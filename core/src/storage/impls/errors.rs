@@ -85,5 +85,15 @@ error_chain! {
             description("Trie node not found when loading Snapshot MPT."),
             display("Trie node not found when loading Snapshot MPT."),
         }
+
+        DeltaMPTAlreadyExists {
+            description("Attempting to create a Delta MPT which already exists."),
+            display("Attempting to create a Delta MPT which already exists."),
+        }
+
+        DeltaMPTEntryNotFound {
+            description("Can't find requested Delta MPT in registry."),
+            display("Can't find requested Delta MPT in registry."),
+        }
     }
 }

@@ -53,7 +53,7 @@ fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     let mut path_index = 0;
     while offset < last_offset {
         path_mut[path_index] = CompressedPathRaw::set_second_nibble(
-            db_key[offset],
+            CompressedPathRaw::from_first_nibble(db_key[offset]),
             db_key[offset + 1],
         );
         offset += 2;
@@ -63,7 +63,7 @@ fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     // A half-byte at the end.
     if offset == last_offset {
         path_mut[path_index] =
-            CompressedPathRaw::set_second_nibble(db_key[offset], 0);
+            CompressedPathRaw::from_first_nibble(db_key[offset]);
     }
 
     Ok(path)

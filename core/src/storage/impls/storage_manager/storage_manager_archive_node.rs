@@ -23,14 +23,14 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
     for StorageManagerArchiveNode<SnapshotDbManager>
 {
     fn remove_old_pivot_snapshot(
-        &self, _snapshot_root: &MerkleHash,
+        &self, _snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
         // FIXME: implement, archive snapshot
         unimplemented!()
     }
 
     fn remove_non_pivot_snapshot(
-        &self, _snapshot_root: &MerkleHash,
+        &self, _snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
         // FIXME: implement, delete snapshot
         unimplemented!()
@@ -44,4 +44,4 @@ use super::super::{
     },
     errors::*,
 };
-use primitives::MerkleHash;
+use primitives::EpochId;

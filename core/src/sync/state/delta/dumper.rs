@@ -47,7 +47,8 @@ impl StateDumper {
     pub fn dump(
         &mut self, state_manager: &StateManager,
     ) -> Result<bool, Error> {
-        let epoch_id = SnapshotAndEpochIdRef::new(&self.epoch, None);
+        let epoch_id =
+            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&self.epoch);
         let state = match state_manager.get_state_no_commit(epoch_id)? {
             Some(state) => state,
             None => return Ok(false),

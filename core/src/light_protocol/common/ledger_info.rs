@@ -17,7 +17,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        SnapshotAndEpochIdRef, StateProof,
+        StateProof,
     },
 };
 
@@ -129,11 +129,16 @@ impl LedgerInfo {
         let state = self
             .consensus
             .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&pivot, None));
+            .get_snapshot_and_epoch_id_readonly(&pivot)
+            .map(|snapshot_and_epoch_id| {
+                self.consensus
+                    .data_man
+                    .storage_manager
+                    .get_state_no_commit(snapshot_and_epoch_id.as_ref())
+            });
 
         match state {
-            Ok(Some(state)) => Ok(state),
+            Some(Ok(Some(state))) => Ok(state),
             _ => Err(ErrorKind::InternalError.into()),
         }
     }

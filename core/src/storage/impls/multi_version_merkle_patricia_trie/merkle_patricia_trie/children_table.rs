@@ -244,10 +244,8 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
     pub fn get_child(&self, index: u8) -> Option<NodeRefT> {
         if Self::has_index(self.bitmap, index) {
             Some(unsafe {
-                (*self
-                    .table_ptr
-                    .offset(Self::lower_bound(self.bitmap, index) as isize))
-                .clone()
+                (*self.table_ptr.add(Self::lower_bound(self.bitmap, index)))
+                    .clone()
             })
         } else {
             None
@@ -256,9 +254,7 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
 
     /// Unsafe because child must already exist at the index.
     pub unsafe fn set_child_unchecked(&mut self, index: u8, value: NodeRefT) {
-        (*self
-            .table_ptr
-            .offset(Self::lower_bound(self.bitmap, index) as isize)) =
+        (*self.table_ptr.add(Self::lower_bound(self.bitmap, index))) =
             value.clone();
     }
 

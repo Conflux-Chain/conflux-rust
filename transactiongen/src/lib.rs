@@ -164,7 +164,7 @@ impl TransactionGenerator {
 
     pub fn generate_transactions_with_multiple_genesis_accounts(
         txgen: Arc<TransactionGenerator>, tx_config: TransactionGeneratorConfig,
-    ) -> Result<(), Error> {
+    ) {
         loop {
             let account_start = txgen.account_start_index.read();
             if account_start.is_some() {
@@ -183,7 +183,7 @@ impl TransactionGenerator {
         // Wait for initial tx
         loop {
             match *txgen.state.read() {
-                TransGenState::Stop => return Ok(()),
+                TransGenState::Stop => return,
                 _ => {}
             }
 
@@ -218,7 +218,7 @@ impl TransactionGenerator {
         let account_count = address_secret_pair.len();
         loop {
             match *txgen.state.read() {
-                TransGenState::Stop => return Ok(()),
+                TransGenState::Stop => return,
                 _ => {}
             }
 
@@ -238,8 +238,12 @@ impl TransactionGenerator {
             // Generate nonce for the transaction
             let sender_nonce = nonce_map.get_mut(&sender_address).unwrap();
 
-            let (nonce, balance) =
-                txgen.txpool.get_state_account_info(&sender_address);
+            // FIXME: It's better first define what kind of Result type
+            // FIXME: to use for this function, then change unwrap() to ?.
+            let (nonce, balance) = txgen
+                .txpool
+                .get_state_account_info(&sender_address)
+                .unwrap();
             if nonce.cmp(sender_nonce) != Ordering::Equal {
                 *sender_nonce = nonce.clone();
                 balance_map.insert(sender_address.clone(), balance.clone());
@@ -305,7 +309,6 @@ impl TransactionGenerator {
                 debug!("Elapsed time larger than the time needed for sleep: time_elapsed={:?}", time_elapsed);
             }
         }
-        Ok(())
     }
 
     pub fn generate_transactions(

@@ -16,6 +16,7 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use primitives::StateRoot;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::time::Duration;
 
@@ -37,14 +38,14 @@ impl Handleable for SnapshotManifestRequest {
             _ => RangedManifest::default(),
         };
 
-        let (state_blame_vec, receipt_blame_vec, bloom_blame_vec) =
+        let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
             self.get_blame_states(ctx).unwrap_or_default();
         let block_receipts = self.get_block_receipts(ctx).unwrap_or_default();
         ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
             checkpoint: self.checkpoint.clone(),
             manifest,
-            state_blame_vec,
+            state_root_vec,
             receipt_blame_vec,
             bloom_blame_vec,
             block_receipts,
@@ -71,6 +72,10 @@ impl SnapshotManifestRequest {
             start_chunk: Some(start_chunk),
             trusted_blame_block: None,
         }
+    }
+
+    pub fn is_initial_request(&self) -> bool {
+        self.trusted_blame_block.is_some()
     }
 
     fn get_block_receipts(
@@ -135,7 +140,7 @@ impl SnapshotManifestRequest {
     /// of the requested block
     fn get_blame_states(
         &self, ctx: &Context,
-    ) -> Option<(Vec<H256>, Vec<H256>, Vec<H256>)> {
+    ) -> Option<(Vec<StateRoot>, Vec<H256>, Vec<H256>)> {
         let trusted_block = ctx
             .manager
             .graph
@@ -160,13 +165,13 @@ impl SnapshotManifestRequest {
                 + REWARD_EPOCH_COUNT
         };
 
-        let mut state_blame_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);
         let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
         let mut bloom_blame_vec = Vec::with_capacity(min_vec_len as usize);
         let mut block_hash = trusted_block.hash();
         let mut trusted_block_height = trusted_block.height();
         let mut blame_count = trusted_block.blame();
-        // loop until we have enough length of `state_blame_vec`
+        // loop until we have enough length of `state_root_vec`
         loop {
             if let Some(exec_info) = ctx
                 .manager
@@ -174,7 +179,12 @@ impl SnapshotManifestRequest {
                 .data_man
                 .consensus_graph_execution_info_from_db(&block_hash)
             {
-                state_blame_vec.push(exec_info.original_deferred_state_root);
+                state_root_vec.push(
+                    exec_info
+                        .deferred_state_root_with_aux_info
+                        .state_root
+                        .clone(),
+                );
                 receipt_blame_vec
                     .push(exec_info.original_deferred_receipt_root);
                 bloom_blame_vec
@@ -183,11 +193,11 @@ impl SnapshotManifestRequest {
                     ctx.manager.graph.data_man.block_header_by_hash(&block_hash)
                 {
                     // We've reached original genesis or collected enough
-                    // `state_blame_vec`.
+                    // `state_root_vec`.
                     if block.height() == 0
                         || (block.height() + blame_count as u64
                             == trusted_block_height
-                            && state_blame_vec.len() >= min_vec_len as usize)
+                            && state_root_vec.len() >= min_vec_len as usize)
                     {
                         break;
                     }
@@ -212,7 +222,7 @@ impl SnapshotManifestRequest {
             }
         }
 
-        Some((state_blame_vec, receipt_blame_vec, bloom_blame_vec))
+        Some((state_root_vec, receipt_blame_vec, bloom_blame_vec))
     }
 }
 

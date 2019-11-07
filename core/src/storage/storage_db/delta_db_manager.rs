@@ -21,9 +21,8 @@ pub trait DeltaDbTrait:
 pub trait DeltaDbManagerTrait {
     type DeltaDb: DeltaDbTrait;
 
-    // TODO: Should we add epoch number to db name?
-    fn delta_db_name(snapshot_root: &MerkleHash) -> String {
-        String::from(snapshot_root.to_hex())
+    fn delta_db_name(snapshot_epoch_id: &EpochId) -> String {
+        String::from(snapshot_epoch_id.to_hex())
     }
 
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb>;
@@ -39,4 +38,4 @@ pub trait DeltaDbManagerTrait {
 
 use super::{super::impls::errors::*, key_value_db::*};
 use parity_bytes::ToPretty;
-use primitives::MerkleHash;
+use primitives::EpochId;

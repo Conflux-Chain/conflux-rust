@@ -18,6 +18,7 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    // FIXME: implement
     pub fn validate(
         &self, _snapshot_root: &MerkleHash, _start_chunk: &Option<ChunkKey>,
     ) -> Result<(), Error> {

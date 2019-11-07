@@ -11,16 +11,13 @@ pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait;
 
     fn new_snapshot_by_merging(
-        &self, old_snapshot_root: &MerkleHash, snapshot_epoch_id: EpochId,
-        height: i64, delta_mpt: DeltaMptInserter,
-    ) -> Result<Self::SnapshotDb>;
+        &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
+        delta_mpt: DeltaMptInserter, in_progress_snapshot_info: SnapshotInfo,
+    ) -> Result<SnapshotInfo>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId,
     ) -> Result<Option<Self::SnapshotDb>>;
-    fn get_snapshot(
-        &self, snapshot_root: &MerkleHash,
-    ) -> Result<Option<Self::SnapshotDb>>;
-    fn destroy_snapshot(&self, snapshot_root: &MerkleHash) -> Result<()>;
+    fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()>;
 }
 
 use super::{
@@ -29,4 +26,4 @@ use super::{
     },
     snapshot_db::*,
 };
-use primitives::{EpochId, MerkleHash};
+use primitives::EpochId;

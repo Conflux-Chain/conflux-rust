@@ -149,7 +149,7 @@ impl TrieProof {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{CompressedPathRaw, VanillaTrieNode},
+        super::{CompressedPathRaw, TrieNodeTrait, VanillaTrieNode},
         TrieProof, TrieProofNode,
     };
     use primitives::MERKLE_NULL_NODE;
@@ -164,7 +164,10 @@ mod tests {
                 MERKLE_NULL_NODE,
                 Default::default(),
                 Some(Box::new([0x03, 0x04, 0x05])),
-                CompressedPathRaw::new(&[0x00, 0x01, 0x02], 0x0f),
+                CompressedPathRaw::new(
+                    &[0x00, 0x01, 0x02],
+                    CompressedPathRaw::first_nibble_mask(),
+                ),
             ));
             // Use .0 to avoid annoying rust compiler error: "cannot borrow
             // `node` as immutable because it is also borrowed as mutable"
@@ -188,18 +191,18 @@ mod tests {
         //      |                     |
         //      |              |path: [0x00, 0x00]|
         //      |                     |
-        // |path: [0x02]|   |path: [0x03]            |
+        // |path: [0x20]|   |path: [0x30]            |
         // |val : [0x02]|   |val : [0x00, 0x00, 0x03]|
 
-        let (key1, value1) = ([0x02], [0x02]);
-        let (key2, value2) = ([0x00, 0x00, 0x03], [0x00, 0x00, 0x03]);
+        let (key1, value1) = ([0x20], [0x02]);
+        let (key2, value2) = ([0x00, 0x00, 0x30], [0x00, 0x00, 0x03]);
 
         let leaf1 = {
             let mut node = TrieProofNode(VanillaTrieNode::new(
                 MERKLE_NULL_NODE,
                 Default::default(),
                 Some(Box::new(value1)),
-                (&[0x02u8][..]).into(),
+                (&[0x20u8][..]).into(),
             ));
             node.0.set_merkle(&node.compute_merkle());
             node
@@ -210,7 +213,7 @@ mod tests {
                 MERKLE_NULL_NODE,
                 Default::default(),
                 Some(Box::new(value2)),
-                (&[0x03u8][..]).into(),
+                (&[0x30u8][..]).into(),
             ));
             node.0.set_merkle(&node.compute_merkle());
             node
@@ -304,21 +307,21 @@ mod tests {
         assert!(!proof.is_valid_path_to(key, leaf2_hash, root));
 
         // path to `leaf1`
-        let path = &[0x02];
+        let path = leaf1.compressed_path_ref().path_slice;
         assert!(proof.is_valid_path_to(path, leaf1_hash, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, ext_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
         // path to `ext`
-        let path = &[0x00, 0x00];
+        let path = ext.compressed_path_ref().path_slice;
         assert!(proof.is_valid_path_to(path, ext_hash, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
         // path to `leaf2`
-        let path = &[0x00, 0x00, 0x03];
+        let path = &key2[..];
         assert!(proof.is_valid_path_to(path, leaf2_hash, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
@@ -333,7 +336,7 @@ mod tests {
         assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
         // non-existent path
-        let path = &[0x01];
+        let path = &[0x10];
         assert!(proof.is_valid_path_to(path, null, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
@@ -341,7 +344,7 @@ mod tests {
         assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
         // non-existent path with existing prefix
-        let path = &[0x00, 0x00, 0x03, 0x04];
+        let path = &[0x00, 0x00, 0x30, 0x04];
         assert!(proof.is_valid_path_to(path, null, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, ext_hash, root));

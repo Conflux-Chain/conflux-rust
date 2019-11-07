@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+// FIXME: find out how to organize synced snapshot data and snapshot recovery.
+#[allow(unused)]
 // Conflux snapshot wire-format.
 pub struct Snapshot {
     // TODO(yz): implement.

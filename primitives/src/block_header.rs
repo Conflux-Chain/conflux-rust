@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::state_root::*;
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY_LIST_RLP},
@@ -83,11 +82,6 @@ pub struct BlockHeader {
     pub pow_quality: U256,
     /// Approximated rlp size of the block header
     pub approximated_rlp_size: usize,
-    // TODO: the state root auxiliary information can be derived from
-    // TODO: consensus graph and should be moved out from p2p messages,
-    // TODO: however to reduce complexity of the code we keep it
-    // TODO: temporarily.
-    pub state_root_with_aux_info: StateRootWithAuxInfo,
 }
 
 impl Deref for BlockHeader {
@@ -131,10 +125,6 @@ impl BlockHeader {
 
     /// Get the deferred state root field of the header.
     pub fn deferred_state_root(&self) -> &H256 { &self.deferred_state_root }
-
-    pub fn deferred_state_root_with_aux_info(&self) -> &StateRootWithAuxInfo {
-        &self.state_root_with_aux_info
-    }
 
     /// Get the deferred block receipts root field of the header.
     pub fn deferred_receipts_root(&self) -> &H256 {
@@ -267,41 +257,6 @@ impl BlockHeader {
         }
     }
 
-    // TODO: calculate previous_snapshot_root & intermediate_delta_epoch_id in
-    // TODO: consensus graph and remove this method.
-    /// Place this header into an RLP stream `stream` for p2p messages.
-    fn stream_wire_rlp(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
-        let list_len = if self.custom.is_empty() {
-            15
-        } else {
-            15 + self.custom.len()
-        };
-        stream
-            .begin_list(list_len)
-            .append(&self.parent_hash)
-            .append(&self.height)
-            .append(&self.timestamp)
-            .append(&self.author)
-            .append(&self.transactions_root)
-            .append(&self.deferred_state_root)
-            .append(&self.deferred_receipts_root)
-            .append(&self.deferred_logs_bloom_hash)
-            .append(&self.blame)
-            .append(&self.difficulty)
-            .append(&adaptive_n)
-            .append(&self.gas_limit)
-            .append_list(&self.referee_hashes)
-            .append(&self.nonce)
-            .append(&self.state_root_with_aux_info);
-
-        if list_len > 15 {
-            for b in &self.custom {
-                stream.append_raw(b, 1);
-            }
-        }
-    }
-
     pub fn size(&self) -> usize {
         // FIXME: We need to revisit the size of block header once we finished
         // the persistent storage part
@@ -316,7 +271,6 @@ pub struct BlockHeaderBuilder {
     author: Address,
     transactions_root: H256,
     deferred_state_root: H256,
-    deferred_state_root_with_aux_info: StateRootWithAuxInfo,
     deferred_receipts_root: H256,
     deferred_logs_bloom_hash: H256,
     blame: u32,
@@ -337,7 +291,6 @@ impl BlockHeaderBuilder {
             author: Address::default(),
             transactions_root: KECCAK_EMPTY_LIST_RLP,
             deferred_state_root: Default::default(),
-            deferred_state_root_with_aux_info: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
             deferred_logs_bloom_hash: KECCAK_EMPTY_BLOOM,
             blame: 0,
@@ -374,15 +327,6 @@ impl BlockHeaderBuilder {
         &mut self, transactions_root: H256,
     ) -> &mut Self {
         self.transactions_root = transactions_root;
-        self
-    }
-
-    pub fn with_deferred_state_root_with_aux_info(
-        &mut self, deferred_state_root_with_aux_info: StateRootWithAuxInfo,
-    ) -> &mut Self {
-        self.deferred_state_root_with_aux_info =
-            deferred_state_root_with_aux_info;
-
         self
     }
 
@@ -466,9 +410,6 @@ impl BlockHeaderBuilder {
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: 0,
-            state_root_with_aux_info: self
-                .deferred_state_root_with_aux_info
-                .clone(),
         };
 
         block_header.approximated_rlp_size =
@@ -522,9 +463,7 @@ impl BlockHeaderBuilder {
 }
 
 impl Encodable for BlockHeader {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        self.stream_wire_rlp(stream);
-    }
+    fn rlp_append(&self, stream: &mut RlpStream) { self.stream_rlp(stream); }
 }
 
 impl Decodable for BlockHeader {
@@ -547,7 +486,7 @@ impl Decodable for BlockHeader {
             custom: vec![],
             nonce: r.val_at(13)?,
         };
-        for i in 15..r.item_count()? {
+        for i in 14..r.item_count()? {
             rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
         }
 
@@ -556,7 +495,6 @@ impl Decodable for BlockHeader {
             hash: None,
             pow_quality: U256::zero(),
             approximated_rlp_size: rlp_size,
-            state_root_with_aux_info: r.val_at(14)?,
         };
         header.compute_hash();
 

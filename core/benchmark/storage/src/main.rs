@@ -1722,27 +1722,14 @@ impl TxReplayer {
             );
             *latest_state = StateDb::new(
                 self.storage_manager
-                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
                         last_state_root,
-                        None,
                     ))
                     .unwrap()
                     .unwrap(),
             );
         }
     }
-}
-
-fn hexstr_to_h256(hex_str: &str) -> H256 {
-    assert_eq!(hex_str.len(), 64);
-
-    let mut bytes: [u8; 32] = Default::default();
-
-    for i in 0..32 {
-        bytes[i] = u8::from_str_radix(&hex_str[i * 2..i * 2 + 2], 16).unwrap();
-    }
-
-    H256::from(bytes)
 }
 
 fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
@@ -1774,9 +1761,8 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             hexstr_to_h256(&matches.value_of("last_state_root").unwrap());
         let true_state_root = tx_replayer
             .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(
+            .get_state_no_commit(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
                 &last_state_root,
-                None,
             ))
             .unwrap()
             .unwrap()
@@ -1786,9 +1772,8 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         latest_state = StateDb::new(
             tx_replayer
                 .storage_manager
-                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new(
+                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
                     &last_state_root,
-                    None,
                 ))
                 .unwrap()
                 .unwrap(),
@@ -2086,3 +2071,4 @@ use std::{
     time::Duration,
     vec::Vec,
 };
+use cfx_types::hexstr_to_h256;

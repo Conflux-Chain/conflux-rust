@@ -155,6 +155,10 @@ impl SynchronizationState {
 
     pub fn is_full_node(&self) -> bool { self.is_full_node }
 
+    // FIXME: use median instead, because it's so confusing without context.
+    // FIXME: median_chain_height_from_peers.
+    // FIXME: it lead to more questions but these are questions on the
+    // FIXME: algorithm side.
     pub fn get_middle_epoch(&self) -> Option<u64> {
         let mut peer_best_epoches = {
             let peers = self.peers.read();

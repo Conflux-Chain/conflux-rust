@@ -74,9 +74,8 @@ fn txexe_benchmark(c: &mut Criterion) {
                     .storage_manager
                     .get_state_for_next_epoch(
                         // FIXME: delta height
-                        SnapshotAndEpochIdRef::new(
+                        SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
                             &handler.consensus.best_block_hash(),
-                            None,
                         ),
                     )
                     .unwrap()

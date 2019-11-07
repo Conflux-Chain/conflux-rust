@@ -8,8 +8,9 @@ pub mod consensus_new_block_handler;
 
 use crate::{
     block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch,
-        ConsensusGraphExecutionInfo, EpochExecutionContext,
+        block_data_types::EpochExecutionCommitments, BlockDataManager,
+        BlockExecutionResultWithEpoch, ConsensusGraphExecutionInfo,
+        EpochExecutionContext,
     },
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
@@ -24,7 +25,7 @@ use link_cut_tree::{
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder,
-    StateRootWithAuxInfo, TransactionAddress,
+    TransactionAddress,
 };
 use slab::Slab;
 use std::{
@@ -337,7 +338,8 @@ pub struct ConsensusGraphInner {
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
     pastset_cache: PastSetCache,
-    // The cache to store execution information of nodes in the consensus graph
+    // The cache to store execution information of nodes in the consensus
+    // graph.
     pub execution_info_cache: HashMap<usize, ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
@@ -1926,7 +1928,11 @@ impl ConsensusGraphInner {
         }
         let mut idx = *idx_opt.unwrap();
         for _i in 0..delay {
-            trace!("get_state_block_with_delay: idx={}", idx);
+            trace!(
+                "get_state_block_with_delay: idx={}, height={}",
+                idx,
+                self.arena[idx].height
+            );
             if idx == self.cur_era_genesis_block_arena_index {
                 // If it is the original genesis, we just break
                 if self.arena[self.cur_era_genesis_block_arena_index].height
@@ -1966,6 +1972,8 @@ impl ConsensusGraphInner {
         }
     }
 
+    // FIXME: There is another function epoch_hash(&self).. What's the
+    // difference?
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: u64,
     ) -> Result<H256, String> {
@@ -2176,22 +2184,29 @@ impl ConsensusGraphInner {
         }
     }
 
+    // FIXME: structure the input/output.
     fn compute_blame_and_state_with_execution_result(
-        &self, parent: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
+        &self, parent: usize, exec_result: &EpochExecutionCommitments,
+    ) -> Result<(u32, H256, H256, H256), String> {
         let mut cur = parent;
         let mut blame: u32 = 0;
         let mut state_blame_vec = Vec::new();
         let mut receipt_blame_vec = Vec::new();
         let mut bloom_blame_vec = Vec::new();
-        state_blame_vec
-            .push(exec_result.0.state_root.compute_state_root_hash());
-        receipt_blame_vec.push(exec_result.1.clone());
-        bloom_blame_vec.push(exec_result.2.clone());
+        state_blame_vec.push(
+            exec_result
+                .state_root_with_aux_info
+                .state_root
+                .compute_state_root_hash(),
+        );
+        receipt_blame_vec.push(exec_result.receipts_root.clone());
+        bloom_blame_vec.push(exec_result.logs_bloom_hash.clone());
         loop {
             if self.arena[cur].data.state_valid {
                 break;
             }
+            // FIXME: is it possible to remove execution_info_cache and use
+            // epoch_execution_commitments instead?
             let exec_info_opt = self.execution_info_cache.get(&cur);
             if exec_info_opt.is_none() {
                 return Err("Failed to compute blame and state due to stale consensus graph state".to_owned());
@@ -2215,7 +2230,6 @@ impl ConsensusGraphInner {
         if blame > 0 {
             Ok((
                 blame,
-                exec_result.0,
                 BlockHeaderBuilder::compute_blame_state_root_vec_root(
                     state_blame_vec,
                 ),
@@ -2229,7 +2243,6 @@ impl ConsensusGraphInner {
         } else {
             Ok((
                 0,
-                exec_result.0,
                 state_blame_vec.pop().unwrap(),
                 receipt_blame_vec.pop().unwrap(),
                 bloom_blame_vec.pop().unwrap(),
@@ -2237,13 +2250,18 @@ impl ConsensusGraphInner {
         }
     }
 
+    // FIXME: maybe this method can be simplified.
     fn compute_execution_info_with_result(
-        &mut self, me: usize, exec_result: (StateRootWithAuxInfo, H256, H256),
+        &mut self, me: usize, exec_result: EpochExecutionCommitments,
     ) -> Result<(), String> {
         // For the original genesis, it is always correct
         if self.arena[me].height == 0 {
             self.arena[me].data.state_valid = true;
             let exec_info = ConsensusGraphExecutionInfo {
+                deferred_state_root_with_aux_info: self
+                    .data_man
+                    .genesis_state_root(),
+
                 original_deferred_state_root: *self
                     .data_man
                     .true_genesis_block
@@ -2268,10 +2286,13 @@ impl ConsensusGraphInner {
             return Ok(());
         }
         let parent = self.arena[me].parent;
-        let original_deferred_state_root =
-            exec_result.0.state_root.compute_state_root_hash();
-        let original_deferred_receipt_root = exec_result.1.clone();
-        let original_deferred_logs_bloom_hash = exec_result.2.clone();
+        let original_deferred_state_root = exec_result
+            .state_root_with_aux_info
+            .state_root
+            .compute_state_root_hash();
+        let original_deferred_receipt_root = exec_result.receipts_root.clone();
+        let original_deferred_logs_bloom_hash =
+            exec_result.logs_bloom_hash.clone();
         // We will skip state validation if `cur_era_stable_height <= lca.height
         // && lca.height < first_trusted_blame_block_height` where lca
         // is the lowest common ancestor of `first_trusted_blame_block`
@@ -2303,13 +2324,12 @@ impl ConsensusGraphInner {
         if !skip_state_validation {
             let (
                 blame,
-                _,
                 deferred_state_root,
                 deferred_receipt_root,
                 deferred_logs_bloom_hash,
             ) = self.compute_blame_and_state_with_execution_result(
                 parent,
-                exec_result,
+                &exec_result,
             )?;
             let block_header = self
                 .data_man
@@ -2330,7 +2350,11 @@ impl ConsensusGraphInner {
 
             self.arena[me].data.state_valid = state_valid;
         }
+
         let exec_info = ConsensusGraphExecutionInfo {
+            deferred_state_root_with_aux_info: exec_result
+                .state_root_with_aux_info
+                .clone(),
             original_deferred_state_root,
             original_deferred_receipt_root,
             original_deferred_logs_bloom_hash,
@@ -2569,6 +2593,8 @@ impl ConsensusGraphInner {
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 
+    // FIXME: can we just loop on state block and check
+    // FIXME: epoch_execution_commitment instead of execution_info_cache?
     fn collect_blocks_missing_execution_info(
         &self, me: usize,
     ) -> Result<Vec<(H256, H256)>, String> {
@@ -2586,6 +2612,12 @@ impl ConsensusGraphInner {
                     DEFERRED_STATE_EPOCH_COUNT as usize,
                 )?
                 .clone();
+            if self.arena[*self.hash_to_arena_indices.get(&state_hash).unwrap()]
+                .height
+                < self.cur_era_stable_height
+            {
+                break;
+            }
             waiting_blocks.push((cur_hash, state_hash));
             if cur == self.cur_era_genesis_block_arena_index {
                 break;
@@ -2597,10 +2629,8 @@ impl ConsensusGraphInner {
     }
 
     fn compute_execution_info_for_blocks(
-        &mut self,
-        waiting_result: Vec<(H256, (StateRootWithAuxInfo, H256, H256))>,
-    ) -> Result<(), String>
-    {
+        &mut self, waiting_result: Vec<(H256, EpochExecutionCommitments)>,
+    ) -> Result<(), String> {
         for (cur_hash, result) in waiting_result {
             let index_opt = self.hash_to_arena_indices.get(&cur_hash);
             if index_opt.is_none() {

@@ -153,14 +153,16 @@ impl CompressedPathRaw {
         }
     }
 
-    // FIXME: in ethereum the first nibble is (x & Self::BITS_4_7_MASK) >> 4,
-    // FIXME: the second nibble.
-    pub fn first_nibble(x: u8) -> u8 { x & Self::BITS_0_3_MASK }
+    pub fn first_nibble_mask() -> u8 { Self::BITS_4_7_MASK }
 
-    pub fn second_nibble(x: u8) -> u8 { (x & Self::BITS_4_7_MASK) >> 4 }
+    pub fn from_first_nibble(x: u8) -> u8 { x << 4 }
+
+    pub fn first_nibble(x: u8) -> u8 { x >> 4 }
+
+    pub fn second_nibble(x: u8) -> u8 { x & Self::BITS_0_3_MASK }
 
     pub fn set_second_nibble(x: u8, second_nibble: u8) -> u8 {
-        Self::first_nibble(x) | (second_nibble << 4)
+        (x & Self::BITS_4_7_MASK) | second_nibble
     }
 
     pub fn concat<X: CompressedPathTrait, Y: CompressedPathTrait>(

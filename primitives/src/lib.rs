@@ -26,7 +26,7 @@ pub use crate::{
     account::Account,
     block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
-    epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber},
+    epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
     log_entry::LogEntry,
     receipt::Receipt,
     state_root::*,

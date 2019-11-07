@@ -24,7 +24,7 @@ use crate::{
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statedb::StateDb,
     statistics::SharedStatistics,
-    storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
+    storage::state_manager::StateManagerTrait,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
@@ -36,7 +36,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    EpochNumber, SignedTransaction, StateRootWithAuxInfo, TransactionAddress,
+    EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
 use std::{
@@ -351,18 +351,27 @@ impl ConsensusGraph {
         Ok(())
     }
 
+    // FIXME: I think the assumption is that this is a pivot block and it's
+    // locked in pivot chain?
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<StateDb, String> {
+        // FIXME: And what is it? Epoch Number or Height?
         self.validate_stated_epoch(&epoch_number)?;
+        // FIXME: Change the method name and variable name..
         let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
         let hash =
             self.inner.read().get_hash_from_epoch_number(epoch_number)?;
-        let maybe_state = self
-            .data_man
-            .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new(&hash, None))
-            .map_err(|e| format!("Error to get state, err={:?}", e))?;
+        let maybe_snapshot_and_epoch_id =
+            self.data_man.get_snapshot_and_epoch_id_readonly(&hash);
+        let maybe_state = match maybe_snapshot_and_epoch_id {
+            Some(snapshot_and_epoch_id) => self
+                .data_man
+                .storage_manager
+                .get_state_no_commit(snapshot_and_epoch_id.as_ref())
+                .map_err(|e| format!("Error to get state, err={:?}", e))?,
+            None => None,
+        };
 
         let state = match maybe_state {
             Some(state) => state,
@@ -413,11 +422,12 @@ impl ConsensusGraph {
         })
     }
 
+    // FIXME: structure the return value?
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
     pub fn force_compute_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
+    ) -> Result<(u32, H256, H256, H256), String> {
         {
             let inner = &mut *self.inner.write();
             let hash = inner
@@ -434,9 +444,10 @@ impl ConsensusGraph {
         )
     }
 
+    // FIXME: structure the return value?
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, StateRootWithAuxInfo, H256, H256, H256), String> {
+    ) -> Result<(u32, H256, H256, H256), String> {
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
             &self.inner,
@@ -673,7 +684,7 @@ impl ConsensusGraph {
         let state_root = self
             .executor
             .wait_for_result(epoch_hash)
-            .0
+            .state_root_with_aux_info
             .state_root
             .compute_state_root_hash();
         Some((results_with_epoch, address, state_root))
@@ -690,6 +701,7 @@ impl ConsensusGraph {
         };
         if pivot_index < inner.pivot_chain.len() {
             let pivot_hash = &inner.arena[inner.pivot_chain[pivot_index]].hash;
+            // FIXME: why not check execution_info_cache first?
             return match self
                 .data_man
                 .consensus_graph_execution_info_from_db(pivot_hash)
@@ -726,8 +738,13 @@ impl ConsensusGraph {
     pub fn get_best_state(&self) -> State {
         let best_state_hash = self.inner.read().best_state_block_hash();
         self.executor.wait_for_result(best_state_hash);
+        // FIXME: it's only absolute safe with lock, otherwise storage /
+        // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
         if let Ok(state) = self.data_man.storage_manager.get_state_no_commit(
-            SnapshotAndEpochIdRef::new(&best_state_hash, None),
+            self.data_man
+                .get_snapshot_and_epoch_id_readonly(&best_state_hash)
+                .unwrap()
+                .as_ref(),
         ) {
             state
                 .map(|db| {

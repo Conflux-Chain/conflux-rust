@@ -6,11 +6,10 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     ext_db::SystemDB,
-    parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     pow::TargetDifficultyManager,
     storage::{
-        state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
-        StorageManager,
+        state_manager::{SnapshotAndEpochId, SnapshotAndEpochIdRef},
+        StorageManager, StorageManagerTrait, StorageTrait,
     },
 };
 use cfx_types::{Bloom, H256};
@@ -22,8 +21,8 @@ use primitives::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, SignedTransaction, TransactionAddress,
-    TransactionWithSignature,
+    Block, BlockHeader, EpochId, SignedTransaction, StateRootWithAuxInfo,
+    TransactionAddress, TransactionWithSignature,
 };
 use rlp::DecoderError;
 use std::{
@@ -147,32 +146,12 @@ impl BlockDataManager {
                     &checkpoint_hash,
                     false, /* update_cache */
                 ) {
-                    if data_man.state_exists(&checkpoint_hash) {
-                        let mut cur_hash =
-                            *checkpoint_block.block_header.parent_hash();
-                        for _ in 0..DEFERRED_STATE_EPOCH_COUNT - 1 {
-                            assert_ne!(cur_hash, H256::default());
-                            let cur_block = data_man.block_by_hash(
-                                &cur_hash, false, /* update_cache */
-                            );
-                            if cur_block.is_some()
-                                && data_man.state_exists(&cur_hash)
-                            {
-                                let cur_block = cur_block.unwrap();
-                                cur_hash =
-                                    *cur_block.block_header.parent_hash();
-                            } else {
-                                panic!("recovery checkpoint from disk failed.");
-                            }
-                        }
-
-                        *data_man.cur_consensus_era_genesis_hash.write() =
-                            checkpoint_hash;
-                        *data_man.cur_consensus_era_stable_hash.write() =
-                            stable_hash;
-                        data_man.genesis_hash = checkpoint_hash;
-                        genesis_block = checkpoint_block.clone();
-                    }
+                    *data_man.cur_consensus_era_genesis_hash.write() =
+                        checkpoint_hash;
+                    *data_man.cur_consensus_era_stable_hash.write() =
+                        stable_hash;
+                    data_man.genesis_hash = checkpoint_hash;
+                    genesis_block = checkpoint_block.clone();
                 }
             }
         }
@@ -201,6 +180,7 @@ impl BlockDataManager {
             );
             data_man.insert_epoch_execution_commitments(
                 *data_man.genesis_hash(),
+                data_man.genesis_state_root(),
                 *data_man
                     .true_genesis_block
                     .block_header
@@ -261,6 +241,19 @@ impl BlockDataManager {
     }
 
     pub fn genesis_hash(&self) -> &H256 { &self.genesis_hash }
+
+    pub fn genesis_state_root(&self) -> StateRootWithAuxInfo {
+        self.storage_manager
+            .get_state_no_commit(SnapshotAndEpochIdRef::new_for_readonly(
+                &self.genesis_hash(),
+                &StateRootWithAuxInfo::default(),
+            ))
+            .unwrap()
+            .unwrap()
+            .get_state_root()
+            .unwrap()
+            .unwrap()
+    }
 
     pub fn transaction_by_hash(
         &self, hash: &H256,
@@ -655,11 +648,15 @@ impl BlockDataManager {
     }
 
     pub fn insert_epoch_execution_commitments(
-        &self, block_hash: H256, receipts_root: H256, logs_bloom_hash: H256,
-    ) {
+        &self, block_hash: H256,
+        state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
+        logs_bloom_hash: H256,
+    )
+    {
         self.epoch_execution_commitments.write().insert(
             block_hash,
             EpochExecutionCommitments {
+                state_root_with_aux_info,
                 receipts_root,
                 logs_bloom_hash,
             },
@@ -676,44 +673,6 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
-    /// Check in-mem execution commitments first. If missing, use on-disk
-    /// execution info of some later block to recover it.
-    pub fn get_epoch_execution_commitments_with_db(
-        &self, epoch_hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
-        let maybe_commitments =
-            self.get_epoch_execution_commitments(epoch_hash);
-        if maybe_commitments.is_some() {
-            return maybe_commitments;
-        }
-
-        // Double check if `epoch_hash` is on the pivot chain on disk
-        let epoch_number = self.block_header_by_hash(epoch_hash)?.height();
-        let pivot_hash =
-            self.epoch_set_hashes_from_db(epoch_number)?.last()?.clone();
-        if *epoch_hash != pivot_hash {
-            debug!("get_epoch_execution_commitments: block is not in memory and not pivot on disk. \
-                block_hash={:?} pivot_block={:?}", epoch_hash, pivot_hash);
-            return None;
-        }
-
-        // find the pivot block whose deferred block is `epoch_hash` and use its
-        // execution info to recover the execution commitments for `epoch_hash`
-        let exec_pivot_hash = self
-            .epoch_set_hashes_from_db(
-                epoch_number + DEFERRED_STATE_EPOCH_COUNT,
-            )?
-            .last()?
-            .clone();
-        let exec_execution_info =
-            self.consensus_graph_execution_info_from_db(&exec_pivot_hash)?;
-        Some(EpochExecutionCommitments {
-            receipts_root: exec_execution_info.original_deferred_state_root,
-            logs_bloom_hash: exec_execution_info
-                .original_deferred_logs_bloom_hash,
-        })
-    }
-
     pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {
         self.epoch_execution_commitments.write().remove(block_hash);
     }
@@ -725,16 +684,6 @@ impl BlockDataManager {
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
         // `block_receipts_root` is not computed when recovering from db
         self.get_epoch_execution_commitments(epoch_hash).is_some()
-            && self.state_exists(epoch_hash)
-    }
-
-    /// Return `true` if storage contains the state for the given epoch.
-    ///
-    /// This function will panic if the storage returns error.
-    pub fn state_exists(&self, epoch_hash: &H256) -> bool {
-        self.storage_manager
-            .contains_state(SnapshotAndEpochIdRef::new(epoch_hash, None))
-            .expect("State DB failure")
     }
 
     /// Check if all executed results of an epoch exist
@@ -947,6 +896,20 @@ impl BlockDataManager {
         &self, compact_block: &mut CompactBlock,
     ) -> Vec<usize> {
         self.tx_data_manager.build_partial(compact_block)
+    }
+
+    pub fn get_snapshot_and_epoch_id_readonly(
+        &self, block_hash: &EpochId,
+    ) -> Option<SnapshotAndEpochId> {
+        match self.get_epoch_execution_commitments(block_hash) {
+            None => None,
+            Some(execution_commitments) => Some(SnapshotAndEpochId::from_ref(
+                SnapshotAndEpochIdRef::new_for_readonly(
+                    block_hash,
+                    &execution_commitments.state_root_with_aux_info,
+                ),
+            )),
+        }
     }
 }
 

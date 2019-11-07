@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use primitives::StateRoot;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable)]
@@ -18,7 +19,16 @@ pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub checkpoint: H256,
     pub manifest: RangedManifest,
-    pub state_blame_vec: Vec<H256>,
+    // We have state_root_vec for two reasons: 1) construct
+    // state_root_blame_vec; 2) construct state_root_with_aux_vec.
+    //
+    // We need state_root_with_aux_vec because we mark the state of
+    // a few epochs as executed, but in the local db we also save the
+    // StateRootAuxInfo, which isn't verifiable, and should be computed
+    // from the consensus graph. Lucky enough that the intermediate_epoch_id
+    // for the snapshot block is itself. So is it for a few following
+    // epochs.
+    pub state_root_vec: Vec<StateRoot>,
     pub receipt_blame_vec: Vec<H256>,
     pub bloom_blame_vec: Vec<H256>,
     pub block_receipts: Vec<BlockExecutionResult>,
@@ -43,7 +53,7 @@ impl Handleable for SnapshotManifestResponse {
 
         ctx.manager
             .state_sync
-            .handle_snapshot_manifest_response(ctx, self);
+            .handle_snapshot_manifest_response(ctx, self, &request);
 
         Ok(())
     }
@@ -51,7 +61,7 @@ impl Handleable for SnapshotManifestResponse {
 
 impl SnapshotManifestResponse {
     fn validate(
-        &self, ctx: &Context, request: &SnapshotManifestRequest,
+        &self, _: &Context, request: &SnapshotManifestRequest,
     ) -> Result<(), Error> {
         if self.checkpoint != request.checkpoint {
             debug!(
@@ -62,25 +72,13 @@ impl SnapshotManifestResponse {
             bail!(ErrorKind::Invalid);
         }
 
-        let root = ctx.must_get_state_root(&self.checkpoint);
-
-        if let Err(e) = self
-            .manifest
-            .validate(&root.snapshot_root, &request.start_chunk)
-        {
-            debug!("failed to validate snapshot manifest, error = {:?}", e);
-            bail!(ErrorKind::Invalid);
-        }
-
-        if request.trusted_blame_block.is_some()
-            && self.state_blame_vec.is_empty()
-        {
+        if request.is_initial_request() && self.state_root_vec.is_empty() {
             debug!("Responded snapshot manifest has empty blame states");
             bail!(ErrorKind::Invalid);
         }
 
-        if self.state_blame_vec.len() != self.receipt_blame_vec.len()
-            || self.state_blame_vec.len() != self.bloom_blame_vec.len()
+        if self.state_root_vec.len() != self.receipt_blame_vec.len()
+            || self.state_root_vec.len() != self.bloom_blame_vec.len()
         {
             debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
             bail!(ErrorKind::Invalid);

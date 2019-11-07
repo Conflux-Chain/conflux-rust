@@ -5,33 +5,46 @@
 pub type ChildrenMerkleMap =
     BTreeMap<ActualSlabIndex, VanillaChildrenTable<MerkleHash>>;
 
+// FIXME: remove 'a.
 pub struct State<'a> {
     manager: &'a StateManager,
     snapshot_db: SnapshotDb,
-    intermediate_trie: Option<Arc<DeltaMpt>>,
+    maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
+    intermediate_epoch_id: EpochId,
+    delta_trie_height: Option<u32>,
+    height: Option<u64>,
     owned_node_set: Option<OwnedNodeSet>,
     dirty: bool,
 
     /// Children merkle hashes. Only used for committing and computing
     /// merkle root. It will be cleared after being committed.
     children_merkle_map: ChildrenMerkleMap,
+
+    // FIXME: this is a hack to get pivot chain from parent snapshot to a
+    // FIXME: snapshot. it should be done in consensus.
+    parent_epoch_id: EpochId,
 }
 
 impl<'a> State<'a> {
     pub fn new(manager: &'a StateManager, state_trees: StateTrees) -> Self {
         Self {
             manager,
-            snapshot_db: state_trees.0,
-            intermediate_trie: state_trees.1,
-            intermediate_trie_root: state_trees.2,
-            delta_trie: state_trees.3,
-            delta_trie_root: state_trees.4,
+            snapshot_db: state_trees.snapshot_db,
+            maybe_intermediate_trie: state_trees.maybe_intermediate_trie,
+            intermediate_trie_root: state_trees.intermediate_trie_root,
+            delta_trie: state_trees.delta_trie,
+            delta_trie_root: state_trees.delta_trie_root,
+            intermediate_epoch_id: state_trees.intermediate_epoch_id,
+            delta_trie_height: state_trees.delta_trie_height,
+            height: state_trees.height,
             owned_node_set: Some(Default::default()),
             dirty: false,
             children_merkle_map: ChildrenMerkleMap::new(),
+
+            parent_epoch_id: state_trees.epoch_id,
         }
     }
 
@@ -72,6 +85,7 @@ impl<'a> State<'a> {
         }
     }
 
+    // FIXME: the current implementation is serialized, which may not be good.
     pub fn get_from_snapshot(
         &self, access_key: &[u8],
     ) -> Result<Option<Box<[u8]>>> {
@@ -93,26 +107,27 @@ impl<'a> State<'a> {
             return Ok((maybe_value, proof));
         }
 
-        let maybe_intermediate_proof = match self.intermediate_trie {
-            None => None,
-            Some(_) => {
-                let (maybe_value, maybe_proof) = self.get_from_delta(
-                    self.intermediate_trie.as_ref().unwrap(),
-                    self.intermediate_trie_root.clone(),
-                    access_key,
-                    with_proof,
-                )?;
+        let maybe_intermediate_proof =
+            match self.maybe_intermediate_trie.as_ref() {
+                None => None,
+                Some(_) => {
+                    let (maybe_value, maybe_proof) = self.get_from_delta(
+                        self.maybe_intermediate_trie.as_ref().as_ref().unwrap(),
+                        self.intermediate_trie_root.clone(),
+                        access_key,
+                        with_proof,
+                    )?;
 
-                if maybe_value.is_some() {
-                    let proof = StateProof::default()
-                        .with_delta(maybe_delta_proof)
-                        .with_intermediate(maybe_proof);
-                    return Ok((maybe_value, proof));
+                    if maybe_value.is_some() {
+                        let proof = StateProof::default()
+                            .with_delta(maybe_delta_proof)
+                            .with_intermediate(maybe_proof);
+                        return Ok((maybe_value, proof));
+                    }
+
+                    maybe_proof
                 }
-
-                maybe_proof
-            }
-        };
+            };
 
         // TODO: get from snapshot
         // self.get_from_snapshot(access_key)
@@ -237,26 +252,52 @@ impl<'a> StateTrait for State<'a> {
     fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>> {
         let merkle_root = self.get_merkle_root()?;
         Ok(merkle_root.map(|merkle_hash| StateRootWithAuxInfo {
-            // TODO: fill in real snapshot, intermediate delta, ...
             state_root: StateRoot {
-                snapshot_root: MERKLE_NULL_NODE,
+                snapshot_root: self
+                    .snapshot_db
+                    .get_snapshot_info()
+                    .merkle_root
+                    .clone(),
+                // FIXME: implement for intermediate_delta_root.
                 intermediate_delta_root: MERKLE_NULL_NODE,
                 delta_root: merkle_hash,
             },
-            aux_info: Default::default(),
+            aux_info: StateRootAuxInfo {
+                snapshot_epoch_id: self
+                    .snapshot_db
+                    .get_snapshot_info()
+                    .get_snapshot_epoch_id()
+                    .clone(),
+                intermediate_epoch_id: self.intermediate_epoch_id.clone(),
+            },
         }))
     }
 
     // TODO(yz): replace coarse lock with a queue.
     fn commit(&mut self, epoch_id: EpochId) -> Result<()> {
-        self.state_root_check()?;
+        let merkle_root = self.state_root_check()?;
 
         // TODO(yz): Think about leaving these node dirty and only commit when
         // the dirty node is removed from cache.
-        let commit_result = self.do_db_commit(epoch_id);
+        let commit_result = self.do_db_commit(epoch_id, &merkle_root);
         if commit_result.is_err() {
             self.revert();
         }
+
+        // TODO: use a better criteria and put it in consensus maybe.
+        if self.delta_trie_height.unwrap() as u64
+            >= SNAPSHOT_EPOCHS_CAPACITY / 2
+        {
+            // FIXME: There are 2 cases when intermediate trie is None, we must
+            // clarify.
+            self.manager.check_make_snapshot(
+                self.maybe_intermediate_trie.clone(),
+                self.intermediate_trie_root.clone(),
+                &self.intermediate_epoch_id,
+                self.height.clone().unwrap(),
+            )?;
+        }
+
         commit_result
     }
 
@@ -339,7 +380,9 @@ impl<'a> State<'a> {
         self.delta_trie.get_merkle(self.delta_trie_root.clone())
     }
 
-    fn do_db_commit(&mut self, epoch_id: EpochId) -> Result<()> {
+    fn do_db_commit(
+        &mut self, epoch_id: EpochId, merkle_root: &MerkleHash,
+    ) -> Result<()> {
         // TODO(yz): accumulate to db write counter.
         self.dirty = false;
 
@@ -416,13 +459,24 @@ impl<'a> State<'a> {
                 };
 
                 commit_transaction.transaction.put(
-                    [
-                        "state_root_db_key_for_epoch_id_".as_bytes(),
-                        epoch_id.as_ref(),
-                    ]
-                    .concat()
-                    .as_slice(),
+                    ["db_key_for_epoch_id_".as_bytes(), epoch_id.as_ref()]
+                        .concat()
+                        .as_slice(),
                     db_key.to_string().as_bytes(),
+                )?;
+
+                commit_transaction.transaction.put(
+                    ["db_key_for_root_".as_bytes(), merkle_root.as_ref()]
+                        .concat()
+                        .as_slice(),
+                    db_key.to_string().as_bytes(),
+                )?;
+
+                commit_transaction.transaction.put(
+                    ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
+                        .concat()
+                        .as_slice(),
+                    self.parent_epoch_id.to_hex().as_bytes(),
                 )?;
 
                 commit_transaction
@@ -437,23 +491,28 @@ impl<'a> State<'a> {
             }
         }
 
-        self.manager
-            .mpt_commit_state_root(epoch_id, self.delta_trie_root.clone());
+        StateManager::mpt_commit_state_root(
+            &self.delta_trie,
+            epoch_id,
+            merkle_root,
+            self.parent_epoch_id.clone(),
+            self.delta_trie_root.clone(),
+        );
 
         Ok(())
     }
 
-    fn state_root_check(&self) -> Result<()> {
+    fn state_root_check(&self) -> Result<MerkleHash> {
         let maybe_merkle_root = self.get_merkle_root()?;
         match maybe_merkle_root {
             // Empty state.
-            None => (Ok(())),
+            None => (Ok(MERKLE_NULL_NODE)),
             Some(merkle_hash) => {
                 // Non-empty state
                 if merkle_hash.is_zero() {
                     Err(ErrorKind::StateCommitWithoutMerkleHash.into())
                 } else {
-                    Ok(())
+                    Ok(merkle_hash)
                 }
             }
         }
@@ -463,7 +522,7 @@ impl<'a> State<'a> {
         &self, dumper: &mut DUMPER,
     ) -> Result<()> {
         let inserter = DeltaMptInserter {
-            mpt: self.delta_trie.clone(),
+            maybe_mpt: Some(self.delta_trie.clone()),
             maybe_root_node: self.delta_trie_root.clone(),
         };
 
@@ -475,17 +534,22 @@ use super::{
     super::{state::*, state_manager::*, storage_db::*},
     errors::*,
     multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::{children_table::VanillaChildrenTable, *},
+        merkle_patricia_trie::{
+            children_table::VanillaChildrenTable, cow_node_ref::KVInserter, *,
+        },
         node_memory_manager::ActualSlabIndex,
         DeltaMpt, TrieProof,
     },
     owned_node_set::OwnedNodeSet,
     state_manager::*,
     state_proof::StateProof,
+    storage_manager::DeltaMptInserter,
 };
 use crate::statedb::KeyPadding;
+use parity_bytes::ToPretty;
 use primitives::{
-    EpochId, MerkleHash, StateRoot, StateRootWithAuxInfo, MERKLE_NULL_NODE,
+    EpochId, MerkleHash, StateRoot, StateRootAuxInfo, StateRootWithAuxInfo,
+    MERKLE_NULL_NODE,
 };
 use std::{
     cell::UnsafeCell,
@@ -493,5 +557,3 @@ use std::{
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };
-use crate::storage::impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::cow_node_ref::KVInserter;
-use crate::storage::impls::storage_manager::DeltaMptInserter;
