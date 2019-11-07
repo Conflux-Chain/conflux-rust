@@ -84,9 +84,7 @@ impl ReceivedTransactionContainer {
         false
     }
 
-    pub fn group_overflow_from_tx_hash(
-        &self, full_trans_id: &H256,
-    ) -> bool {
+    pub fn group_overflow_from_tx_hash(&self, full_trans_id: &H256) -> bool {
         let key: TxPropagateId = TransactionDigests::to_u24(
             full_trans_id[29],
             full_trans_id[30],
@@ -351,7 +349,6 @@ impl InflightPendingTransactionContainer {
             ),
         }
     }
-
 
     pub fn request_transactions_from_inflight_pending_pool(
         &mut self, signed_transactions: &Vec<Arc<SignedTransaction>>,

@@ -275,7 +275,8 @@ impl RequestManager {
         let received_transactions = self.received_transactions.read();
 
         INFLIGHT_TX_POOL_GAUGE.update(tx_from_short_id_inflight_keys.len());
-        TX_HASHES_INFLIGHT_TX_POOL_GAUGE.update(tx_from_hashes_inflight_keys.len());
+        TX_HASHES_INFLIGHT_TX_POOL_GAUGE
+            .update(tx_from_hashes_inflight_keys.len());
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
         let (
@@ -391,14 +392,14 @@ impl RequestManager {
             return;
         }
 
-        self.inflight_pending_transactions.write()
+        self.inflight_pending_transactions
+            .write()
             .append_inflight_pending_items(inflight_pending_items);
     }
 
     pub fn request_transactions_from_tx_hashes(
-        &self, io: &dyn NetworkContext, peer_id: PeerId,
-        tx_hashes: Vec<H256>, window_index: usize,
-        tx_hashes_indices: &Vec<usize>,
+        &self, io: &dyn NetworkContext, peer_id: PeerId, tx_hashes: Vec<H256>,
+        window_index: usize, tx_hashes_indices: &Vec<usize>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
@@ -412,7 +413,8 @@ impl RequestManager {
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
         let received_transactions = self.received_transactions.read();
 
-        TX_HASHES_INFLIGHT_TX_POOL_GAUGE.update(tx_from_hashes_inflight_keys.len());
+        TX_HASHES_INFLIGHT_TX_POOL_GAUGE
+            .update(tx_from_hashes_inflight_keys.len());
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
         let (tx_ids, indices) = {
@@ -438,7 +440,11 @@ impl RequestManager {
             (tx_ids, indices)
         };
         TX_REQUEST_METER.mark(tx_ids.len());
-        debug!("Request {} tx using tx hashes from peer={}", indices.len(), peer_id);
+        debug!(
+            "Request {} tx using tx hashes from peer={}",
+            indices.len(),
+            peer_id
+        );
 
         let request = GetTransactionsFromTxHashes {
             request_id: 0,

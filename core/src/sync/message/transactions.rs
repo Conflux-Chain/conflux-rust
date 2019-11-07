@@ -6,8 +6,8 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{
-            metrics::TX_HANDLE_TIMER, Context, DynamicCapability, Handleable,
-            Key, KeyContainer,msgid
+            metrics::TX_HANDLE_TIMER, msgid, Context, DynamicCapability,
+            Handleable, Key, KeyContainer,
         },
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
@@ -90,7 +90,7 @@ pub struct TransactionDigests {
 impl Handleable for TransactionDigests {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         {
-        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+            let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
 
             let mut peer_info = peer_info.write();
             if peer_info
@@ -149,7 +149,7 @@ impl Decodable for TransactionDigests {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let short_ids:Vec<u8> = rlp.val_at(3)?;
+        let short_ids: Vec<u8> = rlp.val_at(3)?;
         if short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES != 0 {
             return Err(DecoderError::Custom(
                 "TransactionDigests length Error!",
@@ -290,10 +290,8 @@ impl Handleable for GetTransactions {
             .manager
             .request_manager
             .get_sent_transactions(self.window_index, &self.tx_hashes_indices);
-        let tx_hashes = tx_hashes_indices
-            .into_iter()
-            .map(|tx| tx.hash())
-            .collect();
+        let tx_hashes =
+            tx_hashes_indices.into_iter().map(|tx| tx.hash()).collect();
         let response = GetTransactionsResponse {
             request_id: self.request_id,
             transactions,
@@ -313,13 +311,13 @@ impl Handleable for GetTransactions {
 
 impl Encodable for GetTransactions {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.tx_hashes_indices.is_empty(){
+        if self.tx_hashes_indices.is_empty() {
             stream
                 .begin_list(3)
                 .append(&self.request_id)
                 .append(&self.window_index)
                 .append_list(&self.indices);
-        }else {
+        } else {
             stream
                 .begin_list(4)
                 .append(&self.request_id)
@@ -332,10 +330,10 @@ impl Encodable for GetTransactions {
 
 impl Decodable for GetTransactions {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if !(rlp.item_count()? == 3 || rlp.item_count()?==4){
+        if !(rlp.item_count()? == 3 || rlp.item_count()? == 4) {
             return Err(DecoderError::RlpIncorrectListLen);
         }
-        if rlp.item_count()?==3{
+        if rlp.item_count()? == 3 {
             Ok(GetTransactions {
                 request_id: rlp.val_at(0)?,
                 window_index: rlp.val_at(1)?,
@@ -344,7 +342,7 @@ impl Decodable for GetTransactions {
                 short_ids: HashSet::new(),
                 tx_hashes: HashSet::new(),
             })
-        }else {
+        } else {
             Ok(GetTransactions {
                 request_id: rlp.val_at(0)?,
                 window_index: rlp.val_at(1)?,
