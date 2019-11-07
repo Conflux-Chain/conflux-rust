@@ -987,7 +987,7 @@ impl SynchronizationProtocolHandler {
                     break;
                 }
                 if received_pool
-                    .bucket_limit_reached_from_full_tx_id(&tx.hash())
+                    .group_overflow_from_tx_hash(&tx.hash())
                 {
                     tx_hashes_transactions.push(tx.clone());
                 } else {
