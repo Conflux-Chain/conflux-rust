@@ -27,7 +27,7 @@ pub struct TokenBucket {
     last_update: Instant,
 
     // once acquire failed, record the next time to acquire tokens
-    throttled_util: Option<Instant>,
+    throttled_until: Option<Instant>,
     // client may send multiple requests in a short time, and the
     // `throttled_counter` is used to tolerate throttling instead
     // of disconnect the client directly.
@@ -47,7 +47,7 @@ impl TokenBucket {
             recharge_rate,
             default_cost,
             last_update: Instant::now(),
-            throttled_util: None,
+            throttled_until: None,
             throttled_counter: 0,
             max_throttled_counter: 0,
         }
@@ -106,16 +106,16 @@ impl TokenBucket {
         let now = Instant::now();
 
         // already throttled
-        if let Some(util) = self.throttled_util {
-            if now < util {
+        if let Some(until) = self.throttled_until {
+            if now < until {
                 if self.throttled_counter < self.max_throttled_counter {
                     self.throttled_counter += 1;
-                    return ThrottleResult::Throttled(util - now);
+                    return ThrottleResult::Throttled(until - now);
                 } else {
                     return ThrottleResult::AlreadyThrottled;
                 }
             } else {
-                self.throttled_util = None;
+                self.throttled_until = None;
                 self.throttled_counter = 0;
             }
         }
@@ -123,7 +123,7 @@ impl TokenBucket {
         match self.try_acquire() {
             Ok(_) => ThrottleResult::Success,
             Err(wait_time) => {
-                self.throttled_util = Some(now + wait_time);
+                self.throttled_until = Some(now + wait_time);
                 ThrottleResult::Throttled(wait_time)
             }
         }
@@ -293,7 +293,7 @@ mod tests {
         sleep(Duration::from_secs(1));
 
         assert_eq!(bucket.throttle(), ThrottleResult::Success);
-        assert_eq!(bucket.throttled_util, None);
+        assert_eq!(bucket.throttled_until, None);
         assert_eq!(bucket.throttled_counter, 0);
     }
 

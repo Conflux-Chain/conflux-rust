@@ -51,20 +51,20 @@ pub struct SynchronizationPeerState {
 }
 
 impl SynchronizationPeerState {
-    pub fn set_throttled(&mut self, msg_id: MsgId, util: Instant) {
-        let current = self.throttled_msgs.entry(msg_id).or_insert(util);
-        if *current < util {
-            *current = util;
+    pub fn set_throttled(&mut self, msg_id: MsgId, until: Instant) {
+        let current = self.throttled_msgs.entry(msg_id).or_insert(until);
+        if *current < until {
+            *current = until;
         }
     }
 
     pub fn check_throttled(&mut self, msg_id: &MsgId) -> bool {
-        let util = match self.throttled_msgs.get(msg_id) {
+        let until = match self.throttled_msgs.get(msg_id) {
             Some(util) => util,
             None => return false,
         };
 
-        if Instant::now() < *util {
+        if Instant::now() < *until {
             return true;
         }
 
