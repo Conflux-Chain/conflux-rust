@@ -280,14 +280,14 @@ impl RequestManager {
         let (
             short_ids,
             tx_hashes,
-            short_id_indices,
+            tx_request_indices,
             hashes_request_indices,
             inflight_pending_items,
         ) = {
             let mut short_ids = HashSet::new();
             let mut tx_hashes = HashSet::new();
             let mut tx_request_indices = Vec::new();
-            let mut tx_hashes_indices = Vec::new();
+            let mut hashes_request_indices = Vec::new();
             let mut inflight_pending_items: Vec<
                 InflightPendingTrasnactionItem,
             > = Vec::new();
@@ -304,7 +304,7 @@ impl RequestManager {
                     key2,
                 ) {
                     if received_transactions.group_overflow(&fixed_bytes) {
-                        tx_hashes_indices.push(i);
+                        hashes_request_indices.push(i);
                     }
                     // Already received or need to request long id
                     continue;
@@ -350,15 +350,15 @@ impl RequestManager {
                 short_ids,
                 tx_hashes,
                 tx_request_indices,
-                tx_hashes_indices,
+                hashes_request_indices,
                 inflight_pending_items,
             )
         };
-        TX_REQUEST_METER.mark(short_id_indices.len());
+        TX_REQUEST_METER.mark(tx_request_indices.len());
         TX_REQUEST_TX_HASHES_METER.mark(hashes_request_indices.len());
         debug!(
-            "Request {} tx and {} long tx ids from peer={}",
-            short_id_indices.len(),
+            "Request {} tx and {} tx hashes from peer={}",
+            tx_request_indices.len(),
             hashes_request_indices.len(),
             peer_id
         );
@@ -366,7 +366,7 @@ impl RequestManager {
         let request = GetTransactions {
             request_id: 0,
             window_index,
-            indices: short_id_indices,
+            indices: tx_request_indices,
             tx_hashes_indices: hashes_request_indices,
             short_ids: short_ids.clone(),
             tx_hashes: tx_hashes.clone(),

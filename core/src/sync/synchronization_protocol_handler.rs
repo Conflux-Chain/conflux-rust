@@ -1010,7 +1010,7 @@ impl SynchronizationProtocolHandler {
             (short_ids_transactions, tx_hashes_transactions)
         };
         debug!(
-            "Send short ids:{}, Send long ids:{}",
+            "Send short ids:{}, Send tx hashes:{}",
             short_ids_transactions.len(),
             tx_hashes_transactions.len()
         );

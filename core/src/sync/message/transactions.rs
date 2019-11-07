@@ -271,27 +271,7 @@ impl Request for GetTransactions {
         }
     }
 
-    fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
-        let mut short_inflight_keys =
-            inflight_keys.write(msgid::GET_TRANSACTIONS);
-        let mut long_inflight_keys =
-            inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
-        let mut short_tx_ids: HashSet<TxPropagateId> = HashSet::new();
-        let mut long_tx_ids: HashSet<H256> = HashSet::new();
-        for id in self.short_ids.iter() {
-            if short_inflight_keys.insert(Key::Id(*id)) {
-                short_tx_ids.insert(*id);
-            }
-        }
-        for id in self.tx_hashes.iter() {
-            if long_inflight_keys.insert(Key::Hash(*id)) {
-                long_tx_ids.insert(*id);
-            }
-        }
-
-        self.short_ids = short_tx_ids;
-        self.tx_hashes = long_tx_ids;
-    }
+    fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {}
 
     fn is_empty(&self) -> bool {
         self.tx_hashes_indices.is_empty() && self.indices.is_empty()
@@ -320,7 +300,7 @@ impl Handleable for GetTransactions {
             long_trans_ids,
         };
         debug!(
-            "on_get_transactions request {} txs, {} long ids, returned {} txs {} long ids",
+            "on_get_transactions request {} txs, {} tx hashes, returned {} txs {}tx hashes",
             self.indices.len(),
             self.tx_hashes_indices.len(),
             response.transactions.len(),
@@ -333,29 +313,47 @@ impl Handleable for GetTransactions {
 
 impl Encodable for GetTransactions {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        stream
-            .begin_list(4)
-            .append(&self.request_id)
-            .append(&self.window_index)
-            .append_list(&self.indices)
-            .append_list(&self.tx_hashes_indices);
+        if self.tx_hashes_indices.is_empty(){
+            stream
+                .begin_list(3)
+                .append(&self.request_id)
+                .append(&self.window_index)
+                .append_list(&self.indices);
+        }else {
+            stream
+                .begin_list(4)
+                .append(&self.request_id)
+                .append(&self.window_index)
+                .append_list(&self.indices)
+                .append_list(&self.tx_hashes_indices);
+        }
     }
 }
 
 impl Decodable for GetTransactions {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.item_count()? != 4 {
+        if !(rlp.item_count()? == 3 || rlp.item_count()?==4){
             return Err(DecoderError::RlpIncorrectListLen);
         }
-
-        Ok(GetTransactions {
-            request_id: rlp.val_at(0)?,
-            window_index: rlp.val_at(1)?,
-            indices: rlp.list_at(2)?,
-            tx_hashes_indices: rlp.list_at(3)?,
-            short_ids: HashSet::new(),
-            tx_hashes: HashSet::new(),
-        })
+        if rlp.item_count()?==3{
+            Ok(GetTransactions {
+                request_id: rlp.val_at(0)?,
+                window_index: rlp.val_at(1)?,
+                indices: rlp.list_at(2)?,
+                tx_hashes_indices: vec![],
+                short_ids: HashSet::new(),
+                tx_hashes: HashSet::new(),
+            })
+        }else {
+            Ok(GetTransactions {
+                request_id: rlp.val_at(0)?,
+                window_index: rlp.val_at(1)?,
+                indices: rlp.list_at(2)?,
+                tx_hashes_indices: rlp.list_at(3)?,
+                short_ids: HashSet::new(),
+                tx_hashes: HashSet::new(),
+            })
+        }
     }
 }
 
