@@ -6,10 +6,7 @@ use super::*;
 use crate::{
     message::{Message, MsgId, RequestId},
     sync::{
-        message::{
-            throttling::Throttle,
-            transactions::GetTransactionsFromTxHashesResponse,
-        },
+        message::throttling::Throttle,
         state::{
             SnapshotChunkRequest, SnapshotChunkResponse,
             SnapshotManifestRequest, SnapshotManifestResponse,

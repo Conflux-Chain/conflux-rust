@@ -6,8 +6,8 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{
-            metrics::TX_HANDLE_TIMER, msgid, Context, DynamicCapability,
-            Handleable, Key, KeyContainer,
+            metrics::TX_HANDLE_TIMER, Context, DynamicCapability, Handleable,
+            Key, KeyContainer,msgid
         },
         request_manager::Request,
         Error, ErrorKind, ProtocolConfiguration,
@@ -90,7 +90,7 @@ pub struct TransactionDigests {
 impl Handleable for TransactionDigests {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         {
-            let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
 
             let mut peer_info = peer_info.write();
             if peer_info
@@ -286,25 +286,25 @@ impl Handleable for GetTransactions {
             .manager
             .request_manager
             .get_sent_transactions(self.window_index, &self.indices);
-        let long_indices_transactions = ctx
+        let tx_hashes_indices = ctx
             .manager
             .request_manager
             .get_sent_transactions(self.window_index, &self.tx_hashes_indices);
-        let long_trans_ids = long_indices_transactions
+        let tx_hashes = tx_hashes_indices
             .into_iter()
             .map(|tx| tx.hash())
             .collect();
         let response = GetTransactionsResponse {
             request_id: self.request_id,
             transactions,
-            long_trans_ids,
+            tx_hashes,
         };
         debug!(
-            "on_get_transactions request {} txs, {} tx hashes, returned {} txs {}tx hashes",
+            "on_get_transactions request {} txs, {} tx hashes, returned {} txs {} tx hashes",
             self.indices.len(),
             self.tx_hashes_indices.len(),
             response.transactions.len(),
-            response.long_trans_ids.len(),
+            response.tx_hashes.len(),
         );
 
         ctx.send_response(&response)
@@ -449,7 +449,7 @@ impl Decodable for GetTransactionsFromTxHashes {
 pub struct GetTransactionsResponse {
     pub request_id: RequestId,
     pub transactions: Vec<TransactionWithSignature>,
-    pub long_trans_ids: Vec<H256>,
+    pub tx_hashes: Vec<H256>,
 }
 
 impl Handleable for GetTransactionsResponse {
@@ -486,13 +486,13 @@ impl Handleable for GetTransactionsResponse {
 
         debug!("Transactions successfully inserted to transaction pool");
 
-        if req.tx_hashes_indices.len() > 0 && self.long_trans_ids.is_empty() {
+        if req.tx_hashes_indices.len() > 0 && !self.tx_hashes.is_empty() {
             ctx.manager
                 .request_manager
                 .request_transactions_from_tx_hashes(
                     ctx.io,
                     ctx.peer,
-                    self.long_trans_ids,
+                    self.tx_hashes,
                     req.window_index,
                     &req.tx_hashes_indices,
                 );
