@@ -50,6 +50,6 @@ pub use self::{
     throttling::Throttled,
     transactions::{
         GetTransactions, GetTransactionsFromTxHashes, GetTransactionsResponse,
-        TransactionDigests, Transactions,
+        TransactionDigests, Transactions,GetTransactionsFromTxHashesResponse
     },
 };

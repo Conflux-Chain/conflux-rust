@@ -57,10 +57,10 @@ lazy_static! {
             "system_metrics",
             "inflight_tx_pool_size"
         );
-    static ref LONG_INFLIGHT_TX_POOL_GAUGE: Arc<dyn Gauge<usize>> =
+    static ref TX_HASHES_INFLIGHT_TX_POOL_GAUGE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group(
             "system_metrics",
-            "long_inflight_tx_pool_size"
+            "tx_hashes_inflight_tx_pool_size"
         );
     static ref INFLIGHT_TX_PENDING_POOL_METER: Arc<dyn Meter> =
         register_meter_with_group(
@@ -267,14 +267,15 @@ impl RequestManager {
             return;
         }
 
-        let mut inflight_transactions =
-            self.inflight_pending_transactions.write();
+        let mut tx_from_short_id_inflight_keys =
+            self.inflight_keys.write(msgid::GET_TRANSACTIONS);
         let mut tx_from_hashes_inflight_keys = self
             .inflight_keys
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
         let received_transactions = self.received_transactions.read();
 
-        INFLIGHT_TX_POOL_GAUGE.update(inflight_transactions.len());
+        INFLIGHT_TX_POOL_GAUGE.update(tx_from_short_id_inflight_keys.len());
+        TX_HASHES_INFLIGHT_TX_POOL_GAUGE.update(tx_from_hashes_inflight_keys.len());
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
         let (
@@ -310,7 +311,7 @@ impl RequestManager {
                     continue;
                 }
 
-                if inflight_transactions.insert_inflight(fixed_bytes) {
+                if tx_from_short_id_inflight_keys.insert(Key::Id(fixed_bytes)) {
                     tx_request_indices.push(i);
                     short_ids.insert(fixed_bytes);
                 } else {
@@ -382,7 +383,7 @@ impl RequestManager {
             .is_err()
         {
             for id in short_ids {
-                inflight_transactions.remove(id);
+                tx_from_short_id_inflight_keys.remove(&Key::Id(id));
             }
             for id in tx_hashes {
                 tx_from_hashes_inflight_keys.remove(&Key::Hash(id));
@@ -390,43 +391,43 @@ impl RequestManager {
             return;
         }
 
-        inflight_transactions
+        self.inflight_pending_transactions.write()
             .append_inflight_pending_items(inflight_pending_items);
     }
 
     pub fn request_transactions_from_tx_hashes(
         &self, io: &dyn NetworkContext, peer_id: PeerId,
-        long_tx_ids: Vec<H256>, window_index: usize,
-        trans_long_indices: &Vec<usize>,
+        tx_hashes: Vec<H256>, window_index: usize,
+        tx_hashes_indices: &Vec<usize>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
-        if long_tx_ids.is_empty() {
+        if tx_hashes.is_empty() {
             return;
         }
 
-        let mut long_inflight_keys = self
+        let mut tx_from_hashes_inflight_keys = self
             .inflight_keys
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
         let received_transactions = self.received_transactions.read();
 
-        LONG_INFLIGHT_TX_POOL_GAUGE.update(long_inflight_keys.len());
+        TX_HASHES_INFLIGHT_TX_POOL_GAUGE.update(tx_from_hashes_inflight_keys.len());
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
         let (tx_ids, indices) = {
             let mut tx_ids = HashSet::new();
             let mut indices = Vec::new();
 
-            for i in 0..long_tx_ids.len() {
-                let id = long_tx_ids[i];
+            for i in 0..tx_hashes.len() {
+                let id = tx_hashes[i];
                 if received_transactions.contains_tx_id(&id) {
                     // Already received
                     continue;
                 }
 
-                if long_inflight_keys.insert(Key::Hash(id)) {
-                    indices.push(trans_long_indices[i]);
+                if tx_from_hashes_inflight_keys.insert(Key::Hash(id)) {
+                    indices.push(tx_hashes_indices[i]);
                     tx_ids.insert(id);
                 } else {
                     // Already being requested
@@ -437,7 +438,7 @@ impl RequestManager {
             (tx_ids, indices)
         };
         TX_REQUEST_METER.mark(tx_ids.len());
-        debug!("Request {} tx from peer={}", indices.len(), peer_id);
+        debug!("Request {} tx  using tx hashes from peer={}", indices.len(), peer_id);
 
         let request = GetTransactionsFromTxHashes {
             request_id: 0,
@@ -456,7 +457,7 @@ impl RequestManager {
             .is_err()
         {
             for id in tx_ids {
-                long_inflight_keys.remove(&Key::Hash(id));
+                tx_from_hashes_inflight_keys.remove(&Key::Hash(id));
             }
         }
     }

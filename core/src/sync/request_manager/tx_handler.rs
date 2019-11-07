@@ -352,16 +352,6 @@ impl InflightPendingTransactionContainer {
         }
     }
 
-    // true if no inflight, and insert successful
-    //
-    pub fn insert_inflight(&mut self, fixed_bytes: TxPropagateId) -> bool {
-        if self.inner.txid_hashmap.contains_key(&fixed_bytes) {
-            false
-        } else {
-            &self.inner.txid_hashmap.insert(fixed_bytes, HashSet::new());
-            true
-        }
-    }
 
     pub fn remove(&mut self, fixed_bytes: TxPropagateId) {
         self.inner.txid_hashmap.remove(&fixed_bytes);
