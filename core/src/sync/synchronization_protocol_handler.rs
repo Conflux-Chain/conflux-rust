@@ -986,9 +986,7 @@ impl SynchronizationProtocolHandler {
                 if total_tx_bytes >= MAX_TXS_BYTES_TO_PROPAGATE {
                     break;
                 }
-                if received_pool
-                    .group_overflow_from_tx_hash(&tx.hash())
-                {
+                if received_pool.group_overflow_from_tx_hash(&tx.hash()) {
                     tx_hashes_transactions.push(tx.clone());
                 } else {
                     short_ids_transactions.push(tx.clone());

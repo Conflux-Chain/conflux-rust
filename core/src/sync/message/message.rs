@@ -155,7 +155,9 @@ impl Message for GetTransactionsResponse {
 }
 
 impl Message for GetTransactionsFromTxHashesResponse {
-    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE }
+    fn msg_id(&self) -> MsgId {
+        msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE
+    }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
 
@@ -220,13 +222,13 @@ pub fn handle_rlp_message(
             handle_message::<GetTransactions>(ctx, rlp)?;
         }
         msgid::GET_TRANSACTIONS_FROM_TX_HASHES => {
-            handle_message::<GetTransactionsFromTxHashes>(ctx,rlp)?;
+            handle_message::<GetTransactionsFromTxHashes>(ctx, rlp)?;
         }
         msgid::GET_TRANSACTIONS_RESPONSE => {
             handle_message::<GetTransactionsResponse>(ctx, rlp)?;
         }
         msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE => {
-            handle_message::<GetTransactionsFromTxHashesResponse>(ctx,rlp)?;
+            handle_message::<GetTransactionsFromTxHashesResponse>(ctx, rlp)?;
         }
         msgid::GET_BLOCK_HASHES_BY_EPOCH => {
             handle_message::<GetBlockHashesByEpoch>(ctx, rlp)?;
