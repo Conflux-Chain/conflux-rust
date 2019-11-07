@@ -8,7 +8,7 @@ use crate::{
         message::{
             msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn,
             GetBlocks, GetCompactBlocks, GetTransactions,
-            GetTransactionsFromLongId, Key, KeyContainer, TransactionDigests,
+            GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
         },
         synchronization_state::PeerFilter,
         Error,
@@ -439,7 +439,7 @@ impl RequestManager {
         TX_REQUEST_METER.mark(tx_ids.len());
         debug!("Request {} tx from peer={}", indices.len(), peer_id);
 
-        let request = GetTransactionsFromLongId {
+        let request = GetTransactionsFromTxHashes {
             request_id: 0,
             window_index,
             indices,
@@ -733,7 +733,7 @@ impl RequestManager {
     }
 
     pub fn transactions_received_from_tx_hashes(
-        &self, get_transactions_request: &GetTransactionsFromLongId,
+        &self, get_transactions_request: &GetTransactionsFromTxHashes,
         signed_transactions: Vec<Arc<SignedTransaction>>,
     )
     {
