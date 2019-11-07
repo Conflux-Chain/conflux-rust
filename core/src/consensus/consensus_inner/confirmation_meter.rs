@@ -56,6 +56,19 @@ impl ConfirmationMeter {
         }
     }
 
+    pub fn reset(&self) {
+        let mut inner = self.inner.write();
+        inner.total_weight_in_past_2d = TotalWeightInPastMovingDelta {
+            old: 0,
+            cur: 0,
+            delta: 0,
+        };
+        inner.finality_manager = FinalityManager {
+            lowest_epoch_num: 0,
+            risks_less_than: VecDeque::new(),
+        };
+    }
+
     pub fn update_total_weight_in_past(&self) {
         let mut inner = self.inner.write();
         let total_weight = &mut inner.total_weight_in_past_2d;

@@ -55,6 +55,12 @@ fn on_new_decoded_block(
 ) -> Result<Vec<H256>, Error> {
     let hash = block.block_header.hash();
     let mut need_to_relay = Vec::new();
+    // We may receive some messages from peer during recover from db
+    // phase. We should ignore it, since it may cause some
+    // inconsistency.
+    if ctx.manager.in_recover_from_db_phase() {
+        return Ok(need_to_relay);
+    }
     match ctx.manager.graph.block_header_by_hash(&hash) {
         Some(header) => block.block_header = header,
         None => {

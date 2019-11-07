@@ -79,8 +79,6 @@ pub struct BlockDataManager {
     tx_data_manager: TransactionDataManager,
     db_manager: DBManager,
 
-    /// This is the genesis hash at start.
-    genesis_hash: H256,
     /// This is the original genesis block.
     pub true_genesis_block: Arc<Block>,
     pub storage_manager: Arc<StorageManager>,
@@ -96,7 +94,7 @@ impl BlockDataManager {
     ) -> Self
     {
         let mut genesis_block = genesis_block.clone();
-        let genesis_hash = genesis_block.hash();
+        let mut genesis_hash = genesis_block.hash();
         let mb = 1024 * 1024;
         let max_cache_size = cache_conf.ledger_mb() * mb;
         let pref_cache_size = max_cache_size * 3 / 4;
@@ -114,7 +112,7 @@ impl BlockDataManager {
             }
         };
 
-        let mut data_man = Self {
+        let data_man = Self {
             block_headers: RwLock::new(HashMap::new()),
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
@@ -123,7 +121,6 @@ impl BlockDataManager {
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
-            genesis_hash,
             true_genesis_block: genesis_block.clone(),
             storage_manager,
             cache_man,
@@ -150,7 +147,7 @@ impl BlockDataManager {
                         checkpoint_hash;
                     *data_man.cur_consensus_era_stable_hash.write() =
                         stable_hash;
-                    data_man.genesis_hash = checkpoint_hash;
+                    genesis_hash = checkpoint_hash;
                     genesis_block = checkpoint_block.clone();
                 }
             }
@@ -158,7 +155,7 @@ impl BlockDataManager {
 
         // FIXME: Set execution context and past_num_blocks with data on disk
         data_man.insert_epoch_execution_context(
-            *data_man.genesis_hash(),
+            genesis_hash,
             EpochExecutionContext {
                 start_block_number: 0,
             },
@@ -168,10 +165,10 @@ impl BlockDataManager {
         data_man
             .insert_block(genesis_block.clone(), true /* persistent */);
 
-        if *data_man.genesis_hash() == data_man.true_genesis_block.hash() {
+        if genesis_hash == data_man.true_genesis_block.hash() {
             // persist local_block_info for true genesis
             data_man.db_manager.insert_local_block_info_to_db(
-                data_man.genesis_hash(),
+                &data_man.true_genesis_block.hash(),
                 &LocalBlockInfo::new(
                     BlockStatus::Valid,
                     0,
@@ -179,7 +176,7 @@ impl BlockDataManager {
                 ),
             );
             data_man.insert_epoch_execution_commitments(
-                *data_man.genesis_hash(),
+                data_man.true_genesis_block.hash(),
                 data_man.genesis_state_root(),
                 *data_man
                     .true_genesis_block
@@ -192,13 +189,12 @@ impl BlockDataManager {
             );
         } else {
             // for other era genesis, we need to change the instance_id
-            if let Some(mut local_block_info) = data_man
-                .db_manager
-                .local_block_info_from_db(&data_man.genesis_hash())
+            if let Some(mut local_block_info) =
+                data_man.db_manager.local_block_info_from_db(&genesis_hash)
             {
                 local_block_info.instance_id = data_man.get_instance_id();
                 data_man.db_manager.insert_local_block_info_to_db(
-                    data_man.genesis_hash(),
+                    &genesis_hash,
                     &local_block_info,
                 );
             }
@@ -224,13 +220,14 @@ impl BlockDataManager {
             // bodies. And we should change the instance_id of genesis block to
             // current one.
             *my_instance_id += 1;
-            if let Some(mut local_block_info) = self
-                .db_manager
-                .local_block_info_from_db(&self.genesis_hash())
+            if let Some(mut local_block_info) =
+                self.db_manager.local_block_info_from_db(
+                    &self.get_cur_consensus_era_genesis_hash(),
+                )
             {
                 local_block_info.instance_id = *my_instance_id;
                 self.db_manager.insert_local_block_info_to_db(
-                    &self.genesis_hash(),
+                    &self.get_cur_consensus_era_genesis_hash(),
                     &local_block_info,
                 );
             }
@@ -240,12 +237,10 @@ impl BlockDataManager {
         self.db_manager.insert_instance_id_to_db(*my_instance_id);
     }
 
-    pub fn genesis_hash(&self) -> &H256 { &self.genesis_hash }
-
     pub fn genesis_state_root(&self) -> StateRootWithAuxInfo {
         self.storage_manager
             .get_state_no_commit(SnapshotAndEpochIdRef::new_for_readonly(
-                &self.genesis_hash(),
+                &self.get_cur_consensus_era_genesis_hash(),
                 &StateRootWithAuxInfo::default(),
             ))
             .unwrap()
