@@ -50,6 +50,30 @@ pub struct SynchronizationPeerState {
     pub throttled_msgs: HashMap<MsgId, Instant>,
 }
 
+impl SynchronizationPeerState {
+    pub fn set_throttled(&mut self, msg_id: MsgId, until: Instant) {
+        let current = self.throttled_msgs.entry(msg_id).or_insert(until);
+        if *current < until {
+            *current = until;
+        }
+    }
+
+    pub fn check_throttled(&mut self, msg_id: &MsgId) -> bool {
+        let until = match self.throttled_msgs.get(msg_id) {
+            Some(util) => util,
+            None => return false,
+        };
+
+        if Instant::now() < *until {
+            return true;
+        }
+
+        self.throttled_msgs.remove(msg_id);
+
+        false
+    }
+}
+
 pub type SynchronizationPeers =
     HashMap<PeerId, Arc<RwLock<SynchronizationPeerState>>>;
 
@@ -210,11 +234,10 @@ impl PeerFilter {
             }
 
             if check_state {
-                let peer = peer.read();
+                let mut peer = peer.write();
 
                 if let Some(ref ids) = self.throttle_msg_ids {
-                    if ids.iter().any(|id| peer.throttled_msgs.contains_key(id))
-                    {
+                    if ids.iter().any(|id| peer.check_throttled(id)) {
                         continue;
                     }
                 }

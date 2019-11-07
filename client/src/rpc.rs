@@ -45,7 +45,7 @@ use crate::{
     rpc::interceptor::{RpcInterceptor, RpcProxy},
 };
 pub use metadata::Metadata;
-use throttling::token_bucket::TokenBucketManager;
+use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 #[derive(Debug, PartialEq)]
 pub struct TcpConfiguration {
@@ -145,7 +145,7 @@ pub fn setup_public_rpc_apis_light(
 ) -> MetaIoHandler<Metadata> {
     let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let interceptor =
-        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_light");
+        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
@@ -232,14 +232,23 @@ impl RpcInterceptor for ThrottleInterceptor {
             None => return Ok(()),
         };
 
-        if let Err(e) = bucket.lock().try_acquire() {
-            debug!("RPC {} throttled in {:?}", name, e);
-            return Err(RpcError::invalid_params(format!(
-                "throttled in {:?}",
-                e
-            )));
-        }
+        let result = bucket.lock().throttle();
 
-        Ok(())
+        match result {
+            ThrottleResult::Success => Ok(()),
+            ThrottleResult::Throttled(wait_time) => {
+                debug!("RPC {} throttled in {:?}", name, wait_time);
+                return Err(RpcError::invalid_params(format!(
+                    "throttled in {:?}",
+                    wait_time
+                )));
+            }
+            ThrottleResult::AlreadyThrottled => {
+                debug!("RPC {} already throttled", name);
+                return Err(RpcError::invalid_params(
+                    "already throttled, please try again later",
+                ));
+            }
+        }
     }
 }
