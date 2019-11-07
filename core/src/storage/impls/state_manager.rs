@@ -356,6 +356,19 @@ impl StateManagerTrait for StateManager {
     }
 }
 
+// FIXME This is a quick fix for the ref loop of storage_manager. We should
+// eliminate this loop. Arc<StorageManager> -> snapshot_associated_mpts_by_epoch
+// contains -> Arc<DeltaMpt> -> delta_mpts_releaser -> storage_manager ->
+// Arc<StorageManager>
+impl Drop for StateManager {
+    fn drop(&mut self) {
+        self.storage_manager
+            .snapshot_associated_mpts_by_epoch
+            .write()
+            .clear();
+    }
+}
+
 use super::{
     super::{state::*, state_manager::*, storage_db::*},
     errors::*,
