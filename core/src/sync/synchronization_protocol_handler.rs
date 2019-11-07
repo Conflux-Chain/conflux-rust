@@ -44,10 +44,10 @@ use std::{
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "tx_propagate_set_size");
-    static ref LONG_TX_PROPAGATE_METER: Arc<dyn Meter> =
+    static ref TX_HASHES_PROPAGATE_METER: Arc<dyn Meter> =
         register_meter_with_group(
             "system_metrics",
-            "long_tx_propagate_set_size"
+            "tx_hashes_propagate_set_size"
         );
     static ref BLOCK_RECOVER_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync:recover_block");
@@ -1029,7 +1029,7 @@ impl SynchronizationProtocolHandler {
         let mut sent_transactions = vec![];
         sent_transactions.extend(short_ids_transactions);
         if !tx_hashes_transactions.is_empty() {
-            LONG_TX_PROPAGATE_METER.mark(tx_hashes_transactions.len());
+            TX_HASHES_PROPAGATE_METER.mark(tx_hashes_transactions.len());
             for tx in &tx_hashes_transactions {
                 TransactionDigests::append_long_trans_id(
                     &mut tx_hashes_part,

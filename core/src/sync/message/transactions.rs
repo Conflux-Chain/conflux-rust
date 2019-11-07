@@ -149,7 +149,7 @@ impl Decodable for TransactionDigests {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let short_ids = rlp.list_at(3)?;
+        let short_ids:Vec<u8> = rlp.val_at(3)?;
         if short_ids.len() % TransactionDigests::SHORT_ID_SIZE_IN_BYTES != 0 {
             return Err(DecoderError::Custom(
                 "TransactionDigests length Error!",
