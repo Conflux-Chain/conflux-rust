@@ -129,6 +129,10 @@ impl Message for GetTransactions {
     fn msg_name(&self) -> &'static str { "GetTransactions" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
+
+    fn set_request_id(&mut self, id: RequestId) { self.request_id = id; }
 }
 
 impl Message for GetTransactionsFromTxHashes {

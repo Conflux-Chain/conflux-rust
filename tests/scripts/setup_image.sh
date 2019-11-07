@@ -26,6 +26,7 @@ echo "Wait for apt to be unlocked"
 apt_wait
 sudo apt install -y iotop clang git jq pssh libsqlite3-dev xutils-dev cmake pkg-config libssl-dev
 pip3 install prettytable
+pip3 install jsonrpcclient
 
 sudo apt install -y linux-tools-common
 sudo apt install -y linux-tools-`uname -r`
