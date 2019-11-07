@@ -155,7 +155,7 @@ impl Message for GetTransactionsResponse {
 }
 
 impl Message for GetTransactionsFromTxHashesResponse {
-    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
+    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
 
