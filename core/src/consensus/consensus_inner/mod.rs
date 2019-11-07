@@ -257,6 +257,22 @@ impl Default for ConsensusGraphPivotData {
 /// state root of the block is simply the original deferred state root, i.e.,
 /// DSRi+3 for block Bi+3 in the above case.
 ///
+/// Computing the reward for a block relies on correct blaming behavior of
+/// the block. If the block is a pivot block when computing its reward,
+/// it is required that:
+/// 1. the block correctly chooses its parent;
+/// 2. the block contains the correct deferred state root;
+/// 3. the block correctly blames all its previous blocks following parent
+///    edges.
+///
+/// If the block is an off-pivot block when computing its reward,
+/// it is required that:
+/// 1. the block correctly chooses its parent;
+/// 2. the block correctly blames the blocks in the intersection of pivot chain
+///    blocks and all its previous blocks following parent edges. (This is to
+///    encourage the node generating the off-pivot block to keep verifying
+///    pivot chain blocks.)
+///
 /// To provide proof of state root to light node (or a full node when it tries
 /// to recover from a checkpoint), the protocol goes through the following
 /// steps. Let's assume the verifier has a subtree of block headers which
