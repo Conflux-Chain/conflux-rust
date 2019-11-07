@@ -362,14 +362,14 @@ impl Decodable for GetTransactions {
 /////////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, PartialEq)]
-pub struct GetTransactionsFromLongId {
+pub struct GetTransactionsFromTxHashes {
     pub request_id: RequestId,
     pub window_index: usize,
     pub indices: Vec<usize>,
     pub tx_ids: HashSet<H256>,
 }
 
-impl Request for GetTransactionsFromLongId {
+impl Request for GetTransactionsFromTxHashes {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.transaction_request_timeout
     }
@@ -399,14 +399,14 @@ impl Request for GetTransactionsFromLongId {
     fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
 
-impl Handleable for GetTransactionsFromLongId {
+impl Handleable for GetTransactionsFromTxHashes {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let transactions = ctx
             .manager
             .request_manager
             .get_sent_transactions(self.window_index, &self.indices);
 
-        let response = GetTransactionsFromLongIdResponse {
+        let response = GetTransactionsFromTxHashesResponse {
             request_id: self.request_id,
             transactions,
         };
@@ -420,7 +420,7 @@ impl Handleable for GetTransactionsFromLongId {
     }
 }
 
-impl Encodable for GetTransactionsFromLongId {
+impl Encodable for GetTransactionsFromTxHashes {
     fn rlp_append(&self, stream: &mut RlpStream) {
         stream
             .begin_list(3)
@@ -430,13 +430,13 @@ impl Encodable for GetTransactionsFromLongId {
     }
 }
 
-impl Decodable for GetTransactionsFromLongId {
+impl Decodable for GetTransactionsFromTxHashes {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         if rlp.item_count()? != 4 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        Ok(GetTransactionsFromLongId {
+        Ok(GetTransactionsFromTxHashes {
             request_id: rlp.val_at(0)?,
             window_index: rlp.val_at(1)?,
             indices: rlp.list_at(2)?,
@@ -506,12 +506,12 @@ impl Handleable for GetTransactionsResponse {
 //////////////////////////////////////////////////////////////////////
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
-pub struct GetTransactionsFromLongIdResponse {
+pub struct GetTransactionsFromTxHashesResponse {
     pub request_id: RequestId,
     pub transactions: Vec<TransactionWithSignature>,
 }
 
-impl Handleable for GetTransactionsFromLongIdResponse {
+impl Handleable for GetTransactionsFromTxHashesResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(TX_HANDLE_TIMER.as_ref());
 
@@ -521,7 +521,7 @@ impl Handleable for GetTransactionsFromLongIdResponse {
         );
 
         let req = ctx.match_request(self.request_id)?;
-        let req = req.downcast_ref::<GetTransactionsFromLongId>(
+        let req = req.downcast_ref::<GetTransactionsFromTxHashes>(
             ctx.io,
             &ctx.manager.request_manager,
             false,
