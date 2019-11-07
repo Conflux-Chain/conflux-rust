@@ -438,7 +438,7 @@ impl RequestManager {
             (tx_ids, indices)
         };
         TX_REQUEST_METER.mark(tx_ids.len());
-        debug!("Request {} tx  using tx hashes from peer={}", indices.len(), peer_id);
+        debug!("Request {} tx using tx hashes from peer={}", indices.len(), peer_id);
 
         let request = GetTransactionsFromTxHashes {
             request_id: 0,
