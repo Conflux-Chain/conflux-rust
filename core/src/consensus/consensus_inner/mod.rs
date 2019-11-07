@@ -2523,14 +2523,20 @@ impl ConsensusGraphInner {
                 if to_update.contains(&me) {
                     to_update.remove(&me);
                     stack.push((1, me));
-                    stack.push((0, parent));
+                    if parent != NULL {
+                        stack.push((0, parent));
+                    }
                     for referee in &self.arena[me].referees {
                         stack.push((0, *referee));
                     }
                 }
             } else if stage == 1 && me != self.cur_era_genesis_block_arena_index
             {
-                let mut last_pivot = self.arena[parent].last_pivot_in_past;
+                let mut last_pivot = if parent == NULL {
+                    0
+                } else {
+                    self.arena[parent].last_pivot_in_past
+                };
                 for referee in &self.arena[me].referees {
                     let x = self.arena[*referee].last_pivot_in_past;
                     last_pivot = max(last_pivot, x);

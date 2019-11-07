@@ -569,21 +569,26 @@ impl SnapshotChunkSync {
                 .data_man
                 .block_header_by_hash(&block_hash)
                 .expect("block header must exist");
-            block_hash = *block.parent_hash();
-            if block.height() == 0
-                || (block.height() + blame_count as u64 == trusted_block_height
-                    && vec_len >= min_vec_len as usize)
-            {
-                break;
-            }
             // We've jump to another trusted block.
             if block.height() + blame_count as u64 + 1 == trusted_block_height {
                 trusted_block_height = block.height();
                 blame_count = block.blame();
-                trusted_blocks.push(block);
+                trusted_blocks.push(block.clone());
             }
+            if block.height() + blame_count as u64 == trusted_block_height
+                && vec_len >= min_vec_len as usize
+            {
+                break;
+            }
+            block_hash = *block.parent_hash();
         }
+        // verify the length of vector
         if vec_len != state_root_vec.len() {
+            debug!(
+                "wrong length of state_root_vec, expected {}, but {} found",
+                vec_len,
+                state_root_vec.len()
+            );
             return None;
         }
         // Construct out_state_blame_vec.
@@ -653,14 +658,15 @@ impl SnapshotChunkSync {
             .expect("trusted_blame_block header must exist");
 
         // check checkpoint position in `state_blame_vec`
-        let blame_vec_offset = trusted_blame_block.height() as usize
-            - checkpoint.height() as usize;
+        let blame_vec_offset = (trusted_blame_block.height()
+            - (checkpoint.height() + DEFERRED_STATE_EPOCH_COUNT))
+            as usize;
         let epoch_receipts_count = if checkpoint.height() == 0 {
             1
         } else {
             REWARD_EPOCH_COUNT
         } as usize;
-        let mut offset = 0;
+        let mut receipts_vec_offset = 0;
         let mut result = Vec::new();
         for idx in 0..epoch_receipts_count {
             let block_header = ctx
@@ -680,7 +686,7 @@ impl SnapshotChunkSync {
             let mut epoch_receipts = Vec::new();
             for i in 0..ordered_executable_epoch_blocks.len() {
                 epoch_receipts.push(Arc::new(
-                    block_receipts[offset + i]
+                    block_receipts[receipts_vec_offset + i]
                         .receipts
                         .iter()
                         .cloned()
@@ -717,10 +723,10 @@ impl SnapshotChunkSync {
                     epoch_receipts[i].clone(),
                 ));
             }
-            offset += ordered_executable_epoch_blocks.len();
+            receipts_vec_offset += ordered_executable_epoch_blocks.len();
             epoch_hash = *block_header.parent_hash();
         }
-        if offset == block_receipts.len() {
+        if receipts_vec_offset == block_receipts.len() {
             Some(result)
         } else {
             None

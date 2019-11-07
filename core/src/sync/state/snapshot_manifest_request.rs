@@ -173,42 +173,32 @@ impl SnapshotManifestRequest {
         let mut blame_count = trusted_block.blame();
         // loop until we have enough length of `state_root_vec`
         loop {
-            if let Some(exec_info) = ctx
-                .manager
-                .graph
-                .data_man
-                .consensus_graph_execution_info_from_db(&block_hash)
+            if let Some(block) =
+                ctx.manager.graph.data_man.block_header_by_hash(&block_hash)
             {
-                state_root_vec.push(
-                    exec_info
-                        .deferred_state_root_with_aux_info
-                        .state_root
-                        .clone(),
-                );
-                receipt_blame_vec
-                    .push(exec_info.original_deferred_receipt_root);
-                bloom_blame_vec
-                    .push(exec_info.original_deferred_logs_bloom_hash);
-                if let Some(block) =
-                    ctx.manager.graph.data_man.block_header_by_hash(&block_hash)
+                // We've jumped to another trusted block.
+                if block.height() + blame_count as u64 + 1
+                    == trusted_block_height
                 {
-                    // We've reached original genesis or collected enough
-                    // `state_root_vec`.
-                    if block.height() == 0
-                        || (block.height() + blame_count as u64
-                            == trusted_block_height
-                            && state_root_vec.len() >= min_vec_len as usize)
-                    {
-                        break;
-                    }
-                    // We've jump to another trusted block.
-                    if block.height() + blame_count as u64 + 1
-                        == trusted_block_height
-                    {
-                        trusted_block_height = block.height();
-                        blame_count = block.blame();
-                    }
-                    block_hash = *block.parent_hash();
+                    trusted_block_height = block.height();
+                    blame_count = block.blame()
+                }
+                if let Some(exec_info) = ctx
+                    .manager
+                    .graph
+                    .data_man
+                    .consensus_graph_execution_info_from_db(&block_hash)
+                {
+                    state_root_vec.push(
+                        exec_info
+                            .deferred_state_root_with_aux_info
+                            .state_root
+                            .clone(),
+                    );
+                    receipt_blame_vec
+                        .push(exec_info.original_deferred_receipt_root);
+                    bloom_blame_vec
+                        .push(exec_info.original_deferred_logs_bloom_hash);
                 } else {
                     warn!(
                         "failed to find block={} in db, peer={}",
@@ -216,8 +206,18 @@ impl SnapshotManifestRequest {
                     );
                     return None;
                 }
+                // We've collected enough states.
+                if block.height() + blame_count as u64 == trusted_block_height
+                    && state_root_vec.len() >= min_vec_len as usize
+                {
+                    break;
+                }
+                block_hash = *block.parent_hash();
             } else {
-                warn!("failed to find ConsensusGraphExecutionInfo for block={} in db, peer={}", block_hash, ctx.peer);
+                warn!(
+                    "failed to find block={} in db, peer={}",
+                    block_hash, ctx.peer
+                );
                 return None;
             }
         }

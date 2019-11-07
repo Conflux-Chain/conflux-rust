@@ -133,6 +133,13 @@ impl GetBlockHeadersResponse {
                 }
             }
 
+            // We may receive some messages from peer during recover from db
+            // phase. We should ignore it, since it may cause some
+            // inconsistency.
+            if ctx.manager.in_recover_from_db_phase() {
+                continue;
+            }
+
             // check whether block is in old era
             let (era_genesis_hash, era_genesis_height) = ctx
                 .manager
