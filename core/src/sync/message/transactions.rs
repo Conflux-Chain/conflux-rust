@@ -81,10 +81,10 @@ impl Handleable for Transactions {
 #[derive(Debug, PartialEq)]
 pub struct TransactionDigests {
     pub window_index: usize,
-    pub key1: u64,
+    pub key1: u64, //keys used for siphash
     pub key2: u64,
-    short_ids: Vec<u8>,
-    pub tx_hashes: Vec<H256>,
+    short_ids: Vec<u8>, // 4 bytes ids which stores in sequential order
+    pub tx_hashes: Vec<H256>, // SHA-3 hash
 }
 
 impl Handleable for TransactionDigests {
@@ -271,7 +271,27 @@ impl Request for GetTransactions {
         }
     }
 
-    fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {}
+    fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
+        let mut short_inflight_keys =
+            inflight_keys.write(msgid::GET_TRANSACTIONS);
+        let mut long_inflight_keys =
+            inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
+        let mut short_tx_ids: HashSet<TxPropagateId> = HashSet::new();
+        let mut long_tx_ids: HashSet<H256> = HashSet::new();
+        for id in self.short_ids.iter() {
+            if short_inflight_keys.insert(Key::Id(*id)) {
+                short_tx_ids.insert(*id);
+            }
+        }
+        for id in self.tx_hashes.iter() {
+            if long_inflight_keys.insert(Key::Hash(*id)) {
+                long_tx_ids.insert(*id);
+            }
+        }
+
+        self.short_ids = short_tx_ids;
+        self.tx_hashes = long_tx_ids;
+    }
 
     fn is_empty(&self) -> bool {
         self.tx_hashes_indices.is_empty() && self.indices.is_empty()

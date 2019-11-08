@@ -1024,8 +1024,7 @@ impl SynchronizationProtocolHandler {
                 );
             }
         }
-        let mut sent_transactions = vec![];
-        sent_transactions.extend(short_ids_transactions);
+        let mut sent_transactions = short_ids_transactions;
         if !tx_hashes_transactions.is_empty() {
             TX_HASHES_PROPAGATE_METER.mark(tx_hashes_transactions.len());
             for tx in &tx_hashes_transactions {
