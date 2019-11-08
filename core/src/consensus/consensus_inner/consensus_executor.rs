@@ -367,7 +367,7 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward = !inner.arena[pivot_arena_index]
                                 .data
-                                .state_valid;
+                                .state_valid.expect("computed in wait_and_compute_execution_info_locked");
                         } else {
                             no_reward = !inner
                                 .compute_vote_valid_for_pivot_block(
@@ -469,23 +469,19 @@ impl ConsensusExecutor {
         // We go up and find all states whose execution_infos are missing
         let waiting_blocks = inner_lock
             .read()
-            .collect_blocks_missing_execution_info(me)?;
+            .collect_blocks_missing_execution_commitments(me)?;
         // Now we wait without holding the inner lock
         // Note that we must use hash instead of index because once we release
         // the lock, there might be a checkpoint coming in to break
         // index FIXME: There could be situations that in the
         // data_manager, the result is removed due to checkpoint, FIXME:
         // for this rare case, we should make wait_for_result to pop up errors!
-        let mut waiting_result = Vec::new();
-        for (cur_hash_opt, state_block_hash) in waiting_blocks {
-            let res = self.wait_for_result(state_block_hash);
-            waiting_result.push((cur_hash_opt, res));
+        for state_block_hash in waiting_blocks {
+            self.wait_for_result(state_block_hash);
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        inner_lock
-            .write()
-            .compute_execution_info_for_blocks(waiting_result)?;
+        inner_lock.write().compute_execution_info_for_blocks(me)?;
         Ok(())
     }
 
@@ -493,23 +489,19 @@ impl ConsensusExecutor {
         &self, me: usize, inner: &mut ConsensusGraphInner,
     ) -> Result<(), String> {
         // We go up and find all states whose execution_infos are missing
-        let waiting_blocks = inner.collect_blocks_missing_execution_info(me)?;
+        let waiting_blocks =
+            inner.collect_blocks_missing_execution_commitments(me)?;
         trace!(
             "wait_and_compute_execution_info_locked: waiting_blocks={:?}",
             waiting_blocks
         );
-        let mut waiting_result = Vec::new();
-        for (cur_hash_opt, state_block_hash) in waiting_blocks {
-            let res = self.wait_for_result(state_block_hash);
-            waiting_result.push((cur_hash_opt, res));
+        // for this rare case, we should make wait_for_result to pop up errors!
+        for state_block_hash in waiting_blocks {
+            self.wait_for_result(state_block_hash);
         }
-        trace!(
-            "wait_and_compute_execution_info_locked: waiting_result={:?}",
-            waiting_result
-        );
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        inner.compute_execution_info_for_blocks(waiting_result)?;
+        inner.compute_execution_info_for_blocks(me)?;
         Ok(())
     }
 
@@ -519,9 +511,7 @@ impl ConsensusExecutor {
         inner_lock: &RwLock<ConsensusGraphInner>,
     ) -> Result<(u32, H256, H256, H256), String>
     {
-        let parent;
-        let last_state_block;
-        {
+        let (parent_arena_index, last_state_block) = {
             let inner = inner_lock.read();
             let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
             if parent_opt.is_none() {
@@ -529,21 +519,23 @@ impl ConsensusExecutor {
                     "Too old parent to prepare for generation".to_owned()
                 );
             }
-            parent = *parent_opt.unwrap();
-            last_state_block = inner
-                .get_state_block_with_delay(
-                    parent_block_hash,
-                    DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-                )?
-                .clone();
-        }
+            (
+                *parent_opt.unwrap(),
+                inner
+                    .get_state_block_with_delay(
+                        parent_block_hash,
+                        DEFERRED_STATE_EPOCH_COUNT as usize - 1,
+                    )?
+                    .clone(),
+            )
+        };
         let last_result = self.wait_for_result(last_state_block);
-        self.wait_and_compute_execution_info(parent, inner_lock)?;
+        self.wait_and_compute_execution_info(parent_arena_index, inner_lock)?;
         {
             let inner = &mut *inner_lock.write();
-            if inner.arena[parent].hash == *parent_block_hash {
+            if inner.arena[parent_arena_index].hash == *parent_block_hash {
                 Ok(inner.compute_blame_and_state_with_execution_result(
-                    parent,
+                    parent_arena_index,
                     &last_result,
                 )?)
             } else {

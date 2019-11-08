@@ -650,8 +650,7 @@ impl BlockDataManager {
             |key, value| {
                 self.db_manager
                     .insert_consensus_graph_epoch_execution_commitment_to_db(
-                        key,
-                        value,
+                        key, value,
                     )
             },
             None,

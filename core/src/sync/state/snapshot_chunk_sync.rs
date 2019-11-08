@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::{BlockExecutionResult, ConsensusGraphExecutionInfo},
+    block_data_manager::BlockExecutionResult,
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         consensus_internal::REWARD_EPOCH_COUNT,
@@ -454,7 +454,7 @@ impl SnapshotChunkSync {
             //                            .state_root_with_aux_info_vec[i]
             //                            .clone(),
             //                        original_deferred_state_root:
-            // inner.state_blame_vec[i],                        
+            // inner.state_blame_vec[i],
             // original_deferred_receipt_root: inner.receipt_blame_vec
             //                            [i],
             //                        original_deferred_logs_bloom_hash: inner

@@ -555,7 +555,7 @@ impl ConsensusGraph {
                 let arena_index =
                     *inner.hash_to_arena_indices.get(&hash).unwrap();
                 inner.arena[arena_index].data.state_valid =
-                    pivot_block_state_valid_map.remove(&hash).unwrap();
+                    pivot_block_state_valid_map.remove(&hash);
             }
             //
             //            // we should recover exec_info from db

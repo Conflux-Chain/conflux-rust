@@ -1,8 +1,7 @@
 use crate::{
     block_data_manager::{
         BlockExecutionResultWithEpoch, CheckpointHashes,
-        ConsensusGraphExecutionInfo, EpochExecutionCommitments,
-        EpochExecutionContext, LocalBlockInfo,
+        EpochExecutionCommitments, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
     storage::{storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite},
