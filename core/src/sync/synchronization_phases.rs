@@ -530,7 +530,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             *old_sync_inner = new_sync_inner;
 
             // If `checkpoint` is true genesis, `state_valid` must be true.
-            if checkpoint == self.graph.data_man.true_genesis_block.hash()
+            if checkpoint == self.graph.data_man.true_genesis.hash()
                 && pivot_block_state_valid_map.contains_key(&checkpoint)
             {
                 assert!(pivot_block_state_valid_map

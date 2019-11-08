@@ -1431,7 +1431,7 @@ impl ConsensusNewBlockHandler {
         {
             let arena_index = inner.pivot_chain[pivot_index];
             let pivot_hash = inner.arena[arena_index].hash;
-            if pivot_hash == inner.data_man.true_genesis_block.hash() {
+            if pivot_hash == inner.data_man.true_genesis.hash() {
                 continue;
             }
             let exec_pivot_index =

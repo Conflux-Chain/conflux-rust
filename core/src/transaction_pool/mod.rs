@@ -96,7 +96,7 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 
 impl TransactionPool {
     pub fn new(config: TxPoolConfig, data_man: Arc<BlockDataManager>) -> Self {
-        let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
+        let genesis_hash = data_man.true_genesis.hash();
         let inner = TransactionPoolInner::with_capacity(config.capacity);
         TransactionPool {
             config,

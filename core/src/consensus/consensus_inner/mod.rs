@@ -419,18 +419,17 @@ impl ConsensusGraphInner {
         } else {
             cur_era_genesis_height + inner_conf.era_epoch_count
         };
-        let first_trusted_blame_block = first_trusted_blame_block
-            .unwrap_or(data_man.true_genesis_block.hash());
-        let first_trusted_blame_block_height = if first_trusted_blame_block
-            == data_man.true_genesis_block.hash()
-        {
-            0
-        } else {
-            data_man
-                .block_header_by_hash(&first_trusted_blame_block)
-                .expect("first_trusted_blame_block should exist here")
-                .height()
-        };
+        let first_trusted_blame_block =
+            first_trusted_blame_block.unwrap_or(data_man.true_genesis.hash());
+        let first_trusted_blame_block_height =
+            if first_trusted_blame_block == data_man.true_genesis.hash() {
+                0
+            } else {
+                data_man
+                    .block_header_by_hash(&first_trusted_blame_block)
+                    .expect("first_trusted_blame_block should exist here")
+                    .height()
+            };
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
@@ -2280,17 +2279,17 @@ impl ConsensusGraphInner {
 
                 original_deferred_state_root: *self
                     .data_man
-                    .true_genesis_block
+                    .true_genesis
                     .block_header
                     .deferred_state_root(),
                 original_deferred_receipt_root: *self
                     .data_man
-                    .true_genesis_block
+                    .true_genesis
                     .block_header
                     .deferred_receipts_root(),
                 original_deferred_logs_bloom_hash: *self
                     .data_man
-                    .true_genesis_block
+                    .true_genesis
                     .block_header
                     .deferred_logs_bloom_hash(),
             };

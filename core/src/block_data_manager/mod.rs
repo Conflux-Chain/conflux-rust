@@ -80,7 +80,7 @@ pub struct BlockDataManager {
     db_manager: DBManager,
 
     /// This is the original genesis block.
-    pub true_genesis_block: Arc<Block>,
+    pub true_genesis: Arc<Block>,
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
@@ -88,13 +88,12 @@ pub struct BlockDataManager {
 
 impl BlockDataManager {
     pub fn new(
-        cache_conf: CacheConfig, genesis_block: Arc<Block>, db: Arc<SystemDB>,
+        cache_conf: CacheConfig, true_genesis: Arc<Block>, db: Arc<SystemDB>,
         storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
     ) -> Self
     {
-        let mut genesis_block = genesis_block.clone();
-        let mut genesis_hash = genesis_block.hash();
+        let mut cur_era_genesis = true_genesis.clone();
         let mb = 1024 * 1024;
         let max_cache_size = cache_conf.ledger_mb() * mb;
         let pref_cache_size = max_cache_size * 3 / 4;
@@ -121,14 +120,14 @@ impl BlockDataManager {
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
-            true_genesis_block: genesis_block.clone(),
+            true_genesis: true_genesis.clone(),
             storage_manager,
             cache_man,
             instance_id: Mutex::new(0),
             config,
             target_difficulty_manager: TargetDifficultyManager::new(),
-            cur_consensus_era_genesis_hash: RwLock::new(genesis_hash),
-            cur_consensus_era_stable_hash: RwLock::new(genesis_hash),
+            cur_consensus_era_genesis_hash: RwLock::new(true_genesis.hash()),
+            cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
             db_manager,
         };
@@ -138,7 +137,7 @@ impl BlockDataManager {
         if let Some((checkpoint_hash, stable_hash)) =
             data_man.db_manager.checkpoint_hashes_from_db()
         {
-            if checkpoint_hash != genesis_hash {
+            if checkpoint_hash != cur_era_genesis.hash() {
                 if let Some(checkpoint_block) = data_man.block_by_hash(
                     &checkpoint_hash,
                     false, /* update_cache */
@@ -147,15 +146,14 @@ impl BlockDataManager {
                         checkpoint_hash;
                     *data_man.cur_consensus_era_stable_hash.write() =
                         stable_hash;
-                    genesis_hash = checkpoint_hash;
-                    genesis_block = checkpoint_block.clone();
+                    cur_era_genesis = checkpoint_block.clone();
                 }
             }
         }
 
         // FIXME: Set execution context and past_num_blocks with data on disk
         data_man.insert_epoch_execution_context(
-            genesis_hash,
+            cur_era_genesis.hash(),
             EpochExecutionContext {
                 start_block_number: 0,
             },
@@ -163,12 +161,12 @@ impl BlockDataManager {
         );
 
         data_man
-            .insert_block(genesis_block.clone(), true /* persistent */);
+            .insert_block(cur_era_genesis.clone(), true /* persistent */);
 
-        if genesis_hash == data_man.true_genesis_block.hash() {
+        if cur_era_genesis.hash() == data_man.true_genesis.hash() {
             // persist local_block_info for true genesis
             data_man.db_manager.insert_local_block_info_to_db(
-                &data_man.true_genesis_block.hash(),
+                &data_man.true_genesis.hash(),
                 &LocalBlockInfo::new(
                     BlockStatus::Valid,
                     0,
@@ -176,25 +174,23 @@ impl BlockDataManager {
                 ),
             );
             data_man.insert_epoch_execution_commitments(
-                data_man.true_genesis_block.hash(),
+                data_man.true_genesis.hash(),
                 data_man.genesis_state_root(),
+                *data_man.true_genesis.block_header.deferred_receipts_root(),
                 *data_man
-                    .true_genesis_block
-                    .block_header
-                    .deferred_receipts_root(),
-                *data_man
-                    .true_genesis_block
+                    .true_genesis
                     .block_header
                     .deferred_logs_bloom_hash(),
             );
         } else {
             // for other era genesis, we need to change the instance_id
-            if let Some(mut local_block_info) =
-                data_man.db_manager.local_block_info_from_db(&genesis_hash)
+            if let Some(mut local_block_info) = data_man
+                .db_manager
+                .local_block_info_from_db(&cur_era_genesis.hash())
             {
                 local_block_info.instance_id = data_man.get_instance_id();
                 data_man.db_manager.insert_local_block_info_to_db(
-                    &genesis_hash,
+                    &cur_era_genesis.hash(),
                     &local_block_info,
                 );
             }
@@ -237,10 +233,11 @@ impl BlockDataManager {
         self.db_manager.insert_instance_id_to_db(*my_instance_id);
     }
 
+    /// This will return the state root of true genesis block.
     pub fn genesis_state_root(&self) -> StateRootWithAuxInfo {
         self.storage_manager
             .get_state_no_commit(SnapshotAndEpochIdRef::new_for_readonly(
-                &self.get_cur_consensus_era_genesis_hash(),
+                &self.true_genesis.hash(),
                 &StateRootWithAuxInfo::default(),
             ))
             .unwrap()
@@ -597,7 +594,7 @@ impl BlockDataManager {
         if epoch_number != 0 {
             self.db_manager.epoch_set_hashes_from_db(epoch_number)
         } else {
-            Some(vec![self.true_genesis_block.hash()])
+            Some(vec![self.true_genesis.hash()])
         }
     }
 

@@ -247,8 +247,8 @@ impl SnapshotChunkSync {
             }
             match Self::validate_epoch_receipts(
                 ctx,
+                inner.blame_vec_offset,
                 &inner.checkpoint,
-                &inner.trusted_blame_block,
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
                 &response.block_receipts,
@@ -638,7 +638,7 @@ impl SnapshotChunkSync {
     }
 
     fn validate_epoch_receipts(
-        ctx: &Context, checkpoint: &H256, trusted_blame_block: &H256,
+        ctx: &Context, blame_vec_offset: usize, checkpoint: &H256,
         receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
         block_receipts: &Vec<BlockExecutionResult>,
     ) -> Option<Vec<(H256, H256, Arc<Vec<Receipt>>)>>
@@ -650,17 +650,6 @@ impl SnapshotChunkSync {
             .data_man
             .block_header_by_hash(checkpoint)
             .expect("checkpoint header must exist");
-        let trusted_blame_block = ctx
-            .manager
-            .graph
-            .data_man
-            .block_header_by_hash(trusted_blame_block)
-            .expect("trusted_blame_block header must exist");
-
-        // check checkpoint position in `state_blame_vec`
-        let blame_vec_offset = (trusted_blame_block.height()
-            - (checkpoint.height() + DEFERRED_STATE_EPOCH_COUNT))
-            as usize;
         let epoch_receipts_count = if checkpoint.height() == 0 {
             1
         } else {
