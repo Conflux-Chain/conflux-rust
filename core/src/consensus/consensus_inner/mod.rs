@@ -2275,8 +2275,7 @@ impl ConsensusGraphInner {
             let exec_info = ConsensusGraphExecutionInfo {
                 deferred_state_root_with_aux_info: self
                     .data_man
-                    .genesis_state_root(),
-
+                    .true_genesis_state_root(),
                 original_deferred_state_root: *self
                     .data_man
                     .true_genesis

@@ -175,7 +175,7 @@ impl BlockDataManager {
             );
             data_man.insert_epoch_execution_commitments(
                 data_man.true_genesis.hash(),
-                data_man.genesis_state_root(),
+                data_man.true_genesis_state_root(),
                 *data_man.true_genesis.block_header.deferred_receipts_root(),
                 *data_man
                     .true_genesis
@@ -234,7 +234,7 @@ impl BlockDataManager {
     }
 
     /// This will return the state root of true genesis block.
-    pub fn genesis_state_root(&self) -> StateRootWithAuxInfo {
+    pub fn true_genesis_state_root(&self) -> StateRootWithAuxInfo {
         self.storage_manager
             .get_state_no_commit(SnapshotAndEpochIdRef::new_for_readonly(
                 &self.true_genesis.hash(),

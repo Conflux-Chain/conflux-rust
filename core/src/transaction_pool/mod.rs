@@ -107,7 +107,7 @@ impl TransactionPool {
             best_executed_epoch: Mutex::new(SnapshotAndEpochId::from_ref(
                 SnapshotAndEpochIdRef::new_for_readonly(
                     &genesis_hash,
-                    &data_man.genesis_state_root(),
+                    &data_man.true_genesis_state_root(),
                 ),
             )),
             consensus_best_info: Mutex::new(Arc::new(Default::default())),

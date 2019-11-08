@@ -104,6 +104,13 @@ impl GetBlockHeadersResponse {
         requested: HashSet<H256>, chosen_peer: Option<usize>,
     )
     {
+        // We may receive some messages from peer during recover from db
+        // phase. We should ignore it, since it may cause some
+        // inconsistency.
+        if ctx.manager.in_recover_from_db_phase() {
+            return;
+        }
+
         // This stores the block hashes for blocks without block body.
         let mut hashes = Vec::new();
         let mut dependent_hashes_bounded = HashSet::new();
@@ -131,13 +138,6 @@ impl GetBlockHeadersResponse {
                     ctx.manager.future_blocks.insert(header.clone());
                     continue;
                 }
-            }
-
-            // We may receive some messages from peer during recover from db
-            // phase. We should ignore it, since it may cause some
-            // inconsistency.
-            if ctx.manager.in_recover_from_db_phase() {
-                continue;
             }
 
             // check whether block is in old era
