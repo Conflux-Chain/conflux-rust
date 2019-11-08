@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use throttling::token_bucket::TokenBucketManager;
+use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
 pub struct SynchronizationPeerState {
     pub id: PeerId,
@@ -44,34 +44,10 @@ pub struct SynchronizationPeerState {
     // Used to throttle the P2P messages from remote peer, so as to avoid DoS
     // attack. E.g. send large number of P2P messages to query blocks.
     pub throttling: TokenBucketManager,
-    // Used to track the throttled P2P messages to remote peer.
-    // The `Instant` value in `HashMap` is the time to allow send P2P message
-    // again. Otherwise, the remote peer will disconnect the TCP connection.
-    pub throttled_msgs: HashMap<MsgId, Instant>,
-}
-
-impl SynchronizationPeerState {
-    pub fn set_throttled(&mut self, msg_id: MsgId, until: Instant) {
-        let current = self.throttled_msgs.entry(msg_id).or_insert(until);
-        if *current < until {
-            *current = until;
-        }
-    }
-
-    pub fn check_throttled(&mut self, msg_id: &MsgId) -> bool {
-        let until = match self.throttled_msgs.get(msg_id) {
-            Some(util) => util,
-            None => return false,
-        };
-
-        if Instant::now() < *until {
-            return true;
-        }
-
-        self.throttled_msgs.remove(msg_id);
-
-        false
-    }
+    // Used to track the throttled P2P messages to remote peer. When throttled,
+    // should not send requests to the remote peer. Otherwise, the remote peer
+    // may disconnect the TCP connection.
+    pub throttled_msgs: ThrottledManager<MsgId>,
 }
 
 pub type SynchronizationPeers =
@@ -241,7 +217,10 @@ impl PeerFilter {
                 let mut peer = peer.write();
 
                 if let Some(ref ids) = self.throttle_msg_ids {
-                    if ids.iter().any(|id| peer.check_throttled(id)) {
+                    if ids
+                        .iter()
+                        .any(|id| peer.throttled_msgs.check_throttled(id))
+                    {
                         continue;
                     }
                 }

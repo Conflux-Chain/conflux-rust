@@ -2,12 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use rlp::DecoderError;
-
 use crate::{
-    message::MsgId,
+    message::{Message, MsgId},
     network::{self, NetworkContext, PeerId, UpdateNodeOperation},
+    sync::message::Throttled,
 };
+use rlp::DecoderError;
 
 error_chain! {
     links {
@@ -128,6 +128,16 @@ error_chain! {
             description("Validation failed"),
             display("Validation failed"),
         }
+
+        AlreadyThrottled(msg_name: &'static str) {
+            description("packet already throttled"),
+            display("packet already throttled: {:?}", msg_name),
+        }
+
+        Throttled(msg_name: &'static str, response: Throttled) {
+            description("packet throttled"),
+            display("packet {:?} throttled: {:?}", msg_name, response),
+        }
     }
 }
 
@@ -187,7 +197,17 @@ pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature
         | ErrorKind::ValidationFailed
+        | ErrorKind::AlreadyThrottled(_)
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+
+        ErrorKind::Throttled(_, resp) => {
+            disconnect = false;
+
+            if let Err(e) = resp.send(io, peer) {
+                error!("failed to send throttled packet: {:?}", e);
+                disconnect = true;
+            }
+        }
 
         // network errors
         ErrorKind::Network(kind) => match kind {

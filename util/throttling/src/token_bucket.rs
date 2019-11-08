@@ -7,6 +7,7 @@ use std::{
     cmp::min,
     collections::HashMap,
     fs::read_to_string,
+    hash::Hash,
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
@@ -218,6 +219,35 @@ impl TokenBucketManager {
         }
 
         Ok(manager)
+    }
+}
+
+#[derive(Default)]
+pub struct ThrottledManager<K: Eq + Hash> {
+    items: HashMap<K, Instant>,
+}
+
+impl<K: Eq + Hash> ThrottledManager<K> {
+    pub fn set_throttled(&mut self, k: K, until: Instant) {
+        let current = self.items.entry(k).or_insert(until);
+        if *current < until {
+            *current = until;
+        }
+    }
+
+    pub fn check_throttled(&mut self, k: &K) -> bool {
+        let until = match self.items.get(k) {
+            Some(until) => until,
+            None => return false,
+        };
+
+        if Instant::now() < *until {
+            return true;
+        }
+
+        self.items.remove(k);
+
+        false
     }
 }
 
