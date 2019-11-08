@@ -13,7 +13,7 @@ pub struct StorageManager {
             + Sync,
     >,
     maybe_db_errors: MaybeDbErrors,
-    pub snapshot_associated_mpts_by_epoch: RwLock<
+    snapshot_associated_mpts_by_epoch: RwLock<
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
 
@@ -29,7 +29,6 @@ pub struct StorageManager {
 
     last_confirmed_snapshot_id: Mutex<Option<EpochId>>,
 
-    stopping: Mutex<bool>,
     storage_conf: StorageConfiguration,
 }
 
@@ -79,7 +78,6 @@ impl StorageManager {
             current_snapshots: Default::default(),
             snapshot_info_map_by_epoch: Default::default(),
             last_confirmed_snapshot_id: Default::default(),
-            stopping: Default::default(),
             storage_conf,
         };
 
@@ -109,23 +107,24 @@ impl StorageManager {
     }
 }
 
-impl Drop for StorageManager {
-    fn drop(&mut self) { *self.stopping.lock() = true; }
-}
-
 /// Struct which makes sure that the delta mpt is properly ref-counted and
 /// released.
 pub struct DeltaDbReleaser {
-    pub storage_manager: Arc<StorageManager>,
+    pub storage_manager: Weak<StorageManager>,
     pub snapshot_epoch_id: EpochId,
 }
 
 impl Drop for DeltaDbReleaser {
     fn drop(&mut self) {
+        // Don't drop any delta mpt at graceful shutdown because those remaining
+        // DeltaMPTs are useful.
+
         // Note that when an error happens in db, the program should fail
         // gracefully, but not in destructor.
-        self.storage_manager
-            .release_delta_mpt_actions_in_drop(&self.snapshot_epoch_id);
+        Weak::upgrade(&self.storage_manager).map(|storage_manager| {
+            storage_manager
+                .release_delta_mpt_actions_in_drop(&self.snapshot_epoch_id)
+        });
     }
 }
 
@@ -251,19 +250,15 @@ impl StorageManager {
     /// It silently finishes and in case of error, it keeps the error
     /// and raise it later on.
     fn release_delta_mpt_actions_in_drop(&self, snapshot_epoch_id: &EpochId) {
-        // Don't drop any delta mpt at graceful shutdown because those remaining
-        // DeltaMPTs are useful.
-        if *self.stopping.lock() == false {
-            let maybe_another_error = self
-                .maybe_db_errors
-                .delta_trie_destroy_error_1
-                .replace(Some(self.delta_db_manager.destroy_delta_db(
-                    &DeltaDbManager::delta_db_name(snapshot_epoch_id),
-                )));
-            self.maybe_db_errors
-                .delta_trie_destroy_error_2
-                .set(maybe_another_error);
-        }
+        let maybe_another_error = self
+            .maybe_db_errors
+            .delta_trie_destroy_error_1
+            .replace(Some(self.delta_db_manager.destroy_delta_db(
+                &DeltaDbManager::delta_db_name(snapshot_epoch_id),
+            )));
+        self.maybe_db_errors
+            .delta_trie_destroy_error_2
+            .set(maybe_another_error);
     }
 
     // FIXME: use snapshot removing logics, check delta mpt lifetime,
@@ -706,6 +701,6 @@ use primitives::{
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Weak},
     thread,
 };
