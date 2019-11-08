@@ -350,7 +350,7 @@ impl InflightPendingTransactionContainer {
         }
     }
 
-    pub fn request_transactions_from_inflight_pending_pool(
+    pub fn generate_tx_requests_from_inflight_pending_pool(
         &mut self, signed_transactions: &Vec<Arc<SignedTransaction>>,
     ) -> (
         Vec<Arc<InflightPendingTrasnactionItem>>,

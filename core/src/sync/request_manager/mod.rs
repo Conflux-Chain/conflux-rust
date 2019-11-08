@@ -692,7 +692,7 @@ impl RequestManager {
         let (requests, keeped_short_ids) = self
             .inflight_pending_transactions
             .write()
-            .request_transactions_from_inflight_pending_pool(
+            .generate_tx_requests_from_inflight_pending_pool(
                 &signed_transactions,
             );
 
