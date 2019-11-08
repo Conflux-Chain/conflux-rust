@@ -273,6 +273,28 @@ pub mod msg_sender {
                 "get_block_txn_counter"
             );
     }
+    lazy_static! {
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_transactions_from_tx_hashes"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_COUNTRER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data_counter",
+                "get_transactions_from_tx_hashes_counter"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_transactions_from_tx_hashes_response"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_COUNTER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data_counter",
+                "get_transactions_from_tx_hashes_response_counter"
+            );
+    }
 
     pub fn metric_message(peer: PeerId, msg_id: MsgId, size: usize) {
         if peer == NULL {
