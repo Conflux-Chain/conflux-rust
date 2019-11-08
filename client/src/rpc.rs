@@ -124,14 +124,18 @@ pub fn setup_public_rpc_apis(
 
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
-) -> MetaIoHandler<Metadata> {
+    conf: &Configuration,
+) -> MetaIoHandler<Metadata>
+{
     let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let interceptor =
+        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
     let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
     let debug = DebugRpcImpl::new(common.clone(), rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
-    handler.extend_with(cfx);
+    handler.extend_with(RpcProxy::new(cfx, interceptor));
     handler.extend_with(test);
     handler.extend_with(debug);
     if let Some(pubsub) = pubsub {
