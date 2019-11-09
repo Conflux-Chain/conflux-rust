@@ -1679,13 +1679,17 @@ impl ConsensusGraphInner {
     ///   |    /    |
     ///   | [Bi2]   |
     ///
-    ///   Params:
-    ///     epoch_arena_index: the arena index of [Bj]
-    ///   Return:
-    ///     Option<([Bi], [Ba])>
+    /// Let i([Bi]) is the arena index of [Bi].
+    /// Let h([Bi]) is the height of [Bi].
     ///
-    /// The gap between [Bj] and [Bi] is REWARD_EPOCH_COUNT.
-    /// Let D is the gap between [Bi] and the genesis of next era.
+    /// Params:
+    ///   epoch_arena_index: the arena index of [Bj]
+    /// Return:
+    ///   Option<(i([Bi]), i([Ba]))>
+    ///
+    /// The gap between [Bj] and [Bi], i.e., h([Bj])-h([Bi]),
+    /// is REWARD_EPOCH_COUNT.
+    /// Let D is the gap between the parent of the genesis of next era and [Bi].
     /// The gap between [Ba] and [Bi] is
     ///     min(ANTICONE_PENALTY_UPPER_EPOCH_COUNT, D).
     fn get_pivot_reward_index(
