@@ -963,6 +963,7 @@ impl ConsensusGraph {
     /// on_new_block().
     pub fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
+        // FIXME Can we ensure that such block exists?
         // Ensure that `state_valid` of the first valid block after
         // cur_era_genesis is set
         inner.recover_state_valid();
