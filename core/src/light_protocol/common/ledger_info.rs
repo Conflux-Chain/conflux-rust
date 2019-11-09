@@ -100,7 +100,7 @@ impl LedgerInfo {
 
         self.consensus
             .data_man
-            .get_epoch_execution_commitments(&pivot)
+            .get_epoch_execution_commitment(&pivot)
             .map(|c| c.receipts_root)
             .ok_or(ErrorKind::InternalError.into())
     }
@@ -116,7 +116,7 @@ impl LedgerInfo {
 
         self.consensus
             .data_man
-            .get_epoch_execution_commitments(&pivot)
+            .get_epoch_execution_commitment(&pivot)
             .map(|c| c.logs_bloom_hash)
             .ok_or(ErrorKind::InternalError.into())
     }

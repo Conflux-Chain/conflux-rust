@@ -448,13 +448,13 @@ impl SnapshotChunkSync {
         for i in 0..(inner.blame_vec_offset + REWARD_EPOCH_COUNT as usize) {
             hashes.push(deferred_block_hash);
             info!(
-                "insert_epoch_execution_commitments for block hash {:?}",
+                "insert_epoch_execution_commitment for block hash {:?}",
                 &deferred_block_hash
             );
             sync_handler
                 .graph
                 .data_man
-                .insert_epoch_execution_commitments(
+                .insert_epoch_execution_commitment(
                     deferred_block_hash,
                     inner.state_root_with_aux_info_vec[i].clone(),
                     inner.receipt_blame_vec[i],
