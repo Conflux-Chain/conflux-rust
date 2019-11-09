@@ -200,6 +200,13 @@ impl SnapshotManifestRequest {
                 if let Some(block) =
                     ctx.manager.graph.data_man.block_header_by_hash(&block_hash)
                 {
+                    // We've jump to another trusted block.
+                    if block.height() + blame_count as u64 + 1
+                        == trusted_block_height
+                    {
+                        trusted_block_height = block.height();
+                        blame_count = block.blame();
+                    }
                     // We've reached original genesis or collected enough
                     // `state_root_vec`.
                     if block.height() == 0
@@ -208,13 +215,6 @@ impl SnapshotManifestRequest {
                             && state_root_vec.len() >= min_vec_len as usize)
                     {
                         break;
-                    }
-                    // We've jump to another trusted block.
-                    if block.height() + blame_count as u64 + 1
-                        == trusted_block_height
-                    {
-                        trusted_block_height = block.height();
-                        blame_count = block.blame();
                     }
                     block_hash = *block.parent_hash();
                     deferred_block_hash = *ctx
