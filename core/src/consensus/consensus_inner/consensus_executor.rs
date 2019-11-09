@@ -320,8 +320,7 @@ impl ConsensusExecutor {
                 let height = inner.arena[pivot_arena_index].height;
                 if !self.bench_mode
                     && height
-                        >= (inner.cur_era_stable_height
-                            + DEFERRED_STATE_EPOCH_COUNT)
+                        >= inner.cur_era_stable_height
                 {
                     info!(
                         "wait_and_compute_execution_info_locked, idx = {}, \

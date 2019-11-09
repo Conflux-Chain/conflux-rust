@@ -190,7 +190,7 @@ impl SnapshotManifestRequest {
                 .manager
                 .graph
                 .data_man
-                .get_epoch_execution_commitments(&deferred_block_hash)
+                .get_epoch_execution_commitments_from_db(&deferred_block_hash)
             {
                 state_root_vec.push(
                     commitments.state_root_with_aux_info.state_root.clone(),
@@ -232,7 +232,7 @@ impl SnapshotManifestRequest {
                     return None;
                 }
             } else {
-                warn!("failed to find ConsensusGraphExecutionInfo for block={} in db, peer={}", block_hash, ctx.peer);
+                warn!("failed to find ConsensusGraphExecutionInfo for block={} in db, peer={}", deferred_block_hash, ctx.peer);
                 return None;
             }
         }

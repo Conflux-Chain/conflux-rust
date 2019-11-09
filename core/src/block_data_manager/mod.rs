@@ -668,7 +668,7 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
-    pub fn load_epoch_execution_commitments(
+    pub fn load_epoch_execution_commitments_from_db(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitments> {
         let commitments = self
@@ -678,6 +678,13 @@ impl BlockDataManager {
             .write()
             .insert(*block_hash, commitments.clone());
         Some(commitments)
+    }
+
+    pub fn get_epoch_execution_commitments_from_db(
+        &self, block_hash: &H256,
+    ) -> Option<EpochExecutionCommitments> {
+        self.db_manager
+            .consensus_graph_epoch_execution_commitment_from_db(block_hash)
     }
 
     pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {

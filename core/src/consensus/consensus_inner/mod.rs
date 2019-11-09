@@ -2640,9 +2640,11 @@ impl ConsensusGraphInner {
         let mut cur = me;
         loop {
             blocks_to_compute.push(cur);
-            // We are following the pivot chain, so this loop should eventually
-            // break here
-            if cur == self.cur_era_genesis_block_arena_index {
+            // We are following the pivot chain, so this will eventually reach
+            // era_genesis and break here
+            if self.arena[cur].data.state_valid.is_some()
+                || cur == self.cur_era_genesis_block_arena_index
+            {
                 break;
             }
             cur = self.arena[cur].parent;
@@ -2715,5 +2717,50 @@ impl ConsensusGraphInner {
             }
         }
         Ok(idx)
+    }
+
+    /// TODO Check if we need to persist `state_valid` for this recovery.
+    /// Find the first state valid block on the pivot chain after
+    /// `cur_era_genesis` and set `state_valid` of it and its blamed blocks.
+    /// This block is found according to blame_ratio.
+    pub fn recover_state_valid(&mut self) {
+        let checkpoint = self.data_man.get_cur_consensus_era_stable_hash();
+        // We will get first
+        // pivot block whose `state_valid` is `true` after `checkpoint`
+        // (include `checkpoint` itself).
+        let maybe_trusted_blame_block =
+            self.get_trusted_blame_block(&checkpoint);
+
+        // Set `state_valid` of `trusted_blame_block` to true,
+        // and set that of the blocks blamed by it to false
+        if let Some(trusted_blame_block) = maybe_trusted_blame_block {
+            // FIXME Could we remove first_trusted_blame_block?
+            self.first_trusted_blame_block = trusted_blame_block;
+            self.first_trusted_blame_block_height = self
+                .data_man
+                .block_header_by_hash(&trusted_blame_block)
+                .expect("first_trusted_blame_block should exist here")
+                .height();
+            let mut cur = *self
+                .hash_to_arena_indices
+                .get(&trusted_blame_block)
+                .unwrap();
+            while cur != NULL {
+                let blame = self
+                    .data_man
+                    .block_header_by_hash(&self.arena[cur].hash)
+                    .unwrap()
+                    .blame();
+                for i in 0..blame + 1 {
+                    self.arena[cur].data.state_valid = Some(i == 0);
+                    cur = self.arena[cur].parent;
+                    if cur == NULL {
+                        break;
+                    }
+                }
+            }
+        } else {
+            error!("Fail to recover state_valid");
+        }
     }
 }

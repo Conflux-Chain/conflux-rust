@@ -4,7 +4,7 @@
 
 use crate::{
     consensus::ConsensusGraphInner,
-    parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
+    parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD,
     storage::{state_manager::StateManagerTrait, SnapshotAndEpochIdRef},
     sync::{
         message::DynamicCapability,
@@ -476,36 +476,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // (include `checkpoint` itself).
             let trusted_blame_block =
                 old_consensus_inner.get_trusted_blame_block(&checkpoint);
-            // This map will be used to recover `state_valid` info for each
-            // pivot block before `trusted_blame_block`.
-            let mut pivot_block_state_valid_map =
-                self.graph.consensus.pivot_block_state_valid_map.lock();
-            if trusted_blame_block.is_some() {
-                let mut cur = *old_consensus_inner
-                    .hash_to_arena_indices
-                    .get(trusted_blame_block.as_ref().unwrap())
-                    .unwrap();
-                while cur != NULL {
-                    let blame = self
-                        .graph
-                        .data_man
-                        .block_header_by_hash(
-                            &old_consensus_inner.arena[cur].hash,
-                        )
-                        .unwrap()
-                        .blame();
-                    for i in 0..blame + 1 {
-                        pivot_block_state_valid_map.insert(
-                            old_consensus_inner.arena[cur].hash,
-                            i == 0,
-                        );
-                        cur = old_consensus_inner.arena[cur].parent;
-                        if cur == NULL {
-                            break;
-                        }
-                    }
-                }
-            }
 
             let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
                 old_consensus_inner.pow_config.clone(),
@@ -526,15 +496,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 old_sync_inner.data_man.clone(),
             );
             *old_sync_inner = new_sync_inner;
-
-            // If `checkpoint` is true genesis, `state_valid` must be true.
-            if checkpoint == self.graph.data_man.true_genesis_block.hash()
-                && pivot_block_state_valid_map.contains_key(&checkpoint)
-            {
-                assert!(pivot_block_state_valid_map
-                    .remove(&checkpoint)
-                    .unwrap());
-            }
 
             self.graph
                 .statistics

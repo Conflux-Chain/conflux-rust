@@ -1434,20 +1434,14 @@ impl ConsensusNewBlockHandler {
             if pivot_hash == inner.data_man.true_genesis_block.hash() {
                 continue;
             }
-            let exec_pivot_index =
-                pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
-            // For each execution_info_cache, set epoch_execution_commitments
-            // for the state block..
-            if exec_pivot_index < inner.pivot_chain.len()
-            //                && inner
-            //                    .execution_info_cache
-            //
-            // .contains_key(&inner.pivot_chain[exec_pivot_index])
+            if self
+                .data_man
+                .load_epoch_execution_commitments_from_db(&pivot_hash)
+                .is_none()
             {
-                let commitments =
-                    self.data_man.load_epoch_execution_commitments(&pivot_hash);
-                assert!(commitments.is_some());
-            } else {
+                // We should recompute the epochs that should have been executed
+                // but fail to persist their
+                // execution_commitments before shutdown
                 let reward_execution_info =
                     self.executor.get_reward_execution_info(inner, arena_index);
                 let epoch_block_hashes =

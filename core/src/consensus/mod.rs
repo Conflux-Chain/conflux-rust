@@ -40,10 +40,7 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    thread::sleep,
+    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
     time::Duration,
 };
 
@@ -121,12 +118,6 @@ pub struct ConsensusGraph {
     /// This is the hash of latest block inserted into consensus graph.
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_inserted_block: Mutex<H256>,
-    /// This HashMap stores whether the state in header is correct or not for
-    /// pivot blocks from current era genesis to first trusted blame block
-    /// after current era stable genesis.
-    /// We use `Mutex` here because other thread will only modify it once and
-    /// after that only current thread will operate this map.
-    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -170,7 +161,6 @@ impl ConsensusGraph {
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
-            pivot_block_state_valid_map: Mutex::new(Default::default()),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -545,31 +535,6 @@ impl ConsensusGraph {
                     None,
                 );
             }
-
-            // for full node, we should recover state_valid for pivot block
-            let mut pivot_block_state_valid_map =
-                self.pivot_block_state_valid_map.lock();
-            if !pivot_block_state_valid_map.is_empty()
-                && pivot_block_state_valid_map.contains_key(&hash)
-            {
-                let arena_index =
-                    *inner.hash_to_arena_indices.get(&hash).unwrap();
-                inner.arena[arena_index].data.state_valid =
-                    pivot_block_state_valid_map.remove(&hash);
-            }
-            //
-            //            // we should recover exec_info from db
-            //            if let Some(arena_index) =
-            // inner.hash_to_arena_indices.get(hash) {
-            // self.data_man.load_epoch_execution_commitments(hash);
-            //                if let Some(exe_info) =
-            //
-            // self.data_man.consensus_graph_execution_info_from_db(hash)
-            //                {
-            //
-            // inner.execution_info_cache.insert(*arena_index, exe_info);
-            //                }
-            //            }
 
             // Reset pivot chain according to checkpoint information during
             // recovery
@@ -998,6 +963,9 @@ impl ConsensusGraph {
     /// on_new_block().
     pub fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
+        // Ensure that `state_valid` of the first valid block after
+        // cur_era_genesis is set
+        inner.recover_state_valid();
         self.new_block_handler.construct_pivot_state(inner);
     }
 
