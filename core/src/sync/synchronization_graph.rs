@@ -1420,8 +1420,18 @@ impl SynchronizationGraph {
             inner.insert_invalid(header_arc.clone())
         };
 
+        // Currently, `inner.arena[me].graph_status` will only be
+        //   1. `BLOCK_GRAPH_READY` for genesis block.
+        //   2. `BLOCK_HEADER_ONLY` for non genesis block.
+        //   3. `BLOCK_INVALID` for invalid block.
         if inner.arena[me].graph_status != BLOCK_GRAPH_READY {
             inner.not_ready_blocks_count += 1;
+            // This block will become a new `not_ready_blocks_frontier` if
+            //   1. It's parent block has not inserted yet.
+            //   2. We are in `Catch Up Blocks Phase` and the graph status of
+            // parent block is `BLOCK_GRAPH_READY`.
+            //   3. We are in `Catch Up Headers Phase` and the graph status of
+            // parent block is `BLOCK_HEADER_GRAPH_READY`.
             if inner.arena[me].parent == NULL
                 || inner.arena[inner.arena[me].parent].graph_status
                     == BLOCK_GRAPH_READY
