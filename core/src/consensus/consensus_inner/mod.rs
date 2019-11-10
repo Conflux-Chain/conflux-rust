@@ -2235,17 +2235,40 @@ impl ConsensusGraphInner {
     ///    deferred_blame_state_root,
     ///    deferred_blame_receipt_root,
     ///    deferred_blame_bloom_root)
-    /// Assumption:
-    ///   [Bm] is in stable era.
     ///
-    /// This function searches backward for all the blocks whose state_valid are
-    /// false, starting from [Bp]. The number of found blocks is the 'blame'
-    /// of [Bm]. if 'blame' == 0, the deferred blame root information of
-    /// [Bm] is simply [Dm], otherwise, it is computed from the vector of
-    /// deferred state roots of these found blocks together with [Bm], e.g.,
-    /// in the above example, 'blame'==3, and the vector of deferred roots
-    /// of these blocks is ([Dm], [Dp], [Di], [Dj]), therefore, the deferred
-    /// blame root of [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
+    /// Assumption:
+    ///   * [Bm] is a pivot block on current pivot chain.
+    ///   This function is triggered when evaluating the reward for the blocks
+    ///   in epoch of [Bm]. It relies on the state_valid value of [Bm]. In other
+    ///   words, this function is triggered when computing the state_valid value
+    ///   of [Bm].
+    ///
+    ///   * [Bm] is in stable era.
+    ///   This assumption is derived from the following cases:
+    ///   Let [Be] is the last block in the consensus graph and at the
+    ///   era boundary.
+    ///   1. In normal run, when evaluating reward of [Bm] and [Bm] is
+    ///      before [Be], [Be] should have not become the stable genesis,
+    ///      therefore, [Bm] is still in stable era.
+    ///   2. In normal run, when evaluating reward of [Bm] and [Bm] is
+    ///      equal or after [Be], no matter whether [Be] is stable genesis
+    ///      or not, [Bm] is in stable era.
+    ///   3. In recover run, all the pivot blocks between current era
+    ///      genesis and the stable era genesis have state_valid computed.
+    ///      Therefore, this function will not be triggered for those blocks.
+    ///      Only blocks after stable era genesis may trigger this function,
+    ///      therefore, [Bm] is in stable era.
+    ///
+    /// This function is called when evaluating the reward for the blocks
+    /// in epoch of [Bm]. It searches backward for all the blocks whose
+    /// state_valid are false, starting from [Bp]. The number of found
+    /// blocks is the 'blame' of [Bm]. if 'blame' == 0, the deferred blame
+    /// root information of [Bm] is simply [Dm], otherwise, it is computed
+    /// from the vector of deferred state roots of these found blocks
+    /// together with [Bm], e.g., in the above example, 'blame'==3, and
+    /// the vector of deferred roots of these blocks is
+    /// ([Dm], [Dp], [Di], [Dj]), therefore, the deferred blame root of
+    /// [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
     fn compute_blame_and_state_with_execution_result(
         &self, parent: usize, exec_result: &EpochExecutionCommitment,
     ) -> Result<(u32, H256, H256, H256), String> {
