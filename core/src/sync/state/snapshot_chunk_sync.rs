@@ -436,56 +436,40 @@ impl SnapshotChunkSync {
         &self, sync_handler: &SynchronizationProtocolHandler,
     ) {
         let inner = self.inner.read();
-        let mut hash = inner.trusted_blame_block;
         let mut hashes = Vec::new();
+        let mut deferred_block_hash = inner.trusted_blame_block;
+        for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+            deferred_block_hash = *sync_handler
+                .graph
+                .data_man
+                .block_header_by_hash(&deferred_block_hash)
+                .expect("All headers exist")
+                .parent_hash();
+        }
         for i in 0..(inner.blame_vec_offset
             + DEFERRED_STATE_EPOCH_COUNT as usize
             + 1)
         {
-            info!("restore_execution_state (deferred + non-deferred) for block hash: {:?}", hash);
-            hashes.push(hash);
-            //            sync_handler
-            //                .graph
-            //                .data_man
-            //                .insert_consensus_graph_execution_info_to_db(
-            //                    &hash,
-            //                    &ConsensusGraphExecutionInfo {
-            //                        deferred_state_root_with_aux_info: inner
-            //                            .state_root_with_aux_info_vec[i]
-            //                            .clone(),
-            //                        original_deferred_state_root:
-            // inner.state_blame_vec[i],
-            // original_deferred_receipt_root: inner.receipt_blame_vec
-            //                            [i],
-            //                        original_deferred_logs_bloom_hash: inner
-            //                            .bloom_blame_vec[i],
-            //                    },
-            //                );
-            if i >= DEFERRED_STATE_EPOCH_COUNT as usize {
-                info!(
-                    "insert_epoch_execution_commitments for block hash {:?}",
-                    &hash
+            hashes.push(deferred_block_hash);
+            info!(
+                "insert_epoch_execution_commitments for block hash {:?}",
+                &deferred_block_hash
+            );
+            sync_handler
+                .graph
+                .data_man
+                .insert_epoch_execution_commitments(
+                    deferred_block_hash,
+                    inner.state_root_with_aux_info_vec[i].clone(),
+                    inner.receipt_blame_vec[i],
+                    inner.bloom_blame_vec[i],
                 );
-                sync_handler
-                    .graph
-                    .data_man
-                    .insert_epoch_execution_commitments(
-                        hash,
-                        inner.state_root_with_aux_info_vec
-                            [i - DEFERRED_STATE_EPOCH_COUNT as usize]
-                            .clone(),
-                        inner.receipt_blame_vec
-                            [i - DEFERRED_STATE_EPOCH_COUNT as usize],
-                        inner.bloom_blame_vec
-                            [i - DEFERRED_STATE_EPOCH_COUNT as usize],
-                    )
-            }
             let block = sync_handler
                 .graph
                 .data_man
-                .block_header_by_hash(&hash)
+                .block_header_by_hash(&deferred_block_hash)
                 .unwrap();
-            hash = *block.parent_hash();
+            deferred_block_hash = *block.parent_hash();
         }
         for (block_hash, epoch_hash, receipts) in &inner.epoch_receipts {
             sync_handler.graph.data_man.insert_block_results(
