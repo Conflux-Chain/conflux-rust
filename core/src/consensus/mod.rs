@@ -40,7 +40,10 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
+    cmp::Reverse,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    thread::sleep,
     time::Duration,
 };
 
@@ -118,6 +121,12 @@ pub struct ConsensusGraph {
     /// This is the hash of latest block inserted into consensus graph.
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_inserted_block: Mutex<H256>,
+    /// This HashMap stores whether the state in header is correct or not for
+    /// pivot blocks from current era genesis to first trusted blame block
+    /// after current era stable genesis.
+    /// We use `Mutex` here because other thread will only modify it once and
+    /// after that only current thread will operate this map.
+    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -161,6 +170,7 @@ impl ConsensusGraph {
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
+            pivot_block_state_valid_map: Default::default(),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -534,6 +544,18 @@ impl ConsensusGraph {
                     header.as_ref(),
                     None,
                 );
+            }
+
+            // for full node, we should recover state_valid for pivot block
+            let mut pivot_block_state_valid_map =
+                self.pivot_block_state_valid_map.lock();
+            if !pivot_block_state_valid_map.is_empty()
+                && pivot_block_state_valid_map.contains_key(&hash)
+            {
+                let arena_index =
+                    *inner.hash_to_arena_indices.get(&hash).unwrap();
+                inner.arena[arena_index].data.state_valid =
+                    pivot_block_state_valid_map.remove(&hash);
             }
 
             // Reset pivot chain according to checkpoint information during
