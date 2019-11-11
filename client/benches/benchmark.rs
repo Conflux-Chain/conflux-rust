@@ -14,12 +14,13 @@ use cfxcore::{
     vm_factory::VmFactory,
 };
 use client::{archive::ArchiveClient, configuration::Configuration};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
 use ethkey::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
+#[allow(dead_code)]
 fn txgen_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
     conf.raw_conf.test_mode = true;
@@ -65,33 +66,39 @@ fn txexe_benchmark(c: &mut Criterion) {
         last_hashes: Arc::new(vec![]),
     };
     let spec = Spec::new_spec();
-    c.bench_function("Execute 1 transaction", move |b| {
-        let mut state = State::new(
-            StateDb::new(
-                handler
-                    .consensus
-                    .data_man
-                    .storage_manager
-                    .get_state_for_next_epoch(
-                        // FIXME: delta height
-                        SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
-                            &handler.consensus.best_block_hash(),
-                        ),
-                    )
-                    .unwrap()
-                    .unwrap(),
-            ),
-            0.into(),
-            VmFactory::new(1024 * 32),
-        );
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let mut nonce_increased = false;
-        b.iter(|| {
-            ex.transact(&tx, &mut nonce_increased).unwrap();
-            ex.state.clear();
+    c.bench(
+        "Execute 1 transaction",
+        Benchmark::new("Execute 1 transaction", move |b| {
+            let mut state = State::new(
+                StateDb::new(
+                    handler
+                        .consensus
+                        .data_man
+                        .storage_manager
+                        .get_state_for_next_epoch(
+                            // FIXME: delta height
+                            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+                                &handler.consensus.best_block_hash(),
+                            ),
+                        )
+                        .unwrap()
+                        .unwrap(),
+                ),
+                0.into(),
+                VmFactory::new(1024 * 32),
+            );
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+            let mut nonce_increased = false;
+            b.iter(|| {
+                //ex.transact(&tx, &mut nonce_increased);
+                ex.transact(&tx, &mut nonce_increased).unwrap();
+                ex.state.clear();
+            })
         })
-    });
+        .measurement_time(Duration::from_secs(10))
+        .warm_up_time(Duration::from_secs(10)),
+    );
 }
 
-criterion_group!(benches, txgen_benchmark, txexe_benchmark);
+criterion_group!(benches, txexe_benchmark);
 criterion_main!(benches);
