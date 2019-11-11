@@ -468,6 +468,9 @@ impl ConsensusGraphInner {
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
         let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
+        if genesis_block_header.height() == 0 {
+            inner.arena[genesis_arena_index].data.state_valid = Some(true);
+        }
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
         let genesis_block_weight = genesis_block_header.difficulty().low_u128();
         inner
@@ -2274,11 +2277,6 @@ impl ConsensusGraphInner {
     /// The caller should ensure that the precedents have computed state_valid
     /// and the execution_commitments for `me` exist
     fn compute_state_valid(&mut self, me: usize) -> Result<(), String> {
-        // For the original genesis, it is always correct
-        if self.arena[me].height == 0 {
-            self.arena[me].data.state_valid = Some(true);
-            return Ok(());
-        }
         debug!(
             "compute_state_valid: me={} height={}",
             me, self.arena[me].height
@@ -2647,7 +2645,6 @@ impl ConsensusGraphInner {
         let mut blocks_to_compute = Vec::new();
         let mut cur = me;
         loop {
-            blocks_to_compute.push(cur);
             // We are following the pivot chain, so this will eventually reach
             // era_genesis and break here
             if self.arena[cur].data.state_valid.is_some()
@@ -2655,6 +2652,7 @@ impl ConsensusGraphInner {
             {
                 break;
             }
+            blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }
         blocks_to_compute.reverse();
