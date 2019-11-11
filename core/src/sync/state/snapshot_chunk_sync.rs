@@ -419,7 +419,6 @@ impl SnapshotChunkSync {
         // verify the blame state
         let root = inner.restorer.restored_state_root(state_manager);
         if root == inner.true_state_root_by_blame_info {
-            // TODO: restore commitment and exec_info
             info!("Snapshot chunks restored successfully");
             inner.status = Status::Completed;
         } else {

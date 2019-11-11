@@ -1420,9 +1420,6 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        // recover `EpochExecutionCommitments` from
-        // `execution_info_cache` or recompute the state if it is not exist in
-        // `execution_info_cache`
         let stable_pivot_index =
             inner.cur_era_stable_height - inner.cur_era_genesis_height;
         for pivot_index in stable_pivot_index as usize
@@ -1433,6 +1430,9 @@ impl ConsensusNewBlockHandler {
             if pivot_hash == inner.data_man.true_genesis.hash() {
                 continue;
             }
+
+            // Ensure that the commitments for the blocks on
+            // pivot_chain after cur_era_stable_genesis are kept in memory.
             if self
                 .data_man
                 .load_epoch_execution_commitments_from_db(&pivot_hash)

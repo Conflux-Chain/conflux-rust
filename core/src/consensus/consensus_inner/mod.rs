@@ -79,9 +79,9 @@ pub struct ConsensusGraphNodeData {
     /// its size.
     pub blockset_cleared: bool,
     pub sequence_number: u64,
-    /// exec_info_lca_height indicates the fork_at height that the vote_valid
+    /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
-    exec_info_lca_height: u64,
+    vote_valid_lca_height: u64,
     /// It indicates whether the blame voting information of this block is
     /// correct or not.
     vote_valid: bool,
@@ -103,7 +103,7 @@ impl ConsensusGraphNodeData {
             ordered_executable_epoch_blocks: Default::default(),
             blockset_cleared: false,
             sequence_number,
-            exec_info_lca_height: NULLU64,
+            vote_valid_lca_height: NULLU64,
             vote_valid: true,
             state_valid: None,
         }
@@ -355,10 +355,6 @@ pub struct ConsensusGraphInner {
     // large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
     pastset_cache: PastSetCache,
-    // The cache to store execution information of nodes in the consensus
-    // graph.
-    //    pub execution_info_cache: HashMap<usize,
-    // ConsensusGraphExecutionInfo>,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph
@@ -2276,9 +2272,12 @@ impl ConsensusGraphInner {
     }
 
     // FIXME: maybe this method can be simplified.
+    /// Compute `state_valid` for `me`.
     /// The caller should ensure that the precedents have computed state_valid
     /// and the execution_commitments for `me` exist
-    fn compute_state_valid(&mut self, me: usize) -> Result<(), String> {
+    fn compute_state_valid_for_block(
+        &mut self, me: usize,
+    ) -> Result<(), String> {
         debug!(
             "compute_state_valid: me={} height={}",
             me, self.arena[me].height
@@ -2321,9 +2320,9 @@ impl ConsensusGraphInner {
                 == deferred_logs_bloom_hash;
 
         if state_valid {
-            debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
+            debug!("compute_state_valid_for_block(): Block {} state/blame is valid.", self.arena[me].hash);
         } else {
-            debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
+            debug!("compute_state_valid_for_block(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
         }
 
         self.arena[me].data.state_valid = Some(state_valid);
@@ -2362,7 +2361,7 @@ impl ConsensusGraphInner {
         while !stack.is_empty() {
             let (stage, index, a) = stack.pop().unwrap();
             if stage == 0 {
-                if self.arena[index].data.exec_info_lca_height != lca_height {
+                if self.arena[index].data.vote_valid_lca_height != lca_height {
                     let header = self
                         .data_man
                         .block_header_by_hash(&self.arena[index].hash)
@@ -2388,7 +2387,7 @@ impl ConsensusGraphInner {
                         while cur_height > start_height {
                             if self.arena[cur].data.state_valid
                                 .expect("state_valid for me has been computed in \
-                                wait_and_compute_execution_info_locked by the caller, \
+                                wait_and_compute_state_valid_locked by the caller, \
                                 so the precedents should have state_valid") {
                                 vote_valid = false;
                                 break;
@@ -2398,17 +2397,17 @@ impl ConsensusGraphInner {
                         }
                         if vote_valid && !self.arena[cur].data.state_valid
                             .expect("state_valid for me has been computed in \
-                            wait_and_compute_execution_info_locked by the caller, \
+                            wait_and_compute_state_valid_locked by the caller, \
                             so the precedents should have state_valid") {
                             vote_valid = false;
                         }
-                        self.arena[index].data.exec_info_lca_height =
+                        self.arena[index].data.vote_valid_lca_height =
                             lca_height;
                         self.arena[index].data.vote_valid = vote_valid;
                     }
                 }
             } else {
-                self.arena[index].data.exec_info_lca_height = lca_height;
+                self.arena[index].data.vote_valid_lca_height = lca_height;
                 self.arena[index].data.vote_valid =
                     self.arena[a].data.vote_valid;
             }
@@ -2576,7 +2575,7 @@ impl ConsensusGraphInner {
         let mut cur = self.get_deferred_state_arena_index(me)?;
         let mut waiting_blocks = Vec::new();
         debug!(
-            "collect_blocks_missing_execution_info:: me={}, height={}",
+            "collect_blocks_missing_execution_commitments: me={}, height={}",
             me, self.arena[me].height
         );
         loop {
@@ -2609,9 +2608,8 @@ impl ConsensusGraphInner {
         Ok(waiting_blocks)
     }
 
-    fn compute_execution_info_for_blocks(
-        &mut self, me: usize,
-    ) -> Result<(), String> {
+    /// Compute missing `state_valid` for `me` and all the precedents.
+    fn compute_state_valid(&mut self, me: usize) -> Result<(), String> {
         // Collect all precedents whose state_valid is empty, and evaluate them
         // in order
         let mut blocks_to_compute = Vec::new();
@@ -2630,7 +2628,7 @@ impl ConsensusGraphInner {
         blocks_to_compute.reverse();
 
         for index in blocks_to_compute {
-            self.compute_state_valid(index)?;
+            self.compute_state_valid_for_block(index)?;
         }
         Ok(())
     }

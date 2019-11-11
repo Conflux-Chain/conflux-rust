@@ -321,11 +321,11 @@ impl ConsensusExecutor {
                 if !self.bench_mode
                 {
                     info!(
-                        "wait_and_compute_execution_info_locked, idx = {}, \
+                        "wait_and_compute_state_valid_locked, idx = {}, \
                          height = {}, era stable height = {}",
                         pivot_arena_index, height, inner.cur_era_stable_height
                     );
-                    self.wait_and_compute_execution_info_locked(
+                    self.wait_and_compute_state_valid_locked(
                         pivot_arena_index,
                         inner,
                     )
@@ -364,7 +364,7 @@ impl ConsensusExecutor {
                         if *index == pivot_arena_index {
                             no_reward = !inner.arena[pivot_arena_index]
                                 .data
-                                .state_valid.expect("computed in wait_and_compute_execution_info_locked");
+                                .state_valid.expect("computed in wait_and_compute_state_valid_locked");
                         } else {
                             no_reward = !inner
                                 .compute_vote_valid_for_pivot_block(
@@ -460,10 +460,12 @@ impl ConsensusExecutor {
         )
     }
 
-    fn wait_and_compute_execution_info(
+    /// Wait for the deferred state to be executed and compute `state_valid` for
+    /// `me`.
+    fn wait_and_compute_state_valid(
         &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
     ) -> Result<(), String> {
-        // We go up and find all states whose execution_infos are missing
+        // We go up and find all states whose commitments are missing
         let waiting_blocks = inner_lock
             .read()
             .collect_blocks_missing_execution_commitments(me)?;
@@ -478,18 +480,18 @@ impl ConsensusExecutor {
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        inner_lock.write().compute_execution_info_for_blocks(me)?;
+        inner_lock.write().compute_state_valid(me)?;
         Ok(())
     }
 
-    fn wait_and_compute_execution_info_locked(
+    fn wait_and_compute_state_valid_locked(
         &self, me: usize, inner: &mut ConsensusGraphInner,
     ) -> Result<(), String> {
-        // We go up and find all states whose execution_infos are missing
+        // We go up and find all states whose execution_commitments are missing
         let waiting_blocks =
             inner.collect_blocks_missing_execution_commitments(me)?;
         trace!(
-            "wait_and_compute_execution_info_locked: waiting_blocks={:?}",
+            "wait_and_compute_state_valid_locked: waiting_blocks={:?}",
             waiting_blocks
         );
         // for this rare case, we should make wait_for_result to pop up errors!
@@ -498,7 +500,7 @@ impl ConsensusExecutor {
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        inner.compute_execution_info_for_blocks(me)?;
+        inner.compute_state_valid(me)?;
         Ok(())
     }
 
@@ -527,7 +529,7 @@ impl ConsensusExecutor {
             )
         };
         let last_result = self.wait_for_result(last_state_block);
-        self.wait_and_compute_execution_info(parent_arena_index, inner_lock)?;
+        self.wait_and_compute_state_valid(parent_arena_index, inner_lock)?;
         {
             let inner = &mut *inner_lock.write();
             if inner.arena[parent_arena_index].hash == *parent_block_hash {
