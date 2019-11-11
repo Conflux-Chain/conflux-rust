@@ -515,7 +515,13 @@ impl ConsensusGraphInner {
             .set(inner.cur_era_genesis_block_arena_index, 0);
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .data
-            .epoch_number = 0;
+            .epoch_number = cur_era_genesis_height;
+        inner.arena[inner.cur_era_genesis_block_arena_index].past_num_blocks =
+            inner
+                .data_man
+                .get_epoch_execution_context(cur_era_genesis_block_hash)
+                .expect("ExecutionContext for cur_era_genesis exists")
+                .start_block_number;
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .last_pivot_in_past = cur_era_genesis_height;
         inner
