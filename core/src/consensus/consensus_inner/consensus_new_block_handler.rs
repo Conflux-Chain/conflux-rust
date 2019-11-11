@@ -249,7 +249,6 @@ impl ConsensusNewBlockHandler {
                 inner.hash_to_arena_indices.remove(&hash);
                 inner.terminal_hashes.remove(&hash);
                 inner.arena.remove(index);
-                //                inner.execution_info_cache.remove(&index);
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitments(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);

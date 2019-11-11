@@ -681,29 +681,6 @@ impl ConsensusGraph {
         Some((results_with_epoch, address, state_root))
     }
 
-    //    pub fn get_state_root_by_pivot_height(
-    //        &self, pivot_height: u64,
-    //    ) -> Option<H256> {
-    //        let inner = self.inner.read();
-    //        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
-    //        let pivot_index = match height {
-    //            h if h < inner.get_cur_era_genesis_height() => return None,
-    //            h => inner.height_to_pivot_index(h),
-    //        };
-    //        if pivot_index < inner.pivot_chain.len() {
-    //            let pivot_hash =
-    // &inner.arena[inner.pivot_chain[pivot_index]].hash;            //
-    // FIXME: why not check execution_info_cache first?            return
-    // match self                .data_man
-    //                .consensus_graph_execution_info_from_db(pivot_hash)
-    //            {
-    //                Some(info) => Some(info.original_deferred_state_root),
-    //                None => None,
-    //            };
-    //        }
-    //        None
-    //    }
-
     pub fn transaction_count(
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
@@ -986,7 +963,7 @@ impl ConsensusGraph {
     pub fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
         // Ensure that `state_valid` of the first valid block after
-        // cur_era_genesis is set
+        // cur_era_stable_genesis is set
         inner.recover_state_valid();
         self.new_block_handler.construct_pivot_state(inner);
     }

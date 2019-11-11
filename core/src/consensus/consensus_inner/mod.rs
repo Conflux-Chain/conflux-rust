@@ -645,9 +645,11 @@ impl ConsensusGraphInner {
         }
         let height = self.arena[parent].height;
         let era_genesis_height = self.get_era_genesis_height(height, offset);
-        debug!(
+        trace!(
             "height={} era_height={} era_genesis_height={}",
-            height, era_genesis_height, self.cur_era_genesis_height
+            height,
+            era_genesis_height,
+            self.cur_era_genesis_height
         );
         self.ancestor_at(parent, era_genesis_height)
     }
@@ -2731,7 +2733,7 @@ impl ConsensusGraphInner {
                     .blame();
                 for i in 0..blame + 1 {
                     self.arena[cur].data.state_valid = Some(i == 0);
-                    debug!(
+                    trace!(
                         "recover_state_valid: index={} hash={} state_valid={}",
                         cur,
                         self.arena[cur].hash,
