@@ -465,10 +465,11 @@ impl ConsensusExecutor {
     fn wait_and_compute_state_valid(
         &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
     ) -> Result<(), String> {
-        // We go up and find all states whose commitments are missing
+        // We go up from deferred state block of `me`
+        // and find all states whose commitments are missing
         let waiting_blocks = inner_lock
             .read()
-            .collect_blocks_missing_execution_commitments(me)?;
+            .collect_defer_blocks_missing_execution_commitments(me)?;
         // Now we wait without holding the inner lock
         // Note that we must use hash instead of index because once we release
         // the lock, there might be a checkpoint coming in to break
@@ -487,9 +488,10 @@ impl ConsensusExecutor {
     fn wait_and_compute_state_valid_locked(
         &self, me: usize, inner: &mut ConsensusGraphInner,
     ) -> Result<(), String> {
-        // We go up and find all states whose execution_commitments are missing
+        // We go up from deferred state block of `me`
+        // and find all states whose commitments are missing
         let waiting_blocks =
-            inner.collect_blocks_missing_execution_commitments(me)?;
+            inner.collect_defer_blocks_missing_execution_commitments(me)?;
         trace!(
             "wait_and_compute_state_valid_locked: waiting_blocks={:?}",
             waiting_blocks

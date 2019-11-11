@@ -2569,7 +2569,7 @@ impl ConsensusGraphInner {
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 
-    fn collect_blocks_missing_execution_commitments(
+    fn collect_defer_blocks_missing_execution_commitments(
         &self, me: usize,
     ) -> Result<Vec<H256>, String> {
         let mut cur = self.get_deferred_state_arena_index(me)?;
