@@ -528,15 +528,6 @@ impl ConsensusGraphInner {
             last_pivot_in_past_blocks,
         });
 
-        // FIXME: Set execution context and past_num_blocks with data on disk
-        inner.data_man.insert_epoch_execution_context(
-            genesis_block_header.hash(),
-            EpochExecutionContext {
-                start_block_number: 0,
-            },
-            true, /* persistent to db */
-        );
-
         inner
             .anticone_cache
             .update(inner.cur_era_genesis_block_arena_index, &BitSet::new());
