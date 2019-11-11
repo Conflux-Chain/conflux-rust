@@ -10,8 +10,9 @@ use std::{
     sync::Arc,
 };
 
-use crate::network::PeerId;
+use crate::{message::MsgId, network::PeerId};
 use rand::prelude::SliceRandom;
+use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
 #[derive(Default)]
 pub struct FullPeerState {
@@ -19,12 +20,14 @@ pub struct FullPeerState {
     pub handshake_completed: bool,
     pub protocol_version: u8,
     pub terminals: HashSet<H256>,
+    pub throttled_msgs: ThrottledManager<MsgId>,
 }
 
 #[derive(Default)]
 pub struct LightPeerState {
     pub handshake_completed: bool,
     pub protocol_version: u8,
+    pub throttling: TokenBucketManager,
 }
 
 #[derive(Default)]

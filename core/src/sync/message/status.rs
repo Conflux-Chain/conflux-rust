@@ -11,10 +11,7 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
@@ -97,7 +94,7 @@ impl Handleable for Status {
                 capabilities: Default::default(),
                 notified_capabilities: Default::default(),
                 throttling,
-                throttled_msgs: HashMap::new(),
+                throttled_msgs: Default::default(),
             };
 
             peer_state
