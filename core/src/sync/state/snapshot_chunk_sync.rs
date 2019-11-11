@@ -446,10 +446,7 @@ impl SnapshotChunkSync {
                 .expect("All headers exist")
                 .parent_hash();
         }
-        for i in 0..(inner.blame_vec_offset
-            + DEFERRED_STATE_EPOCH_COUNT as usize
-            + 1)
-        {
+        for i in 0..(inner.blame_vec_offset + REWARD_EPOCH_COUNT as usize) {
             hashes.push(deferred_block_hash);
             info!(
                 "insert_epoch_execution_commitments for block hash {:?}",
@@ -523,9 +520,14 @@ impl SnapshotChunkSync {
         }
 
         let min_vec_len = if checkpoint.height() == 0 {
-            trusted_blame_block.height() - checkpoint.height() + 1
+            trusted_blame_block.height()
+                - DEFERRED_STATE_EPOCH_COUNT
+                - checkpoint.height()
+                + 1
         } else {
-            trusted_blame_block.height() - checkpoint.height()
+            trusted_blame_block.height()
+                - DEFERRED_STATE_EPOCH_COUNT
+                - checkpoint.height()
                 + REWARD_EPOCH_COUNT
         };
         let mut trusted_blocks = Vec::new();

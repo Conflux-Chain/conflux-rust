@@ -318,9 +318,11 @@ impl ConsensusExecutor {
                 // FIXME: Wait for the execution info populated for all blocks
                 // FIXME: before pivot_arena_index
                 let height = inner.arena[pivot_arena_index].height;
+                // Execution starts at height `cur_era_stable_height + 1` after recovery,
+                // so we will need its deferred reward-related state_valid to be available
                 if !self.bench_mode
                     && height
-                        >= inner.cur_era_stable_height
+                        >= inner.cur_era_stable_height - REWARD_EPOCH_COUNT + 1
                 {
                     info!(
                         "wait_and_compute_execution_info_locked, idx = {}, \

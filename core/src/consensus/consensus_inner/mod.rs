@@ -2219,6 +2219,7 @@ impl ConsensusGraphInner {
                 break;
             }
             // TODO Double check the assumption
+            debug!("compute_blame_and_state_with_execution_result: cur={} height={}", cur, self.arena[cur].height);
             let deferred_arena_index =
                 self.get_deferred_state_arena_index(cur)?;
             let deferred_block_commitments = self
@@ -2278,6 +2279,10 @@ impl ConsensusGraphInner {
             self.arena[me].data.state_valid = Some(true);
             return Ok(());
         }
+        debug!(
+            "compute_state_valid: me={} height={}",
+            me, self.arena[me].height
+        );
         let deferred_state_arena_index =
             self.get_deferred_state_arena_index(me)?;
         let exec_commitments = self
@@ -2722,17 +2727,19 @@ impl ConsensusGraphInner {
         Ok(idx)
     }
 
+    /// FIXME Can we ensure that a state-valid block exists?
     /// TODO Check if we need to persist `state_valid` for this recovery.
     /// Find the first state valid block on the pivot chain after
     /// `cur_era_genesis` and set `state_valid` of it and its blamed blocks.
     /// This block is found according to blame_ratio.
     pub fn recover_state_valid(&mut self) {
         let checkpoint = self.data_man.get_cur_consensus_era_stable_hash();
-        // We will get first
+        // We will get the first
         // pivot block whose `state_valid` is `true` after `checkpoint`
         // (include `checkpoint` itself).
         let maybe_trusted_blame_block =
             self.get_trusted_blame_block(&checkpoint);
+        debug!("recover_state_valid: checkpoint={:?}, maybe_trusted_blame_block={:?}", checkpoint, maybe_trusted_blame_block);
 
         // Set `state_valid` of `trusted_blame_block` to true,
         // and set that of the blocks blamed by it to false
@@ -2756,6 +2763,12 @@ impl ConsensusGraphInner {
                     .blame();
                 for i in 0..blame + 1 {
                     self.arena[cur].data.state_valid = Some(i == 0);
+                    debug!(
+                        "recover_state_valid: index={} hash={} state_valid={}",
+                        cur,
+                        self.arena[cur].hash,
+                        i == 0
+                    );
                     cur = self.arena[cur].parent;
                     if cur == NULL {
                         break;

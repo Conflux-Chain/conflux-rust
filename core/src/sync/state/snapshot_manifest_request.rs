@@ -161,16 +161,6 @@ impl SnapshotManifestRequest {
             );
             return None;
         }
-        let min_vec_len = if checkpoint_block.height() == 0 {
-            trusted_block.height() - checkpoint_block.height() + 1
-        } else {
-            trusted_block.height() - checkpoint_block.height()
-                + REWARD_EPOCH_COUNT
-        };
-
-        let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);
-        let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
-        let mut bloom_blame_vec = Vec::with_capacity(min_vec_len as usize);
         let mut block_hash = trusted_block.hash();
         let mut trusted_block_height = trusted_block.height();
         let mut blame_count = trusted_block.blame();
@@ -184,6 +174,22 @@ impl SnapshotManifestRequest {
                 .expect("All headers exist")
                 .parent_hash();
         }
+
+        let min_vec_len = if checkpoint_block.height() == 0 {
+            trusted_block.height()
+                - DEFERRED_STATE_EPOCH_COUNT
+                - checkpoint_block.height()
+                + 1
+        } else {
+            trusted_block.height()
+                - DEFERRED_STATE_EPOCH_COUNT
+                - checkpoint_block.height()
+                + REWARD_EPOCH_COUNT
+        };
+        let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut bloom_blame_vec = Vec::with_capacity(min_vec_len as usize);
+
         // loop until we have enough length of `state_root_vec`
         loop {
             if let Some(block) =
