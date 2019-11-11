@@ -2513,7 +2513,7 @@ impl ConsensusGraphInner {
         }
         while !stack.is_empty() {
             let (stage, me) = stack.pop().unwrap();
-            if !to_visit.contains(&me) {
+            if !to_visit.contains(&me) || self.arena[me].era_block == NULL {
                 continue;
             }
             let parent = self.arena[me].parent;
@@ -2521,11 +2521,9 @@ impl ConsensusGraphInner {
                 if to_update.contains(&me) {
                     to_update.remove(&me);
                     stack.push((1, me));
-                    if self.arena[me].era_block != NULL {
-                        stack.push((0, parent));
-                        for referee in &self.arena[me].referees {
-                            stack.push((0, *referee));
-                        }
+                    stack.push((0, parent));
+                    for referee in &self.arena[me].referees {
+                        stack.push((0, *referee));
                     }
                 }
             } else if stage == 1 && me != self.cur_era_genesis_block_arena_index
