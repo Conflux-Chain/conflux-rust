@@ -4,12 +4,6 @@
 
 mod sync;
 
-use cfx_types::H256;
-use io::TimerToken;
-use parking_lot::RwLock;
-use rlp::Rlp;
-use std::sync::Arc;
-
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
@@ -32,11 +26,16 @@ use crate::{
     parameters::light::{
         CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
-    sync::SynchronizationGraph,
+    sync::{message::Throttled, SynchronizationGraph},
 };
-
-use crate::sync::message::Throttled;
-use std::time::{Duration, Instant};
+use cfx_types::H256;
+use io::TimerToken;
+use parking_lot::RwLock;
+use rlp::Rlp;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use sync::{
     BlockTxs, Blooms, Epochs, HashSource, Headers, Receipts, StateEntries,
     StateRoots, TxInfos, Txs, Witnesses,
@@ -559,8 +558,10 @@ impl Handler {
         // 1. Just return error to client;
         // 2. Select another peer to try again (e.g. 3 times at most).
         //
-        // In addition, if no peer available, return error to client immediately.
-        // So, always return error instead of current timeout.
+        // In addition, if no peer available, return error to client
+        // immediately. So, when any error occur (e.g. proof validation failed,
+        // throttled), light node should return error instead of waiting for
+        // timeout.
 
         Ok(())
     }

@@ -2,21 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use parking_lot::RwLock;
-use std::{
-    cmp,
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Instant,
-};
-
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{max_of_collection, FullPeerState, Peers, UniqueId},
+        common::{
+            max_of_collection, FullPeerFilter, FullPeerState, Peers, UniqueId,
+        },
+        handler::sync::headers::Headers,
         message::{msgid, GetBlockHashesByEpoch},
         Error,
     },
@@ -28,9 +20,16 @@ use crate::{
         NUM_WAITING_HEADERS_THRESHOLD,
     },
 };
-
-use super::headers::Headers;
-use crate::light_protocol::common::FullPeerFilter;
+use parking_lot::RwLock;
+use std::{
+    cmp,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Instant,
+};
 
 #[derive(Debug)]
 struct Statistics {
