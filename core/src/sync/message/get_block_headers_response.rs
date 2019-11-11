@@ -34,13 +34,6 @@ pub struct GetBlockHeadersResponse {
 
 impl Handleable for GetBlockHeadersResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        // We may receive some messages from peer during recover from db
-        // phase. We should ignore it, since it may cause some
-        // inconsistency.
-        if ctx.manager.in_recover_from_db_phase() {
-            return Ok(());
-        }
-
         let _timer = MeterTimer::time_func(BLOCK_HEADER_HANDLE_TIMER.as_ref());
 
         for header in &self.headers {
@@ -56,6 +49,13 @@ impl Handleable for GetBlockHeadersResponse {
             let requested = self.headers.iter().map(|h| h.hash()).collect();
 
             self.handle_block_headers(ctx, &self.headers, requested, None);
+            return Ok(());
+        }
+
+        // We may receive some messages from peer during recover from db
+        // phase. We should ignore it, since it may cause some
+        // inconsistency.
+        if ctx.manager.in_recover_from_db_phase() {
             return Ok(());
         }
 

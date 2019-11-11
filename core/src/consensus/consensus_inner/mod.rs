@@ -2521,11 +2521,11 @@ impl ConsensusGraphInner {
                 if to_update.contains(&me) {
                     to_update.remove(&me);
                     stack.push((1, me));
-                    if parent != NULL {
+                    if self.arena[me].era_block != NULL {
                         stack.push((0, parent));
-                    }
-                    for referee in &self.arena[me].referees {
-                        stack.push((0, *referee));
+                        for referee in &self.arena[me].referees {
+                            stack.push((0, *referee));
+                        }
                     }
                 }
             } else if stage == 1 && me != self.cur_era_genesis_block_arena_index
