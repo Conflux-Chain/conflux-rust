@@ -26,7 +26,7 @@ impl Handleable for Status {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        let genesis_hash = ctx.manager.graph.data_man.true_genesis_block.hash();
+        let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
         if genesis_hash != self.genesis_hash {
             debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",

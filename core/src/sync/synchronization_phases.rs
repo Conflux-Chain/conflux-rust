@@ -516,6 +516,8 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             );
             self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
+            // FIXME: We may need to some information of `confirmation_meter`.
+            self.graph.consensus.confirmation_meter.reset();
             let new_sync_inner = SynchronizationGraphInner::with_genesis_block(
                 self.graph
                     .data_man
@@ -528,7 +530,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             *old_sync_inner = new_sync_inner;
 
             // If `checkpoint` is true genesis, `state_valid` must be true.
-            if checkpoint == self.graph.data_man.true_genesis_block.hash()
+            if checkpoint == self.graph.data_man.true_genesis.hash()
                 && pivot_block_state_valid_map.contains_key(&checkpoint)
             {
                 assert!(pivot_block_state_valid_map

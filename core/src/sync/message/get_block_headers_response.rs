@@ -52,6 +52,13 @@ impl Handleable for GetBlockHeadersResponse {
             return Ok(());
         }
 
+        // We may receive some messages from peer during recover from db
+        // phase. We should ignore it, since it may cause some
+        // inconsistency.
+        if ctx.manager.in_recover_from_db_phase() {
+            return Ok(());
+        }
+
         let req = ctx.match_request(self.request_id)?;
         let req = req.downcast_ref::<GetBlockHeaders>(
             ctx.io,

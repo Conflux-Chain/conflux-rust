@@ -324,6 +324,14 @@ impl SynchronizationProtocolHandler {
             != SyncPhaseType::Normal
     }
 
+    pub fn in_recover_from_db_phase(&self) -> bool {
+        let current_phase = self.phase_manager.get_current_phase();
+        current_phase.phase_type()
+            == SyncPhaseType::CatchUpRecoverBlockHeaderFromDB
+            || current_phase.phase_type()
+                == SyncPhaseType::CatchUpRecoverBlockFromDB
+    }
+
     pub fn need_requesting_blocks(&self) -> bool {
         let current_phase = self.phase_manager.get_current_phase();
         current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlock
@@ -862,7 +870,7 @@ impl SynchronizationProtocolHandler {
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
-            genesis_hash: self.graph.data_man.true_genesis_block.hash(),
+            genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
         }
@@ -1333,9 +1341,10 @@ impl SynchronizationProtocolHandler {
     pub fn expire_block_gc(
         &self, io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
-        let need_to_relay = self
-            .graph
-            .resolve_outside_dependencies(false /* recover_from_db */);
+        let need_to_relay = self.graph.resolve_outside_dependencies(
+            false, /* recover_from_db */
+            self.insert_header_to_consensus(),
+        );
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }

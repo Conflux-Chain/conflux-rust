@@ -233,7 +233,7 @@ impl Provider {
         &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
         let best_info = self.consensus.get_best_info();
-        let genesis_hash = self.consensus.data_man.true_genesis_block.hash();
+        let genesis_hash = self.consensus.data_man.true_genesis.hash();
 
         let terminals = match &best_info.terminal_block_hashes {
             Some(x) => x.clone(),
@@ -262,7 +262,7 @@ impl Provider {
 
     #[inline]
     fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.consensus.data_man.true_genesis_block.hash() {
+        match self.consensus.data_man.true_genesis.hash() {
             h if h == genesis => Ok(()),
             h => {
                 debug!(

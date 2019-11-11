@@ -218,7 +218,7 @@ impl Handler {
 
     #[inline]
     fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.consensus.data_man.true_genesis_block.hash() {
+        match self.consensus.data_man.true_genesis.hash() {
             h if h == genesis => Ok(()),
             h => {
                 debug!(
@@ -313,7 +313,7 @@ impl Handler {
         &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(StatusPing {
-            genesis_hash: self.consensus.data_man.true_genesis_block.hash(),
+            genesis_hash: self.consensus.data_man.true_genesis.hash(),
             node_type: NodeType::Light,
             protocol_version: LIGHT_PROTOCOL_VERSION,
         });
