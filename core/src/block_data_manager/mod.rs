@@ -61,8 +61,7 @@ pub struct BlockDataManager {
     /// 1) When a new epoch gets executed in normal execution;
     /// 2) After syncing snapshot, we need to update execution commitment
     ///    for pivot blocks around snapshot block based on blaming information;
-    /// 3) After recovering block graph from db, update execution commitment
-    ///    according to execution info from db;
+    /// 3) After recovering block graph from db, update execution commitment from db;
     /// 4) In BlockDataManager::new(), update execution commitment of true
     ///    genesis block if it is the current era genesis in BlockDataManager.
     epoch_execution_commitments:
@@ -632,6 +631,8 @@ impl BlockDataManager {
         )
     }
 
+    /// TODO We can only persist execution_commitments for blocks
+    /// on the pivot chain after making a checkpoint
     pub fn insert_epoch_execution_commitments(
         &self, block_hash: H256,
         state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
