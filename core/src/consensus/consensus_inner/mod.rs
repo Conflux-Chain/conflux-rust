@@ -1668,7 +1668,7 @@ impl ConsensusGraphInner {
     }
 
     /// Return the consensus graph indexes of the pivot block where the rewards
-    /// of its epoch should be computed The rewards are needed to compute
+    /// of its epoch should be computed. The rewards are needed to compute
     /// the state of the epoch at height `state_at` of `chain`
     fn get_pivot_reward_index(
         &self, epoch_arena_index: usize,

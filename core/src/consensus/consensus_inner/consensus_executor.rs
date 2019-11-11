@@ -663,7 +663,7 @@ impl ConsensusExecutor {
                         .handler
                         .data_man
                         .get_epoch_execution_commitments(&block_hash)
-                        // Unwrap is safe here because the if condition on
+                        // Unwrap is safe here because the if-condition on
                         // data_man.get_snapshot_and_epoch_id_readonly implies
                         // epoch_execution_commitments is non-empty.
                         .unwrap());
@@ -699,7 +699,7 @@ impl ConsensusExecutor {
         debug!("Start execution from index {}", start_chain_index);
 
         // We need the state of the fork point to start executing the fork
-        if start_chain_index != 0 {
+        if start_chain_index == 0 {
             let mut last_state_height =
                 if inner.get_pivot_height() > DEFERRED_STATE_EPOCH_COUNT {
                     inner.get_pivot_height() - DEFERRED_STATE_EPOCH_COUNT
@@ -708,7 +708,7 @@ impl ConsensusExecutor {
                 };
 
             last_state_height += 1;
-            while last_state_height <= fork_height {
+            while last_state_height < fork_height {
                 let epoch_arena_index =
                     inner.get_pivot_block_arena_index(last_state_height);
                 let reward_execution_info =
