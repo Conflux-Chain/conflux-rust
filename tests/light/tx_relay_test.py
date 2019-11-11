@@ -83,11 +83,14 @@ class TxRelayTest(ConfluxTestFramework):
         for (hash, _, _) in txs:
             self.log.info(f"waiting for tx {hash}")
             self.rpc[FULLNODE0].wait_for_receipt(hash)
-            self.rpc[FULLNODE1].wait_for_receipt(hash)
 
         self.log.info(f"Pass 1 - all txs relayed\n")
         # ------------------------------------------------
         self.log.info(f"Retrieving txs through light node...")
+
+        # sync blocks to make sure the light client has the header with the latest state
+        self.log.info("syncing blocks...")
+        sync_blocks(self.nodes)
 
         for (hash, _, _) in txs:
             self.check_tx(hash)      # cfx_getTransactionByHash
