@@ -4,7 +4,10 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
-    parameters::consensus_internal::REWARD_EPOCH_COUNT,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        consensus_internal::REWARD_EPOCH_COUNT,
+    },
     sync::{
         message::{Context, DynamicCapability, Handleable, KeyContainer},
         request_manager::Request,
@@ -158,19 +161,35 @@ impl SnapshotManifestRequest {
             );
             return None;
         }
-        let min_vec_len = if checkpoint_block.height() == 0 {
-            trusted_block.height() - checkpoint_block.height() + 1
-        } else {
-            trusted_block.height() - checkpoint_block.height()
-                + REWARD_EPOCH_COUNT
-        };
-
-        let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);
-        let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
-        let mut bloom_blame_vec = Vec::with_capacity(min_vec_len as usize);
         let mut block_hash = trusted_block.hash();
         let mut trusted_block_height = trusted_block.height();
         let mut blame_count = trusted_block.blame();
+        let mut deferred_block_hash = block_hash;
+        for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+            deferred_block_hash = *ctx
+                .manager
+                .graph
+                .data_man
+                .block_header_by_hash(&deferred_block_hash)
+                .expect("All headers exist")
+                .parent_hash();
+        }
+
+        let min_vec_len = if checkpoint_block.height() == 0 {
+            trusted_block.height()
+                - DEFERRED_STATE_EPOCH_COUNT
+                - checkpoint_block.height()
+                + 1
+        } else {
+            trusted_block.height()
+                - DEFERRED_STATE_EPOCH_COUNT
+                - checkpoint_block.height()
+                + REWARD_EPOCH_COUNT
+        };
+        let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut receipt_blame_vec = Vec::with_capacity(min_vec_len as usize);
+        let mut bloom_blame_vec = Vec::with_capacity(min_vec_len as usize);
+
         // loop until we have enough length of `state_root_vec`
         loop {
             if let Some(block) =
@@ -183,22 +202,19 @@ impl SnapshotManifestRequest {
                     trusted_block_height = block.height();
                     blame_count = block.blame()
                 }
-                if let Some(exec_info) = ctx
+                if let Some(commitments) = ctx
                     .manager
                     .graph
                     .data_man
-                    .consensus_graph_execution_info_from_db(&block_hash)
+                    .get_epoch_execution_commitments_from_db(
+                        &deferred_block_hash,
+                    )
                 {
                     state_root_vec.push(
-                        exec_info
-                            .deferred_state_root_with_aux_info
-                            .state_root
-                            .clone(),
+                        commitments.state_root_with_aux_info.state_root.clone(),
                     );
-                    receipt_blame_vec
-                        .push(exec_info.original_deferred_receipt_root);
-                    bloom_blame_vec
-                        .push(exec_info.original_deferred_logs_bloom_hash);
+                    receipt_blame_vec.push(commitments.receipts_root);
+                    bloom_blame_vec.push(commitments.logs_bloom_hash);
                 } else {
                     warn!(
                         "failed to find block={} in db, peer={}",
@@ -213,6 +229,13 @@ impl SnapshotManifestRequest {
                     break;
                 }
                 block_hash = *block.parent_hash();
+                deferred_block_hash = *ctx
+                    .manager
+                    .graph
+                    .data_man
+                    .block_header_by_hash(&deferred_block_hash)
+                    .expect("All headers received")
+                    .parent_hash();
             } else {
                 warn!(
                     "failed to find block={} in db, peer={}",

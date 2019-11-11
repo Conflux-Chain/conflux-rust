@@ -62,9 +62,9 @@ pub struct BlockDataManager {
     /// 2) After syncing snapshot, we need to update execution commitment
     ///    for pivot blocks around snapshot block based on blaming information;
     /// 3) After recovering block graph from db, update execution commitment
-    ///    according to execution info from db;
-    /// 4) In BlockDataManager::new(), update execution commitment of true
-    ///    genesis block if it is the current era genesis in BlockDataManager.
+    ///    from db;
+    /// 4) In BlockDataManager::new(), update execution commitment
+    ///    of true_genesis_block.
     epoch_execution_commitments:
         RwLock<HashMap<H256, EpochExecutionCommitments>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
@@ -576,21 +576,6 @@ impl BlockDataManager {
         self.db_manager.terminals_from_db()
     }
 
-    /// This only inserts reference because the object will be stored in
-    /// ConsensusInner
-    pub fn insert_consensus_graph_execution_info_to_db(
-        &self, hash: &H256, info: &ConsensusGraphExecutionInfo,
-    ) {
-        self.db_manager
-            .insert_consensus_graph_execution_info_to_db(hash, info)
-    }
-
-    pub fn consensus_graph_execution_info_from_db(
-        &self, hash: &H256,
-    ) -> Option<ConsensusGraphExecutionInfo> {
-        self.db_manager.consensus_graph_execution_info_from_db(hash)
-    }
-
     pub fn insert_epoch_set_hashes_to_db(
         &self, epoch_number: u64, epoch_set: &Vec<H256>,
     ) {
@@ -649,19 +634,31 @@ impl BlockDataManager {
         )
     }
 
+    /// TODO We can avoid persisting execution_commitments for blocks
+    /// not on the pivot chain after a checkpoint
     pub fn insert_epoch_execution_commitments(
         &self, block_hash: H256,
         state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
         logs_bloom_hash: H256,
     )
     {
-        self.epoch_execution_commitments.write().insert(
+        let commitments = EpochExecutionCommitments {
+            state_root_with_aux_info,
+            receipts_root,
+            logs_bloom_hash,
+        };
+        self.insert(
             block_hash,
-            EpochExecutionCommitments {
-                state_root_with_aux_info,
-                receipts_root,
-                logs_bloom_hash,
+            commitments,
+            &self.epoch_execution_commitments,
+            |key, value| {
+                self.db_manager
+                    .insert_consensus_graph_epoch_execution_commitment_to_db(
+                        key, value,
+                    )
             },
+            None,
+            true,
         );
     }
 
@@ -673,6 +670,25 @@ impl BlockDataManager {
             .read()
             .get(block_hash)
             .map(Clone::clone)
+    }
+
+    pub fn load_epoch_execution_commitments_from_db(
+        &self, block_hash: &H256,
+    ) -> Option<EpochExecutionCommitments> {
+        let commitments = self
+            .db_manager
+            .consensus_graph_epoch_execution_commitment_from_db(block_hash)?;
+        self.epoch_execution_commitments
+            .write()
+            .insert(*block_hash, commitments.clone());
+        Some(commitments)
+    }
+
+    pub fn get_epoch_execution_commitments_from_db(
+        &self, block_hash: &H256,
+    ) -> Option<EpochExecutionCommitments> {
+        self.db_manager
+            .consensus_graph_epoch_execution_commitment_from_db(block_hash)
     }
 
     pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {

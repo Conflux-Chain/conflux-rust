@@ -249,7 +249,6 @@ impl ConsensusNewBlockHandler {
                 inner.hash_to_arena_indices.remove(&hash);
                 inner.terminal_hashes.remove(&hash);
                 inner.arena.remove(index);
-                inner.execution_info_cache.remove(&index);
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitments(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
@@ -1421,9 +1420,6 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        // recover `EpochExecutionCommitments` from
-        // `execution_info_cache` or recompute the state if it is not exist in
-        // `execution_info_cache`
         let stable_pivot_index =
             inner.cur_era_stable_height - inner.cur_era_genesis_height;
         for pivot_index in stable_pivot_index as usize
@@ -1434,25 +1430,17 @@ impl ConsensusNewBlockHandler {
             if pivot_hash == inner.data_man.true_genesis.hash() {
                 continue;
             }
-            let exec_pivot_index =
-                pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
-            // For each execution_info_cache, set epoch_execution_commitments
-            // for the state block..
-            if exec_pivot_index < inner.pivot_chain.len()
-                && inner
-                    .execution_info_cache
-                    .contains_key(&inner.pivot_chain[exec_pivot_index])
+
+            // Ensure that the commitments for the blocks on
+            // pivot_chain after cur_era_stable_genesis are kept in memory.
+            if self
+                .data_man
+                .load_epoch_execution_commitments_from_db(&pivot_hash)
+                .is_none()
             {
-                let exec_arena_index = inner.pivot_chain[exec_pivot_index];
-                let exec_info =
-                    inner.execution_info_cache.get(&exec_arena_index).unwrap();
-                self.data_man.insert_epoch_execution_commitments(
-                    pivot_hash,
-                    exec_info.deferred_state_root_with_aux_info.clone(),
-                    exec_info.original_deferred_receipt_root,
-                    exec_info.original_deferred_logs_bloom_hash,
-                );
-            } else {
+                // We should recompute the epochs that should have been executed
+                // but fail to persist their
+                // execution_commitments before shutdown
                 let reward_execution_info =
                     self.executor.get_reward_execution_info(inner, arena_index);
                 let epoch_block_hashes =

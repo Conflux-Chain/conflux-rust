@@ -170,7 +170,7 @@ impl ConsensusGraph {
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
-            pivot_block_state_valid_map: Mutex::new(Default::default()),
+            pivot_block_state_valid_map: Default::default(),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -555,16 +555,7 @@ impl ConsensusGraph {
                 let arena_index =
                     *inner.hash_to_arena_indices.get(&hash).unwrap();
                 inner.arena[arena_index].data.state_valid =
-                    pivot_block_state_valid_map.remove(&hash).unwrap();
-            }
-
-            // we should recover exec_info from db
-            if let Some(arena_index) = inner.hash_to_arena_indices.get(hash) {
-                if let Some(exe_info) =
-                    self.data_man.consensus_graph_execution_info_from_db(hash)
-                {
-                    inner.execution_info_cache.insert(*arena_index, exe_info);
-                }
+                    pivot_block_state_valid_map.remove(&hash);
             }
 
             // Reset pivot chain according to checkpoint information during
@@ -688,29 +679,6 @@ impl ConsensusGraph {
             .state_root
             .compute_state_root_hash();
         Some((results_with_epoch, address, state_root))
-    }
-
-    pub fn get_state_root_by_pivot_height(
-        &self, pivot_height: u64,
-    ) -> Option<H256> {
-        let inner = self.inner.read();
-        let height = pivot_height + DEFERRED_STATE_EPOCH_COUNT as u64;
-        let pivot_index = match height {
-            h if h < inner.get_cur_era_genesis_height() => return None,
-            h => inner.height_to_pivot_index(h),
-        };
-        if pivot_index < inner.pivot_chain.len() {
-            let pivot_hash = &inner.arena[inner.pivot_chain[pivot_index]].hash;
-            // FIXME: why not check execution_info_cache first?
-            return match self
-                .data_man
-                .consensus_graph_execution_info_from_db(pivot_hash)
-            {
-                Some(info) => Some(info.original_deferred_state_root),
-                None => None,
-            };
-        }
-        None
     }
 
     pub fn transaction_count(
@@ -994,6 +962,9 @@ impl ConsensusGraph {
     /// on_new_block().
     pub fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
+        // Ensure that `state_valid` of the first valid block after
+        // cur_era_stable_genesis is set
+        inner.recover_state_valid();
         self.new_block_handler.construct_pivot_state(inner);
     }
 

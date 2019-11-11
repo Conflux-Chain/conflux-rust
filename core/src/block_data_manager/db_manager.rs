@@ -1,7 +1,7 @@
 use crate::{
     block_data_manager::{
         BlockExecutionResultWithEpoch, CheckpointHashes,
-        ConsensusGraphExecutionInfo, EpochExecutionContext, LocalBlockInfo,
+        EpochExecutionCommitments, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
     storage::{storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite},
@@ -258,22 +258,22 @@ impl DBManager {
         self.load_decodable_list(DBTable::Misc, b"terminals")
     }
 
-    pub fn insert_consensus_graph_execution_info_to_db(
-        &self, hash: &H256, ctx: &ConsensusGraphExecutionInfo,
+    pub fn insert_consensus_graph_epoch_execution_commitment_to_db(
+        &self, hash: &H256, ctx: &EpochExecutionCommitments,
     ) {
         self.insert_encodable_val(
             DBTable::Blocks,
-            &epoch_consensus_execution_info_key(hash),
+            &epoch_consensus_epoch_execution_commitment_key(hash),
             ctx,
         );
     }
 
-    pub fn consensus_graph_execution_info_from_db(
+    pub fn consensus_graph_epoch_execution_commitment_from_db(
         &self, hash: &H256,
-    ) -> Option<ConsensusGraphExecutionInfo> {
+    ) -> Option<EpochExecutionCommitments> {
         self.load_decodable_val(
             DBTable::Blocks,
-            &epoch_consensus_execution_info_key(hash),
+            &epoch_consensus_epoch_execution_commitment_key(hash),
         )
     }
 
@@ -376,6 +376,6 @@ fn epoch_execution_context_key(hash: &H256) -> Vec<u8> {
     append_suffix(hash, EPOCH_EXECUTION_CONTEXT_SUFFIX_BYTE)
 }
 
-fn epoch_consensus_execution_info_key(hash: &H256) -> Vec<u8> {
+fn epoch_consensus_epoch_execution_commitment_key(hash: &H256) -> Vec<u8> {
     append_suffix(hash, EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE)
 }

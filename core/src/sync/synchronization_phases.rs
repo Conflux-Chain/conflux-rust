@@ -506,7 +506,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     }
                 }
             }
-
             let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
                 old_consensus_inner.pow_config.clone(),
                 self.graph.data_man.clone(),
@@ -528,15 +527,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 old_sync_inner.data_man.clone(),
             );
             *old_sync_inner = new_sync_inner;
-
-            // If `checkpoint` is true genesis, `state_valid` must be true.
-            if checkpoint == self.graph.data_man.true_genesis.hash()
-                && pivot_block_state_valid_map.contains_key(&checkpoint)
-            {
-                assert!(pivot_block_state_valid_map
-                    .remove(&checkpoint)
-                    .unwrap());
-            }
 
             self.graph
                 .statistics
