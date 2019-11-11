@@ -21,6 +21,7 @@ use crate::{
 };
 
 use super::{HasKey, PriorityQueue};
+use crate::{light_protocol::common::FullPeerFilter, message::MsgId};
 
 #[derive(Debug)]
 struct InFlightRequest<T> {
@@ -46,6 +47,9 @@ pub struct SyncManager<Key, Item> {
 
     // priority queue of headers we need excluding the ones in `in_flight`
     waiting: RwLock<PriorityQueue<Key, Item>>,
+
+    // used to filter peer to send request
+    request_msg_id: MsgId,
 }
 
 impl<Key, Item> SyncManager<Key, Item>
@@ -53,7 +57,9 @@ where
     Key: Clone + Eq + Hash,
     Item: Debug + Clone + HasKey<Key> + Ord,
 {
-    pub fn new(peers: Arc<Peers<FullPeerState>>) -> Self {
+    pub fn new(
+        peers: Arc<Peers<FullPeerState>>, request_msg_id: MsgId,
+    ) -> Self {
         let in_flight = RwLock::new(HashMap::new());
         let waiting = RwLock::new(PriorityQueue::new());
 
@@ -61,6 +67,7 @@ where
             in_flight,
             peers,
             waiting,
+            request_msg_id,
         }
     }
 
@@ -138,7 +145,9 @@ where
 
         // request items in batches from random peers
         for batch in items.chunks(batch_size) {
-            let peer = match self.peers.random_peer() {
+            let peer = match FullPeerFilter::new(self.request_msg_id)
+                .select(self.peers.clone())
+            {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available");
@@ -196,7 +205,9 @@ where
     ) where
         I: Iterator<Item = Item>,
     {
-        let peer = match self.peers.random_peer() {
+        let peer = match FullPeerFilter::new(self.request_msg_id)
+            .select(self.peers.clone())
+        {
             Some(peer) => peer,
             None => {
                 warn!("No peers available");

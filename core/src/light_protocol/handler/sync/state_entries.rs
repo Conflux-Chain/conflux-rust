@@ -13,7 +13,7 @@ use std::sync::Arc;
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers, UniqueId},
-        message::{GetStateEntries, StateEntryWithKey, StateKey},
+        message::{msgid, GetStateEntries, StateEntryWithKey, StateKey},
         Error, ErrorKind,
     },
     message::Message,
@@ -73,7 +73,8 @@ impl StateEntries {
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager =
+            SyncManager::new(peers.clone(), msgid::GET_STATE_ENTRIES);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));

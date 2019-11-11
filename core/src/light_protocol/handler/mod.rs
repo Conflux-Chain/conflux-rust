@@ -4,12 +4,6 @@
 
 mod sync;
 
-use cfx_types::H256;
-use io::TimerToken;
-use parking_lot::RwLock;
-use rlp::Rlp;
-use std::sync::Arc;
-
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
@@ -32,10 +26,16 @@ use crate::{
     parameters::light::{
         CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
-    sync::SynchronizationGraph,
+    sync::{message::Throttled, SynchronizationGraph},
 };
-
-use crate::sync::message::Throttled;
+use cfx_types::H256;
+use io::TimerToken;
+use parking_lot::RwLock;
+use rlp::Rlp;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use sync::{
     BlockTxs, Blooms, Epochs, HashSource, Headers, Receipts, StateEntries,
     StateRoots, TxInfos, Txs, Witnesses,
@@ -542,20 +542,26 @@ impl Handler {
     }
 
     fn on_throttled(
-        &self, _io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: Throttled = rlp.as_val()?;
         info!("on_throttled resp={:?}", resp);
 
+        let peer = self.get_existing_peer_state(&peer)?;
+        peer.write().throttled_msgs.set_throttled(
+            resp.msg_id,
+            Instant::now() + Duration::from_nanos(resp.wait_time_nanos),
+        );
+
         // todo (boqiu): update when throttled
         // In case of throttled for a RPC call:
         // 1. Just return error to client;
-        // 2. Select another peer to try again (3 times at most).
+        // 2. Select another peer to try again (e.g. 3 times at most).
         //
-        // Enhancement: send request to peer that not throttled.
-        // If no peer available, return error to client.
-
-        // Note, if this message not handled, the RPC call will timeout.
+        // In addition, if no peer available, return error to client
+        // immediately. So, when any error occur (e.g. proof validation failed,
+        // throttled), light node should return error instead of waiting for
+        // timeout.
 
         Ok(())
     }

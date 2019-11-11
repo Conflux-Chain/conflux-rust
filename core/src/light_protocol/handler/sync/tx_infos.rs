@@ -16,7 +16,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers, UniqueId},
-        message::{GetTxInfos, TxInfo},
+        message::{msgid, GetTxInfos, TxInfo},
         Error, ErrorKind,
     },
     message::Message,
@@ -72,7 +72,7 @@ impl TxInfos {
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager = SyncManager::new(peers.clone(), msgid::GET_TX_INFOS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));

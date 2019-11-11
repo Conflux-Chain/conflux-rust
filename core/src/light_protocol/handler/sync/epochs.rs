@@ -2,22 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use parking_lot::RwLock;
-use std::{
-    cmp,
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Instant,
-};
-
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{max_of_collection, FullPeerState, Peers, UniqueId},
-        message::GetBlockHashesByEpoch,
+        common::{
+            max_of_collection, FullPeerFilter, FullPeerState, Peers, UniqueId,
+        },
+        handler::sync::headers::Headers,
+        message::{msgid, GetBlockHashesByEpoch},
         Error,
     },
     message::{Message, RequestId},
@@ -28,8 +20,16 @@ use crate::{
         NUM_WAITING_HEADERS_THRESHOLD,
     },
 };
-
-use super::headers::Headers;
+use parking_lot::RwLock;
+use std::{
+    cmp,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Instant,
+};
 
 #[derive(Debug)]
 struct Statistics {
@@ -194,8 +194,12 @@ impl Epochs {
             let max = max_of_collection(batch.iter()).expect("chunk not empty");
 
             // choose random peer that has the epochs we need
-            let predicate = |s: &FullPeerState| s.best_epoch >= *max;
-            let peer = match self.peers.random_peer_satisfying(predicate) {
+            let matched_peer =
+                FullPeerFilter::new(msgid::GET_BLOCK_HASHES_BY_EPOCH)
+                    .with_min_best_epoch(*max)
+                    .select(self.peers.clone());
+
+            let peer = match matched_peer {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available; aborting sync");

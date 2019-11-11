@@ -15,7 +15,7 @@ use crate::{
     hash::keccak,
     light_protocol::{
         common::{FullPeerState, Peers, UniqueId},
-        message::{BloomWithEpoch, GetBlooms},
+        message::{msgid, BloomWithEpoch, GetBlooms},
         Error, ErrorKind,
     },
     message::Message,
@@ -61,7 +61,7 @@ impl Blooms {
         witnesses: Arc<Witnesses>,
     ) -> Self
     {
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager = SyncManager::new(peers.clone(), msgid::GET_BLOOMS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));

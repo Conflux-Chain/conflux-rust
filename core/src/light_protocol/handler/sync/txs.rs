@@ -15,7 +15,7 @@ use std::sync::Arc;
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers, UniqueId},
-        message::GetTxs,
+        message::{msgid, GetTxs},
         Error, ErrorKind,
     },
     message::Message,
@@ -53,7 +53,7 @@ impl Txs {
     pub fn new(
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self {
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager = SyncManager::new(peers.clone(), msgid::GET_TXS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));

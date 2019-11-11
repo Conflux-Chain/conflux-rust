@@ -13,7 +13,7 @@ use std::sync::Arc;
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers, UniqueId},
-        message::{GetReceipts, ReceiptsWithEpoch},
+        message::{msgid, GetReceipts, ReceiptsWithEpoch},
         Error, ErrorKind,
     },
     message::Message,
@@ -60,7 +60,7 @@ impl Receipts {
         witnesses: Arc<Witnesses>,
     ) -> Self
     {
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager = SyncManager::new(peers.clone(), msgid::GET_RECEIPTS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));

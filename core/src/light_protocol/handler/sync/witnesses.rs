@@ -10,7 +10,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers, UniqueId},
-        message::{GetWitnessInfo, WitnessInfoWithHeight},
+        message::{msgid, GetWitnessInfo, WitnessInfoWithHeight},
         Error, ErrorKind,
     },
     message::Message,
@@ -66,7 +66,8 @@ impl Witnesses {
     {
         let latest_verified_header = RwLock::new(0);
         let ledger = LedgerInfo::new(consensus.clone());
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager =
+            SyncManager::new(peers.clone(), msgid::GET_WITNESS_INFO);
         let verified = RwLock::new(HashMap::new());
 
         Witnesses {

@@ -4,19 +4,16 @@
 
 extern crate futures;
 
-use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
-use futures::{future, stream, Future, Stream};
-use std::{collections::BTreeSet, sync::Arc};
-
-use primitives::{
-    filter::{Filter, FilterError},
-    log_entry::{LocalizedLogEntry, LogEntry},
-    Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
-    TransactionAddress,
-};
-
 use crate::{
     consensus::ConsensusGraph,
+    light_protocol::{
+        common::{
+            poll_future, poll_stream, with_timeout, FullPeerFilter, LedgerInfo,
+        },
+        message::msgid,
+        Error, Handler as LightHandler, LIGHT_PROTOCOL_ID,
+        LIGHT_PROTOCOL_VERSION,
+    },
     network::{NetworkContext, NetworkService},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -26,11 +23,15 @@ use crate::{
     storage,
     sync::SynchronizationGraph,
 };
-
-use super::{
-    common::{poll_future, poll_stream, with_timeout, LedgerInfo},
-    Error, Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
+use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
+use futures::{future, stream, Future, Stream};
+use primitives::{
+    filter::{Filter, FilterError},
+    log_entry::{LocalizedLogEntry, LogEntry},
+    Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
+    TransactionAddress,
 };
+use std::{collections::BTreeSet, sync::Arc};
 
 type TxInfo = (
     SignedTransaction,
@@ -303,7 +304,10 @@ impl QueryService {
 
         let mut success = false;
 
-        for peer in self.handler.peers.all_peers_shuffled() {
+        let peers = FullPeerFilter::new(msgid::SEND_RAW_TX)
+            .select_all(self.handler.peers.clone());
+
+        for peer in peers {
             // relay to peer
             let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
                 self.handler.send_raw_tx(io, peer, raw.clone())

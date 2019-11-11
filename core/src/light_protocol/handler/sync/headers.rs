@@ -18,7 +18,7 @@ use primitives::BlockHeader;
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers, UniqueId},
-        message::GetBlockHeaders,
+        message::{msgid, GetBlockHeaders},
         Error,
     },
     message::Message,
@@ -105,7 +105,8 @@ impl Headers {
     ) -> Self
     {
         let duplicate_count = AtomicU64::new(0);
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager =
+            SyncManager::new(peers.clone(), msgid::GET_BLOCK_HEADERS);
 
         Headers {
             duplicate_count,
