@@ -1668,8 +1668,30 @@ impl ConsensusGraphInner {
     }
 
     /// Return the consensus graph indexes of the pivot block where the rewards
-    /// of its epoch should be computed. The rewards are needed to compute
-    /// the state of the epoch at height `state_at` of `chain`
+    /// of its epoch should be computed.
+    ///
+    ///   epoch to                         Block holding
+    ///   compute reward                   the reward state
+    ///                         Block epoch                  Block with
+    ///   | [Bi1]   |           for cared                    [Bj]'s state
+    ///   |     \   |           anticone                     as deferred root
+    /// --|----[Bi]-|--------------[Ba]---------[Bj]----------[Bt]
+    ///   |    /    |
+    ///   | [Bi2]   |
+    ///
+    /// Let i([Bi]) is the arena index of [Bi].
+    /// Let h([Bi]) is the height of [Bi].
+    ///
+    /// Params:
+    ///   epoch_arena_index: the arena index of [Bj]
+    /// Return:
+    ///   Option<(i([Bi]), i([Ba]))>
+    ///
+    /// The gap between [Bj] and [Bi], i.e., h([Bj])-h([Bi]),
+    /// is REWARD_EPOCH_COUNT.
+    /// Let D is the gap between the parent of the genesis of next era and [Bi].
+    /// The gap between [Ba] and [Bi] is
+    ///     min(ANTICONE_PENALTY_UPPER_EPOCH_COUNT, D).
     fn get_pivot_reward_index(
         &self, epoch_arena_index: usize,
     ) -> Option<(usize, usize)> {
