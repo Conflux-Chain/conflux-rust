@@ -2298,63 +2298,33 @@ impl ConsensusGraphInner {
             exec_commitments.receipts_root.clone();
         let original_deferred_logs_bloom_hash =
             exec_commitments.logs_bloom_hash.clone();
-        // We will skip state validation if `cur_era_stable_height <= lca.height
-        // && lca.height < first_trusted_blame_block_height` where lca
-        // is the lowest common ancestor of `first_trusted_blame_block`
-        // and `parent`.
-        let skip_state_validation = {
-            if self.first_trusted_blame_block_height
-                > self.cur_era_stable_height
-            {
-                if self.arena[parent].height
-                    < self.first_trusted_blame_block_height
-                {
-                    true
-                } else {
-                    let arena_index_opt = self
-                        .hash_to_arena_indices
-                        .get(&self.first_trusted_blame_block);
-                    if arena_index_opt.is_some() {
-                        let lca = self.lca(*arena_index_opt.unwrap(), parent);
-                        self.arena[lca].height
-                            < self.first_trusted_blame_block_height
-                    } else {
-                        false
-                    }
-                }
-            } else {
-                false
-            }
-        };
-        if !skip_state_validation {
-            let (
-                blame,
-                deferred_state_root,
-                deferred_receipt_root,
-                deferred_logs_bloom_hash,
-            ) = self.compute_blame_and_state_with_execution_result(
-                parent,
-                &exec_commitments,
-            )?;
-            let block_header = self
-                .data_man
-                .block_header_by_hash(&self.arena[me].hash)
-                .unwrap();
-            let state_valid = block_header.blame() == blame
-                && *block_header.deferred_state_root() == deferred_state_root
-                && *block_header.deferred_receipts_root()
-                    == deferred_receipt_root
-                && *block_header.deferred_logs_bloom_hash()
-                    == deferred_logs_bloom_hash;
 
-            if state_valid {
-                debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
-            } else {
-                debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
-            }
+        let (
+            blame,
+            deferred_state_root,
+            deferred_receipt_root,
+            deferred_logs_bloom_hash,
+        ) = self.compute_blame_and_state_with_execution_result(
+            parent,
+            &exec_commitments,
+        )?;
+        let block_header = self
+            .data_man
+            .block_header_by_hash(&self.arena[me].hash)
+            .unwrap();
+        let state_valid = block_header.blame() == blame
+            && *block_header.deferred_state_root() == deferred_state_root
+            && *block_header.deferred_receipts_root() == deferred_receipt_root
+            && *block_header.deferred_logs_bloom_hash()
+                == deferred_logs_bloom_hash;
 
-            self.arena[me].data.state_valid = Some(state_valid);
+        if state_valid {
+            debug!("compute_execution_info_with_result(): Block {} state/blame is valid.", self.arena[me].hash);
+        } else {
+            debug!("compute_execution_info_with_result(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
         }
+
+        self.arena[me].data.state_valid = Some(state_valid);
 
         if self.inner_conf.enable_state_expose {
             STATE_EXPOSER
