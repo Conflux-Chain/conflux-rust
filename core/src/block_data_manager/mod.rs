@@ -93,7 +93,6 @@ impl BlockDataManager {
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
     ) -> Self
     {
-        let mut cur_era_genesis = true_genesis.clone();
         let mb = 1024 * 1024;
         let max_cache_size = cache_conf.ledger_mb() * mb;
         let pref_cache_size = max_cache_size * 3 / 4;
@@ -134,36 +133,37 @@ impl BlockDataManager {
 
         data_man.initialize_instance_id();
 
-        if let Some((checkpoint_hash, stable_hash)) =
-            data_man.db_manager.checkpoint_hashes_from_db()
-        {
-            if checkpoint_hash != cur_era_genesis.hash() {
-                if let Some(checkpoint_block) = data_man.block_by_hash(
-                    &checkpoint_hash,
-                    false, /* update_cache */
-                ) {
-                    *data_man.cur_consensus_era_genesis_hash.write() =
-                        checkpoint_hash;
-                    *data_man.cur_consensus_era_stable_hash.write() =
-                        stable_hash;
-                    cur_era_genesis = checkpoint_block.clone();
+        let cur_era_genesis =
+            match data_man.db_manager.checkpoint_hashes_from_db() {
+                None => true_genesis,
+                Some((checkpoint_hash, stable_hash)) => {
+                    if let Some(checkpoint_block) = data_man.block_by_hash(
+                        &checkpoint_hash,
+                        false, /* update_cache */
+                    ) {
+                        *data_man.cur_consensus_era_genesis_hash.write() =
+                            checkpoint_hash;
+                        *data_man.cur_consensus_era_stable_hash.write() =
+                            stable_hash;
+                        checkpoint_block
+                    } else {
+                        panic!("Checkpoint block does not exist!");
+                    }
                 }
-            }
-        }
-
-        // FIXME: Set execution context and past_num_blocks with data on disk
-        data_man.insert_epoch_execution_context(
-            cur_era_genesis.hash(),
-            EpochExecutionContext {
-                start_block_number: 0,
-            },
-            true,
-        );
-
+            };
+        let cur_era_genesis_hash = cur_era_genesis.hash();
         data_man
             .insert_block(cur_era_genesis.clone(), true /* persistent */);
 
-        if cur_era_genesis.hash() == data_man.true_genesis.hash() {
+        if cur_era_genesis_hash == data_man.true_genesis.hash() {
+            // Initialize ExecutionContext for true genesis
+            data_man.insert_epoch_execution_context(
+                cur_era_genesis_hash,
+                EpochExecutionContext {
+                    start_block_number: 0,
+                },
+                true,
+            );
             // persist local_block_info for true genesis
             data_man.db_manager.insert_local_block_info_to_db(
                 &data_man.true_genesis.hash(),
@@ -183,6 +183,14 @@ impl BlockDataManager {
                     .deferred_logs_bloom_hash(),
             );
         } else {
+            // Recover ExecutionContext for cur_era_genesis from db
+            data_man.insert_epoch_execution_context(
+                cur_era_genesis_hash,
+                data_man
+                    .get_epoch_execution_context(&cur_era_genesis_hash)
+                    .expect("ExecutionContext exists for cur_era_genesis"),
+                false, /* Not persistent because it's already in db */
+            );
             // for other era genesis, we need to change the instance_id
             if let Some(mut local_block_info) = data_man
                 .db_manager
@@ -194,6 +202,8 @@ impl BlockDataManager {
                     &local_block_info,
                 );
             }
+            // The commitments of cur_era_genesis will be recovered in
+            // `construct_pivot_state` with other epochs
         }
 
         data_man
