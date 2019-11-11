@@ -35,6 +35,7 @@ use crate::{
     sync::SynchronizationGraph,
 };
 
+use crate::sync::message::Throttled;
 use sync::{
     BlockTxs, Blooms, Epochs, HashSource, Headers, Receipts, StateEntries,
     StateRoots, TxInfos, Txs, Witnesses,
@@ -217,7 +218,7 @@ impl Handler {
 
     #[inline]
     fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.consensus.data_man.true_genesis_block.hash() {
+        match self.consensus.data_man.true_genesis.hash() {
             h if h == genesis => Ok(()),
             h => {
                 debug!(
@@ -252,6 +253,9 @@ impl Handler {
             msgid::TXS => self.on_txs(io, peer, &rlp),
             msgid::TX_INFOS => self.on_tx_infos(io, peer, &rlp),
             msgid::WITNESS_INFO => self.on_witness_info(io, peer, &rlp),
+
+            // request was throttled by service provider
+            msgid::THROTTLED => self.on_throttled(io, peer, &rlp),
 
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
@@ -309,7 +313,7 @@ impl Handler {
         &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(StatusPing {
-            genesis_hash: self.consensus.data_man.true_genesis_block.hash(),
+            genesis_hash: self.consensus.data_man.true_genesis.hash(),
             node_type: NodeType::Light,
             protocol_version: LIGHT_PROTOCOL_VERSION,
         });
@@ -535,6 +539,25 @@ impl Handler {
         self.tx_infos.clean_up();
         self.txs.clean_up();
         self.witnesses.clean_up();
+    }
+
+    fn on_throttled(
+        &self, _io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+    ) -> Result<(), Error> {
+        let resp: Throttled = rlp.as_val()?;
+        info!("on_throttled resp={:?}", resp);
+
+        // todo (boqiu): update when throttled
+        // In case of throttled for a RPC call:
+        // 1. Just return error to client;
+        // 2. Select another peer to try again (3 times at most).
+        //
+        // Enhancement: send request to peer that not throttled.
+        // If no peer available, return error to client.
+
+        // Note, if this message not handled, the RPC call will timeout.
+
+        Ok(())
     }
 }
 

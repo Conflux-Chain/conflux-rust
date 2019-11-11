@@ -49,7 +49,8 @@ pub use self::{
     status::Status,
     throttling::Throttled,
     transactions::{
-        GetTransactions, GetTransactionsResponse, TransactionDigests,
-        Transactions,
+        GetTransactions, GetTransactionsFromTxHashes,
+        GetTransactionsFromTxHashesResponse, GetTransactionsResponse,
+        TransactionDigests, Transactions,
     },
 };

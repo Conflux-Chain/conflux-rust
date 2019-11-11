@@ -19,6 +19,12 @@ impl Handleable for NewBlock {
     // TODO This is only used in tests now. Maybe we can add a rpc to send full
     // block and remove NEW_BLOCK from p2p
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        // We may receive some messages from peer during recover from db
+        // phase. We should ignore it, since it may cause some
+        // inconsistency.
+        if ctx.manager.in_recover_from_db_phase() {
+            return Ok(());
+        }
         let mut block = self.block;
         ctx.manager.graph.data_man.recover_block(&mut block)?;
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import random
 from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
 sys.path.insert(1, os.path.dirname(sys.path[0]))
@@ -21,6 +22,17 @@ class SyncCheckpointTests(ConfluxTestFramework):
     def setup_network(self):
         self.add_nodes(self.num_nodes)
         self.start_node(0)
+    
+    def _generate_txs(self, peer, num):
+        client = RpcClient(self.nodes[peer])
+        txs = []
+        for _ in range(num):
+            addr = client.rand_addr()
+            tx_gas = client.DEFAULT_TX_GAS
+            tx = client.new_tx(receiver=addr, nonce=self.genesis_nonce, value=0, gas=tx_gas, data=b'')
+            self.genesis_nonce += 1
+            txs.append(tx)
+        return txs
 
     def run_test(self):
         num_blocks = 200
@@ -28,13 +40,10 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
         # Generate checkpoint on node[0]
         client = RpcClient(self.nodes[0])
-        genesis_nonce = client.get_nonce(client.GENESIS_ADDR)
+        self.genesis_nonce = client.get_nonce(client.GENESIS_ADDR)
         for _ in range(num_blocks):
-            tx = client.new_tx(nonce=genesis_nonce)
-            tx_hash = client.send_tx(tx)
-            assert tx_hash == tx.hash_hex()
-            genesis_nonce += 1
-            client.generate_block(100)
+            txs = self._generate_txs(0, random.randint(5, 10))
+            client.generate_block_with_fake_txs(txs)
 
         # Start node[1] as full node to sync checkpoint
         # Change phase from CatchUpSyncBlockHeader to CatchUpCheckpoint
@@ -48,7 +57,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         sync_blocks(self.nodes, sync_count=False)
 
         client = RpcClient(self.nodes[1])
-        
+
         # At epoch 1, block header exists while body not synchronized
         try:
             print(client.block_by_epoch(client.EPOCH_NUM(1)))

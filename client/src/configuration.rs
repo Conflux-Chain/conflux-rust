@@ -79,7 +79,8 @@ build_config! {
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
         (max_inflight_request_count, (u64), 64)
-        (received_tx_index_maintain_timeout_ms, (u64), 600_000)
+        (received_tx_index_maintain_timeout_ms, (u64), 300_000)
+        (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
         (start_mining, (bool), false)
@@ -361,6 +362,9 @@ impl Configuration {
             request_block_with_public: self.raw_conf.request_block_with_public,
             received_tx_index_maintain_timeout: Duration::from_millis(
                 self.raw_conf.received_tx_index_maintain_timeout_ms,
+            ),
+            inflight_pending_tx_index_maintain_timeout: Duration::from_millis(
+                self.raw_conf.inflight_pending_tx_index_maintain_timeout_ms,
             ),
             max_trans_count_received_in_catch_up: self
                 .raw_conf

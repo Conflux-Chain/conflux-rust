@@ -486,6 +486,8 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             );
             self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
+            // FIXME: We may need to some information of `confirmation_meter`.
+            self.graph.consensus.confirmation_meter.reset();
             let new_sync_inner = SynchronizationGraphInner::with_genesis_block(
                 self.graph
                     .data_man

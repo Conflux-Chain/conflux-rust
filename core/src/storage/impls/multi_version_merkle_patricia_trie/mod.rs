@@ -119,7 +119,7 @@ impl MultiVersionMerklePatriciaTrie {
             padding,
             delta_mpts_releaser: DeltaDbReleaser {
                 snapshot_epoch_id,
-                storage_manager,
+                storage_manager: Arc::downgrade(&storage_manager),
             },
             db: kvdb,
             commit_lock: Mutex::new(AtomicCommit {

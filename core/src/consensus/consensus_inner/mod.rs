@@ -421,18 +421,17 @@ impl ConsensusGraphInner {
         } else {
             cur_era_genesis_height + inner_conf.era_epoch_count
         };
-        let first_trusted_blame_block = first_trusted_blame_block
-            .unwrap_or(data_man.true_genesis_block.hash());
-        let first_trusted_blame_block_height = if first_trusted_blame_block
-            == data_man.true_genesis_block.hash()
-        {
-            0
-        } else {
-            data_man
-                .block_header_by_hash(&first_trusted_blame_block)
-                .expect("first_trusted_blame_block should exist here")
-                .height()
-        };
+        let first_trusted_blame_block =
+            first_trusted_blame_block.unwrap_or(data_man.true_genesis.hash());
+        let first_trusted_blame_block_height =
+            if first_trusted_blame_block == data_man.true_genesis.hash() {
+                0
+            } else {
+                data_man
+                    .block_header_by_hash(&first_trusted_blame_block)
+                    .expect("first_trusted_blame_block should exist here")
+                    .height()
+            };
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
@@ -2498,7 +2497,7 @@ impl ConsensusGraphInner {
         }
         while !stack.is_empty() {
             let (stage, me) = stack.pop().unwrap();
-            if !to_visit.contains(&me) {
+            if !to_visit.contains(&me) || self.arena[me].era_block == NULL {
                 continue;
             }
             let parent = self.arena[me].parent;
@@ -2513,7 +2512,11 @@ impl ConsensusGraphInner {
                 }
             } else if stage == 1 && me != self.cur_era_genesis_block_arena_index
             {
-                let mut last_pivot = self.arena[parent].last_pivot_in_past;
+                let mut last_pivot = if parent == NULL {
+                    0
+                } else {
+                    self.arena[parent].last_pivot_in_past
+                };
                 for referee in &self.arena[me].referees {
                     let x = self.arena[*referee].last_pivot_in_past;
                     last_pivot = max(last_pivot, x);

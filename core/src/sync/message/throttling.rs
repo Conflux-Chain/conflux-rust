@@ -28,7 +28,7 @@ impl Handleable for Throttled {
             None => return Ok(()),
         };
 
-        peer.write().set_throttled(
+        peer.write().throttled_msgs.set_throttled(
             self.msg_id,
             Instant::now() + Duration::from_nanos(self.wait_time_nanos),
         );

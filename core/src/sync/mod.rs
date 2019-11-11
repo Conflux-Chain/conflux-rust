@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 mod error;
-mod message;
+pub mod message;
 pub mod request_manager;
 mod state;
 
@@ -271,6 +271,28 @@ pub mod msg_sender {
             register_meter_with_group(
                 "network_connection_data_counter",
                 "get_block_txn_counter"
+            );
+    }
+    lazy_static! {
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_transactions_from_tx_hashes"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_COUNTRER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data_counter",
+                "get_transactions_from_tx_hashes_counter"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_METER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data",
+                "get_transactions_from_tx_hashes_response"
+            );
+        static ref GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE_COUNTER: Arc<dyn Meter> =
+            register_meter_with_group(
+                "network_connection_data_counter",
+                "get_transactions_from_tx_hashes_response_counter"
             );
     }
 

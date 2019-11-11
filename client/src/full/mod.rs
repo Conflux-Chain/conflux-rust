@@ -215,6 +215,7 @@ impl FullClient {
             sync_graph.clone(),
             Arc::downgrade(&network),
             txpool.clone(),
+            conf.raw_conf.throttling_conf.clone(),
         ));
         light_provider.clone().register(network.clone()).unwrap();
 

@@ -11,10 +11,7 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
@@ -29,7 +26,7 @@ impl Handleable for Status {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        let genesis_hash = ctx.manager.graph.data_man.true_genesis_block.hash();
+        let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
         if genesis_hash != self.genesis_hash {
             debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
@@ -97,7 +94,7 @@ impl Handleable for Status {
                 capabilities: Default::default(),
                 notified_capabilities: Default::default(),
                 throttling,
-                throttled_msgs: HashMap::new(),
+                throttled_msgs: Default::default(),
             };
 
             peer_state
