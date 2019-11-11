@@ -31,6 +31,7 @@ use super::{
     common::{poll_future, poll_stream, with_timeout, LedgerInfo},
     Error, Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
 };
+use crate::light_protocol::{common::FullPeerFilter, message::msgid};
 
 type TxInfo = (
     SignedTransaction,
@@ -303,7 +304,10 @@ impl QueryService {
 
         let mut success = false;
 
-        for peer in self.handler.peers.all_peers_shuffled() {
+        let peers = FullPeerFilter::new(msgid::SEND_RAW_TX)
+            .select_all(self.handler.peers.clone());
+
+        for peer in peers {
             // relay to peer
             let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
                 self.handler.send_raw_tx(io, peer, raw.clone())

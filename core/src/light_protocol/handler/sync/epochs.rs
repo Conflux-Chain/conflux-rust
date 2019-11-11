@@ -17,7 +17,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{max_of_collection, FullPeerState, Peers, UniqueId},
-        message::GetBlockHashesByEpoch,
+        message::{msgid, GetBlockHashesByEpoch},
         Error,
     },
     message::{Message, RequestId},
@@ -30,6 +30,7 @@ use crate::{
 };
 
 use super::headers::Headers;
+use crate::light_protocol::common::FullPeerFilter;
 
 #[derive(Debug)]
 struct Statistics {
@@ -194,8 +195,12 @@ impl Epochs {
             let max = max_of_collection(batch.iter()).expect("chunk not empty");
 
             // choose random peer that has the epochs we need
-            let predicate = |s: &FullPeerState| s.best_epoch >= *max;
-            let peer = match self.peers.random_peer_satisfying(predicate) {
+            let matched_peer =
+                FullPeerFilter::new(msgid::GET_BLOCK_HASHES_BY_EPOCH)
+                    .with_min_best_epoch(*max)
+                    .select(self.peers.clone());
+
+            let peer = match matched_peer {
                 Some(peer) => peer,
                 None => {
                     warn!("No peers available; aborting sync");

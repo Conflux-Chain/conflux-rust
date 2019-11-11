@@ -16,7 +16,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers, UniqueId},
-        message::{BlockTxsWithHash, GetBlockTxs},
+        message::{msgid, BlockTxsWithHash, GetBlockTxs},
         Error, ErrorKind,
     },
     message::Message,
@@ -66,7 +66,8 @@ impl BlockTxs {
     ) -> Self
     {
         let ledger = LedgerInfo::new(consensus.clone());
-        let sync_manager = SyncManager::new(peers.clone());
+        let sync_manager =
+            SyncManager::new(peers.clone(), msgid::GET_BLOCK_TXS);
 
         let cache = LruCache::with_expiry_duration(*CACHE_TIMEOUT);
         let verified = Arc::new(RwLock::new(cache));
