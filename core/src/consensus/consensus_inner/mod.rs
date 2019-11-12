@@ -2253,11 +2253,13 @@ impl ConsensusGraphInner {
     ///   2. In normal run, when evaluating reward of [Bm] and [Bm] is
     ///      equal or after [Be], no matter whether [Be] is stable genesis
     ///      or not, [Bm] is in stable era.
-    ///   3. In recover run, all the pivot blocks between current era
-    ///      genesis and the stable era genesis have state_valid computed.
-    ///      Therefore, this function will not be triggered for those blocks.
-    ///      Only blocks after stable era genesis may trigger this function,
-    ///      therefore, [Bm] is in stable era.
+    ///   3. In recover run, 1) all the pivot blocks between current era
+    ///      genesis and the stable era genesis have state_valid computed;
+    ///      and 2) all the pivot blocks between the stable era genesis
+    ///      and the block whose reward info required by the current tip
+    ///      pivot block have state_valid computed. Therefore, this function
+    ///      will not be triggered for those blocks. This leads to the normal
+    ///      run case again.
     ///
     /// This function is called when evaluating the reward for the blocks
     /// in epoch of [Bm]. It searches backward for all the blocks whose
