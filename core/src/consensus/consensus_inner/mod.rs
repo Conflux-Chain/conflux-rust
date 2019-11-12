@@ -2211,7 +2211,41 @@ impl ConsensusGraphInner {
         }
     }
 
-    // FIXME: structure the input/output.
+    ////////////////////////////////////////////////////////////////////
+    ///                   _________ 5 __________
+    ///                   |                    |
+    ///  state_valid:           t    f    f    f
+    /// <----------------[Bl]-[Bk]-[Bj]-[Bi]-[Bp]-[Bm]----
+    ///   [Dj]-[Di]-[Dp]-[Dm]
+    ///
+    /// [Bp] is the parent of [Bm]
+    /// [Dm] is the deferred state root of [Bm]. This is a rough definition
+    /// representing deferred state/receipt/blame root
+    /// i([Bm]) is the arena index of [Bm]
+    /// e([Bm]) is the execution commitment of [Bm]
+    /// [Dm] can be generated from e([Bl])
+    ///
+    /// Param:
+    ///   i([Bp]),
+    ///   e([Bl]),
+    /// Return:
+    ///   The blame and the deferred blame roots information that should be
+    ///   contained in header of [Bm].
+    ///   (blame,
+    ///    deferred_blame_state_root,
+    ///    deferred_blame_receipt_root,
+    ///    deferred_blame_bloom_root)
+    /// Assumption:
+    ///   [Bm] is in stable era.
+    ///
+    /// This function searches backward for all the blocks whose state_valid are
+    /// false, starting from [Bp]. The number of found blocks is the 'blame'
+    /// of [Bm]. if 'blame' == 0, the deferred blame root information of
+    /// [Bm] is simply [Dm], otherwise, it is computed from the vector of
+    /// deferred state roots of these found blocks together with [Bm], e.g.,
+    /// in the above example, 'blame'==3, and the vector of deferred roots
+    /// of these blocks is ([Dm], [Dp], [Di], [Dj]), therefore, the deferred
+    /// blame root of [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
     fn compute_blame_and_state_with_execution_result(
         &self, parent: usize, exec_result: &EpochExecutionCommitments,
     ) -> Result<(u32, H256, H256, H256), String> {
