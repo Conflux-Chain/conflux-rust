@@ -133,29 +133,24 @@ impl BlockDataManager {
 
         data_man.initialize_instance_id();
 
-        let cur_era_genesis =
+        let cur_era_genesis_hash =
             match data_man.db_manager.checkpoint_hashes_from_db() {
-                None => true_genesis,
+                None => true_genesis.hash(),
                 Some((checkpoint_hash, stable_hash)) => {
-                    if let Some(checkpoint_block) = data_man.block_by_hash(
-                        &checkpoint_hash,
-                        false, /* update_cache */
-                    ) {
-                        *data_man.cur_consensus_era_genesis_hash.write() =
-                            checkpoint_hash;
-                        *data_man.cur_consensus_era_stable_hash.write() =
-                            stable_hash;
-                        checkpoint_block
-                    } else {
-                        panic!("Checkpoint block does not exist!");
-                    }
+                    *data_man.cur_consensus_era_genesis_hash.write() =
+                        checkpoint_hash;
+                    *data_man.cur_consensus_era_stable_hash.write() =
+                        stable_hash;
+                    checkpoint_hash
                 }
             };
-        let cur_era_genesis_hash = cur_era_genesis.hash();
-        data_man
-            .insert_block(cur_era_genesis.clone(), true /* persistent */);
 
         if cur_era_genesis_hash == data_man.true_genesis.hash() {
+            // Only insert block body for true genesis
+            data_man.insert_block(
+                data_man.true_genesis.clone(),
+                true, /* persistent */
+            );
             // Initialize ExecutionContext for true genesis
             data_man.insert_epoch_execution_context(
                 cur_era_genesis_hash,
@@ -194,11 +189,11 @@ impl BlockDataManager {
             // for other era genesis, we need to change the instance_id
             if let Some(mut local_block_info) = data_man
                 .db_manager
-                .local_block_info_from_db(&cur_era_genesis.hash())
+                .local_block_info_from_db(&cur_era_genesis_hash)
             {
                 local_block_info.instance_id = data_man.get_instance_id();
                 data_man.db_manager.insert_local_block_info_to_db(
-                    &cur_era_genesis.hash(),
+                    &cur_era_genesis_hash,
                     &local_block_info,
                 );
             }
