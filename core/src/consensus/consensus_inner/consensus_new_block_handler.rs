@@ -1457,5 +1457,19 @@ impl ConsensusNewBlockHandler {
                 ));
             }
         }
+        // We should have enqueued the execution for the block at
+        // pivot_index == (pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT)
+        // before shutdown, so after recovery, the block at
+        // (pivot_index - REWARD_EPOCH_COUNT) should have
+        // its state_valid available.
+        let state_valid_defer =
+            (DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT) as usize;
+        if inner.pivot_chain.len() >= state_valid_defer as usize {
+            let last_reward_pivot_index =
+                inner.pivot_chain.len() - state_valid_defer;
+            inner
+                .compute_state_valid(inner.pivot_chain[last_reward_pivot_index])
+                .expect("Fail to compute state_valid in construct_pivot_state");
+        }
     }
 }
