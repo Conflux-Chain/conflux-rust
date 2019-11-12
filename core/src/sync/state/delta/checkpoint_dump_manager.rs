@@ -113,10 +113,15 @@ impl CheckpointDumpManager {
         }
 
         let maybe_sender = self.checkpoint_dump_sender.lock();
-        let sender = maybe_sender.as_ref().expect("uninitialized");
 
-        if let Err(e) = sender.send(checkpoint) {
-            warn!("failed to dump checkpoint async, error = {:?}", e);
+        if let Some(ref sender) = *maybe_sender {
+            if let Err(e) = sender.send(checkpoint) {
+                warn!("failed to dump checkpoint async, error = {:?}", e);
+            }
+        } else {
+            // TODO Handle possible inconsistency for skipped or cancelled state
+            // dumping
+            debug!("Skip checkpoint dumping during shutdown");
         }
     }
 
