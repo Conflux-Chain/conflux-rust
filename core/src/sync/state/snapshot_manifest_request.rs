@@ -202,19 +202,19 @@ impl SnapshotManifestRequest {
                     trusted_block_height = block.height();
                     blame_count = block.blame()
                 }
-                if let Some(commitments) = ctx
+                if let Some(commitment) = ctx
                     .manager
                     .graph
                     .data_man
-                    .get_epoch_execution_commitments_from_db(
+                    .get_epoch_execution_commitment_from_db(
                         &deferred_block_hash,
                     )
                 {
                     state_root_vec.push(
-                        commitments.state_root_with_aux_info.state_root.clone(),
+                        commitment.state_root_with_aux_info.state_root.clone(),
                     );
-                    receipt_blame_vec.push(commitments.receipts_root);
-                    bloom_blame_vec.push(commitments.logs_bloom_hash);
+                    receipt_blame_vec.push(commitment.receipts_root);
+                    bloom_blame_vec.push(commitment.logs_bloom_hash);
                 } else {
                     warn!(
                         "failed to find block={} in db, peer={}",

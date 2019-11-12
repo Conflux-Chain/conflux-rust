@@ -250,7 +250,7 @@ impl ConsensusNewBlockHandler {
                 inner.terminal_hashes.remove(&hash);
                 inner.arena.remove(index);
                 // remove useless data in BlockDataManager
-                inner.data_man.remove_epoch_execution_commitments(&hash);
+                inner.data_man.remove_epoch_execution_commitment(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
             }
         }
@@ -570,7 +570,7 @@ impl ConsensusNewBlockHandler {
         let parent_block_hash = inner.arena[parent_arena_index].hash;
         let parent_state_root = inner
             .data_man
-            .get_epoch_execution_commitments(&parent_block_hash)
+            .get_epoch_execution_commitment(&parent_block_hash)
             .unwrap()
             .state_root_with_aux_info;
 
@@ -1301,7 +1301,7 @@ impl ConsensusNewBlockHandler {
         // FIXME: for block deferred or not.
         if let Some(confirmed_epoch) = self
             .data_man
-            .get_epoch_execution_commitments(&confirmed_epoch_hash)
+            .get_epoch_execution_commitment(&confirmed_epoch_hash)
         {
             self.data_man
                 .storage_manager
@@ -1435,7 +1435,7 @@ impl ConsensusNewBlockHandler {
             // pivot_chain after cur_era_stable_genesis are kept in memory.
             if self
                 .data_man
-                .load_epoch_execution_commitments_from_db(&pivot_hash)
+                .load_epoch_execution_commitment_from_db(&pivot_hash)
                 .is_none()
             {
                 // We should recompute the epochs that should have been executed

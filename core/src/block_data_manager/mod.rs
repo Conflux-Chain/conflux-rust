@@ -66,7 +66,7 @@ pub struct BlockDataManager {
     /// 4) In BlockDataManager::new(), update execution commitment
     ///    of true_genesis_block.
     epoch_execution_commitments:
-        RwLock<HashMap<H256, EpochExecutionCommitments>>,
+        RwLock<HashMap<H256, EpochExecutionCommitment>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
 
     invalid_block_set: RwLock<HashSet<H256>>,
@@ -173,7 +173,7 @@ impl BlockDataManager {
                     data_man.get_instance_id(),
                 ),
             );
-            data_man.insert_epoch_execution_commitments(
+            data_man.insert_epoch_execution_commitment(
                 data_man.true_genesis.hash(),
                 data_man.true_genesis_state_root(),
                 *data_man.true_genesis.block_header.deferred_receipts_root(),
@@ -636,20 +636,20 @@ impl BlockDataManager {
 
     /// TODO We can avoid persisting execution_commitments for blocks
     /// not on the pivot chain after a checkpoint
-    pub fn insert_epoch_execution_commitments(
+    pub fn insert_epoch_execution_commitment(
         &self, block_hash: H256,
         state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
         logs_bloom_hash: H256,
     )
     {
-        let commitments = EpochExecutionCommitments {
+        let commitment = EpochExecutionCommitment {
             state_root_with_aux_info,
             receipts_root,
             logs_bloom_hash,
         };
         self.insert(
             block_hash,
-            commitments,
+            commitment,
             &self.epoch_execution_commitments,
             |key, value| {
                 self.db_manager
@@ -662,36 +662,36 @@ impl BlockDataManager {
         );
     }
 
-    /// Get in-mem execution commitments.
-    pub fn get_epoch_execution_commitments(
+    /// Get in-mem execution commitment.
+    pub fn get_epoch_execution_commitment(
         &self, block_hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
+    ) -> Option<EpochExecutionCommitment> {
         self.epoch_execution_commitments
             .read()
             .get(block_hash)
             .map(Clone::clone)
     }
 
-    pub fn load_epoch_execution_commitments_from_db(
+    pub fn load_epoch_execution_commitment_from_db(
         &self, block_hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
-        let commitments = self
+    ) -> Option<EpochExecutionCommitment> {
+        let commitment = self
             .db_manager
             .consensus_graph_epoch_execution_commitment_from_db(block_hash)?;
         self.epoch_execution_commitments
             .write()
-            .insert(*block_hash, commitments.clone());
-        Some(commitments)
+            .insert(*block_hash, commitment.clone());
+        Some(commitment)
     }
 
-    pub fn get_epoch_execution_commitments_from_db(
+    pub fn get_epoch_execution_commitment_from_db(
         &self, block_hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
+    ) -> Option<EpochExecutionCommitment> {
         self.db_manager
             .consensus_graph_epoch_execution_commitment_from_db(block_hash)
     }
 
-    pub fn remove_epoch_execution_commitments(&self, block_hash: &H256) {
+    pub fn remove_epoch_execution_commitment(&self, block_hash: &H256) {
         self.epoch_execution_commitments.write().remove(block_hash);
     }
 
@@ -701,7 +701,7 @@ impl BlockDataManager {
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
         // `block_receipts_root` is not computed when recovering from db
-        self.get_epoch_execution_commitments(epoch_hash).is_some()
+        self.get_epoch_execution_commitment(epoch_hash).is_some()
     }
 
     /// Check if all executed results of an epoch exist
@@ -919,12 +919,12 @@ impl BlockDataManager {
     pub fn get_snapshot_and_epoch_id_readonly(
         &self, block_hash: &EpochId,
     ) -> Option<SnapshotAndEpochId> {
-        match self.get_epoch_execution_commitments(block_hash) {
+        match self.get_epoch_execution_commitment(block_hash) {
             None => None,
-            Some(execution_commitments) => Some(SnapshotAndEpochId::from_ref(
+            Some(execution_commitment) => Some(SnapshotAndEpochId::from_ref(
                 SnapshotAndEpochIdRef::new_for_readonly(
                     block_hash,
-                    &execution_commitments.state_root_with_aux_info,
+                    &execution_commitment.state_root_with_aux_info,
                 ),
             )),
         }

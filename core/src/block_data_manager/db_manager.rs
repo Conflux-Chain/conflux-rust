@@ -1,7 +1,7 @@
 use crate::{
     block_data_manager::{
         BlockExecutionResultWithEpoch, CheckpointHashes,
-        EpochExecutionCommitments, EpochExecutionContext, LocalBlockInfo,
+        EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
     storage::{storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite},
@@ -259,7 +259,7 @@ impl DBManager {
     }
 
     pub fn insert_consensus_graph_epoch_execution_commitment_to_db(
-        &self, hash: &H256, ctx: &EpochExecutionCommitments,
+        &self, hash: &H256, ctx: &EpochExecutionCommitment,
     ) {
         self.insert_encodable_val(
             DBTable::Blocks,
@@ -270,7 +270,7 @@ impl DBManager {
 
     pub fn consensus_graph_epoch_execution_commitment_from_db(
         &self, hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
+    ) -> Option<EpochExecutionCommitment> {
         self.load_decodable_val(
             DBTable::Blocks,
             &epoch_consensus_epoch_execution_commitment_key(hash),

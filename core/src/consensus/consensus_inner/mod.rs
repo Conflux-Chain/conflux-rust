@@ -8,7 +8,7 @@ pub mod consensus_new_block_handler;
 
 use crate::{
     block_data_manager::{
-        block_data_types::EpochExecutionCommitments, BlockDataManager,
+        block_data_types::EpochExecutionCommitment, BlockDataManager,
         BlockExecutionResultWithEpoch, EpochExecutionContext,
     },
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
@@ -2235,19 +2235,42 @@ impl ConsensusGraphInner {
     ///    deferred_blame_state_root,
     ///    deferred_blame_receipt_root,
     ///    deferred_blame_bloom_root)
-    /// Assumption:
-    ///   [Bm] is in stable era.
     ///
-    /// This function searches backward for all the blocks whose state_valid are
-    /// false, starting from [Bp]. The number of found blocks is the 'blame'
-    /// of [Bm]. if 'blame' == 0, the deferred blame root information of
-    /// [Bm] is simply [Dm], otherwise, it is computed from the vector of
-    /// deferred state roots of these found blocks together with [Bm], e.g.,
-    /// in the above example, 'blame'==3, and the vector of deferred roots
-    /// of these blocks is ([Dm], [Dp], [Di], [Dj]), therefore, the deferred
-    /// blame root of [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
+    /// Assumption:
+    ///   * [Bm] is a pivot block on current pivot chain.
+    ///   This function is triggered when evaluating the reward for the blocks
+    ///   in epoch of [Bm]. It relies on the state_valid value of [Bm]. In other
+    ///   words, this function is triggered when computing the state_valid value
+    ///   of [Bm].
+    ///
+    ///   * [Bm] is in stable era.
+    ///   This assumption is derived from the following cases:
+    ///   Let [Be] is the last block in the consensus graph and at the
+    ///   era boundary.
+    ///   1. In normal run, when evaluating reward of [Bm] and [Bm] is
+    ///      before [Be], [Be] should have not become the stable genesis,
+    ///      therefore, [Bm] is still in stable era.
+    ///   2. In normal run, when evaluating reward of [Bm] and [Bm] is
+    ///      equal or after [Be], no matter whether [Be] is stable genesis
+    ///      or not, [Bm] is in stable era.
+    ///   3. In recover run, all the pivot blocks between current era
+    ///      genesis and the stable era genesis have state_valid computed.
+    ///      Therefore, this function will not be triggered for those blocks.
+    ///      Only blocks after stable era genesis may trigger this function,
+    ///      therefore, [Bm] is in stable era.
+    ///
+    /// This function is called when evaluating the reward for the blocks
+    /// in epoch of [Bm]. It searches backward for all the blocks whose
+    /// state_valid are false, starting from [Bp]. The number of found
+    /// blocks is the 'blame' of [Bm]. if 'blame' == 0, the deferred blame
+    /// root information of [Bm] is simply [Dm], otherwise, it is computed
+    /// from the vector of deferred state roots of these found blocks
+    /// together with [Bm], e.g., in the above example, 'blame'==3, and
+    /// the vector of deferred roots of these blocks is
+    /// ([Dm], [Dp], [Di], [Dj]), therefore, the deferred blame root of
+    /// [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
     fn compute_blame_and_state_with_execution_result(
-        &self, parent: usize, exec_result: &EpochExecutionCommitments,
+        &self, parent: usize, exec_result: &EpochExecutionCommitment,
     ) -> Result<(u32, H256, H256, H256), String> {
         let mut cur = parent;
         let mut blame: u32 = 0;
@@ -2276,12 +2299,12 @@ impl ConsensusGraphInner {
             debug!("compute_blame_and_state_with_execution_result: cur={} height={}", cur, self.arena[cur].height);
             let deferred_arena_index =
                 self.get_deferred_state_arena_index(cur)?;
-            let deferred_block_commitments = self
+            let deferred_block_commitment = self
                 .data_man
-                .get_epoch_execution_commitments(
+                .get_epoch_execution_commitment(
                     &self.arena[deferred_arena_index].hash,
                 )
-                .ok_or("State block commitments missing")?;
+                .ok_or("State block commitment missing")?;
             blame += 1;
             if cur == self.cur_era_genesis_block_arena_index {
                 return Err(
@@ -2290,15 +2313,15 @@ impl ConsensusGraphInner {
                 );
             }
             state_blame_vec.push(
-                deferred_block_commitments
+                deferred_block_commitment
                     .state_root_with_aux_info
                     .state_root
                     .compute_state_root_hash(),
             );
             receipt_blame_vec
-                .push(deferred_block_commitments.receipts_root.clone());
+                .push(deferred_block_commitment.receipts_root.clone());
             bloom_blame_vec
-                .push(deferred_block_commitments.logs_bloom_hash.clone());
+                .push(deferred_block_commitment.logs_bloom_hash.clone());
             cur = self.arena[cur].parent;
         }
         if blame > 0 {
@@ -2326,8 +2349,10 @@ impl ConsensusGraphInner {
 
     // FIXME: maybe this method can be simplified.
     /// Compute `state_valid` for `me`.
-    /// The caller should ensure that the precedents have computed state_valid
-    /// and the execution_commitments for `me` exist
+    /// Assumption:
+    ///   1. The precedents of `me` have computed state_valid
+    ///   2. The execution_commitment for deferred state block of `me` exist.
+    ///   3. `me` is in stable era.
     fn compute_state_valid_for_block(
         &mut self, me: usize,
     ) -> Result<(), String> {
@@ -2337,21 +2362,21 @@ impl ConsensusGraphInner {
         );
         let deferred_state_arena_index =
             self.get_deferred_state_arena_index(me)?;
-        let exec_commitments = self
+        let exec_commitment = self
             .data_man
-            .get_epoch_execution_commitments(
+            .get_epoch_execution_commitment(
                 &self.arena[deferred_state_arena_index].hash,
             )
-            .expect("Commitments exist");
+            .expect("Commitment exist");
         let parent = self.arena[me].parent;
-        let original_deferred_state_root = exec_commitments
+        let original_deferred_state_root = exec_commitment
             .state_root_with_aux_info
             .state_root
             .compute_state_root_hash();
         let original_deferred_receipt_root =
-            exec_commitments.receipts_root.clone();
+            exec_commitment.receipts_root.clone();
         let original_deferred_logs_bloom_hash =
-            exec_commitments.logs_bloom_hash.clone();
+            exec_commitment.logs_bloom_hash.clone();
 
         let (
             blame,
@@ -2360,7 +2385,7 @@ impl ConsensusGraphInner {
             deferred_logs_bloom_hash,
         ) = self.compute_blame_and_state_with_execution_result(
             parent,
-            &exec_commitments,
+            &exec_commitment,
         )?;
         let block_header = self
             .data_man
@@ -2636,7 +2661,7 @@ impl ConsensusGraphInner {
 
             if self
                 .data_man
-                .get_epoch_execution_commitments(&deferred_block_hash)
+                .get_epoch_execution_commitment(&deferred_block_hash)
                 .is_some()
             {
                 // The state_hash block and the blocks before have been executed

@@ -5,7 +5,7 @@
 use super::super::debug::*;
 use crate::{
     block_data_manager::{
-        block_data_types::EpochExecutionCommitments, BlockDataManager,
+        block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
     consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
@@ -129,7 +129,7 @@ impl EpochExecutionTask {
 #[derive(Debug)]
 struct GetExecutionResultTask {
     pub epoch_hash: H256,
-    pub sender: Sender<EpochExecutionCommitments>,
+    pub sender: Sender<EpochExecutionCommitment>,
 }
 
 /// ConsensusExecutor processes transaction execution tasks.
@@ -242,10 +242,10 @@ impl ConsensusExecutor {
     // TODO Release Consensus inner lock if possible when the function is called
     pub fn wait_for_result(
         &self, epoch_hash: H256,
-    ) -> EpochExecutionCommitments {
+    ) -> EpochExecutionCommitment {
         // FIXME: this is hard to understand due to lack of documentation.
         if self.bench_mode {
-            EpochExecutionCommitments {
+            EpochExecutionCommitment {
                 state_root_with_aux_info: Default::default(),
                 receipts_root: KECCAK_EMPTY_LIST_RLP,
                 logs_bloom_hash: KECCAK_EMPTY_BLOOM,
@@ -632,7 +632,7 @@ impl ConsensusExecutor {
     /// state of a block immediately
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> Result<EpochExecutionCommitments, String> {
+    ) -> Result<EpochExecutionCommitment, String> {
         let _timer = MeterTimer::time_func(
             CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER.as_ref(),
         );
@@ -655,7 +655,7 @@ impl ConsensusExecutor {
                     return Ok(self
                         .handler
                         .data_man
-                        .get_epoch_execution_commitments(&block_hash)
+                        .get_epoch_execution_commitment(&block_hash)
                         // Unwrap is safe here because the if-condition on
                         // data_man.get_snapshot_and_epoch_id_readonly implies
                         // epoch_execution_commitments is non-empty.
@@ -816,8 +816,8 @@ impl ConsensusExecutionHandler {
 
     fn get_execution_result(
         &self, epoch_hash: &H256,
-    ) -> Option<EpochExecutionCommitments> {
-        self.data_man.get_epoch_execution_commitments(epoch_hash)
+    ) -> Option<EpochExecutionCommitment> {
+        self.data_man.get_epoch_execution_commitment(epoch_hash)
     }
 
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
@@ -852,7 +852,7 @@ impl ConsensusExecutionHandler {
                 // Unwrap is safe here because it's guaranteed by outer if.
                 let state_root = self
                     .data_man
-                    .get_epoch_execution_commitments(epoch_hash)
+                    .get_epoch_execution_commitment(epoch_hash)
                     .unwrap()
                     .state_root_with_aux_info;
                 self.tx_pool.set_best_executed_epoch(
@@ -891,7 +891,7 @@ impl ConsensusExecutionHandler {
                             pivot_block.block_header.parent_hash(),
                             &self
                                 .data_man
-                                .get_epoch_execution_commitments(
+                                .get_epoch_execution_commitment(
                                     pivot_block.block_header.parent_hash(),
                                 )
                                 // Unwrapping is safe because the state exists.
@@ -939,19 +939,19 @@ impl ConsensusExecutionHandler {
         } else {
             state_root = state.commit(*epoch_hash).unwrap();
         };
-        self.data_man.insert_epoch_execution_commitments(
+        self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
             BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
-        let epoch_execution_commitments = self
+        let epoch_execution_commitment = self
             .data_man
-            .get_epoch_execution_commitments(&epoch_hash)
+            .get_epoch_execution_commitment(&epoch_hash)
             .unwrap();
         debug!(
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
-            on_local_pivot, epoch_hash, state_root, epoch_execution_commitments.receipts_root, epoch_execution_commitments.logs_bloom_hash,
+            on_local_pivot, epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
         );
     }
 
@@ -1356,7 +1356,7 @@ impl ConsensusExecutionHandler {
                             pivot_block.block_header.parent_hash(),
                             &self
                                 .data_man
-                                .get_epoch_execution_commitments(
+                                .get_epoch_execution_commitment(
                                     pivot_block.block_header.parent_hash(),
                                 )
                                 // Unwrapping is safe because the state exists.
