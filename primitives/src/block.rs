@@ -294,13 +294,13 @@ impl CompactBlock {
         short_ids
     }
 
-    pub fn to_u16(v1: u8, v2: u8) -> u16 { ((v2 as u16) << 8) + v1 as u16 }
+    pub fn to_u16(v1: u8, v2: u8) -> u16 { ((v1 as u16) << 8) + v2 as u16 }
 
     pub fn to_u32(v1: u8, v2: u8, v3: u8, v4: u8) -> u32 {
-        ((v4 as u32) << 24)
-            + ((v3 as u32) << 16)
-            + ((v2 as u32) << 8)
-            + v1 as u32
+        ((v1 as u32) << 24)
+            + ((v2 as u32) << 16)
+            + ((v3 as u32) << 8)
+            + v4 as u32
     }
 
     pub fn get_random_bytes(

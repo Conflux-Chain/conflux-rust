@@ -528,10 +528,10 @@ impl TransactionCacheContainer {
                     if CompactBlock::get_random_bytes(value, key1, key2)
                         == random_bytes
                     {
-                        if tx.is_none(){
+                        if tx.is_none() {
                             tx = Some(self.get(value).unwrap().clone());
-                        }else{
-                            return None
+                        } else {
+                            return None;
                         }
                     }
                 }
