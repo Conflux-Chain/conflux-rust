@@ -129,6 +129,7 @@ build_config! {
         (enable_state_expose, (bool), false)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (throttling_conf, (Option<String>), None)
+        (unexpected_msgs_conf, (Option<String>), None)
     }
     {
         (

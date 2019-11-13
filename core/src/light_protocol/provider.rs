@@ -221,6 +221,7 @@ impl Provider {
             .collect();
 
         Some(TxInfo {
+            tx_hash: hash,
             epoch,
             block_hash,
             index,

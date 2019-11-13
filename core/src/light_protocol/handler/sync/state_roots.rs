@@ -17,7 +17,7 @@ use crate::{
         message::{msgid, GetStateRoots, StateRootWithEpoch},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
@@ -105,18 +105,35 @@ impl StateRoots {
 
     #[inline]
     pub fn receive(
-        &self, state_roots: impl Iterator<Item = StateRootWithEpoch>,
-    ) -> Result<(), Error> {
+        &self, peer: PeerId, id: RequestId,
+        state_roots: impl Iterator<Item = StateRootWithEpoch>,
+    ) -> Result<(), Error>
+    {
         for StateRootWithEpoch { epoch, state_root } in state_roots {
             info!(
                 "Validating state root {:?} with epoch {}",
                 state_root, epoch
             );
-            self.validate_state_root(epoch, &state_root)?;
 
-            self.verified.write().insert(epoch, state_root);
-            self.sync_manager.remove_in_flight(&epoch);
+            match self.sync_manager.check_if_requested(peer, id, &epoch)? {
+                None => continue,
+                Some(_) => self.validate_and_store(epoch, state_root)?,
+            };
         }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn validate_and_store(
+        &self, epoch: u64, state_root: StateRoot,
+    ) -> Result<(), Error> {
+        // validate state root
+        self.validate_state_root(epoch, &state_root)?;
+
+        // store state root by epoch
+        self.verified.write().insert(epoch, state_root);
+        self.sync_manager.remove_in_flight(&epoch);
 
         Ok(())
     }
@@ -135,20 +152,19 @@ impl StateRoots {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetStateRoots {
-            request_id: self.request_id_allocator.next(),
-            epochs,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetStateRoots { request_id, epochs });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]

@@ -19,7 +19,7 @@ use crate::{
         message::{msgid, GetTxInfos, TxInfo},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         CACHE_TIMEOUT, MAX_TX_INFOS_IN_FLIGHT, TX_INFO_REQUEST_BATCH_SIZE,
@@ -113,56 +113,71 @@ impl TxInfos {
 
     #[inline]
     pub fn receive(
-        &self, infos: impl Iterator<Item = TxInfo>,
+        &self, peer: PeerId, id: RequestId, infos: impl Iterator<Item = TxInfo>,
     ) -> Result<(), Error> {
         for info in infos {
             info!("Validating tx_info {:?}", info);
 
-            let TxInfo {
-                epoch,
-                block_hash,
-                index: _,
-                mut epoch_receipts,
-                block_txs,
-            } = info;
-
-            // find index of block within epoch
-            let hashes = self.ledger.block_hashes_in(epoch)?;
-            let block_index = hashes.iter().position(|h| *h == block_hash);
-
-            let block_index = match block_index {
-                Some(index) => index,
-                None => {
-                    warn!(
-                        "Block {:?} does not exist in epoch {} (hashes: {:?})",
-                        block_hash, epoch, hashes
-                    );
-                    return Err(ErrorKind::InvalidTxInfo.into());
-                }
+            match self.sync_manager.check_if_requested(
+                peer,
+                id,
+                &info.tx_hash,
+            )? {
+                None => continue,
+                Some(_) => self.validate_and_store(info)?,
             };
+        }
 
-            // validate receipts
-            let receipts = epoch_receipts.clone();
-            self.receipts.receive_single(epoch, receipts)?;
+        Ok(())
+    }
 
-            // validate block txs
-            let txs = block_txs.clone();
-            self.block_txs.receive_single(block_hash, txs)?;
+    #[inline]
+    pub fn validate_and_store(&self, info: TxInfo) -> Result<(), Error> {
+        let TxInfo {
+            epoch,
+            block_hash,
+            index: _,
+            mut epoch_receipts,
+            block_txs,
+            tx_hash: _,
+        } = info;
 
-            // `epoch_receipts` is valid and `block_hash` exists in epoch
-            assert!(block_index < epoch_receipts.len());
-            let block_receipts = epoch_receipts.swap_remove(block_index);
+        // find index of block within epoch
+        let hashes = self.ledger.block_hashes_in(epoch)?;
+        let block_index = hashes.iter().position(|h| *h == block_hash);
 
-            // `block_txs` is valid and `block_hash` exists in epoch
-            assert!(block_txs.len() == block_receipts.len());
-            let items = block_txs.into_iter().zip(block_receipts.into_iter());
-
-            for (index, (tx, receipt)) in items.enumerate() {
-                let hash = tx.hash();
-                let address = TransactionAddress { block_hash, index };
-                self.verified.write().insert(hash, (tx, receipt, address));
-                self.sync_manager.remove_in_flight(&hash);
+        let block_index = match block_index {
+            Some(index) => index,
+            None => {
+                warn!(
+                    "Block {:?} does not exist in epoch {} (hashes: {:?})",
+                    block_hash, epoch, hashes
+                );
+                return Err(ErrorKind::InvalidTxInfo.into());
             }
+        };
+
+        // validate receipts
+        let receipts = epoch_receipts.clone();
+        self.receipts.validate_and_store(epoch, receipts)?;
+
+        // validate block txs
+        let txs = block_txs.clone();
+        self.block_txs.validate_and_store(block_hash, txs)?;
+
+        // `epoch_receipts` is valid and `block_hash` exists in epoch
+        assert!(block_index < epoch_receipts.len());
+        let block_receipts = epoch_receipts.swap_remove(block_index);
+
+        // `block_txs` is valid and `block_hash` exists in epoch
+        assert!(block_txs.len() == block_receipts.len());
+        let items = block_txs.into_iter().zip(block_receipts.into_iter());
+
+        for (index, (tx, receipt)) in items.enumerate() {
+            let hash = tx.hash();
+            let address = TransactionAddress { block_hash, index };
+            self.verified.write().insert(hash, (tx, receipt, address));
+            self.sync_manager.remove_in_flight(&hash);
         }
 
         Ok(())
@@ -178,20 +193,18 @@ impl TxInfos {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetTxInfos {
-            request_id: self.request_id_allocator.next(),
-            hashes,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> = Box::new(GetTxInfos { request_id, hashes });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]

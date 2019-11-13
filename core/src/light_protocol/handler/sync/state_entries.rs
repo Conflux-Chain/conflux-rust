@@ -16,7 +16,7 @@ use crate::{
         message::{msgid, GetStateEntries, StateEntryWithKey, StateKey},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT,
@@ -115,15 +115,32 @@ impl StateEntries {
 
     #[inline]
     pub fn receive(
-        &self, entries: impl Iterator<Item = StateEntryWithKey>,
-    ) -> Result<(), Error> {
+        &self, peer: PeerId, id: RequestId,
+        entries: impl Iterator<Item = StateEntryWithKey>,
+    ) -> Result<(), Error>
+    {
         for StateEntryWithKey { key, entry, proof } in entries {
             info!("Validating state entry {:?} with key {:?}", entry, key);
-            self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
 
-            self.verified.write().insert(key.clone(), entry);
-            self.sync_manager.remove_in_flight(&key);
+            match self.sync_manager.check_if_requested(peer, id, &key)? {
+                None => continue,
+                Some(_) => self.validate_and_store(key, entry, proof)?,
+            };
         }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn validate_and_store(
+        &self, key: StateKey, entry: Option<Vec<u8>>, proof: StateProof,
+    ) -> Result<(), Error> {
+        // validate state entry
+        self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
+
+        // store state entry by state key
+        self.verified.write().insert(key.clone(), entry);
+        self.sync_manager.remove_in_flight(&key);
 
         Ok(())
     }
@@ -142,20 +159,19 @@ impl StateEntries {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, keys: Vec<StateKey>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} keys={:?}", peer, keys);
 
         if keys.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetStateEntries {
-            request_id: self.request_id_allocator.next(),
-            keys,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetStateEntries { request_id, keys });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]

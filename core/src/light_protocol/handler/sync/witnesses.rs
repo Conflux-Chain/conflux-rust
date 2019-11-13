@@ -13,7 +13,7 @@ use crate::{
         message::{msgid, GetWitnessInfo, WitnessInfoWithHeight},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -144,17 +144,38 @@ impl Witnesses {
         Ok(())
     }
 
-    pub fn receive<I>(&self, witnesses: I) -> Result<(), Error>
-    where I: Iterator<Item = WitnessInfoWithHeight> {
+    pub fn receive(
+        &self, peer: PeerId, id: RequestId,
+        witnesses: impl Iterator<Item = WitnessInfoWithHeight>,
+    ) -> Result<(), Error>
+    {
         for item in witnesses {
-            let witness = item.height;
+            info!("Validating witness info {:?}", item);
 
-            // validate and store
-            self.handle_witness_info(item)?;
-
-            // signal receipt
-            self.sync_manager.remove_in_flight(&witness);
+            match self.sync_manager.check_if_requested(
+                peer,
+                id,
+                &item.height,
+            )? {
+                None => continue,
+                Some(_) => self.validate_and_store(item)?,
+            };
         }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn validate_and_store(
+        &self, item: WitnessInfoWithHeight,
+    ) -> Result<(), Error> {
+        let witness = item.height;
+
+        // validate and store
+        self.handle_witness_info(item)?;
+
+        // signal receipt
+        self.sync_manager.remove_in_flight(&witness);
 
         Ok(())
     }
@@ -169,20 +190,22 @@ impl Witnesses {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, witnesses: Vec<u64>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} witnesses={:?}", peer, witnesses);
 
         if witnesses.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
+        let request_id = self.request_id_allocator.next();
+
         let msg: Box<dyn Message> = Box::new(GetWitnessInfo {
-            request_id: self.request_id_allocator.next(),
+            request_id,
             witnesses,
         });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]
