@@ -152,12 +152,24 @@ impl ConsensusNewBlockHandler {
 
     fn make_checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
-    ) {
+        will_execute: bool,
+    )
+    {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
         let new_era_stable_height =
             new_era_height + inner.inner_conf.era_epoch_count;
         let stable_era_genesis =
             inner.get_pivot_block_arena_index(new_era_stable_height);
+
+        // In transaction-execution phases (`RecoverBlockFromDb` or `Normal`),
+        // ensure all blocks on the pivot chain before stable_era_genesis
+        // have state_valid computed
+        if will_execute {
+            inner
+                .compute_state_valid(stable_era_genesis)
+                .expect("Old cur_era_stable_height has available state_valid");
+        }
+
         // We first compute the set of blocks inside the new era and we
         // recompute the past_weight inside the stable height.
         let mut new_era_block_arena_index_set = HashSet::new();
@@ -1266,6 +1278,7 @@ impl ConsensusNewBlockHandler {
             ConsensusNewBlockHandler::make_checkpoint_at(
                 inner,
                 new_checkpoint_era_genesis,
+                transactions.is_some(),
             );
             let stable_era_genesis_arena_index =
                 inner.ancestor_at(me, inner.cur_era_stable_height);
@@ -1456,20 +1469,6 @@ impl ConsensusNewBlockHandler {
                     false,
                 ));
             }
-        }
-        // We should have enqueued the execution for the block at
-        // pivot_index == (pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT)
-        // before shutdown, so after recovery, the block at
-        // (pivot_index - REWARD_EPOCH_COUNT) should have
-        // its state_valid available.
-        let state_valid_defer =
-            (DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT) as usize;
-        if inner.pivot_chain.len() >= state_valid_defer as usize {
-            let last_reward_pivot_index =
-                inner.pivot_chain.len() - state_valid_defer;
-            inner
-                .compute_state_valid(inner.pivot_chain[last_reward_pivot_index])
-                .expect("Fail to compute state_valid in construct_pivot_state");
         }
     }
 }
