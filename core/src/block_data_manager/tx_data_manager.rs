@@ -256,7 +256,7 @@ impl TransactionDataManager {
         {
             let tx_time_window = self.tx_time_window.read();
             for i in 0..fixed_bytes_vector.len() {
-                match tx_time_window.contains_short_tx_id(
+                match tx_time_window.get_transaction(
                     fixed_bytes_vector[i],
                     random_bytes_vector[i],
                     k0,

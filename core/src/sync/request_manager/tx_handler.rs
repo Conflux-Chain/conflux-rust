@@ -517,9 +517,9 @@ impl TransactionCacheContainer {
         self.inner.tx_container.get(tx_hash)
     }
 
-    pub fn contains_short_tx_id(
+    pub fn get_transaction(
         &self, fixed_bytes: u32, random_bytes: u16, key1: u64, key2: u64,
-    ) -> Option<&Arc<SignedTransaction>> {
+    ) -> Option<Arc<SignedTransaction>> {
         let inner = &self.inner;
         let mut tx = None;
         match inner.txid_hashmap.get(&fixed_bytes) {
@@ -528,11 +528,10 @@ impl TransactionCacheContainer {
                     if CompactBlock::get_random_bytes(value, key1, key2)
                         == random_bytes
                     {
-                        match tx {
-                            Some(_) => return None,
-                            None => {
-                                tx = self.get(value);
-                            }
+                        if tx.is_none(){
+                            tx = Some(self.get(value).unwrap().clone());
+                        }else{
+                            return None
                         }
                     }
                 }
@@ -603,7 +602,7 @@ impl TransactionCacheContainer {
                 }); //if occupied, append, else, insert.
             inner
                 .tx_container
-                .insert(Arc::clone(&full_hash_id), transaction.clone());
+                .insert(Arc::clone(&full_hash_id), Arc::clone(transaction));
             entry.tx_ids.push(full_hash_id);
         }
     }
