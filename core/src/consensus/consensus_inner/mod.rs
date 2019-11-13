@@ -2238,31 +2238,25 @@ impl ConsensusGraphInner {
     ///
     /// Assumption:
     ///   * [Bm] is a pivot block on current pivot chain.
-    ///   This function is triggered when evaluating the reward for the blocks
-    ///   in epoch of [Bm]. It relies on the state_valid value of [Bm]. In other
-    ///   words, this function is triggered when computing the state_valid value
-    ///   of [Bm].
+    ///   This assumption is derived from the following cases:
+    ///   1. This function may be triggered when evaluating the reward for the
+    ///      blocks in epoch of [Bm]. This relies on the state_valid value of
+    ///      [Bm]. In other words, in this case, this function is triggered
+    ///      when computing the state_valid value of [Bm].
+    ///   2. This function may be triggered when mining [Bm].
+    ///
+    ///   * The execution commitments of blocks needed do exist.
     ///
     ///   * [Bm] is in stable era.
     ///   This assumption is derived from the following cases:
-    ///   Let [Be] is the last block in the consensus graph and at the
-    ///   era boundary.
-    ///   1. In normal run, when evaluating reward of [Bm] and [Bm] is
-    ///      before [Be], [Be] should have not become the stable genesis,
-    ///      therefore, [Bm] is still in stable era.
-    ///   2. In normal run, when evaluating reward of [Bm] and [Bm] is
-    ///      equal or after [Be], no matter whether [Be] is stable genesis
-    ///      or not, [Bm] is in stable era.
-    ///   3. In recover run, 1) all the pivot blocks between current era
-    ///      genesis and the stable era genesis have state_valid computed;
-    ///      and 2) all the pivot blocks between the stable era genesis
-    ///      and the block whose reward info required by the current tip
-    ///      pivot block have state_valid computed. Therefore, this function
-    ///      will not be triggered for those blocks. This leads to the normal
-    ///      run case again.
+    ///   1. In normal run, before updating stable era genesis, we always
+    ///      make state_valid of all the pivot blocks before the new
+    ///      stable era genesis computed.
+    ///   2. The recover phase (including both archive and full node)
+    ///      prepares the graph state to the normal run state before
+    ///      calling this function.
     ///
-    /// This function is called when evaluating the reward for the blocks
-    /// in epoch of [Bm]. It searches backward for all the blocks whose
+    /// This function searches backward for all the blocks whose
     /// state_valid are false, starting from [Bp]. The number of found
     /// blocks is the 'blame' of [Bm]. if 'blame' == 0, the deferred blame
     /// root information of [Bm] is simply [Dm], otherwise, it is computed
