@@ -2,7 +2,7 @@ use crate::sync::message::TransactionDigests;
 use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::PeerId;
-use primitives::{SignedTransaction, TxPropagateId};
+use primitives::{block::CompactBlock, SignedTransaction, TxPropagateId};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -184,6 +184,7 @@ impl ReceivedTransactionContainer {
                     set
                 }); //if occupied, append, else, insert.
 
+            inner.txid_container.insert(Arc::clone(&full_hash_id));
             entry.tx_ids.push(full_hash_id);
         }
     }
@@ -455,6 +456,155 @@ impl InflightPendingTransactionContainer {
                 }); //if occupied, append, else, insert.
 
             entry.items.push(inflight_pending_item);
+        }
+    }
+}
+
+///
+const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
+
+struct TransactionCacheTimeWindowedEntry {
+    pub secs: u64,
+    pub tx_ids: Vec<Arc<H256>>,
+}
+
+struct TransactionCacheContainerInner {
+    window_size: usize,
+    slot_duration_as_secs: u64,
+    txid_hashmap: HashMap<u32, HashSet<Arc<H256>>>, /* 6 bytes, keyed on
+                                                     * txid_hashmap */
+    tx_container: HashMap<Arc<H256>, Arc<SignedTransaction>>,
+    time_windowed_indices: Vec<Option<TransactionCacheTimeWindowedEntry>>,
+}
+
+impl TransactionCacheContainerInner {
+    pub fn new(window_size: usize, slot_duration_as_secs: u64) -> Self {
+        let mut time_windowed_indices = Vec::new();
+        for _ in 0..window_size {
+            time_windowed_indices.push(None);
+        }
+        TransactionCacheContainerInner {
+            window_size,
+            slot_duration_as_secs,
+            txid_hashmap: HashMap::new(),
+            tx_container: HashMap::new(),
+            time_windowed_indices,
+        }
+    }
+}
+
+pub struct TransactionCacheContainer {
+    inner: TransactionCacheContainerInner,
+}
+
+impl TransactionCacheContainer {
+    pub fn new(timeout: u64) -> Self {
+        let slot_duration_as_secs =
+            timeout / TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE as u64;
+        TransactionCacheContainer {
+            inner: TransactionCacheContainerInner::new(
+                TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE,
+                slot_duration_as_secs,
+            ),
+        }
+    }
+
+    pub fn contains_key(&self, tx_hash: &H256) -> bool {
+        self.inner.tx_container.contains_key(tx_hash)
+    }
+
+    pub fn get(&self, tx_hash: &H256) -> Option<&Arc<SignedTransaction>> {
+        self.inner.tx_container.get(tx_hash)
+    }
+
+    pub fn contains_short_tx_id(
+        &self, fixed_bytes: u32, random_bytes: u16, key1: u64, key2: u64,
+    ) -> Option<&Arc<SignedTransaction>> {
+        let inner = &self.inner;
+        let mut tx = None;
+        match inner.txid_hashmap.get(&fixed_bytes) {
+            Some(set) => {
+                for value in set {
+                    if CompactBlock::get_random_bytes(value, key1, key2)
+                        == random_bytes
+                    {
+                        match tx {
+                            Some(_) => return None,
+                            None => {
+                                tx = self.get(value);
+                            }
+                        }
+                    }
+                }
+            }
+            None => {}
+        }
+        tx
+    }
+
+    pub fn append_transactions(
+        &mut self, transactions: &Vec<(usize, Arc<SignedTransaction>)>,
+    ) {
+        let inner = &mut self.inner;
+
+        let now = SystemTime::now();
+        let duration = now.duration_since(UNIX_EPOCH);
+        let secs = duration.ok().unwrap().as_secs();
+        let window_index =
+            (secs / inner.slot_duration_as_secs) as usize % inner.window_size;
+
+        let entry = if inner.time_windowed_indices[window_index].is_none() {
+            inner.time_windowed_indices[window_index] =
+                Some(TransactionCacheTimeWindowedEntry {
+                    secs,
+                    tx_ids: Vec::new(),
+                });
+            inner.time_windowed_indices[window_index].as_mut().unwrap()
+        } else {
+            let indices_with_time =
+                inner.time_windowed_indices[window_index].as_mut().unwrap();
+            if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
+                for tx_id in &indices_with_time.tx_ids {
+                    let key = CompactBlock::to_u32(
+                        tx_id[28], tx_id[29], tx_id[30], tx_id[31],
+                    );
+
+                    if let Some(set) = inner.txid_hashmap.get_mut(&key) {
+                        // if there is a value asscicated with the key
+                        if set.len() == 1 {
+                            inner.txid_hashmap.remove(&key);
+                        } else {
+                            set.remove(tx_id);
+                            inner.tx_container.remove(tx_id);
+                        }
+                    }
+                }
+                indices_with_time.secs = secs;
+                indices_with_time.tx_ids = Vec::new();
+            }
+            indices_with_time
+        };
+
+        for (_, transaction) in transactions {
+            let hash = transaction.hash();
+            let full_hash_id = Arc::new(hash);
+            let short_id =
+                CompactBlock::to_u32(hash[28], hash[29], hash[30], hash[31]);
+            inner
+                .txid_hashmap
+                .entry(short_id)
+                .and_modify(|s| {
+                    s.insert(Arc::clone(&full_hash_id));
+                })
+                .or_insert_with(|| {
+                    let mut set = HashSet::new();
+                    set.insert(Arc::clone(&full_hash_id));
+                    set
+                }); //if occupied, append, else, insert.
+            inner
+                .tx_container
+                .insert(Arc::clone(&full_hash_id), transaction.clone());
+            entry.tx_ids.push(full_hash_id);
         }
     }
 }

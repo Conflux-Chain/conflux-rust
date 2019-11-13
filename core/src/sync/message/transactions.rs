@@ -217,7 +217,7 @@ impl TransactionDigests {
         ((v1 as u32) << 16) + ((v2 as u32) << 8) + v3 as u32
     }
 
-    pub fn append_short_trans_id(
+    pub fn append_short_id(
         message: &mut Vec<u8>, key1: u64, key2: u64, transaction_id: &H256,
     ) {
         message.push(TransactionDigests::get_random_byte(
@@ -230,7 +230,7 @@ impl TransactionDigests {
         message.push(transaction_id[31]);
     }
 
-    pub fn append_long_trans_id(message: &mut Vec<H256>, transaction_id: H256) {
+    pub fn append_tx_hash(message: &mut Vec<H256>, transaction_id: H256) {
         message.push(transaction_id);
     }
 
