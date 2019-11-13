@@ -2695,13 +2695,12 @@ impl ConsensusGraphInner {
         let mut blocks_to_compute = Vec::new();
         let mut cur = me;
         loop {
-            // See comments on compute_blame_and_state_with_execution_result()
-            // for explanation of this assumption.
-            assert!(self.arena[cur].height >= self.cur_era_stable_height);
-
             if self.arena[cur].data.state_valid.is_some() {
                 break;
             }
+            // See comments on compute_blame_and_state_with_execution_result()
+            // for explanation of this assumption.
+            assert!(self.arena[cur].height >= self.cur_era_stable_height);
             blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }
