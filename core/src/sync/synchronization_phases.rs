@@ -495,6 +495,8 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         .unwrap()
                         .blame();
                     for i in 0..blame + 1 {
+                        trace!("Backup state_valid: hash={:?} height={} state_valid={},", old_consensus_inner.arena[cur].hash, old_consensus_inner.arena[cur].height,
+                        i==0);
                         pivot_block_state_valid_map.insert(
                             old_consensus_inner.arena[cur].hash,
                             i == 0,

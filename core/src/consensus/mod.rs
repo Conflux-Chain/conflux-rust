@@ -554,6 +554,11 @@ impl ConsensusGraph {
             {
                 let arena_index =
                     *inner.hash_to_arena_indices.get(&hash).unwrap();
+                trace!(
+                    "Restore state_valid: hash={:?} height={}",
+                    hash,
+                    inner.arena[arena_index].height
+                );
                 inner.arena[arena_index].data.state_valid =
                     pivot_block_state_valid_map.remove(&hash);
             }
