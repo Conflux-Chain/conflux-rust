@@ -19,7 +19,7 @@ use cfx_types::{Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
@@ -119,8 +119,9 @@ pub fn initialize_synchronization_graph(
         storage_manager,
         worker_thread_pool,
         DataManagerConfiguration::new(
-            false,  /* do not record transaction address */
-            250000, /* max cached tx count */
+            false,                          /* do not record transaction
+                                             * address */
+            Duration::from_millis(300_000), /* max cached tx count */
             DbType::Rocksdb,
         ),
     ));

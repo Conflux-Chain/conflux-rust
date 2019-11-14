@@ -37,7 +37,7 @@ use crate::block_data_manager::{
     db_manager::DBManager, tx_data_manager::TransactionDataManager,
 };
 pub use block_data_types::*;
-use std::{hash::Hash, path::Path};
+use std::{hash::Hash, path::Path, time::Duration};
 
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 lazy_static! {
@@ -101,8 +101,10 @@ impl BlockDataManager {
             max_cache_size,
             3 * mb,
         )));
-        let tx_data_manager =
-            TransactionDataManager::new(config.tx_cache_count, worker_pool);
+        let tx_data_manager = TransactionDataManager::new(
+            config.tx_cache_index_maintain_timeout,
+            worker_pool,
+        );
         let db_manager = match config.db_type {
             DbType::Rocksdb => DBManager::new_from_rocksdb(db),
             DbType::Sqlite => {
@@ -862,10 +864,7 @@ impl BlockDataManager {
         exeuction_contexts.shrink_to_fit();
     }
 
-    pub fn cache_gc(&self) {
-        self.block_cache_gc();
-        self.tx_data_manager.tx_cache_gc();
-    }
+    pub fn cache_gc(&self) { self.block_cache_gc(); }
 
     pub fn set_cur_consensus_era_genesis_hash(
         &self, cur_era_hash: &H256, next_era_hash: &H256,
@@ -934,17 +933,19 @@ pub enum DbType {
 
 pub struct DataManagerConfiguration {
     record_tx_address: bool,
-    tx_cache_count: usize,
+    tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
 }
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_address: bool, tx_cache_count: usize, db_type: DbType,
-    ) -> Self {
+        record_tx_address: bool, tx_cache_index_maintain_timeout: Duration,
+        db_type: DbType,
+    ) -> Self
+    {
         Self {
             record_tx_address,
-            tx_cache_count,
+            tx_cache_index_maintain_timeout,
             db_type,
         }
     }

@@ -80,6 +80,7 @@ build_config! {
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
         (max_inflight_request_count, (u64), 64)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
+        (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (request_block_with_public, (bool), false)
@@ -122,7 +123,6 @@ build_config! {
         (max_peers_propagation, (usize), 128)
         (future_block_buffer_capacity, (usize), 32768)
         (txgen_account_count, (usize), 10)
-        (tx_cache_count, (usize), 250000)
         (max_download_state_peers, (usize), 8)
         (block_db_type, (String), "rocksdb".to_string())
         (rocksdb_disable_wal, (bool), false)
@@ -383,7 +383,9 @@ impl Configuration {
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
         DataManagerConfiguration::new(
             self.raw_conf.record_tx_address,
-            self.raw_conf.tx_cache_count,
+            Duration::from_millis(
+                self.raw_conf.tx_cache_index_maintain_timeout_ms,
+            ),
             match self.raw_conf.block_db_type.as_str() {
                 "rocksdb" => DbType::Rocksdb,
                 "sqlite" => DbType::Sqlite,

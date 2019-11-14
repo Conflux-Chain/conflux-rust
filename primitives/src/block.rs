@@ -2,10 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    transaction::TxShortId, BlockHeader, SignedTransaction,
-    TransactionWithSignature,
-};
+use crate::{BlockHeader, SignedTransaction, TransactionWithSignature};
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{H256, U256};
 use keccak_hash::keccak;
@@ -112,15 +109,16 @@ impl Block {
     /// adversaries to make tx shortId collision
     pub fn to_compact(&self) -> CompactBlock {
         let nonce: u64 = rand::thread_rng().gen();
-        let (k0, k1) = get_shortid_key(&self.block_header, &nonce);
+        let (k0, k1) =
+            CompactBlock::get_shortid_key(&self.block_header, &nonce);
         CompactBlock {
             block_header: self.block_header.clone(),
             nonce,
-            tx_short_ids: self
-                .transactions
-                .iter()
-                .map(|tx| from_tx_hash(&tx.hash(), k0, k1))
-                .collect(),
+            tx_short_ids: CompactBlock::create_shortids(
+                &self.transactions,
+                k0,
+                k1,
+            ),
             // reconstructed_txes constructed here will not be used
             reconstructed_txes: Vec::new(),
         }
@@ -236,7 +234,7 @@ pub struct CompactBlock {
     /// The nonce for use in short id calculation
     pub nonce: u64,
     /// A list of tx short ids
-    pub tx_short_ids: Vec<TxShortId>,
+    pub tx_short_ids: Vec<u8>,
     /// Store the txes reconstructed, None means not received
     pub reconstructed_txes: Vec<Option<Arc<SignedTransaction>>>,
 }
@@ -258,24 +256,82 @@ impl MallocSizeOf for CompactBlock {
 }
 
 impl CompactBlock {
+    const SHORT_ID_SIZE_IN_BYTES: usize = 6;
+
+    pub fn len(&self) -> usize {
+        self.tx_short_ids.len() / CompactBlock::SHORT_ID_SIZE_IN_BYTES
+    }
+
     pub fn hash(&self) -> H256 { self.block_header.hash() }
-}
 
-pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
-    let mut stream = RlpStream::new();
-    stream.begin_list(2).append(header).append(nonce);
-    let to_hash = stream.out();
-    let key_hash: [u8; 32] = keccak(to_hash).into();
-    let k0 = LittleEndian::read_u64(&key_hash[0..8]);
-    let k1 = LittleEndian::read_u64(&key_hash[8..16]);
-    (k0, k1)
-}
+    pub fn get_shortid_key(header: &BlockHeader, nonce: &u64) -> (u64, u64) {
+        let mut stream = RlpStream::new();
+        stream.begin_list(2).append(header).append(nonce);
+        let to_hash = stream.out();
+        let key_hash: [u8; 32] = keccak(to_hash).into();
+        let k0 = LittleEndian::read_u64(&key_hash[0..8]);
+        let k1 = LittleEndian::read_u64(&key_hash[8..16]);
+        (k0, k1)
+    }
 
-/// Compute Tx ShortId from hash. The algorithm is from Bitcoin BIP152
-pub fn from_tx_hash(hash: &H256, k0: u64, k1: u64) -> TxShortId {
-    let mut hasher = SipHasher24::new_with_keys(k0, k1);
-    hasher.write(hash.as_ref());
-    hasher.finish() & 0xffff_ffffffff
+    /// Compute Tx ShortId from hash
+    pub fn create_shortids(
+        transactions: &Vec<Arc<SignedTransaction>>, k0: u64, k1: u64,
+    ) -> Vec<u8> {
+        let mut short_ids: Vec<u8> = vec![];
+
+        for tx in transactions {
+            let hash = tx.hash();
+            let random = CompactBlock::get_random_bytes(&hash, k0, k1);
+
+            short_ids.push(((random & 0xff00) >> 8) as u8);
+            short_ids.push((random & 0xff) as u8);
+            short_ids.push(hash[28]);
+            short_ids.push(hash[29]);
+            short_ids.push(hash[30]);
+            short_ids.push(hash[31]);
+        }
+        short_ids
+    }
+
+    pub fn to_u16(v1: u8, v2: u8) -> u16 { ((v1 as u16) << 8) + v2 as u16 }
+
+    pub fn to_u32(v1: u8, v2: u8, v3: u8, v4: u8) -> u32 {
+        ((v1 as u32) << 24)
+            + ((v2 as u32) << 16)
+            + ((v3 as u32) << 8)
+            + v4 as u32
+    }
+
+    pub fn get_random_bytes(
+        transaction_id: &H256, key1: u64, key2: u64,
+    ) -> u16 {
+        let mut hasher = SipHasher24::new_with_keys(key1, key2);
+        hasher.write(transaction_id.as_ref());
+        (hasher.finish() & 0xffff) as u16
+    }
+
+    pub fn get_decomposed_short_ids(&self) -> (Vec<u16>, Vec<u32>) {
+        let mut random_bytes_vector: Vec<u16> = Vec::new();
+        let mut fixed_bytes_vector: Vec<u32> = Vec::new();
+
+        for i in (0..self.tx_short_ids.len())
+            .step_by(CompactBlock::SHORT_ID_SIZE_IN_BYTES)
+        {
+            random_bytes_vector.push(CompactBlock::to_u16(
+                self.tx_short_ids[i],
+                self.tx_short_ids[i + 1],
+            ));
+            fixed_bytes_vector.push(CompactBlock::to_u32(
+                self.tx_short_ids[i + 2],
+                self.tx_short_ids[i + 3],
+                self.tx_short_ids[i + 4],
+                self.tx_short_ids[i + 5],
+            ));
+        }
+
+        (random_bytes_vector, fixed_bytes_vector)
+    }
 }
 
 impl Encodable for CompactBlock {
@@ -284,16 +340,20 @@ impl Encodable for CompactBlock {
             .begin_list(3)
             .append(&self.block_header)
             .append(&self.nonce)
-            .append_list(&self.tx_short_ids);
+            .append(&self.tx_short_ids);
     }
 }
 
 impl Decodable for CompactBlock {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let short_ids: Vec<u8> = rlp.val_at(2)?;
+        if short_ids.len() % CompactBlock::SHORT_ID_SIZE_IN_BYTES != 0 {
+            return Err(DecoderError::Custom("Compact Block length Error!"));
+        }
         Ok(CompactBlock {
             block_header: rlp.val_at(0)?,
             nonce: rlp.val_at(1)?,
-            tx_short_ids: rlp.list_at(2)?,
+            tx_short_ids: short_ids,
             reconstructed_txes: Vec::new(),
         })
     }

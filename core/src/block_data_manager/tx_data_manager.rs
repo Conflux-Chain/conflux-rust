@@ -1,15 +1,16 @@
-use crate::{cache_manager::CacheManager, WORKER_COMPUTATION_PARALLELISM};
-use cfx_types::H256;
+use crate::{
+    sync::request_manager::tx_handler::TransactionCacheContainer,
+    WORKER_COMPUTATION_PARALLELISM,
+};
 use metrics::{register_queue, Queue};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    block::{from_tx_hash, get_shortid_key, CompactBlock},
-    Block, SignedTransaction, TransactionWithSignature,
+    block::CompactBlock, Block, SignedTransaction, TransactionWithSignature,
 };
 use rlp::DecoderError;
 use std::{
-    collections::HashMap,
     sync::{mpsc::channel, Arc},
+    time::Duration,
 };
 use threadpool::ThreadPool;
 
@@ -19,25 +20,21 @@ lazy_static! {
 }
 
 pub struct TransactionDataManager {
-    tx_cache: RwLock<HashMap<H256, Arc<SignedTransaction>>>,
+    tx_time_window: RwLock<TransactionCacheContainer>,
     worker_pool: Arc<Mutex<ThreadPool>>,
-    tx_cache_man: Mutex<CacheManager<H256>>,
 }
 
 impl TransactionDataManager {
     pub fn new(
-        tx_cache_count: usize, worker_pool: Arc<Mutex<ThreadPool>>,
-    ) -> Self {
-        // TODO Bound both the size and the count of tx
-        let tx_cache_man = Mutex::new(CacheManager::new(
-            tx_cache_count * 3 / 4,
-            tx_cache_count,
-            10000,
-        ));
+        tx_cache_index_maintain_timeout: Duration,
+        worker_pool: Arc<Mutex<ThreadPool>>,
+    ) -> Self
+    {
         Self {
-            tx_cache: Default::default(),
+            tx_time_window: RwLock::new(TransactionCacheContainer::new(
+                tx_cache_index_maintain_timeout.as_secs(),
+            )),
             worker_pool,
-            tx_cache_man,
         }
     }
 
@@ -48,12 +45,12 @@ impl TransactionDataManager {
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
         let uncached_trans = {
-            let tx_cache = self.tx_cache.read();
+            let tx_time_window = self.tx_time_window.read();
             transactions
                 .iter()
                 .filter(|tx| {
                     let tx_hash = tx.hash();
-                    let inserted = tx_cache.contains_key(&tx_hash);
+                    let inserted = tx_time_window.contains_key(&tx_hash);
                     // Sample 1/128 transactions
                     if tx_hash[0] & 254 == 0 {
                         debug!("Sampled transaction {:?} in tx pool", tx_hash);
@@ -75,7 +72,7 @@ impl TransactionDataManager {
     /// thrown.
     pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
         let (uncached_trans, mut recovered_trans) = {
-            let tx_cache = self.tx_cache.read();
+            let tx_time_window = self.tx_time_window.read();
             let mut uncached_trans = Vec::new();
             let mut recovered_trans = Vec::new();
             for (idx, transaction) in block.transactions.iter().enumerate() {
@@ -90,7 +87,7 @@ impl TransactionDataManager {
                 if tx_hash[0] & 254 == 0 {
                     debug!("Sampled transaction {:?} in block", tx_hash);
                 }
-                match tx_cache.get(&tx_hash) {
+                match tx_time_window.get(&tx_hash) {
                     Some(tx) => recovered_trans.push(Some(tx.clone())),
                     None => {
                         uncached_trans
@@ -115,7 +112,7 @@ impl TransactionDataManager {
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
         let (uncached_trans, mut recovered_trans) = {
-            let tx_cache = self.tx_cache.read();
+            let tx_time_window = self.tx_time_window.read();
             let mut uncached_trans = Vec::new();
             let mut recovered_trans = Vec::new();
             for (idx, transaction) in transactions.iter().enumerate() {
@@ -124,7 +121,7 @@ impl TransactionDataManager {
                 if tx_hash[0] & 254 == 0 {
                     debug!("Sampled transaction {:?} in block", tx_hash);
                 }
-                match tx_cache.get(&tx_hash) {
+                match tx_time_window.get(&tx_hash) {
                     Some(tx) => recovered_trans.push(Some(tx.clone())),
                     None => {
                         uncached_trans.push((idx, transaction.clone()));
@@ -146,9 +143,9 @@ impl TransactionDataManager {
     /// Recover public key for `uncached_trans` and keep the corresponding index
     /// unchanged.
     ///
-    /// Note that we release `tx_cache` lock during pubkey recovery to allow
-    /// more parallelism, but we may recover a tx twice if it is received
-    /// again before the recovery finishes.
+    /// Note that we release `tx_time_window` lock during pubkey recovery to
+    /// allow more parallelism, but we may recover a tx twice if it is
+    /// received again before the recovery finishes.
     fn recover_uncached_tx(
         &self, uncached_trans: Vec<(usize, TransactionWithSignature)>,
     ) -> Result<Vec<(usize, Arc<SignedTransaction>)>, DecoderError> {
@@ -233,16 +230,12 @@ impl TransactionDataManager {
                 return Err(DecoderError::Custom("Cannot recover public key"));
             }
         }
-        let mut tx_cache = self.tx_cache.write();
-        let mut tx_cache_man = self.tx_cache_man.lock();
-        for (_, tx) in &recovered_trans {
-            tx_cache.insert(tx.hash(), tx.clone());
-            tx_cache_man.note_used(tx.hash());
-        }
+        let mut tx_time_window = self.tx_time_window.write();
+        tx_time_window.append_transactions(&recovered_trans.clone());
         Ok(recovered_trans)
     }
 
-    /// Find tx in tx_cache that matches tx_short_ids to fill in
+    /// Find tx in tx_time_window that matches tx_short_ids to fill in
     /// reconstruced_txes Return the differentially encoded index of missing
     /// transactions Now should only called once after CompactBlock is
     /// decoded
@@ -251,28 +244,34 @@ impl TransactionDataManager {
     ) -> Vec<usize> {
         compact_block
             .reconstructed_txes
-            .resize(compact_block.tx_short_ids.len(), None);
-        let mut short_id_to_index =
-            HashMap::with_capacity(compact_block.tx_short_ids.len());
-        for (i, id) in compact_block.tx_short_ids.iter().enumerate() {
-            short_id_to_index.insert(id, i);
-        }
-        let (k0, k1) =
-            get_shortid_key(&compact_block.block_header, &compact_block.nonce);
-        for (tx_hash, tx) in &*self.tx_cache.read() {
-            let short_id = from_tx_hash(tx_hash, k0, k1);
-            match short_id_to_index.remove(&short_id) {
-                Some(index) => {
-                    compact_block.reconstructed_txes[index] = Some(tx.clone());
+            .resize(compact_block.len(), None);
+
+        let (random_bytes_vector, fixed_bytes_vector) =
+            compact_block.get_decomposed_short_ids();
+        let (k0, k1) = CompactBlock::get_shortid_key(
+            &compact_block.block_header,
+            &compact_block.nonce,
+        );
+        let mut missing_index = Vec::new();
+        {
+            let tx_time_window = self.tx_time_window.read();
+            for i in 0..fixed_bytes_vector.len() {
+                match tx_time_window.get_transaction(
+                    fixed_bytes_vector[i],
+                    random_bytes_vector[i],
+                    k0,
+                    k1,
+                ) {
+                    Some(tx) => {
+                        compact_block.reconstructed_txes[i] = Some(tx.clone());
+                    }
+                    None => {
+                        missing_index.push(i);
+                    }
                 }
-                None => {}
             }
         }
-        let mut missing_index = Vec::new();
-        for index in short_id_to_index.values() {
-            missing_index.push(*index);
-        }
-        missing_index.sort();
+
         let mut last = 0;
         let mut missing_encoded = Vec::new();
         for index in missing_index {
@@ -280,17 +279,5 @@ impl TransactionDataManager {
             last = index + 1;
         }
         missing_encoded
-    }
-
-    pub fn tx_cache_gc(&self) {
-        let mut tx_cache = self.tx_cache.write();
-        let mut tx_cache_man = self.tx_cache_man.lock();
-        tx_cache_man.collect_garbage(tx_cache.len(), |ids| {
-            for id in ids {
-                tx_cache.remove(&id);
-            }
-            tx_cache.len()
-        });
-        tx_cache.shrink_to_fit();
     }
 }

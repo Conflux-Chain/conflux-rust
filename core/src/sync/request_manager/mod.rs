@@ -299,7 +299,7 @@ impl RequestManager {
                 let fixed_bytes = fixed_bytes_vector[i];
                 let random_bytes = random_byte_vector[i];
 
-                if received_transactions.contains_short_tx_id(
+                if received_transactions.contains_short_id(
                     fixed_bytes,
                     random_bytes,
                     key1,
@@ -332,16 +332,16 @@ impl RequestManager {
                 }
             }
 
-            //process long ids
+            //process tx hashes
             let base_index = fixed_bytes_vector.len();
             for i in 0..transaction_digests.tx_hashes.len() {
-                let id = transaction_digests.tx_hashes[i];
-                if received_transactions.contains_tx_id(&id) {
+                let tx_hash = transaction_digests.tx_hashes[i];
+                if received_transactions.contains_tx_hash(&tx_hash) {
                     continue;
                 }
-                if tx_from_hashes_inflight_keys.insert(Key::Hash(id)) {
+                if tx_from_hashes_inflight_keys.insert(Key::Hash(tx_hash)) {
                     tx_request_indices.push(base_index + i);
-                    tx_hashes.insert(id);
+                    tx_hashes.insert(tx_hash);
                 } else {
                     // Already being requested
                     INFLIGHT_TX_REJECT_METER.mark(1);
@@ -398,13 +398,14 @@ impl RequestManager {
     }
 
     pub fn request_transactions_from_tx_hashes(
-        &self, io: &dyn NetworkContext, peer_id: PeerId, tx_hashes: Vec<H256>,
-        window_index: usize, tx_hashes_indices: &Vec<usize>,
+        &self, io: &dyn NetworkContext, peer_id: PeerId,
+        responded_tx_hashes: Vec<H256>, window_index: usize,
+        tx_hashes_indices: &Vec<usize>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TX_TIMER.as_ref());
 
-        if tx_hashes.is_empty() {
+        if responded_tx_hashes.is_empty() {
             return;
         }
 
@@ -417,29 +418,29 @@ impl RequestManager {
             .update(tx_from_hashes_inflight_keys.len());
         TX_RECEIVED_POOL_METER.mark(received_transactions.get_length());
 
-        let (tx_ids, indices) = {
-            let mut tx_ids = HashSet::new();
+        let (tx_hashes, indices) = {
+            let mut tx_hashes = HashSet::new();
             let mut indices = Vec::new();
 
-            for i in 0..tx_hashes.len() {
-                let id = tx_hashes[i];
-                if received_transactions.contains_tx_id(&id) {
+            for i in 0..responded_tx_hashes.len() {
+                let tx_hash = responded_tx_hashes[i];
+                if received_transactions.contains_tx_hash(&tx_hash) {
                     // Already received
                     continue;
                 }
 
-                if tx_from_hashes_inflight_keys.insert(Key::Hash(id)) {
+                if tx_from_hashes_inflight_keys.insert(Key::Hash(tx_hash)) {
                     indices.push(tx_hashes_indices[i]);
-                    tx_ids.insert(id);
+                    tx_hashes.insert(tx_hash);
                 } else {
                     // Already being requested
                     INFLIGHT_TX_REJECT_METER.mark(1);
                 }
             }
 
-            (tx_ids, indices)
+            (tx_hashes, indices)
         };
-        TX_REQUEST_METER.mark(tx_ids.len());
+        TX_REQUEST_METER.mark(tx_hashes.len());
         debug!(
             "Request {} tx using tx hashes from peer={}",
             indices.len(),
@@ -450,7 +451,7 @@ impl RequestManager {
             request_id: 0,
             window_index,
             indices,
-            tx_ids: tx_ids.clone(),
+            tx_hashes: tx_hashes.clone(),
         };
 
         if request.is_empty() {
@@ -462,7 +463,7 @@ impl RequestManager {
             .send_request(io, Some(peer_id), Box::new(request), None)
             .is_err()
         {
-            for id in tx_ids {
+            for id in tx_hashes {
                 tx_from_hashes_inflight_keys.remove(&Key::Hash(id));
             }
         }
@@ -683,9 +684,9 @@ impl RequestManager {
         signed_transactions: Vec<Arc<SignedTransaction>>,
     )
     {
-        let mut short_inflight_keys =
+        let mut short_id_inflight_keys =
             self.inflight_keys.write(msgid::GET_TRANSACTIONS);
-        let mut long_inflight_keys = self
+        let mut tx_hash_inflight_keys = self
             .inflight_keys
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
 
@@ -699,11 +700,11 @@ impl RequestManager {
         self.append_received_transactions(signed_transactions);
         for tx in &get_transactions_request.short_ids {
             if !keeped_short_ids.contains(tx) {
-                short_inflight_keys.remove(&Key::Id(*tx));
+                short_id_inflight_keys.remove(&Key::Id(*tx));
             }
         }
         for tx in &get_transactions_request.tx_hashes {
-            long_inflight_keys.remove(&Key::Hash(*tx));
+            tx_hash_inflight_keys.remove(&Key::Hash(*tx));
         }
 
         //request transactions from inflight pending pool
@@ -734,7 +735,8 @@ impl RequestManager {
                 )
                 .is_err()
             {
-                short_inflight_keys.remove(&Key::Id(request.fixed_byte_part));
+                short_id_inflight_keys
+                    .remove(&Key::Id(request.fixed_byte_part));
             }
         }
     }
@@ -744,11 +746,11 @@ impl RequestManager {
         signed_transactions: Vec<Arc<SignedTransaction>>,
     )
     {
-        let mut long_inflight_keys = self
+        let mut tx_hash_inflight_keys = self
             .inflight_keys
             .write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
-        for tx in &get_transactions_request.tx_ids {
-            long_inflight_keys.remove(&Key::Hash(*tx));
+        for tx in &get_transactions_request.tx_hashes {
+            tx_hash_inflight_keys.remove(&Key::Hash(*tx));
         }
         self.append_received_transactions(signed_transactions);
     }

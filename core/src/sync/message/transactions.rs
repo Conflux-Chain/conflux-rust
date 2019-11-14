@@ -217,7 +217,7 @@ impl TransactionDigests {
         ((v1 as u32) << 16) + ((v2 as u32) << 8) + v3 as u32
     }
 
-    pub fn append_short_trans_id(
+    pub fn append_short_id(
         message: &mut Vec<u8>, key1: u64, key2: u64, transaction_id: &H256,
     ) {
         message.push(TransactionDigests::get_random_byte(
@@ -230,7 +230,7 @@ impl TransactionDigests {
         message.push(transaction_id[31]);
     }
 
-    pub fn append_long_trans_id(message: &mut Vec<H256>, transaction_id: H256) {
+    pub fn append_tx_hash(message: &mut Vec<H256>, transaction_id: H256) {
         message.push(transaction_id);
     }
 
@@ -259,38 +259,38 @@ impl Request for GetTransactions {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut short_inflight_keys =
+        let mut short_id_inflight_keys =
             inflight_keys.write(msgid::GET_TRANSACTIONS);
-        let mut long_inflight_keys =
+        let mut tx_hash_inflight_keys =
             inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
         for tx in &self.short_ids {
-            short_inflight_keys.remove(&Key::Id(*tx));
+            short_id_inflight_keys.remove(&Key::Id(*tx));
         }
         for tx in &self.tx_hashes {
-            long_inflight_keys.remove(&Key::Hash(*tx));
+            tx_hash_inflight_keys.remove(&Key::Hash(*tx));
         }
     }
 
     fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
-        let mut short_inflight_keys =
+        let mut short_id_inflight_keys =
             inflight_keys.write(msgid::GET_TRANSACTIONS);
-        let mut long_inflight_keys =
+        let mut tx_hash_inflight_keys =
             inflight_keys.write(msgid::GET_TRANSACTIONS_FROM_TX_HASHES);
-        let mut short_tx_ids: HashSet<TxPropagateId> = HashSet::new();
-        let mut long_tx_ids: HashSet<H256> = HashSet::new();
+        let mut short_ids: HashSet<TxPropagateId> = HashSet::new();
+        let mut tx_hashes: HashSet<H256> = HashSet::new();
         for id in self.short_ids.iter() {
-            if short_inflight_keys.insert(Key::Id(*id)) {
-                short_tx_ids.insert(*id);
+            if short_id_inflight_keys.insert(Key::Id(*id)) {
+                short_ids.insert(*id);
             }
         }
         for id in self.tx_hashes.iter() {
-            if long_inflight_keys.insert(Key::Hash(*id)) {
-                long_tx_ids.insert(*id);
+            if tx_hash_inflight_keys.insert(Key::Hash(*id)) {
+                tx_hashes.insert(*id);
             }
         }
 
-        self.short_ids = short_tx_ids;
-        self.tx_hashes = long_tx_ids;
+        self.short_ids = short_ids;
+        self.tx_hashes = tx_hashes;
     }
 
     fn is_empty(&self) -> bool {
@@ -382,7 +382,7 @@ pub struct GetTransactionsFromTxHashes {
     pub request_id: RequestId,
     pub window_index: usize,
     pub indices: Vec<usize>,
-    pub tx_ids: HashSet<H256>,
+    pub tx_hashes: HashSet<H256>,
 }
 
 impl Request for GetTransactionsFromTxHashes {
@@ -392,25 +392,25 @@ impl Request for GetTransactionsFromTxHashes {
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
         let mut inflight_keys = inflight_keys.write(self.msg_id());
-        for tx_id in self.tx_ids.iter() {
-            inflight_keys.remove(&Key::Hash(*tx_id));
+        for tx_hash in self.tx_hashes.iter() {
+            inflight_keys.remove(&Key::Hash(*tx_hash));
         }
     }
 
     fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
         let mut inflight_keys = inflight_keys.write(self.msg_id());
 
-        let mut tx_ids: HashSet<H256> = HashSet::new();
-        for id in self.tx_ids.iter() {
+        let mut tx_hashes: HashSet<H256> = HashSet::new();
+        for id in self.tx_hashes.iter() {
             if inflight_keys.insert(Key::Hash(*id)) {
-                tx_ids.insert(*id);
+                tx_hashes.insert(*id);
             }
         }
 
-        self.tx_ids = tx_ids;
+        self.tx_hashes = tx_hashes;
     }
 
-    fn is_empty(&self) -> bool { self.tx_ids.is_empty() }
+    fn is_empty(&self) -> bool { self.tx_hashes.is_empty() }
 
     fn resend(&self) -> Option<Box<dyn Request>> { None }
 }
@@ -456,7 +456,7 @@ impl Decodable for GetTransactionsFromTxHashes {
             request_id: rlp.val_at(0)?,
             window_index: rlp.val_at(1)?,
             indices: rlp.list_at(2)?,
-            tx_ids: HashSet::new(),
+            tx_hashes: HashSet::new(),
         })
     }
 }

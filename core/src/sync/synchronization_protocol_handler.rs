@@ -1024,7 +1024,7 @@ impl SynchronizationProtocolHandler {
             for i in 0..lucky_peers.len() {
                 //consist of [one random position byte, and last three
                 // bytes]
-                TransactionDigests::append_short_trans_id(
+                TransactionDigests::append_short_id(
                     &mut short_ids_part[i],
                     nonces[i].0,
                     nonces[i].1,
@@ -1036,7 +1036,7 @@ impl SynchronizationProtocolHandler {
         if !tx_hashes_transactions.is_empty() {
             TX_HASHES_PROPAGATE_METER.mark(tx_hashes_transactions.len());
             for tx in &tx_hashes_transactions {
-                TransactionDigests::append_long_trans_id(
+                TransactionDigests::append_tx_hash(
                     &mut tx_hashes_part,
                     tx.hash(),
                 );
