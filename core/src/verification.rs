@@ -5,10 +5,10 @@
 use crate::{
     error::{BlockError, Error},
     parameters::block::*,
-    pow,
+    pow::{self, ProofOfWorkProblem},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
-use cfx_types::{H256, U256};
+use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{Block, BlockHeader};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
@@ -34,7 +34,7 @@ impl VerificationConfig {
     #[inline]
     pub fn compute_header_pow_quality(header: &mut BlockHeader) -> H256 {
         let pow_hash = pow::compute(header.nonce(), &header.problem_hash());
-        header.pow_quality = pow::boundary_to_difficulty(&pow_hash);
+        header.pow_quality = pow::pow_hash_to_quality(&pow_hash);
         pow_hash
     }
 
@@ -50,12 +50,14 @@ impl VerificationConfig {
             .into());
         }
         let boundary = pow::difficulty_to_boundary(header.difficulty());
-        if pow_hash >= boundary {
+        if !ProofOfWorkProblem::validate_hash_against_boundary(
+            &pow_hash, &boundary,
+        ) {
             warn!("block {} has invalid proof of work. boundary: {}, pow_hash: {}", header.hash(), boundary.clone(), pow_hash.clone());
             return Err(From::from(BlockError::InvalidProofOfWork(
                 OutOfBounds {
                     min: None,
-                    max: Some(boundary),
+                    max: Some(BigEndianHash::from_uint(&boundary)),
                     found: pow_hash,
                 },
             )));

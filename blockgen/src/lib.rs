@@ -84,22 +84,14 @@ impl Worker {
                     }
                     // check if there is a problem to be solved
                     if problem.is_some() {
-                        let boundary = problem.unwrap().boundary;
-                        let block_hash = problem.unwrap().block_hash;
-
-                        #[cfg(test)]
-                        {
-                            let difficulty = problem.unwrap().difficulty;
-                            if difficulty > 500000.into() {
-                                warn!("Difficulty is too high to mine!");
-                            }
-                        }
+                        let boundary = problem.as_ref().unwrap().boundary;
+                        let block_hash = problem.as_ref().unwrap().block_hash;
 
                         for _i in 0..100000 {
                             //TODO: adjust the number of times
                             let nonce = rand::random();
                             let hash = compute(nonce, &block_hash);
-                            if hash < boundary {
+                            if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &boundary) {
                                 // problem solved
                                 match solution_sender
                                     .send(ProofOfWorkSolution { nonce })
@@ -614,11 +606,10 @@ impl BlockGenerator {
     fn generate_block_impl(&self, block_init: Block) -> H256 {
         let mut block = block_init;
         let difficulty = block.block_header.difficulty();
-        let problem = ProofOfWorkProblem {
-            block_hash: block.block_header.problem_hash(),
-            difficulty: *difficulty,
-            boundary: difficulty_to_boundary(difficulty),
-        };
+        let problem = ProofOfWorkProblem::new(
+            block.block_header.problem_hash(),
+            *difficulty,
+        );
         loop {
             let nonce = rand::random();
             if validate(&problem, &ProofOfWorkSolution { nonce }) {
@@ -722,15 +713,14 @@ impl BlockGenerator {
                     .unwrap()
                     .block_header
                     .difficulty();
-                let problem = ProofOfWorkProblem {
-                    block_hash: current_mining_block
+                let problem = ProofOfWorkProblem::new(
+                    current_mining_block
                         .as_ref()
                         .unwrap()
                         .block_header
                         .problem_hash(),
-                    difficulty: *current_difficulty,
-                    boundary: difficulty_to_boundary(current_difficulty),
-                };
+                    *current_difficulty,
+                );
                 BlockGenerator::send_problem(bg.clone(), problem);
                 current_problem = Some(problem);
             } else {
