@@ -171,8 +171,11 @@ impl ReceivedTransactionContainer {
 
         for transaction in transactions {
             let tx_hash = transaction.hash();
-            let short_id =
-                TransactionDigests::to_u24(tx_hash[29], tx_hash[30], tx_hash[31]); //read the last three bytes
+            let short_id = TransactionDigests::to_u24(
+                tx_hash[29],
+                tx_hash[30],
+                tx_hash[31],
+            ); //read the last three bytes
             inner
                 .tx_hashes_map
                 .entry(short_id)
@@ -588,8 +591,12 @@ impl TransactionCacheContainer {
 
         for (_, transaction) in transactions {
             let tx_hash = transaction.hash();
-            let short_id =
-                CompactBlock::to_u32(tx_hash[28], tx_hash[29], tx_hash[30], tx_hash[31]);
+            let short_id = CompactBlock::to_u32(
+                tx_hash[28],
+                tx_hash[29],
+                tx_hash[30],
+                tx_hash[31],
+            );
             inner
                 .tx_hashes_map
                 .entry(short_id)
@@ -601,9 +608,7 @@ impl TransactionCacheContainer {
                     set.insert(tx_hash.clone());
                     set
                 }); //if occupied, append, else, insert.
-            inner
-                .tx_map
-                .insert(tx_hash.clone(), transaction.clone());
+            inner.tx_map.insert(tx_hash.clone(), transaction.clone());
             entry.tx_hashes.push(tx_hash);
         }
     }
