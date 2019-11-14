@@ -176,15 +176,15 @@ impl ReceivedTransactionContainer {
                 .txid_hashmap
                 .entry(short_id)
                 .and_modify(|s| {
-                    s.insert(Arc::clone(&full_hash_id));
+                    s.insert(full_hash_id.clone());
                 })
                 .or_insert_with(|| {
                     let mut set = HashSet::new();
-                    set.insert(Arc::clone(&full_hash_id));
+                    set.insert(full_hash_id.clone());
                     set
                 }); //if occupied, append, else, insert.
 
-            inner.txid_container.insert(Arc::clone(&full_hash_id));
+            inner.txid_container.insert(full_hash_id.clone());
             entry.tx_ids.push(full_hash_id);
         }
     }
@@ -447,11 +447,11 @@ impl InflightPendingTransactionContainer {
                 .txid_hashmap
                 .entry(key)
                 .and_modify(|s| {
-                    s.insert(Arc::clone(&inflight_pending_item));
+                    s.insert(inflight_pending_item.clone());
                 })
                 .or_insert_with(|| {
                     let mut set = HashSet::new();
-                    set.insert(Arc::clone(&inflight_pending_item));
+                    set.insert(inflight_pending_item.clone());
                     set
                 }); //if occupied, append, else, insert.
 
@@ -460,7 +460,6 @@ impl InflightPendingTransactionContainer {
     }
 }
 
-///
 const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct TransactionCacheTimeWindowedEntry {
@@ -471,8 +470,7 @@ struct TransactionCacheTimeWindowedEntry {
 struct TransactionCacheContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_hashmap: HashMap<u32, HashSet<Arc<H256>>>, /* 6 bytes, keyed on
-                                                     * txid_hashmap */
+    txid_hashmap: HashMap<u32, HashSet<Arc<H256>>>,
     tx_container: HashMap<Arc<H256>, Arc<SignedTransaction>>,
     time_windowed_indices: Vec<Option<TransactionCacheTimeWindowedEntry>>,
 }
@@ -593,16 +591,16 @@ impl TransactionCacheContainer {
                 .txid_hashmap
                 .entry(short_id)
                 .and_modify(|s| {
-                    s.insert(Arc::clone(&full_hash_id));
+                    s.insert(full_hash_id.clone());
                 })
                 .or_insert_with(|| {
                     let mut set = HashSet::new();
-                    set.insert(Arc::clone(&full_hash_id));
+                    set.insert(full_hash_id.clone());
                     set
                 }); //if occupied, append, else, insert.
             inner
                 .tx_container
-                .insert(Arc::clone(&full_hash_id), Arc::clone(transaction));
+                .insert(full_hash_id.clone(), transaction.clone());
             entry.tx_ids.push(full_hash_id);
         }
     }
