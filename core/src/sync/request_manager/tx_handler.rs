@@ -32,14 +32,14 @@ const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct ReceivedTransactionTimeWindowedEntry {
     pub secs: u64,
-    pub tx_hashes: Vec<Arc<H256>>,
+    pub tx_hashes: Vec<H256>,
 }
 
 struct ReceivedTransactionContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    tx_hashes_map: HashMap<TxPropagateId, HashSet<Arc<H256>>>,
-    tx_hashes_set: HashSet<Arc<H256>>,
+    tx_hashes_map: HashMap<TxPropagateId, HashSet<H256>>,
+    tx_hashes_set: HashSet<H256>,
     time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
 }
 
@@ -170,24 +170,23 @@ impl ReceivedTransactionContainer {
         };
 
         for transaction in transactions {
-            let hash = transaction.hash();
-            let full_hash_id = Arc::new(hash);
+            let tx_hash = transaction.hash();
             let short_id =
-                TransactionDigests::to_u24(hash[29], hash[30], hash[31]); //read the last three bytes
+                TransactionDigests::to_u24(tx_hash[29], tx_hash[30], tx_hash[31]); //read the last three bytes
             inner
                 .tx_hashes_map
                 .entry(short_id)
                 .and_modify(|s| {
-                    s.insert(full_hash_id.clone());
+                    s.insert(tx_hash.clone());
                 })
                 .or_insert_with(|| {
                     let mut set = HashSet::new();
-                    set.insert(full_hash_id.clone());
+                    set.insert(tx_hash.clone());
                     set
                 }); //if occupied, append, else, insert.
 
-            inner.tx_hashes_set.insert(full_hash_id.clone());
-            entry.tx_hashes.push(full_hash_id);
+            inner.tx_hashes_set.insert(tx_hash.clone());
+            entry.tx_hashes.push(tx_hash);
         }
     }
 }
@@ -466,14 +465,14 @@ const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct TransactionCacheTimeWindowedEntry {
     pub secs: u64,
-    pub tx_hashes: Vec<Arc<H256>>,
+    pub tx_hashes: Vec<H256>,
 }
 
 struct TransactionCacheContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    tx_hashes_map: HashMap<u32, HashSet<Arc<H256>>>,
-    tx_map: HashMap<Arc<H256>, Arc<SignedTransaction>>,
+    tx_hashes_map: HashMap<u32, HashSet<H256>>,
+    tx_map: HashMap<H256, Arc<SignedTransaction>>,
     time_windowed_indices: Vec<Option<TransactionCacheTimeWindowedEntry>>,
 }
 
@@ -588,25 +587,24 @@ impl TransactionCacheContainer {
         };
 
         for (_, transaction) in transactions {
-            let hash = transaction.hash();
-            let full_hash_id = Arc::new(hash);
+            let tx_hash = transaction.hash();
             let short_id =
-                CompactBlock::to_u32(hash[28], hash[29], hash[30], hash[31]);
+                CompactBlock::to_u32(tx_hash[28], tx_hash[29], tx_hash[30], tx_hash[31]);
             inner
                 .tx_hashes_map
                 .entry(short_id)
                 .and_modify(|s| {
-                    s.insert(full_hash_id.clone());
+                    s.insert(tx_hash.clone());
                 })
                 .or_insert_with(|| {
                     let mut set = HashSet::new();
-                    set.insert(full_hash_id.clone());
+                    set.insert(tx_hash.clone());
                     set
                 }); //if occupied, append, else, insert.
             inner
                 .tx_map
-                .insert(full_hash_id.clone(), transaction.clone());
-            entry.tx_hashes.push(full_hash_id);
+                .insert(tx_hash.clone(), transaction.clone());
+            entry.tx_hashes.push(tx_hash);
         }
     }
 }
