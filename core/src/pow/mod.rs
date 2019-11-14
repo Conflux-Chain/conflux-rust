@@ -14,7 +14,34 @@ use std::{collections::HashMap, convert::TryFrom};
 pub struct ProofOfWorkProblem {
     pub block_hash: H256,
     pub difficulty: U256,
-    pub boundary: H256,
+    pub boundary: U256,
+}
+
+impl ProofOfWorkProblem {
+    pub const NO_BOUNDARY: U256 = U256::MAX;
+
+    pub fn new(block_hash: H256, difficulty: U256) -> Self {
+        let boundary = difficulty_to_boundary(&difficulty);
+        Self {
+            block_hash,
+            difficulty,
+            boundary,
+        }
+    }
+
+    #[inline]
+    pub fn validate_hash(&self, hash: &H256) -> bool {
+        BigEndianHash::into_uint(hash) < self.boundary
+            || self.boundary == ProofOfWorkProblem::NO_BOUNDARY
+    }
+
+    #[inline]
+    pub fn validate_hash_against_boundary(
+        hash: &H256, boundary: &U256,
+    ) -> bool {
+        BigEndianHash::into_uint(hash).lt(boundary)
+            || boundary.eq(&ProofOfWorkProblem::NO_BOUNDARY)
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -107,24 +134,33 @@ impl ProofOfWorkConfig {
 
 /// Convert boundary to its original difficulty. Basically just `f(x) = 2^256 /
 /// x`.
-pub fn boundary_to_difficulty(boundary: &H256) -> U256 {
-    difficulty_to_boundary_aux(boundary.into_uint())
+pub fn boundary_to_difficulty(boundary: &U256) -> U256 {
+    assert!(!boundary.is_zero());
+    if boundary.eq(&U256::one()) {
+        U256::MAX
+    } else {
+        compute_inv_x_times_2_pow_256_floor(boundary)
+    }
 }
 
 /// Convert difficulty to the target boundary. Basically just `f(x) = 2^256 /
 /// x`.
-pub fn difficulty_to_boundary(difficulty: &U256) -> H256 {
-    BigEndianHash::from_uint(&difficulty_to_boundary_aux(difficulty))
+pub fn difficulty_to_boundary(difficulty: &U256) -> U256 {
+    assert!(!difficulty.is_zero());
+    if difficulty.eq(&U256::one()) {
+        ProofOfWorkProblem::NO_BOUNDARY
+    } else {
+        compute_inv_x_times_2_pow_256_floor(difficulty)
+    }
 }
 
-pub fn difficulty_to_boundary_aux<T: Into<U512>>(difficulty: T) -> U256 {
-    let difficulty = difficulty.into();
-    assert!(!difficulty.is_zero());
-    if difficulty == U512::one() {
-        U256::max_value()
+/// Compute [2^256 / x], where x >= 2 and x < 2^256.
+pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
+    let (div, modular) = U256::MAX.clone().div_mod(x.clone());
+    if &(modular + U256::one()) == x {
+        div + U256::one()
     } else {
-        // difficulty > 1, so result should never overflow 256 bits
-        U256::try_from((U512::one() << 256) / difficulty).unwrap()
+        div
     }
 }
 
@@ -139,7 +175,7 @@ pub fn validate(
 ) -> bool {
     let nonce = solution.nonce;
     let hash = compute(nonce, &problem.block_hash);
-    hash < problem.boundary
+    problem.validate_hash(&hash)
 }
 
 /// This function computes the target difficulty of the next period
