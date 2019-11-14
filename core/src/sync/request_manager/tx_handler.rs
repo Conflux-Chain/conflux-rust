@@ -32,14 +32,14 @@ const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct ReceivedTransactionTimeWindowedEntry {
     pub secs: u64,
-    pub tx_ids: Vec<Arc<H256>>,
+    pub tx_hashes: Vec<Arc<H256>>,
 }
 
 struct ReceivedTransactionContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_hashmap: HashMap<TxPropagateId, HashSet<Arc<H256>>>,
-    txid_container: HashSet<Arc<H256>>,
+    tx_hashes_map: HashMap<TxPropagateId, HashSet<Arc<H256>>>,
+    tx_hashes_set: HashSet<Arc<H256>>,
     time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
 }
 
@@ -52,8 +52,8 @@ impl ReceivedTransactionContainerInner {
         ReceivedTransactionContainerInner {
             window_size,
             slot_duration_as_secs,
-            txid_hashmap: HashMap::new(),
-            txid_container: HashSet::new(),
+            tx_hashes_map: HashMap::new(),
+            tx_hashes_set: HashSet::new(),
             time_windowed_indices,
         }
     }
@@ -78,7 +78,7 @@ impl ReceivedTransactionContainer {
     }
 
     pub fn group_overflow(&self, fixed_bytes: &TxPropagateId) -> bool {
-        if let Some(set) = self.inner.txid_hashmap.get(&fixed_bytes) {
+        if let Some(set) = self.inner.tx_hashes_map.get(&fixed_bytes) {
             return set.len() >= ReceivedTransactionContainer::BUCKET_LIMIT;
         }
         false
@@ -93,7 +93,7 @@ impl ReceivedTransactionContainer {
         self.group_overflow(&key)
     }
 
-    pub fn contains_short_tx_id(
+    pub fn contains_short_id(
         &self, fixed_bytes: TxPropagateId, random_byte: u8, key1: u64,
         key2: u64,
     ) -> bool
@@ -101,7 +101,7 @@ impl ReceivedTransactionContainer {
         let inner = &self.inner;
         TX_FOR_COMPARE_METER.mark(1);
 
-        match inner.txid_hashmap.get(&fixed_bytes) {
+        match inner.tx_hashes_map.get(&fixed_bytes) {
             Some(set) => {
                 TX_FIRST_MISS_METER.mark(1);
                 for value in set {
@@ -118,12 +118,12 @@ impl ReceivedTransactionContainer {
         false
     }
 
-    pub fn contains_tx_id(&self, tx_id: &H256) -> bool {
+    pub fn contains_tx_hash(&self, tx_hash: &H256) -> bool {
         FULL_TX_COMPARE_METER.mark(1);
-        self.inner.txid_container.contains(tx_id)
+        self.inner.tx_hashes_set.contains(tx_hash)
     }
 
-    pub fn get_length(&self) -> usize { self.inner.txid_hashmap.len() }
+    pub fn get_length(&self) -> usize { self.inner.tx_hashes_map.len() }
 
     pub fn append_transactions(
         &mut self, transactions: Vec<Arc<SignedTransaction>>,
@@ -140,29 +140,31 @@ impl ReceivedTransactionContainer {
             inner.time_windowed_indices[window_index] =
                 Some(ReceivedTransactionTimeWindowedEntry {
                     secs,
-                    tx_ids: Vec::new(),
+                    tx_hashes: Vec::new(),
                 });
             inner.time_windowed_indices[window_index].as_mut().unwrap()
         } else {
             let indices_with_time =
                 inner.time_windowed_indices[window_index].as_mut().unwrap();
             if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
-                for tx_id in &indices_with_time.tx_ids {
+                for tx_hash in &indices_with_time.tx_hashes {
                     let key = TransactionDigests::to_u24(
-                        tx_id[29], tx_id[30], tx_id[31],
+                        tx_hash[29],
+                        tx_hash[30],
+                        tx_hash[31],
                     );
-                    if let Some(set) = inner.txid_hashmap.get_mut(&key) {
+                    if let Some(set) = inner.tx_hashes_map.get_mut(&key) {
                         // if there is a value asscicated with the key
                         if set.len() == 1 {
-                            inner.txid_hashmap.remove(&key);
+                            inner.tx_hashes_map.remove(&key);
                         } else {
-                            set.remove(tx_id);
-                            inner.txid_container.remove(tx_id);
+                            set.remove(tx_hash);
                         }
+                        inner.tx_hashes_set.remove(tx_hash);
                     }
                 }
                 indices_with_time.secs = secs;
-                indices_with_time.tx_ids = Vec::new();
+                indices_with_time.tx_hashes = Vec::new();
             }
             indices_with_time
         };
@@ -173,7 +175,7 @@ impl ReceivedTransactionContainer {
             let short_id =
                 TransactionDigests::to_u24(hash[29], hash[30], hash[31]); //read the last three bytes
             inner
-                .txid_hashmap
+                .tx_hashes_map
                 .entry(short_id)
                 .and_modify(|s| {
                     s.insert(full_hash_id.clone());
@@ -184,8 +186,8 @@ impl ReceivedTransactionContainer {
                     set
                 }); //if occupied, append, else, insert.
 
-            inner.txid_container.insert(full_hash_id.clone());
-            entry.tx_ids.push(full_hash_id);
+            inner.tx_hashes_set.insert(full_hash_id.clone());
+            entry.tx_hashes.push(full_hash_id);
         }
     }
 }
@@ -464,14 +466,14 @@ const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct TransactionCacheTimeWindowedEntry {
     pub secs: u64,
-    pub tx_ids: Vec<Arc<H256>>,
+    pub tx_hashes: Vec<Arc<H256>>,
 }
 
 struct TransactionCacheContainerInner {
     window_size: usize,
     slot_duration_as_secs: u64,
-    txid_hashmap: HashMap<u32, HashSet<Arc<H256>>>,
-    tx_container: HashMap<Arc<H256>, Arc<SignedTransaction>>,
+    tx_hashes_map: HashMap<u32, HashSet<Arc<H256>>>,
+    tx_map: HashMap<Arc<H256>, Arc<SignedTransaction>>,
     time_windowed_indices: Vec<Option<TransactionCacheTimeWindowedEntry>>,
 }
 
@@ -484,8 +486,8 @@ impl TransactionCacheContainerInner {
         TransactionCacheContainerInner {
             window_size,
             slot_duration_as_secs,
-            txid_hashmap: HashMap::new(),
-            tx_container: HashMap::new(),
+            tx_hashes_map: HashMap::new(),
+            tx_map: HashMap::new(),
             time_windowed_indices,
         }
     }
@@ -508,11 +510,11 @@ impl TransactionCacheContainer {
     }
 
     pub fn contains_key(&self, tx_hash: &H256) -> bool {
-        self.inner.tx_container.contains_key(tx_hash)
+        self.inner.tx_map.contains_key(tx_hash)
     }
 
     pub fn get(&self, tx_hash: &H256) -> Option<&Arc<SignedTransaction>> {
-        self.inner.tx_container.get(tx_hash)
+        self.inner.tx_map.get(tx_hash)
     }
 
     pub fn get_transaction(
@@ -520,7 +522,7 @@ impl TransactionCacheContainer {
     ) -> Option<Arc<SignedTransaction>> {
         let inner = &self.inner;
         let mut tx = None;
-        match inner.txid_hashmap.get(&fixed_bytes) {
+        match inner.tx_hashes_map.get(&fixed_bytes) {
             Some(set) => {
                 for value in set {
                     if CompactBlock::get_random_bytes(value, key1, key2)
@@ -554,30 +556,33 @@ impl TransactionCacheContainer {
             inner.time_windowed_indices[window_index] =
                 Some(TransactionCacheTimeWindowedEntry {
                     secs,
-                    tx_ids: Vec::new(),
+                    tx_hashes: Vec::new(),
                 });
             inner.time_windowed_indices[window_index].as_mut().unwrap()
         } else {
             let indices_with_time =
                 inner.time_windowed_indices[window_index].as_mut().unwrap();
             if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
-                for tx_id in &indices_with_time.tx_ids {
+                for tx_hash in &indices_with_time.tx_hashes {
                     let key = CompactBlock::to_u32(
-                        tx_id[28], tx_id[29], tx_id[30], tx_id[31],
+                        tx_hash[28],
+                        tx_hash[29],
+                        tx_hash[30],
+                        tx_hash[31],
                     );
 
-                    if let Some(set) = inner.txid_hashmap.get_mut(&key) {
+                    if let Some(set) = inner.tx_hashes_map.get_mut(&key) {
                         // if there is a value asscicated with the key
                         if set.len() == 1 {
-                            inner.txid_hashmap.remove(&key);
+                            inner.tx_hashes_map.remove(&key);
                         } else {
-                            set.remove(tx_id);
-                            inner.tx_container.remove(tx_id);
+                            set.remove(tx_hash);
                         }
+                        inner.tx_map.remove(tx_hash);
                     }
                 }
                 indices_with_time.secs = secs;
-                indices_with_time.tx_ids = Vec::new();
+                indices_with_time.tx_hashes = Vec::new();
             }
             indices_with_time
         };
@@ -588,7 +593,7 @@ impl TransactionCacheContainer {
             let short_id =
                 CompactBlock::to_u32(hash[28], hash[29], hash[30], hash[31]);
             inner
-                .txid_hashmap
+                .tx_hashes_map
                 .entry(short_id)
                 .and_modify(|s| {
                     s.insert(full_hash_id.clone());
@@ -599,9 +604,9 @@ impl TransactionCacheContainer {
                     set
                 }); //if occupied, append, else, insert.
             inner
-                .tx_container
+                .tx_map
                 .insert(full_hash_id.clone(), transaction.clone());
-            entry.tx_ids.push(full_hash_id);
+            entry.tx_hashes.push(full_hash_id);
         }
     }
 }
