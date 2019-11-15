@@ -118,8 +118,6 @@ impl StateManager {
     }
 
     // FIXME: Fix implementation.
-    // Empty Snapshot is a Snapshot. Empty intermediate delta mpt should be a
-    // DeltaMpt.
     pub fn get_state_trees(
         &self, epoch_id: &SnapshotAndEpochIdRef,
     ) -> Result<Option<StateTrees>> {

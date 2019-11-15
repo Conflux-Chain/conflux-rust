@@ -5,6 +5,7 @@
 #[derive(Clone)]
 pub struct SnapshotInfo {
     pub merkle_root: MerkleHash,
+    // FIXME: is the delta_root necessary? no...
     pub delta_root: MerkleHash,
     pub parent_snapshot_height: u64,
     pub height: u64,
