@@ -59,13 +59,13 @@ impl QueryService {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>,
-        unexpected_msgs_config_file: Option<String>,
+        throttling_config_file: Option<String>,
     ) -> Self
     {
         let handler = Arc::new(LightHandler::new(
             consensus.clone(),
             graph,
-            unexpected_msgs_config_file,
+            throttling_config_file,
         ));
         let ledger = LedgerInfo::new(consensus.clone());
 

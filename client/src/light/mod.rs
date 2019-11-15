@@ -191,7 +191,7 @@ impl LightClient {
             consensus.clone(),
             sync_graph.clone(),
             network.clone(),
-            conf.raw_conf.unexpected_msgs_conf.clone(),
+            conf.raw_conf.throttling_conf.clone(),
         ));
         light.register().unwrap();
 

@@ -88,7 +88,7 @@ pub struct Handler {
     pub tx_infos: TxInfos,
 
     // path to unexpected messages config file
-    unexpected_msgs_config_file: Option<String>,
+    throttling_config_file: Option<String>,
 
     // witness sync manager
     pub witnesses: Arc<Witnesses>,
@@ -97,7 +97,7 @@ pub struct Handler {
 impl Handler {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        unexpected_msgs_config_file: Option<String>,
+        throttling_config_file: Option<String>,
     ) -> Self
     {
         let peers = Arc::new(Peers::new());
@@ -181,7 +181,7 @@ impl Handler {
             state_roots,
             txs,
             tx_infos,
-            unexpected_msgs_config_file,
+            throttling_config_file,
             witnesses,
         }
     }
@@ -640,7 +640,7 @@ impl NetworkProtocolHandler for Handler {
                 // insert handshaking peer
                 self.peers.insert(peer);
 
-                if let Some(ref file) = self.unexpected_msgs_config_file {
+                if let Some(ref file) = self.throttling_config_file {
                     let peer = self.peers.get(&peer).expect("peer not found");
                     peer.write().unexpected_msgs = TokenBucketManager::load(
                         file,

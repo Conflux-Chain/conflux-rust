@@ -125,8 +125,8 @@ impl BlockTxs {
         &self, hash: H256, block_txs: Vec<SignedTransaction>,
     ) -> Result<(), Error> {
         // validate and store each transaction
-        for tx in block_txs.clone() {
-            self.txs.validate_and_store(tx)?;
+        for tx in &block_txs {
+            self.txs.validate_and_store(tx.clone())?;
         }
 
         // validate block txs
