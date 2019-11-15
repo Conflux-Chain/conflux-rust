@@ -16,13 +16,14 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
     statistics::SharedStatistics,
+    storage::StateRootWithAuxInfo,
     sync::delta::CHECKPOINT_DUMP_MANAGER,
     SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parity_bytes::ToPretty;
-use primitives::{BlockHeader, SignedTransaction, StateRootWithAuxInfo};
+use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -584,7 +585,8 @@ impl ConsensusNewBlockHandler {
             .data_man
             .get_epoch_execution_commitment(&parent_block_hash)
             .unwrap()
-            .state_root_with_aux_info;
+            .state_root_with_aux_info
+            .clone();
 
         let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
 
@@ -1312,7 +1314,7 @@ impl ConsensusNewBlockHandler {
             .unwrap();
         // FIXME: we also need more helper function to get the execution result
         // FIXME: for block deferred or not.
-        if let Some(confirmed_epoch) = self
+        if let Some(confirmed_epoch) = &*self
             .data_man
             .get_epoch_execution_commitment(&confirmed_epoch_hash)
         {

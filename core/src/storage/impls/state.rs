@@ -11,8 +11,10 @@ pub struct State<'a> {
     snapshot_db: SnapshotDb,
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
+    maybe_intermediate_trie_key_padding: Option<KeyPadding>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
+    delta_trie_key_padding: KeyPadding,
     intermediate_epoch_id: EpochId,
     delta_trie_height: Option<u32>,
     height: Option<u64>,
@@ -35,16 +37,19 @@ impl<'a> State<'a> {
             snapshot_db: state_trees.snapshot_db,
             maybe_intermediate_trie: state_trees.maybe_intermediate_trie,
             intermediate_trie_root: state_trees.intermediate_trie_root,
+            maybe_intermediate_trie_key_padding: state_trees
+                .maybe_intermediate_trie_key_padding,
             delta_trie: state_trees.delta_trie,
             delta_trie_root: state_trees.delta_trie_root,
+            delta_trie_key_padding: state_trees.delta_trie_key_padding,
             intermediate_epoch_id: state_trees.intermediate_epoch_id,
-            delta_trie_height: state_trees.delta_trie_height,
-            height: state_trees.height,
+            delta_trie_height: state_trees.maybe_delta_trie_height,
+            height: state_trees.maybe_height,
             owned_node_set: Some(Default::default()),
             dirty: false,
             children_merkle_map: ChildrenMerkleMap::new(),
 
-            parent_epoch_id: state_trees.epoch_id,
+            parent_epoch_id: state_trees.parent_epoch_id,
         }
     }
 
@@ -93,12 +98,12 @@ impl<'a> State<'a> {
     }
 
     fn get_from_all_tries(
-        &self, access_key: &[u8], with_proof: bool,
+        &self, access_key: StorageKey, with_proof: bool,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
         let (maybe_value, maybe_delta_proof) = self.get_from_delta(
             &self.delta_trie,
             self.delta_trie_root.clone(),
-            access_key,
+            &access_key.to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
             with_proof,
         )?;
 
@@ -114,7 +119,12 @@ impl<'a> State<'a> {
                     let (maybe_value, maybe_proof) = self.get_from_delta(
                         self.maybe_intermediate_trie.as_ref().as_ref().unwrap(),
                         self.intermediate_trie_root.clone(),
-                        access_key,
+                        &access_key.to_delta_mpt_key_bytes(
+                            &self
+                                .maybe_intermediate_trie_key_padding
+                                .as_ref()
+                                .unwrap(),
+                        ),
                         with_proof,
                     )?;
 
@@ -149,38 +159,18 @@ impl<'a> Drop for State<'a> {
 }
 
 impl<'a> StateTrait for State<'a> {
-    fn does_exist(&self) -> bool { self.get_delta_root_node().is_some() }
-
-    fn get_padding(&self) -> &KeyPadding { &self.delta_trie.padding }
-
-    fn get_merkle_hash(&self, access_key: &[u8]) -> Result<Option<MerkleHash>> {
-        // Get won't create any new nodes so it's fine to pass an empty
-        // owned_node_set.
-        let mut empty_owned_node_set: Option<OwnedNodeSet> =
-            Some(Default::default());
-        match self.get_delta_root_node() {
-            None => Ok(None),
-            Some(root_node) => SubTrieVisitor::new(
-                &self.delta_trie,
-                root_node,
-                &mut empty_owned_node_set,
-            )?
-            .get_merkle_hash_wo_compressed_path(access_key),
-        }
-    }
-
-    fn get(&self, access_key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.get_from_all_tries(access_key, false)
             .map(|(value, _)| value)
     }
 
     fn get_with_proof(
-        &self, access_key: &[u8],
+        &self, access_key: StorageKey,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
         self.get_from_all_tries(access_key, true)
     }
 
-    fn set(&mut self, access_key: &[u8], value: Box<[u8]>) -> Result<()> {
+    fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
         self.pre_modification();
 
         let root_node = self.get_or_create_root_node()?;
@@ -189,13 +179,16 @@ impl<'a> StateTrait for State<'a> {
             root_node,
             &mut self.owned_node_set,
         )?
-        .set(access_key, value)?
+        .set(
+            &access_key.to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
+            value,
+        )?
         .into();
 
         Ok(())
     }
 
-    fn delete(&mut self, access_key: &[u8]) -> Result<Option<Box<[u8]>>> {
+    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.pre_modification();
 
         match self.get_delta_root_node() {
@@ -206,7 +199,10 @@ impl<'a> StateTrait for State<'a> {
                     old_root_node,
                     &mut self.owned_node_set,
                 )?
-                .delete(access_key)?;
+                .delete(
+                    &access_key
+                        .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
+                )?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
                 Ok(old_value)
@@ -215,19 +211,21 @@ impl<'a> StateTrait for State<'a> {
     }
 
     fn delete_all(
-        &mut self, access_key_prefix: &[u8],
+        &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
         self.pre_modification();
 
-        match self.get_delta_root_node() {
+        match &self.delta_trie_root {
             None => Ok(None),
             Some(old_root_node) => {
+                let delta_mpt_key_prefix = access_key_prefix
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
                 let (deleted, _, root_node) = SubTrieVisitor::new(
                     &self.delta_trie,
-                    old_root_node,
+                    old_root_node.clone(),
                     &mut self.owned_node_set,
                 )?
-                .delete_all(access_key_prefix, access_key_prefix)?;
+                .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
                 Ok(deleted)
@@ -239,13 +237,31 @@ impl<'a> StateTrait for State<'a> {
         let merkle_root = self.compute_merkle_root()?;
 
         Ok(StateRootWithAuxInfo {
-            // TODO: fill in real snapshot, intermediate delta, ...
             state_root: StateRoot {
-                snapshot_root: MERKLE_NULL_NODE,
+                // FIXME: is it better to calc it here or at construction?
+                snapshot_root: self
+                    .snapshot_db
+                    .get_snapshot_info()
+                    .merkle_root
+                    .clone(),
+                // FIXME: fill in the intermediate delta root.
+                // FIXME: is it better to calc it here or at construction?
                 intermediate_delta_root: MERKLE_NULL_NODE,
                 delta_root: merkle_root,
             },
-            aux_info: Default::default(),
+            aux_info: StateRootAuxInfo {
+                // FIXME: is it better to calc it here or at construction?
+                snapshot_epoch_id: self
+                    .snapshot_db
+                    .get_snapshot_info()
+                    .get_snapshot_epoch_id()
+                    .clone(),
+                intermediate_epoch_id: self.intermediate_epoch_id.clone(),
+                maybe_intermediate_mpt_key_padding: self
+                    .maybe_intermediate_trie_key_padding
+                    .clone(),
+                delta_mpt_key_padding: self.delta_trie_key_padding.clone(),
+            },
         })
     }
 
@@ -259,6 +275,8 @@ impl<'a> StateTrait for State<'a> {
                     .merkle_root
                     .clone(),
                 // FIXME: implement for intermediate_delta_root.
+                // FIXME: get_intermediate_root.. also update the other place
+                // when getting state trees.
                 intermediate_delta_root: MERKLE_NULL_NODE,
                 delta_root: merkle_hash,
             },
@@ -269,6 +287,10 @@ impl<'a> StateTrait for State<'a> {
                     .get_snapshot_epoch_id()
                     .clone(),
                 intermediate_epoch_id: self.intermediate_epoch_id.clone(),
+                maybe_intermediate_mpt_key_padding: self
+                    .maybe_intermediate_trie_key_padding
+                    .clone(),
+                delta_mpt_key_padding: self.delta_trie_key_padding.clone(),
             },
         }))
     }
@@ -531,7 +553,10 @@ impl<'a> State<'a> {
 }
 
 use super::{
-    super::{state::*, state_manager::*, storage_db::*},
+    super::{
+        state::*, state_manager::*, storage_db::*, storage_key::*,
+        StateRootAuxInfo, StateRootWithAuxInfo,
+    },
     errors::*,
     multi_version_merkle_patricia_trie::{
         merkle_patricia_trie::{
@@ -545,12 +570,8 @@ use super::{
     state_proof::StateProof,
     storage_manager::DeltaMptInserter,
 };
-use crate::statedb::KeyPadding;
 use parity_bytes::ToPretty;
-use primitives::{
-    EpochId, MerkleHash, StateRoot, StateRootAuxInfo, StateRootWithAuxInfo,
-    MERKLE_NULL_NODE,
-};
+use primitives::{EpochId, MerkleHash, StateRoot, MERKLE_NULL_NODE};
 use std::{
     cell::UnsafeCell,
     collections::BTreeMap,

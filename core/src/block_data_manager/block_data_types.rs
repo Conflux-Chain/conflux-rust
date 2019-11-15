@@ -1,7 +1,8 @@
+use crate::storage::StateRootWithAuxInfo;
 use cfx_types::{Bloom, H256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::{Receipt, StateRootWithAuxInfo};
+use primitives::Receipt;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::sync::Arc;

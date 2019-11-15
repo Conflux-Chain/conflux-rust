@@ -44,7 +44,7 @@ fn test_empty_genesis_block() {
     }
 
     state_manager
-        .get_state_trees(&SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+        .get_state_trees(&StateIndex::new_for_test_only_delta_mpt(
             &genesis_epoch_id,
         ))
         .unwrap();
@@ -65,7 +65,7 @@ fn test_set_get() {
 
     for key in &keys {
         state
-            .set(key, key[..].into())
+            .set(StorageKey::AccountKey(key), key[..].into())
             .expect("Failed to insert key.");
     }
 
@@ -73,7 +73,7 @@ fn test_set_get() {
 
     for key in &keys {
         let value = state
-            .get(key)
+            .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let equal = key.eq(value.as_ref());
@@ -103,7 +103,7 @@ fn test_get_set_at_second_commit() {
 
     for key in keys_0 {
         state_0
-            .set(key, key[..].into())
+            .set(StorageKey::AccountKey(key), key[..].into())
             .expect("Failed to insert key.");
     }
 
@@ -113,16 +113,16 @@ fn test_get_set_at_second_commit() {
     state_0.commit(epoch_id_0).unwrap();
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&epoch_id_0),
-        )
+        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+            &epoch_id_0,
+        ))
         .unwrap()
         .unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len(),);
     for key in keys_1_new {
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(key, value.into())
+            .set(StorageKey::AccountKey(key), value.into())
             .expect("Failed to insert key.");
     }
 
@@ -132,14 +132,14 @@ fn test_get_set_at_second_commit() {
     );
     for key in keys_1_overwritten {
         let old_value = state_1
-            .get(key)
+            .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let equal = key.eq(old_value.as_ref());
         assert_eq!(equal, true);
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(key, value.into())
+            .set(StorageKey::AccountKey(key), value.into())
             .expect("Failed to insert key.");
     }
 
@@ -149,7 +149,7 @@ fn test_get_set_at_second_commit() {
     );
     for key in keys_remain {
         let value = state_1
-            .get(key)
+            .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let equal = key.eq(value.as_ref());
@@ -162,7 +162,7 @@ fn test_get_set_at_second_commit() {
     );
     for key in keys_1_overwritten {
         let value = state_1
-            .get(key)
+            .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let expected_value = vec![&key[..], &key[..]].concat();
@@ -195,7 +195,7 @@ fn test_set_delete() {
     // Insert part 1 and commit.
     for key in keys_0.iter() {
         state
-            .set(key, key[..].into())
+            .set(StorageKey::AccountKey(key), key[..].into())
             .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
@@ -205,14 +205,14 @@ fn test_set_delete() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&epoch_id),
-        )
+        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+            &epoch_id,
+        ))
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
         state
-            .set(key, key[..].into())
+            .set(StorageKey::AccountKey(key), key[..].into())
             .expect("Failed to insert key.");
     }
 
@@ -221,7 +221,7 @@ fn test_set_delete() {
     println!("Testing with {} delete operations.", keys.len());
     for key in &keys {
         let value = state
-            .delete(key)
+            .delete(StorageKey::AccountKey(key))
             .expect("Failed to delete key.")
             .expect("Failed to get key");
         let equal = key.eq(value.as_ref());
@@ -255,7 +255,12 @@ fn test_set_delete_all() {
     // Insert part 1 and commit.
     for key in keys_0.iter() {
         state
-            .set(vec![&key[..], &key[..]].concat().as_slice(), key[..].into())
+            .set(
+                StorageKey::AccountKey(
+                    vec![&key[..], &key[..]].concat().as_slice(),
+                ),
+                key[..].into(),
+            )
             .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
@@ -265,14 +270,19 @@ fn test_set_delete_all() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&epoch_id),
-        )
+        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+            &epoch_id,
+        ))
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
         state
-            .set(vec![&key[..], &key[..]].concat().as_slice(), key[..].into())
+            .set(
+                StorageKey::AccountKey(
+                    vec![&key[..], &key[..]].concat().as_slice(),
+                ),
+                key[..].into(),
+            )
             .expect("Failed to insert key.");
     }
 
@@ -283,8 +293,9 @@ fn test_set_delete_all() {
     for key in &keys {
         let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
 
-        let value =
-            state.delete_all(key_prefix).expect("Failed to delete key.");
+        let value = state
+            .delete_all(StorageKey::AccountKey(key_prefix))
+            .expect("Failed to delete key.");
         if value.is_none() {
             continue;
         }
@@ -298,7 +309,9 @@ fn test_set_delete_all() {
             values.push(item);
         }
 
-        let value = state.delete_all(key).expect("Failed to delete key.");
+        let value = state
+            .delete_all(StorageKey::AccountKey(key))
+            .expect("Failed to delete key.");
         assert_eq!(value, None);
     }
 
@@ -343,7 +356,7 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
-            .set(&actual_key, actual_value.into())
+            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
@@ -357,7 +370,7 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
-            .set(&actual_key, actual_value.into())
+            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
@@ -371,7 +384,7 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_2
-            .set(&actual_key, actual_value.into())
+            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
             .expect("Failed to insert key.");
     }
     let merkle_2 = state_2.compute_state_root().unwrap();
@@ -401,7 +414,7 @@ fn test_set_order_concurrent() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
-            .set(&actual_key, actual_value.into())
+            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
@@ -411,9 +424,9 @@ fn test_set_order_concurrent() {
     let parent_epoch_0 = epoch_id;
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&parent_epoch_0),
-        )
+        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+            &parent_epoch_0,
+        ))
         .unwrap()
         .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
@@ -422,7 +435,7 @@ fn test_set_order_concurrent() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
-            .set(&actual_key, actual_value.into())
+            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
@@ -445,9 +458,7 @@ fn test_set_order_concurrent() {
         threads.push(thread::spawn(move || {
             let mut state_2 = state_manager
                 .get_state_for_next_epoch(
-                    SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
-                        &parent_epoch_0,
-                    ),
+                    StateIndex::new_for_test_only_delta_mpt(&parent_epoch_0),
                 )
                 .unwrap()
                 .unwrap();
@@ -462,7 +473,10 @@ fn test_set_order_concurrent() {
                 let actual_value =
                     vec![key_slice; 1 + (key[0] % 32) as usize].concat();
                 state_2
-                    .set(&actual_key, actual_value.into())
+                    .set(
+                        StorageKey::AccountKey(&actual_key),
+                        actual_value.into(),
+                    )
                     .expect("Failed to insert key.");
             }
             let merkle_2 = state_2.compute_state_root().unwrap();
@@ -497,7 +511,7 @@ fn test_proofs() {
 
     for key in &keys {
         state
-            .set(key, key[..].into())
+            .set(StorageKey::AccountKey(key), key[..].into())
             .expect("Failed to insert key.");
     }
 
@@ -509,8 +523,9 @@ fn test_proofs() {
     keys.shuffle(&mut rng);
 
     for key in &keys {
-        let (value, proof) =
-            state.get_with_proof(key).expect("Failed to get key.");
+        let (value, proof) = state
+            .get_with_proof(StorageKey::AccountKey(key))
+            .expect("Failed to get key.");
 
         let key = &key.to_vec();
         let value = value.as_ref().map(|b| &**b);
@@ -561,8 +576,9 @@ fn test_proofs() {
             continue;
         }
 
-        let (value, proof) =
-            state.get_with_proof(key).expect("Failed to get key.");
+        let (value, proof) = state
+            .get_with_proof(StorageKey::AccountKey(key))
+            .expect("Failed to get key.");
 
         assert_eq!(value, None);
 
@@ -574,7 +590,7 @@ fn test_proofs() {
 use super::{
     super::{
         impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::CompressedPathRaw,
-        state::*, state_manager::*,
+        state::*, state_manager::*, storage_key::StorageKey,
     },
     new_state_manager_for_testing,
 };

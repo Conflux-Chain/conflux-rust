@@ -2,12 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use super::multi_version_merkle_patricia_trie::{
-    merkle_patricia_trie::merkle::MaybeMerkleTableRef, TrieProof,
-};
-use primitives::{StateRoot, MERKLE_NULL_NODE};
-use rlp_derive::{RlpDecodable, RlpEncodable};
-
+// FIXME: What's the proper way to express: 1) Proof not available;
+// FIXME: 2) What if Intermediate Delta Root is MERKLE_NULL_NODE.
+// TODO: Maybe create a new class for special situation when
+// TODO: a full node does not have full state proof, but it
+// TODO: could provide a shortcut proof with snapshot_proof
+// TODO: at intermediate_epoch_id with delta_proof.
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct StateProof {
     pub delta_proof: Option<TrieProof>,
@@ -35,6 +35,14 @@ impl StateProof {
         let intermediate_root = root.intermediate_delta_root;
         let snapshot_root = root.snapshot_root;
 
+        let delta_mpt_padding =
+            DeltaMpt::padding(&snapshot_root, &intermediate_root);
+        let delta_mpt_key = StorageKey::from_key_bytes(&key)
+            .to_delta_mpt_key_bytes(&delta_mpt_padding);
+        // FIXME: DeltaMpt Padding for intermediate_mpt is missing. It's
+        // FIXME: computed by StateRoot and "previous snapshot info",
+        // FIXME: which should be part of the proof.
+
         match (
             value,
             &self.delta_proof,
@@ -43,16 +51,16 @@ impl StateProof {
         ) {
             // proof of existence for key in delta trie
             (Some(_), Some(p1), None, None) => {
-                p1.is_valid_kv(key, value, delta_root)
+                p1.is_valid_kv(&delta_mpt_key, value, delta_root)
             }
             // proof of existence for key in intermediate trie
             (Some(_), Some(p1), Some(p2), None) => {
-                p1.is_valid_kv(key, None, delta_root)
+                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
                     && p2.is_valid_kv(key, value, intermediate_root)
             }
             // proof of existence for key in snapshot
             (Some(_), Some(p1), Some(p2), Some(p3)) => {
-                p1.is_valid_kv(key, None, delta_root)
+                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
                     && p2.is_valid_kv(key, None, intermediate_root)
                     && p3.is_valid_kv(key, value, snapshot_root)
             }
@@ -64,13 +72,13 @@ impl StateProof {
             }
             // proof of non-existence with two tries
             (None, Some(p1), Some(p2), None) => {
-                p1.is_valid_kv(key, None, delta_root)
+                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
                     && p2.is_valid_kv(key, None, intermediate_root)
                     && snapshot_root == MERKLE_NULL_NODE
             }
             // proof of non-existence with all tries
             (None, Some(p1), Some(p2), Some(p3)) => {
-                p1.is_valid_kv(key, None, delta_root)
+                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
                     && p2.is_valid_kv(key, None, intermediate_root)
                     && p3.is_valid_kv(key, None, snapshot_root)
             }
@@ -85,3 +93,10 @@ impl StateProof {
         }
     }
 }
+
+use super::{
+    super::StorageKey,
+    multi_version_merkle_patricia_trie::{DeltaMpt, TrieProof},
+};
+use primitives::{StateRoot, MERKLE_NULL_NODE};
+use rlp_derive::{RlpDecodable, RlpEncodable};

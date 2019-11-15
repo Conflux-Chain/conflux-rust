@@ -5,24 +5,32 @@
 #[derive(Clone)]
 pub struct SnapshotInfo {
     pub merkle_root: MerkleHash,
-    pub delta_root: MerkleHash,
     pub parent_snapshot_height: u64,
     pub height: u64,
     pub parent_snapshot_epoch_id: EpochId,
     // the last element of pivot_chain_parts is the epoch id of the snapshot
     // itself.
     pub pivot_chain_parts: Vec<EpochId>,
+
+    // Fields for intermediate delta mpt / delta mpt's padding.
+    pub parent_snapshot_root: MerkleHash,
+    // This is the merkle root of the snapshot in the intermediate delta mpt of
+    // the parent snapshot.
+    pub intermediate_delta_root_at_snapshot: MerkleHash,
+    pub intermediate_delta_padding: KeyPadding,
 }
 
 impl SnapshotInfo {
-    pub fn empty_snapshot_info() -> Self {
+    pub fn genesis_snapshot_info() -> Self {
         Self {
             merkle_root: MERKLE_NULL_NODE,
-            delta_root: MERKLE_NULL_NODE,
             parent_snapshot_height: 0,
             height: 0,
             parent_snapshot_epoch_id: NULL_EPOCH,
             pivot_chain_parts: vec![NULL_EPOCH],
+            parent_snapshot_root: MERKLE_NULL_NODE,
+            intermediate_delta_root_at_snapshot: MERKLE_NULL_NODE,
+            intermediate_delta_padding: GENESIS_DELTA_MPT_KEY_PADDING.clone(),
         }
     }
 
@@ -79,7 +87,10 @@ pub trait SnapshotDbTrait:
 }
 
 use super::{
-    super::impls::{errors::*, storage_manager::DeltaMptInserter},
+    super::{
+        impls::{errors::*, storage_manager::DeltaMptInserter},
+        storage_key::*,
+    },
     key_value_db::{
         KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitSingleWriter,
