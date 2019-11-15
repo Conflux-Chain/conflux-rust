@@ -58,8 +58,7 @@ pub struct QueryService {
 impl QueryService {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        network: Arc<NetworkService>,
-        throttling_config_file: Option<String>,
+        network: Arc<NetworkService>, throttling_config_file: Option<String>,
     ) -> Self
     {
         let handler = Arc::new(LightHandler::new(
