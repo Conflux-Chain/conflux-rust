@@ -21,6 +21,8 @@ pub fn height_to_delta_height(height: u64) -> u32 {
     (height % SNAPSHOT_EPOCHS_CAPACITY) as u32
 }
 
+// FIXME: remove these structs.
+// FIXME: rename these structs.
 pub struct SnapshotAndEpochId {
     pub snapshot_epoch_id: EpochId,
     pub epoch_id: EpochId,

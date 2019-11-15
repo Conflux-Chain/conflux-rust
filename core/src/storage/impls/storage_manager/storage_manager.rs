@@ -153,6 +153,8 @@ impl StorageManager {
 
             DeltaMpt::padding(
                 &snapshot_info.merkle_root,
+                // FIXME: the intermediate delta root isn't stored in the
+                // snapshot info.
                 &snapshot_info.delta_root,
             )
         };
@@ -615,6 +617,8 @@ impl StorageManager {
     pub fn log_usage(&self) {
         // FIXME: log usage for all delta mpt.
         // Log the usage of the delta mpt for the first snapshot.
+        // FIXME: due to initialization problems the delta mpt may not be
+        // available?
         self.snapshot_associated_mpts_by_epoch
             .read()
             .get(&NULL_EPOCH)

@@ -179,6 +179,8 @@ impl SnapshotChunkSync {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        // FIXME: start here.
+        // consensus is available from sync_handler.
         let request = SnapshotManifestRequest::new(
             inner.checkpoint.clone(),
             inner.trusted_blame_block.clone(),
