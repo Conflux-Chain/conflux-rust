@@ -25,7 +25,7 @@ use cfx_stratum::{
     Error as StratumServiceError, JobDispatcher, PushWorkHandler,
     Stratum as StratumService,
 };
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use parking_lot::Mutex;
 use std::{
     fmt,
@@ -137,7 +137,7 @@ impl StratumJobDispatcher {
     }
 
     /// Serializes payload for stratum service
-    fn payload(&self, pow_hash: H256, boundary: H256) -> String {
+    fn payload(&self, pow_hash: H256, boundary: U256) -> String {
         format!(r#"["0x", "0x{:x}","0x{:x}"]"#, pow_hash, boundary)
     }
 }
@@ -168,7 +168,7 @@ impl From<AddrParseError> for Error {
 }
 
 impl NotifyWork for Stratum {
-    fn notify(&self, pow_hash: H256, boundary: H256) {
+    fn notify(&self, pow_hash: H256, boundary: U256) {
         trace!(target: "stratum", "Notify work");
 
         self.service.push_work_all(

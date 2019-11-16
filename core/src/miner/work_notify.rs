@@ -18,10 +18,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 
 /// Trait for notifying about new mining work
 pub trait NotifyWork: Send + Sync {
     /// Fired when new mining job available
-    fn notify(&self, pow_hash: H256, boundary: H256);
+    fn notify(&self, pow_hash: H256, boundary: U256);
 }
