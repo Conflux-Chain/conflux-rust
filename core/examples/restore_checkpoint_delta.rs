@@ -11,7 +11,7 @@ use cfxcore::{
         state_manager::{
             StateManager, StateManagerTrait, StorageConfiguration,
         },
-        SnapshotAndEpochIdRef,
+        StateIndex,
     },
     sync::{
         delta::{Chunk, ChunkReader, StateDumper},
@@ -224,9 +224,9 @@ fn prepare_checkpoint(
 
     let root = manager
         // TODO consider snapshot.
-        .get_state_no_commit(
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&checkpoint),
-        )?
+        .get_state_no_commit(StateIndex::new_for_test_only_delta_mpt(
+            &checkpoint,
+        ))?
         .unwrap()
         .get_state_root()?
         .unwrap()
@@ -240,7 +240,7 @@ fn prepare_checkpoint(
 fn add_epoch_with_accounts(
     manager: &StateManager, parent: &H256, accounts: usize,
 ) -> H256 {
-    let epoch_id = SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(parent);
+    let epoch_id = StateIndex::new_for_test_only_delta_mpt(parent);
     let state = manager.get_state_for_next_epoch(epoch_id).unwrap().unwrap();
     let mut state = StateDb::new(state);
     for i in 0..accounts {

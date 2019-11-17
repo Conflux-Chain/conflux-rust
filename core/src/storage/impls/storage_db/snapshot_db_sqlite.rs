@@ -122,7 +122,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self {
         Self {
             maybe_db: None,
-            snapshot_info: SnapshotInfo::empty_snapshot_info(),
+            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
         }
     }
 
@@ -143,7 +143,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db: Some(sqlite_open_result?),
                 // FIXME: load snapshot info from db.
-                snapshot_info: SnapshotInfo::empty_snapshot_info(),
+                snapshot_info: SnapshotInfo::genesis_snapshot_info(),
             }));
         } else {
             return Ok(None);
@@ -156,7 +156,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 &snapshot_path,
                 SqliteConnection::default_open_flags(),
             )?),
-            snapshot_info: SnapshotInfo::empty_snapshot_info(),
+            // FIXME: set snapshot info at creation or ..?
+            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
         });
 
         {
