@@ -2,15 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use self::account_entry::{AccountEntry, AccountState, OverlayAccount};
 use crate::{
     bytes::Bytes,
     hash::KECCAK_EMPTY,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
+    storage::{StateRootWithAuxInfo, StorageKey},
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StateRootWithAuxInfo};
+use primitives::{Account, EpochId};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -19,8 +21,6 @@ use std::{
 
 mod account_entry;
 mod substate;
-
-use self::account_entry::{AccountEntry, AccountState, OverlayAccount};
 
 pub use self::substate::Substate;
 
@@ -267,11 +267,11 @@ impl<'a> State<'a> {
             if let Some(ref mut account) = entry.account {
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
-                    &self.db.account_key(address),
+                    StorageKey::new_account_key(address),
                     &account.as_account(),
                 )?;
             } else {
-                self.db.delete(&self.db.account_key(address))?;
+                self.db.delete(StorageKey::new_account_key(address))?;
             }
         }
         Ok(self.db.commit(epoch_id)?)
@@ -304,11 +304,11 @@ impl<'a> State<'a> {
                 accounts_for_txpool.push(account.as_account());
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
-                    &self.db.account_key(address),
+                    StorageKey::new_account_key(address),
                     &account.as_account(),
                 )?;
             } else {
-                self.db.delete(&self.db.account_key(address))?;
+                self.db.delete(StorageKey::new_account_key(address))?;
             }
         }
         let result = self.db.commit(epoch_id)?;
@@ -624,8 +624,8 @@ impl<'a> State<'a> {
 mod tests {
     use super::*;
     use crate::storage::{
-        tests::new_state_manager_for_testing, SnapshotAndEpochIdRef,
-        StorageManager, StorageManagerTrait,
+        tests::new_state_manager_for_testing, StateIndex, StorageManager,
+        StorageManagerTrait,
     };
     use cfx_types::{Address, BigEndianHash, U256};
 
@@ -634,9 +634,7 @@ mod tests {
             StateDb::new(
                 storage_manager
                     .get_state_for_next_epoch(
-                        SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
-                            &epoch_id,
-                        ),
+                        StateIndex::new_for_test_only_delta_mpt(&epoch_id),
                     )
                     .unwrap()
                     .unwrap(),
