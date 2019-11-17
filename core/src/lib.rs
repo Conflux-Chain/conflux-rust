@@ -33,6 +33,8 @@ extern crate byteorder;
 extern crate memory_cache;
 extern crate num;
 extern crate parity_crypto;
+#[macro_use]
+extern crate serde_derive;
 
 #[cfg(test)]
 extern crate rustc_hex;

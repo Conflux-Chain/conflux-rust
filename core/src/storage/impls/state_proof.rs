@@ -8,6 +8,12 @@ pub use super::multi_version_merkle_patricia_trie::{
 use primitives::{StateRoot, MERKLE_NULL_NODE};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
+// FIXME: What's the proper way to express: 1) Proof not available;
+// FIXME: 2) What if Intermediate Delta Root is MERKLE_NULL_NODE.
+// TODO: Maybe create a new class for special situation when
+// TODO: a full node does not have full state proof, but it
+// TODO: could provide a shortcut proof with snapshot_proof
+// TODO: at intermediate_epoch_id with delta_proof.
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct StateProof {
     pub delta_proof: Option<TrieProof>,

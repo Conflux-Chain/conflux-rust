@@ -362,13 +362,13 @@ impl ConsensusGraph {
         let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
         let hash =
             self.inner.read().get_hash_from_epoch_number(epoch_number)?;
-        let maybe_snapshot_and_epoch_id =
-            self.data_man.get_snapshot_and_epoch_id_readonly(&hash);
-        let maybe_state = match maybe_snapshot_and_epoch_id {
-            Some(snapshot_and_epoch_id) => self
+        let maybe_state_readonly_index =
+            self.data_man.get_state_readonly_index(&hash);
+        let maybe_state = match maybe_state_readonly_index {
+            Some(state_readonly_index) => self
                 .data_man
                 .storage_manager
-                .get_state_no_commit(snapshot_and_epoch_id.as_ref())
+                .get_state_no_commit(state_readonly_index)
                 .map_err(|e| format!("Error to get state, err={:?}", e))?,
             None => None,
         };
@@ -715,9 +715,8 @@ impl ConsensusGraph {
         // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
         if let Ok(state) = self.data_man.storage_manager.get_state_no_commit(
             self.data_man
-                .get_snapshot_and_epoch_id_readonly(&best_state_hash)
-                .unwrap()
-                .as_ref(),
+                .get_state_readonly_index(&best_state_hash)
+                .unwrap(),
         ) {
             state
                 .map(|db| {

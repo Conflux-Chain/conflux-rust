@@ -21,43 +21,49 @@ pub fn height_to_delta_height(height: u64) -> u32 {
     (height % SNAPSHOT_EPOCHS_CAPACITY) as u32
 }
 
-// FIXME: remove these structs.
-// FIXME: rename these structs.
-pub struct SnapshotAndEpochId {
+pub struct StateReadonlyIndex {
     pub snapshot_epoch_id: EpochId,
-    pub epoch_id: EpochId,
-    pub delta_trie_height: Option<u32>,
-    pub height: Option<u64>,
     pub intermediate_epoch_id: EpochId,
+    pub maybe_intermediate_key_padding: Option<KeyPadding>,
+    pub epoch_id: EpochId,
+    pub delta_mpt_key_padding: KeyPadding,
 }
 
-impl SnapshotAndEpochId {
-    pub fn from_ref(r: SnapshotAndEpochIdRef) -> Self {
+impl StateReadonlyIndex {
+    pub fn from_ref(r: StateIndex) -> Self {
         Self {
             snapshot_epoch_id: r.snapshot_epoch_id.clone(),
-            epoch_id: r.epoch_id.clone(),
-            delta_trie_height: r.delta_trie_height,
-            height: r.height,
             intermediate_epoch_id: r.intermediate_epoch_id.clone(),
+            maybe_intermediate_key_padding: r
+                .maybe_intermediate_mpt_key_padding
+                .cloned(),
+            epoch_id: r.epoch_id.clone(),
+            delta_mpt_key_padding: r.delta_mpt_key_padding.clone(),
         }
     }
 
-    pub fn as_ref(&self) -> SnapshotAndEpochIdRef {
-        SnapshotAndEpochIdRef {
+    pub fn as_ref(&self) -> StateIndex {
+        StateIndex {
             snapshot_epoch_id: &self.snapshot_epoch_id,
-            epoch_id: &self.epoch_id,
-            delta_trie_height: self.delta_trie_height,
-            height: self.height,
             intermediate_epoch_id: &self.intermediate_epoch_id,
+            maybe_intermediate_mpt_key_padding: self
+                .maybe_intermediate_key_padding
+                .as_ref(),
+            epoch_id: &self.epoch_id,
+            delta_mpt_key_padding: &self.delta_mpt_key_padding,
+            delta_trie_height: None,
+            height: None,
         }
     }
 }
 
 #[derive(Debug)]
-pub struct SnapshotAndEpochIdRef<'a> {
+pub struct StateIndex<'a> {
     pub snapshot_epoch_id: &'a EpochId,
     pub intermediate_epoch_id: &'a EpochId,
+    pub maybe_intermediate_mpt_key_padding: Option<&'a KeyPadding>,
     pub epoch_id: &'a EpochId,
+    pub delta_mpt_key_padding: &'a KeyPadding,
     pub delta_trie_height: Option<u32>,
     pub height: Option<u64>,
 }
@@ -69,23 +75,25 @@ pub trait StateManagerTrait {
     /// At the boundary of snapshot, getting a state for new epoch will switch
     /// to new Delta MPT, but it's unnecessary getting a no-commit state.
     fn get_state_no_commit(
-        &self, epoch_id: SnapshotAndEpochIdRef,
+        &self, epoch_id: StateIndex,
     ) -> Result<Option<State>>;
     fn get_state_for_next_epoch(
-        &self, parent_epoch_id: SnapshotAndEpochIdRef,
+        &self, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>>;
     fn get_state_for_genesis_write(&self) -> State;
 
     /// False in case of db failure.
-    fn contains_state(&self, epoch_id: SnapshotAndEpochIdRef) -> Result<bool>;
+    fn contains_state(&self, epoch_id: StateIndex) -> Result<bool>;
 }
 
-impl<'a> SnapshotAndEpochIdRef<'a> {
+impl<'a> StateIndex<'a> {
     pub fn new_for_test_only_delta_mpt(epoch_id: &'a EpochId) -> Self {
         Self {
             snapshot_epoch_id: &MERKLE_NULL_NODE,
             intermediate_epoch_id: &MERKLE_NULL_NODE,
+            maybe_intermediate_mpt_key_padding: None,
             epoch_id,
+            delta_mpt_key_padding: &*GENESIS_DELTA_MPT_KEY_PADDING,
             delta_trie_height: Some(0),
             height: Some(0),
         }
@@ -101,7 +109,12 @@ impl<'a> SnapshotAndEpochIdRef<'a> {
         Self {
             snapshot_epoch_id: &state_root.aux_info.snapshot_epoch_id,
             intermediate_epoch_id: &state_root.aux_info.intermediate_epoch_id,
+            maybe_intermediate_mpt_key_padding: state_root
+                .aux_info
+                .maybe_intermediate_mpt_key_padding
+                .as_ref(),
             epoch_id: base_epoch_id,
+            delta_mpt_key_padding: &state_root.aux_info.delta_mpt_key_padding,
             delta_trie_height: Some(height_to_delta_height(height)),
             height: Some(height),
         }
@@ -113,7 +126,12 @@ impl<'a> SnapshotAndEpochIdRef<'a> {
         Self {
             snapshot_epoch_id: &state_root.aux_info.snapshot_epoch_id,
             intermediate_epoch_id: &state_root.aux_info.intermediate_epoch_id,
+            maybe_intermediate_mpt_key_padding: state_root
+                .aux_info
+                .maybe_intermediate_mpt_key_padding
+                .as_ref(),
             epoch_id,
+            delta_mpt_key_padding: &state_root.aux_info.delta_mpt_key_padding,
             delta_trie_height: None,
             height: None,
         }
@@ -144,6 +162,8 @@ impl Default for StorageConfiguration {
 use super::{
     impls::{defaults, errors::*},
     state::State,
+    storage_key::*,
+    StateRootWithAuxInfo,
 };
-use primitives::{EpochId, StateRootWithAuxInfo, MERKLE_NULL_NODE};
+use primitives::{EpochId, MERKLE_NULL_NODE};
 use std::sync::Arc;

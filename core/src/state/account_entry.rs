@@ -142,7 +142,7 @@ impl OverlayAccount {
             return Some(self.code_cache.clone());
         }
 
-        match db.get_raw(&db.code_key(&self.address, &self.code_hash)) {
+        match db.get_raw(db.code_key(&self.address, &self.code_hash)) {
             Ok(Some(code)) => {
                 self.code_size = Some(code.len());
                 self.code_cache = Arc::new(code.to_vec());
@@ -228,7 +228,7 @@ impl OverlayAccount {
     ) -> DbResult<H256>
     {
         let value = db
-            .get::<H256>(&db.storage_key(address, key.as_ref()))
+            .get::<H256>(db.storage_key(address, key.as_ref()))
             .expect("get_and_cache_storage failed")
             .unwrap_or_else(|| H256::zero());
         storage_cache.insert(key.clone(), value.clone());
@@ -255,17 +255,17 @@ impl OverlayAccount {
 
     pub fn commit<'a>(&mut self, db: &mut StateDb<'a>) -> DbResult<()> {
         if self.reset_storage {
-            db.delete_all(&db.storage_root_key(&self.address))?;
-            db.delete_all(&db.code_root_key(&self.address))?;
+            db.delete_all(db.storage_root_key(&self.address))?;
+            db.delete_all(db.code_root_key(&self.address))?;
         }
 
         for (k, v) in self.storage_changes.drain() {
             let address_key = db.storage_key(&self.address, k.as_ref());
 
             match v.is_zero() {
-                true => db.delete(&address_key)?,
+                true => db.delete(address_key)?,
                 false => db.set::<H256>(
-                    &address_key,
+                    address_key,
                     &BigEndianHash::from_uint(&v.into_uint()),
                 )?,
             }
@@ -276,7 +276,7 @@ impl OverlayAccount {
             Some(code) => {
                 if !code.is_empty() {
                     db.set_raw(
-                        &db.code_key(&self.address, &self.code_hash),
+                        db.code_key(&self.address, &self.code_hash),
                         code.as_ref().clone().into_boxed_slice(),
                     )?;
                 }

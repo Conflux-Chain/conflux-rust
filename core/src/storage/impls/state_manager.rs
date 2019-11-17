@@ -13,9 +13,11 @@ pub struct StateTrees {
     /// so we don't need to look up intermediate trie.
     pub maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     pub intermediate_trie_root: Option<NodeRefDeltaMpt>,
+    pub maybe_intermediate_trie_key_padding: Option<KeyPadding>,
     /// Delta trie can't be none since we may commit into it.
     pub delta_trie: Arc<DeltaMpt>,
     pub delta_trie_root: Option<NodeRefDeltaMpt>,
+    pub delta_trie_key_padding: KeyPadding,
     /// Information for making new snapshot when necessary.
     pub delta_trie_height: Option<u32>,
     pub height: Option<u64>,
@@ -84,7 +86,7 @@ impl StateManager {
         for (addr, balance) in genesis_accounts {
             let account =
                 Account::new_empty_with_balance(&addr, &balance, &0.into());
-            state.set(&state.account_key(&addr), &account).unwrap();
+            state.set(state.account_key(&addr), &account).unwrap();
         }
 
         let state_root = state.compute_state_root().unwrap();
@@ -119,12 +121,12 @@ impl StateManager {
 
     // FIXME: Fix implementation.
     pub fn get_state_trees(
-        &self, epoch_id: &SnapshotAndEpochIdRef,
+        &self, state_index: &StateIndex,
     ) -> Result<Option<StateTrees>> {
         let maybe_snapshot = self
             .storage_manager
             .get_snapshot_manager()
-            .get_snapshot_by_epoch_id(&epoch_id.snapshot_epoch_id)?;
+            .get_snapshot_by_epoch_id(&state_index.snapshot_epoch_id)?;
 
         match maybe_snapshot {
             None => {
@@ -136,13 +138,13 @@ impl StateManager {
             Some(snapshot) => {
                 let maybe_intermediate_mpt = self
                     .storage_manager
-                    .get_intermediate_mpt(&epoch_id.snapshot_epoch_id)?;
+                    .get_intermediate_mpt(&state_index.snapshot_epoch_id)?;
                 let delta_mpt = self
                     .storage_manager
-                    .get_delta_mpt(&epoch_id.snapshot_epoch_id)?;
+                    .get_delta_mpt(&state_index.snapshot_epoch_id)?;
                 let intermediate_root = None;
-                let maybe_delta_root =
-                    delta_mpt.get_root_node_ref_by_epoch(epoch_id.epoch_id)?;
+                let maybe_delta_root = delta_mpt
+                    .get_root_node_ref_by_epoch(state_index.epoch_id)?;
                 if maybe_delta_root.is_none() {
                     Ok(None)
                 } else {
@@ -150,14 +152,20 @@ impl StateManager {
                         snapshot_db: snapshot,
                         maybe_intermediate_trie: maybe_intermediate_mpt,
                         intermediate_trie_root: intermediate_root,
+                        maybe_intermediate_trie_key_padding: state_index
+                            .maybe_intermediate_mpt_key_padding
+                            .cloned(),
                         delta_trie: delta_mpt,
                         delta_trie_root: maybe_delta_root,
-                        delta_trie_height: epoch_id.delta_trie_height,
-                        height: epoch_id.height,
-                        intermediate_epoch_id: epoch_id
+                        delta_trie_key_padding: state_index
+                            .delta_mpt_key_padding
+                            .clone(),
+                        delta_trie_height: state_index.delta_trie_height,
+                        height: state_index.height,
+                        intermediate_epoch_id: state_index
                             .intermediate_epoch_id
                             .clone(),
-                        epoch_id: epoch_id.epoch_id.clone(),
+                        epoch_id: state_index.epoch_id.clone(),
                     }))
                 }
             }
@@ -165,7 +173,7 @@ impl StateManager {
     }
 
     pub fn get_state_trees_for_next_epoch(
-        &self, parent_epoch_id: &SnapshotAndEpochIdRef,
+        &self, parent_state_index: &StateIndex,
     ) -> Result<Option<StateTrees>> {
         let snapshot;
         let maybe_intermediate_mpt;
@@ -178,14 +186,16 @@ impl StateManager {
         let delta_trie_height;
         let height;
         let intermediate_epoch_id;
-        if parent_epoch_id.delta_trie_height.unwrap_or_default() as u64
+        let maybe_intermediate_trie_key_padding;
+        let delta_trie_key_padding;
+        if parent_state_index.delta_trie_height.unwrap_or_default() as u64
             == SNAPSHOT_EPOCHS_CAPACITY
         {
             let maybe_snapshot = self
                 .storage_manager
                 .get_snapshot_manager()
                 .get_snapshot_by_epoch_id(
-                    parent_epoch_id.intermediate_epoch_id,
+                    parent_state_index.intermediate_epoch_id,
                 )?;
             if maybe_snapshot.is_none() {
                 return Ok(None);
@@ -201,19 +211,44 @@ impl StateManager {
             delta_trie_height = Some(1);
             maybe_intermediate_mpt = Some(
                 self.storage_manager
-                    .get_delta_mpt(&parent_epoch_id.snapshot_epoch_id)?,
+                    .get_delta_mpt(&parent_state_index.snapshot_epoch_id)?,
             );
-            intermediate_epoch_id = parent_epoch_id.epoch_id.clone();
+
+            intermediate_epoch_id = parent_state_index.epoch_id.clone();
+
+            let intermediate_mpt_ref =
+                &*maybe_intermediate_mpt.as_ref().unwrap();
+            let intermediate_delta_root = intermediate_mpt_ref
+                .get_root_node_ref_by_epoch(&intermediate_epoch_id)?;
+            if intermediate_delta_root.is_none() {
+                return Ok(None);
+            }
+            let intermediate_merkle_root = match intermediate_mpt_ref
+                .get_merkle(intermediate_delta_root)?
+            {
+                None => return Ok(None),
+                Some(merkle_root) => merkle_root,
+            };
+            // TODO: maybe we can move the calculation to a central place and
+            // cache the result?
+            delta_trie_key_padding = DeltaMpt::padding(
+                &snapshot.get_snapshot_info().merkle_root,
+                &intermediate_merkle_root,
+            );
+            maybe_intermediate_trie_key_padding =
+                Some(parent_state_index.delta_mpt_key_padding.clone());
         } else {
-            height = parent_epoch_id.height.map(|x| x + 1);
+            height = parent_state_index.height.map(|x| x + 1);
             delta_trie_height =
-                parent_epoch_id.delta_trie_height.map(|x| x + 1);
+                parent_state_index.delta_trie_height.map(|x| x + 1);
             intermediate_epoch_id =
-                parent_epoch_id.intermediate_epoch_id.clone();
+                parent_state_index.intermediate_epoch_id.clone();
             let maybe_snapshot = self
                 .storage_manager
                 .get_snapshot_manager()
-                .get_snapshot_by_epoch_id(&parent_epoch_id.snapshot_epoch_id)?;
+                .get_snapshot_by_epoch_id(
+                    &parent_state_index.snapshot_epoch_id,
+                )?;
             if maybe_snapshot.is_none() {
                 return Ok(None);
                 // TODO: there is a special case when the snapshot_root isn't
@@ -224,19 +259,24 @@ impl StateManager {
 
             delta_mpt = self
                 .storage_manager
-                .get_delta_mpt(&parent_epoch_id.snapshot_epoch_id)?;
+                .get_delta_mpt(&parent_state_index.snapshot_epoch_id)?;
+            delta_trie_key_padding =
+                parent_state_index.delta_mpt_key_padding.clone();
             delta_root = delta_mpt
-                .get_root_node_ref_by_epoch(parent_epoch_id.epoch_id)?;
+                .get_root_node_ref_by_epoch(parent_state_index.epoch_id)?;
             if delta_root.is_none() {
                 return Ok(None);
             }
             maybe_intermediate_mpt = self
                 .storage_manager
-                .get_intermediate_mpt(&parent_epoch_id.snapshot_epoch_id)?;
+                .get_intermediate_mpt(&parent_state_index.snapshot_epoch_id)?;
+            maybe_intermediate_trie_key_padding = parent_state_index
+                .maybe_intermediate_mpt_key_padding
+                .cloned();
         }
 
         let intermediate_trie_root =
-            if parent_epoch_id.intermediate_epoch_id.eq(&NULL_EPOCH)
+            if parent_state_index.intermediate_epoch_id.eq(&NULL_EPOCH)
                 || maybe_intermediate_mpt.is_none()
             {
                 None
@@ -245,7 +285,7 @@ impl StateManager {
                     .as_ref()
                     .unwrap()
                     .get_root_node_ref_by_epoch(
-                        &parent_epoch_id.intermediate_epoch_id,
+                        &parent_state_index.intermediate_epoch_id,
                     )?
             };
 
@@ -253,12 +293,14 @@ impl StateManager {
             snapshot_db: snapshot,
             maybe_intermediate_trie: maybe_intermediate_mpt,
             intermediate_trie_root,
+            maybe_intermediate_trie_key_padding,
             delta_trie: delta_mpt,
             delta_trie_root: delta_root,
+            delta_trie_key_padding,
             delta_trie_height,
             height,
             intermediate_epoch_id,
-            epoch_id: parent_epoch_id.epoch_id.clone(),
+            epoch_id: parent_state_index.epoch_id.clone(),
         }))
     }
 
@@ -283,7 +325,7 @@ impl StateManager {
 
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
-        &self, epoch_id: SnapshotAndEpochIdRef,
+        &self, epoch_id: StateIndex,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees(&epoch_id)?;
         match maybe_state_trees {
@@ -304,11 +346,13 @@ impl StateManagerTrait for StateManager {
                     .unwrap(),
                 maybe_intermediate_trie: None,
                 intermediate_trie_root: None,
+                maybe_intermediate_trie_key_padding: None,
                 delta_trie: self
                     .storage_manager
                     .get_delta_mpt(&NULL_EPOCH)
                     .unwrap(),
                 delta_trie_root: None,
+                delta_trie_key_padding: GENESIS_DELTA_MPT_KEY_PADDING.clone(),
                 delta_trie_height: Some(1),
                 height: Some(1),
                 intermediate_epoch_id: NULL_EPOCH,
@@ -332,7 +376,7 @@ impl StateManagerTrait for StateManager {
     // Due to the complexity of the latter approach, we stay with the
     // simple approach.
     fn get_state_for_next_epoch(
-        &self, parent_epoch_id: SnapshotAndEpochIdRef,
+        &self, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
         let maybe_state_trees =
             self.get_state_trees_for_next_epoch(&parent_epoch_id)?;
@@ -342,7 +386,7 @@ impl StateManagerTrait for StateManager {
         }
     }
 
-    fn contains_state(&self, epoch_id: SnapshotAndEpochIdRef) -> Result<bool> {
+    fn contains_state(&self, epoch_id: StateIndex) -> Result<bool> {
         let maybe_state_trees = self.get_state_trees(&epoch_id)?;
         Ok(match maybe_state_trees {
             None => {
@@ -355,7 +399,7 @@ impl StateManagerTrait for StateManager {
 }
 
 use super::{
-    super::{state::*, state_manager::*, storage_db::*},
+    super::{state::*, state_manager::*, storage_db::*, storage_key::*},
     errors::*,
     multi_version_merkle_patricia_trie::{
         merkle_patricia_trie::NodeRefDeltaMpt, *,
