@@ -234,11 +234,12 @@ pub struct TxInfo {
     pub index: usize,
     pub epoch_receipts: Vec<Vec<PrimitiveReceipt>>,
     pub block_txs: Vec<SignedTransaction>,
+    pub tx_hash: H256,
 }
 
 impl Encodable for TxInfo {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(5);
+        stream.begin_list(6);
         stream.append(&self.epoch);
         stream.append(&self.block_hash);
         stream.append(&self.index);
@@ -249,6 +250,7 @@ impl Encodable for TxInfo {
         }
 
         stream.append_list(&self.block_txs);
+        stream.append(&self.tx_hash);
     }
 }
 
@@ -265,6 +267,7 @@ impl Decodable for TxInfo {
             .collect::<Result<_, _>>()?;
 
         let block_txs = rlp.list_at(4)?;
+        let tx_hash = rlp.val_at(5)?;
 
         Ok(TxInfo {
             epoch,
@@ -272,6 +275,7 @@ impl Decodable for TxInfo {
             index,
             epoch_receipts,
             block_txs,
+            tx_hash,
         })
     }
 }

@@ -19,7 +19,7 @@ use crate::{
         message::{msgid, BlockTxsWithHash, GetBlockTxs},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
@@ -104,30 +104,39 @@ impl BlockTxs {
 
     #[inline]
     pub fn receive(
-        &self, block_txs: impl Iterator<Item = BlockTxsWithHash>,
-    ) -> Result<(), Error> {
+        &self, peer: PeerId, id: RequestId,
+        block_txs: impl Iterator<Item = BlockTxsWithHash>,
+    ) -> Result<(), Error>
+    {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
             info!("Validating block_txs {:?} with hash {}", block_txs, hash);
-            // validate and store each transaction
-            self.txs.receive(block_txs.clone().into_iter())?;
 
-            // validate block txs
-            self.validate_block_txs(hash, &block_txs)?;
-
-            // store block bodies by block hash
-            self.verified.write().insert(hash, block_txs);
-            self.sync_manager.remove_in_flight(&hash);
+            match self.sync_manager.check_if_requested(peer, id, &hash)? {
+                None => continue,
+                Some(_) => self.validate_and_store(hash, block_txs)?,
+            };
         }
 
         Ok(())
     }
 
     #[inline]
-    pub fn receive_single(
+    pub fn validate_and_store(
         &self, hash: H256, block_txs: Vec<SignedTransaction>,
     ) -> Result<(), Error> {
-        let item = BlockTxsWithHash { hash, block_txs };
-        self.receive(std::iter::once(item))
+        // validate and store each transaction
+        for tx in &block_txs {
+            self.txs.validate_and_store(tx.clone())?;
+        }
+
+        // validate block txs
+        self.validate_block_txs(hash, &block_txs)?;
+
+        // store block bodies by block hash
+        self.verified.write().insert(hash, block_txs);
+        self.sync_manager.remove_in_flight(&hash);
+
+        Ok(())
     }
 
     #[inline]
@@ -144,20 +153,19 @@ impl BlockTxs {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlockTxs {
-            request_id: self.request_id_allocator.next(),
-            hashes,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetBlockTxs { request_id, hashes });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]

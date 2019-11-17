@@ -16,7 +16,7 @@ use crate::{
         message::{msgid, GetReceipts, ReceiptsWithEpoch},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
@@ -100,25 +100,34 @@ impl Receipts {
 
     #[inline]
     pub fn receive(
-        &self, receipts: impl Iterator<Item = ReceiptsWithEpoch>,
-    ) -> Result<(), Error> {
+        &self, peer: PeerId, id: RequestId,
+        receipts: impl Iterator<Item = ReceiptsWithEpoch>,
+    ) -> Result<(), Error>
+    {
         for ReceiptsWithEpoch { epoch, receipts } in receipts {
             info!("Validating receipts {:?} with epoch {}", receipts, epoch);
-            self.validate_receipts(epoch, &receipts)?;
 
-            self.verified.write().insert(epoch, receipts);
-            self.sync_manager.remove_in_flight(&epoch);
+            match self.sync_manager.check_if_requested(peer, id, &epoch)? {
+                None => continue,
+                Some(_) => self.validate_and_store(epoch, receipts)?,
+            };
         }
 
         Ok(())
     }
 
     #[inline]
-    pub fn receive_single(
+    pub fn validate_and_store(
         &self, epoch: u64, receipts: Vec<Vec<Receipt>>,
     ) -> Result<(), Error> {
-        let item = ReceiptsWithEpoch { epoch, receipts };
-        self.receive(std::iter::once(item))
+        // validate receipts
+        self.validate_receipts(epoch, &receipts)?;
+
+        // store receipts by epoch
+        self.verified.write().insert(epoch, receipts);
+        self.sync_manager.remove_in_flight(&epoch);
+
+        Ok(())
     }
 
     #[inline]
@@ -135,20 +144,19 @@ impl Receipts {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetReceipts {
-            request_id: self.request_id_allocator.next(),
-            epochs,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetReceipts { request_id, epochs });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]

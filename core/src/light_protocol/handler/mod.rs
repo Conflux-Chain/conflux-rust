@@ -40,6 +40,7 @@ use sync::{
     BlockTxs, Blooms, Epochs, HashSource, Headers, Receipts, StateEntries,
     StateRoots, TxInfos, Txs, Witnesses,
 };
+use throttling::token_bucket::TokenBucketManager;
 
 const SYNC_TIMER: TimerToken = 0;
 const REQUEST_CLEANUP_TIMER: TimerToken = 1;
@@ -86,6 +87,9 @@ pub struct Handler {
     // tx info sync manager
     pub tx_infos: TxInfos,
 
+    // path to unexpected messages config file
+    throttling_config_file: Option<String>,
+
     // witness sync manager
     pub witnesses: Arc<Witnesses>,
 }
@@ -93,7 +97,9 @@ pub struct Handler {
 impl Handler {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-    ) -> Self {
+        throttling_config_file: Option<String>,
+    ) -> Self
+    {
         let peers = Arc::new(Peers::new());
         let request_id_allocator = Arc::new(UniqueId::new());
 
@@ -175,6 +181,7 @@ impl Handler {
             state_roots,
             txs,
             tx_infos,
+            throttling_config_file,
             witnesses,
         }
     }
@@ -371,36 +378,45 @@ impl Handler {
     }
 
     fn on_block_headers(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockHeadersResponse = rlp.as_val()?;
         info!("on_block_headers resp={:?}", resp);
 
-        self.headers.receive(resp.headers.into_iter());
+        self.headers.receive(
+            peer,
+            resp.request_id,
+            resp.headers.into_iter(),
+        )?;
 
         self.start_sync(io);
         Ok(())
     }
 
     fn on_block_txs(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockTxsResponse = rlp.as_val()?;
         info!("on_block_txs resp={:?}", resp);
 
-        self.block_txs.receive(resp.block_txs.into_iter())?;
+        self.block_txs.receive(
+            peer,
+            resp.request_id,
+            resp.block_txs.into_iter(),
+        )?;
 
         self.block_txs.sync(io);
         Ok(())
     }
 
     fn on_blooms(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBloomsResponse = rlp.as_val()?;
         info!("on_blooms resp={:?}", resp);
 
-        self.blooms.receive(resp.blooms.into_iter())?;
+        self.blooms
+            .receive(peer, resp.request_id, resp.blooms.into_iter())?;
 
         self.blooms.sync(io);
         Ok(())
@@ -432,72 +448,90 @@ impl Handler {
     }
 
     fn on_receipts(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetReceiptsResponse = rlp.as_val()?;
         info!("on_receipts resp={:?}", resp);
 
-        self.receipts.receive(resp.receipts.into_iter())?;
+        self.receipts.receive(
+            peer,
+            resp.request_id,
+            resp.receipts.into_iter(),
+        )?;
 
         self.receipts.sync(io);
         Ok(())
     }
 
     fn on_state_entries(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateEntriesResponse = rlp.as_val()?;
         info!("on_state_entries resp={:?}", resp);
 
-        self.state_entries.receive(resp.entries.into_iter())?;
+        self.state_entries.receive(
+            peer,
+            resp.request_id,
+            resp.entries.into_iter(),
+        )?;
 
         self.state_entries.sync(io);
         Ok(())
     }
 
     fn on_state_roots(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateRootsResponse = rlp.as_val()?;
         info!("on_state_roots resp={:?}", resp);
 
-        self.state_roots.receive(resp.state_roots.into_iter())?;
+        self.state_roots.receive(
+            peer,
+            resp.request_id,
+            resp.state_roots.into_iter(),
+        )?;
 
         self.state_roots.sync(io);
         Ok(())
     }
 
     fn on_txs(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetTxsResponse = rlp.as_val()?;
         info!("on_txs resp={:?}", resp);
 
-        self.txs.receive(resp.txs.into_iter())?;
+        self.txs
+            .receive(peer, resp.request_id, resp.txs.into_iter())?;
 
         self.txs.sync(io);
         Ok(())
     }
 
     fn on_tx_infos(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetTxInfosResponse = rlp.as_val()?;
         info!("on_tx_infos resp={:?}", resp);
 
-        self.tx_infos.receive(resp.infos.into_iter())?;
+        self.tx_infos
+            .receive(peer, resp.request_id, resp.infos.into_iter())?;
 
         self.tx_infos.sync(io);
         Ok(())
     }
 
     fn on_witness_info(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetWitnessInfoResponse = rlp.as_val()?;
         info!("on_witness_info resp={:?}", resp);
 
-        self.witnesses.receive(resp.infos.into_iter())?;
+        self.witnesses.receive(
+            peer,
+            resp.request_id,
+            resp.infos.into_iter(),
+        )?;
 
         self.witnesses.sync(io);
         Ok(())
@@ -602,7 +636,19 @@ impl NetworkProtocolHandler for Handler {
         info!("on_peer_connected: peer={:?}", peer);
 
         match self.send_status(io, peer) {
-            Ok(_) => self.peers.insert(peer), // insert handshaking peer
+            Ok(_) => {
+                // insert handshaking peer
+                self.peers.insert(peer);
+
+                if let Some(ref file) = self.throttling_config_file {
+                    let peer = self.peers.get(&peer).expect("peer not found");
+                    peer.write().unexpected_msgs = TokenBucketManager::load(
+                        file,
+                        Some("light_protocol::unexpected_msgs"),
+                    )
+                    .expect("invalid throttling configuration file");
+                }
+            }
             Err(e) => {
                 warn!("Error while sending status: {}", e);
                 handle_error(

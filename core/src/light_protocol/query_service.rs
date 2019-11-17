@@ -58,10 +58,14 @@ pub struct QueryService {
 impl QueryService {
     pub fn new(
         consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
-        network: Arc<NetworkService>,
+        network: Arc<NetworkService>, throttling_config_file: Option<String>,
     ) -> Self
     {
-        let handler = Arc::new(LightHandler::new(consensus.clone(), graph));
+        let handler = Arc::new(LightHandler::new(
+            consensus.clone(),
+            graph,
+            throttling_config_file,
+        ));
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {

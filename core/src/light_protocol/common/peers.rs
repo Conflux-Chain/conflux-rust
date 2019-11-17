@@ -21,6 +21,7 @@ pub struct FullPeerState {
     pub protocol_version: u8,
     pub terminals: HashSet<H256>,
     pub throttled_msgs: ThrottledManager<MsgId>,
+    pub unexpected_msgs: TokenBucketManager,
 }
 
 #[derive(Default)]

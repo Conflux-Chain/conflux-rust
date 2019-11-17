@@ -2,6 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::{HasKey, PriorityQueue};
+use crate::{
+    light_protocol::{
+        common::{FullPeerFilter, FullPeerState, Peers},
+        Error, ErrorKind,
+    },
+    message::{MsgId, RequestId},
+    network::PeerId,
+};
 use parking_lot::RwLock;
 use std::{
     cmp::Ord,
@@ -11,28 +20,20 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
-use crate::{
-    light_protocol::{
-        common::{FullPeerState, Peers},
-        Error,
-    },
-    network::PeerId,
-};
-
-use super::{HasKey, PriorityQueue};
-use crate::{light_protocol::common::FullPeerFilter, message::MsgId};
+use throttling::token_bucket::ThrottleResult;
 
 #[derive(Debug)]
 struct InFlightRequest<T> {
     pub item: T,
+    pub request_id: RequestId,
     pub sent_at: Instant,
 }
 
 impl<T> InFlightRequest<T> {
-    pub fn new(item: T) -> Self {
+    pub fn new(item: T, request_id: RequestId) -> Self {
         InFlightRequest {
             item,
+            request_id,
             sent_at: Instant::now(),
         }
     }
@@ -78,10 +79,53 @@ where
     pub fn num_in_flight(&self) -> usize { self.in_flight.read().len() }
 
     #[inline]
-    pub fn insert_in_flight<I>(&self, missing: I)
+    pub fn insert_in_flight<I>(&self, missing: I, request_id: RequestId)
     where I: Iterator<Item = Item> {
-        let new = missing.map(|item| (item.key(), InFlightRequest::new(item)));
+        let new = missing
+            .map(|item| (item.key(), InFlightRequest::new(item, request_id)));
         self.in_flight.write().extend(new);
+    }
+
+    #[inline]
+    fn get_existing_peer_state(
+        &self, peer: PeerId,
+    ) -> Result<Arc<RwLock<FullPeerState>>, Error> {
+        match self.peers.get(&peer) {
+            Some(state) => Ok(state),
+            None => {
+                error!("Received message from unknown peer={:?}", peer);
+                Err(ErrorKind::InternalError.into())
+            }
+        }
+    }
+
+    #[inline]
+    pub fn check_if_requested(
+        &self, peer: PeerId, request_id: RequestId, key: &Key,
+    ) -> Result<Option<RequestId>, Error> {
+        let id = match self.in_flight.read().get(&key).map(|req| req.request_id)
+        {
+            Some(id) if id == request_id => return Ok(Some(id)),
+            x => x,
+        };
+
+        let peer = self.get_existing_peer_state(peer)?;
+
+        let bucket_name = self.request_msg_id.to_string();
+        let bucket = match peer.read().unexpected_msgs.get(&bucket_name) {
+            Some(bucket) => bucket,
+            None => return Ok(id),
+        };
+
+        let result = bucket.lock().throttle();
+
+        match result {
+            ThrottleResult::Success => Ok(id),
+            ThrottleResult::Throttled(_) => Ok(id),
+            ThrottleResult::AlreadyThrottled => {
+                Err(ErrorKind::UnexpectedResponse.into())
+            }
+        }
     }
 
     #[inline]
@@ -126,7 +170,7 @@ where
 
     pub fn sync(
         &self, max_in_flight: usize, batch_size: usize,
-        request: impl Fn(PeerId, Vec<Key>) -> Result<(), Error>,
+        request: impl Fn(PeerId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     )
     {
         // check if there are any peers available
@@ -162,8 +206,12 @@ where
             let keys = batch.iter().map(|h| h.key()).collect();
 
             match request(peer, keys) {
-                Ok(_) => {
-                    self.insert_in_flight(batch.to_owned().into_iter());
+                Ok(None) => {}
+                Ok(Some(request_id)) => {
+                    self.insert_in_flight(
+                        batch.to_owned().into_iter(),
+                        request_id,
+                    );
                 }
                 Err(e) => {
                     warn!(
@@ -201,7 +249,7 @@ where
     #[inline]
     pub fn request_now<I>(
         &self, items: I,
-        request: impl Fn(PeerId, Vec<Key>) -> Result<(), Error>,
+        request: impl Fn(PeerId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     ) where
         I: Iterator<Item = Item>,
     {
@@ -222,7 +270,7 @@ where
     #[inline]
     pub fn request_now_from_peer<I>(
         &self, items: I, peer: PeerId,
-        request: impl Fn(PeerId, Vec<Key>) -> Result<(), Error>,
+        request: impl Fn(PeerId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     ) where
         I: Iterator<Item = Item>,
     {
@@ -230,7 +278,10 @@ where
         let keys = items.iter().map(|h| h.key()).collect();
 
         match request(peer, keys) {
-            Ok(_) => self.insert_in_flight(items.into_iter()),
+            Ok(None) => {}
+            Ok(Some(request_id)) => {
+                self.insert_in_flight(items.into_iter(), request_id)
+            }
             Err(e) => {
                 warn!("Failed to request {:?} from {:?}: {:?}", items, peer, e);
                 self.insert_waiting(items.into_iter());

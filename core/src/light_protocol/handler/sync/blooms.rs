@@ -18,7 +18,7 @@ use crate::{
         message::{msgid, BloomWithEpoch, GetBlooms},
         Error, ErrorKind,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
@@ -101,15 +101,32 @@ impl Blooms {
 
     #[inline]
     pub fn receive(
-        &self, blooms: impl Iterator<Item = BloomWithEpoch>,
-    ) -> Result<(), Error> {
+        &self, peer: PeerId, id: RequestId,
+        blooms: impl Iterator<Item = BloomWithEpoch>,
+    ) -> Result<(), Error>
+    {
         for BloomWithEpoch { epoch, bloom } in blooms {
             info!("Validating bloom {:?} with epoch {}", bloom, epoch);
-            self.validate_bloom(epoch, bloom)?;
 
-            self.verified.write().insert(epoch, bloom);
-            self.sync_manager.remove_in_flight(&epoch);
+            match self.sync_manager.check_if_requested(peer, id, &epoch)? {
+                None => continue,
+                Some(_) => self.validate_and_store(epoch, bloom)?,
+            };
         }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn validate_and_store(
+        &self, epoch: u64, bloom: Bloom,
+    ) -> Result<(), Error> {
+        // validate bloom
+        self.validate_bloom(epoch, bloom)?;
+
+        // store bloom by epoch
+        self.verified.write().insert(epoch, bloom);
+        self.sync_manager.remove_in_flight(&epoch);
 
         Ok(())
     }
@@ -128,20 +145,18 @@ impl Blooms {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlooms {
-            request_id: self.request_id_allocator.next(),
-            epochs,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> = Box::new(GetBlooms { request_id, epochs });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]

@@ -21,7 +21,7 @@ use crate::{
         message::{msgid, GetBlockHeaders},
         Error,
     },
-    message::Message,
+    message::{Message, RequestId},
     network::{NetworkContext, PeerId},
     parameters::light::{
         HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT,
@@ -161,13 +161,25 @@ impl Headers {
         );
     }
 
-    pub fn receive<I>(&self, headers: I)
-    where I: Iterator<Item = BlockHeader> {
+    pub fn receive(
+        &self, peer: PeerId, id: RequestId,
+        headers: impl Iterator<Item = BlockHeader>,
+    ) -> Result<(), Error>
+    {
         let mut missing = HashSet::new();
 
         // TODO(thegaram): validate header timestamps
         for header in headers {
             let hash = header.hash();
+
+            // check request id
+            if self
+                .sync_manager
+                .check_if_requested(peer, id, &hash)?
+                .is_none()
+            {
+                continue;
+            }
 
             // signal receipt
             self.sync_manager.remove_in_flight(&hash);
@@ -201,6 +213,8 @@ impl Headers {
 
         let missing = missing.into_iter();
         self.request(missing, HashSource::Dependency);
+
+        Ok(())
     }
 
     #[inline]
@@ -213,20 +227,19 @@ impl Headers {
     #[inline]
     fn send_request(
         &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
 
-        let msg: Box<dyn Message> = Box::new(GetBlockHeaders {
-            request_id: self.request_id_allocator.next(),
-            hashes,
-        });
+        let request_id = self.request_id_allocator.next();
+        let msg: Box<dyn Message> =
+            Box::new(GetBlockHeaders { request_id, hashes });
 
         msg.send(io, peer)?;
-        Ok(())
+        Ok(Some(request_id))
     }
 
     #[inline]
