@@ -1679,7 +1679,7 @@ impl TxReplayer {
                         .0;
                     latest_state
                         .set::<Account>(
-                            &latest_state.account_key(&sender),
+                            &StorageKey::new_account_key(&sender),
                             &account,
                         )
                         .unwrap();

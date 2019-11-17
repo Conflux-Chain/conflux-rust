@@ -20,7 +20,7 @@ use crate::{
     consensus::BestInformation,
     executive,
     statedb::Result as StateDbResult,
-    storage::{SnapshotAndEpochId, SnapshotAndEpochIdRef, StorageManagerTrait},
+    storage::{StateIndex, StateReadonlyIndex, StorageManagerTrait},
     vm,
 };
 use account_cache::AccountCache;
@@ -86,7 +86,7 @@ pub struct TransactionPool {
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
     spec: vm::Spec,
-    best_executed_epoch: Mutex<SnapshotAndEpochId>,
+    best_executed_epoch: Mutex<StateReadonlyIndex>,
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
@@ -104,8 +104,8 @@ impl TransactionPool {
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man: data_man.clone(),
             spec: vm::Spec::new_spec(),
-            best_executed_epoch: Mutex::new(SnapshotAndEpochId::from_ref(
-                SnapshotAndEpochIdRef::new_for_readonly(
+            best_executed_epoch: Mutex::new(StateReadonlyIndex::from_ref(
+                StateIndex::new_for_readonly(
                     &genesis_hash,
                     &data_man.true_genesis_state_root(),
                 ),
@@ -474,11 +474,9 @@ impl TransactionPool {
         (consensus_best_info.clone(), transactions)
     }
 
-    pub fn set_best_executed_epoch(
-        &self, best_executed_epoch: SnapshotAndEpochIdRef,
-    ) {
+    pub fn set_best_executed_epoch(&self, best_executed_epoch: StateIndex) {
         *self.best_executed_epoch.lock() =
-            SnapshotAndEpochId::from_ref(best_executed_epoch);
+            StateReadonlyIndex::from_ref(best_executed_epoch);
     }
 
     fn get_best_state_account_cache(&self) -> StateDbResult<AccountCache> {

@@ -17,7 +17,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        StateProof,
+        StateProof, StorageKey,
     },
 };
 
@@ -126,16 +126,17 @@ impl LedgerInfo {
     pub fn state_of(&self, epoch: u64) -> Result<State, Error> {
         let pivot = self.pivot_hash_of(epoch)?;
 
-        let state = self
+        let (_state_index_guard, maybe_state_index) = self
             .consensus
             .data_man
-            .get_snapshot_and_epoch_id_readonly(&pivot)
-            .map(|snapshot_and_epoch_id| {
-                self.consensus
-                    .data_man
-                    .storage_manager
-                    .get_state_no_commit(snapshot_and_epoch_id.as_ref())
-            });
+            .get_state_readonly_index(&pivot)
+            .into();
+        let state = maybe_state_index.map(|state_index| {
+            self.consensus
+                .data_man
+                .storage_manager
+                .get_state_no_commit(state_index)
+        });
 
         match state {
             Some(Ok(Some(state))) => Ok(state),
@@ -160,7 +161,7 @@ impl LedgerInfo {
         let state = self.state_of(epoch)?;
 
         let (value, proof) = StateDb::new(state)
-            .get_raw_with_proof(key)
+            .get_raw_with_proof(StorageKey::from_key_bytes(&key))
             .or(Err(ErrorKind::InternalError))?;
 
         let value = value.map(|x| x.to_vec());

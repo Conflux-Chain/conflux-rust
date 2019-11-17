@@ -14,14 +14,11 @@ use cfx_types::H256;
 use primitives::StateRoot;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-// FIXME: remove manifest from it,
 #[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub checkpoint: H256,
     pub manifest: RangedManifest,
-    // FIXME: the blame vecs should be part of state blame response.
-
     // We have state_root_vec for two reasons: 1) construct
     // state_root_blame_vec; 2) construct state_root_with_aux_vec.
     //

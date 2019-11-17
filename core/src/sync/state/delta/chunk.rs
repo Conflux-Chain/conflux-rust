@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    storage::state::{State, StateTrait},
+    storage::{
+        state::{State, StateTrait},
+        StateRootWithAuxInfo, StorageKey,
+    },
     sync::{
         state::delta::{
             compress::write_single_zip_file, ChunkKey, ChunkReader, StateDumper,
@@ -13,7 +16,6 @@ use crate::{
 };
 use cfx_types::H256;
 use keccak_hash::keccak;
-use primitives::StateRootWithAuxInfo;
 use rlp::{Encodable, Rlp};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
@@ -146,7 +148,10 @@ impl Chunk {
             data_pos += self.metadata[index + 1];
             index += 2;
 
-            state.set(key, value.to_vec().into_boxed_slice())?;
+            state.set(
+                StorageKey::from_delta_mpt_key(key),
+                value.to_vec().into_boxed_slice(),
+            )?;
         }
 
         let epoch = match commit_epoch {

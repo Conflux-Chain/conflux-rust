@@ -53,11 +53,6 @@ pub struct MultiVersionMerklePatriciaTrie {
     node_memory_manager: NodeMemoryManagerDeltaMpt,
     /// Underlying database for DeltaMpt.
     db: Arc<dyn DeltaDbTrait + Send + Sync>,
-    /// The padding is uniquely generated for each DeltaMPT, and it's used to
-    /// compute padding bytes for address and storage_key. The padding setup
-    /// is against an attack where adversary artificially build deep paths in
-    /// MPT.
-    pub padding: KeyPadding,
     /// Take care of database clean-ups for DeltaMpt.
     // The variable is used in drop. Variable with non-trivial dtor shouldn't
     // trigger the compiler warning.
@@ -96,8 +91,7 @@ impl MultiVersionMerklePatriciaTrie {
 
     pub fn new(
         kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, conf: &StorageConfiguration,
-        padding: KeyPadding, snapshot_epoch_id: EpochId,
-        storage_manager: Arc<StorageManager>,
+        snapshot_epoch_id: EpochId, storage_manager: Arc<StorageManager>,
     ) -> Self
     {
         let row_number =
@@ -116,7 +110,6 @@ impl MultiVersionMerklePatriciaTrie {
                 conf.node_map_size,
                 LRU::<RLFUPosT, DeltaMptDbKey>::new(conf.cache_size),
             ),
-            padding,
             delta_mpts_releaser: DeltaDbReleaser {
                 snapshot_epoch_id,
                 storage_manager: Arc::downgrade(&storage_manager),
@@ -306,6 +299,12 @@ impl MultiVersionMerklePatriciaTrie {
         }
     }
 
+    pub fn get_merkle_root_by_epoch_id(
+        &self, epoch_id: &EpochId,
+    ) -> Result<Option<MerkleHash>> {
+        self.get_merkle(self.get_root_node_ref_by_epoch(epoch_id)?)
+    }
+
     pub fn log_usage(&self) { self.node_memory_manager.log_usage(); }
 }
 
@@ -339,14 +338,15 @@ use self::{
     node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
 };
 use super::{
-    super::storage_db::delta_db_manager::{
-        DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
+    super::{
+        state_manager::StorageConfiguration,
+        storage_db::delta_db_manager::{
+            DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
+        },
+        storage_key::*,
     },
     errors::*,
     storage_manager::storage_manager::*,
-};
-use crate::{
-    statedb::KeyPadding, storage::state_manager::StorageConfiguration,
 };
 use cfx_types::hexstr_to_h256;
 use keccak_hash::keccak;
