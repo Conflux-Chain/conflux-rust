@@ -19,6 +19,19 @@ matrix:
             - cargo test --release --all
         before_cache:
             - cp Cargo.lock target
+      # cargo clippy
+      - env:
+          - CACHE_NAME=clippy_tests
+        cache:
+          timeout: 300
+          cargo: true
+        install:
+          - if [ -f target/Cargo.lock ]; then mv target/Cargo.lock .; fi
+          - export RUSTFLAGS="-D warnings"
+        script:
+          - cargo clippy --release -- -A warnings
+        before_cache:
+          - cp Cargo.lock target
       # benchmark tests
       - env:
             - CACHE_NAME=bench
