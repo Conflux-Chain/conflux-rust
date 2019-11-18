@@ -504,7 +504,7 @@ impl Impl for Bn128AddImpl {
                 .expect("Cannot fail since 0..32 is 32-byte length");
             sum.y()
                 .to_big_endian(&mut write_buf[32..64])
-                .expect("Cannot fail since 32..64 is 32-byte length");;
+                .expect("Cannot fail since 32..64 is 32-byte length");
         }
         output.write(0, &write_buf);
 
@@ -532,7 +532,7 @@ impl Impl for Bn128MulImpl {
                 .expect("Cannot fail since 0..32 is 32-byte length");
             sum.y()
                 .to_big_endian(&mut write_buf[32..64])
-                .expect("Cannot fail since 32..64 is 32-byte length");;
+                .expect("Cannot fail since 32..64 is 32-byte length");
         }
         output.write(0, &write_buf);
         Ok(())

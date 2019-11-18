@@ -42,7 +42,7 @@ log4rs = "0.8.1"
 rlp = "0.4.0"
 keccak-hash = "0.3.0"
 rand = "0.7"
-kvdb-rocksdb = "=0.1.4"
+kvdb-rocksdb = {path="db/src/kvdb-rocksdb"}
 client = { path = "client" }
 cfx-types = { path = "cfx_types" }
 threadpool = "1.7"
@@ -68,8 +68,8 @@ path = "accounts/ethkey/cli/src/main.rs"
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
 
-[patch.crates-io]
-kvdb-rocksdb = {path = "./db/src/kvdb-rocksdb"}
+#[patch.crates-io]
+#kvdb-rocksdb = {path = "./db/src/kvdb-rocksdb"}
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
