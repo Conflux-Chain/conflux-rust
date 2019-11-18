@@ -178,7 +178,8 @@ class ConsensusExecutionStatus(object):
 
 
 class ConsensusSnapshot(object):
-    def __init__(self):
+    def __init__(self, peer_id):
+        self.peer_id = peer_id
         self.block_status_verified = {}
         self.block_status_unverified = {}
         self.exec_status_verified = {}
@@ -188,41 +189,59 @@ class ConsensusSnapshot(object):
         if block.hash in self.block_status_verified:
             verified_block = self.block_status_verified[block.hash]
             if block.block_status != BlockStatus.Pending:
-                assert block.block_status == verified_block.block_status
-                assert block.stable == verified_block.stable
-                assert block.adaptive == verified_block.adaptive
+                assert block.block_status == verified_block.block_status, "peer[{}] block[{}] status[{}], expect [{}]".format(
+                    self.peer_id, block.hash, block.block_status, verified_block.block_status)
+                assert block.stable == verified_block.stable, "peer[{}] block[{}] stable[{}], expect [{}]".format(
+                    self.peer_id, block.hash, block.stable, verified_block.stable)
+                assert block.adaptive == verified_block.adaptive, "peer[{}] block[{}] adaptive[{}], expect [{}]".format(
+                    self.peer_id, block.hash, block.adaptive, verified_block.adaptive)
                 assert block.era_block_hash == verified_block.era_block_hash or \
-                    block.era_block_hash == DEFAULT_HASH
-                assert block.past_era_weight == verified_block.past_era_weight
+                    block.era_block_hash == DEFAULT_HASH, "peer[{}] block[{}] era_block_hash[{}], expect [{}]".format(
+                        self.peer_id, block.hash, block.era_block_hash, verified_block.era_block_hash)
+                assert block.past_era_weight == verified_block.past_era_weight, "peer[{}] block[{}] past_era_weight[{}], expect [{}]".format(
+                    self.peer_id, block.hash, block.past_era_weight, verified_block.past_era_weight)
         elif block.hash in self.block_status_unverified:
             unverified_block = self.block_status_unverified[block.hash]
             if unverified_block.block_status == BlockStatus.Pending:
                 self.block_status_unverified[block.hash] = block
             else:
                 if block.block_status != BlockStatus.Pending:
-                    assert block.block_status == unverified_block.block_status
-                    assert block.stable == unverified_block.stable
-                    assert block.adaptive == unverified_block.adaptive
+                    assert block.block_status == unverified_block.block_status, "peer[{}] block[{}] status[{}], expect [{}]".format(
+                        self.peer_id, block.hash, block.block_status, unverified_block.block_status)
+                    assert block.stable == unverified_block.stable, "peer[{}] block[{}] stable[{}], expect [{}]".format(
+                        self.peer_id, block.hash, block.stable, unverified_block.stable)
+                    assert block.adaptive == unverified_block.adaptive, "peer[{}] block[{}] adaptive[{}], expect [{}]".format(
+                        self.peer_id, block.hash, block.adaptive, unverified_block.adaptive)
                     assert block.era_block_hash == unverified_block.era_block_hash or \
                         block.era_block_hash == DEFAULT_HASH or \
-                        unverified_block.era_block_hash == DEFAULT_HASH
-                    assert block.past_era_weight == unverified_block.past_era_weight
+                        unverified_block.era_block_hash == DEFAULT_HASH, "peer[{}] block[{}] era_block_hash[{}], expect [{}]".format(
+                            self.peer_id, block.hash, block.era_block_hash, unverified_block.era_block_hash)
+                    assert block.past_era_weight == unverified_block.past_era_weight, "peer[{}] block[{}] past_era_weight[{}], expect [{}]".format(
+                        self.peer_id, block.hash, block.past_era_weight, unverified_block.past_era_weight)
         else:
             self.block_status_unverified[block.hash] = block
 
     def add_exec(self, exec):
         if exec.hash in self.exec_status_verified:
             verified_exec = self.exec_status_verified[exec.hash]
-            assert exec.deferred_state_root == verified_exec.deferred_state_root
-            assert exec.deferred_receipt_root == verified_exec.deferred_receipt_root
-            assert exec.deferred_logs_bloom_hash == verified_exec.deferred_logs_bloom_hash
-            assert exec.state_valid == verified_exec.state_valid
+            assert exec.deferred_state_root == verified_exec.deferred_state_root, "peer[{}] block[{}] deferred_state_root[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.deferred_state_root, verified_exec.deferred_state_root)
+            assert exec.deferred_receipt_root == verified_exec.deferred_receipt_root, "peer[{}] block[{}] deferred_receipt_root[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.deferred_receipt_root, verified_exec.deferred_receipt_root)
+            assert exec.deferred_logs_bloom_hash == verified_exec.deferred_logs_bloom_hash, "peer[{}] block[{}] deferred_logs_bloom_hash[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.deferred_logs_bloom_hash, verified_exec.deferred_logs_bloom_hash)
+            assert exec.state_valid == verified_exec.state_valid, "peer[{}] block[{}] state_valid[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.state_valid, verified_exec.state_valid)
         elif exec.hash in self.exec_status_unverified:
             unverified_exec = self.exec_status_unverified[exec.hash]
-            assert exec.deferred_state_root == unverified_exec.deferred_state_root
-            assert exec.deferred_receipt_root == unverified_exec.deferred_receipt_root
-            assert exec.deferred_logs_bloom_hash == unverified_exec.deferred_logs_bloom_hash
-            assert exec.state_valid == unverified_exec.state_valid
+            assert exec.deferred_state_root == unverified_exec.deferred_state_root, "peer[{}] block[{}] deferred_state_root[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.deferred_state_root, unverified_exec.deferred_state_root)
+            assert exec.deferred_receipt_root == unverified_exec.deferred_receipt_root, "peer[{}] block[{}] deferred_receipt_root[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.deferred_receipt_root, unverified_exec.deferred_receipt_root)
+            assert exec.deferred_logs_bloom_hash == unverified_exec.deferred_logs_bloom_hash, "peer[{}] block[{}] deferred_logs_bloom_hash[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.deferred_logs_bloom_hash, unverified_exec.deferred_logs_bloom_hash)
+            assert exec.state_valid == unverified_exec.state_valid, "peer[{}] block[{}] state_valid[{}], expect[{}]".format(
+                self.peer_id, exec.hash, exec.state_valid, unverified_exec.state_valid)
         else:
             self.exec_status_unverified[exec.hash] = exec
 
@@ -231,7 +250,7 @@ class Snapshot(object):
     def __init__(self, peer_id, genesis):
         self.genesis = genesis
         self.peer_id = peer_id
-        self.consensus = ConsensusSnapshot()
+        self.consensus = ConsensusSnapshot(peer_id)
         self.sync_graph = None
         self.network = None
         self.event_list = []
@@ -325,7 +344,7 @@ class ConfluxTracing(ConfluxTestFramework):
                     self._snapshots[chosen_peer].start()
                     self.log.info("started {}".format(chosen_peer))
         except Exception as e:
-            self.log.info('got exception[{}]'.format(repr(e)))
+            self.log.info('got exception[{}] during start'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -339,8 +358,9 @@ class ConfluxTracing(ConfluxTestFramework):
                 if (len(normal_peers) - 1) * 2 <= len(self.nodes):
                     return
                 alive_peer_indices = normal_peers + catch_up_peers
+                # We need peer[0] to run forever as a reference
                 chosen_peer = alive_peer_indices[random.randint(
-                    0, len(alive_peer_indices) - 1)]
+                    1, len(alive_peer_indices) - 1)]
                 self.log.info("stopping {}".format(chosen_peer))
                 # retrieve new ready blocks before stopping it
                 new_blocks = self.nodes[chosen_peer].sync_graph_state()
@@ -350,7 +370,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 self._snapshots[chosen_peer].stop()
                 self.log.info("stopped {}".format(chosen_peer))
         except Exception as e:
-            self.log.info('got exception[{}]'.format(repr(e)))
+            self.log.info('got exception[{}] during crash'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -374,7 +394,9 @@ class ConfluxTracing(ConfluxTestFramework):
             with self._peer_lock:
                 alive_peer_indices = self._retrieve_alive_peers(["NormalSyncPhase"])
                 alive_peer_indices = alive_peer_indices.get('NormalSyncPhase', [])
-                assert len(alive_peer_indices) * 2 > len(self.nodes)
+                if self.options.archive:
+                    assert len(alive_peer_indices) * \
+                        2 > self.num_nodes, "alive[{}] total[{}]".format(len(alive_peer_indices), self.num_nodes)
                 chosen_peer = alive_peer_indices[random.randint(
                     0, len(alive_peer_indices) - 1)]
                 txs = self._generate_txs(chosen_peer, NUM_TX_PER_BLOCK)
@@ -405,7 +427,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 for predicate in self._predicates:
                     predicate(self._snapshots, self._stopped_peers)
         except Exception as e:
-            self.log.info('got exception[{}]'.format(repr(e)))
+            self.log.info('got exception[{}] during verify'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -420,6 +442,15 @@ class ConfluxTracing(ConfluxTestFramework):
             "era_epoch_count": 50,
             "era_checkpoint_gap": 50
         }
+
+    def setup_nodes(self):
+        self.add_nodes(self.num_nodes)
+        if self.options.archive:
+            self.start_nodes()
+        else:
+            self.start_node(0)
+            for i in range(1, self.num_nodes):
+                self.start_node(i, extra_args=["--full"], phase_to_wait=None)
 
     def setup_network(self):
         self.log.info("setup nodes ...")
@@ -499,6 +530,13 @@ class ConfluxTracing(ConfluxTestFramework):
             type=int,
             default=11,
             help='number of nodes to run')
+        run_parser.add_argument(
+            '-archive',
+            '--archive',
+            dest='archive',
+            type=int,
+            default=1,
+            help='archive node mode or full node mode')
         run_parser.add_argument(
             '-ct',
             '--crash-timeout',

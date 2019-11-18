@@ -1433,16 +1433,30 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        let stable_pivot_index =
-            inner.cur_era_stable_height - inner.cur_era_genesis_height;
-        for pivot_index in stable_pivot_index as usize
+        let stable_pivot_index = (inner.cur_era_stable_height
+            - inner.cur_era_genesis_height)
+            as usize;
+        let stable_hash =
+            inner.arena[inner.pivot_chain[stable_pivot_index]].hash;
+        // Here, we should ensure the epoch_execution_commitment for stable hash
+        // must be loaded into memory. Since, in some rare cases, the number of
+        // blocks between stable and best_epoch is less than
+        // DEFERRED_STATE_EPOCH_COUNT, the for loop below will not load
+        // epoch_execution_commitment for stable hash.
+        if stable_hash != inner.data_man.true_genesis.hash()
+            && self
+                .data_man
+                .get_epoch_execution_commitment(&stable_hash)
+                .is_none()
+        {
+            self.data_man.load_epoch_execution_commitment_from_db(&stable_hash)
+                .expect("epoch_execution_commitment for stable hash must exist in disk");
+        }
+        for pivot_index in stable_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
         {
             let arena_index = inner.pivot_chain[pivot_index];
             let pivot_hash = inner.arena[arena_index].hash;
-            if pivot_hash == inner.data_man.true_genesis.hash() {
-                continue;
-            }
 
             // Ensure that the commitments for the blocks on
             // pivot_chain after cur_era_stable_genesis are kept in memory.
