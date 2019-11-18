@@ -654,13 +654,15 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     }
 
     fn merge_path_action(&self) -> TrieNodeAction {
-        for (i, node_ref) in self.children_table.iter() {
-            return TrieNodeAction::MergePath {
-                child_index: i,
-                child_node_ref: (*node_ref).into(),
-            };
+        let (i, node_ref) = self
+            .children_table
+            .iter()
+            .next()
+            .expect("Only called when children_count == 1");
+        TrieNodeAction::MergePath {
+            child_index: i,
+            child_node_ref: (*node_ref).into(),
         }
-        unsafe { unreachable_unchecked() }
     }
 
     fn merge_path_action_after_child_deletion(

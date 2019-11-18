@@ -43,6 +43,7 @@
 //! the `BitSet` to panic.
 
 #![deny(missing_docs)]
+#![allow(clippy::all)]
 
 extern crate atom;
 #[cfg(test)]

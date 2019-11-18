@@ -158,11 +158,7 @@ impl RpcImpl {
             Err(RpcError::invalid_params(String::from("tx already exist")))
         } else {
             if signed_trans.is_empty() {
-                let mut tx_err = String::from("");
-                for (_, e) in failed_trans.iter() {
-                    tx_err = e.clone();
-                    break;
-                }
+                let tx_err = failed_trans.iter().next().expect("Not empty").1;
                 Err(RpcError::invalid_params(tx_err))
             } else {
                 let tx_hash = signed_trans[0].hash();

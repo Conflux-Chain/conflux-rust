@@ -210,7 +210,7 @@ impl StratumImpl {
                 match tcp_dispatcher.push_message(addr, workers_msg.clone()) {
                     Err(PushMessageError::NoSuchPeer) => {
                         trace!(target: "stratum", "Worker no longer connected: {}", &addr);
-                        hup_peers.insert(*addr.clone());
+                        hup_peers.insert(**addr);
                     }
                     Err(e) => {
                         warn!(target: "stratum", "Unexpected transport error: {:?}", e);

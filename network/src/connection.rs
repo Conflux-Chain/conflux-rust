@@ -375,7 +375,7 @@ impl Connection {
             token,
             socket,
             recv_buf: BytesMut::new(),
-            send_queue: PrioritySendQueue::new(),
+            send_queue: PrioritySendQueue::default(),
             sending_packet: None,
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
@@ -662,7 +662,7 @@ mod tests {
             TestConnection {
                 token: 1234567890usize,
                 socket: TestSocket::new(),
-                send_queue: PrioritySendQueue::new(),
+                send_queue: PrioritySendQueue::default(),
                 sending_packet: None,
                 recv_buf: BytesMut::new(),
                 interest: Ready::hup() | Ready::readable(),

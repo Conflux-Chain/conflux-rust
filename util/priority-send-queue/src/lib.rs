@@ -14,14 +14,16 @@ pub struct PrioritySendQueue<T> {
     queues: Vec<VecDeque<T>>,
 }
 
-impl<T> PrioritySendQueue<T> {
-    pub fn new() -> PrioritySendQueue<T> {
+impl<T> Default for PrioritySendQueue<T> {
+    fn default() -> PrioritySendQueue<T> {
         let mut queues = Vec::new();
         queues.push(VecDeque::new());
         queues.push(VecDeque::new());
         PrioritySendQueue { queues }
     }
+}
 
+impl<T> PrioritySendQueue<T> {
     fn queue(&self, priority: SendQueuePriority) -> &VecDeque<T> {
         &self.queues[priority as usize]
     }
@@ -46,13 +48,13 @@ impl<T> PrioritySendQueue<T> {
     }
 
     pub fn front_mut(&mut self) -> Option<(&mut T, bool)> {
-        let mut promoted = false;
-
-        if self.queue(SendQueuePriority::High).is_empty() {
+        let promoted = if self.queue(SendQueuePriority::High).is_empty() {
             let res = self.queue_mut(SendQueuePriority::Normal).pop_front()?;
             self.queue_mut(SendQueuePriority::High).push_back(res);
-            promoted = true;
-        }
+            true
+        } else {
+            false
+        };
 
         self.queue_mut(SendQueuePriority::High)
             .front_mut()
