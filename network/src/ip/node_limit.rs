@@ -238,11 +238,11 @@ impl NodeIpLimit {
         let subnet = self.subnet_type.subnet(&ip);
         if trusted {
             self.trusted_buckets
-                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .get_mut_or_insert_with(subnet, NodeBucket::default)
                 .add(id);
         } else {
             self.untrusted_buckets
-                .get_mut_or_insert_with(subnet, || NodeBucket::default())
+                .get_mut_or_insert_with(subnet, NodeBucket::default)
                 .add(id);
         }
     }

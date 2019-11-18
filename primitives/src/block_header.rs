@@ -525,7 +525,7 @@ mod tests {
         let receipt = Receipt {
             gas_used: 0.into(),
             logs: vec![],
-            outcome_status: 0.into(),
+            outcome_status: 0,
             log_bloom: Bloom::zero(),
         };
 
@@ -543,7 +543,7 @@ mod tests {
             Receipt {
                 gas_used: 0.into(),
                 logs: vec![],
-                outcome_status: 0.into(),
+                outcome_status: 0,
                 log_bloom: Bloom::from_str(
                     "11111111111111111111111111111111\
                      00000000000000000000000000000000\
@@ -567,7 +567,7 @@ mod tests {
             Receipt {
                 gas_used: 0.into(),
                 logs: vec![],
-                outcome_status: 0.into(),
+                outcome_status: 0,
                 log_bloom: Bloom::from_str(
                     "00000000000000000000000000000000\
                      22222222222222222222222222222222\
@@ -593,7 +593,7 @@ mod tests {
         let block2 = vec![Receipt {
             gas_used: 0.into(),
             logs: vec![],
-            outcome_status: 0.into(),
+            outcome_status: 0,
             log_bloom: Bloom::from_str(
                 "44444444444444440000000000000000\
                  44444444444444440000000000000000\

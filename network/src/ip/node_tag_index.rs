@@ -46,10 +46,10 @@ impl NodeTagIndex {
     ) -> bool {
         self.items
             .entry(key)
-            .or_insert_with(|| Default::default())
+            .or_insert_with(Default::default)
             .entry(value)
-            .or_insert_with(|| Default::default())
-            .get_mut_or_insert_with(subnet, || Default::default())
+            .or_insert_with(Default::default)
+            .get_mut_or_insert_with(subnet, Default::default)
             .insert(id)
     }
 

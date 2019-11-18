@@ -126,11 +126,11 @@ impl RpcImpl {
         let epoch_height = self
             .consensus
             .get_height_from_epoch_number(epoch_num.into())
-            .map_err(|err| RpcError::invalid_params(err))?;
+            .map_err(RpcError::invalid_params)?;
 
         let pivot_hash = inner
             .get_hash_from_epoch_number(epoch_height)
-            .map_err(|err| RpcError::invalid_params(err))?;
+            .map_err(RpcError::invalid_params)?;
 
         if let Some(block) = self
             .data_man
@@ -176,7 +176,7 @@ impl RpcImpl {
 
         inner
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
-            .map_err(|err| RpcError::invalid_params(err))?;
+            .map_err(RpcError::invalid_params)?;
 
         self.data_man
             .block_by_hash(&block_hash, false /* update_cache */)
@@ -192,7 +192,7 @@ impl RpcImpl {
 
         self.consensus
             .get_block_hashes_by_epoch(num.into())
-            .map_err(|err| RpcError::invalid_params(err))
+            .map_err(RpcError::invalid_params)
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }
 
@@ -209,7 +209,7 @@ impl RpcImpl {
 
         self.consensus
             .transaction_count(address.into(), num.into())
-            .map_err(|err| RpcError::invalid_params(err))
+            .map_err(RpcError::invalid_params)
             .map(|x| x.into())
     }
 }
@@ -235,7 +235,7 @@ impl RpcImpl {
         };
         info!("RPC Request: add_peer({:?})", node.clone());
         match self.network.add_peer(node) {
-            Ok(x) => Ok(x),
+            Ok(_x) => Ok(()),
             Err(_) => Err(RpcError::internal_error()),
         }
     }
@@ -430,7 +430,7 @@ impl RpcImpl {
     pub fn net_sessions(
         &self, node_id: Option<NodeId>,
     ) -> RpcResult<Vec<SessionDetails>> {
-        match self.network.get_detailed_sessions(node_id.into()) {
+        match self.network.get_detailed_sessions(node_id) {
             None => Ok(Vec::new()),
             Some(sessions) => Ok(sessions),
         }
@@ -629,7 +629,7 @@ impl RpcImpl {
         &self, data: Bytes, address: RpcH160, password: Option<String>,
     ) -> RpcResult<RpcH520> {
         let message = self.eth_data_hash(data.0);
-        let password = password.map(|s| Password::from(s));
+        let password = password.map(Password::from);
         let signature =
             match self.accounts.sign(address.into(), password, message) {
                 Ok(signature) => signature,

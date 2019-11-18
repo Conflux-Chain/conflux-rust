@@ -129,7 +129,7 @@ impl PushWorkHandler for Stratum {
 impl Drop for Stratum {
     fn drop(&mut self) {
         // shut down rpc server
-        self.rpc_server.take().map(|server| server.close());
+        if let Some(server) = self.rpc_server.take() { server.close() }
     }
 }
 
@@ -197,7 +197,7 @@ impl StratumImpl {
                 if *counter == ::std::u32::MAX {
                     *counter = NOTIFY_COUNTER_INITIAL;
                 } else {
-                    *counter = *counter + 1
+                    *counter += 1
                 }
                 *counter
             };

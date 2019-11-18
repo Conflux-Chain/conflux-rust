@@ -72,7 +72,7 @@ impl Handshake {
         token: StreamToken, id: Option<&NodeId>, socket: TcpStream,
     ) -> Self {
         Handshake {
-            id: id.cloned().unwrap_or_else(|| NodeId::default()),
+            id: id.cloned().unwrap_or_else(NodeId::default),
             connection: Connection::new(token, socket),
             state: HandshakeState::New,
             nonce: H256::random(),

@@ -164,7 +164,7 @@ impl AccountProvider {
         )?;
         if self.blacklisted_accounts.contains(&account.address) {
             self.sstore.remove_account(&account, password)?;
-            return Err(Error::InvalidAccount.into());
+            return Err(Error::InvalidAccount);
         }
         Ok(account.address)
     }
@@ -205,7 +205,7 @@ impl AccountProvider {
             presale_json,
             password,
         )?;
-        Ok(Address::from(account.address).into())
+        Ok(account.address)
     }
 
     /// Import a new wallet.
@@ -220,9 +220,9 @@ impl AccountProvider {
         )?;
         if self.blacklisted_accounts.contains(&account.address) {
             self.sstore.remove_account(&account, password)?;
-            return Err(Error::InvalidAccount.into());
+            return Err(Error::InvalidAccount);
         }
-        Ok(Address::from(account.address).into())
+        Ok(account.address)
     }
 
     /// Checks whether an account with a given address is present.
@@ -613,7 +613,7 @@ impl AccountProvider {
         self.sstore
             .list_geth_accounts(testnet)
             .into_iter()
-            .map(|a| Address::from(a).into())
+            .map(|a| a)
             .collect()
     }
 

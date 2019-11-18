@@ -53,8 +53,8 @@ impl Transaction {
         Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
-            block_hash: receipt.clone().map(|x| x.block_hash.into()),
-            transaction_index: receipt.clone().map(|x| x.index.into()),
+            block_hash: receipt.clone().map(|x| x.block_hash),
+            transaction_index: receipt.map(|x| x.index.into()),
             status,
             contract_created,
             from: t.sender().into(),
@@ -124,7 +124,7 @@ impl SendTxRequest {
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 
-        let password = password.map(|s| Password::from(s));
+        let password = password.map(Password::from);
         let sig = account_provider(None, None)?
             .sign(self.from.into(), password, tx.hash())
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;

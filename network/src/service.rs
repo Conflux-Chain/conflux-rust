@@ -603,7 +603,7 @@ impl NetworkServiceInner {
             Ok(n) => {
                 self.node_db.write().insert_trusted(NodeEntry {
                     id: n.id,
-                    endpoint: n.endpoint.clone(),
+                    endpoint: n.endpoint,
                 });
             }
         }
@@ -1214,7 +1214,7 @@ impl NetworkServiceInner {
     fn on_udp_packet(
         &self, packet: &[u8], from: SocketAddr,
     ) -> Result<(), Error> {
-        if packet.len() == 0 {
+        if packet.is_empty() {
             return Ok(());
         }
 
@@ -1360,12 +1360,10 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 }
             }
             DISCOVERY_ROUND => {
-                self.discovery.lock().as_mut().map(|d| {
-                    d.round(&UdpIoContext::new(
+                if let Some(d) = self.discovery.lock().as_mut() { d.round(&UdpIoContext::new(
                         &self.udp_channel,
                         &self.node_db,
-                    ))
-                });
+                    )) }
                 io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                     debug!("Error updating discovery registration: {:?}", e)
                 });
@@ -1675,13 +1673,11 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
             let latency =
                 self.network_service
                     .delayed_queue
-                    .as_ref()
-                    .map_or(None, |q| {
-                        session.write().metadata.id.map_or(None, |id| {
+                    .as_ref().and_then(|q| {
+                        session.write().metadata.id.and_then(|id| {
                             q.latencies
                                 .read()
-                                .get(&id)
-                                .map(|latency| latency.clone())
+                                .get(&id).copied()
                         })
                     });
             match latency {
@@ -1694,7 +1690,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         ts_to_send,
                         self.io.clone(),
                         self.protocol,
-                        session.clone(),
+                        session,
                         peer,
                         msg,
                         priority,

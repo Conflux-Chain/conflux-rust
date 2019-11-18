@@ -76,7 +76,7 @@ impl str::FromStr for Uuid {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let parts: Vec<&str> = s.split("-").collect();
+        let parts: Vec<&str> = s.split('-').collect();
 
         if parts.len() != 5 {
             return Err(Error::InvalidUuid);
@@ -96,11 +96,7 @@ impl str::FromStr for Uuid {
 
 impl From<&'static str> for Uuid {
     fn from(s: &'static str) -> Self {
-        s.parse().expect(&format!(
-            "invalid string literal for {}: '{}'",
-            stringify!(Self),
-            s
-        ))
+        s.parse().unwrap_or_else(|_| panic!("invalid string literal for {}: '{}'", stringify!(Self), s))
     }
 }
 

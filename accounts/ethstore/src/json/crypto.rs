@@ -93,7 +93,7 @@ impl<'a> Visitor<'a> for CryptoFieldVisitor {
 impl<'a> Deserialize<'a> for Crypto {
     fn deserialize<D>(deserializer: D) -> Result<Crypto, D::Error>
     where D: Deserializer<'a> {
-        static FIELDS: &'static [&'static str] =
+        static FIELDS: &[&str] =
             &["id", "version", "crypto", "Crypto", "address"];
         deserializer.deserialize_struct("Crypto", FIELDS, CryptoVisitor)
     }

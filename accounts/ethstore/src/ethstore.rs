@@ -286,12 +286,12 @@ impl SecretStore for EthStore {
 
     fn name(&self, account: &StoreAccountRef) -> Result<String, Error> {
         let account = self.get(account)?;
-        Ok(account.name.clone())
+        Ok(account.name)
     }
 
     fn meta(&self, account: &StoreAccountRef) -> Result<String, Error> {
         let account = self.get(account)?;
-        Ok(account.meta.clone())
+        Ok(account.meta)
     }
 
     fn set_name(
@@ -347,7 +347,7 @@ impl SecretStore for EthStore {
         };
 
         imported_addresses
-            .map(|a| a.into_iter().map(|a| StoreAccountRef::root(a)).collect())
+            .map(|a| a.into_iter().map(StoreAccountRef::root).collect())
     }
 }
 
@@ -568,7 +568,7 @@ impl EthMultiStore {
             cache.remove(account_ref);
         }
 
-        return Ok(());
+        Ok(())
     }
 
     fn generate(
@@ -897,8 +897,7 @@ impl SimpleSecretStore for EthMultiStore {
         // => allow reading meta even if vault is not yet opened
         self.vaults
             .lock()
-            .get(name)
-            .and_then(|v| Some(v.meta()))
+            .get(name).map(|v| v.meta())
             .ok_or(Error::VaultNotFound)
             .or_else(|_| {
                 let vault_provider = self
@@ -1271,12 +1270,12 @@ mod tests {
 
         // then
         let account1 = store
-            .change_account_vault(SecretVaultRef::Root, account1.clone())
+            .change_account_vault(SecretVaultRef::Root, account1)
             .unwrap();
         let account2 = store
             .change_account_vault(
                 SecretVaultRef::Vault(name2.to_owned()),
-                account2.clone(),
+                account2,
             )
             .unwrap();
         let account3 = store
@@ -1483,8 +1482,8 @@ mod tests {
         // then
         let opened_vaults = store.list_opened_vaults().unwrap();
         assert_eq!(opened_vaults.len(), 2);
-        assert!(opened_vaults.iter().any(|v| &*v == name1));
-        assert!(opened_vaults.iter().any(|v| &*v == name3));
+        assert!(opened_vaults.iter().any(|v| *v == name1));
+        assert!(opened_vaults.iter().any(|v| *v == name3));
     }
 
     #[test]

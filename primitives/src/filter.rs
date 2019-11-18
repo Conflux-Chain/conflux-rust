@@ -141,7 +141,7 @@ impl Filter {
                 .into_iter()
                 .flat_map(|bloom| {
                     topics
-                        .into_iter()
+                        .iter()
                         .map(|topic| {
                             let mut b = bloom.clone();
                             b.accrue(BloomInput::Raw(topic.as_bytes()));

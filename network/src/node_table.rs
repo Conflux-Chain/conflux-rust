@@ -563,7 +563,7 @@ impl NodeTable {
             if let Some(node_idx) = self.node_index.get_mut(&tail_node.id) {
                 node_rep_vec[index.1] = tail_node;
                 *node_idx = *index;
-                return Some(removed_node);
+                Some(removed_node)
             } else {
                 panic!("Should not happen!");
             }
@@ -729,17 +729,15 @@ impl NodeTable {
             if by_connection {
                 node.last_connected = Some(NodeContact::failure());
             }
-        } else {
-            if let Some(mut node) = self.remove_from_reputation_level(&_index) {
-                node.last_contact = Some(NodeContact::failure());
-                if by_connection {
-                    node.last_connected = Some(NodeContact::failure());
-                }
-                self.add_to_reputation_level(target_node_rep, node);
-            } else {
-                panic!("Should not happen!");
-            }
-        }
+        } else if let Some(mut node) = self.remove_from_reputation_level(&_index) {
+    node.last_contact = Some(NodeContact::failure());
+    if by_connection {
+        node.last_connected = Some(NodeContact::failure());
+    }
+    self.add_to_reputation_level(target_node_rep, node);
+} else {
+    panic!("Should not happen!");
+}
     }
 
     /// Set last contact as success for a node
@@ -763,20 +761,18 @@ impl NodeTable {
                     node.stream_token = token;
                 }
             }
-        } else {
-            if let Some(mut node) = self.remove_from_reputation_level(&_index) {
-                node.last_contact = Some(NodeContact::success());
-                if by_connection {
-                    node.last_connected = Some(NodeContact::success());
-                    if token != None {
-                        node.stream_token = token;
-                    }
-                }
-                self.add_to_reputation_level(target_node_rep, node);
-            } else {
-                panic!("Should not happen!");
-            }
+        } else if let Some(mut node) = self.remove_from_reputation_level(&_index) {
+    node.last_contact = Some(NodeContact::success());
+    if by_connection {
+        node.last_connected = Some(NodeContact::success());
+        if token != None {
+            node.stream_token = token;
         }
+    }
+    self.add_to_reputation_level(target_node_rep, node);
+} else {
+    panic!("Should not happen!");
+}
     }
 
     /// Mark as useless, no further attempts to connect until next call to
@@ -827,7 +823,7 @@ impl NodeTable {
     }
 
     pub fn all(&self) -> Vec<NodeId> {
-        self.node_index.keys().map(|id| id.clone()).collect()
+        self.node_index.keys().copied().collect()
     }
 }
 

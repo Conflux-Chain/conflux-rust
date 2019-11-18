@@ -50,8 +50,8 @@ impl Into<json::KeyFile> for SafeAccount {
             version: self.version.into(),
             address: Some(self.address.into()),
             crypto: self.crypto.into(),
-            name: Some(self.name.into()),
-            meta: Some(self.meta.into()),
+            name: Some(self.name),
+            meta: Some(self.meta),
         }
     }
 }
@@ -93,8 +93,8 @@ impl SafeAccount {
         let crypto = Crypto::from(json.crypto);
         let address = match (password, &json.address) {
 			(None, Some(json_address)) => json_address.into(),
-			(None, None) => Err(Error::Custom(
-				"This keystore does not contain address. You need to provide password to import it".into()))?,
+			(None, None) => return Err(Error::Custom(
+				"This keystore does not contain address. You need to provide password to import it".into())),
 			(Some(password), json_address) => {
 				let derived_address = KeyPair::from_secret(
 					crypto.secret(&password).map_err(|_| Error::InvalidPassword)?
@@ -120,7 +120,7 @@ impl SafeAccount {
             address,
             crypto,
             filename,
-            name: json.name.unwrap_or(String::new()),
+            name: json.name.unwrap_or_default(),
             meta: json.meta.unwrap_or("{}".to_owned()),
         })
     }

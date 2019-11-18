@@ -86,7 +86,7 @@ impl PhrasesIterator {
             let to_add = expected_words - words.len();
             info!("Number of words is insuficcient adding {} more.", to_add);
             for _ in 0..to_add {
-                words.push(parity_wordlist::WORDS.iter().cloned().collect());
+                words.push(parity_wordlist::WORDS.to_vec());
             }
         }
 

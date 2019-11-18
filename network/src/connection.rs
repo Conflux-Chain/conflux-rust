@@ -660,7 +660,7 @@ mod tests {
     impl TestConnection {
         fn new() -> Self {
             TestConnection {
-                token: 1234567890usize,
+                token: 1_234_567_890usize,
                 socket: TestSocket::new(),
                 send_queue: PrioritySendQueue::default(),
                 sending_packet: None,
@@ -690,7 +690,7 @@ mod tests {
         let mut connection = TestConnection::new();
         connection.socket = TestSocket::with_buf(10);
         let packet =
-            Packet::new(vec![0; 60].into(), SendQueuePriority::High).unwrap();
+            Packet::new(vec![0; 60], SendQueuePriority::High).unwrap();
         connection
             .send_queue
             .push_back(packet, SendQueuePriority::High);

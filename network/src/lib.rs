@@ -316,7 +316,7 @@ impl PartialOrd for Capability {
 
 impl Ord for Capability {
     fn cmp(&self, other: &Capability) -> Ordering {
-        return self.protocol.cmp(&other.protocol);
+        self.protocol.cmp(&other.protocol)
     }
 }
 
@@ -356,7 +356,7 @@ impl IpFilter {
                 "public" => filter.predefined = AllowIP::Public,
                 "none" => filter.predefined = AllowIP::None,
                 custom => {
-                    if custom.starts_with("-") {
+                    if custom.starts_with('-') {
                         filter.custom_block.push(IpNetwork::from_str(
                             &custom.to_owned().split_off(1),
                         )?)

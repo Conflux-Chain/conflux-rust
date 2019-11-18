@@ -11,7 +11,7 @@ fn recover_benchmark(c: &mut Criterion) {
         "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
             .parse()
             .unwrap();
-    let msg = keccak("0".as_bytes());
+    let msg = keccak(b"0");
     let kp = KeyPair::from_secret(secret).unwrap();
     let sig = sign(kp.secret(), &msg).unwrap();
     c.bench_function("Recover public", move |b| {
@@ -26,7 +26,7 @@ fn verify_benchmark(c: &mut Criterion) {
         "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
             .parse()
             .unwrap();
-    let msg = keccak("0".as_bytes());
+    let msg = keccak(b"0");
     let kp = KeyPair::from_secret(secret).unwrap();
     let pub_key = kp.public().clone();
     let sig = sign(kp.secret(), &msg).unwrap();
