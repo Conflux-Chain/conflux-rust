@@ -26,7 +26,7 @@ impl RpcCommand {
 
         let url = matches
             .value_of("url")
-            .ok_or(String::from("RPC URL not specified"))?;
+            .ok_or_else(|| String::from("RPC URL not specified"))?;
 
         let args = match matches.values_of("rpc-args") {
             Some(args) => args,
@@ -87,7 +87,7 @@ struct ArgSchema<'a> {
 
 impl<'a> ArgSchema<'a> {
     fn parse(arg: &'a str) -> Self {
-        let schema: Vec<&str> = arg.splitn(2, ":").collect();
+        let schema: Vec<&str> = arg.splitn(2, ':').collect();
         ArgSchema {
             arg_name: schema[0],
             arg_type: schema.get(1).cloned().unwrap_or("string"),
@@ -106,7 +106,7 @@ impl<'a> ArgSchema<'a> {
             "password2" => Ok(Some(self.password2()?)),
             _ => {
                 if self.arg_type.starts_with("map(")
-                    && self.arg_type.ends_with(")")
+                    && self.arg_type.ends_with(')')
                 {
                     return Ok(Some(self.object(matches)?));
                 }
@@ -133,8 +133,8 @@ impl<'a> ArgSchema<'a> {
         let fields: Vec<&str> = self
             .arg_type
             .trim_start_matches("map(")
-            .trim_end_matches(")")
-            .split(";")
+            .trim_end_matches(')')
+            .split(';')
             .collect();
 
         let mut object = Map::new();

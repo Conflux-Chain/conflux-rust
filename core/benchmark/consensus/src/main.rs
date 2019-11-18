@@ -156,7 +156,7 @@ fn main() {
     // Parse adaptive weight parameters
     let content = fs::read_to_string(input_file)
         .expect("Cannot open the block sequence input file!");
-    let mut lines = content.split("\n");
+    let mut lines = content.split('\n');
     let line = lines.next().unwrap();
     let mut tokens = line.split_whitespace();
     let alpha_num = u64::from_str(tokens.next().unwrap())
