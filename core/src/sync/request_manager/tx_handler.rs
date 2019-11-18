@@ -28,7 +28,6 @@ lazy_static! {
             "request_manager::request_pending_inflight_tx"
         );
 }
-const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
 struct ReceivedTransactionTimeWindowedEntry {
     pub secs: u64,
@@ -65,13 +64,14 @@ pub struct ReceivedTransactionContainer {
 
 impl ReceivedTransactionContainer {
     const BUCKET_LIMIT: usize = 10;
+    const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
     pub fn new(timeout: u64) -> Self {
         let slot_duration_as_secs =
-            timeout / RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
+            timeout / ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
         ReceivedTransactionContainer {
             inner: ReceivedTransactionContainerInner::new(
-                RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE,
+                ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE,
                 slot_duration_as_secs,
             ),
         }
@@ -280,8 +280,6 @@ impl SentTransactionContainer {
     }
 }
 
-const INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 5;
-
 struct InflightPendingTransactionTimeWindowedEntry {
     pub secs: u64,
     pub items: Vec<Arc<InflightPendingTrasnactionItem>>,
@@ -344,12 +342,14 @@ pub struct InflightPendingTransactionContainer {
 }
 
 impl InflightPendingTransactionContainer {
+    const INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 5;
+
     pub fn new(timeout: u64) -> Self {
         let slot_duration_as_secs =
-            timeout / INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
+            timeout / InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
         InflightPendingTransactionContainer {
             inner: InflightPendingTransactionContainerInner::new(
-                INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE,
+                InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE,
                 slot_duration_as_secs,
             ),
         }
@@ -464,8 +464,6 @@ impl InflightPendingTransactionContainer {
     }
 }
 
-const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
-
 struct TransactionCacheTimeWindowedEntry {
     pub secs: u64,
     pub tx_hashes: Vec<H256>,
@@ -500,12 +498,15 @@ pub struct TransactionCacheContainer {
 }
 
 impl TransactionCacheContainer {
+    const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
+
     pub fn new(timeout: u64) -> Self {
-        let slot_duration_as_secs =
-            timeout / TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE as u64;
+        let slot_duration_as_secs = timeout
+            / TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE
+                as u64;
         TransactionCacheContainer {
             inner: TransactionCacheContainerInner::new(
-                TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE,
+                TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE,
                 slot_duration_as_secs,
             ),
         }
