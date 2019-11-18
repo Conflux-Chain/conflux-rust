@@ -107,7 +107,7 @@ fn test_get_set_at_second_commit() {
             .expect("Failed to insert key.");
     }
 
-    let mut epoch_id_0 = H256::default();;
+    let mut epoch_id_0 = H256::default();
     epoch_id_0.as_bytes_mut()[0] = 1;
     state_0.compute_state_root().unwrap();
     state_0.commit(epoch_id_0).unwrap();
@@ -170,7 +170,7 @@ fn test_get_set_at_second_commit() {
         assert_eq!(equal, true);
     }
 
-    let mut epoch_id_1 = H256::default();;
+    let mut epoch_id_1 = H256::default();
     epoch_id_1.as_bytes_mut()[0] = 2;
     state_1.compute_state_root().unwrap();
     state_1.commit(epoch_id_1).unwrap();

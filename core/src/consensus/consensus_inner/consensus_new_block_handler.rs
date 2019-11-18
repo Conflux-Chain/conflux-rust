@@ -634,7 +634,7 @@ impl ConsensusNewBlockHandler {
             debug_record.block_txs = blocks
                 .iter()
                 .map(|block| block.transactions.len())
-                .collect::<Vec<_>>();;
+                .collect::<Vec<_>>();
             debug_record.transactions = blocks
                 .iter()
                 .flat_map(|block| block.transactions.clone())

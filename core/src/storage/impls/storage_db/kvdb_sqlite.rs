@@ -225,7 +225,7 @@ impl<ValueType> KvdbSqlite<ValueType> {
                 &statements.stmts_main_table.create_table,
                 SQLITE_NO_PARAM,
             )?
-            .finish_ignore_rows()?;;
+            .finish_ignore_rows()?;
 
         Ok(Self {
             connection: Some(connection),
@@ -650,7 +650,7 @@ where ValueType::PutType: SqlBindableValue
                     statements.stmts_bytes_key_table.delete,
                     &[&&key as SqlBindableRef],
                 )?
-                .finish_ignore_rows()?;;
+                .finish_ignore_rows()?;
                 Ok(None)
             }
         }
@@ -667,7 +667,7 @@ where ValueType::PutType: SqlBindableValue
                     statements.stmts_main_table.delete,
                     &[&key as SqlBindableRef],
                 )?
-                .finish_ignore_rows()?;;
+                .finish_ignore_rows()?;
                 Ok(None)
             }
         }
@@ -689,7 +689,7 @@ where ValueType::PutType: SqlBindableValue
                     &statements.stmts_bytes_key_table.put,
                     &bind_list,
                 )?
-                .finish_ignore_rows()?;;
+                .finish_ignore_rows()?;
                 Ok(None)
             }
         }
@@ -708,7 +708,7 @@ where ValueType::PutType: SqlBindableValue
                 bind_list.append(&mut value_bind_list);
 
                 conn.execute(&statements.stmts_main_table.put, &bind_list)?
-                    .finish_ignore_rows()?;;
+                    .finish_ignore_rows()?;
                 Ok(None)
             }
         }
