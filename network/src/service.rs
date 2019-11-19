@@ -1360,10 +1360,12 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 }
             }
             DISCOVERY_ROUND => {
-                if let Some(d) = self.discovery.lock().as_mut() { d.round(&UdpIoContext::new(
+                if let Some(d) = self.discovery.lock().as_mut() {
+                    d.round(&UdpIoContext::new(
                         &self.udp_channel,
                         &self.node_db,
-                    )) }
+                    ))
+                }
                 io.update_registration(UDP_MESSAGE).unwrap_or_else(|e| {
                     debug!("Error updating discovery registration: {:?}", e)
                 });
@@ -1671,15 +1673,13 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         trace!("Sending {} bytes to {}", msg.len(), peer);
         if let Some(session) = session {
             let latency =
-                self.network_service
-                    .delayed_queue
-                    .as_ref().and_then(|q| {
-                        session.write().metadata.id.and_then(|id| {
-                            q.latencies
-                                .read()
-                                .get(&id).copied()
-                        })
-                    });
+                self.network_service.delayed_queue.as_ref().and_then(|q| {
+                    session
+                        .write()
+                        .metadata
+                        .id
+                        .and_then(|id| q.latencies.read().get(&id).copied())
+                });
             match latency {
                 Some(latency) => {
                     let q =

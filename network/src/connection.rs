@@ -689,8 +689,7 @@ mod tests {
     fn connection_write_is_buffered() {
         let mut connection = TestConnection::new();
         connection.socket = TestSocket::with_buf(10);
-        let packet =
-            Packet::new(vec![0; 60], SendQueuePriority::High).unwrap();
+        let packet = Packet::new(vec![0; 60], SendQueuePriority::High).unwrap();
         connection
             .send_queue
             .push_back(packet, SendQueuePriority::High);

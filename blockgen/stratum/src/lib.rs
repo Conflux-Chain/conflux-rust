@@ -129,7 +129,9 @@ impl PushWorkHandler for Stratum {
 impl Drop for Stratum {
     fn drop(&mut self) {
         // shut down rpc server
-        if let Some(server) = self.rpc_server.take() { server.close() }
+        if let Some(server) = self.rpc_server.take() {
+            server.close()
+        }
     }
 }
 

@@ -291,7 +291,8 @@ where
             let mut it = brain_recover::PhrasesIterator::from_known_phrase(
                 &known_phrase,
                 BRAIN_WORDS,
-            ).enumerate();
+            )
+            .enumerate();
             move || {
                 for (i, phrase) in &mut it {
                     let keypair =

@@ -145,9 +145,8 @@ impl VaultKeyDirectory for VaultDiskDirectory {
     fn key(&self) -> VaultKey { self.key_manager().key.clone() }
 
     fn set_key(&self, new_key: VaultKey) -> Result<(), SetKeyError> {
-        let temp_vault =
-            VaultDiskDirectory::create_temp_vault(self, new_key)
-                .map_err(SetKeyError::NonFatalOld)?;
+        let temp_vault = VaultDiskDirectory::create_temp_vault(self, new_key)
+            .map_err(SetKeyError::NonFatalOld)?;
         let mut source_path = temp_vault.path().expect("temp_vault is instance of DiskDirectory; DiskDirectory always returns path; qed").clone();
         let mut target_path = self.path().expect("self is instance of DiskDirectory; DiskDirectory always returns path; qed").clone();
 
@@ -184,9 +183,7 @@ impl VaultKeyDirectory for VaultDiskDirectory {
         fs::rename(source_path, target_path)
             .map_err(|err| SetKeyError::Fatal(err.into()))?;
 
-        temp_vault
-            .delete()
-            .map_err(SetKeyError::NonFatalNew)
+        temp_vault.delete().map_err(SetKeyError::NonFatalNew)
     }
 
     fn meta(&self) -> String { self.key_manager().meta.lock().clone() }

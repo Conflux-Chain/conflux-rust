@@ -389,19 +389,9 @@ impl FullClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(
-                    common_impl,
-                    rpc_impl,
-                    None,
-                    &conf,
-                )
+                setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
             } else {
-                setup_public_rpc_apis(
-                    common_impl,
-                    rpc_impl,
-                    None,
-                    &conf,
-                )
+                setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
             },
         )?;
 

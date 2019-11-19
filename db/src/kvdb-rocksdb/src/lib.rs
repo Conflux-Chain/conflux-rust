@@ -20,10 +20,7 @@
 
 mod iter;
 
-use std::{
-    cmp, collections::HashMap, error, fs, io, mem,
-    path::Path, result,
-};
+use std::{cmp, collections::HashMap, error, fs, io, mem, path::Path, result};
 
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use rocksdb::{
@@ -354,8 +351,7 @@ impl Database {
                         match DB::open_cf(&opts, path, &[] as &[&str]) {
                             Ok(mut db) => {
                                 for (i, name) in cfnames.iter().enumerate() {
-                                    db
-                                        .create_cf(name, &cf_options[i])
+                                    db.create_cf(name, &cf_options[i])
                                         .map_err(other_io_err)?;
                                 }
                                 Ok(db)
@@ -749,12 +745,11 @@ impl Database {
             }) => {
                 let col = column_names.len() as u32;
                 let name = format!("col{}", col);
-                db
-                    .create_cf(
-                        &name,
-                        &col_config(&self.config, &self.block_opts)?,
-                    )
-                    .map_err(other_io_err)?;
+                db.create_cf(
+                    &name,
+                    &col_config(&self.config, &self.block_opts)?,
+                )
+                .map_err(other_io_err)?;
                 column_names.push(name);
                 Ok(())
             }

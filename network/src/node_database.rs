@@ -482,10 +482,10 @@ impl NodeDatabase {
 
                 assert!(self.ip_limit.insert(id, ip, trusted, evictee));
             } else if trusted {
-    self.trusted_nodes.remove_with_id(&id);
-} else {
-    self.untrusted_nodes.remove_with_id(&id);
-}
+                self.trusted_nodes.remove_with_id(&id);
+            } else {
+                self.untrusted_nodes.remove_with_id(&id);
+            }
         }
     }
 

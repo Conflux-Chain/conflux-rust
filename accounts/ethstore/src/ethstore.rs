@@ -897,7 +897,8 @@ impl SimpleSecretStore for EthMultiStore {
         // => allow reading meta even if vault is not yet opened
         self.vaults
             .lock()
-            .get(name).map(|v| v.meta())
+            .get(name)
+            .map(|v| v.meta())
             .ok_or(Error::VaultNotFound)
             .or_else(|_| {
                 let vault_provider = self

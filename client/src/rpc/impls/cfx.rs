@@ -157,13 +157,13 @@ impl RpcImpl {
             debug!("insert_new_transactions ignores inserted transactions");
             Err(RpcError::invalid_params(String::from("tx already exist")))
         } else if signed_trans.is_empty() {
-    let tx_err = failed_trans.iter().next().expect("Not empty").1;
-    Err(RpcError::invalid_params(tx_err))
-} else {
-    let tx_hash = signed_trans[0].hash();
-    self.sync.append_received_transactions(signed_trans);
-    Ok(tx_hash.into())
-}
+            let tx_err = failed_trans.iter().next().expect("Not empty").1;
+            Err(RpcError::invalid_params(tx_err))
+        } else {
+            let tx_hash = signed_trans[0].hash();
+            self.sync.append_received_transactions(signed_trans);
+            Ok(tx_hash.into())
+        }
     }
 
     fn send_transaction(
@@ -442,10 +442,8 @@ impl RpcImpl {
             vec![],
             blame_info.blame,
             blame_info.deferred_state_root.map(|x| x.into()),
-            blame_info
-                .deferred_receipts_root.map(|x| x.into()),
-            blame_info
-                .deferred_logs_bloom_hash.map(|x| x.into()),
+            blame_info.deferred_receipts_root.map(|x| x.into()),
+            blame_info.deferred_logs_bloom_hash.map(|x| x.into()),
         ))
     }
 

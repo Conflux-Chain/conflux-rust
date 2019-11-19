@@ -635,9 +635,7 @@ impl BlockGenerator {
         hash
     }
 
-    pub fn pow_config(&self) -> ProofOfWorkConfig {
-        self.pow_config.clone()
-    }
+    pub fn pow_config(&self) -> ProofOfWorkConfig { self.pow_config.clone() }
 
     /// Start num_worker new workers
     pub fn start_new_worker(

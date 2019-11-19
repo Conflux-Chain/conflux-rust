@@ -337,10 +337,8 @@ mod tests {
 
     #[test]
     fn test_deserialize_block_transactions() {
-        let result_block_transactions = BlockTransactions::Hashes(vec![
-            H256::default(),
-            H256::default(),
-        ]);
+        let result_block_transactions =
+            BlockTransactions::Hashes(vec![H256::default(), H256::default()]);
         let serialized = r#"["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();

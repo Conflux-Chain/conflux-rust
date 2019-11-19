@@ -242,16 +242,9 @@ impl LightClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis_light(
-                    common_impl,
-                    rpc_impl,
-                )
+                setup_debug_rpc_apis_light(common_impl, rpc_impl)
             } else {
-                setup_public_rpc_apis_light(
-                    common_impl,
-                    rpc_impl,
-                    &conf,
-                )
+                setup_public_rpc_apis_light(common_impl, rpc_impl, &conf)
             },
         )?;
 

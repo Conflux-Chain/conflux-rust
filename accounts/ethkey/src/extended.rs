@@ -481,8 +481,7 @@ mod tests {
         )
         .unwrap();
 
-        let extended_secret =
-            ExtendedSecret::with_code(secret, H256::zero());
+        let extended_secret = ExtendedSecret::with_code(secret, H256::zero());
         let extended_public = ExtendedPublic::from_secret(&extended_secret)
             .expect("Extended public should be created");
 

@@ -214,10 +214,11 @@ where T: KeyFileManager
     }
 
     fn last_modification_date(&self) -> Result<u64, Error> {
-        use std::time::{UNIX_EPOCH};
+        use std::time::UNIX_EPOCH;
         let duration = fs::metadata(&self.path)?
             .modified()?
-            .duration_since(UNIX_EPOCH).unwrap_or_default();
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         let timestamp = duration.as_secs() ^ (duration.subsec_nanos() as u64);
         Ok(timestamp)
     }

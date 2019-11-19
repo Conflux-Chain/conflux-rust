@@ -75,8 +75,7 @@ fn main() -> Result<(), Error> {
     // restore chunks for checkpoint
     println!("====================================================");
     println!("sync manifest ...");
-    let reader =
-        ChunkReader::new(chunk_store_dir, &checkpoint).unwrap();
+    let reader = ChunkReader::new(chunk_store_dir, &checkpoint).unwrap();
     let manifest = reader.chunks()?;
     println!("manifest: {} chunks", manifest.len());
 
