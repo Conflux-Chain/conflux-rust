@@ -36,7 +36,7 @@ function check_fmt_and_clippy {
 
     pushd $ROOT_DIR > /dev/null
     local result
-    result=`./cargo_fmt.sh -- --check && cargo clippy -- -A warnings`
+    result=`./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings`
     local exit_code=$?
     popd > /dev/null
 
