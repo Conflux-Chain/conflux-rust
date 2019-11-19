@@ -33,14 +33,7 @@ struct TimeWindowEntry<T> {
     pub secs: u64,
     pub values: Vec<T>,
 }
-impl<T> TimeWindowEntry<T> {
-    pub fn new(secs: u64) -> Self {
-        TimeWindowEntry {
-            secs,
-            values: Vec::new(),
-        }
-    }
-}
+
 struct TimeWindow<T> {
     window_size: usize,
     slot_duration_as_secs: u64,
@@ -60,34 +53,31 @@ impl<T> TimeWindow<T> {
         }
     }
 
-    //returns (current entry, replace_flag, second)
-    pub fn get_mut_current_entry(
-        &mut self,
-    ) -> (&mut TimeWindowEntry<T>, bool, u64) {
+    //returns values that need to be removed
+    pub fn append_entry(&mut self, mut values: Vec<T>) -> Option<Vec<T>> {
         let now = SystemTime::now();
         let duration = now.duration_since(UNIX_EPOCH);
         let secs = duration.ok().unwrap().as_secs();
         let window_index =
             (secs / self.slot_duration_as_secs) as usize % self.window_size;
+        let mut res = None;
 
         if self.time_windowed_indices[window_index].is_none() {
             self.time_windowed_indices[window_index] =
-                Some(TimeWindowEntry::new(secs));
-            (
-                self.time_windowed_indices[window_index].as_mut().unwrap(),
-                false,
-                secs,
-            )
+                Some(TimeWindowEntry { secs, values });
         } else {
             let indices_with_time =
                 self.time_windowed_indices[window_index].as_mut().unwrap();
             if indices_with_time.secs + self.slot_duration_as_secs <= secs {
-                indices_with_time.secs = secs; // update the entry timestamp
-                (indices_with_time, true, secs)
+                indices_with_time.secs = secs;
+                std::mem::swap(&mut values, &mut indices_with_time.values);
+                res = Some(values);
             } else {
-                (indices_with_time, false, secs)
+                indices_with_time.values.append(&mut values);
             }
-        }
+        };
+
+        res
     }
 }
 
@@ -175,28 +165,7 @@ impl ReceivedTransactionContainer {
     pub fn append_transactions(
         &mut self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
-        let (entry, replace_flag, secs) =
-            self.inner.time_window.get_mut_current_entry();
-        if replace_flag {
-            for tx_hash in &entry.values {
-                let key = TransactionDigests::to_u24(
-                    tx_hash[29],
-                    tx_hash[30],
-                    tx_hash[31],
-                );
-                if let Some(set) = self.inner.tx_hashes_map.get_mut(&key) {
-                    // if there is a value asscicated with the key
-                    if set.len() == 1 {
-                        self.inner.tx_hashes_map.remove(&key);
-                    } else {
-                        set.remove(tx_hash);
-                    }
-                    self.inner.tx_hashes_set.remove(tx_hash);
-                }
-            }
-            entry.secs = secs;
-            entry.values = Vec::new();
-        }
+        let mut values = Vec::new();
 
         for transaction in transactions {
             let tx_hash = transaction.hash();
@@ -218,7 +187,28 @@ impl ReceivedTransactionContainer {
                 }); //if occupied, append, else, insert.
 
             self.inner.tx_hashes_set.insert(tx_hash.clone());
-            entry.values.push(tx_hash);
+
+            values.push(tx_hash);
+        }
+
+        let remove_values = self.inner.time_window.append_entry(values);
+        if remove_values.is_some() {
+            for tx_hash in &remove_values.unwrap() {
+                let key = TransactionDigests::to_u24(
+                    tx_hash[29],
+                    tx_hash[30],
+                    tx_hash[31],
+                );
+                if let Some(set) = self.inner.tx_hashes_map.get_mut(&key) {
+                    // if there is a value asscicated with the key
+                    if set.len() == 1 {
+                        self.inner.tx_hashes_map.remove(&key);
+                    } else {
+                        set.remove(tx_hash);
+                    }
+                    self.inner.tx_hashes_set.remove(tx_hash);
+                }
+            }
         }
     }
 }
@@ -417,29 +407,7 @@ impl InflightPendingTransactionContainer {
     pub fn append_inflight_pending_items(
         &mut self, items: Vec<InflightPendingTrasnactionItem>,
     ) {
-        let (entry, replace_flag, secs) =
-            self.inner.time_window.get_mut_current_entry();
-        if replace_flag {
-            for item in &entry.values {
-                if let Some(set) =
-                    self.inner.txid_hashmap.get_mut(&item.fixed_byte_part)
-                {
-                    //TODO: if this section executed, it means the node has
-                    // not received the corresponding tx responses. this
-                    // should be handled by either disconnected the node
-                    // or making another request from a random inflight
-                    // pending item.
-                    if set.len() == 1 {
-                        self.inner.txid_hashmap.remove(&item.fixed_byte_part);
-                    } else {
-                        set.remove(item);
-                    }
-                }
-            }
-            entry.secs = secs;
-            entry.values = Vec::new();
-        }
-
+        let mut values = Vec::new();
         for item in items {
             let key = item.fixed_byte_part;
             let inflight_pending_item = Arc::new(item);
@@ -455,7 +423,28 @@ impl InflightPendingTransactionContainer {
                     set
                 }); //if occupied, append, else, insert.
 
-            entry.values.push(inflight_pending_item);
+            values.push(inflight_pending_item);
+        }
+
+        let remove_values = self.inner.time_window.append_entry(values);
+
+        if remove_values.is_some() {
+            for item in &remove_values.unwrap() {
+                if let Some(set) =
+                    self.inner.txid_hashmap.get_mut(&item.fixed_byte_part)
+                {
+                    //TODO: if this section executed, it means the node has
+                    // not received the corresponding tx responses. this
+                    // should be handled by either disconnected the node
+                    // or making another request from a random inflight
+                    // pending item.
+                    if set.len() == 1 {
+                        self.inner.txid_hashmap.remove(&item.fixed_byte_part);
+                    } else {
+                        set.remove(item);
+                    }
+                }
+            }
         }
     }
 }
@@ -527,31 +516,7 @@ impl TransactionCacheContainer {
     pub fn append_transactions(
         &mut self, transactions: &Vec<(usize, Arc<SignedTransaction>)>,
     ) {
-        let (entry, replace_flag, secs) =
-            self.inner.time_window.get_mut_current_entry();
-        if replace_flag {
-            for tx_hash in &entry.values {
-                let key = CompactBlock::to_u32(
-                    tx_hash[28],
-                    tx_hash[29],
-                    tx_hash[30],
-                    tx_hash[31],
-                );
-
-                if let Some(set) = self.inner.tx_hashes_map.get_mut(&key) {
-                    // if there is a value asscicated with the key
-                    if set.len() == 1 {
-                        self.inner.tx_hashes_map.remove(&key);
-                    } else {
-                        set.remove(tx_hash);
-                    }
-                    self.inner.tx_map.remove(tx_hash);
-                }
-            }
-            entry.secs = secs;
-            entry.values = Vec::new();
-        }
-
+        let mut values = Vec::new();
         for (_, transaction) in transactions {
             let tx_hash = transaction.hash();
             let short_id = CompactBlock::to_u32(
@@ -574,7 +539,30 @@ impl TransactionCacheContainer {
             self.inner
                 .tx_map
                 .insert(tx_hash.clone(), transaction.clone());
-            entry.values.push(tx_hash);
+            values.push(tx_hash);
+        }
+
+        let remove_values = self.inner.time_window.append_entry(values);
+
+        if remove_values.is_some() {
+            for tx_hash in &remove_values.unwrap() {
+                let key = CompactBlock::to_u32(
+                    tx_hash[28],
+                    tx_hash[29],
+                    tx_hash[30],
+                    tx_hash[31],
+                );
+
+                if let Some(set) = self.inner.tx_hashes_map.get_mut(&key) {
+                    // if there is a value asscicated with the key
+                    if set.len() == 1 {
+                        self.inner.tx_hashes_map.remove(&key);
+                    } else {
+                        set.remove(tx_hash);
+                    }
+                    self.inner.tx_map.remove(tx_hash);
+                }
+            }
         }
     }
 }
