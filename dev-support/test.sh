@@ -96,10 +96,10 @@ function save_test_result {
 echo -n "" > $ROOT_DIR/.phabricator-comment
 mkdir -p $ROOT_DIR/build
 
-declare -a test_result; check_fmt_and_clippy test_result; save_test_result test_result
 # Build
 declare -a test_result; check_build test_result; save_test_result test_result
 # fmt and clippy tests
+declare -a test_result; check_fmt_and_clippy test_result; save_test_result test_result
 # Unit tests
 declare -a test_result; check_unit_tests test_result; save_test_result test_result
 # Integration test
