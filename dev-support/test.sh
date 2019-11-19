@@ -9,7 +9,7 @@ ROOT_DIR="$( cd $SCRIPT_DIR/.. && pwd )"
 
 export PYTHONUNBUFFERED=1
 export CARGO_TARGET_DIR=$ROOT_DIR/build
-export RUSTFLAGS="-g"
+export RUSTFLAGS="-g -D warnings"
 
 function check_build {
     local -n inner_result=$1
@@ -18,7 +18,7 @@ function check_build {
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`cargo build --release -D warnings && cargo test --release --all --no-run -D warnings && cargo bench --all --no-run -D warnings && ( cd core/src/storage && cargo build --release -D warnings)`
+    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run && ( cd core/src/storage && cargo build --release )`
     local exit_code=$?
 
     popd > /dev/null
