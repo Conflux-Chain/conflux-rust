@@ -57,7 +57,7 @@ impl<T> TimeWindow<T> {
     pub fn append_entry(&mut self, mut values: Vec<T>) -> Option<Vec<T>> {
         let now = SystemTime::now();
         let duration = now.duration_since(UNIX_EPOCH);
-        let secs = duration.ok().unwrap().as_secs();
+        let secs = duration.unwrap().as_secs();
         let window_index =
             (secs / self.slot_duration_as_secs) as usize % self.window_size;
         let mut res = None;
@@ -191,9 +191,9 @@ impl ReceivedTransactionContainer {
             values.push(tx_hash);
         }
 
-        let remove_values = self.inner.time_window.append_entry(values);
-        if remove_values.is_some() {
-            for tx_hash in &remove_values.unwrap() {
+        if let Some(remove_values) = self.inner.time_window.append_entry(values)
+        {
+            for tx_hash in &remove_values {
                 let key = TransactionDigests::to_u24(
                     tx_hash[29],
                     tx_hash[30],
@@ -426,10 +426,9 @@ impl InflightPendingTransactionContainer {
             values.push(inflight_pending_item);
         }
 
-        let remove_values = self.inner.time_window.append_entry(values);
-
-        if remove_values.is_some() {
-            for item in &remove_values.unwrap() {
+        if let Some(remove_values) = self.inner.time_window.append_entry(values)
+        {
+            for item in &remove_values {
                 if let Some(set) =
                     self.inner.txid_hashmap.get_mut(&item.fixed_byte_part)
                 {
@@ -542,10 +541,9 @@ impl TransactionCacheContainer {
             values.push(tx_hash);
         }
 
-        let remove_values = self.inner.time_window.append_entry(values);
-
-        if remove_values.is_some() {
-            for tx_hash in &remove_values.unwrap() {
+        if let Some(remove_values) = self.inner.time_window.append_entry(values)
+        {
+            for tx_hash in &remove_values {
                 let key = CompactBlock::to_u32(
                     tx_hash[28],
                     tx_hash[29],
