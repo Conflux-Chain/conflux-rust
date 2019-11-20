@@ -388,15 +388,15 @@ mod tests {
     fn get_root(dsu: &mut Vec<usize>, x: usize) -> usize {
         if dsu[x] != NULL {
             dsu[x] = get_root(dsu, dsu[x]);
-            return dsu[x];
+            dsu[x]
         } else {
-            return x;
+            x
         }
     }
 
     #[test]
     fn test_default_random_stress() {
-        let bound: i64 = 100000000;
+        let bound: i64 = 100_000_000;
         let mut n: usize = 5000;
         let mut parent: Vec<usize> = Vec::new();
         let mut value: Vec<i64> = Vec::new();
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_size_random_stress() {
-        let bound: i64 = 100000000;
+        let bound: i64 = 100_000_000;
         let mut n: usize = 5000;
         let mut parent: Vec<usize> = Vec::new();
         let mut value: Vec<i64> = Vec::new();
@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     fn test_caterpillar_random_stress() {
-        let bound: i64 = 1000000;
+        let bound: i64 = 1_000_000;
         let mut n: usize = 5000;
         let mut parent: Vec<usize> = Vec::new();
         let mut value: Vec<i64> = Vec::new();

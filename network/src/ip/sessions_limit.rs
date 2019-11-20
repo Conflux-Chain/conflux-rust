@@ -25,7 +25,7 @@ impl TryFrom<String> for SessionIpLimitConfig {
     type Error = String;
 
     fn try_from(value: String) -> Result<Self, String> {
-        let configs: Vec<&str> = value.split(",").collect();
+        let configs: Vec<&str> = value.split(',').collect();
 
         let mut nums = Vec::new();
         for s in configs {

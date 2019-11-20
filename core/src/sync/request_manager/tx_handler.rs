@@ -380,14 +380,12 @@ impl InflightPendingTransactionContainer {
                     if set.len() == 0 {
                         self.inner.txid_hashmap.remove(&fixed_bytes_part);
                     } else {
-                        for item in set.iter() {
+                        if let Some(item) = set.iter().next() {
                             requests.push(item.clone());
-                            break;
-                        }
-                        if let Some(last) = requests.last() {
                             keeped_short_inflight_keys
-                                .insert(last.fixed_byte_part);
-                            set.remove(&last.clone());
+                                .insert(item.fixed_byte_part);
+                            // Remove `item` from `set`
+                            set.remove(requests.last().expect("Just pushed"));
                         }
                         if set.len() == 0 {
                             self.inner.txid_hashmap.remove(&fixed_bytes_part);

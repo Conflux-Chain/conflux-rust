@@ -81,7 +81,7 @@ fn test_mining_10_epochs() {
         Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handle = ArchiveClient::start(conf, exit.clone()).unwrap();
+    let handle = ArchiveClient::start(conf, exit).unwrap();
 
     test_mining_10_epochs_inner(&handle);
 

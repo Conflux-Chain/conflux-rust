@@ -200,7 +200,7 @@ impl Discovery {
     ) -> Result<H256, Error>
     {
         let packet = assemble_packet(packet_id, payload, &self.secret)?;
-        let hash = H256::from_slice(&packet[1..(1 + 32)]);
+        let hash = H256::from_slice(&packet[1..=32]);
         self.send_to(uio, packet, address.clone());
         Ok(hash)
     }
@@ -297,7 +297,7 @@ impl Discovery {
 
         let entry = NodeEntry {
             id: node_id.clone(),
-            endpoint: pong_to.clone(),
+            endpoint: pong_to,
         };
         // TODO handle the error before sending pong
         if !entry.endpoint.is_valid() {
@@ -545,7 +545,7 @@ impl Discovery {
 
         if self.discovery_round.is_some() {
             self.discover(uio);
-        } else if self.in_flight_pings.len() == 0 && !self.discovery_initiated {
+        } else if self.in_flight_pings.is_empty() && !self.discovery_initiated {
             // Start discovering if the first pings have been sent (or timed
             // out)
             self.discovery_initiated = true;
@@ -662,7 +662,7 @@ fn assemble_packet(
     };
     packet[(1 + 32)..(1 + 32 + 65)].copy_from_slice(&signature[..]);
     let signed_hash = keccak(&packet[(1 + 32)..]);
-    packet[1..(1 + 32)].copy_from_slice(signed_hash.as_bytes());
+    packet[1..=32].copy_from_slice(signed_hash.as_bytes());
     Ok(packet)
 }
 

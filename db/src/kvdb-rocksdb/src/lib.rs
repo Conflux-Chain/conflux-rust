@@ -20,10 +20,7 @@
 
 mod iter;
 
-use std::{
-    cmp, collections::HashMap, convert::identity, error, fs, io, mem,
-    path::Path, result,
-};
+use std::{cmp, collections::HashMap, error, fs, io, mem, path::Path, result};
 
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use rocksdb::{
@@ -354,8 +351,7 @@ impl Database {
                         match DB::open_cf(&opts, path, &[] as &[&str]) {
                             Ok(mut db) => {
                                 for (i, name) in cfnames.iter().enumerate() {
-                                    let _ = db
-                                        .create_cf(name, &cf_options[i])
+                                    db.create_cf(name, &cf_options[i])
                                         .map_err(other_io_err)?;
                                 }
                                 Ok(db)
@@ -401,9 +397,9 @@ impl Database {
             ),
             flushing_lock: Mutex::new(false),
             path: path.to_owned(),
-            read_opts: read_opts.into(),
-            write_opts: write_opts.into(),
-            block_opts: block_opts.into(),
+            read_opts,
+            write_opts,
+            block_opts,
         })
     }
 
@@ -642,7 +638,7 @@ impl Database {
         } else {
             None
         };
-        optional.into_iter().flat_map(identity)
+        optional.into_iter().flatten()
     }
 
     /// Get database iterator from prefix for flushed data.
@@ -660,7 +656,7 @@ impl Database {
         } else {
             None
         };
-        optional.into_iter().flat_map(identity)
+        optional.into_iter().flatten()
     }
 
     /// Close the database
@@ -749,12 +745,11 @@ impl Database {
             }) => {
                 let col = column_names.len() as u32;
                 let name = format!("col{}", col);
-                let _ = db
-                    .create_cf(
-                        &name,
-                        &col_config(&self.config, &self.block_opts)?,
-                    )
-                    .map_err(other_io_err)?;
+                db.create_cf(
+                    &name,
+                    &col_config(&self.config, &self.block_opts)?,
+                )
+                .map_err(other_io_err)?;
                 column_names.push(name);
                 Ok(())
             }
@@ -790,14 +785,14 @@ impl KeyValueDB for Database {
         &'a self, col: Option<u32>,
     ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
         let unboxed = Database::iter(self, col);
-        Box::new(unboxed.into_iter())
+        Box::new(unboxed)
     }
 
     fn iter_from_prefix<'a>(
         &'a self, col: Option<u32>, prefix: &'a [u8],
     ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
         let unboxed = Database::iter_from_prefix(self, col, prefix);
-        Box::new(unboxed.into_iter())
+        Box::new(unboxed)
     }
 
     fn restore(&self, new_db: &str) -> io::Result<()> {
@@ -843,7 +838,7 @@ mod tests {
 
         assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"cat");
 
-        let contents: Vec<_> = db.iter(None).into_iter().collect();
+        let contents: Vec<_> = db.iter(None).collect();
         assert_eq!(contents.len(), 2);
         assert_eq!(&*contents[0].0, key1.as_bytes());
         assert_eq!(&*contents[0].1, b"cat");

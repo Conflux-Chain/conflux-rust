@@ -55,8 +55,6 @@ impl SnapshotDbManagerSqlite {
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path)
                 .output()?
-        } else if cfg!(target_os = "windows") {
-            return Ok(false);
         } else {
             return Ok(false);
         };

@@ -379,6 +379,10 @@ pub struct ConsensusGraphNode {
     stable: bool,
     adaptive: bool,
     pub parent: usize,
+
+    /// The genesis arena index of the era that `self` is in.
+    ///
+    /// It is `NULL` if `self` is not in the subtree of `cur_era_genesis`.
     era_block: usize,
     last_pivot_in_past: u64,
     children: Vec<usize>,

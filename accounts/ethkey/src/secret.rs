@@ -233,11 +233,9 @@ impl From<H256> for Secret {
 
 impl From<&'static str> for Secret {
     fn from(s: &'static str) -> Self {
-        s.parse().expect(&format!(
-            "invalid string literal for {}: '{}'",
-            stringify!(Self),
-            s
-        ))
+        s.parse().unwrap_or_else(|_| {
+            panic!("invalid string literal for {}: '{}'", stringify!(Self), s)
+        })
     }
 }
 

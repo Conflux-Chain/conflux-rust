@@ -118,7 +118,7 @@ impl<K: hash::Hash + Eq, V> DiskMap<K, V> {
     }
 
     pub fn transient() -> Self {
-        let mut map = DiskMap::new(&PathBuf::new(), "diskmap.json".into());
+        let mut map = DiskMap::new(&PathBuf::new(), "diskmap.json");
         map.transient = true;
         map
     }
@@ -195,7 +195,7 @@ mod tests {
         b.set_name(Address::from_low_u64_be(1), "One".to_owned());
         b.set_name(Address::from_low_u64_be(2), "Two".to_owned());
         b.set_name(Address::from_low_u64_be(3), "Three".to_owned());
-        b.remove(Address::from_low_u64_be(2).into());
+        b.remove(Address::from_low_u64_be(2));
 
         let b = AddressBook::new(tempdir.path());
         assert_eq!(

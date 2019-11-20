@@ -25,7 +25,7 @@ fn txgen_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
     conf.raw_conf.test_mode = true;
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handler = ArchiveClient::start(conf, exit.clone()).unwrap();
+    let handler = ArchiveClient::start(conf, exit).unwrap();
     c.bench_function("Randomly generate 1 transaction", move |b| {
         b.iter(|| {
             handler.txgen.generate_transaction();
@@ -37,7 +37,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
     conf.raw_conf.test_mode = true;
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handler = ArchiveClient::start(conf, exit.clone()).unwrap();
+    let handler = ArchiveClient::start(conf, exit).unwrap();
     let kp = KeyPair::from_secret(
         "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
             .parse()

@@ -74,7 +74,7 @@ fn test_load_chain() {
     conf.raw_conf.jsonrpc_http_port = Some(18000);
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handle = ArchiveClient::start(conf, exit.clone()).unwrap();
+    let handle = ArchiveClient::start(conf, exit).unwrap();
 
     let chain_path = "../tests/blockchain_tests/general_2.json";
 

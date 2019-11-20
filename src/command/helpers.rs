@@ -91,5 +91,5 @@ pub fn passwords_from_files(files: &[String]) -> Result<Vec<Password>, String> {
 			.collect::<Vec<Password>>();
 		Ok(lines)
 	}).collect::<Result<Vec<Vec<Password>>, String>>();
-    Ok(passwords?.into_iter().flat_map(|x| x).collect())
+    Ok(passwords?.into_iter().flatten().collect())
 }

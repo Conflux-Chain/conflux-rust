@@ -185,10 +185,10 @@ impl FullClient {
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::new(
             conf.consensus_config(),
-            vm.clone(),
+            vm,
             txpool.clone(),
-            statistics.clone(),
-            data_man.clone(),
+            statistics,
+            data_man,
             pow_config.clone(),
         ));
 
@@ -256,11 +256,11 @@ impl FullClient {
 
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(BlockGenerator::new(
-            sync_graph.clone(),
+            sync_graph,
             txpool.clone(),
             sync.clone(),
             txgen.clone(),
-            special_txgen.clone(),
+            special_txgen,
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));
@@ -336,7 +336,7 @@ impl FullClient {
         let common_impl = Arc::new(CommonImpl::new(
             exit,
             consensus.clone(),
-            network.clone(),
+            network,
             txpool.clone(),
         ));
 
@@ -389,19 +389,9 @@ impl FullClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis(
-                    common_impl.clone(),
-                    rpc_impl.clone(),
-                    None,
-                    &conf,
-                )
+                setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
             } else {
-                setup_public_rpc_apis(
-                    common_impl.clone(),
-                    rpc_impl.clone(),
-                    None,
-                    &conf,
-                )
+                setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
             },
         )?;
 
@@ -466,7 +456,7 @@ impl FullClient {
 
         let mut lock = exit.0.lock();
         if !*lock {
-            let _ = exit.1.wait(&mut lock);
+            exit.1.wait(&mut lock);
         }
 
         FullClient::close(keep_alive);

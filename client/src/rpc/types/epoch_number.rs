@@ -63,7 +63,7 @@ impl EpochNumber {
             EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
             EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
             EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
-            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.into()),
+            EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num),
         }
     }
 }
@@ -78,8 +78,8 @@ impl FromStr for EpochNumber {
             "earliest" => Ok(EpochNumber::Earliest),
             _ if s.starts_with("0x") => u64::from_str_radix(&s[2..], 16)
                 .map(EpochNumber::Num)
-                .map_err(|e| format!("Invalid epoch number: {}", e).into()),
-            _ => Err(format!("Invalid epoch number: missing 0x prefix").into()),
+                .map_err(|e| format!("Invalid epoch number: {}", e)),
+            _ => Err("Invalid epoch number: missing 0x prefix".to_string()),
         }
     }
 }

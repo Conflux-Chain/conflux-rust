@@ -35,7 +35,7 @@ pub enum SecretVaultRef {
 }
 
 /// Stored account reference
-#[derive(Debug, Clone, PartialEq, Eq, Ord)]
+#[derive(Debug, Clone)]
 pub struct StoreAccountRef {
     /// Account address
     pub address: Address,
@@ -51,6 +51,19 @@ impl PartialOrd for StoreAccountRef {
                 .then_with(|| self.vault.cmp(&other.vault)),
         )
     }
+}
+
+impl PartialEq for StoreAccountRef {
+    fn eq(&self, other: &Self) -> bool { self.address == other.address }
+}
+impl Eq for StoreAccountRef {}
+
+impl Ord for StoreAccountRef {
+    fn cmp(&self, other: &Self) -> Ordering { self.address.cmp(&other.address) }
+}
+
+impl Hash for StoreAccountRef {
+    fn hash<H: Hasher>(&self, state: &mut H) { self.address.hash(state); }
 }
 
 impl ::std::borrow::Borrow<Address> for StoreAccountRef {
@@ -225,10 +238,6 @@ impl StoreAccountRef {
             address,
         }
     }
-}
-
-impl Hash for StoreAccountRef {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.address.hash(state); }
 }
 
 /// Node in hierarchical derivation.

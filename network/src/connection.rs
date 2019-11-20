@@ -375,7 +375,7 @@ impl Connection {
             token,
             socket,
             recv_buf: BytesMut::new(),
-            send_queue: PrioritySendQueue::new(),
+            send_queue: PrioritySendQueue::default(),
             sending_packet: None,
             interest: Ready::hup() | Ready::readable(),
             registered: AtomicBool::new(false),
@@ -660,9 +660,9 @@ mod tests {
     impl TestConnection {
         fn new() -> Self {
             TestConnection {
-                token: 1234567890usize,
+                token: 1_234_567_890usize,
                 socket: TestSocket::new(),
-                send_queue: PrioritySendQueue::new(),
+                send_queue: PrioritySendQueue::default(),
                 sending_packet: None,
                 recv_buf: BytesMut::new(),
                 interest: Ready::hup() | Ready::readable(),
@@ -689,8 +689,7 @@ mod tests {
     fn connection_write_is_buffered() {
         let mut connection = TestConnection::new();
         connection.socket = TestSocket::with_buf(10);
-        let packet =
-            Packet::new(vec![0; 60].into(), SendQueuePriority::High).unwrap();
+        let packet = Packet::new(vec![0; 60], SendQueuePriority::High).unwrap();
         connection
             .send_queue
             .push_back(packet, SendQueuePriority::High);

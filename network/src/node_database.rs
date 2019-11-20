@@ -247,7 +247,7 @@ impl NodeDatabase {
             return;
         }
 
-        let mut node = Node::new(entry.id.clone(), entry.endpoint.clone());
+        let mut node = Node::new(entry.id.clone(), entry.endpoint);
         let ip = node.endpoint.address.ip();
 
         if self.untrusted_nodes.contains(&node.id) {
@@ -352,7 +352,7 @@ impl NodeDatabase {
         // node table
         self.trusted_node_tag_index
             .sample(count, key, value)
-            .unwrap_or_else(|| HashSet::new())
+            .unwrap_or_else(HashSet::new)
     }
 
     pub fn get_nodes(
@@ -481,12 +481,10 @@ impl NodeDatabase {
                 }
 
                 assert!(self.ip_limit.insert(id, ip, trusted, evictee));
+            } else if trusted {
+                self.trusted_nodes.remove_with_id(&id);
             } else {
-                if trusted {
-                    self.trusted_nodes.remove_with_id(&id);
-                } else {
-                    self.untrusted_nodes.remove_with_id(&id);
-                }
+                self.untrusted_nodes.remove_with_id(&id);
             }
         }
     }

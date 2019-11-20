@@ -75,8 +75,7 @@ fn main() -> Result<(), Error> {
     // restore chunks for checkpoint
     println!("====================================================");
     println!("sync manifest ...");
-    let reader =
-        ChunkReader::new(chunk_store_dir.clone(), &checkpoint).unwrap();
+    let reader = ChunkReader::new(chunk_store_dir, &checkpoint).unwrap();
     let manifest = reader.chunks()?;
     println!("manifest: {} chunks", manifest.len());
 
@@ -106,7 +105,7 @@ fn main() -> Result<(), Error> {
     println!("restoration completed in {:?}", start.elapsed());
 
     // validate the restored state root
-    let restored_root = restorer.restored_state_root(sm2.clone()).delta_root;
+    let restored_root = restorer.restored_state_root(sm2).delta_root;
     println!("restored root: {:?}", restored_root);
     assert_eq!(restored_root, checkpoint_root);
 
@@ -182,8 +181,8 @@ fn initialize_genesis(
 ) -> Result<(H256, MerkleHash), Error> {
     let mut state = manager.get_state_for_genesis_write();
 
-    state.set("123".as_bytes(), vec![1, 2, 3].into_boxed_slice())?;
-    state.set("124".as_bytes(), vec![1, 2, 4].into_boxed_slice())?;
+    state.set(b"123", vec![1, 2, 3].into_boxed_slice())?;
+    state.set(b"124", vec![1, 2, 4].into_boxed_slice())?;
 
     let root = state.compute_state_root()?;
     println!("genesis root: {:?}", root.state_root.delta_root);

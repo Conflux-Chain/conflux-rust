@@ -437,11 +437,11 @@ mod tests {
         // hardened
         assert_eq!(&**extended_secret.as_raw(), &*secret);
         assert_eq!(
-			**extended_secret.derive(2147483648.into()).as_raw(),
+			**extended_secret.derive(2_147_483_648.into()).as_raw(),
 			H256::from_str("0927453daed47839608e414a3738dfad10aed17c459bbd9ab53f89b026c834b6").unwrap(),
 		);
         assert_eq!(
-			**extended_secret.derive(2147483649.into()).as_raw(),
+			**extended_secret.derive(2_147_483_649.into()).as_raw(),
 			H256::from_str("44238b6a29c6dcbe9b401364141ba11e2198c289a5fed243a1c11af35c19dc0f").unwrap(),
 		);
 
@@ -465,7 +465,7 @@ mod tests {
 			H256::from_low_u64_be(64),
 		);
         assert_eq!(
-			**keypair.derive(2147483648u32.into()).expect("Derivation of keypair should succeed").secret().as_raw(),
+			**keypair.derive(2_147_483_648u32.into()).expect("Derivation of keypair should succeed").secret().as_raw(),
 			H256::from_str("edef54414c03196557cf73774bc97a645c9a1df2164ed34f0c2a78d1375a930c").unwrap(),
 		);
     }
@@ -481,8 +481,7 @@ mod tests {
         )
         .unwrap();
 
-        let extended_secret =
-            ExtendedSecret::with_code(secret.clone(), H256::zero());
+        let extended_secret = ExtendedSecret::with_code(secret, H256::zero());
         let extended_public = ExtendedPublic::from_secret(&extended_secret)
             .expect("Extended public should be created");
 
@@ -509,7 +508,7 @@ mod tests {
         )
         .unwrap();
         let extended_secret =
-            ExtendedSecret::with_code(secret.clone(), H256::from_low_u64_be(1));
+            ExtendedSecret::with_code(secret, H256::from_low_u64_be(1));
 
         assert_eq!(
 			**extended_secret.derive(Derivation::Hard(derivation_secret)).as_raw(),
@@ -524,7 +523,7 @@ mod tests {
         )
         .unwrap();
         let extended_secret =
-            ExtendedSecret::with_code(secret.clone(), H256::from_low_u64_be(1));
+            ExtendedSecret::with_code(secret, H256::from_low_u64_be(1));
         let extended_public = ExtendedPublic::from_secret(&extended_secret)
             .expect("Extended public should be created");
 
@@ -563,7 +562,7 @@ mod tests {
         // xprv9uHRZZhk6KAJC1avXpDAp4MDc3sQKNxDiPvvkX8Br5ngLNv1TxvUxt4cV1rGL5hj6KCesnDYUhd7oWgT11eZG7XnxHrnYeSvkzY7d2bhkJ7
         // H(0)
         test_extended(
-			|secret| secret.derive(2147483648.into()),
+			|secret| secret.derive(2_147_483_648.into()),
 			H256::from_str("edb2e14f9ee77d26dd93b4ecede8d16ed408ce149b6cd80b0715a2d911a0afea")
 				.expect("Private should be decoded ok")
 		);
@@ -574,7 +573,7 @@ mod tests {
         // xprv9wTYmMFdV23N2TdNG573QoEsfRrWKQgWeibmLntzniatZvR9BmLnvSxqu53Kw1UmYPxLgboyZQaXwTCg8MSY3H2EU4pWcQDnRnrVA1xe8fs
         // H(0)/1
         test_extended(
-			|secret| secret.derive(2147483648.into()).derive(1.into()),
+			|secret| secret.derive(2_147_483_648.into()).derive(1.into()),
 			H256::from_str("3c6cb8d0f6a264c91ea8b5030fadaa8e538b020f0a387421a12de9319dc93368")
 				.expect("Private should be decoded ok")
 		);

@@ -63,7 +63,7 @@ impl Worker {
         problem_receiver: mpsc::Receiver<ProofOfWorkProblem>,
     ) -> Self
     {
-        let bg_handle = bg.clone();
+        let bg_handle = bg;
 
         let thread = thread::Builder::new()
             .name("blockgen".into())
@@ -87,7 +87,7 @@ impl Worker {
                         let boundary = problem.as_ref().unwrap().boundary;
                         let block_hash = problem.as_ref().unwrap().block_hash;
 
-                        for _i in 0..100000 {
+                        for _i in 0..100_000 {
                             //TODO: adjust the number of times
                             let nonce = rand::random();
                             let hash = compute(nonce, &block_hash);
@@ -433,7 +433,7 @@ impl BlockGenerator {
         self.generate_block(
             num_txs,
             block_size_limit,
-            txs.into_iter().map(|tx| Arc::new(tx)).collect(),
+            txs.into_iter().map(Arc::new).collect(),
         )
     }
 
@@ -635,9 +635,7 @@ impl BlockGenerator {
         hash
     }
 
-    pub fn pow_config(&self) -> ProofOfWorkConfig {
-        return self.pow_config.clone();
-    }
+    pub fn pow_config(&self) -> ProofOfWorkConfig { self.pow_config.clone() }
 
     /// Start num_worker new workers
     pub fn start_new_worker(

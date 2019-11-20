@@ -31,6 +31,21 @@ function check_build {
     inner_result=($exit_code "$result")
 }
 
+function check_fmt_and_clippy {
+    local -n inner_result=$1
+
+    pushd $ROOT_DIR > /dev/null
+    local result
+    result=`export RUSTFLAGS="-g";./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings`
+    local exit_code=$?
+    popd > /dev/null
+
+    if [[ $exit_code -ne 0 ]]; then
+        result="fmt and clippy tests failed."$'\n'"$result"
+    fi
+    inner_result=($exit_code "$result")
+}
+
 function check_unit_tests {
     local -n inner_result=$1
 
@@ -83,6 +98,8 @@ mkdir -p $ROOT_DIR/build
 
 # Build
 declare -a test_result; check_build test_result; save_test_result test_result
+# fmt and clippy tests
+declare -a test_result; check_fmt_and_clippy test_result; save_test_result test_result
 # Unit tests
 declare -a test_result; check_unit_tests test_result; save_test_result test_result
 # Integration test

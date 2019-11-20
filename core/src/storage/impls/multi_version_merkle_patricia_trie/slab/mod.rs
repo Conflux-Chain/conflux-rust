@@ -881,7 +881,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
         let entry = self.cast_entry_ref_mut(key);
         if entry.is_vacant() {
             // Trying to free unallocated space.
-            return Err(Error::from_kind(ErrorKind::SlabKeyError));
+            Err(Error::from_kind(ErrorKind::SlabKeyError))
         } else {
             alloc_fields.used -= 1;
             alloc_fields.next = key;

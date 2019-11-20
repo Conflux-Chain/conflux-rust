@@ -78,7 +78,7 @@ impl SessionManager {
 
     /// Get all the sessions in `SessionManager`.
     pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
-        self.sessions.read().iter().map(|s| s.clone()).collect()
+        self.sessions.read().iter().cloned().collect()
     }
 
     /// Add tag for the session of specified index, so as to support session
@@ -316,7 +316,7 @@ impl SessionTagIndex {
         let removed_tag_value = self
             .session_to_tags
             .entry(idx)
-            .or_insert_with(|| Default::default())
+            .or_insert_with(Default::default)
             .insert(key.clone(), value.clone());
 
         if let Some(removed_tag_value) = removed_tag_value {
@@ -332,9 +332,9 @@ impl SessionTagIndex {
         assert!(self
             .tag_key_to_value_to_sessions
             .entry(key)
-            .or_insert_with(|| Default::default())
+            .or_insert_with(Default::default)
             .entry(value)
-            .or_insert_with(|| Default::default())
+            .or_insert_with(Default::default)
             .insert(idx));
     }
 

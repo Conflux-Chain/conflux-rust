@@ -330,17 +330,15 @@ mod tests {
         let serialized = serde_json::to_string(&t).unwrap();
         assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
 
-        let t = BlockTransactions::Hashes(vec![H256::default().into()]);
+        let t = BlockTransactions::Hashes(vec![H256::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
         assert_eq!(serialized, r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#);
     }
 
     #[test]
     fn test_deserialize_block_transactions() {
-        let result_block_transactions = BlockTransactions::Hashes(vec![
-            H256::default().into(),
-            H256::default().into(),
-        ]);
+        let result_block_transactions =
+            BlockTransactions::Hashes(vec![H256::default(), H256::default()]);
         let serialized = r#"["0x0000000000000000000000000000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000000000000000000000000000"]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
@@ -374,7 +372,7 @@ mod tests {
             stable: None,
             adaptive: false,
             nonce: 0.into(),
-            transactions: BlockTransactions::Hashes(vec![].into()),
+            transactions: BlockTransactions::Hashes(vec![]),
             size: Some(69.into()),
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
@@ -403,7 +401,7 @@ mod tests {
             stable: None,
             adaptive: false,
             nonce: 0.into(),
-            transactions: BlockTransactions::Full(vec![].into()),
+            transactions: BlockTransactions::Full(vec![]),
             size: Some(69.into()),
         };
         let deserialized_block: Block =

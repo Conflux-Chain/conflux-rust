@@ -162,10 +162,10 @@ impl LightClient {
         let pow_config = conf.pow_config();
         let consensus = Arc::new(ConsensusGraph::new(
             conf.consensus_config(),
-            vm.clone(),
+            vm,
             txpool.clone(),
-            statistics.clone(),
-            data_man.clone(),
+            statistics,
+            data_man,
             pow_config.clone(),
         ));
 
@@ -189,7 +189,7 @@ impl LightClient {
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
-            sync_graph.clone(),
+            sync_graph,
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
         ));
@@ -200,7 +200,7 @@ impl LightClient {
         let common_impl = Arc::new(CommonImpl::new(
             exit,
             consensus.clone(),
-            network.clone(),
+            network,
             txpool.clone(),
         ));
 
@@ -242,16 +242,9 @@ impl LightClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.raw_conf.test_mode {
-                setup_debug_rpc_apis_light(
-                    common_impl.clone(),
-                    rpc_impl.clone(),
-                )
+                setup_debug_rpc_apis_light(common_impl, rpc_impl)
             } else {
-                setup_public_rpc_apis_light(
-                    common_impl.clone(),
-                    rpc_impl.clone(),
-                    &conf,
-                )
+                setup_public_rpc_apis_light(common_impl, rpc_impl, &conf)
             },
         )?;
 
@@ -309,7 +302,7 @@ impl LightClient {
 
         let mut lock = exit.0.lock();
         if !*lock {
-            let _ = exit.1.wait(&mut lock);
+            exit.1.wait(&mut lock);
         }
 
         LightClient::close(keep_alive);

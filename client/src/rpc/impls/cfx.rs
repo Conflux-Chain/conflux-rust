@@ -81,7 +81,7 @@ impl RpcImpl {
         self.consensus
             .get_code(address, epoch_number.into())
             .map(Bytes::new)
-            .map_err(|err| RpcError::invalid_params(err))
+            .map_err(RpcError::invalid_params)
     }
 
     fn balance(
@@ -97,7 +97,7 @@ impl RpcImpl {
         self.consensus
             .get_balance(address, num.into())
             .map(|x| x.into())
-            .map_err(|err| RpcError::invalid_params(err))
+            .map_err(RpcError::invalid_params)
     }
 
     //    fn account(
@@ -156,19 +156,13 @@ impl RpcImpl {
             // For tx in transactions_pubkey_cache, we simply ignore them
             debug!("insert_new_transactions ignores inserted transactions");
             Err(RpcError::invalid_params(String::from("tx already exist")))
+        } else if signed_trans.is_empty() {
+            let tx_err = failed_trans.iter().next().expect("Not empty").1;
+            Err(RpcError::invalid_params(tx_err))
         } else {
-            if signed_trans.is_empty() {
-                let mut tx_err = String::from("");
-                for (_, e) in failed_trans.iter() {
-                    tx_err = e.clone();
-                    break;
-                }
-                Err(RpcError::invalid_params(tx_err))
-            } else {
-                let tx_hash = signed_trans[0].hash();
-                self.sync.append_received_transactions(signed_trans);
-                Ok(tx_hash.into())
-            }
+            let tx_hash = signed_trans[0].hash();
+            self.sync.append_received_transactions(signed_trans);
+            Ok(tx_hash.into())
         }
     }
 
@@ -447,13 +441,9 @@ impl RpcImpl {
             block_size_limit,
             vec![],
             blame_info.blame,
-            blame_info.deferred_state_root.and_then(|x| Some(x.into())),
-            blame_info
-                .deferred_receipts_root
-                .and_then(|x| Some(x.into())),
-            blame_info
-                .deferred_logs_bloom_hash
-                .and_then(|x| Some(x.into())),
+            blame_info.deferred_state_root.map(|x| x.into()),
+            blame_info.deferred_receipts_root.map(|x| x.into()),
+            blame_info.deferred_logs_bloom_hash.map(|x| x.into()),
         ))
     }
 
@@ -470,7 +460,7 @@ impl RpcImpl {
         self.consensus
             .call_virtual(&signed_tx, epoch.into())
             .map(|output| Bytes::new(output.0))
-            .map_err(|e| RpcError::invalid_params(e))
+            .map_err(RpcError::invalid_params)
     }
 
     fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {

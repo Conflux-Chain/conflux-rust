@@ -109,7 +109,7 @@ pub fn setup_public_rpc_apis(
     conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
-    let cfx = CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let cfx = CfxHandler::new(common, rpc).to_delegate();
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
 
@@ -131,7 +131,7 @@ pub fn setup_debug_rpc_apis(
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
     let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
-    let debug = DebugRpcImpl::new(common.clone(), rpc).to_delegate();
+    let debug = DebugRpcImpl::new(common, rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
@@ -147,7 +147,7 @@ pub fn setup_debug_rpc_apis(
 pub fn setup_public_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, conf: &Configuration,
 ) -> MetaIoHandler<Metadata> {
-    let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
+    let cfx = LightCfxHandler::new(common, rpc).to_delegate();
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
 
@@ -162,7 +162,7 @@ pub fn setup_debug_rpc_apis_light(
 ) -> MetaIoHandler<Metadata> {
     let cfx = LightCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
     let test = LightTestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
-    let debug = LightDebugRpcImpl::new(common.clone(), rpc).to_delegate();
+    let debug = LightDebugRpcImpl::new(common, rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
@@ -242,16 +242,16 @@ impl RpcInterceptor for ThrottleInterceptor {
             ThrottleResult::Success => Ok(()),
             ThrottleResult::Throttled(wait_time) => {
                 debug!("RPC {} throttled in {:?}", name, wait_time);
-                return Err(RpcError::invalid_params(format!(
+                Err(RpcError::invalid_params(format!(
                     "throttled in {:?}",
                     wait_time
-                )));
+                )))
             }
             ThrottleResult::AlreadyThrottled => {
                 debug!("RPC {} already throttled", name);
-                return Err(RpcError::invalid_params(
+                Err(RpcError::invalid_params(
                     "already throttled, please try again later",
-                ));
+                ))
             }
         }
     }

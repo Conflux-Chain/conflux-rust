@@ -30,9 +30,9 @@ use Error;
 use SafeAccount;
 
 /// Name of vault metadata file
-pub const VAULT_FILE_NAME: &'static str = "vault.json";
+pub const VAULT_FILE_NAME: &str = "vault.json";
 /// Name of temporary vault metadata file
-pub const VAULT_TEMP_FILE_NAME: &'static str = "vault_temp.json";
+pub const VAULT_TEMP_FILE_NAME: &str = "vault_temp.json";
 
 /// Vault directory implementation
 pub type VaultDiskDirectory = DiskDirectory<VaultKeyFileManager>;
@@ -145,9 +145,8 @@ impl VaultKeyDirectory for VaultDiskDirectory {
     fn key(&self) -> VaultKey { self.key_manager().key.clone() }
 
     fn set_key(&self, new_key: VaultKey) -> Result<(), SetKeyError> {
-        let temp_vault =
-            VaultDiskDirectory::create_temp_vault(self, new_key.clone())
-                .map_err(|err| SetKeyError::NonFatalOld(err))?;
+        let temp_vault = VaultDiskDirectory::create_temp_vault(self, new_key)
+            .map_err(SetKeyError::NonFatalOld)?;
         let mut source_path = temp_vault.path().expect("temp_vault is instance of DiskDirectory; DiskDirectory always returns path; qed").clone();
         let mut target_path = self.path().expect("self is instance of DiskDirectory; DiskDirectory always returns path; qed").clone();
 
@@ -184,9 +183,7 @@ impl VaultKeyDirectory for VaultDiskDirectory {
         fs::rename(source_path, target_path)
             .map_err(|err| SetKeyError::Fatal(err.into()))?;
 
-        temp_vault
-            .delete()
-            .map_err(|err| SetKeyError::NonFatalNew(err))
+        temp_vault.delete().map_err(SetKeyError::NonFatalNew)
     }
 
     fn meta(&self) -> String { self.key_manager().meta.lock().clone() }
@@ -220,7 +217,7 @@ impl KeyFileManager for VaultKeyFileManager {
         let mut safe_account = SafeAccount::from_vault_file(
             &self.key.password,
             vault_file,
-            filename.clone(),
+            filename,
         )?;
 
         safe_account.meta = json::insert_vault_name_to_json_meta(
@@ -400,7 +397,7 @@ mod test {
 
         // then
         assert!(result.is_ok());
-        let mut vault_file_path = vault_dir.clone();
+        let mut vault_file_path = vault_dir;
         vault_file_path.push(VAULT_FILE_NAME);
         assert!(vault_file_path.exists() && vault_file_path.is_file());
     }

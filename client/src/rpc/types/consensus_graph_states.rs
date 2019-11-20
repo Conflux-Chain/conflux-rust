@@ -45,7 +45,7 @@ impl ConsensusGraphStates {
                 block_hash: block_state.block_hash.into(),
                 best_block_hash: block_state.best_block_hash.into(),
                 block_status: block_state.block_status as u8,
-                past_era_weight: U256::from(block_state.past_era_weight).into(),
+                past_era_weight: U256::from(block_state.past_era_weight),
                 era_block_hash: block_state.era_block_hash.into(),
                 stable: block_state.stable,
                 adaptive: block_state.adaptive,

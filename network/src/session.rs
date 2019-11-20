@@ -391,7 +391,7 @@ impl Session {
                 .metadata
                 .id
                 .expect("should have node ID after handshake"),
-            endpoint: ping_to.clone(),
+            endpoint: ping_to,
         };
         if !entry.endpoint.is_valid() {
             debug!("Got invalid endpoint {:?}, session = {:?}", entry, self);
@@ -628,7 +628,7 @@ impl SessionPacket {
 
     fn parse(mut data: Bytes) -> Result<Self, Error> {
         // packet id
-        if data.len() == 0 {
+        if data.is_empty() {
             debug!("failed to parse session packet, packet id missed");
             return Err(ErrorKind::BadProtocol.into());
         }
@@ -636,7 +636,7 @@ impl SessionPacket {
         let packet_id = data.split_off(data.len() - 1)[0];
 
         // protocol flag
-        if data.len() == 0 {
+        if data.is_empty() {
             debug!("failed to parse session packet, protocol flag missed");
             return Err(ErrorKind::BadProtocol.into());
         }

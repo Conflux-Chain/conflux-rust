@@ -30,7 +30,7 @@ use time;
 use Error;
 use SafeAccount;
 
-const IGNORED_FILES: &'static [&'static str] = &[
+const IGNORED_FILES: &[&str] = &[
     "thumbs.db",
     "address_book.json",
     "dapps_policy.json",
@@ -193,7 +193,7 @@ where T: KeyFileManager
                 // filter directories
                 metadata.map_or(false, |m| !m.is_dir()) &&
 					// hidden files
-					!name.starts_with(".") &&
+					!name.starts_with('.') &&
 					// other ignored files
 					!IGNORED_FILES.contains(&&*name)
             })
@@ -214,11 +214,11 @@ where T: KeyFileManager
     }
 
     fn last_modification_date(&self) -> Result<u64, Error> {
-        use std::time::{Duration, UNIX_EPOCH};
+        use std::time::UNIX_EPOCH;
         let duration = fs::metadata(&self.path)?
             .modified()?
             .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::default());
+            .unwrap_or_default();
         let timestamp = duration.as_secs() ^ (duration.subsec_nanos() as u64);
         Ok(timestamp)
     }
@@ -494,7 +494,7 @@ mod test {
             .filename
             .unwrap();
         let file3 = directory
-            .insert_with_filename(account.clone(), filename.clone(), dedup)
+            .insert_with_filename(account, filename.clone(), dedup)
             .unwrap()
             .filename
             .unwrap();
@@ -579,7 +579,7 @@ mod test {
         let hash = directory
             .files_hash()
             .expect("Files hash should be calculated ok");
-        assert_eq!(hash, 15130871412783076140);
+        assert_eq!(hash, 15_130_871_412_783_076_140);
 
         let keypair = Random.generate().unwrap();
         let password = "test pass".into();

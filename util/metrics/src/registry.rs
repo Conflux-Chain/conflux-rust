@@ -39,10 +39,8 @@ impl GroupingRegistry {
         metric: Arc<dyn Metric>,
     )
     {
-        let group_entry = self
-            .groups
-            .entry(group_name)
-            .or_insert_with(|| HashMap::new());
+        let group_entry =
+            self.groups.entry(group_name).or_insert_with(HashMap::new);
         assert!(!group_entry.contains_key(&metric_name));
         group_entry.insert(metric_name, metric);
     }

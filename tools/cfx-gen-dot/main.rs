@@ -30,7 +30,7 @@ fn retrieve_block(db: &Arc<db::SystemDB>, hash: &H256) -> Option<Block> {
     let block =
         Block::decode_with_tx_public(&rlp).expect("Wrong block rlp format!");
 
-    return Some(block);
+    Some(block)
 }
 
 fn fmt_hash(hash: &H256) -> String {

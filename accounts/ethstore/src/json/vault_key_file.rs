@@ -20,7 +20,7 @@ use serde_json::{self, error, value::Value};
 use std::io::{Read, Write};
 
 /// Meta key name for vault field
-const VAULT_NAME_META_KEY: &'static str = "vault";
+const VAULT_NAME_META_KEY: &str = "vault";
 
 /// Key file as stored in vaults
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

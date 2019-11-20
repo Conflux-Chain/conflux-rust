@@ -141,7 +141,7 @@ impl FromStr for TokenBucket {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, String> {
-        let fields: Vec<&str> = s.split(",").collect();
+        let fields: Vec<&str> = s.split(',').collect();
 
         if fields.len() != 5 {
             return Err(format!(
@@ -180,12 +180,12 @@ impl TokenBucketManager {
         self.buckets.insert(name, Arc::new(Mutex::new(bucket)));
     }
 
-    pub fn get(&self, name: &String) -> Option<Arc<Mutex<TokenBucket>>> {
+    pub fn get(&self, name: &str) -> Option<Arc<Mutex<TokenBucket>>> {
         self.buckets.get(name).cloned()
     }
 
     pub fn load(
-        toml_file: &String, section: Option<&str>,
+        toml_file: &str, section: Option<&str>,
     ) -> Result<Self, String> {
         let content = read_to_string(toml_file)
             .map_err(|e| format!("failed to read toml file: {:?}", e))?;
