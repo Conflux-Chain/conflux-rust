@@ -29,31 +29,70 @@ lazy_static! {
         );
 }
 
-struct ReceivedTransactionTimeWindowedEntry {
+struct TimeWindowEntry<T> {
     pub secs: u64,
-    pub tx_hashes: Vec<H256>,
+    pub values: Vec<T>,
 }
 
-struct ReceivedTransactionContainerInner {
+struct TimeWindow<T> {
     window_size: usize,
     slot_duration_as_secs: u64,
-    tx_hashes_map: HashMap<TxPropagateId, HashSet<H256>>,
-    tx_hashes_set: HashSet<H256>,
-    time_windowed_indices: Vec<Option<ReceivedTransactionTimeWindowedEntry>>,
+    time_windowed_indices: Vec<Option<TimeWindowEntry<T>>>,
 }
 
-impl ReceivedTransactionContainerInner {
-    pub fn new(window_size: usize, slot_duration_as_secs: u64) -> Self {
+impl<T> TimeWindow<T> {
+    pub fn new(timeout: u64, window_size: usize) -> Self {
         let mut time_windowed_indices = Vec::new();
         for _ in 0..window_size {
             time_windowed_indices.push(None);
         }
-        ReceivedTransactionContainerInner {
+        TimeWindow {
             window_size,
-            slot_duration_as_secs,
+            slot_duration_as_secs: timeout / window_size as u64,
+            time_windowed_indices,
+        }
+    }
+
+    //returns values that need to be removed
+    pub fn append_entry(&mut self, mut values: Vec<T>) -> Option<Vec<T>> {
+        let now = SystemTime::now();
+        let duration = now.duration_since(UNIX_EPOCH);
+        let secs = duration.unwrap().as_secs();
+        let window_index =
+            (secs / self.slot_duration_as_secs) as usize % self.window_size;
+        let mut res = None;
+
+        if self.time_windowed_indices[window_index].is_none() {
+            self.time_windowed_indices[window_index] =
+                Some(TimeWindowEntry { secs, values });
+        } else {
+            let indices_with_time =
+                self.time_windowed_indices[window_index].as_mut().unwrap();
+            if indices_with_time.secs + self.slot_duration_as_secs <= secs {
+                indices_with_time.secs = secs;
+                std::mem::swap(&mut values, &mut indices_with_time.values);
+                res = Some(values);
+            } else {
+                indices_with_time.values.append(&mut values);
+            }
+        };
+
+        res
+    }
+}
+
+struct ReceivedTransactionContainerInner {
+    tx_hashes_map: HashMap<TxPropagateId, HashSet<H256>>,
+    tx_hashes_set: HashSet<H256>,
+    time_window: TimeWindow<H256>,
+}
+
+impl ReceivedTransactionContainerInner {
+    pub fn new(timeout: u64, window_size: usize) -> Self {
+        ReceivedTransactionContainerInner {
             tx_hashes_map: HashMap::new(),
             tx_hashes_set: HashSet::new(),
-            time_windowed_indices,
+            time_window: TimeWindow::new(timeout, window_size),
         }
     }
 }
@@ -67,12 +106,10 @@ impl ReceivedTransactionContainer {
     const RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 64;
 
     pub fn new(timeout: u64) -> Self {
-        let slot_duration_as_secs =
-            timeout / ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
         ReceivedTransactionContainer {
             inner: ReceivedTransactionContainerInner::new(
+                timeout,
                 ReceivedTransactionContainer::RECEIVED_TRANSACTION_CONTAINER_WINDOW_SIZE,
-                slot_duration_as_secs,
             ),
         }
     }
@@ -128,46 +165,7 @@ impl ReceivedTransactionContainer {
     pub fn append_transactions(
         &mut self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
-        let inner = &mut self.inner;
-
-        let now = SystemTime::now();
-        let duration = now.duration_since(UNIX_EPOCH);
-        let secs = duration.ok().unwrap().as_secs();
-        let window_index =
-            (secs / inner.slot_duration_as_secs) as usize % inner.window_size;
-
-        let entry = if inner.time_windowed_indices[window_index].is_none() {
-            inner.time_windowed_indices[window_index] =
-                Some(ReceivedTransactionTimeWindowedEntry {
-                    secs,
-                    tx_hashes: Vec::new(),
-                });
-            inner.time_windowed_indices[window_index].as_mut().unwrap()
-        } else {
-            let indices_with_time =
-                inner.time_windowed_indices[window_index].as_mut().unwrap();
-            if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
-                for tx_hash in &indices_with_time.tx_hashes {
-                    let key = TransactionDigests::to_u24(
-                        tx_hash[29],
-                        tx_hash[30],
-                        tx_hash[31],
-                    );
-                    if let Some(set) = inner.tx_hashes_map.get_mut(&key) {
-                        // if there is a value asscicated with the key
-                        if set.len() == 1 {
-                            inner.tx_hashes_map.remove(&key);
-                        } else {
-                            set.remove(tx_hash);
-                        }
-                        inner.tx_hashes_set.remove(tx_hash);
-                    }
-                }
-                indices_with_time.secs = secs;
-                indices_with_time.tx_hashes = Vec::new();
-            }
-            indices_with_time
-        };
+        let mut values = Vec::new();
 
         for transaction in transactions {
             let tx_hash = transaction.hash();
@@ -176,7 +174,7 @@ impl ReceivedTransactionContainer {
                 tx_hash[30],
                 tx_hash[31],
             ); //read the last three bytes
-            inner
+            self.inner
                 .tx_hashes_map
                 .entry(short_id)
                 .and_modify(|s| {
@@ -188,8 +186,29 @@ impl ReceivedTransactionContainer {
                     set
                 }); //if occupied, append, else, insert.
 
-            inner.tx_hashes_set.insert(tx_hash.clone());
-            entry.tx_hashes.push(tx_hash);
+            self.inner.tx_hashes_set.insert(tx_hash.clone());
+
+            values.push(tx_hash);
+        }
+
+        if let Some(remove_values) = self.inner.time_window.append_entry(values)
+        {
+            for tx_hash in &remove_values {
+                let key = TransactionDigests::to_u24(
+                    tx_hash[29],
+                    tx_hash[30],
+                    tx_hash[31],
+                );
+                if let Some(set) = self.inner.tx_hashes_map.get_mut(&key) {
+                    // if there is a value asscicated with the key
+                    if set.len() == 1 {
+                        self.inner.tx_hashes_map.remove(&key);
+                    } else {
+                        set.remove(tx_hash);
+                    }
+                    self.inner.tx_hashes_set.remove(tx_hash);
+                }
+            }
         }
     }
 }
@@ -280,10 +299,6 @@ impl SentTransactionContainer {
     }
 }
 
-struct InflightPendingTransactionTimeWindowedEntry {
-    pub secs: u64,
-    pub items: Vec<Arc<InflightPendingTrasnactionItem>>,
-}
 #[derive(Eq, PartialEq, Hash)]
 pub struct InflightPendingTrasnactionItem {
     pub fixed_byte_part: TxPropagateId,
@@ -314,25 +329,16 @@ impl InflightPendingTrasnactionItem {
 }
 
 struct InflightPendingTransactionContainerInner {
-    window_size: usize,
-    slot_duration_as_secs: u64,
     txid_hashmap:
         HashMap<TxPropagateId, HashSet<Arc<InflightPendingTrasnactionItem>>>,
-    time_windowed_indices:
-        Vec<Option<InflightPendingTransactionTimeWindowedEntry>>,
+    time_window: TimeWindow<Arc<InflightPendingTrasnactionItem>>,
 }
 
 impl InflightPendingTransactionContainerInner {
-    pub fn new(window_size: usize, slot_duration_as_secs: u64) -> Self {
-        let mut time_windowed_indices = Vec::new();
-        for _ in 0..window_size {
-            time_windowed_indices.push(None);
-        }
+    pub fn new(timeout: u64, window_size: usize) -> Self {
         InflightPendingTransactionContainerInner {
-            window_size,
-            slot_duration_as_secs,
             txid_hashmap: HashMap::new(),
-            time_windowed_indices,
+            time_window: TimeWindow::new(timeout, window_size),
         }
     }
 }
@@ -345,12 +351,10 @@ impl InflightPendingTransactionContainer {
     const INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE: usize = 5;
 
     pub fn new(timeout: u64) -> Self {
-        let slot_duration_as_secs =
-            timeout / InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE as u64;
         InflightPendingTransactionContainer {
             inner: InflightPendingTransactionContainerInner::new(
+                timeout,
                 InflightPendingTransactionContainer::INFLIGHT_PENDING_TRANSACTION_CONTAINER_WINDOW_SIZE,
-                slot_duration_as_secs,
             ),
         }
     }
@@ -401,51 +405,11 @@ impl InflightPendingTransactionContainer {
     pub fn append_inflight_pending_items(
         &mut self, items: Vec<InflightPendingTrasnactionItem>,
     ) {
-        let inner = &mut self.inner;
-
-        let now = SystemTime::now();
-        let duration = now.duration_since(UNIX_EPOCH);
-        let secs = duration.ok().unwrap().as_secs();
-        let window_index =
-            (secs / inner.slot_duration_as_secs) as usize % inner.window_size;
-
-        let entry = if inner.time_windowed_indices[window_index].is_none() {
-            inner.time_windowed_indices[window_index] =
-                Some(InflightPendingTransactionTimeWindowedEntry {
-                    secs,
-                    items: Vec::new(),
-                });
-            inner.time_windowed_indices[window_index].as_mut().unwrap()
-        } else {
-            let indices_with_time =
-                inner.time_windowed_indices[window_index].as_mut().unwrap();
-            if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
-                for item in &indices_with_time.items {
-                    if let Some(set) =
-                        inner.txid_hashmap.get_mut(&item.fixed_byte_part)
-                    {
-                        //TODO: if this section executed, it means the node has
-                        // not received the corresponding tx responses. this
-                        // should be handled by either disconnected the node
-                        // or making another request from a random inflight
-                        // pending item.
-                        if set.len() == 1 {
-                            inner.txid_hashmap.remove(&item.fixed_byte_part);
-                        } else {
-                            set.remove(item);
-                        }
-                    }
-                }
-                indices_with_time.secs = secs;
-                indices_with_time.items = Vec::new();
-            }
-            indices_with_time
-        };
-
+        let mut values = Vec::new();
         for item in items {
             let key = item.fixed_byte_part;
             let inflight_pending_item = Arc::new(item);
-            inner
+            self.inner
                 .txid_hashmap
                 .entry(key)
                 .and_modify(|s| {
@@ -457,36 +421,43 @@ impl InflightPendingTransactionContainer {
                     set
                 }); //if occupied, append, else, insert.
 
-            entry.items.push(inflight_pending_item);
+            values.push(inflight_pending_item);
+        }
+
+        if let Some(remove_values) = self.inner.time_window.append_entry(values)
+        {
+            for item in &remove_values {
+                if let Some(set) =
+                    self.inner.txid_hashmap.get_mut(&item.fixed_byte_part)
+                {
+                    //TODO: if this section executed, it means the node has
+                    // not received the corresponding tx responses. this
+                    // should be handled by either disconnected the node
+                    // or making another request from a random inflight
+                    // pending item.
+                    if set.len() == 1 {
+                        self.inner.txid_hashmap.remove(&item.fixed_byte_part);
+                    } else {
+                        set.remove(item);
+                    }
+                }
+            }
         }
     }
 }
 
-struct TransactionCacheTimeWindowedEntry {
-    pub secs: u64,
-    pub tx_hashes: Vec<H256>,
-}
-
 struct TransactionCacheContainerInner {
-    window_size: usize,
-    slot_duration_as_secs: u64,
     tx_hashes_map: HashMap<u32, HashSet<H256>>,
     tx_map: HashMap<H256, Arc<SignedTransaction>>,
-    time_windowed_indices: Vec<Option<TransactionCacheTimeWindowedEntry>>,
+    time_window: TimeWindow<H256>,
 }
 
 impl TransactionCacheContainerInner {
-    pub fn new(window_size: usize, slot_duration_as_secs: u64) -> Self {
-        let mut time_windowed_indices = Vec::new();
-        for _ in 0..window_size {
-            time_windowed_indices.push(None);
-        }
+    pub fn new(timeout: u64, window_size: usize) -> Self {
         TransactionCacheContainerInner {
-            window_size,
-            slot_duration_as_secs,
             tx_hashes_map: HashMap::new(),
             tx_map: HashMap::new(),
-            time_windowed_indices,
+            time_window: TimeWindow::new(timeout, window_size),
         }
     }
 }
@@ -499,13 +470,10 @@ impl TransactionCacheContainer {
     const TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE: usize = 64;
 
     pub fn new(timeout: u64) -> Self {
-        let slot_duration_as_secs = timeout
-            / TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE
-                as u64;
         TransactionCacheContainer {
             inner: TransactionCacheContainerInner::new(
+                timeout,
                 TransactionCacheContainer::TRANSACTION_CACHE_CONTAINER_WINDOW_SIZE,
-                slot_duration_as_secs,
             ),
         }
     }
@@ -545,49 +513,7 @@ impl TransactionCacheContainer {
     pub fn append_transactions(
         &mut self, transactions: &Vec<(usize, Arc<SignedTransaction>)>,
     ) {
-        let inner = &mut self.inner;
-
-        let now = SystemTime::now();
-        let duration = now.duration_since(UNIX_EPOCH);
-        let secs = duration.ok().unwrap().as_secs();
-        let window_index =
-            (secs / inner.slot_duration_as_secs) as usize % inner.window_size;
-
-        let entry = if inner.time_windowed_indices[window_index].is_none() {
-            inner.time_windowed_indices[window_index] =
-                Some(TransactionCacheTimeWindowedEntry {
-                    secs,
-                    tx_hashes: Vec::new(),
-                });
-            inner.time_windowed_indices[window_index].as_mut().unwrap()
-        } else {
-            let indices_with_time =
-                inner.time_windowed_indices[window_index].as_mut().unwrap();
-            if indices_with_time.secs + inner.slot_duration_as_secs <= secs {
-                for tx_hash in &indices_with_time.tx_hashes {
-                    let key = CompactBlock::to_u32(
-                        tx_hash[28],
-                        tx_hash[29],
-                        tx_hash[30],
-                        tx_hash[31],
-                    );
-
-                    if let Some(set) = inner.tx_hashes_map.get_mut(&key) {
-                        // if there is a value asscicated with the key
-                        if set.len() == 1 {
-                            inner.tx_hashes_map.remove(&key);
-                        } else {
-                            set.remove(tx_hash);
-                        }
-                        inner.tx_map.remove(tx_hash);
-                    }
-                }
-                indices_with_time.secs = secs;
-                indices_with_time.tx_hashes = Vec::new();
-            }
-            indices_with_time
-        };
-
+        let mut values = Vec::new();
         for (_, transaction) in transactions {
             let tx_hash = transaction.hash();
             let short_id = CompactBlock::to_u32(
@@ -596,7 +522,7 @@ impl TransactionCacheContainer {
                 tx_hash[30],
                 tx_hash[31],
             );
-            inner
+            self.inner
                 .tx_hashes_map
                 .entry(short_id)
                 .and_modify(|s| {
@@ -607,8 +533,32 @@ impl TransactionCacheContainer {
                     set.insert(tx_hash.clone());
                     set
                 }); //if occupied, append, else, insert.
-            inner.tx_map.insert(tx_hash.clone(), transaction.clone());
-            entry.tx_hashes.push(tx_hash);
+            self.inner
+                .tx_map
+                .insert(tx_hash.clone(), transaction.clone());
+            values.push(tx_hash);
+        }
+
+        if let Some(remove_values) = self.inner.time_window.append_entry(values)
+        {
+            for tx_hash in &remove_values {
+                let key = CompactBlock::to_u32(
+                    tx_hash[28],
+                    tx_hash[29],
+                    tx_hash[30],
+                    tx_hash[31],
+                );
+
+                if let Some(set) = self.inner.tx_hashes_map.get_mut(&key) {
+                    // if there is a value asscicated with the key
+                    if set.len() == 1 {
+                        self.inner.tx_hashes_map.remove(&key);
+                    } else {
+                        set.remove(tx_hash);
+                    }
+                    self.inner.tx_map.remove(tx_hash);
+                }
+            }
         }
     }
 }
