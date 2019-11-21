@@ -814,10 +814,20 @@ impl ConsensusExecutionHandler {
             .expect("Consensus Worker fails");
     }
 
+    /// Get `EpochExecutionCommitment` for an executed epoch.
+    ///
+    /// Return `None` if the commitment does not exist in memory or db.
+    /// For archive node, this should only happen when `epoch_hash` is not
+    /// executed.
     fn get_execution_result(
         &self, epoch_hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
-        self.data_man.get_epoch_execution_commitment(epoch_hash)
+        self.data_man
+            .get_epoch_execution_commitment(epoch_hash)
+            .or_else(|| {
+                self.data_man
+                    .get_epoch_execution_commitment_from_db(epoch_hash)
+            })
     }
 
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
