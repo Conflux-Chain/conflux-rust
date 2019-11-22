@@ -53,9 +53,9 @@ pub struct BlockDataManager {
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
-    /// Caching for receipts_root and logs_bloom.
-    /// It is not deferred, i.e., indexed by the hash of the pivot block
-    /// that produces the result when executed.
+    /// Caching for receipts_root and logs_bloom for epochs after
+    /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
+    /// the pivot block that produces the result when executed.
     /// It is also used for checking whether an epoch has been executed.
     /// It can be updated, i.e., adding new items, in the following cases:
     /// 1) When a new epoch gets executed in normal execution;
@@ -669,6 +669,9 @@ impl BlockDataManager {
             .map(Clone::clone)
     }
 
+    /// Load commitment from db.
+    /// The caller should ensure that the loaded commitment is after
+    /// cur_era_genesis and can be garbage-collected by checkpoint.
     pub fn load_epoch_execution_commitment_from_db(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
@@ -681,11 +684,15 @@ impl BlockDataManager {
         Some(commitment)
     }
 
-    pub fn get_epoch_execution_commitment_from_db(
+    /// Get persisted execution commitment.
+    /// It will check db if it's missing in db.
+    pub fn get_epoch_execution_commitment_with_db(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
-        self.db_manager
-            .consensus_graph_epoch_execution_commitment_from_db(block_hash)
+        self.get_epoch_execution_commitment(block_hash).or_else(|| {
+            self.db_manager
+                .consensus_graph_epoch_execution_commitment_from_db(block_hash)
+        })
     }
 
     pub fn remove_epoch_execution_commitment(&self, block_hash: &H256) {
@@ -913,7 +920,7 @@ impl BlockDataManager {
     pub fn get_snapshot_and_epoch_id_readonly(
         &self, block_hash: &EpochId,
     ) -> Option<SnapshotAndEpochId> {
-        match self.get_epoch_execution_commitment(block_hash) {
+        match self.get_epoch_execution_commitment_with_db(block_hash) {
             None => None,
             Some(execution_commitment) => Some(SnapshotAndEpochId::from_ref(
                 SnapshotAndEpochIdRef::new_for_readonly(

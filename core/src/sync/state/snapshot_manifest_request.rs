@@ -206,7 +206,7 @@ impl SnapshotManifestRequest {
                     .manager
                     .graph
                     .data_man
-                    .get_epoch_execution_commitment_from_db(
+                    .get_epoch_execution_commitment_with_db(
                         &deferred_block_hash,
                     )
                 {
