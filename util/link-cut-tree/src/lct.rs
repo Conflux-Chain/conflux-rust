@@ -503,6 +503,34 @@ impl CaterpillarMinLinkCutTreeInner {
 }
 
 impl CaterpillarLinkCutTreeTrait for CaterpillarMinLinkCutTreeInner {
+    ///            ||
+    ///            V3
+    ///         /  ||  \
+    ///      V'2   V2  V"2
+    ///         /  ||  \
+    ///      V'1   V1  V"1
+    ///         /  |   \
+    ///      V'0   V0  V"0
+    ///
+    /// In the above figure, we use "/", "|", and "\" to represent light
+    /// edges, and "||" to represent heavy edges.
+    ///
+    /// The caterpillar delta/value represents the caterpillar effect of
+    /// a node V on all its children connected to V through light edges.
+    /// The caterpillar effect of V on its child connected through heavy
+    /// edge should already be applied through the delta/value of the child.
+    /// This is because when accessing a node, it must be on the preferred
+    /// path and its value should already be the final value with caterpillar
+    /// effect integrated.
+    ///
+    /// Specifically, when calling caterpillar_apply(V1, caterpillar_delta),
+    /// The edges between V1 and all its children become light edges.
+    /// The caterpillar_value of V1 represents its caterpillar effect on
+    /// V'0, V0, and V"0. The caterpillar_delta of V1 helps maintain the
+    /// caterpillar effects of V2 on V'1 and V"1, and V3 on V'2 and V"2,
+    /// and so on upwards. The value of V1 has already integrated the
+    /// caterpillar effect of V2 on it, and the delta of V1 helps maintain
+    /// the integrated caterpillar effects of V3 on V2, and so on upwards.
     fn caterpillar_apply(&mut self, v: usize, caterpillar_delta: i128) {
         self.access(v);
 
