@@ -823,11 +823,7 @@ impl ConsensusExecutionHandler {
         &self, epoch_hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
         self.data_man
-            .get_epoch_execution_commitment(epoch_hash)
-            .or_else(|| {
-                self.data_man
-                    .get_epoch_execution_commitment_from_db(epoch_hash)
-            })
+            .get_epoch_execution_commitment_with_db(epoch_hash)
     }
 
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
