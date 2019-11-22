@@ -209,10 +209,9 @@ subcommands:
                         default_value: epoch
                         hidden: true
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
-                        possible_values: [latest_mined, latest_state, earliest]
             - balance:
                 about: Get balance of specified account
                 args:
@@ -230,10 +229,9 @@ subcommands:
                         required: true
                         takes_value: true
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
-                        possible_values: [latest_mined, latest_state, earliest]
             - code:
                 about: Get bytecode of specified contract
                 args:
@@ -251,10 +249,9 @@ subcommands:
                         required: true
                         takes_value: true
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
-                        possible_values: [latest_mined, latest_state, earliest]
             - block-by-hash:
                 about: Get block by hash
                 args:
@@ -315,11 +312,10 @@ subcommands:
                         default_value: epoch,include-txs:bool
                         hidden: true
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         required: true
                         takes_value: true
-                        possible_values: [latest_mined, latest_state, earliest]
                     - include-txs:
                         help: Whether to return detailed transactions in block
                         long: include-txs
@@ -346,10 +342,9 @@ subcommands:
                         required: true
                         takes_value: true
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
-                        possible_values: [latest_mined, latest_state, earliest]
             - send:
                 about: Send a signed transaction and return its hash
                 args:
@@ -395,11 +390,10 @@ subcommands:
                         default_value: epoch
                         hidden: true
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         required: true
                         takes_value: true
-                        possible_values: [latest_mined, latest_state, earliest]
             - receipt:
                 about: Get receipt by transaction hash
                 args:
@@ -463,11 +457,10 @@ subcommands:
                         takes_value: true
                         value_name: HEX
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
                         value_name: EPOCH
-                        possible_values: [latest_mined, latest_state, earliest]
             - estimate-gas:
                 about: Executes a call request immediately without creating a transaction and returns the gas used
                 args:
@@ -515,11 +508,10 @@ subcommands:
                         takes_value: true
                         value_name: HEX
                     - epoch:
-                        help: Epoch
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
                         value_name: EPOCH
-                        possible_values: [latest_mined, latest_state, earliest]
             - debug:
                 about: Debug subcommands (requires jsonrpc_local_http_port configured)
                 setting: SubcommandRequiredElseHelp
