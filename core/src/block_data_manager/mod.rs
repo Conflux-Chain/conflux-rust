@@ -689,9 +689,9 @@ impl BlockDataManager {
     pub fn get_epoch_execution_commitment_with_db(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
-        self.get_epoch_execution_commitment(epoch_hash).or_else(|| {
+        self.get_epoch_execution_commitment(block_hash).or_else(|| {
             self.db_manager
-                .consensus_graph_epoch_execution_commitment_from_db(epoch_hash)
+                .consensus_graph_epoch_execution_commitment_from_db(block_hash)
         })
     }
 
