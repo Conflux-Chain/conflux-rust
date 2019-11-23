@@ -8,21 +8,21 @@ use crate::{
     ext_db::SystemDB,
     pow::TargetDifficultyManager,
     storage::{
-        state_manager::{SnapshotAndEpochId, SnapshotAndEpochIdRef},
+        state_manager::StateIndex, GuardedValue, NonCopy, StateRootWithAuxInfo,
         StorageManager, StorageManagerTrait, StorageTrait,
     },
 };
 use cfx_types::{Bloom, H256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, EpochId, SignedTransaction, StateRootWithAuxInfo,
-    TransactionAddress, TransactionWithSignature,
+    Block, BlockHeader, EpochId, SignedTransaction, TransactionAddress,
+    TransactionWithSignature,
 };
 use rlp::DecoderError;
 use std::{
@@ -242,10 +242,11 @@ impl BlockDataManager {
 
     /// This will return the state root of true genesis block.
     pub fn true_genesis_state_root(&self) -> StateRootWithAuxInfo {
+        let true_genesis_hash = self.true_genesis.hash();
         self.storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new_for_readonly(
-                &self.true_genesis.hash(),
-                &StateRootWithAuxInfo::default(),
+            .get_state_no_commit(StateIndex::new_for_readonly(
+                &true_genesis_hash,
+                &StateRootWithAuxInfo::genesis(&true_genesis_hash),
             ))
             .unwrap()
             .unwrap()
@@ -662,11 +663,13 @@ impl BlockDataManager {
     /// Get in-mem execution commitment.
     pub fn get_epoch_execution_commitment(
         &self, block_hash: &H256,
-    ) -> Option<EpochExecutionCommitment> {
-        self.epoch_execution_commitments
-            .read()
-            .get(block_hash)
-            .map(Clone::clone)
+    ) -> GuardedValue<
+        RwLockReadGuard<'_, HashMap<H256, EpochExecutionCommitment>>,
+        NonCopy<Option<&'_ EpochExecutionCommitment>>,
+    > {
+        let read_lock = self.epoch_execution_commitments.read();
+        let (read_lock, derefed) = GuardedValue::new_derefed(read_lock).into();
+        GuardedValue::new(read_lock, NonCopy(derefed.0.get(block_hash)))
     }
 
     /// Load commitment from db.
@@ -689,10 +692,15 @@ impl BlockDataManager {
     pub fn get_epoch_execution_commitment_with_db(
         &self, block_hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
-        self.get_epoch_execution_commitment(block_hash).or_else(|| {
-            self.db_manager
-                .consensus_graph_epoch_execution_commitment_from_db(block_hash)
-        })
+        self.get_epoch_execution_commitment(block_hash).map_or_else(
+            || {
+                self.db_manager
+                    .consensus_graph_epoch_execution_commitment_from_db(
+                        block_hash,
+                    )
+            },
+            |maybe_ref| Some(maybe_ref.clone()),
+        )
     }
 
     pub fn remove_epoch_execution_commitment(&self, block_hash: &H256) {
@@ -917,18 +925,23 @@ impl BlockDataManager {
         self.tx_data_manager.build_partial(compact_block)
     }
 
-    pub fn get_snapshot_and_epoch_id_readonly(
-        &self, block_hash: &EpochId,
-    ) -> Option<SnapshotAndEpochId> {
-        match self.get_epoch_execution_commitment_with_db(block_hash) {
+    pub fn get_state_readonly_index<'a>(
+        &'a self, block_hash: &'a EpochId,
+    ) -> GuardedValue<
+        RwLockReadGuard<'a, HashMap<H256, EpochExecutionCommitment>>,
+        Option<StateIndex<'a>>,
+    > {
+        let (guard, maybe_commitment) =
+            self.get_epoch_execution_commitment(block_hash).into();
+        let maybe_state_index = match &*maybe_commitment {
             None => None,
-            Some(execution_commitment) => Some(SnapshotAndEpochId::from_ref(
-                SnapshotAndEpochIdRef::new_for_readonly(
-                    block_hash,
-                    &execution_commitment.state_root_with_aux_info,
-                ),
+            Some(execution_commitment) => Some(StateIndex::new_for_readonly(
+                block_hash,
+                &execution_commitment.state_root_with_aux_info,
             )),
-        }
+        };
+
+        GuardedValue::new(guard, maybe_state_index)
     }
 }
 

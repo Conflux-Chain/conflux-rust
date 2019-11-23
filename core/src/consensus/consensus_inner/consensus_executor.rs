@@ -13,7 +13,7 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     state::{CleanupMode, State},
     statedb::StateDb,
-    storage::state_manager::{SnapshotAndEpochIdRef, StateManagerTrait},
+    storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
@@ -31,6 +31,7 @@ use primitives::{
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
+    MERKLE_NULL_NODE,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -116,7 +117,8 @@ impl EpochExecutionTask {
             reward_info,
             on_local_pivot,
             debug_record: if debug_record {
-                Arc::new(Mutex::new(Some(ComputeEpochDebugRecord::default())))
+                // FIXME: make debug_record great again.
+                Default::default()
             } else {
                 Arc::new(Mutex::new(None))
             },
@@ -148,7 +150,7 @@ pub struct ConsensusExecutor {
     /// synchronously by the executor itself
     pub handler: Arc<ConsensusExecutionHandler>,
 
-    bench_mode: bool,
+    consensus_graph_bench_mode: bool,
 }
 
 impl ConsensusExecutor {
@@ -170,7 +172,7 @@ impl ConsensusExecutor {
             sender: Mutex::new(sender),
             stopped: AtomicBool::new(false),
             handler: handler.clone(),
-            bench_mode,
+            consensus_graph_bench_mode: bench_mode,
         };
         let executor = Arc::new(executor_raw);
         let executor_thread = executor.clone();
@@ -243,10 +245,12 @@ impl ConsensusExecutor {
     pub fn wait_for_result(
         &self, epoch_hash: H256,
     ) -> EpochExecutionCommitment {
-        // FIXME: this is hard to understand due to lack of documentation.
-        if self.bench_mode {
+        // In consensus_graph_bench_mode execution is skipped.
+        if self.consensus_graph_bench_mode {
             EpochExecutionCommitment {
-                state_root_with_aux_info: Default::default(),
+                state_root_with_aux_info: StateRootWithAuxInfo::genesis(
+                    &MERKLE_NULL_NODE,
+                ),
                 receipts_root: KECCAK_EMPTY_LIST_RLP,
                 logs_bloom_hash: KECCAK_EMPTY_BLOOM,
             }
@@ -318,7 +322,7 @@ impl ConsensusExecutor {
                 // FIXME: Wait for the execution info populated for all blocks
                 // FIXME: before pivot_arena_index
                 let height = inner.arena[pivot_arena_index].height;
-                if !self.bench_mode
+                if !self.consensus_graph_bench_mode
                 {
                     info!(
                         "wait_and_compute_state_valid_locked, idx = {}, \
@@ -360,7 +364,7 @@ impl ConsensusExecutor {
 
                     let mut no_reward =
                         block_consensus_node.data.partial_invalid;
-                    if !self.bench_mode && !no_reward {
+                    if !self.consensus_graph_bench_mode && !no_reward {
                         if *index == pivot_arena_index {
                             no_reward = !inner.arena[pivot_arena_index]
                                 .data
@@ -550,7 +554,7 @@ impl ConsensusExecutor {
     /// The parameters are needed for the thread to execute this epoch without
     /// holding inner lock.
     pub fn enqueue_epoch(&self, task: EpochExecutionTask) -> bool {
-        if !self.bench_mode {
+        if !self.consensus_graph_bench_mode {
             self.sender
                 .lock()
                 .send(ExecutionTask::ExecuteEpoch(task))
@@ -562,7 +566,7 @@ impl ConsensusExecutor {
 
     /// Execute the epoch synchronously
     pub fn compute_epoch(&self, task: EpochExecutionTask) {
-        if !self.bench_mode {
+        if !self.consensus_graph_bench_mode {
             self.handler.handle_epoch_execution(task)
         }
     }
@@ -632,7 +636,7 @@ impl ConsensusExecutor {
     /// state of a block immediately
     pub fn compute_state_for_block(
         &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
-    ) -> Result<EpochExecutionCommitment, String> {
+    ) -> Result<(), String> {
         let _timer = MeterTimer::time_func(
             CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER.as_ref(),
         );
@@ -640,26 +644,22 @@ impl ConsensusExecutor {
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
         {
-            if let Some(maybe_cached_state_result) = self
+            let (_guarded_state_index, maybe_state_index) = self
                 .handler
                 .data_man
-                .get_snapshot_and_epoch_id_readonly(&block_hash)
-                .map(|snapshot_and_epoch_id| {
+                .get_state_readonly_index(&block_hash)
+                .into();
+            // The state is computed and is retrievable from storage.
+            if let Some(maybe_cached_state_result) =
+                maybe_state_index.map(|state_readonly_index| {
                     self.handler
                         .data_man
                         .storage_manager
-                        .get_state_no_commit(snapshot_and_epoch_id.as_ref())
+                        .get_state_no_commit(state_readonly_index)
                 })
             {
                 if let Ok(Some(_)) = maybe_cached_state_result {
-                    return Ok(self
-                        .handler
-                        .data_man
-                        .get_epoch_execution_commitment(&block_hash)
-                        // Unwrap is safe here because the if-condition on
-                        // data_man.get_snapshot_and_epoch_id_readonly implies
-                        // epoch_execution_commitments is non-empty.
-                        .unwrap());
+                    return Ok(());
                 } else {
                     return Err("Internal storage error".to_owned());
                 }
@@ -741,7 +741,7 @@ impl ConsensusExecutor {
             epoch_execution_result.receipts_root, epoch_execution_result.logs_bloom_hash
         );
 
-        Ok(epoch_execution_result)
+        Ok(())
     }
 }
 
@@ -856,16 +856,13 @@ impl ConsensusExecutionHandler {
         {
             if on_local_pivot {
                 // Unwrap is safe here because it's guaranteed by outer if.
-                let state_root = self
+                let state_root = &self
                     .data_man
                     .get_epoch_execution_commitment(epoch_hash)
                     .unwrap()
                     .state_root_with_aux_info;
                 self.tx_pool.set_best_executed_epoch(
-                    SnapshotAndEpochIdRef::new_for_readonly(
-                        epoch_hash,
-                        &state_root,
-                    ),
+                    StateIndex::new_for_readonly(epoch_hash, state_root),
                 );
             }
             debug!("Skip execution in prefix {:?}", epoch_hash);
@@ -892,20 +889,18 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_for_next_epoch(
-                        SnapshotAndEpochIdRef::new_for_next_epoch(
-                            pivot_block.block_header.parent_hash(),
-                            &self
-                                .data_man
-                                .get_epoch_execution_commitment(
-                                    pivot_block.block_header.parent_hash(),
-                                )
-                                // Unwrapping is safe because the state exists.
-                                .unwrap()
-                                .state_root_with_aux_info,
-                            pivot_block.block_header.height() - 1,
-                        ),
-                    )
+                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                    ))
                     .expect("No db error")
                     // Unwrapping is safe because the state exists.
                     .expect("State exists"),
@@ -936,12 +931,11 @@ impl ConsensusExecutionHandler {
         if on_local_pivot {
             state_root =
                 state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
-            self.tx_pool.set_best_executed_epoch(
-                SnapshotAndEpochIdRef::new_for_readonly(
+            self.tx_pool
+                .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
-                ),
-            );
+                ));
         } else {
             state_root = state.commit(*epoch_hash).unwrap();
         };
@@ -1357,20 +1351,18 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_for_next_epoch(
-                        SnapshotAndEpochIdRef::new_for_next_epoch(
-                            pivot_block.block_header.parent_hash(),
-                            &self
-                                .data_man
-                                .get_epoch_execution_commitment(
-                                    pivot_block.block_header.parent_hash(),
-                                )
-                                // Unwrapping is safe because the state exists.
-                                .unwrap()
-                                .state_root_with_aux_info,
-                            pivot_block.block_header.height() - 1,
-                        ),
-                    )
+                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                    ))
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),
@@ -1393,16 +1385,13 @@ impl ConsensusExecutionHandler {
     ) -> Result<(Vec<u8>, U256), String> {
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
+        let (_state_index_guard, state_index) =
+            self.data_man.get_state_readonly_index(epoch_id).into();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_no_commit(
-                        self.data_man
-                            .get_snapshot_and_epoch_id_readonly(epoch_id)
-                            .unwrap()
-                            .as_ref(),
-                    )
+                    .get_state_no_commit(state_index.unwrap())
                     .unwrap()
                     // Unwrapping is safe because the state exists.
                     .unwrap(),

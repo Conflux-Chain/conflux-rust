@@ -19,8 +19,7 @@ use crate::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
-    statedb::StorageKey,
-    storage,
+    storage::StorageKey,
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
@@ -169,26 +168,16 @@ impl QueryService {
         )
     }
 
-    fn account_key(root: &StateRoot, address: H160) -> Vec<u8> {
-        let padding = storage::MultiVersionMerklePatriciaTrie::padding(
-            &root.snapshot_root,
-            &root.intermediate_delta_root,
-        );
-
-        StorageKey::new_account_key(&address, &padding)
-            .as_ref()
-            .to_vec()
+    fn account_key(address: &H160) -> Vec<u8> {
+        StorageKey::AccountKey(&address.0).to_key_bytes()
     }
 
-    fn code_key(root: &StateRoot, address: H160, code_hash: H256) -> Vec<u8> {
-        let padding = storage::MultiVersionMerklePatriciaTrie::padding(
-            &root.snapshot_root,
-            &root.intermediate_delta_root,
-        );
-
-        StorageKey::new_code_key(&address, &code_hash, &padding)
-            .as_ref()
-            .to_vec()
+    fn code_key(address: &H160, code_hash: &H256) -> Vec<u8> {
+        StorageKey::CodeKey {
+            address_bytes: &address.0,
+            code_hash_bytes: &code_hash.0,
+        }
+        .to_key_bytes()
     }
 
     fn retrieve_account<'a>(
@@ -200,8 +189,11 @@ impl QueryService {
             address
         );
 
+        // FIXME: We don't need the state root when we don't verify the
+        // retrieved content. FIXME: but can we rule out the need for
+        // verification in the context?
         self.retrieve_state_root(epoch)
-            .map(move |root| Self::account_key(&root, address))
+            .map(move |_root| Self::account_key(&address))
             .and_then(move |key| self.retrieve_state_entry(epoch, key))
             .and_then(|entry| match entry {
                 Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
@@ -220,8 +212,11 @@ impl QueryService {
             code_hash
         );
 
+        // FIXME: We don't need the state root when we don't verify the
+        // retrieved content. FIXME: but can we rule out the need for
+        // verification in the context?
         self.retrieve_state_root(epoch)
-            .map(move |root| Self::code_key(&root, address, code_hash))
+            .map(move |_root| Self::code_key(&address, &code_hash))
             .and_then(move |key| self.retrieve_state_entry(epoch, key))
             .map_err(|e| format!("{}", e))
     }

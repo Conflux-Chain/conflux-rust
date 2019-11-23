@@ -5,7 +5,7 @@
 use crate::{
     storage::{
         state_manager::{StateManager, StateManagerTrait},
-        Error as StorageError, KVInserter, SnapshotAndEpochIdRef,
+        Error as StorageError, KVInserter, StateIndex,
     },
     sync::{state::delta::chunk::Chunk, Error},
 };
@@ -47,8 +47,7 @@ impl StateDumper {
     pub fn dump(
         &mut self, state_manager: &StateManager,
     ) -> Result<bool, Error> {
-        let epoch_id =
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&self.epoch);
+        let epoch_id = StateIndex::new_for_test_only_delta_mpt(&self.epoch);
         let state = match state_manager.get_state_no_commit(epoch_id)? {
             Some(state) => state,
             None => return Ok(false),

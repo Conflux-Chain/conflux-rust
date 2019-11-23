@@ -1,6 +1,7 @@
+use crate::storage::StateRootWithAuxInfo;
 use cfx_types::{Address, H256, U256};
 use parity_bytes::ToPretty;
-use primitives::{SignedTransaction, StateRootWithAuxInfo};
+use primitives::SignedTransaction;
 use rlp::*;
 use std::{fmt::Display, sync::Arc, vec::Vec};
 
@@ -17,7 +18,7 @@ pub struct BlockHashAuthorValue<ValueType>(
 #[derive(Debug)]
 pub struct AuthorValue<ValueType>(pub Address, pub ValueType);
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ComputeEpochDebugRecord {
     // Basic information.
     pub parent_block_hash: H256,

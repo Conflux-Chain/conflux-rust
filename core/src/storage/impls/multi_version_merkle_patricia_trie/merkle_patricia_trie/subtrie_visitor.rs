@@ -200,6 +200,8 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         })
     }
 
+    // FIXME: why it's unused after all?
+    #[allow(unused)]
     pub fn get_merkle_hash_wo_compressed_path(
         &mut self, key: KeyPart,
     ) -> Result<Option<MerkleHash>> {

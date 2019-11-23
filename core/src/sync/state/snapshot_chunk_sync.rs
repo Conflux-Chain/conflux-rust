@@ -8,7 +8,9 @@ use crate::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         consensus_internal::REWARD_EPOCH_COUNT,
     },
-    storage::state_manager::StateManager,
+    storage::{
+        state_manager::StateManager, StateRootAuxInfo, StateRootWithAuxInfo,
+    },
     sync::{
         message::{msgid, Context, DynamicCapability},
         state::{
@@ -25,10 +27,7 @@ use crate::{
 use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
-use primitives::{
-    BlockHeaderBuilder, Receipt, StateRoot, StateRootAuxInfo,
-    StateRootWithAuxInfo,
-};
+use primitives::{BlockHeaderBuilder, Receipt, StateRoot};
 use std::{
     collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
@@ -179,6 +178,8 @@ impl SnapshotChunkSync {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
+        // FIXME: start here.
+        // consensus is available from sync_handler.
         let request = SnapshotManifestRequest::new(
             inner.checkpoint.clone(),
             inner.trusted_blame_block.clone(),
@@ -541,7 +542,8 @@ impl SnapshotChunkSync {
         for state_root in state_root_vec {
             out_state_root_with_aux_info_vec.push(StateRootWithAuxInfo {
                 state_root: state_root.clone(),
-                aux_info: StateRootAuxInfo::default(),
+                // FIXME: build StateRootAuxInfo till the snapshot.
+                aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
             });
         }
         // FIXME: build StateRootAuxInfo till the snapshot.

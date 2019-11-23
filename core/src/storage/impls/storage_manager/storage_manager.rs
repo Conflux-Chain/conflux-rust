@@ -83,14 +83,7 @@ impl StorageManager {
 
         // Create and register the initial empty snapshot for genesis block
         // and blocks before the second snapshot.
-        let genesis_snapshot_info = SnapshotInfo {
-            merkle_root: MERKLE_NULL_NODE.clone(),
-            delta_root: MERKLE_NULL_NODE.clone(),
-            height: 0,
-            parent_snapshot_epoch_id: NULL_EPOCH.clone(),
-            parent_snapshot_height: 0,
-            pivot_chain_parts: vec![NULL_EPOCH.clone()],
-        };
+        let genesis_snapshot_info = SnapshotInfo::genesis_snapshot_info();
         storage_manager.register_new_snapshot(genesis_snapshot_info);
 
         storage_manager
@@ -145,24 +138,11 @@ impl StorageManager {
             }
         }
 
-        let delta_mpt_key_padding = {
-            let snapshot_info_map_locked =
-                self.snapshot_info_map_by_epoch.read();
-            let snapshot_info =
-                snapshot_info_map_locked.get(snapshot_epoch_id).unwrap();
-
-            DeltaMpt::padding(
-                &snapshot_info.merkle_root,
-                &snapshot_info.delta_root,
-            )
-        };
-
         StorageManager::new_or_get_delta_mpt(
             // The StorageManager is maintained in Arc so it's fine to call
             // this unsafe function.
             unsafe { shared_from_this(self) },
             snapshot_epoch_id,
-            delta_mpt_key_padding,
         )
     }
 
@@ -182,9 +162,7 @@ impl StorageManager {
     /// Return the existing delta mpt if the delta mpt already exists.
     pub fn new_or_get_delta_mpt(
         storage_manager: Arc<StorageManager>, snapshot_epoch_id: &EpochId,
-        delta_mpt_key_padding: KeyPadding,
-    ) -> Result<Arc<DeltaMpt>>
-    {
+    ) -> Result<Arc<DeltaMpt>> {
         // Don't hold the lock while doing db io.
         {
             let snapshot_associated_mpts_locked =
@@ -233,9 +211,6 @@ impl StorageManager {
             let arc_delta_mpt = Arc::new(DeltaMpt::new(
                 db,
                 &storage_manager.storage_conf,
-                // FIXME: the intermediate_delta_root padding is not fixed for
-                // the delta mpt.
-                delta_mpt_key_padding,
                 snapshot_epoch_id.clone(),
                 storage_manager.clone(),
             ));
@@ -317,11 +292,15 @@ impl StorageManager {
         let in_progress_snapshot_info = SnapshotInfo {
             height: height as u64,
             parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
-            delta_root: delta_merkle_root,
             // This is unknown for now, and we don't care.
             merkle_root: Default::default(),
             parent_snapshot_epoch_id,
             pivot_chain_parts,
+            // FIXME: this is not required until the snapshot is made.
+            parent_snapshot_root: Default::default(),
+            intermediate_delta_root_at_snapshot: delta_merkle_root,
+            // FIXME: this is not required until the snapshot is made.
+            intermediate_delta_padding: Default::default(),
         };
 
         if !upgradable_read_locked.contains_key(&snapshot_epoch_id) {
@@ -615,6 +594,8 @@ impl StorageManager {
     pub fn log_usage(&self) {
         // FIXME: log usage for all delta mpt.
         // Log the usage of the delta mpt for the first snapshot.
+        // FIXME: due to initialization problems the delta mpt may not be
+        // available?
         self.snapshot_associated_mpts_by_epoch
             .read()
             .get(&NULL_EPOCH)
@@ -679,6 +660,7 @@ use super::{
                 snapshot_db_manager::SnapshotDbManagerTrait,
             },
             utils::arc_ext::*,
+            StateRootWithAuxInfo,
         },
         errors::*,
         multi_version_merkle_patricia_trie::{
@@ -693,11 +675,8 @@ use super::{
     },
     *,
 };
-use crate::statedb::KeyPadding;
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{
-    EpochId, MerkleHash, StateRootWithAuxInfo, MERKLE_NULL_NODE, NULL_EPOCH,
-};
+use primitives::{EpochId, MerkleHash, NULL_EPOCH};
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},

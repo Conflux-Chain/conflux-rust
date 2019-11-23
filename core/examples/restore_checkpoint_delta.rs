@@ -11,7 +11,8 @@ use cfxcore::{
         state_manager::{
             StateManager, StateManagerTrait, StorageConfiguration,
         },
-        SnapshotAndEpochIdRef,
+        storage_key::StorageKey,
+        StateIndex,
     },
     sync::{
         delta::{Chunk, ChunkReader, StateDumper},
@@ -181,8 +182,14 @@ fn initialize_genesis(
 ) -> Result<(H256, MerkleHash), Error> {
     let mut state = manager.get_state_for_genesis_write();
 
-    state.set(b"123", vec![1, 2, 3].into_boxed_slice())?;
-    state.set(b"124", vec![1, 2, 4].into_boxed_slice())?;
+    state.set(
+        StorageKey::AccountKey(b"123"),
+        vec![1, 2, 3].into_boxed_slice(),
+    )?;
+    state.set(
+        StorageKey::AccountKey(b"124"),
+        vec![1, 2, 4].into_boxed_slice(),
+    )?;
 
     let root = state.compute_state_root()?;
     println!("genesis root: {:?}", root.state_root.delta_root);
@@ -223,9 +230,9 @@ fn prepare_checkpoint(
 
     let root = manager
         // TODO consider snapshot.
-        .get_state_no_commit(
-            SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(&checkpoint),
-        )?
+        .get_state_no_commit(StateIndex::new_for_test_only_delta_mpt(
+            &checkpoint,
+        ))?
         .unwrap()
         .get_state_root()?
         .unwrap()
@@ -239,14 +246,16 @@ fn prepare_checkpoint(
 fn add_epoch_with_accounts(
     manager: &StateManager, parent: &H256, accounts: usize,
 ) -> H256 {
-    let epoch_id = SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(parent);
+    let epoch_id = StateIndex::new_for_test_only_delta_mpt(parent);
     let state = manager.get_state_for_next_epoch(epoch_id).unwrap().unwrap();
     let mut state = StateDb::new(state);
     for i in 0..accounts {
         let addr = Address::random();
         let account =
             Account::new_empty_with_balance(&addr, &i.into(), &0.into());
-        state.set(&state.account_key(&addr), &account).unwrap();
+        state
+            .set(StorageKey::new_account_key(&addr), &account)
+            .unwrap();
     }
     let epoch = H256::random();
     state.commit(epoch).unwrap();
