@@ -267,8 +267,6 @@ impl StorageManager {
         let upgradable_read_locked =
             this_cloned.in_progress_snapshoting_tasks.upgradable_read();
 
-        let delta_merkle_root = delta_db.get_merkle_root();
-
         let mut pivot_chain_parts =
             vec![Default::default(); SNAPSHOT_EPOCHS_CAPACITY as usize];
         let parent_snapshot_epoch_id;
@@ -296,11 +294,6 @@ impl StorageManager {
             merkle_root: Default::default(),
             parent_snapshot_epoch_id,
             pivot_chain_parts,
-            // FIXME: this is not required until the snapshot is made.
-            parent_snapshot_root: Default::default(),
-            intermediate_delta_root_at_snapshot: delta_merkle_root,
-            // FIXME: this is not required until the snapshot is made.
-            intermediate_delta_padding: Default::default(),
         };
 
         if !upgradable_read_locked.contains_key(&snapshot_epoch_id) {
