@@ -5,7 +5,6 @@
 use crate::{
     consensus::ConsensusGraphInner,
     parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
-    storage::{state_manager::StateManagerTrait, StateIndex},
     sync::{
         message::DynamicCapability,
         state::{SnapshotChunkSync, Status},
@@ -370,12 +369,8 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         let has_state = sync_handler
             .graph
             .data_man
-            .storage_manager
-            // TODO: think about snapshot.
-            .contains_state(StateIndex::new_for_test_only_delta_mpt(
-                &checkpoint,
-            ))
-            .expect("failed to check if checkpoint state exists");
+            .get_epoch_execution_commitment_with_db(&checkpoint)
+            .is_some();
 
         if has_state {
             self.has_state.store(true, AtomicOrdering::SeqCst);

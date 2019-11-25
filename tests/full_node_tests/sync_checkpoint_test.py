@@ -67,10 +67,13 @@ class SyncCheckpointTests(ConfluxTestFramework):
         # There is no state from epoch 1 to checkpoint_epoch
         # Note, state of genesis epoch always exists
         assert client.epoch_number() >= checkpoint_epoch
-        for i in range(1, checkpoint_epoch):
+        # FIXME: we minus REWARD_EPOCH_COUNT here as a workaround.
+        # FIXME: after the state boundary is implemented in consensus,
+        # FIXME: this workaround should be removed.
+        for i in range(1, checkpoint_epoch - 11):
             try:
                 client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(i))
-                raise AssertionError("should be not state for epoch {}".format(i))
+                raise AssertionError("should not have state for epoch {}".format(i))
             except ReceivedErrorResponseError as e:
                 assert "State for epoch" in e.response.message
                 assert "does not exist" in e.response.message
@@ -79,7 +82,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(checkpoint_epoch))
 
         # There should be states after checkpoint
-        for i in range(checkpoint_epoch + 1, client.epoch_number() - 3):
+        for i in range(checkpoint_epoch, client.epoch_number() - 3):
             client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(i))
 
 if __name__ == "__main__":
