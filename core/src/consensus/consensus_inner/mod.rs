@@ -2770,19 +2770,20 @@ impl ConsensusGraphInner {
         Ok(idx)
     }
 
-    /// FIXME Can we ensure that a state-valid block exists?
-    /// TODO Check if we need to persist `state_valid` for this recovery.
     /// Find the first state valid block on the pivot chain after
-    /// `cur_era_genesis` and set `state_valid` of it and its blamed blocks.
-    /// This block is found according to blame_ratio.
+    /// `state_boundary_height` and set `state_valid` of it and its blamed
+    /// blocks. This block is found according to blame_ratio.
     pub fn recover_state_valid(&mut self) {
-        let checkpoint = self.data_man.get_cur_consensus_era_stable_hash();
+        let start_pivot_index =
+            (self.state_boundary_height - self.cur_era_genesis_height) as usize;
+        let start_epoch_hash =
+            self.arena[self.pivot_chain[start_pivot_index]].hash;
         // We will get the first
-        // pivot block whose `state_valid` is `true` after `checkpoint`
-        // (include `checkpoint` itself).
+        // pivot block whose `state_valid` is `true` after `start_epoch_hash`
+        // (include `start_epoch_hash` itself).
         let maybe_trusted_blame_block =
-            self.get_trusted_blame_block(&checkpoint);
-        debug!("recover_state_valid: checkpoint={:?}, maybe_trusted_blame_block={:?}", checkpoint, maybe_trusted_blame_block);
+            self.get_trusted_blame_block(&start_epoch_hash);
+        debug!("recover_state_valid: checkpoint={:?}, maybe_trusted_blame_block={:?}", start_epoch_hash, maybe_trusted_blame_block);
 
         // Set `state_valid` of `trusted_blame_block` to true,
         // and set that of the blocks blamed by it to false
