@@ -2314,9 +2314,9 @@ impl ConsensusGraphInner {
                 )
                 .ok_or("State block commitment missing")?;
             blame += 1;
-            if self.arena[cur].height <= self.state_boundary_height {
+            if self.arena[cur].height == self.cur_era_genesis_height {
                 return Err(
-                    "Failed to compute blame and state due to out of state boundary"
+                    "Failed to compute blame and state due to out of era"
                         .to_owned(),
                 );
             }
