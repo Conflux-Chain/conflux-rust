@@ -364,6 +364,13 @@ pub struct ConsensusGraphInner {
     /// `stable genesis` and `first_trusted_blame_block`.
     first_trusted_blame_block: H256,
     first_trusted_blame_block_height: u64,
+
+    /// The lowest height of the epochs that have available states and
+    /// commitments. For archive node, it equals `cur_era_stable_height`.
+    /// For light node, it equals the height of remotely synchronized state at
+    /// start, and equals `cur_era_stable_height` after making a new
+    /// checkpoint.
+    pub state_boundary_height: u64,
 }
 
 pub struct ConsensusGraphNode {
@@ -461,6 +468,7 @@ impl ConsensusGraphInner {
             old_era_block_set: Mutex::new(VecDeque::new()),
             first_trusted_blame_block,
             first_trusted_blame_block_height,
+            state_boundary_height: cur_era_stable_height,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -2306,9 +2314,9 @@ impl ConsensusGraphInner {
                 )
                 .ok_or("State block commitment missing")?;
             blame += 1;
-            if self.arena[cur].height < self.cur_era_stable_height {
+            if self.arena[cur].height < self.state_boundary_height {
                 return Err(
-                    "Failed to compute blame and state due to out of era"
+                    "Failed to compute blame and state due to out of state boundary"
                         .to_owned(),
                 );
             }
@@ -2663,23 +2671,13 @@ impl ConsensusGraphInner {
                 .data_man
                 .get_epoch_execution_commitment(&deferred_block_hash)
                 .is_some()
+                || self.arena[cur].height < self.state_boundary_height
             {
-                // The state_hash block and the blocks before have been executed
-                break;
-            }
-            if self.arena[*self
-                .hash_to_arena_indices
-                .get(&deferred_block_hash)
-                .unwrap()]
-            .height
-                < self.cur_era_stable_height
-            {
+                // This block and the blocks before have been executed or will
+                // not be executed
                 break;
             }
             waiting_blocks.push(deferred_block_hash);
-            if cur == self.cur_era_genesis_block_arena_index {
-                break;
-            }
             cur = self.arena[cur].parent;
         }
         waiting_blocks.reverse();
@@ -2698,7 +2696,7 @@ impl ConsensusGraphInner {
             }
             // See comments on compute_blame_and_state_with_execution_result()
             // for explanation of this assumption.
-            assert!(self.arena[cur].height >= self.cur_era_stable_height);
+            assert!(self.arena[cur].height >= self.state_boundary_height);
             blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }

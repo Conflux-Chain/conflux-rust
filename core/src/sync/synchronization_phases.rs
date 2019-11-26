@@ -333,6 +333,17 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
                 DynamicCapability::ServeCheckpoint(Some(checkpoint))
                     .broadcast(io, &sync_handler.syn);
                 self.state_sync.restore_execution_state(sync_handler);
+                sync_handler
+                    .graph
+                    .consensus
+                    .inner
+                    .write()
+                    .state_boundary_height = sync_handler
+                    .graph
+                    .data_man
+                    .block_header_by_hash(&checkpoint)
+                    .expect("Header for checkpoint exists")
+                    .height();
                 return SyncPhaseType::CatchUpRecoverBlockFromDB;
             }
         } else {
