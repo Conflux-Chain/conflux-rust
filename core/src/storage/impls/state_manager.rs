@@ -14,11 +14,11 @@ pub struct StateTrees {
     pub maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     pub intermediate_trie_root: Option<NodeRefDeltaMpt>,
     pub intermediate_trie_root_merkle: MerkleHash,
-    pub maybe_intermediate_trie_key_padding: Option<KeyPadding>,
+    pub maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
     /// Delta trie can't be none since we may commit into it.
     pub delta_trie: Arc<DeltaMpt>,
     pub delta_trie_root: Option<NodeRefDeltaMpt>,
-    pub delta_trie_key_padding: KeyPadding,
+    pub delta_trie_key_padding: DeltaMptKeyPadding,
     /// Information for making new snapshot when necessary.
     pub maybe_delta_trie_height: Option<u32>,
     pub maybe_height: Option<u64>,
@@ -128,9 +128,9 @@ impl StateManager {
     pub fn get_state_trees_internal(
         snapshot_db: SnapshotDb,
         maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
-        maybe_intermediate_trie_key_padding: Option<&KeyPadding>,
+        maybe_intermediate_trie_key_padding: Option<&DeltaMptKeyPadding>,
         delta_mpt: Arc<DeltaMpt>,
-        maybe_delta_mpt_key_padding: Option<&KeyPadding>,
+        maybe_delta_mpt_key_padding: Option<&DeltaMptKeyPadding>,
         intermediate_epoch_id: &EpochId, epoch_id: &EpochId,
         maybe_delta_root: Option<NodeRefDeltaMpt>, maybe_height: Option<u64>,
         maybe_delta_trie_height: Option<u32>,
@@ -161,7 +161,7 @@ impl StateManager {
             None => {
                 // TODO: maybe we can move the calculation to a central place
                 // and cache the result?
-                DeltaMpt::padding(
+                StorageKey::delta_mpt_padding(
                     &snapshot_db.get_snapshot_info().merkle_root,
                     &intermediate_trie_root_merkle,
                 )
@@ -391,11 +391,9 @@ impl StateManagerTrait for StateManager {
 }
 
 use super::{
-    super::{state::*, state_manager::*, storage_db::*, storage_key::*},
+    super::{state::*, state_manager::*, storage_db::*},
+    delta_mpt::*,
     errors::*,
-    multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::NodeRefDeltaMpt, *,
-    },
     storage_db::{
         delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
         snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
@@ -405,7 +403,8 @@ use super::{
 use crate::{ext_db::SystemDB, statedb::StateDb};
 use cfx_types::{Address, U256};
 use primitives::{
-    Account, Block, BlockHeaderBuilder, EpochId, MerkleHash, MERKLE_NULL_NODE,
+    Account, Block, BlockHeaderBuilder, DeltaMptKeyPadding, EpochId,
+    MerkleHash, StorageKey, GENESIS_DELTA_MPT_KEY_PADDING, MERKLE_NULL_NODE,
     NULL_EPOCH,
 };
 use std::{

@@ -173,11 +173,11 @@ fn test_children_table_type_conversions() {
         let children_table_ref = children_table.to_ref();
         assert_eq!(children_table, children_table_ref.clone().into());
 
-        let children_table_manager = ChildrenTableManagedDeltaMpt::decode(
+        let children_table_managed = ChildrenTableManagedDeltaMpt::decode(
             &Rlp::new(&children_table_ref.rlp_bytes()),
         )
         .unwrap();
-        assert_eq!(children_table, children_table_manager.into());
+        assert_eq!(children_table, children_table_managed.into());
     })
 }
 
@@ -276,6 +276,6 @@ fn test_children_table_iteration_modification() {
     })
 }
 
-use super::super::{children_table::*, *};
+use super::super::*;
 use lazy_static::lazy_static;
 use rlp::*;

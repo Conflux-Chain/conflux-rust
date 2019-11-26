@@ -108,9 +108,9 @@
 #![deny(warnings, missing_docs, missing_debug_implementations)]
 #![doc(html_root_url = "https://docs.rs/slab/0.4.1")]
 
-use super::{
-    super::errors::*,
-    merkle_patricia_trie::{UnsafeCellExtension, WrappedCreateFrom},
+use super::super::{
+    super::utils::{UnsafeCellExtension, WrappedCreateFrom},
+    errors::*,
 };
 use parking_lot::Mutex;
 use std::{

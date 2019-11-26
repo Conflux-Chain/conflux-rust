@@ -7,6 +7,7 @@ use std::sync::Arc;
 use cfx_types::{Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,
+    StorageKey,
 };
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        StateProof, StorageKey,
+        StateProof,
     },
 };
 

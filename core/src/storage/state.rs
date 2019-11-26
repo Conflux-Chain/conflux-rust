@@ -42,7 +42,6 @@ pub trait StateTrait {
 
 use super::{
     impls::{errors::*, state_proof::StateProof},
-    storage_key::*,
     StateRootWithAuxInfo,
 };
-use primitives::EpochId;
+use primitives::{EpochId, StorageKey};

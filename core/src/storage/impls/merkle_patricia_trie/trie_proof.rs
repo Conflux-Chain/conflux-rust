@@ -149,7 +149,10 @@ impl TrieProof {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{CompressedPathRaw, TrieNodeTrait, VanillaTrieNode},
+        super::{
+            CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
+            VanillaTrieNode,
+        },
         TrieProof, TrieProofNode,
     };
     use primitives::MERKLE_NULL_NODE;
@@ -307,14 +310,16 @@ mod tests {
         assert!(!proof.is_valid_path_to(key, leaf2_hash, root));
 
         // path to `leaf1`
-        let path = leaf1.compressed_path_ref().path_slice;
+        let compressed_path_ref = leaf1.compressed_path_ref();
+        let path = compressed_path_ref.path_slice();
         assert!(proof.is_valid_path_to(path, leaf1_hash, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, ext_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
 
         // path to `ext`
-        let path = ext.compressed_path_ref().path_slice;
+        let compressed_path_ref = ext.compressed_path_ref();
+        let path = compressed_path_ref.path_slice();
         assert!(proof.is_valid_path_to(path, ext_hash, root));
         assert!(!proof.is_valid_path_to(path, branch_hash, root));
         assert!(!proof.is_valid_path_to(path, leaf1_hash, root));

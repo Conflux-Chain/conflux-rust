@@ -6,10 +6,9 @@ use crate::{
     bytes::{Bytes, ToPretty},
     hash::{keccak, KECCAK_EMPTY},
     statedb::{Result as DbResult, StateDb},
-    storage::StorageKey,
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
-use primitives::Account;
+use primitives::{Account, StorageKey};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 #[derive(Debug)]

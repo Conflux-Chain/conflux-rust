@@ -214,10 +214,6 @@ pub struct CompactedChildrenTable<NodeRefT: NodeRefTrait> {
 
 pub const CHILDREN_COUNT: usize = 16;
 
-impl NodeRefTrait for NodeRefDeltaMptCompact {}
-pub type ChildrenTableDeltaMpt = CompactedChildrenTable<NodeRefDeltaMptCompact>;
-pub type ChildrenTableManagedDeltaMpt = ChildrenTable<NodeRefDeltaMptCompact>;
-
 impl<NodeRefT: NodeRefTrait> Default for CompactedChildrenTable<NodeRefT> {
     fn default() -> Self {
         Self {
@@ -840,9 +836,8 @@ impl<NodeRefT: NodeRefTrait> Decodable for ChildrenTable<NodeRefT> {
 }
 
 use super::{
+    super::super::utils::WrappedCreateFrom,
     merkle::{ChildrenMerkleTable, MaybeMerkleTable},
-    node_ref::NodeRefDeltaMptCompact,
-    WrappedCreateFrom,
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;

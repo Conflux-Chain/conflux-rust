@@ -25,6 +25,12 @@ pub trait CompressedPathTrait {
     }
 }
 
+impl CompressedPathTrait for [u8] {
+    fn path_slice(&self) -> &[u8] { self }
+
+    fn end_mask(&self) -> u8 { 0 }
+}
+
 impl<'a> CompressedPathTrait for &'a [u8] {
     fn path_slice(&self) -> &[u8] { self }
 
@@ -33,8 +39,17 @@ impl<'a> CompressedPathTrait for &'a [u8] {
 
 #[derive(Debug, PartialEq)]
 pub struct CompressedPathRef<'a> {
-    pub(super) path_slice: &'a [u8],
-    pub(super) end_mask: u8,
+    path_slice: &'a [u8],
+    end_mask: u8,
+}
+
+impl<'a> CompressedPathRef<'a> {
+    pub fn new(path_slice: &'a [u8], end_mask: u8) -> Self {
+        Self {
+            path_slice,
+            end_mask,
+        }
+    }
 }
 
 #[derive(Default)]

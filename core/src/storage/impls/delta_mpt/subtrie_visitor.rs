@@ -698,12 +698,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                         let mut new_child_node =
                             MemOptimizedTrieNode::default();
                         // set compressed path.
-                        new_child_node.copy_compressed_path(
-                            CompressedPathRef {
-                                path_slice: key_remaining,
-                                end_mask: 0,
-                            },
-                        );
+                        new_child_node.copy_compressed_path(key_remaining);
                         new_child_node.replace_value_valid(value);
                         child_node_entry.insert(&new_child_node);
 
@@ -733,10 +728,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     )?;
                 let mut new_child_node = MemOptimizedTrieNode::default();
                 // set compressed path.
-                new_child_node.copy_compressed_path(CompressedPathRef {
-                    path_slice: key_remaining,
-                    end_mask: 0,
-                });
+                new_child_node.copy_compressed_path(key_remaining);
                 new_child_node.replace_value_valid(value);
                 child_node_entry.insert(&new_child_node);
 
@@ -775,20 +767,23 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 use super::{
     super::{
         super::{
-            super::storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
-            errors::*, owned_node_set::OwnedNodeSet,
+            storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
+            utils::guarded_value::GuardedValue,
         },
-        guarded_value::GuardedValue,
-        node_memory_manager::*,
-        return_after_use::ReturnAfterUse,
-        DeltaMpt,
+        errors::*,
+        merkle_patricia_trie::{
+            merkle::*,
+            trie_proof::TrieProofNode,
+            walk::{access_mode::*, KeyPart, TrieNodeWalkTrait, WalkStop},
+            *,
+        },
     },
-    children_table::ChildrenTableDeltaMpt,
-    merkle::*,
-    trie_node::TrieNodeAction,
-    trie_proof::{TrieProof, TrieProofNode},
-    walk::{access_mode::*, KeyPart, TrieNodeWalkTrait, WalkStop},
-    *,
+    cow_node_ref::CowNodeRef,
+    mem_optimized_trie_node::*,
+    node_memory_manager::*,
+    owned_node_set::OwnedNodeSet,
+    return_after_use::ReturnAfterUse,
+    ChildrenTableDeltaMpt, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

@@ -47,14 +47,6 @@ pub struct MaybeOwnedTrieNodeAsCowCallParam {
     trie_node: *mut TrieNodeDeltaMpt,
 }
 
-pub trait KVInserter<Value> {
-    fn push(&mut self, v: Value) -> Result<()>;
-}
-
-impl<Value> KVInserter<Value> for Vec<Value> {
-    fn push(&mut self, v: Value) -> Result<()> { Ok((*self).push(v)) }
-}
-
 impl MaybeOwnedTrieNodeAsCowCallParam {
     // Returns a mutable reference to trie node when the trie_node is owned,
     // however the precondition is unchecked.
@@ -901,21 +893,18 @@ impl CowNodeRef {
 use super::{
     super::{
         super::{
-            super::storage_db::delta_db_manager::{
+            storage_db::delta_db_manager::{
                 DeltaDbOwnedReadTraitObj, DeltaDbTransactionTraitObj,
             },
-            errors::*,
-            owned_node_set::OwnedNodeSet,
-            state::ChildrenMerkleMap,
+            utils::{guarded_value::GuardedValue, UnsafeCellExtension},
         },
-        guarded_value::GuardedValue,
-        node_memory_manager::*,
-        AtomicCommitTransaction, DeltaMpt, UnsafeCellExtension,
+        errors::*,
+        merkle_patricia_trie::{merkle::*, *},
+        state::ChildrenMerkleMap,
     },
-    children_table::*,
-    merkle::*,
-    mpt_value::MptValue,
-    *,
+    node_memory_manager::*,
+    owned_node_set::OwnedNodeSet,
+    AtomicCommitTransaction, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

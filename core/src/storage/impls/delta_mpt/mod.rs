@@ -3,24 +3,36 @@
 // See http://www.gnu.org/licenses/
 
 pub mod cache;
-pub mod guarded_value;
-pub(in super::super) mod merkle_patricia_trie;
+pub mod cow_node_ref;
+mod mem_optimized_trie_node;
 pub(in super::super) mod node_memory_manager;
+mod node_ref;
 pub(super) mod node_ref_map;
+pub(super) mod owned_node_set;
 pub(super) mod return_after_use;
 pub(super) mod row_number;
-
 /// Fork of upstream slab in order to compact data and be thread-safe without
 /// giant lock.
 mod slab;
+pub mod subtrie_visitor;
+
+#[cfg(test)]
+mod tests;
 
 pub use self::{
+    cow_node_ref::CowNodeRef,
+    mem_optimized_trie_node::MemOptimizedTrieNode,
     node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell},
+    node_ref::*,
     node_ref_map::DEFAULT_NODE_MAP_SIZE,
+    owned_node_set::OwnedNodeSet,
+    subtrie_visitor::SubTrieVisitor,
 };
-pub use merkle_patricia_trie::trie_proof::TrieProof;
 
 pub type DeltaMpt = MultiVersionMerklePatriciaTrie;
+
+pub type ChildrenTableDeltaMpt = CompactedChildrenTable<NodeRefDeltaMptCompact>;
+pub type ChildrenTableManagedDeltaMpt = ChildrenTable<NodeRefDeltaMptCompact>;
 
 #[derive(Default)]
 pub struct AtomicCommit {
@@ -69,17 +81,6 @@ pub struct MultiVersionMerklePatriciaTrie {
 unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
 
 impl MultiVersionMerklePatriciaTrie {
-    pub fn padding(
-        snapshot_root: &MerkleHash, intermediate_delta_root: &MerkleHash,
-    ) -> KeyPadding {
-        let mut buffer = Vec::with_capacity(
-            snapshot_root.0.len() + intermediate_delta_root.0.len(),
-        );
-        buffer.extend_from_slice(&snapshot_root.0);
-        buffer.extend_from_slice(&intermediate_delta_root.0);
-        keccak(&buffer).0
-    }
-
     pub fn start_commit(
         &self,
     ) -> Result<AtomicCommitTransaction<Box<DeltaDbTransactionTraitObj>>> {
@@ -334,8 +335,8 @@ impl MultiVersionMerklePatriciaTrie {
 }
 
 use self::{
-    cache::algorithm::lru::LRU, merkle_patricia_trie::*,
-    node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
+    cache::algorithm::lru::LRU, node_memory_manager::*,
+    node_ref_map::DeltaMptDbKey, row_number::*,
 };
 use super::{
     super::{
@@ -343,13 +344,12 @@ use super::{
         storage_db::delta_db_manager::{
             DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
         },
-        storage_key::*,
     },
     errors::*,
+    merkle_patricia_trie::*,
     storage_manager::storage_manager::*,
 };
 use cfx_types::hexstr_to_h256;
-use keccak_hash::keccak;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{EpochId, MerkleHash};
 use std::{any::Any, borrow::BorrowMut, collections::HashMap, sync::Arc};

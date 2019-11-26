@@ -12,10 +12,10 @@ pub struct State<'a> {
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     intermediate_trie_root_merkle: MerkleHash,
-    maybe_intermediate_trie_key_padding: Option<KeyPadding>,
+    maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
-    delta_trie_key_padding: KeyPadding,
+    delta_trie_key_padding: DeltaMptKeyPadding,
     intermediate_epoch_id: EpochId,
     delta_trie_height: Option<u32>,
     height: Option<u64>,
@@ -176,7 +176,7 @@ impl<'a> StateTrait for State<'a> {
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
         self.pre_modification();
 
-        let root_node = self.get_or_create_root_node()?;
+        let root_node = self.get_or_create_delta_root_node()?;
         self.delta_trie_root = SubTrieVisitor::new(
             &self.delta_trie,
             root_node,
@@ -344,7 +344,7 @@ impl<'a> State<'a> {
         self.delta_trie_root.clone()
     }
 
-    pub fn get_or_create_root_node(&mut self) -> Result<NodeRefDeltaMpt> {
+    fn get_or_create_delta_root_node(&mut self) -> Result<NodeRefDeltaMpt> {
         if self.delta_trie_root.is_none() {
             let allocator =
                 self.delta_trie.get_node_memory_manager().get_allocator();
@@ -550,24 +550,21 @@ impl<'a> State<'a> {
 
 use super::{
     super::{
-        state::*, state_manager::*, storage_db::*, storage_key::*,
-        StateRootAuxInfo, StateRootWithAuxInfo,
+        state::*, state_manager::*, storage_db::*, StateRootAuxInfo,
+        StateRootWithAuxInfo,
     },
+    delta_mpt::{node_memory_manager::ActualSlabIndex, *},
     errors::*,
-    multi_version_merkle_patricia_trie::{
-        merkle_patricia_trie::{
-            children_table::VanillaChildrenTable, cow_node_ref::KVInserter, *,
-        },
-        node_memory_manager::ActualSlabIndex,
-        DeltaMpt, TrieProof,
-    },
-    owned_node_set::OwnedNodeSet,
+    merkle_patricia_trie::{KVInserter, TrieProof, VanillaChildrenTable},
     state_manager::*,
     state_proof::StateProof,
     storage_manager::DeltaMptInserter,
 };
 use parity_bytes::ToPretty;
-use primitives::{EpochId, MerkleHash, StateRoot, MERKLE_NULL_NODE};
+use primitives::{
+    DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,
+    MERKLE_NULL_NODE,
+};
 use std::{
     cell::UnsafeCell,
     collections::BTreeMap,

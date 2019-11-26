@@ -101,8 +101,5 @@ fn test_trie_node_encode_decode() {
     assert_eq!(rlp_parsed, x);
 }
 
-use super::super::{
-    super::node_memory_manager::CacheAlgoDataDeltaMpt, children_table::*,
-    node_ref::*, *,
-};
+use super::super::{node_memory_manager::CacheAlgoDataDeltaMpt, *};
 use rlp::*;

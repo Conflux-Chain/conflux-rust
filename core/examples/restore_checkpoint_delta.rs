@@ -11,7 +11,6 @@ use cfxcore::{
         state_manager::{
             StateManager, StateManagerTrait, StorageConfiguration,
         },
-        storage_key::StorageKey,
         StateIndex,
     },
     sync::{
@@ -21,7 +20,7 @@ use cfxcore::{
     },
 };
 use clap::{App, Arg, ArgMatches};
-use primitives::{Account, MerkleHash};
+use primitives::{Account, MerkleHash, StorageKey};
 use rlp::Rlp;
 use std::{
     cmp::min,

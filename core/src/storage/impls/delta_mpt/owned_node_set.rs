@@ -100,8 +100,8 @@ impl<'a> IntoIterator for &'a OwnedNodeSet {
     fn into_iter(self) -> Iter<'a> { self.iter() }
 }
 
-use super::multi_version_merkle_patricia_trie::{
-    merkle_patricia_trie::NodeRefDeltaMpt,
+use super::{
     node_memory_manager::ActualSlabIndex, node_ref_map::DeltaMptDbKey,
+    NodeRefDeltaMpt,
 };
 use std::collections::{BTreeMap, BTreeSet};

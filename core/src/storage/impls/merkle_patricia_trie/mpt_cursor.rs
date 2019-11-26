@@ -1243,12 +1243,10 @@ pub fn rlp_key_value_len(_key_len: u16, _value_len: usize) -> i64 {
 }
 
 use super::{
-    super::{
-        super::{super::storage_db::snapshot_mpt::*, errors::*},
-        mpt_value::MptValue,
-    },
+    super::{super::storage_db::snapshot_mpt::*, errors::*},
     children_table::*,
     compressed_path::CompressedPathTrait,
+    mpt_value::MptValue,
     trie_node::{TrieNodeTrait, VanillaTrieNode},
     trie_proof::*,
     walk::*,

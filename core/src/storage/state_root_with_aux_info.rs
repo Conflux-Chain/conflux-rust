@@ -17,12 +17,12 @@ pub struct StateRootAuxInfo {
     pub intermediate_epoch_id: EpochId,
     // We need key_padding in order to retrieve key-values from (Intermediate-)
     // Delta MPT.
-    pub maybe_intermediate_mpt_key_padding: Option<KeyPadding>,
+    pub maybe_intermediate_mpt_key_padding: Option<DeltaMptKeyPadding>,
 
     // FIXME: how is it possible to fill this field for recovered state from
     // FIXME: blame? what's the expectation of saving as many
     // FIXME: EpochExecutionCommitments from blame?
-    pub delta_mpt_key_padding: KeyPadding,
+    pub delta_mpt_key_padding: DeltaMptKeyPadding,
 }
 
 impl StateRootAuxInfo {
@@ -80,12 +80,14 @@ impl Encodable for StateRootAuxInfo {
 
 impl Decodable for StateRootAuxInfo {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let mut maybe_intermediate_mpt_key_padding: Option<KeyPadding> =
+        let mut maybe_intermediate_mpt_key_padding: Option<DeltaMptKeyPadding> =
             Default::default();
         {
             let rlp_parsed = rlp.val_at::<Option<Vec<u8>>>(2)?;
             if rlp_parsed.is_some() {
-                if rlp_parsed.as_ref().unwrap().len() != KEY_PADDING_BYTES {
+                if rlp_parsed.as_ref().unwrap().len()
+                    != DELTA_MPT_KEY_PADDING_BYTES
+                {
                     return Err(DecoderError::Custom(
                         "incorrect length for KeyPadding.",
                     ));
@@ -94,10 +96,10 @@ impl Decodable for StateRootAuxInfo {
                     .copy_from_slice(&rlp_parsed.as_ref().unwrap());
             }
         }
-        let mut delta_mpt_key_padding: KeyPadding = Default::default();
+        let mut delta_mpt_key_padding: DeltaMptKeyPadding = Default::default();
         {
             let rlp_parsed = rlp.val_at::<Vec<u8>>(3)?;
-            if rlp_parsed.len() != KEY_PADDING_BYTES {
+            if rlp_parsed.len() != DELTA_MPT_KEY_PADDING_BYTES {
                 return Err(DecoderError::Custom(
                     "incorrect length for KeyPadding.",
                 ));
@@ -131,7 +133,9 @@ impl Decodable for StateRootWithAuxInfo {
     }
 }
 
-use super::storage_key::*;
-use primitives::{EpochId, MerkleHash, StateRoot, NULL_EPOCH};
+use primitives::{
+    DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot,
+    DELTA_MPT_KEY_PADDING_BYTES, GENESIS_DELTA_MPT_KEY_PADDING, NULL_EPOCH,
+};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde_derive::{Deserialize, Serialize};

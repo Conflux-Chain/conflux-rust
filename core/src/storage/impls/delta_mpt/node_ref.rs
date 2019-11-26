@@ -2,11 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::{
-    node_memory_manager::ActualSlabIndex, node_ref_map::DeltaMptDbKey,
-};
-use rlp::*;
-
 /// The MSB is used to indicate if a node is in mem or on disk,
 /// the rest 31 bits specifies the index of the node in the
 /// memory region.
@@ -17,6 +12,8 @@ use rlp::*;
 pub struct NodeRefDeltaMptCompact {
     value: u32,
 }
+
+impl NodeRefTrait for NodeRefDeltaMptCompact {}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct MaybeNodeRefDeltaMptCompact {
@@ -111,3 +108,9 @@ impl Decodable for NodeRefDeltaMptCompact {
 impl Encodable for NodeRefDeltaMptCompact {
     fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.value); }
 }
+
+use super::{
+    super::merkle_patricia_trie::NodeRefTrait,
+    node_memory_manager::ActualSlabIndex, node_ref_map::DeltaMptDbKey,
+};
+use rlp::*;

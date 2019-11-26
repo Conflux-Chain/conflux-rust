@@ -24,9 +24,9 @@ pub fn height_to_delta_height(height: u64) -> u32 {
 pub struct StateReadonlyIndex {
     pub snapshot_epoch_id: EpochId,
     pub intermediate_epoch_id: EpochId,
-    pub maybe_intermediate_key_padding: Option<KeyPadding>,
+    pub maybe_intermediate_key_padding: Option<DeltaMptKeyPadding>,
     pub epoch_id: EpochId,
-    pub delta_mpt_key_padding: KeyPadding,
+    pub delta_mpt_key_padding: DeltaMptKeyPadding,
 }
 
 impl StateReadonlyIndex {
@@ -61,9 +61,9 @@ impl StateReadonlyIndex {
 pub struct StateIndex<'a> {
     pub snapshot_epoch_id: &'a EpochId,
     pub intermediate_epoch_id: &'a EpochId,
-    pub maybe_intermediate_mpt_key_padding: Option<&'a KeyPadding>,
+    pub maybe_intermediate_mpt_key_padding: Option<&'a DeltaMptKeyPadding>,
     pub epoch_id: &'a EpochId,
-    pub delta_mpt_key_padding: &'a KeyPadding,
+    pub delta_mpt_key_padding: &'a DeltaMptKeyPadding,
     pub maybe_delta_trie_height: Option<u32>,
     pub maybe_height: Option<u64>,
 }
@@ -159,8 +159,10 @@ impl Default for StorageConfiguration {
 use super::{
     impls::{defaults, errors::*},
     state::State,
-    storage_key::*,
     StateRootWithAuxInfo,
 };
-use primitives::{EpochId, MERKLE_NULL_NODE};
+use primitives::{
+    DeltaMptKeyPadding, EpochId, GENESIS_DELTA_MPT_KEY_PADDING,
+    MERKLE_NULL_NODE,
+};
 use std::sync::Arc;

@@ -81,13 +81,13 @@ pub mod access_mode {
     }
 }
 
-pub(super) trait GetChildTrait<'node> {
+pub trait GetChildTrait<'node> {
     type ChildIdType: 'node;
 
     fn get_child(&'node self, child_index: u8) -> Option<Self::ChildIdType>;
 }
 
-pub(super) trait TrieNodeWalkTrait<'node>:
+pub trait TrieNodeWalkTrait<'node>:
     TrieNodeTrait + GetChildTrait<'node>
 {
     fn walk<'key, AM: access_mode::AccessMode>(
