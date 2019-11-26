@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// FIXME: find a better place for this file.
+
 use std::ops::{Deref, DerefMut};
 
 /// To prevent automatic copy from leaking guarded value.

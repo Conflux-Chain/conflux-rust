@@ -171,11 +171,11 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
 }
 
 use super::{
-    super::super::{
+    super::{
         super::storage_db::snapshot_mpt::*, errors::*,
         storage_manager::DeltaMptInserter,
     },
-    cow_node_ref::KVInserter,
     mpt_cursor::*,
+    KVInserter,
 };
 use primitives::MerkleHash;

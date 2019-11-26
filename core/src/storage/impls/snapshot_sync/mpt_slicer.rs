@@ -120,7 +120,5 @@ impl<'a> MptSlicer<'a> {
 use super::super::{
     super::storage_db::snapshot_mpt::SnapshotMptTraitReadOnly,
     errors::*,
-    multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-        children_table::*, mpt_cursor::*, mpt_value::*, trie_proof::*, *,
-    },
+    merkle_patricia_trie::{mpt_cursor::*, *},
 };

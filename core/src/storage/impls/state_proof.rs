@@ -36,7 +36,7 @@ impl StateProof {
         let snapshot_root = root.snapshot_root;
 
         let delta_mpt_padding =
-            DeltaMpt::padding(&snapshot_root, &intermediate_root);
+            StorageKey::delta_mpt_padding(&snapshot_root, &intermediate_root);
         let delta_mpt_key = StorageKey::from_key_bytes(&key)
             .to_delta_mpt_key_bytes(&delta_mpt_padding);
         // FIXME: DeltaMpt Padding for intermediate_mpt is missing. It's
@@ -94,9 +94,6 @@ impl StateProof {
     }
 }
 
-use super::{
-    super::StorageKey,
-    multi_version_merkle_patricia_trie::{DeltaMpt, TrieProof},
-};
-use primitives::{StateRoot, MERKLE_NULL_NODE};
+use super::merkle_patricia_trie::TrieProof;
+use primitives::{StateRoot, StorageKey, MERKLE_NULL_NODE};
 use rlp_derive::{RlpDecodable, RlpEncodable};

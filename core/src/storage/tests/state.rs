@@ -589,13 +589,13 @@ fn test_proofs() {
 
 use super::{
     super::{
-        impls::multi_version_merkle_patricia_trie::merkle_patricia_trie::CompressedPathRaw,
-        state::*, state_manager::*, storage_key::StorageKey,
+        impls::merkle_patricia_trie::CompressedPathRaw, state::*,
+        state_manager::*,
     },
     new_state_manager_for_testing,
 };
 use cfx_types::H256;
-use primitives::StateRoot;
+use primitives::{StateRoot, StorageKey};
 use rand::{prelude::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::{mem, sync::Arc, thread};
