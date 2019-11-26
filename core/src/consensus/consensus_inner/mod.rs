@@ -2314,7 +2314,7 @@ impl ConsensusGraphInner {
                 )
                 .ok_or("State block commitment missing")?;
             blame += 1;
-            if self.arena[cur].height < self.state_boundary_height {
+            if self.arena[cur].height <= self.state_boundary_height {
                 return Err(
                     "Failed to compute blame and state due to out of state boundary"
                         .to_owned(),
@@ -2671,7 +2671,7 @@ impl ConsensusGraphInner {
                 .data_man
                 .get_epoch_execution_commitment(&deferred_block_hash)
                 .is_some()
-                || self.arena[cur].height < self.state_boundary_height
+                || self.arena[cur].height <= self.state_boundary_height
             {
                 // This block and the blocks before have been executed or will
                 // not be executed
