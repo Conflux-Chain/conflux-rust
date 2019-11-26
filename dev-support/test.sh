@@ -3,7 +3,7 @@
 SCRIPT_DIR=`dirname "${BASH_SOURCE[0]}"`
 echo "Checking dependent python3 modules ..."
 source $SCRIPT_DIR/dep_pip3.sh
-set -o pipefail
+set -uxo pipefail
 
 ROOT_DIR="$( cd $SCRIPT_DIR/.. && pwd )"
 
@@ -18,7 +18,7 @@ function check_build {
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run && ( cd core/src/storage && cargo build --release )`
+    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run`
     local exit_code=$?
 
     popd > /dev/null
@@ -36,7 +36,13 @@ function check_fmt_and_clippy {
 
     pushd $ROOT_DIR > /dev/null
     local result
-    result=`export RUSTFLAGS="-g";./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings`
+    SAVED_RUSTFLAGS=$RUSTFLAGS
+    SAVED_CARGO_DIR=$CARGO_TARGET_DIR
+    export RUSTFLAGS="-g"
+    export CARGO_TARGET_DIR="$ROOT_DIR/build_clippy"
+    result=`./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings`
+    export RUSTFLAGS=$SAVED_RUSTFLAGS
+    export CARGO_TARGET_DIR=$SAVED_CARGO_DIR
     local exit_code=$?
     popd > /dev/null
 

@@ -285,6 +285,7 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
         inner.cur_era_stable_height = new_era_stable_height;
+        inner.state_boundary_height = new_era_stable_height;
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
         let next_era_arena_index =
@@ -1374,9 +1375,10 @@ impl ConsensusNewBlockHandler {
                     state_at = 1;
                 }
             }
-            // For full node, we don't execute blocks before stable
-            if state_at < inner.cur_era_stable_height + 1 {
-                state_at = inner.cur_era_stable_height + 1;
+            // For full node, we don't execute blocks before available states
+            // This skip should only happen in `SyncBlockPhase` for full nodes
+            if state_at < inner.state_boundary_height + 1 {
+                state_at = inner.state_boundary_height + 1;
             }
 
             // Apply transactions in the determined total order
@@ -1435,26 +1437,25 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        let stable_pivot_index = (inner.cur_era_stable_height
+        let start_pivot_index = (inner.state_boundary_height
             - inner.cur_era_genesis_height)
             as usize;
-        let stable_hash =
-            inner.arena[inner.pivot_chain[stable_pivot_index]].hash;
+        let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory. Since, in some rare cases, the number of
         // blocks between stable and best_epoch is less than
         // DEFERRED_STATE_EPOCH_COUNT, the for loop below will not load
         // epoch_execution_commitment for stable hash.
-        if stable_hash != inner.data_man.true_genesis.hash()
+        if start_hash != inner.data_man.true_genesis.hash()
             && self
                 .data_man
-                .get_epoch_execution_commitment(&stable_hash)
+                .get_epoch_execution_commitment(&start_hash)
                 .is_none()
         {
-            self.data_man.load_epoch_execution_commitment_from_db(&stable_hash)
+            self.data_man.load_epoch_execution_commitment_from_db(&start_hash)
                 .expect("epoch_execution_commitment for stable hash must exist in disk");
         }
-        for pivot_index in stable_pivot_index + 1
+        for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
         {
             let arena_index = inner.pivot_chain[pivot_index];

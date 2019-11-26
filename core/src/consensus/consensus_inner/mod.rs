@@ -364,6 +364,13 @@ pub struct ConsensusGraphInner {
     /// `stable genesis` and `first_trusted_blame_block`.
     first_trusted_blame_block: H256,
     first_trusted_blame_block_height: u64,
+
+    /// The lowest height of the epochs that have available states and
+    /// commitments. For archive node, it equals `cur_era_stable_height`.
+    /// For light node, it equals the height of remotely synchronized state at
+    /// start, and equals `cur_era_stable_height` after making a new
+    /// checkpoint.
+    pub state_boundary_height: u64,
 }
 
 pub struct ConsensusGraphNode {
@@ -461,6 +468,7 @@ impl ConsensusGraphInner {
             old_era_block_set: Mutex::new(VecDeque::new()),
             first_trusted_blame_block,
             first_trusted_blame_block_height,
+            state_boundary_height: cur_era_stable_height,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -2306,7 +2314,7 @@ impl ConsensusGraphInner {
                 )
                 .ok_or("State block commitment missing")?;
             blame += 1;
-            if self.arena[cur].height < self.cur_era_stable_height {
+            if self.arena[cur].height == self.cur_era_genesis_height {
                 return Err(
                     "Failed to compute blame and state due to out of era"
                         .to_owned(),
@@ -2663,23 +2671,13 @@ impl ConsensusGraphInner {
                 .data_man
                 .get_epoch_execution_commitment(&deferred_block_hash)
                 .is_some()
+                || self.arena[cur].height <= self.state_boundary_height
             {
-                // The state_hash block and the blocks before have been executed
-                break;
-            }
-            if self.arena[*self
-                .hash_to_arena_indices
-                .get(&deferred_block_hash)
-                .unwrap()]
-            .height
-                < self.cur_era_stable_height
-            {
+                // This block and the blocks before have been executed or will
+                // not be executed
                 break;
             }
             waiting_blocks.push(deferred_block_hash);
-            if cur == self.cur_era_genesis_block_arena_index {
-                break;
-            }
             cur = self.arena[cur].parent;
         }
         waiting_blocks.reverse();
@@ -2698,7 +2696,7 @@ impl ConsensusGraphInner {
             }
             // See comments on compute_blame_and_state_with_execution_result()
             // for explanation of this assumption.
-            assert!(self.arena[cur].height >= self.cur_era_stable_height);
+            assert!(self.arena[cur].height >= self.state_boundary_height);
             blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }
@@ -2772,19 +2770,20 @@ impl ConsensusGraphInner {
         Ok(idx)
     }
 
-    /// FIXME Can we ensure that a state-valid block exists?
-    /// TODO Check if we need to persist `state_valid` for this recovery.
     /// Find the first state valid block on the pivot chain after
-    /// `cur_era_genesis` and set `state_valid` of it and its blamed blocks.
-    /// This block is found according to blame_ratio.
+    /// `state_boundary_height` and set `state_valid` of it and its blamed
+    /// blocks. This block is found according to blame_ratio.
     pub fn recover_state_valid(&mut self) {
-        let checkpoint = self.data_man.get_cur_consensus_era_stable_hash();
+        let start_pivot_index =
+            (self.state_boundary_height - self.cur_era_genesis_height) as usize;
+        let start_epoch_hash =
+            self.arena[self.pivot_chain[start_pivot_index]].hash;
         // We will get the first
-        // pivot block whose `state_valid` is `true` after `checkpoint`
-        // (include `checkpoint` itself).
+        // pivot block whose `state_valid` is `true` after `start_epoch_hash`
+        // (include `start_epoch_hash` itself).
         let maybe_trusted_blame_block =
-            self.get_trusted_blame_block(&checkpoint);
-        debug!("recover_state_valid: checkpoint={:?}, maybe_trusted_blame_block={:?}", checkpoint, maybe_trusted_blame_block);
+            self.get_trusted_blame_block(&start_epoch_hash);
+        debug!("recover_state_valid: checkpoint={:?}, maybe_trusted_blame_block={:?}", start_epoch_hash, maybe_trusted_blame_block);
 
         // Set `state_valid` of `trusted_blame_block` to true,
         // and set that of the blocks blamed by it to false

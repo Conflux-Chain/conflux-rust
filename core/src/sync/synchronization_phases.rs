@@ -462,8 +462,16 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // TODO: Make sure that the checkpoint will not change between the
             // end of CatchUpCheckpointPhase and the start of
             // CatchUpRecoverBlockFromDbPhase.
+
+            // FIXME Use synchronized state hash/height for full node.
             let checkpoint =
                 self.graph.data_man.get_cur_consensus_era_stable_hash();
+            let state_boundary_height = self
+                .graph
+                .data_man
+                .block_header_by_hash(&checkpoint)
+                .expect("Header for checkpoint exists")
+                .height();
             // For archive node, this will be `None` or `checkpoint` if
             // `checkpoint` is true genesis.
             // For full node, this will never be `None` and we will get first
@@ -503,13 +511,14 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     }
                 }
             }
-            let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
+            let mut new_consensus_inner = ConsensusGraphInner::with_era_genesis(
                 old_consensus_inner.pow_config.clone(),
                 self.graph.data_man.clone(),
                 old_consensus_inner.inner_conf.clone(),
                 &cur_era_genesis_hash,
                 trusted_blame_block,
             );
+            new_consensus_inner.state_boundary_height = state_boundary_height;
             self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
             // FIXME: We may need to some information of `confirmation_meter`.
