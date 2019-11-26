@@ -81,9 +81,6 @@ pub trait StateManagerTrait {
         &self, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>>;
     fn get_state_for_genesis_write(&self) -> State;
-
-    /// False in case of db failure.
-    fn contains_state(&self, epoch_id: StateIndex) -> Result<bool>;
 }
 
 impl<'a> StateIndex<'a> {

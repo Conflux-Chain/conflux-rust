@@ -11,6 +11,7 @@ pub struct State<'a> {
     snapshot_db: SnapshotDb,
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
+    intermediate_trie_root_merkle: MerkleHash,
     maybe_intermediate_trie_key_padding: Option<KeyPadding>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
@@ -37,6 +38,8 @@ impl<'a> State<'a> {
             snapshot_db: state_trees.snapshot_db,
             maybe_intermediate_trie: state_trees.maybe_intermediate_trie,
             intermediate_trie_root: state_trees.intermediate_trie_root,
+            intermediate_trie_root_merkle: state_trees
+                .intermediate_trie_root_merkle,
             maybe_intermediate_trie_key_padding: state_trees
                 .maybe_intermediate_trie_key_padding,
             delta_trie: state_trees.delta_trie,
@@ -238,19 +241,15 @@ impl<'a> StateTrait for State<'a> {
 
         Ok(StateRootWithAuxInfo {
             state_root: StateRoot {
-                // FIXME: is it better to calc it here or at construction?
                 snapshot_root: self
                     .snapshot_db
                     .get_snapshot_info()
                     .merkle_root
                     .clone(),
-                // FIXME: fill in the intermediate delta root.
-                // FIXME: is it better to calc it here or at construction?
-                intermediate_delta_root: MERKLE_NULL_NODE,
+                intermediate_delta_root: self.intermediate_trie_root_merkle,
                 delta_root: merkle_root,
             },
             aux_info: StateRootAuxInfo {
-                // FIXME: is it better to calc it here or at construction?
                 snapshot_epoch_id: self
                     .snapshot_db
                     .get_snapshot_info()
@@ -274,10 +273,7 @@ impl<'a> StateTrait for State<'a> {
                     .get_snapshot_info()
                     .merkle_root
                     .clone(),
-                // FIXME: implement for intermediate_delta_root.
-                // FIXME: get_intermediate_root.. also update the other place
-                // when getting state trees.
-                intermediate_delta_root: MERKLE_NULL_NODE,
+                intermediate_delta_root: self.intermediate_trie_root_merkle,
                 delta_root: merkle_hash,
             },
             aux_info: StateRootAuxInfo {

@@ -5,6 +5,8 @@
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
 // processed to use in DeltaMpt.
 
+// FIXME: Move to primitives.
+
 use std::hint::unreachable_unchecked;
 
 #[derive(Debug, Clone, Copy)]
