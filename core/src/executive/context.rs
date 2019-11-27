@@ -102,12 +102,14 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
             .map_err(Into::into)
     }
 
-    fn set_storage(&mut self, key: H256, value: H256) -> vm::Result<()> {
+    fn set_storage(
+        &mut self, key: H256, value: H256, owner: Address,
+    ) -> vm::Result<()> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
             self.state
-                .set_storage(&self.origin.address, key, value)
+                .set_storage(&self.origin.address, key, value, owner)
                 .map_err(Into::into)
         }
     }

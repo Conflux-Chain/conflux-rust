@@ -6,6 +6,7 @@ use self::account_entry::{AccountEntry, AccountState, OverlayAccount};
 use crate::{
     bytes::Bytes,
     hash::KECCAK_EMPTY,
+    parameters::consensus_internal::GAS_PRICE_PER_STORAGE_KEY,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
     storage::StateRootWithAuxInfo,
     transaction_pool::SharedTransactionPool,
@@ -48,6 +49,11 @@ pub struct State<'a> {
     cache: RefCell<HashMap<Address, AccountEntry>>,
     checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
     account_start_nonce: U256,
+    total_tokens: U256,
+    total_bank_tokens: U256,
+    total_storage_tokens: U256,
+    interest_rate: U256,
+    accumulate_interest_rate: U256,
     vm: VmFactory,
 }
 
@@ -55,11 +61,25 @@ impl<'a> State<'a> {
     pub fn new(
         db: StateDb<'a>, account_start_nonce: U256, vm: VmFactory,
     ) -> Self {
+        // TODO: get current interest and accumulate_interest from db
+        let interest_rate = db.get_interest_rate().expect("no db error");
+        let accumulate_interest_rate =
+            db.get_accumulate_interest_rate().expect("no db error");
+        let total_tokens = db.get_total_tokens().expect("No db error");
+        let total_bank_tokens =
+            db.get_total_bank_tokens().expect("No db error");
+        let total_storage_tokens =
+            db.get_total_storage_tokens().expect("No db error");
         State {
             db,
             cache: RefCell::new(HashMap::new()),
             checkpoints: RefCell::new(Vec::new()),
             account_start_nonce,
+            total_tokens,
+            total_bank_tokens,
+            total_storage_tokens,
+            interest_rate,
+            accumulate_interest_rate,
             vm,
         }
     }
@@ -74,6 +94,58 @@ impl<'a> State<'a> {
         let index = checkpoints.len();
         checkpoints.push(HashMap::new());
         index
+    }
+
+    /// return true if all accounts has enough storage balance.
+    pub fn check_storage_balance(&mut self) -> bool {
+        let mut storage_balance_sub = HashMap::new();
+        let mut storage_balance_inc = HashMap::new();
+        if let Some(checkpoint) = self.checkpoints.borrow().last() {
+            for address in checkpoint.keys() {
+                if let Some(ref mut maybe_acc) = self
+                    .cache
+                    .borrow_mut()
+                    .get_mut(address)
+                    .filter(|x| x.is_dirty())
+                {
+                    if let Some(ref mut acc) =
+                        maybe_acc.account.as_mut().filter(|x| !x.is_basic())
+                    {
+                        let ownership_delta =
+                            acc.commit_ownership_change(&self.db);
+                        for (addr, (inc, sub)) in ownership_delta {
+                            if inc > 0 {
+                                *storage_balance_inc
+                                    .entry(addr)
+                                    .or_insert(0) += inc;
+                            }
+                            if sub > 0 {
+                                *storage_balance_sub
+                                    .entry(addr)
+                                    .or_insert(0) += sub;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (addr, sub) in storage_balance_sub {
+            let delta = U256::from(sub) * U256::from(GAS_PRICE_PER_STORAGE_KEY);
+            self.sub_storage_balance(&addr, &delta)
+                .expect("no db error");
+        }
+        for (addr, inc) in storage_balance_inc {
+            let delta = U256::from(inc) * U256::from(GAS_PRICE_PER_STORAGE_KEY);
+            let bank_balance = self.bank_balance(&addr).expect("no db error");
+            let storage_balance =
+                self.storage_balance(&addr).expect("no db error");
+            if storage_balance + delta > bank_balance {
+                return false;
+            }
+            self.add_storage_balance(&addr, &delta)
+                .expect("no db error");
+        }
+        true
     }
 
     /// Merge last checkpoint with previous.
@@ -190,6 +262,18 @@ impl<'a> State<'a> {
         })
     }
 
+    pub fn bank_balance(&self, address: &Address) -> DbResult<U256> {
+        self.ensure_cached(address, RequireCache::None, true, |acc| {
+            acc.map_or(U256::zero(), |account| *account.bank_balance())
+        })
+    }
+
+    pub fn storage_balance(&self, address: &Address) -> DbResult<U256> {
+        self.ensure_cached(address, RequireCache::None, true, |acc| {
+            acc.map_or(U256::zero(), |account| *account.storage_balance())
+        })
+    }
+
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
         self.require(address, false).map(|mut x| x.inc_nonce())
     }
@@ -209,8 +293,7 @@ impl<'a> State<'a> {
     pub fn add_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
-        let is_value_transfer = !by.is_zero();
-        if is_value_transfer
+        if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate
                 && !self.exists(address)?)
         {
@@ -223,6 +306,71 @@ impl<'a> State<'a> {
         }
         Ok(())
     }
+
+    /// Caller should make sure that bank_balance for this account is sufficient
+    /// enough.
+    pub fn add_storage_balance(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        if !by.is_zero() {
+            self.require(address, false)?.add_storage_balance(by);
+            self.total_storage_tokens += *by;
+        }
+        Ok(())
+    }
+
+    pub fn sub_storage_balance(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        if !by.is_zero() {
+            self.require(address, false)?.sub_storage_balance(by);
+            self.total_storage_tokens -= *by;
+        }
+        Ok(())
+    }
+
+    pub fn deposit(&mut self, address: &Address, by: &U256) -> DbResult<()> {
+        if !by.is_zero() {
+            self.require(address, false)?.deposit(by);
+            self.total_bank_tokens += *by;
+        }
+        Ok(())
+    }
+
+    pub fn withdraw(&mut self, address: &Address, by: &U256) -> DbResult<()> {
+        if !by.is_zero() {
+            self.require(address, false)?.withdraw(by);
+            self.total_bank_tokens -= *by;
+        }
+        Ok(())
+    }
+
+    pub fn interest_rate(&self) -> &U256 { &self.interest_rate }
+
+    pub fn set_interest_rate(&mut self, new_interest_rate: U256) {
+        // TODO: may multiple the scale and change to epoch interest rate.
+        self.interest_rate = new_interest_rate;
+    }
+
+    pub fn accumulate_interest_rate(&self) -> &U256 {
+        &self.accumulate_interest_rate
+    }
+
+    pub fn set_accumulate_interest_rate(
+        &mut self, accumulate_interest_rate: U256,
+    ) {
+        self.accumulate_interest_rate = accumulate_interest_rate;
+    }
+
+    pub fn total_tokens(&self) -> &U256 { &self.total_tokens }
+
+    pub fn set_total_tokens(&mut self, total_tokens: U256) {
+        self.total_tokens = total_tokens;
+    }
+
+    pub fn total_bank_tokens(&self) -> &U256 { &self.total_bank_tokens }
+
+    pub fn total_storage_tokens(&self) -> &U256 { &self.total_storage_tokens }
 
     fn touch(&mut self, address: &Address) -> DbResult<()> {
         self.require(address, false)?;
@@ -252,11 +400,59 @@ impl<'a> State<'a> {
         }
     }
 
+    fn commit_metadata(&mut self) -> DbResult<()> {
+        self.db.set_interest_rate(&self.interest_rate)?;
+        self.db
+            .set_accumulate_interest_rate(&self.accumulate_interest_rate)?;
+        self.db.set_total_tokens(&self.total_tokens)?;
+        self.db.set_total_bank_tokens(&self.total_bank_tokens)?;
+        self.db
+            .set_total_storage_tokens(&self.total_storage_tokens)?;
+        Ok(())
+    }
+
+    fn recycle_storage(
+        &mut self, killed_addresses: Vec<Address>,
+    ) -> DbResult<()> {
+        for address in killed_addresses {
+            self.db.delete(StorageKey::new_account_key(&address))?;
+            self.db
+                .delete_all(StorageKey::new_storage_root_key(&address))?;
+            self.db
+                .delete_all(StorageKey::new_code_root_key(&address))?;
+            let ownership_opt = self
+                .db
+                .delete_all(StorageKey::new_ownership_root_key(&address))?;
+            if let Some(ownership) = ownership_opt {
+                for (_, value) in ownership {
+                    let address = rlp::decode::<Address>(value.as_ref())?;
+                    self.sub_storage_balance(
+                        &address,
+                        &U256::from(GAS_PRICE_PER_STORAGE_KEY),
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn commit(
-        &mut self, epoch_id: EpochId,
+        &mut self, epoch_id: EpochId, epoch_height: u64,
     ) -> DbResult<StateRootWithAuxInfo> {
-        debug!("Commit epoch {}", epoch_id);
+        debug!("Commit epoch[{}] height[{}]", epoch_id, epoch_height);
         assert!(self.checkpoints.borrow().is_empty());
+        self.commit_metadata()?;
+
+        let mut killed_addresses = Vec::new();
+        {
+            let accounts = self.cache.borrow();
+            for (address, entry) in accounts.iter() {
+                if entry.is_dirty() && entry.account.is_none() {
+                    killed_addresses.push(*address);
+                }
+            }
+        }
+        self.recycle_storage(killed_addresses)?;
 
         let mut accounts = self.cache.borrow_mut();
         for (address, ref mut entry) in accounts
@@ -270,22 +466,34 @@ impl<'a> State<'a> {
                     StorageKey::new_account_key(address),
                     &account.as_account(),
                 )?;
-            } else {
-                self.db.delete(StorageKey::new_account_key(address))?;
             }
         }
         Ok(self.db.commit(epoch_id)?)
     }
 
     pub fn commit_and_notify(
-        &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
-    ) -> DbResult<StateRootWithAuxInfo> {
+        &mut self, epoch_id: EpochId, epoch_height: u64,
+        txpool: &SharedTransactionPool,
+    ) -> DbResult<StateRootWithAuxInfo>
+    {
         assert!(self.checkpoints.borrow().is_empty());
+        self.commit_metadata()?;
 
         let mut accounts_for_txpool = vec![];
 
+        let mut killed_addresses = Vec::new();
+        {
+            let accounts = self.cache.borrow();
+            for (address, entry) in accounts.iter() {
+                if entry.is_dirty() && entry.account.is_none() {
+                    killed_addresses.push(*address);
+                }
+            }
+        }
+        self.recycle_storage(killed_addresses)?;
+
         let mut accounts = self.cache.borrow_mut();
-        debug!("Notify for epoch {}", epoch_id);
+        debug!("Notify epoch[{}] height[{}]", epoch_id, epoch_height);
         let mut sorted_dirty_addresses = accounts
             .iter()
             .filter_map(|(address, entry)| {
@@ -301,14 +509,13 @@ impl<'a> State<'a> {
             let entry = accounts.get_mut(address).unwrap();
             entry.state = AccountState::Committed;
             if let Some(ref mut account) = entry.account {
+                account.compute_vote_height(epoch_height);
                 accounts_for_txpool.push(account.as_account());
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
                     StorageKey::new_account_key(address),
                     &account.as_account(),
                 )?;
-            } else {
-                self.db.delete(StorageKey::new_account_key(address))?;
             }
         }
         let result = self.db.commit(epoch_id)?;
@@ -386,6 +593,7 @@ impl<'a> State<'a> {
         min_balance: &Option<U256>, kill_contracts: bool,
     ) -> DbResult<()>
     {
+        // TODO: consider both balance and bank_balance
         let to_kill: HashSet<_> = {
             self.cache
                 .borrow()
@@ -503,10 +711,10 @@ impl<'a> State<'a> {
     }
 
     pub fn set_storage(
-        &mut self, address: &Address, key: H256, value: H256,
+        &mut self, address: &Address, key: H256, value: H256, owner: Address,
     ) -> DbResult<()> {
         if self.storage_at(address, &key)? != value {
-            self.require(address, false)?.set_storage(key, value)
+            self.require(address, false)?.set_storage(key, value, owner)
         }
         Ok(())
     }
@@ -533,10 +741,9 @@ impl<'a> State<'a> {
             }
         }
 
-        let mut maybe_acc = self
-            .db
-            .get_account(address)?
-            .map(|acc| OverlayAccount::new(address, acc));
+        let mut maybe_acc = self.db.get_account(address)?.map(|acc| {
+            OverlayAccount::new(address, acc, self.accumulate_interest_rate)
+        });
         if let Some(ref mut account) = maybe_acc.as_mut() {
             if !Self::update_account_cache(require, account, &self.db) {
                 return Err(DbErrorKind::IncompleteDatabase(
@@ -578,10 +785,9 @@ impl<'a> State<'a> {
     {
         let contains_key = self.cache.borrow().contains_key(address);
         if !contains_key {
-            let account = self
-                .db
-                .get_account(address)?
-                .map(|acc| OverlayAccount::new(address, acc));
+            let account = self.db.get_account(address)?.map(|acc| {
+                OverlayAccount::new(address, acc, self.accumulate_interest_rate)
+            });
             self.insert_cache(address, AccountEntry::new_clean(account));
         }
         self.note_cache(address);
@@ -703,6 +909,7 @@ mod tests {
                 &address,
                 key,
                 BigEndianHash::from_uint(&U256::from(1)),
+                address,
             )
             .unwrap();
 
@@ -748,19 +955,19 @@ mod tests {
         state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
         let c1 = state.checkpoint();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
             .unwrap();
         let c2 = state.checkpoint();
         let c3 = state.checkpoint();
         state
-            .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)))
+            .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)), a)
             .unwrap();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)), a)
             .unwrap();
         let c4 = state.checkpoint();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)), a)
             .unwrap();
         let c5 = state.checkpoint();
 
@@ -869,7 +1076,12 @@ mod tests {
         let k2 = BigEndianHash::from_uint(&U256::from(1));
 
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(0xffff)))
+            .set_storage(
+                &a,
+                k,
+                BigEndianHash::from_uint(&U256::from(0xffff)),
+                a,
+            )
             .unwrap();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1u64)))
@@ -891,19 +1103,19 @@ mod tests {
         state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
         let c1 = state.checkpoint();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
             .unwrap();
         let c2 = state.checkpoint();
         let c3 = state.checkpoint();
         state
-            .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)))
+            .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)), a)
             .unwrap();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)), a)
             .unwrap();
         let c4 = state.checkpoint();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)), a)
             .unwrap();
         let c5 = state.checkpoint();
 
@@ -1035,7 +1247,7 @@ mod tests {
         let k = BigEndianHash::from_uint(&U256::from(0));
         state.checkpoint();
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
             .unwrap();
         state.checkpoint();
         state.kill_account(&a);
@@ -1083,7 +1295,12 @@ mod tests {
         let k = BigEndianHash::from_uint(&U256::from(0));
 
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(0xffff)))
+            .set_storage(
+                &a,
+                k,
+                BigEndianHash::from_uint(&U256::from(0xffff)),
+                a,
+            )
             .unwrap();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1)))
@@ -1104,7 +1321,7 @@ mod tests {
         state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
         state.checkpoint(); // c2
         state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(2)))
+            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(2)), a)
             .unwrap();
         state.revert_to_checkpoint(); // revert to c2
         assert_eq!(

@@ -426,6 +426,34 @@ impl ConsensusGraph {
         })
     }
 
+    /// Get the current bank balance of an address
+    pub fn get_bank_balance(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<U256, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc
+                .map_or(U256::zero(), |acc| acc.bank_balance)
+                .into()
+        } else {
+            0.into()
+        })
+    }
+
+    /// Get the current storage balance of an address
+    pub fn get_storage_balance(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<U256, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc
+                .map_or(U256::zero(), |acc| acc.storage_balance)
+                .into()
+        } else {
+            0.into()
+        })
+    }
+
     // FIXME: structure the return value?
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.

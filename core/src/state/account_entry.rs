@@ -5,6 +5,10 @@
 use crate::{
     bytes::{Bytes, ToPretty},
     hash::{keccak, KECCAK_EMPTY},
+    parameters::consensus_internal::{
+        CONFLUX_TOKEN, INTEREST_RATE_SCALE, MIN_BANK_BALANCE_FOR_VOTING,
+        MIN_VOTE_WAITING_EPOCH_COUNT,
+    },
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
@@ -18,13 +22,28 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 pub struct OverlayAccount {
     address: Address,
 
-    // Balance of the account.
+    /// Balance of the account.
     balance: U256,
-    // Nonce of the account,
+    /// Nonce of the account,
     nonce: U256,
 
+    /// This is a cache for storage change.
     storage_cache: RefCell<HashMap<H256, H256>>,
     storage_changes: HashMap<H256, H256>,
+    /// This is a cache for storage ownership change.
+    ownership_cache: RefCell<HashMap<H256, Option<Address>>>,
+    ownership_changes: HashMap<H256, Address>,
+
+    /// This is the number of tokens in bank and part of this will be used for
+    /// storage.
+    bank_balance: U256,
+    /// This is the number of tokens in bank used for storage.
+    storage_balance: U256,
+    /// This is the accumulated interest rate at latest deposit.
+    bank_ar: U256,
+    /// This is the minimum epoch when this account can participate a vote
+    /// event.
+    vote_epoch: u64,
 
     // Code hash of the account.
     code_hash: H256,
@@ -37,18 +56,26 @@ pub struct OverlayAccount {
 }
 
 impl OverlayAccount {
-    pub fn new(address: &Address, account: Account) -> Self {
-        OverlayAccount {
+    pub fn new(address: &Address, account: Account, ar: U256) -> Self {
+        let mut overlay_account = OverlayAccount {
             address: address.clone(),
             balance: account.balance,
             nonce: account.nonce,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
+            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_changes: HashMap::new(),
+            bank_balance: account.bank_balance,
+            storage_balance: account.storage_balance,
+            bank_ar: account.bank_ar,
+            vote_epoch: account.vote_epoch,
             code_hash: account.code_hash,
             code_size: None,
             code_cache: Arc::new(vec![]),
             reset_storage: false,
-        }
+        };
+        overlay_account.interest_settlement(ar);
+        overlay_account
     }
 
     pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
@@ -58,6 +85,12 @@ impl OverlayAccount {
             nonce,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
+            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_changes: HashMap::new(),
+            bank_balance: 0.into(),
+            storage_balance: 0.into(),
+            bank_ar: 0.into(),
+            vote_epoch: u64::max_value(),
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -74,6 +107,12 @@ impl OverlayAccount {
             nonce,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
+            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_changes: HashMap::new(),
+            bank_balance: 0.into(),
+            storage_balance: 0.into(),
+            bank_ar: 0.into(),
+            vote_epoch: u64::max_value(),
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -87,12 +126,30 @@ impl OverlayAccount {
             balance: self.balance.clone(),
             nonce: self.nonce.clone(),
             code_hash: self.code_hash.clone(),
+            bank_balance: self.bank_balance,
+            storage_balance: self.storage_balance,
+            bank_ar: self.bank_ar,
+            vote_epoch: self.vote_epoch,
         }
+    }
+
+    fn interest_settlement(&mut self, ar: U256) {
+        if self.bank_ar == ar {
+            return;
+        }
+        let capital = self.bank_balance - self.storage_balance;
+        self.balance +=
+            capital * (ar - self.bank_ar) / U256::from(INTEREST_RATE_SCALE);
+        self.bank_ar = ar;
     }
 
     pub fn address(&self) -> &Address { &self.address }
 
     pub fn balance(&self) -> &U256 { &self.balance }
+
+    pub fn bank_balance(&self) -> &U256 { &self.bank_balance }
+
+    pub fn storage_balance(&self) -> &U256 { &self.storage_balance }
 
     pub fn nonce(&self) -> &U256 { &self.nonce }
 
@@ -107,9 +164,6 @@ impl OverlayAccount {
             Some(self.code_cache.clone())
         }
     }
-
-    #[allow(dead_code)]
-    pub fn reset_storage(&mut self) { self.reset_storage = true; }
 
     pub fn is_cached(&self) -> bool {
         !self.code_cache.is_empty()
@@ -133,6 +187,27 @@ impl OverlayAccount {
     pub fn sub_balance(&mut self, by: &U256) {
         assert!(self.balance >= *by);
         self.balance = self.balance - *by;
+    }
+
+    pub fn deposit(&mut self, by: &U256) {
+        self.sub_balance(by);
+        self.bank_balance += *by;
+    }
+
+    pub fn withdraw(&mut self, by: &U256) {
+        assert!(self.bank_balance - self.storage_balance >= *by);
+        self.bank_balance -= *by;
+        self.add_balance(by);
+    }
+
+    pub fn add_storage_balance(&mut self, by: &U256) {
+        self.storage_balance += *by;
+        assert!(self.storage_balance <= self.bank_balance);
+    }
+
+    pub fn sub_storage_balance(&mut self, by: &U256) {
+        assert!(self.storage_balance >= *by);
+        self.storage_balance -= *by;
     }
 
     pub fn cache_code<'a>(&mut self, db: &StateDb<'a>) -> Option<Arc<Bytes>> {
@@ -164,6 +239,12 @@ impl OverlayAccount {
             nonce: self.nonce.clone(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
+            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_changes: HashMap::new(),
+            bank_balance: self.bank_balance,
+            storage_balance: self.storage_balance,
+            bank_ar: self.bank_ar,
+            vote_epoch: self.vote_epoch,
             code_hash: self.code_hash.clone(),
             code_size: self.code_size.clone(),
             code_cache: self.code_cache.clone(),
@@ -174,12 +255,15 @@ impl OverlayAccount {
     pub fn clone_dirty(&self) -> Self {
         let mut account = self.clone_basic();
         account.storage_changes = self.storage_changes.clone();
+        account.ownership_cache = self.ownership_cache.clone();
+        account.ownership_changes = self.ownership_changes.clone();
         account.reset_storage = self.reset_storage;
         account
     }
 
-    pub fn set_storage(&mut self, key: H256, value: H256) {
+    pub fn set_storage(&mut self, key: H256, value: H256, owner: Address) {
         self.storage_changes.insert(key, value);
+        self.ownership_changes.insert(key, owner);
     }
 
     pub fn cached_storage_at(&self, key: &H256) -> Option<H256> {
@@ -238,6 +322,35 @@ impl OverlayAccount {
         Ok(value)
     }
 
+    pub fn original_ownership_at<'a>(
+        &self, db: &StateDb<'a>, key: &H256,
+    ) -> DbResult<Option<Address>> {
+        if let Some(value) = self.ownership_cache.borrow().get(key) {
+            return Ok(value.clone());
+        }
+        Self::get_and_cache_ownership(
+            &mut self.ownership_cache.borrow_mut(),
+            db,
+            &self.address,
+            key,
+        )
+    }
+
+    fn get_and_cache_ownership<'a>(
+        ownership_cache: &mut HashMap<H256, Option<Address>>, db: &StateDb<'a>,
+        address: &Address, key: &H256,
+    ) -> DbResult<Option<Address>>
+    {
+        let value = db
+            .get::<Address>(StorageKey::new_ownership_key(
+                &address,
+                key.as_ref(),
+            ))
+            .expect("get_and_cache_ownership failed");
+        ownership_cache.insert(key.clone(), value.clone());
+        Ok(value)
+    }
+
     pub fn init_code(&mut self, code: Bytes) {
         self.code_hash = keccak(&code);
         self.code_cache = Arc::new(code);
@@ -252,27 +365,117 @@ impl OverlayAccount {
         self.code_size = other.code_size;
         self.storage_cache = other.storage_cache;
         self.storage_changes = other.storage_changes;
+        self.ownership_cache = other.ownership_cache;
+        self.ownership_changes = other.ownership_changes;
+        self.bank_balance = other.bank_balance;
+        self.storage_balance = other.storage_balance;
+        self.bank_ar = other.bank_ar;
+        self.vote_epoch = other.vote_epoch;
         self.reset_storage = other.reset_storage;
+    }
+
+    pub fn compute_vote_height(&mut self, current_epoch_height: u64) {
+        let bank_balance_bound =
+            U256::from(CONFLUX_TOKEN) * U256::from(MIN_BANK_BALANCE_FOR_VOTING);
+        if self.bank_balance >= bank_balance_bound {
+            if self.vote_epoch == u64::max_value() {
+                self.vote_epoch =
+                    current_epoch_height + MIN_VOTE_WAITING_EPOCH_COUNT;
+            }
+        } else {
+            self.vote_epoch = u64::max_value();
+        }
+    }
+
+    pub fn commit_ownership_change<'a>(
+        &mut self, db: &StateDb<'a>,
+    ) -> HashMap<Address, (usize, usize)> {
+        let mut ownership_delta = HashMap::new();
+        let ownership_changes: Vec<_> =
+            self.ownership_changes.drain().collect();
+        for (k, v) in ownership_changes {
+            let cur_value_is_zero = self
+                .storage_changes
+                .get(&k)
+                .expect("key must exists")
+                .is_zero();
+            let ori_value_is_zero = self
+                .original_storage_at(db, &k)
+                .expect("original_storage_at always success")
+                .is_zero();
+            let mut ownership_changed = true;
+            // It seems that the `reset_storage` flag will only set when
+            // creating a contract. The key/value in disk can be ignore.
+            let original_ownership_opt = if self.reset_storage {
+                self.ownership_cache
+                    .borrow()
+                    .get(&k)
+                    .and_then(|x| x.clone())
+            } else {
+                self.original_ownership_at(db, &k)
+                    .expect("original_ownership_at always success")
+            };
+            if let Some(original_ownership) = original_ownership_opt {
+                if v == original_ownership {
+                    ownership_changed = false;
+                }
+                if !ori_value_is_zero
+                    && (ownership_changed
+                        || (!ownership_changed && cur_value_is_zero))
+                {
+                    ownership_delta
+                        .entry(original_ownership)
+                        .or_insert((0, 0))
+                        .1 += 1;
+                }
+            }
+            if !cur_value_is_zero
+                && (ownership_changed
+                    || (!ownership_changed && ori_value_is_zero))
+            {
+                ownership_delta.entry(v).or_insert((0, 0)).0 += 1;
+            }
+            if cur_value_is_zero {
+                self.ownership_cache.borrow_mut().insert(k, None);
+            } else {
+                self.ownership_cache.borrow_mut().insert(k, Some(v));
+            }
+        }
+        ownership_delta
     }
 
     pub fn commit<'a>(&mut self, db: &mut StateDb<'a>) -> DbResult<()> {
         if self.reset_storage {
             db.delete_all(StorageKey::new_storage_root_key(&self.address))?;
             db.delete_all(StorageKey::new_code_root_key(&self.address))?;
+            db.delete_all(StorageKey::new_ownership_root_key(&self.address))?;
         }
 
+        assert!(self.ownership_changes.is_empty());
+        let ownership_cache = self.ownership_cache.borrow();
         for (k, v) in self.storage_changes.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address, k.as_ref());
+            let ownership_key =
+                StorageKey::new_ownership_key(&self.address, k.as_ref());
+            let owner = ownership_cache.get(&k).expect("all key must exist");
 
             match v.is_zero() {
-                true => db.delete(address_key)?,
-                false => db.set::<H256>(
-                    address_key,
-                    &BigEndianHash::from_uint(&v.into_uint()),
-                )?,
+                true => {
+                    db.delete(address_key)?;
+                    db.delete(ownership_key)?;
+                }
+                false => {
+                    db.set::<H256>(
+                        address_key,
+                        &BigEndianHash::from_uint(&v.into_uint()),
+                    )?;
+                    db.set::<Address>(
+                        ownership_key,
+                        &owner.expect("owner exists"),
+                    )?;
+                }
             }
-            self.storage_cache.borrow_mut().insert(k, v);
         }
         match self.code() {
             None => {}
@@ -338,17 +541,6 @@ impl AccountEntry {
                 }
             }
             None => self.account = None,
-        }
-    }
-
-    /// Clone dirty data into new `AccountEntry`. This includes
-    /// basic account data and modified storage keys.
-    /// Returns None if clean.
-    #[allow(dead_code)]
-    pub fn clone_if_dirty(&self) -> Option<AccountEntry> {
-        match self.is_dirty() {
-            true => Some(self.clone_dirty()),
-            false => None,
         }
     }
 

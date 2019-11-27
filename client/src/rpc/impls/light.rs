@@ -60,6 +60,48 @@ impl RpcImpl {
             .unwrap_or_default())
     }
 
+    fn bank_balance(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let address: H160 = address.into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getBalance address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        let account = self
+            .light
+            .get_account(epoch, address)
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(account
+            .map(|account| account.bank_balance.into())
+            .unwrap_or_default())
+    }
+
+    fn storage_balance(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let address: H160 = address.into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getBalance address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        let account = self
+            .light
+            .get_account(epoch, address)
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(account
+            .map(|account| account.storage_balance.into())
+            .unwrap_or_default())
+    }
+
     #[allow(unused_variables)]
     fn call(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
@@ -239,6 +281,8 @@ impl Cfx for CfxHandler {
 
         target self.rpc_impl {
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;

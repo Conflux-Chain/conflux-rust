@@ -20,6 +20,11 @@ pub enum StorageKey<'a> {
         address_bytes: &'a [u8],
         code_hash_bytes: &'a [u8],
     },
+    OwnershipRootKey(&'a [u8]),
+    OwnershipKey {
+        address_bytes: &'a [u8],
+        ownership_key: &'a [u8],
+    },
 }
 
 impl<'a> StorageKey<'a> {
@@ -50,6 +55,19 @@ impl<'a> StorageKey<'a> {
             code_hash_bytes: &code_hash.0,
         }
     }
+
+    pub fn new_ownership_root_key(address: &'a Address) -> Self {
+        StorageKey::OwnershipRootKey(&address.0)
+    }
+
+    pub fn new_ownership_key(
+        address: &'a Address, ownership_key: &'a [u8],
+    ) -> Self {
+        StorageKey::OwnershipKey {
+            address_bytes: &address.0,
+            ownership_key,
+        }
+    }
 }
 
 // Conversion methods.
@@ -58,6 +76,8 @@ impl<'a> StorageKey<'a> {
     const CODE_HASH_BYTES: usize = 32;
     const CODE_HASH_PREFIX: &'static [u8] = b"code";
     const CODE_HASH_PREFIX_LEN: usize = 4;
+    const OWNERSHIP_PREFIX: &'static [u8] = b"owner";
+    const OWNERSHIP_PREFIX_LEN: usize = 5;
     const STORAGE_PREFIX: &'static [u8] = b"data";
     const STORAGE_PREFIX_LEN: usize = 4;
 
@@ -105,6 +125,20 @@ impl<'a> StorageKey<'a> {
             } => delta_mpt_storage_key::new_code_key(
                 address_bytes,
                 code_hash_bytes,
+                padding,
+            ),
+            StorageKey::OwnershipRootKey(address_bytes) => {
+                delta_mpt_storage_key::new_ownership_root_key(
+                    address_bytes,
+                    padding,
+                )
+            }
+            StorageKey::OwnershipKey {
+                address_bytes,
+                ownership_key,
+            } => delta_mpt_storage_key::new_ownership_key(
+                address_bytes,
+                ownership_key,
                 padding,
             ),
         }
@@ -166,6 +200,30 @@ impl<'a> StorageKey<'a> {
 
                 key
             }
+            StorageKey::OwnershipRootKey(address_bytes) => {
+                let mut key = Vec::with_capacity(
+                    Self::ACCOUNT_BYTES + Self::OWNERSHIP_PREFIX_LEN,
+                );
+                key.extend_from_slice(address_bytes);
+                key.extend_from_slice(Self::OWNERSHIP_PREFIX);
+
+                key
+            }
+            StorageKey::OwnershipKey {
+                address_bytes,
+                ownership_key,
+            } => {
+                let mut key = Vec::with_capacity(
+                    Self::ACCOUNT_BYTES
+                        + Self::OWNERSHIP_PREFIX_LEN
+                        + ownership_key.len(),
+                );
+                key.extend_from_slice(address_bytes);
+                key.extend_from_slice(Self::OWNERSHIP_PREFIX);
+                key.extend_from_slice(ownership_key);
+
+                key
+            }
         }
     }
 
@@ -194,6 +252,16 @@ impl<'a> StorageKey<'a> {
                     }
                 } else {
                     StorageKey::CodeRootKey(address_bytes)
+                }
+            } else if bytes.starts_with(Self::OWNERSHIP_PREFIX) {
+                let bytes = &bytes[Self::OWNERSHIP_PREFIX_LEN..];
+                if bytes.len() > 0 {
+                    StorageKey::OwnershipKey {
+                        address_bytes,
+                        ownership_key: bytes,
+                    }
+                } else {
+                    StorageKey::OwnershipRootKey(address_bytes)
                 }
             } else {
                 unreachable!(
@@ -262,6 +330,17 @@ mod delta_mpt_storage_key {
             Vec::with_capacity(KEY_PADDING_BYTES + storage_key.len());
         padded.extend_from_slice(padding);
         padded.extend_from_slice(storage_key);
+
+        keccak(padded).0
+    }
+
+    fn compute_ownership_key_padding(
+        ownership_key: &[u8], padding: &DeltaMptKeyPadding,
+    ) -> DeltaMptKeyPadding {
+        let mut padded =
+            Vec::with_capacity(KEY_PADDING_BYTES + ownership_key.len());
+        padded.extend_from_slice(padding);
+        padded.extend_from_slice(ownership_key);
 
         keccak(padded).0
     }
@@ -358,6 +437,49 @@ mod delta_mpt_storage_key {
         key
     }
 
+    fn extend_ownership_root(
+        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
+    ) {
+        extend_address(key, address, padding);
+        key.extend_from_slice(StorageKey::OWNERSHIP_PREFIX);
+    }
+
+    fn extend_ownership_key(
+        key: &mut Vec<u8>, ownership_key: &[u8], padding: &DeltaMptKeyPadding,
+    ) {
+        key.extend_from_slice(
+            &compute_ownership_key_padding(ownership_key, padding)
+                [StorageKey::OWNERSHIP_PREFIX_LEN..],
+        );
+        key.extend_from_slice(ownership_key);
+    }
+
+    pub fn new_ownership_root_key(
+        address: &[u8], padding: &DeltaMptKeyPadding,
+    ) -> Vec<u8> {
+        let mut key = Vec::with_capacity(
+            ACCOUNT_KEYPART_BYTES + StorageKey::OWNERSHIP_PREFIX_LEN,
+        );
+        extend_ownership_root(&mut key, address, padding);
+
+        key
+    }
+
+    pub fn new_ownership_key(
+        address: &[u8], ownership_key: &[u8], padding: &DeltaMptKeyPadding,
+    ) -> Vec<u8> {
+        let mut key = Vec::with_capacity(
+            ACCOUNT_KEYPART_BYTES
+                + StorageKey::OWNERSHIP_PREFIX_LEN
+                + KEY_PADDING_BYTES
+                + ownership_key.len(),
+        );
+        extend_ownership_root(&mut key, address, padding);
+        extend_ownership_key(&mut key, ownership_key, padding);
+
+        key
+    }
+
     impl<'a> StorageKey<'a> {
         pub fn delta_mpt_padding(
             snapshot_root: &MerkleHash, intermediate_delta_root: &MerkleHash,
@@ -390,7 +512,8 @@ mod delta_mpt_storage_key {
                 }
                 remaining_bytes = &remaining_bytes[ACCOUNT_KEYPART_BYTES..];
                 if remaining_bytes.starts_with(Self::STORAGE_PREFIX) {
-                    let bytes = &remaining_bytes[KEY_PADDING_BYTES..];
+                    let bytes = &remaining_bytes
+                        [KEY_PADDING_BYTES + StorageKey::STORAGE_PREFIX_LEN..];
                     if bytes.len() > 0 {
                         StorageKey::StorageKey {
                             address_bytes,
@@ -408,6 +531,17 @@ mod delta_mpt_storage_key {
                         }
                     } else {
                         StorageKey::CodeRootKey(address_bytes)
+                    }
+                } else if remaining_bytes.starts_with(Self::OWNERSHIP_PREFIX) {
+                    let bytes = &remaining_bytes[KEY_PADDING_BYTES
+                        + StorageKey::OWNERSHIP_PREFIX_LEN..];
+                    if bytes.len() > 0 {
+                        StorageKey::OwnershipKey {
+                            address_bytes,
+                            ownership_key: bytes,
+                        }
+                    } else {
+                        StorageKey::OwnershipRootKey(address_bytes)
                     }
                 } else {
                     unreachable!(

@@ -46,6 +46,18 @@ pub trait Cfx {
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<RpcU256>;
 
+    /// Returns balance of the given account.
+    #[rpc(name = "cfx_getBankBalance")]
+    fn bank_balance(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256>;
+
+    /// Returns balance of the given account.
+    #[rpc(name = "cfx_getStorageBalance")]
+    fn storage_balance(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256>;
+
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(

@@ -8,5 +8,7 @@ mod executive;
 
 pub use self::{
     executed::{Executed, ExecutionError, ExecutionResult},
-    executive::{contract_address, Executive},
+    executive::{
+        contract_address, Executive, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
 };

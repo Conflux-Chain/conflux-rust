@@ -18,7 +18,7 @@ use crate::{
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{Address, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -929,15 +929,22 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
-            state_root =
-                state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
+            state_root = state
+                .commit_and_notify(
+                    *epoch_hash,
+                    pivot_block.block_header.height(),
+                    &self.tx_pool,
+                )
+                .unwrap();
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
                 ));
         } else {
-            state_root = state.commit(*epoch_hash).unwrap();
+            state_root = state
+                .commit(*epoch_hash, pivot_block.block_header.height())
+                .unwrap();
         };
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
@@ -1121,6 +1128,8 @@ impl ConsensusExecutionHandler {
 
         let epoch_size = epoch_blocks.len();
         let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
+        let mut base_reword_count: HashMap<Address, U256> = HashMap::new();
+        let mut total_base_reward: U256 = 0.into();
 
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
@@ -1189,9 +1198,43 @@ impl ConsensusExecutionHandler {
                 }
 
                 debug_assert!(reward <= U512::from(U256::max_value()));
-                epoch_block_total_rewards.push(U256::try_from(reward).unwrap());
+                let reward = U256::try_from(reward).unwrap();
+                epoch_block_total_rewards.push(reward);
+                *base_reword_count
+                    .entry(*block.block_header.author())
+                    .or_insert(0.into()) += reward;
+                total_base_reward += reward;
             }
         }
+
+        let interest_rate = *state.interest_rate();
+        // Calculate the new total tokens.
+        let total_tokens = state.total_tokens()
+            + state.total_bank_tokens() * interest_rate
+                / U256::from(INTEREST_RATE_SCALE);
+        state.set_total_tokens(total_tokens);
+
+        // Calculate the new accumulate interest rate.
+        let accumulate_interest_rate =
+            state.accumulate_interest_rate() + interest_rate;
+        state.set_accumulate_interest_rate(accumulate_interest_rate);
+
+        // TODO: do divide here to fix units
+        // Calculate
+        let secondary_reward = state.total_storage_tokens() * interest_rate
+            / U256::from(INTEREST_RATE_SCALE);
+        // TODO:
+        //   If we use an interest to issure secondary tokens:
+        //      1. Maybe we can do the settlement every X epochs
+        //      2. `interest * total_storage_tokens` number of tokens should
+        // distribute to miners.      3. transfer `interest *
+        // (total_tokens - total_bank_tokens) to some special account for
+        // further use.      4. do some voting to change interest
+        //      5. `total_tokens` will become `total_tokens * (1 + interest)`
+        //      6. `total_bank_tokens` will become `total_bank_tokens * (1 +
+        // interest) - total_storage_tokens * interest  If we issue
+        // secondary tokens in a fix amount every X epochs:
+        //      1. further discuss is needed.
 
         // Tx fee for each block in this epoch
         let mut tx_fee = HashMap::new();
@@ -1314,7 +1357,10 @@ impl ConsensusExecutionHandler {
 
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
-        for (address, reward) in merged_rewards {
+        for (address, mut reward) in merged_rewards {
+            // Distribute the secondary reward according to primary reward.
+            reward += base_reword_count[&address] * secondary_reward
+                / total_base_reward;
             state
                 .add_balance(&address, &reward, CleanupMode::ForceCreate)
                 .unwrap();

@@ -989,7 +989,13 @@ impl<Cost: CostType> Interpreter<Cost> {
                     context.add_sstore_refund(sstore_clears_schedule);
                 }
 
-                context.set_storage(address, BigEndianHash::from_uint(&val))?;
+                // `self.params.sender` may change during execution,
+                // `self.params.origin` is the actual sender of the transaction.
+                context.set_storage(
+                    address,
+                    BigEndianHash::from_uint(&val),
+                    self.params.origin,
+                )?;
             }
             instructions::PC => {
                 self.stack.push(U256::from(self.reader.position - 1));
