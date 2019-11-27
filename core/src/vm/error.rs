@@ -77,6 +77,8 @@ pub enum Error {
     },
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
+    /// Internal contract failed
+    InternalContract(&'static str),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Likely to cause consensus issues.
@@ -121,6 +123,9 @@ impl fmt::Display for Error {
                 limit,
             } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
+            InternalContract(name) => {
+                write!(f, "InternalContract failed: {}", name)
+            }
             Internal(ref msg) => write!(f, "Internal error: {}", msg),
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
