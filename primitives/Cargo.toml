@@ -28,3 +28,9 @@ criterion = "0.2"
 [[bench]]
 name = "benchmark"
 harness = false
+
+# Unfortunately cfg test attributes doesn't work across crates,
+# we have to define a feature for test code.
+# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
+[features]
+test_no_account_length_check = []
