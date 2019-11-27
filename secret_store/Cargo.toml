@@ -10,7 +10,7 @@ edition = "2018"
 ethereum-types = "0.7"
 keccak-hash = "0.3.0"
 primitives = { path = "../primitives" }
-parking_lot = "0.8"
+parking_lot = "0.10"
 rlp = "0.4.0"
 rand = "0.7"
 ethkey = { path = "../accounts/ethkey" }
