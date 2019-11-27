@@ -20,7 +20,10 @@
 // TODO(yz): In future merge can be made into multiple threads easily by merging
 // different children in parallel then combine the root node.
 pub struct MptMerger<'a> {
-    rw_cursor: MptCursorRw<MergeMptsInRequest<'a>>,
+    rw_cursor: MptCursorRw<
+        MergeMptsInRequest<'a>,
+        ReadWritePathNode<MergeMptsInRequest<'a>>,
+    >,
 }
 
 impl<'a> MptMerger<'a> {
