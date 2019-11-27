@@ -32,7 +32,7 @@ log = "0.4"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 runtime = { path = "../util/runtime" }
-slab = "0.2"
+slab = "0.4"
 cfxcore = { path = "../core" }
 network = { path = "../network" }
 db = { path = "../db" }
