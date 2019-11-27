@@ -11,7 +11,7 @@ cfx-stratum = { path = "../blockgen/stratum" }
 keccak-hash = "0.3.0"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
-primitives = { path = "../primitives" }
+primitives = { path = "../primitives", optional = true }
 parking_lot = "0.10"
 network = { path = "../network" }
 io = { path = "../util/io" }
@@ -65,3 +65,7 @@ serde_derive = "1.0"
 
 [dev-dependencies]
 criterion = "0.2"
+primitives = { path = "../primitives", features = ["test_no_account_length_check"] }
+
+[features]
+default = ["primitives"]

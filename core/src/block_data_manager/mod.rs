@@ -8,8 +8,9 @@ use crate::{
     ext_db::SystemDB,
     pow::TargetDifficultyManager,
     storage::{
-        state_manager::StateIndex, GuardedValue, NonCopy, StateRootWithAuxInfo,
-        StorageManager, StorageManagerTrait, StorageTrait,
+        state_manager::StateIndex, utils::guarded_value::*,
+        StateRootWithAuxInfo, StorageManager, StorageManagerTrait,
+        StorageTrait,
     },
 };
 use cfx_types::{Bloom, H256};

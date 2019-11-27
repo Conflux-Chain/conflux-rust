@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+pub(super) mod merkle_patricia_trie;
+pub(super) mod delta_mpt;
 pub(super) mod errors;
-pub(super) mod multi_version_merkle_patricia_trie;
-pub(self) mod owned_node_set;
 pub(super) mod snapshot_sync;
 pub(super) mod state;
 pub(super) mod state_manager;
@@ -14,7 +15,7 @@ pub(super) mod storage_db;
 pub(super) mod storage_manager;
 
 pub mod defaults {
-    pub use super::multi_version_merkle_patricia_trie::DEFAULT_NODE_MAP_SIZE;
+    pub use super::delta_mpt::DEFAULT_NODE_MAP_SIZE;
     pub const DEFAULT_CACHE_SIZE: u32 =
         NodeMemoryManagerDeltaMpt::MAX_CACHED_TRIE_NODES_DISK_HYBRID;
     pub const DEFAULT_CACHE_START_SIZE: u32 =
@@ -26,5 +27,5 @@ pub mod defaults {
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 =
         NodeMemoryManagerDeltaMpt::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER;
 
-    use super::multi_version_merkle_patricia_trie::node_memory_manager::NodeMemoryManagerDeltaMpt;
+    use super::delta_mpt::node_memory_manager::NodeMemoryManagerDeltaMpt;
 }

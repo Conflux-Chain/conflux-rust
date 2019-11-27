@@ -19,7 +19,6 @@ use crate::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{LOG_FILTERING_LOOKAHEAD, MAX_POLL_TIME},
     },
-    storage::StorageKey,
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
@@ -27,7 +26,7 @@ use futures::{future, stream, Future, Stream};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, EpochNumber, Receipt, SignedTransaction, StateRoot,
+    Account, EpochNumber, Receipt, SignedTransaction, StateRoot, StorageKey,
     TransactionAddress,
 };
 use std::{collections::BTreeSet, sync::Arc};

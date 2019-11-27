@@ -5,7 +5,7 @@
 use crate::{
     storage::{
         state::{State, StateTrait},
-        StateRootWithAuxInfo, StorageKey,
+        StateRootWithAuxInfo,
     },
     sync::{
         state::delta::{
@@ -16,6 +16,7 @@ use crate::{
 };
 use cfx_types::{Address, H256};
 use keccak_hash::keccak;
+use primitives::StorageKey;
 use rlp::{Encodable, Rlp};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{

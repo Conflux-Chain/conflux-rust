@@ -5,8 +5,6 @@
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
 // processed to use in DeltaMpt.
 
-// FIXME: Move to primitives.
-
 use std::hint::unreachable_unchecked;
 
 #[derive(Debug, Clone, Copy)]
@@ -63,7 +61,9 @@ impl<'a> StorageKey<'a> {
     const STORAGE_PREFIX: &'static [u8] = b"data";
     const STORAGE_PREFIX_LEN: usize = 4;
 
-    pub fn to_delta_mpt_key_bytes(&self, padding: &KeyPadding) -> Vec<u8> {
+    pub fn to_delta_mpt_key_bytes(
+        &self, padding: &DeltaMptKeyPadding,
+    ) -> Vec<u8> {
         match self {
             StorageKey::AccountKey(address_bytes) => {
                 if address_bytes.len() == Self::ACCOUNT_BYTES {
@@ -71,7 +71,7 @@ impl<'a> StorageKey<'a> {
                         address_bytes,
                         padding,
                     )
-                } else if cfg!(test) {
+                } else if cfg!(feature = "test_no_account_length_check") {
                     // The branch is test only. When an address with incomplete
                     // length, it's passed to DeltaMPT directly.
                     let mut x = Vec::with_capacity(address_bytes.len());
@@ -209,11 +209,11 @@ impl<'a> StorageKey<'a> {
 /// and it's used to compute padding bytes for address and storage_key. The
 /// padding setup is against an attack where adversary artificially build deep
 /// paths in MPT.
-pub type KeyPadding = [u8; delta_mpt_storage_key::KEY_PADDING_BYTES];
-pub use delta_mpt_storage_key::KEY_PADDING_BYTES;
+pub type DeltaMptKeyPadding = [u8; delta_mpt_storage_key::KEY_PADDING_BYTES];
+pub use delta_mpt_storage_key::KEY_PADDING_BYTES as DELTA_MPT_KEY_PADDING_BYTES;
 lazy_static! {
-    pub static ref GENESIS_DELTA_MPT_KEY_PADDING: KeyPadding =
-        DeltaMpt::padding(&MERKLE_NULL_NODE, &MERKLE_NULL_NODE);
+    pub static ref GENESIS_DELTA_MPT_KEY_PADDING: DeltaMptKeyPadding =
+        StorageKey::delta_mpt_padding(&MERKLE_NULL_NODE, &MERKLE_NULL_NODE);
 }
 
 mod delta_mpt_storage_key {
@@ -231,7 +231,7 @@ mod delta_mpt_storage_key {
     }
 
     fn compute_address_keypart(
-        address: &[u8], padding: &KeyPadding,
+        address: &[u8], padding: &DeltaMptKeyPadding,
     ) -> [u8; ACCOUNT_KEYPART_BYTES] {
         // Manually asserting the size by using new_buffer instead of
         // Vec#extend_from_slice.
@@ -256,8 +256,8 @@ mod delta_mpt_storage_key {
     }
 
     fn compute_storage_key_padding(
-        storage_key: &[u8], padding: &KeyPadding,
-    ) -> KeyPadding {
+        storage_key: &[u8], padding: &DeltaMptKeyPadding,
+    ) -> DeltaMptKeyPadding {
         let mut padded =
             Vec::with_capacity(KEY_PADDING_BYTES + storage_key.len());
         padded.extend_from_slice(padding);
@@ -266,13 +266,17 @@ mod delta_mpt_storage_key {
         keccak(padded).0
     }
 
-    fn extend_address(key: &mut Vec<u8>, address: &[u8], padding: &KeyPadding) {
+    fn extend_address(
+        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
+    ) {
         let hash = compute_address_keypart(address, padding);
 
         key.extend_from_slice(hash.as_ref());
     }
 
-    pub fn new_account_key(address: &[u8], padding: &KeyPadding) -> Vec<u8> {
+    pub fn new_account_key(
+        address: &[u8], padding: &DeltaMptKeyPadding,
+    ) -> Vec<u8> {
         let mut key = Vec::with_capacity(ACCOUNT_KEYPART_BYTES);
         extend_address(&mut key, address, padding);
 
@@ -280,14 +284,14 @@ mod delta_mpt_storage_key {
     }
 
     fn extend_storage_root(
-        key: &mut Vec<u8>, address: &[u8], padding: &KeyPadding,
+        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
     ) {
         extend_address(key, address, padding);
         key.extend_from_slice(StorageKey::STORAGE_PREFIX);
     }
 
     fn extend_storage_key(
-        key: &mut Vec<u8>, storage_key: &[u8], padding: &KeyPadding,
+        key: &mut Vec<u8>, storage_key: &[u8], padding: &DeltaMptKeyPadding,
     ) {
         key.extend_from_slice(
             &compute_storage_key_padding(storage_key, padding)
@@ -297,7 +301,7 @@ mod delta_mpt_storage_key {
     }
 
     pub fn new_storage_root_key(
-        address: &[u8], padding: &KeyPadding,
+        address: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
         let mut key = Vec::with_capacity(
             ACCOUNT_KEYPART_BYTES + StorageKey::STORAGE_PREFIX_LEN,
@@ -308,7 +312,7 @@ mod delta_mpt_storage_key {
     }
 
     pub fn new_storage_key(
-        address: &[u8], storage_key: &[u8], padding: &KeyPadding,
+        address: &[u8], storage_key: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
         let mut key = Vec::with_capacity(
             ACCOUNT_KEYPART_BYTES
@@ -323,13 +327,15 @@ mod delta_mpt_storage_key {
     }
 
     fn extend_code_root(
-        key: &mut Vec<u8>, address: &[u8], padding: &KeyPadding,
+        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
     ) {
         extend_address(key, address, padding);
         key.extend_from_slice(StorageKey::CODE_HASH_PREFIX);
     }
 
-    pub fn new_code_root_key(address: &[u8], padding: &KeyPadding) -> Vec<u8> {
+    pub fn new_code_root_key(
+        address: &[u8], padding: &DeltaMptKeyPadding,
+    ) -> Vec<u8> {
         let mut key = Vec::with_capacity(
             ACCOUNT_KEYPART_BYTES + StorageKey::STORAGE_PREFIX_LEN,
         );
@@ -339,7 +345,7 @@ mod delta_mpt_storage_key {
     }
 
     pub fn new_code_key(
-        address: &[u8], code_hash: &[u8], padding: &KeyPadding,
+        address: &[u8], code_hash: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
         let mut key = Vec::with_capacity(
             ACCOUNT_KEYPART_BYTES
@@ -353,6 +359,17 @@ mod delta_mpt_storage_key {
     }
 
     impl<'a> StorageKey<'a> {
+        pub fn delta_mpt_padding(
+            snapshot_root: &MerkleHash, intermediate_delta_root: &MerkleHash,
+        ) -> DeltaMptKeyPadding {
+            let mut buffer = Vec::with_capacity(
+                snapshot_root.0.len() + intermediate_delta_root.0.len(),
+            );
+            buffer.extend_from_slice(&snapshot_root.0);
+            buffer.extend_from_slice(&intermediate_delta_root.0);
+            keccak(&buffer).0
+        }
+
         pub fn from_delta_mpt_key(
             delta_mpt_key: &'a [u8], address_bytes: &'a mut [u8],
         ) -> StorageKey<'a> {
@@ -403,8 +420,7 @@ mod delta_mpt_storage_key {
     }
 }
 
-use super::DeltaMpt;
+use super::{MerkleHash, MERKLE_NULL_NODE};
 use cfx_types::{Address, H256};
 use hash::keccak;
-use primitives::MERKLE_NULL_NODE;
 use std::{convert::AsRef, vec::Vec};
