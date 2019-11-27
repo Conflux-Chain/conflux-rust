@@ -71,7 +71,7 @@ impl<'a> StorageKey<'a> {
                         address_bytes,
                         padding,
                     )
-                } else if cfg!(test) {
+                } else if cfg!(feature = "test_no_account_length_check") {
                     // The branch is test only. When an address with incomplete
                     // length, it's passed to DeltaMPT directly.
                     let mut x = Vec::with_capacity(address_bytes.len());

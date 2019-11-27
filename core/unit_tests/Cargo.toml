@@ -1,33 +1,33 @@
 [package]
-description = "Conflux core library"
+description = "Conflux core library, unit test only"
 homepage = "http://www.conflux-chain.org"
 license = "GPL-3.0"
-name = "cfxcore"
+name = "cfxcore-test"
 version = "0.1.1"
 edition = "2018"
 
 [dependencies]
-cfx-stratum = { path = "../blockgen/stratum" }
+cfx-stratum = { path = "../../blockgen/stratum" }
 keccak-hash = "0.3.0"
-cfx-types = { path = "../cfx_types" }
-cfx-bytes = { path = "../cfx_bytes" }
-primitives = { path = "../primitives" }
+cfx-types = { path = "../../cfx_types" }
+cfx-bytes = { path = "../../cfx_bytes" }
+primitives = { path = "../../primitives" }
 parking_lot = "0.8"
-network = { path = "../network" }
-io = { path = "../util/io" }
+network = { path = "../../network" }
+io = { path = "../../util/io" }
 log = "0.4"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 lazy_static = "1.1.0"
-ethkey = { path = "../accounts/ethkey" }
-secret-store = { path = "../secret_store" }
+ethkey = { path = "../../accounts/ethkey" }
+secret-store = { path = "../../secret_store" }
 rand = "0.7"
 rand_chacha="0.2.1"
 rand_xorshift="0.2.0"
 error-chain = { version = "0.12", default-features = false }
 slab = "0.4"
 kvdb = "0.1.1"
-db = { path = "../db" }
+db = { path = "../../db" }
 bit-set = "0.4"
 heapsize = "0.4"
 memory-cache = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
@@ -43,15 +43,15 @@ threadpool = "1.0"
 rayon = "1.0"
 sqlite = "0.25"
 sqlite3-sys = "0.12"
-link-cut-tree = { path = "../util/link-cut-tree" }
-priority-send-queue = { path = "../util/priority-send-queue" }
+link-cut-tree = { path = "../../util/link-cut-tree" }
+priority-send-queue = { path = "../../util/priority-send-queue" }
 toml = "0.4"
-metrics = { path = "../util/metrics" }
-hibitset = { path = "../util/hibitset" }
+metrics = { path = "../../util/metrics" }
+hibitset = { path = "../../util/hibitset" }
 futures = "0.1"
 memoffset = "0.5.1"
-malloc_size_of = {path = "../util/malloc_size_of"}
-malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
+malloc_size_of = {path = "../../util/malloc_size_of"}
+malloc_size_of_derive = {path = "../../util/malloc_size_of_derive"}
 fallible-iterator = "0.2"
 strfmt = "0.1"
 rustc-hex = "1.0"
@@ -59,20 +59,17 @@ parity-bytes = "0.1"
 siphasher = "0.3"
 zip = "0.5.3"
 clap = "2"
-throttling = { path = "../util/throttling" }
+throttling = { path = "../../util/throttling" }
 serde = "1.0"
 serde_derive = "1.0"
 
 [dev-dependencies]
 criterion = "0.2"
 
-[lib]
-test = false
+[[test]]
+name = "cfxcore-test"
+path = "../src/lib.rs"
+required-features = ["primitives/test_no_account_length_check"]
 
-#[[test]]
-#name = "core-test"
-#path = "src/lib.rs"
-#required-features = ["primitives/test_no_account_length_check"]
-#
-#[features]
-#test_no_account_length_check = ["primitives/test_no_account_length_check"]
+[features]
+default = ["primitives/test_no_account_length_check"]
