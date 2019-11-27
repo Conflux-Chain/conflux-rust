@@ -22,7 +22,7 @@ use crate::{
     service_mio::{HandlerId, IoChannel, IoContext},
     IoHandler, LOCAL_STACK_SIZE,
 };
-use crossbeam::sync::chase_lev;
+use crossbeam_deque;
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
@@ -136,7 +136,7 @@ pub struct Worker {
 impl Worker {
     /// Creates a new worker instance.
     pub fn new<Message>(
-        index: usize, stealer: chase_lev::Stealer<Work<Message>>,
+        index: usize, stealer: crossbeam_deque::Stealer<Work<Message>>,
         channel: IoChannel<Message>, wait: Arc<SCondvar>,
         wait_mutex: Arc<SMutex<()>>,
     ) -> Worker
@@ -170,7 +170,7 @@ impl Worker {
     }
 
     fn work_loop<Message>(
-        stealer: chase_lev::Stealer<Work<Message>>,
+        stealer: crossbeam_deque::Stealer<Work<Message>>,
         channel: IoChannel<Message>, wait: Arc<SCondvar>,
         wait_mutex: Arc<SMutex<()>>, deleting: Arc<AtomicBool>,
     ) where
@@ -187,7 +187,7 @@ impl Worker {
 
             while !deleting.load(AtomicOrdering::Acquire) {
                 match stealer.steal() {
-                    chase_lev::Steal::Data(work) => {
+                    crossbeam_deque::Steal::Success(work) => {
                         Worker::do_work(work, channel.clone())
                     }
                     _ => break,

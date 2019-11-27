@@ -5,5 +5,5 @@ edition = "2018"
 
 [dependencies]
 cfx-types = { path = "../../cfx_types" }
-parking_lot = "0.8"
+parking_lot = "0.10"
 rand = "0.7"
