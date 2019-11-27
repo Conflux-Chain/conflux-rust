@@ -4,22 +4,23 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
+byteorder = "1.2.7"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
+ethkey = { path = "../accounts/ethkey" }
 fixed-hash = "0.5"
 keccak-hash = "0.3.0"
-ethkey = { path = "../accounts/ethkey" }
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-malloc_size_of = { path = "../util/malloc_size_of" }
+lazy_static = "1.4"
 log = "0.4"
 lru = "0.1"
-byteorder = "1.2.7"
+malloc_size_of = { path = "../util/malloc_size_of" }
 rand = "0.7"
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 siphasher = "0.3"
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 
 [dev-dependencies]
 criterion = "0.2"
@@ -27,3 +28,9 @@ criterion = "0.2"
 [[bench]]
 name = "benchmark"
 harness = false
+
+# Unfortunately cfg test attributes doesn't work across crates,
+# we have to define a feature for test code.
+# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
+[features]
+test_no_account_length_check = []

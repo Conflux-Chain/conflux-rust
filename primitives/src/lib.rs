@@ -10,6 +10,8 @@ extern crate rlp_derive;
 extern crate ethkey as keylib;
 extern crate log;
 extern crate unexpected;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod account;
 pub mod block;
@@ -19,6 +21,7 @@ pub mod filter;
 pub mod log_entry;
 pub mod receipt;
 pub mod state_root;
+pub mod storage_key;
 pub mod transaction;
 pub mod transaction_address;
 
@@ -30,6 +33,7 @@ pub use crate::{
     log_entry::LogEntry,
     receipt::Receipt,
     state_root::*,
+    storage_key::*,
     transaction::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,
         TxPropagateId,

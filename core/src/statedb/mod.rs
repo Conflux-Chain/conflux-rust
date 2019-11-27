@@ -6,11 +6,11 @@ use crate::{
     bytes::Bytes,
     storage::{
         Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
-        StateRootWithAuxInfo, Storage, StorageKey, StorageTrait,
+        StateRootWithAuxInfo, Storage, StorageTrait,
     },
 };
 use cfx_types::{Address, H256};
-use primitives::{Account, EpochId};
+use primitives::{Account, EpochId, StorageKey};
 
 mod error;
 

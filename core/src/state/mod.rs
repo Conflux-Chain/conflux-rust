@@ -7,12 +7,12 @@ use crate::{
     bytes::Bytes,
     hash::KECCAK_EMPTY,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
-    storage::{StateRootWithAuxInfo, StorageKey},
+    storage::StateRootWithAuxInfo,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId};
+use primitives::{Account, EpochId, StorageKey};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},

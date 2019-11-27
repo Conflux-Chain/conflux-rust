@@ -794,18 +794,21 @@ impl<
 
 use super::{
     super::{
-        super::storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
+        super::{
+            storage_db::delta_db_manager::DeltaDbOwnedReadTraitObj,
+            utils::{guarded_value::*, UnsafeCellExtension},
+        },
         errors::*,
+        merkle_patricia_trie::children_table::*,
     },
     cache::algorithm::{
         lru::LRU, CacheAccessResult, CacheAlgoDataTrait, CacheAlgorithm,
         CacheIndexTrait, CacheStoreUtil,
     },
-    guarded_value::*,
-    merkle_patricia_trie::{children_table::*, *},
+    mem_optimized_trie_node::MemOptimizedTrieNode,
     node_ref_map::*,
     slab::Slab,
-    UnsafeCellExtension,
+    NodeRefDeltaMpt,
 };
 use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
 use primitives::MerkleHash;

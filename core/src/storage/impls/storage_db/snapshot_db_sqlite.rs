@@ -458,9 +458,7 @@ use super::{
             SnapshotMptTraitSingleWriter, SnapshotMptValue,
         },
         errors::*,
-        multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-            cow_node_ref::KVInserter, mpt_merger::MptMerger,
-        },
+        merkle_patricia_trie::{KVInserter, MptMerger},
         storage_manager::DeltaMptInserter,
     },
     kvdb_sqlite::{

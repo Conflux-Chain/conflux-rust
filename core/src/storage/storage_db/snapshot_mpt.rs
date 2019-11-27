@@ -62,8 +62,8 @@ impl DerefMut for SnapshotMptNode {
 use super::super::{
     impls::{
         errors::*,
-        multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-            trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
+        merkle_patricia_trie::{
+            CompressedPathRaw, CompressedPathTrait, VanillaTrieNode,
         },
     },
     utils::tuple::*,

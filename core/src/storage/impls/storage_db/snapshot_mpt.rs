@@ -158,8 +158,8 @@ use super::super::{
         snapshot_mpt::*,
     },
     errors::*,
-    multi_version_merkle_patricia_trie::merkle_patricia_trie::{
-        trie_node::VanillaTrieNode, CompressedPathRaw, CompressedPathTrait,
+    merkle_patricia_trie::{
+        CompressedPathRaw, CompressedPathTrait, VanillaTrieNode,
     },
 };
 use fallible_iterator::FallibleIterator;
