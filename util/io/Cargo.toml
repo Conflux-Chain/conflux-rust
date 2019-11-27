@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 fnv = "1.0"
 mio = { version = "0.6.19" }
-crossbeam = "0.3"
+crossbeam = "0.7"
 parking_lot = "0.10"
 log = "0.4"
 slab = "0.4"
