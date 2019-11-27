@@ -22,7 +22,7 @@ app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 jsonrpc-core = "=12.0.0"
-jsonrpc-tcp-server = "=12.0.0"
+jsonrpc-tcp-server = "=14.0.3"
 jsonrpc-http-server = "=12.0.0"
 jsonrpc-derive = "=12.0.0"
 jsonrpc-core-client = "=12.0.0"
