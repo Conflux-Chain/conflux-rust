@@ -15,7 +15,7 @@ use crate::{
 };
 use cfx_types::{Address, H256, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
-use std::{cmp, convert::TryFrom, sync::Arc};
+use std::{cmp, convert::TryFrom, str::FromStr, sync::Arc};
 //use crate::storage::{Storage, StorageTrait};
 //use crate::transaction_pool::SharedTransactionPool;
 use crate::{
@@ -26,6 +26,9 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
+
+const STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: &str =
+    "443c409373ffd5c0bec1dddb7bec830856757b65";
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -107,6 +110,7 @@ pub fn into_contract_create_result(
 enum CallCreateExecutiveKind {
     Transfer(ActionParams),
     CallBuiltin(ActionParams),
+    CallInternalContract(ActionParams),
     ExecCall(ActionParams, Substate),
     ExecCreate(ActionParams, Substate),
     ResumeCall(OriginInfo, Box<dyn ResumeCall>, Substate),
@@ -156,6 +160,12 @@ impl<'a> CallCreateExecutive<'a> {
             }
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(params)
+        } else if params.code_address
+            == Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
+                .unwrap()
+        {
+            info!("CallInternalContract: {:?}", params.data);
+            CallCreateExecutiveKind::CallInternalContract(params)
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
@@ -226,7 +236,8 @@ impl<'a> CallCreateExecutive<'a> {
                 Some(unsub)
             }
             CallCreateExecutiveKind::Transfer(..)
-            | CallCreateExecutiveKind::CallBuiltin(..) => None,
+            | CallCreateExecutiveKind::CallBuiltin(..)
+            | CallCreateExecutiveKind::CallInternalContract(..) => None,
         }
     }
 
@@ -299,6 +310,7 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::BadInstruction { .. })
             | Err(vm::Error::StackUnderflow { .. })
             | Err(vm::Error::BuiltIn { .. })
+            | Err(vm::Error::InternalContract { .. })
             | Err(vm::Error::Wasm { .. })
             | Err(vm::Error::OutOfStack { .. })
             | Err(vm::Error::MutableCallInStaticContext)
@@ -411,6 +423,82 @@ impl<'a> CallCreateExecutive<'a> {
                                 gas_left: params.gas - cost,
                                 return_data: ReturnData::new(
                                     builtin_out_buffer,
+                                    0,
+                                    out_len,
+                                ),
+                                apply_state: true,
+                            })
+                        }
+                    } else {
+                        state.revert_to_checkpoint();
+                        Err(vm::Error::OutOfGas)
+                    }
+                };
+
+                Ok(inner())
+            }
+
+            CallCreateExecutiveKind::CallInternalContract(ref params) => {
+                assert!(!self.is_create);
+
+                let mut inner = || {
+                    if params.call_type != CallType::Call {
+                        return Err(vm::Error::InternalContract(
+                            "Incorrect call type.",
+                        ));
+                    }
+
+                    Self::check_static_flag(
+                        &params,
+                        self.static_flag,
+                        self.is_create,
+                    )?;
+                    state.checkpoint();
+                    Self::transfer_exec_balance(
+                        &params, self.spec, state, substate,
+                    )?;
+
+                    /*
+                    let default = [];
+                    let data = if let Some(ref d) = params.data {
+                        d as &[u8]
+                    } else {
+                        &default as &[u8]
+                    };
+                    */
+
+                    // FIXME: Implement the correct pricer!
+                    let cost = U256::zero();
+                    if cost <= params.gas {
+                        //let mut internal_contract_out_buffer = Vec::new();
+                        let internal_contract_out_buffer = Vec::new();
+                        let result: Result<(), ()> = {
+                            /*
+                            let mut builtin_output = BytesRef::Flexible(
+                                &mut internal_contract_out_buffer,
+                            );
+                            */
+                            // FIXME: execute the internal contract
+                            Ok(())
+                        };
+                        // FIXME: correct handling of error
+                        //if let Err(e) = result {
+                        if !result.is_ok() {
+                            state.revert_to_checkpoint();
+
+                            // FIXME: need correct error value.
+                            //Err(e.into())
+                            Err(vm::Error::InternalContract(
+                                "Internal contract execution failed.",
+                            ))
+                        } else {
+                            state.discard_checkpoint();
+
+                            let out_len = internal_contract_out_buffer.len();
+                            Ok(FinalizationResult {
+                                gas_left: params.gas - cost,
+                                return_data: ReturnData::new(
+                                    internal_contract_out_buffer,
                                     0,
                                     out_len,
                                 ),
@@ -659,6 +747,7 @@ impl<'a> CallCreateExecutive<'a> {
             }
             CallCreateExecutiveKind::Transfer(..)
             | CallCreateExecutiveKind::CallBuiltin(..)
+            | CallCreateExecutiveKind::CallInternalContract(..)
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
@@ -733,6 +822,7 @@ impl<'a> CallCreateExecutive<'a> {
             }
             CallCreateExecutiveKind::Transfer(..)
             | CallCreateExecutiveKind::CallBuiltin(..)
+            | CallCreateExecutiveKind::CallInternalContract(..)
             | CallCreateExecutiveKind::ExecCall(..)
             | CallCreateExecutiveKind::ExecCreate(..) => {
                 panic!("Not resumable")
@@ -1120,6 +1210,7 @@ impl<'a, 'b> Executive<'a, 'b> {
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
                 };
+
                 let res = self.call(params, &mut substate);
                 let out = match &res {
                     Ok(res) => res.return_data.to_vec(),
