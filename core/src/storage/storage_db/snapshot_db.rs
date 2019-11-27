@@ -4,6 +4,8 @@
 
 #[derive(Clone)]
 pub struct SnapshotInfo {
+    pub serve_one_step_sync: bool,
+
     pub merkle_root: MerkleHash,
     pub parent_snapshot_height: u64,
     pub height: u64,
@@ -16,6 +18,7 @@ pub struct SnapshotInfo {
 impl SnapshotInfo {
     pub fn genesis_snapshot_info() -> Self {
         Self {
+            serve_one_step_sync: false,
             merkle_root: MERKLE_NULL_NODE,
             parent_snapshot_height: 0,
             height: 0,

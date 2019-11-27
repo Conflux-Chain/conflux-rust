@@ -97,7 +97,7 @@ impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT> {
 
     pub fn get_children_count(&self) -> u8 { self.children_count }
 
-    pub fn get_children_count_mut(&mut self) -> &mut u8 {
+    pub unsafe fn get_children_count_mut(&mut self) -> &mut u8 {
         &mut self.children_count
     }
 

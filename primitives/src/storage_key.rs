@@ -315,10 +315,7 @@ mod delta_mpt_storage_key {
         address: &[u8], storage_key: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
         let mut key = Vec::with_capacity(
-            ACCOUNT_KEYPART_BYTES
-                + StorageKey::STORAGE_PREFIX_LEN
-                + KEY_PADDING_BYTES
-                + storage_key.len(),
+            ACCOUNT_KEYPART_BYTES + KEY_PADDING_BYTES + storage_key.len(),
         );
         extend_storage_root(&mut key, address, padding);
         extend_storage_key(&mut key, storage_key, padding);

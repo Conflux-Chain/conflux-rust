@@ -288,6 +288,7 @@ impl StorageManager {
         }
 
         let in_progress_snapshot_info = SnapshotInfo {
+            serve_one_step_sync: true,
             height: height as u64,
             parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
             // This is unknown for now, and we don't care.

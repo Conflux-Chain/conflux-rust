@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[allow(unused)]
 pub struct MptSlicer<'a> {
     cursor: MptCursor<
         &'a mut dyn SnapshotMptTraitReadOnly,
@@ -68,9 +69,7 @@ impl<'a> MptSlicer<'a> {
         for (
             this_child_index,
             &SubtreeMerkleWithSize {
-                merkle: _,
-                ref subtree_size,
-                delta_subtree_size: _,
+                ref subtree_size, ..
             },
         ) in current_node
             .trie_node
@@ -116,7 +115,7 @@ impl<'a> MptSlicer<'a> {
     }
 }
 
-use super::super::{
+use super::super::super::{
     super::storage_db::snapshot_mpt::{
         SnapshotMptTraitReadOnly, SubtreeMerkleWithSize,
     },

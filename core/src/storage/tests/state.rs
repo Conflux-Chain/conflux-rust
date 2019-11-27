@@ -556,9 +556,12 @@ fn test_proofs() {
             let mut wrong_merkle = delta_proof.nodes[0].get_merkle().clone();
             wrong_merkle.as_bytes_mut()[0] = 0x00;
             delta_proof.nodes[0].set_merkle(&wrong_merkle);
-        }
 
-        assert!(!invalid_proof.is_valid_kv(key, value, root.clone()));
+            let mut wrong_state_root = root.clone();
+            wrong_state_root.delta_root = wrong_merkle;
+
+            assert!(!invalid_proof.is_valid_kv(key, value, wrong_state_root));
+        }
 
         // test rlp
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());

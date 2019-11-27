@@ -201,7 +201,7 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
 }
 
 impl VanillaTrieNode<MerkleHash> {
-    pub fn get_children_merkle(&self) -> MaybeMerkleTableRef {
+    pub fn get_children_merkles(&self) -> MaybeMerkleTableRef {
         if self.get_children_count() > 0 {
             Some(&self.children_table.get_children_table())
         } else {
