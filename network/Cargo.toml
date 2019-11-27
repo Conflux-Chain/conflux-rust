@@ -5,9 +5,9 @@ edition = "2018"
 
 [dependencies]
 mio = "0.6.8"
-parking_lot = "0.8"
+parking_lot = "0.10"
 log = "0.4"
-slab = "0.2"
+slab = "0.4"
 io = { path = "../util/io" }
 error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
