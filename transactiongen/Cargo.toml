@@ -14,7 +14,7 @@ cfx-bytes = { path = "../cfx_bytes" }
 hex = "0.2"
 keccak-hash = "0.3.0"
 primitives = { path = "../primitives" }
-parking_lot = "0.8"
+parking_lot = "0.10"
 rlp = "0.4.0"
 rand = "0.7"
 secret-store = { path = "../secret_store" }
