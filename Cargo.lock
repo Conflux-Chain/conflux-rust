@@ -2513,6 +2513,7 @@ dependencies = [
  "ethkey 0.3.0",
  "fixed-hash 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hash 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lru 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "malloc_size_of 0.0.1",
