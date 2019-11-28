@@ -178,6 +178,9 @@ class TestNode:
             except ValueError as e:  # cookie file not found and no rpcuser or rpcassword. bitcoind still starting
                 if "No RPC credentials" not in str(e):
                     raise
+            except jsonrpcclient.exceptions.ReceivedNon2xxResponseError as e:
+                if e.code != 500:
+                    raise
             time.sleep(1.0 / poll_per_s)
         self._raise_assertion_error("failed to get RPC proxy: index = {}, ip = {}, rpchost = {}, p2pport={}, rpcport = {}, rpc_url = {}".format(
             self.index, self.ip, self.rpchost, self.port, self.rpcport, rpc_url(self.index, self.rpchost, self.rpcport)

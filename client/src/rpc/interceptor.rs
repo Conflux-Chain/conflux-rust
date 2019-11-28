@@ -17,7 +17,7 @@ pub trait RpcInterceptor: Send + Sync + 'static {
 pub struct RpcProxy<M, T, I>
 where
     M: Metadata,
-    T: Into<HashMap<String, RemoteProcedure<M>>>,
+    T: IntoIterator<Item = (String, RemoteProcedure<M>)>,
     I: RpcInterceptor,
 {
     underlying: T,
@@ -28,7 +28,7 @@ where
 impl<M, T, I> RpcProxy<M, T, I>
 where
     M: Metadata,
-    T: Into<HashMap<String, RemoteProcedure<M>>>,
+    T: IntoIterator<Item = (String, RemoteProcedure<M>)>,
     I: RpcInterceptor,
 {
     pub fn new(underlying: T, interceptor: I) -> Self {
@@ -40,16 +40,20 @@ where
     }
 }
 
-impl<M, T, I> Into<HashMap<String, RemoteProcedure<M>>> for RpcProxy<M, T, I>
+impl<M, T, I> IntoIterator for RpcProxy<M, T, I>
 where
     M: Metadata,
-    T: Into<HashMap<String, RemoteProcedure<M>>>,
+    T: IntoIterator<Item = (String, RemoteProcedure<M>)>,
     I: RpcInterceptor,
 {
-    fn into(self) -> HashMap<String, RemoteProcedure<M>> {
+    type IntoIter =
+        std::collections::hash_map::IntoIter<String, RemoteProcedure<M>>;
+    type Item = (String, RemoteProcedure<M>);
+
+    fn into_iter(self) -> Self::IntoIter {
         let mut intercepted = HashMap::new();
 
-        for (name, mut rp) in self.underlying.into() {
+        for (name, mut rp) in self.underlying.into_iter() {
             if let RemoteProcedure::Method(method) = rp {
                 let method = RpcMethodWithInterceptor::new(
                     name.clone(),
@@ -62,7 +66,7 @@ where
             intercepted.insert(name, rp);
         }
 
-        intercepted
+        intercepted.into_iter()
     }
 }
 

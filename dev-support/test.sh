@@ -3,7 +3,7 @@
 SCRIPT_DIR=`dirname "${BASH_SOURCE[0]}"`
 echo "Checking dependent python3 modules ..."
 source $SCRIPT_DIR/dep_pip3.sh
-set -uxo pipefail
+set -o pipefail
 
 ROOT_DIR="$( cd $SCRIPT_DIR/.. && pwd )"
 

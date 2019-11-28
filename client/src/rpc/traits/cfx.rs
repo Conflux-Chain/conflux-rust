@@ -12,7 +12,7 @@ use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 
 /// Cfx rpc interface.
-#[rpc]
+#[rpc(server)]
 pub trait Cfx {
     //        /// Returns protocol version encoded as a string (quotes are
     // necessary).        #[rpc(name = "cfx_protocolVersion")]

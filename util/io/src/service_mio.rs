@@ -22,7 +22,7 @@ use crate::{
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
-use crossbeam::sync::chase_lev;
+use crossbeam_deque;
 use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use mio::{
@@ -260,7 +260,7 @@ where Message: Send + Sync
     timers: Arc<RwLock<HashMap<HandlerId, UserTimer>>>,
     handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
     workers: Vec<Worker>,
-    worker_channel: chase_lev::Worker<Work<Message>>,
+    worker_channel: crossbeam_deque::Worker<Work<Message>>,
     work_ready: Arc<SCondvar>,
     socket_workers: Vec<(AsyncSender<Work<Message>>, SocketWorker)>,
     network_poll: Arc<Poll>,
@@ -276,7 +276,8 @@ where Message: Send + Sync + 'static
         network_poll: Arc<Poll>,
     ) -> Result<(), IoError>
     {
-        let (worker, stealer) = chase_lev::deque();
+        let worker = crossbeam_deque::Worker::new_fifo();
+        let stealer = worker.stealer();
         let num_workers = 4;
         let work_ready_mutex = Arc::new(SMutex::new(()));
         let work_ready = Arc::new(SCondvar::new());

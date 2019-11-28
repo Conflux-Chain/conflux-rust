@@ -12,7 +12,7 @@ use jsonrpc_derive::rpc;
 use network::node_table::NodeId;
 use std::net::SocketAddr;
 
-#[rpc]
+#[rpc(server)]
 pub trait TestRpc {
     #[rpc(name = "sayhello")]
     fn say_hello(&self) -> RpcResult<String>;

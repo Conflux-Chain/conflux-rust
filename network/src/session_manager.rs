@@ -32,13 +32,19 @@ use std::{
 /// The session manager also limits the maximum number of incoming TCP
 /// connections, so as to establish some trusted outgoing connections.
 pub struct SessionManager {
-    sessions: RwLock<Slab<Arc<RwLock<Session>>, usize>>,
+    sessions: RwLock<Slab<Arc<RwLock<Session>>>>,
+    capacity: usize,
 
-    // used to limit the ingress sessions.
+    #[allow(unused)]
+    /// FIXME It's not used because currently it's always 0.
+    /// Token id offset.
+    offset: usize,
+
+    /// used to limit the ingress sessions.
     max_ingress_sessions: usize,
     cur_ingress_sessions: AtomicUsize,
 
-    // session indices
+    /// session indices
     node_id_index: RwLock<HashMap<NodeId, usize>>,
     ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
@@ -52,7 +58,9 @@ impl SessionManager {
     ) -> Self
     {
         SessionManager {
-            sessions: RwLock::new(Slab::new_starting_at(offset, capacity)),
+            sessions: RwLock::new(Slab::with_capacity(capacity)),
+            offset,
+            capacity,
             max_ingress_sessions,
             cur_ingress_sessions: AtomicUsize::new(0),
             node_id_index: RwLock::new(HashMap::new()),
@@ -62,7 +70,7 @@ impl SessionManager {
     }
 
     /// Get the number of sessions in `SessionManager`.
-    pub fn count(&self) -> usize { self.sessions.read().count() }
+    pub fn count(&self) -> usize { self.sessions.read().len() }
 
     /// Get the session of specified index.
     pub fn get(&self, idx: usize) -> Option<Arc<RwLock<Session>>> {
@@ -78,7 +86,11 @@ impl SessionManager {
 
     /// Get all the sessions in `SessionManager`.
     pub fn all(&self) -> Vec<Arc<RwLock<Session>>> {
-        self.sessions.read().iter().cloned().collect()
+        self.sessions
+            .read()
+            .iter()
+            .map(|(_, s)| s.clone())
+            .collect()
     }
 
     /// Add tag for the session of specified index, so as to support session
@@ -99,7 +111,7 @@ impl SessionManager {
         let mut egress = 0;
         let mut ingress = 0;
 
-        for s in self.sessions.read().iter() {
+        for (_, s) in self.sessions.read().iter() {
             match s.try_read() {
                 Some(ref s) if s.is_ready() && s.metadata.originated => {
                     egress += 1
@@ -178,24 +190,21 @@ impl SessionManager {
             ));
         }
 
-        let index = match sessions.vacant_entry() {
-            None => {
-                debug!("SessionManager.create: leave on MAX sessions reached");
-                Err(String::from("Max sessions reached"))
+        if sessions.len() >= self.capacity {
+            debug!("SessionManager.create: leave on MAX sessions reached");
+            return Err(String::from("Max sessions reached"));
+        }
+        let entry = sessions.vacant_entry();
+        let index = entry.key();
+        match Session::new(io, socket, address, id, index, host) {
+            Err(e) => {
+                debug!(
+                    "SessionManager.create: leave on session creation failed"
+                );
+                return Err(format!("{:?}", e));
             }
-            Some(entry) => {
-                match Session::new(io, socket, address, id, entry.index(), host)
-                {
-                    Err(e) => {
-                        debug!("SessionManager.create: leave on session creation failed");
-                        Err(format!("{:?}", e))
-                    }
-                    Ok(session) => {
-                        Ok(entry.insert(Arc::new(RwLock::new(session))).index())
-                    }
-                }
-            }
-        }?;
+            Ok(session) => entry.insert(Arc::new(RwLock::new(session))),
+        };
 
         // update on creation succeeded
         if let Some(node_id) = id {
@@ -219,7 +228,9 @@ impl SessionManager {
 
         let mut sessions = self.sessions.write();
 
-        if sessions.remove(session.token()).is_some() {
+        // TODO This check can be removed?
+        if sessions.contains(session.token()) {
+            sessions.remove(session.token());
             if let Some(node_id) = session.id() {
                 self.node_id_index.write().remove(node_id);
             }

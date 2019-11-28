@@ -462,11 +462,11 @@ fn test_set_order_concurrent() {
                 )
                 .unwrap()
                 .unwrap();
-            println!(
-                "Setting state_{} with {} keys.",
-                2 + thread_id,
-                keys.len()
-            );
+            //            println!(
+            //                "Setting state_{} with {} keys.",
+            //                2 + thread_id,
+            //                keys.len()
+            //            );
             for key in keys.iter().rev() {
                 let key_slice = &key[..];
                 let actual_key = vec![key_slice; 3].concat();

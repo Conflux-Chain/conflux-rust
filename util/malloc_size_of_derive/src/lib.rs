@@ -24,10 +24,10 @@ fn malloc_size_of_derive(
 ) -> proc_macro2::TokenStream {
     let match_body = s.each(|binding| {
         let ignore = binding.ast().attrs.iter().any(|attr| {
-            match attr.interpret_meta().unwrap() {
-                syn::Meta::Word(ref ident)
-                | syn::Meta::List(syn::MetaList { ref ident, .. })
-                    if ident == "ignore_malloc_size_of" =>
+            match attr.parse_meta().unwrap() {
+                syn::Meta::Path(ref path)
+                | syn::Meta::List(syn::MetaList { ref path, .. })
+                    if path.is_ident("ignore_malloc_size_of") =>
                 {
                     panic!(
                         "#[ignore_malloc_size_of] should have an explanation, \
@@ -35,8 +35,8 @@ fn malloc_size_of_derive(
                     );
                 }
                 syn::Meta::NameValue(syn::MetaNameValue {
-                    ref ident, ..
-                }) if ident == "ignore_malloc_size_of" => true,
+                    ref path, ..
+                }) if path.is_ident("ignore_malloc_size_of") => true,
                 _ => false,
             }
         });

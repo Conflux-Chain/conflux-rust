@@ -26,7 +26,6 @@
 extern crate mio;
 #[macro_use]
 extern crate log as rlog;
-extern crate crossbeam;
 extern crate fnv;
 extern crate num_cpus;
 extern crate parking_lot;
