@@ -145,6 +145,8 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
+        //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
+        //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
         //     * generate blocks automatically without PoW if `start_mining` is false
         //     * Skip catch-up mode even there is no peer
         //

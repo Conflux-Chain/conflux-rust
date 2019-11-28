@@ -89,7 +89,7 @@ pub struct FullClient {}
 impl FullClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<FullClientHandle, String> {
         info!("Working directory: {:?}", std::env::current_dir());
 
@@ -370,6 +370,15 @@ impl FullClient {
             ),
         )?;
 
+
+        if conf.is_dev_mode() {
+            if conf.raw_conf.jsonrpc_tcp_port.is_none() {
+                conf.raw_conf.jsonrpc_tcp_port = Some(12536);
+            }
+            if conf.raw_conf.jsonrpc_http_port.is_none() {
+                conf.raw_conf.jsonrpc_http_port = Some(12537);
+            }
+        };
         let rpc_tcp_server = super::rpc::start_tcp(
             super::rpc::TcpConfiguration::new(
                 None,
