@@ -55,7 +55,7 @@ fn test_mining_10_epochs_inner(handle: &ArchiveClientHandle) {
 #[test]
 fn test_mining_10_epochs() {
     let mut conf = Configuration::default();
-    conf.raw_conf.test_mode = true;
+    conf.raw_conf.mode = Some("test".to_owned());
     conf.raw_conf.initial_difficulty = Some(10_000);
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();

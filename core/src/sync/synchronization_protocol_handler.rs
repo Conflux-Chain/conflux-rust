@@ -260,6 +260,7 @@ pub struct ProtocolConfiguration {
     pub future_block_buffer_capacity: usize,
     pub max_download_state_peers: usize,
     pub test_mode: bool,
+    pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
 }
 
@@ -271,7 +272,10 @@ impl SynchronizationProtocolHandler {
         light_provider: Arc<LightProvider>,
     ) -> Self
     {
-        let sync_state = Arc::new(SynchronizationState::new(is_full_node));
+        let sync_state = Arc::new(SynchronizationState::new(
+            is_full_node,
+            protocol_config.dev_mode,
+        ));
         let request_manager =
             Arc::new(RequestManager::new(&protocol_config, sync_state.clone()));
 

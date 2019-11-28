@@ -265,7 +265,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "jsonrpc_local_http_port": str(rpc_port(n)),
                         "jsonrpc_http_port": str(remote_rpc_port(n)),
                         "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
-                        "test_mode": "true",
+                        "mode": "\'test\'",
                         "log_level": "\"trace\"",
                         "storage_cache_size": "200000",
                         "storage_cache_start_size": "200000",

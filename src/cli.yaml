@@ -3,6 +3,12 @@ about: Conflux client.
 author: The Conflux Team
 
 args:
+    - mode:
+        help: Use the preset testing configurations.
+        long: mode
+        value_name: MODE
+        takes_value: true
+        possible_values: [dev, test]
     - port:
         help: Specify the port for P2P connections.
         short: p

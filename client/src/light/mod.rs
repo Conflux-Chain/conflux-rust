@@ -117,7 +117,7 @@ impl LightClient {
             });
         }
 
-        let genesis_accounts = if conf.raw_conf.test_mode {
+        let genesis_accounts = if conf.is_test_mode() {
             match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
                     genesis::default(secret_store.as_ref());
@@ -219,7 +219,7 @@ impl LightClient {
                 None,
                 conf.raw_conf.jsonrpc_tcp_port,
             ),
-            if conf.raw_conf.test_mode {
+            if conf.is_test_mode() {
                 setup_debug_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
@@ -241,7 +241,7 @@ impl LightClient {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            if conf.raw_conf.test_mode {
+            if conf.is_test_mode() {
                 setup_debug_rpc_apis_light(common_impl, rpc_impl)
             } else {
                 setup_public_rpc_apis_light(common_impl, rpc_impl, &conf)

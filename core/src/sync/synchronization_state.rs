@@ -55,15 +55,17 @@ pub type SynchronizationPeers =
 
 pub struct SynchronizationState {
     is_full_node: bool,
+    is_dev_mode: bool,
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
 }
 
 impl SynchronizationState {
-    pub fn new(is_full_node: bool) -> Self {
+    pub fn new(is_full_node: bool, is_dev_mode: bool) -> Self {
         SynchronizationState {
             is_full_node,
+            is_dev_mode,
             peers: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
@@ -130,6 +132,8 @@ impl SynchronizationState {
     }
 
     pub fn is_full_node(&self) -> bool { self.is_full_node }
+
+    pub fn is_dev_mode(&self) -> bool { self.is_dev_mode }
 
     // FIXME: use median instead, because it's so confusing without context.
     // FIXME: median_chain_height_from_peers.
