@@ -52,7 +52,7 @@ fn get_expected_best_hash() -> String {
 #[test]
 fn test_load_chain() {
     let mut conf = Configuration::default();
-    conf.raw_conf.test_mode = true;
+    conf.raw_conf.mode = Some("test".to_owned());
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.db_dir = Some(
         tmp_dir

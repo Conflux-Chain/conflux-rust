@@ -23,7 +23,7 @@ use std::{sync::Arc, time::Duration};
 #[allow(dead_code)]
 fn txgen_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
-    conf.raw_conf.test_mode = true;
+    conf.raw_conf.mode = Some("test".to_owned());
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handler = ArchiveClient::start(conf, exit).unwrap();
     c.bench_function("Randomly generate 1 transaction", move |b| {
@@ -35,7 +35,7 @@ fn txgen_benchmark(c: &mut Criterion) {
 
 fn txexe_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
-    conf.raw_conf.test_mode = true;
+    conf.raw_conf.mode = Some("test".to_owned());
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handler = ArchiveClient::start(conf, exit).unwrap();
     let kp = KeyPair::from_secret(
