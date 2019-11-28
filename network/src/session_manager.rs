@@ -190,7 +190,7 @@ impl SessionManager {
             ));
         }
 
-        if sessions.len() <= self.capacity {
+        if sessions.len() >= self.capacity {
             debug!("SessionManager.create: leave on MAX sessions reached");
             return Err(String::from("Max sessions reached"));
         }
