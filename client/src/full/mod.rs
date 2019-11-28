@@ -370,7 +370,6 @@ impl FullClient {
             ),
         )?;
 
-
         if conf.is_dev_mode() {
             if conf.raw_conf.jsonrpc_tcp_port.is_none() {
                 conf.raw_conf.jsonrpc_tcp_port = Some(12536);
