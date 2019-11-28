@@ -137,7 +137,7 @@ impl ArchiveClient {
             });
         }
 
-        let genesis_accounts = if conf.raw_conf.test_mode {
+        let genesis_accounts = if conf.is_test_or_dev_mode() {
             match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
                     genesis::default(secret_store.as_ref());
@@ -231,7 +231,7 @@ impl ArchiveClient {
         ));
         sync.register().unwrap();
 
-        if conf.raw_conf.test_mode && conf.raw_conf.data_propagate_enabled {
+        if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
             let dp = Arc::new(DataPropagation::new(
                 conf.raw_conf.data_propagate_interval_ms,
                 conf.raw_conf.data_propagate_size,
@@ -277,12 +277,24 @@ impl ArchiveClient {
                     BlockGenerator::start_mining(bg, 0);
                 })
                 .expect("Mining thread spawn error");
+        } else {
+            if conf.is_dev_mode() {
+                let bg = blockgen.clone();
+                let interval_ms = conf.raw_conf.dev_block_interval_ms;
+                info!("Start auto block generation");
+                thread::Builder::new()
+                    .name("auto_mining".into())
+                    .spawn(move || {
+                        bg.auto_block_generation(interval_ms);
+                    })
+                    .expect("Mining thread spawn error");
+            }
         }
 
         let tx_conf = conf.tx_gen_config();
         let txgen_handle = if tx_conf.generate_tx {
             let txgen_clone = txgen.clone();
-            let t = if conf.raw_conf.test_mode {
+            let t = if conf.is_test_mode() {
                 match conf.raw_conf.genesis_secrets {
                     Some(ref _file) => {
                         thread::Builder::new()
@@ -364,7 +376,7 @@ impl ArchiveClient {
                 None,
                 conf.raw_conf.jsonrpc_tcp_port,
             ),
-            if conf.raw_conf.test_mode {
+            if conf.is_test_mode() {
                 setup_debug_rpc_apis(
                     common_impl.clone(),
                     rpc_impl.clone(),
@@ -389,7 +401,7 @@ impl ArchiveClient {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            if conf.raw_conf.test_mode {
+            if conf.is_test_or_dev_mode() {
                 setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
             } else {
                 setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)

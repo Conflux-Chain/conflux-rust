@@ -583,7 +583,11 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         // FIXME: use target_height instead.
         let middle_epoch = self.syn.get_middle_epoch();
         if middle_epoch.is_none() {
-            return self.phase_type();
+            if self.syn.is_dev_mode() {
+                return SyncPhaseType::Normal;
+            } else {
+                return self.phase_type();
+            }
         }
         let middle_epoch = middle_epoch.unwrap();
         // FIXME: OK, what if the chain height is close, or even local height is

@@ -324,7 +324,7 @@ impl ConsensusExecutor {
                 let height = inner.arena[pivot_arena_index].height;
                 if !self.consensus_graph_bench_mode
                 {
-                    info!(
+                    debug!(
                         "wait_and_compute_state_valid_locked, idx = {}, \
                          height = {}, era stable height = {}",
                         pivot_arena_index, height, inner.cur_era_stable_height

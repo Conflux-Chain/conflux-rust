@@ -15,7 +15,7 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use lazy_static::lazy_static;
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use metrics::{Gauge, GaugeUsize};
 use parking_lot::{Mutex, RwLock};
 use primitives::*;
@@ -25,7 +25,7 @@ use std::{
     sync::{mpsc, Arc},
     thread, time,
 };
-use time::{SystemTime, UNIX_EPOCH};
+use time::{Duration, SystemTime, UNIX_EPOCH};
 use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
 lazy_static! {
     static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
@@ -591,7 +591,7 @@ impl BlockGenerator {
         block.block_header.set_timestamp(timestamp);
 
         let hash = block.block_header.compute_hash();
-        info!(
+        debug!(
             "generate_block with block header:{:?} tx_number:{}, block_size:{}",
             block.block_header,
             block.transactions.len(),
@@ -618,7 +618,7 @@ impl BlockGenerator {
             }
         }
         let hash = block.block_header.compute_hash();
-        info!(
+        debug!(
             "generate_block with block header:{:?} tx_number:{}, block_size:{}",
             block.block_header,
             block.transactions.len(),
@@ -758,6 +758,20 @@ impl BlockGenerator {
                     continue;
                 }
             }
+        }
+    }
+
+    pub fn auto_block_generation(&self, interval_ms: u64) {
+        let interval = Duration::from_millis(interval_ms);
+        loop {
+            match *self.state.read() {
+                MiningState::Stop => return,
+                _ => {}
+            }
+            if !self.sync.catch_up_mode() {
+                self.generate_block(3000, MAX_BLOCK_SIZE_IN_BYTES, vec![]);
+            }
+            thread::sleep(interval);
         }
     }
 }

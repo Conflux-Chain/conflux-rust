@@ -595,7 +595,7 @@ impl Provider {
         msg: &dyn Message,
     ) -> Result<(), Error>
     {
-        info!("broadcast peers={:?}", peers);
+        debug!("broadcast peers={:?}", peers);
 
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
         let total = peers.len();
@@ -618,7 +618,7 @@ impl Provider {
     }
 
     pub fn relay_hashes(&self, hashes: Vec<H256>) -> Result<(), Error> {
-        info!("relay_hashes hashes={:?}", hashes);
+        debug!("relay_hashes hashes={:?}", hashes);
 
         if hashes.is_empty() {
             return Ok(());

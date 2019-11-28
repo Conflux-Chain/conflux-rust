@@ -51,7 +51,7 @@ impl StateManager {
             None => {}
             Some(node) => {
                 // Debugging log.
-                info!("State root committed for epoch {:?}", epoch_id);
+                debug!("State root committed for epoch {:?}", epoch_id);
                 delta_trie.set_parent_epoch(parent_epoch_id, epoch_id.clone());
                 delta_trie.set_epoch_root(epoch_id, node.clone());
                 delta_trie.set_root_node_ref(merkle_root.clone(), node.clone());
