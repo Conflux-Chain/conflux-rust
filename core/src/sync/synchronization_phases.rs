@@ -316,38 +316,45 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
 
-        let checkpoint = sync_handler
+        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
+        match sync_handler
             .graph
-            .data_man
-            .get_cur_consensus_era_stable_hash();
+            .consensus
+            .get_trusted_blame_block(&epoch_to_sync)
+        {
+            Some(trusted_blame_block) => {
+                if self.state_sync.checkpoint() == epoch_to_sync {
+                    if let Status::Restoring(_) = self.state_sync.status() {
+                        self.state_sync.update_restore_progress(
+                            sync_handler.graph.data_man.storage_manager.clone(),
+                        );
+                    }
 
-        if self.state_sync.checkpoint() == checkpoint {
-            if let Status::Restoring(_) = self.state_sync.status() {
-                self.state_sync.update_restore_progress(
-                    sync_handler.graph.data_man.storage_manager.clone(),
-                );
-            }
-
-            if self.state_sync.status() == Status::Completed {
-                DynamicCapability::ServeCheckpoint(Some(checkpoint))
-                    .broadcast(io, &sync_handler.syn);
-                self.state_sync.restore_execution_state(sync_handler);
-                return SyncPhaseType::CatchUpRecoverBlockFromDB;
-            }
-        } else {
-            // start to sync new checkpoint if new era started,
-            match sync_handler
-                .graph
-                .consensus
-                .get_trusted_blame_block(&checkpoint)
-            {
-                Some(block) => {
-                    self.state_sync.start(checkpoint, block, io, sync_handler)
+                    if self.state_sync.status() == Status::Completed {
+                        DynamicCapability::ServeCheckpoint(Some(epoch_to_sync))
+                            .broadcast(io, &sync_handler.syn);
+                        self.state_sync.restore_execution_state(sync_handler);
+                        *sync_handler
+                            .graph
+                            .consensus
+                            .synced_epoch_id_and_blame_block
+                            .lock() =
+                            Some((epoch_to_sync, trusted_blame_block));
+                        return SyncPhaseType::CatchUpRecoverBlockFromDB;
+                    }
+                } else {
+                    // start to sync new checkpoint if new era started,
+                    self.state_sync.start(
+                        epoch_to_sync,
+                        trusted_blame_block,
+                        io,
+                        sync_handler,
+                    )
                 }
-                None => {
-                    // FIXME should find the trusted blame block
-                    error!("failed to start checkpoint sync, the trusted blame block is unavailable");
-                }
+            }
+            None => {
+                // FIXME should find the trusted blame block
+                error!("failed to start checkpoint sync, the trusted blame block is unavailable");
             }
         }
 
@@ -360,44 +367,39 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     )
     {
         info!("start phase {:?}", self.name());
-
-        let checkpoint = sync_handler
-            .graph
-            .data_man
-            .get_cur_consensus_era_stable_hash();
+        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
         let has_state = sync_handler
             .graph
             .data_man
-            .get_epoch_execution_commitment_with_db(&checkpoint)
+            .get_epoch_execution_commitment_with_db(&epoch_to_sync)
             .is_some();
-
         if has_state {
             self.has_state.store(true, AtomicOrdering::SeqCst);
             return;
         }
 
-        let trusted_blame_block = match sync_handler
+        match sync_handler
             .graph
             .consensus
-            .get_trusted_blame_block(&checkpoint)
+            .get_trusted_blame_block(&epoch_to_sync)
         {
-            Some(block) => block,
+            Some(trusted_blame_block) => {
+                info!("start to sync state for checkpoint {:?}, trusted blame block = {:?}", epoch_to_sync, trusted_blame_block);
+
+                self.state_sync.start(
+                    epoch_to_sync,
+                    trusted_blame_block,
+                    io,
+                    sync_handler,
+                );
+            }
             None => {
                 // FIXME should find the trusted blame block
                 error!("failed to start checkpoint sync, the trusted blame block is unavailable");
                 return;
             }
-        };
-
-        info!("start to sync state for checkpoint {:?}, trusted blame block = {:?}", checkpoint, trusted_blame_block);
-
-        self.state_sync.start(
-            checkpoint,
-            trusted_blame_block,
-            io,
-            sync_handler,
-        );
+        }
     }
 }
 
@@ -463,30 +465,29 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // end of CatchUpCheckpointPhase and the start of
             // CatchUpRecoverBlockFromDbPhase.
 
-            // FIXME Use synchronized state hash/height for full node.
-            let checkpoint =
-                self.graph.data_man.get_cur_consensus_era_stable_hash();
-            let state_boundary_height = self
-                .graph
-                .data_man
-                .block_header_by_hash(&checkpoint)
-                .expect("Header for checkpoint exists")
-                .height();
-            // For archive node, this will be `None` or `checkpoint` if
-            // `checkpoint` is true genesis.
-            // For full node, this will never be `None` and we will get first
-            // pivot block whose `state_valid` is `true` after `checkpoint`
-            // (include `checkpoint` itself).
-            let trusted_blame_block =
-                old_consensus_inner.get_trusted_blame_block(&checkpoint);
-            // This map will be used to recover `state_valid` info for each
-            // pivot block before `trusted_blame_block`.
-            let mut pivot_block_state_valid_map =
-                self.graph.consensus.pivot_block_state_valid_map.lock();
-            if trusted_blame_block.is_some() {
+            let mut new_consensus_inner = ConsensusGraphInner::with_era_genesis(
+                old_consensus_inner.pow_config.clone(),
+                self.graph.data_man.clone(),
+                old_consensus_inner.inner_conf.clone(),
+                &cur_era_genesis_hash,
+            );
+            // For archive node, this will be `None`.
+            if let Some((epoch_synced, trusted_blame_block)) =
+                &*self.graph.consensus.synced_epoch_id_and_blame_block.lock()
+            {
+                new_consensus_inner.state_boundary_height = self
+                    .graph
+                    .data_man
+                    .block_header_by_hash(epoch_synced)
+                    .expect("Header for checkpoint exists")
+                    .height();
+                // This map will be used to recover `state_valid` info for each
+                // pivot block before `trusted_blame_block`.
+                let mut pivot_block_state_valid_map =
+                    self.graph.consensus.pivot_block_state_valid_map.lock();
                 let mut cur = *old_consensus_inner
                     .hash_to_arena_indices
-                    .get(trusted_blame_block.as_ref().unwrap())
+                    .get(trusted_blame_block)
                     .unwrap();
                 while cur != NULL {
                     let blame = self
@@ -499,7 +500,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         .blame();
                     for i in 0..blame + 1 {
                         trace!("Backup state_valid: hash={:?} height={} state_valid={},", old_consensus_inner.arena[cur].hash, old_consensus_inner.arena[cur].height,
-                        i==0);
+                                   i == 0);
                         pivot_block_state_valid_map.insert(
                             old_consensus_inner.arena[cur].hash,
                             i == 0,
@@ -511,14 +512,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     }
                 }
             }
-            let mut new_consensus_inner = ConsensusGraphInner::with_era_genesis(
-                old_consensus_inner.pow_config.clone(),
-                self.graph.data_man.clone(),
-                old_consensus_inner.inner_conf.clone(),
-                &cur_era_genesis_hash,
-                trusted_blame_block,
-            );
-            new_consensus_inner.state_boundary_height = state_boundary_height;
             self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
             // FIXME: We may need to some information of `confirmation_meter`.
