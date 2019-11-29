@@ -12,7 +12,7 @@ from test_framework.util import assert_equal, assert_is_hex_string, assert_is_ha
 from test_framework.util import *
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
-CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address)"))
+CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address,address)"))
 CALLED_TOPIC = encode_hex_0x(keccak(b"Called(address,uint32)"))
 NUM_CALLS = 20
 
@@ -52,6 +52,7 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(len(logs0[0]["topics"]), 2)
         assert_equal(logs0[0]["topics"][0], CONSTRUCTED_TOPIC)
         assert_equal(logs0[0]["topics"][1], self.address_to_topic(sender))
+        assert_equal(logs0[0]["data"], self.address_to_topic(sender))
 
         # call method
         receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
