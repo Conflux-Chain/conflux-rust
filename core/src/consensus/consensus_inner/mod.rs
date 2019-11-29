@@ -23,7 +23,7 @@ use link_cut_tree::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder,
+    receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
     TransactionAddress,
 };
 use slab::Slab;
@@ -359,11 +359,6 @@ pub struct ConsensusGraphInner {
     last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph
     pub old_era_block_set: Mutex<VecDeque<H256>>,
-    /// This is the first trusted blame block for stable genesis. During full
-    /// node recovery, we will not do state validation for blocks between
-    /// `stable genesis` and `first_trusted_blame_block`.
-    first_trusted_blame_block: H256,
-    first_trusted_blame_block_height: u64,
 
     /// The lowest height of the epochs that have available states and
     /// commitments. For archive node, it equals `cur_era_stable_height`.
@@ -416,7 +411,6 @@ impl ConsensusGraphInner {
     pub fn with_era_genesis(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        first_trusted_blame_block: Option<H256>,
     ) -> Self
     {
         let genesis_block_header = data_man
@@ -428,17 +422,6 @@ impl ConsensusGraphInner {
         } else {
             cur_era_genesis_height + inner_conf.era_epoch_count
         };
-        let first_trusted_blame_block =
-            first_trusted_blame_block.unwrap_or(data_man.true_genesis.hash());
-        let first_trusted_blame_block_height =
-            if first_trusted_blame_block == data_man.true_genesis.hash() {
-                0
-            } else {
-                data_man
-                    .block_header_by_hash(&first_trusted_blame_block)
-                    .expect("first_trusted_blame_block should exist here")
-                    .height()
-            };
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
@@ -466,8 +449,6 @@ impl ConsensusGraphInner {
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
-            first_trusted_blame_block,
-            first_trusted_blame_block_height,
             state_boundary_height: cur_era_stable_height,
         };
 
@@ -2655,6 +2636,20 @@ impl ConsensusGraphInner {
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 
+    /// Return the epoch that we are going to sync the state
+    pub fn get_to_sync_epoch_id(&self) -> EpochId {
+        let height_to_sync = self.latest_snapshot_height();
+        // The height_to_sync is within the range of `self.pivit_chain`.
+        let epoch_to_sync = self.arena
+            [self.pivot_chain[self.height_to_pivot_index(height_to_sync)]]
+        .hash;
+        epoch_to_sync
+    }
+
+    /// FIXME Use snapshot-related information when we can sync snapshot states.
+    /// Return the latest height that a snapshot should be available.
+    fn latest_snapshot_height(&self) -> u64 { self.cur_era_stable_height }
+
     fn collect_defer_blocks_missing_execution_commitments(
         &self, me: usize,
     ) -> Result<Vec<H256>, String> {
@@ -2788,13 +2783,6 @@ impl ConsensusGraphInner {
         // Set `state_valid` of `trusted_blame_block` to true,
         // and set that of the blocks blamed by it to false
         if let Some(trusted_blame_block) = maybe_trusted_blame_block {
-            // FIXME Could we remove first_trusted_blame_block?
-            self.first_trusted_blame_block = trusted_blame_block;
-            self.first_trusted_blame_block_height = self
-                .data_man
-                .block_header_by_hash(&trusted_blame_block)
-                .expect("first_trusted_blame_block should exist here")
-                .height();
             let mut cur = *self
                 .hash_to_arena_indices
                 .get(&trusted_blame_block)

@@ -36,7 +36,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    EpochNumber, SignedTransaction, TransactionAddress,
+    EpochId, EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
 use std::{
@@ -127,6 +127,10 @@ pub struct ConsensusGraph {
     /// We use `Mutex` here because other thread will only modify it once and
     /// after that only current thread will operate this map.
     pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+
+    /// The epoch id of the remotely synchronized state and the trusted block
+    /// whose blame includes it. This is always `None` for archive nodes.
+    pub synced_epoch_id_and_blame_block: Mutex<Option<(EpochId, H256)>>,
 }
 
 pub type SharedConsensusGraph = Arc<ConsensusGraph>;
@@ -147,7 +151,6 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
-                None,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -171,6 +174,7 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Default::default(),
+            synced_epoch_id_and_blame_block: Default::default(),
         };
         graph.update_best_info(&*graph.inner.read());
         graph
@@ -943,8 +947,12 @@ impl ConsensusGraph {
 
     /// Find a trusted blame block for checkpoint
     pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
-        let inner = self.inner.read();
-        inner.get_trusted_blame_block(stable_hash)
+        self.inner.read().get_trusted_blame_block(stable_hash)
+    }
+
+    /// Return the epoch that we are going to sync the state
+    pub fn get_to_sync_epoch_id(&self) -> EpochId {
+        self.inner.read().get_to_sync_epoch_id()
     }
 
     pub fn first_trusted_header_starting_from(
