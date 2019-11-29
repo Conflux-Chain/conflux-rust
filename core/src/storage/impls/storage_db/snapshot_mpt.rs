@@ -84,11 +84,8 @@ where DbType:
         let key = mpt_node_path_to_db_key(path);
         match self.db.borrow_mut().get_mut(&key)? {
             None => Ok(None),
-            Some(SnapshotMptDbValue(rlp, subtree_size)) => {
-                Ok(Some(SnapshotMptNode(
-                    VanillaTrieNode::<MerkleHash>::decode(&Rlp::new(&rlp))?,
-                    subtree_size,
-                )))
+            Some(rlp) => {
+                Ok(Some(SnapshotMptNode::new(Rlp::new(&rlp).as_val()?)))
             }
         }
     }
@@ -106,13 +103,10 @@ where DbType:
             self.db
                 .borrow_mut()
                 .iter_range_excl(&begin_key_excl, &end_key_excl)?
-                .map(|(key, value, subtree_size)| {
+                .map(|(key, value)| {
                     Ok((
                         mpt_node_path_from_db_key(&key)?,
-                        VanillaTrieNode::<MerkleHash>::decode(&Rlp::new(
-                            &value,
-                        ))?,
-                        subtree_size,
+                        SnapshotMptNode::decode(&Rlp::new(&value))?,
                     ))
                 }),
         ))
@@ -138,13 +132,9 @@ where DbType:
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
     ) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
-        self.db.borrow_mut().put(
-            &key,
-            &SnapshotMptDbValue(
-                trie_node.0.rlp_bytes().into_boxed_slice(),
-                trie_node.1,
-            ),
-        )?;
+        self.db
+            .borrow_mut()
+            .put(&key, &trie_node.rlp_bytes().into_boxed_slice())?;
         Ok(())
     }
 }
@@ -158,9 +148,7 @@ use super::super::{
         snapshot_mpt::*,
     },
     errors::*,
-    merkle_patricia_trie::{
-        CompressedPathRaw, CompressedPathTrait, VanillaTrieNode,
-    },
+    merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
