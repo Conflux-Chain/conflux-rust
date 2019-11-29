@@ -375,13 +375,14 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             MERKLE_NULL_NODE,
                             VanillaChildrenTable::new_from_one_child(
                                 unmatched_child_index,
-                                &SubtreeMerkleWithSize(
-                                    MERKLE_NULL_NODE,
-                                    last_node
+                                &SubtreeMerkleWithSize {
+                                    merkle: MERKLE_NULL_NODE,
+                                    subtree_size: last_node
                                         .get_read_only_path_node()
                                         .trie_node
                                         .subtree_size(),
-                                ),
+                                    delta_subtree_size: 0,
+                                },
                             ),
                             // The value isn't set when insert_value_at_fork
                             // because the compiler
@@ -601,10 +602,10 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
     ) -> ReadWritePathNode<Mpt> {
         ReadWritePathNode {
             basic_node,
-
             first_realized_child_index: 0,
             the_first_child: None,
             subtree_size_delta: 0,
+            delta_subtree_size: 0,
             has_io_error: self.io_error(),
             db_committed: false,
         }
@@ -676,7 +677,11 @@ pub struct ReadWritePathNode<Mpt> {
     first_realized_child_index: u8,
     the_first_child: Option<Box<ReadWritePathNode<Mpt>>>,
 
+    /// For SnapshotMpt
     subtree_size_delta: i64,
+    /// For DeltaMpt which is the difference between current snapshot and the
+    /// parent snapshots.
+    delta_subtree_size: i64,
 
     has_io_error: *const Cell<bool>,
     db_committed: bool,
@@ -801,8 +806,12 @@ pub trait RwPathNodeTrait<Mpt: GetRwMpt>: PathNodeTrait<Mpt> {
                 .get_basic_path_node()
                 .full_path_to_node
                 .path_size();
-            this_node.get_read_write_path_node().subtree_size_delta =
+            let new_key_value_rlp_size =
                 rlp_key_value_len(key_size, value_size);
+            this_node.get_read_write_path_node().subtree_size_delta =
+                new_key_value_rlp_size;
+            this_node.get_read_write_path_node().delta_subtree_size =
+                new_key_value_rlp_size;
         }
 
         this_node
@@ -835,10 +844,11 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
             .get_child(child_index)
         {
             None => Ok(None),
-            Some(&SubtreeMerkleWithSize(
-                ref supposed_merkle_hash,
-                _subtree_size,
-            )) => {
+            Some(&SubtreeMerkleWithSize {
+                merkle: ref supposed_merkle_hash,
+                subtree_size: _,
+                delta_subtree_size: _,
+            }) => {
                 let mpt = self.mpt.take();
                 Ok(Some(Self::load_into(
                     self,
@@ -858,6 +868,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             first_realized_child_index: 0,
             the_first_child: None,
             subtree_size_delta: 0,
+            delta_subtree_size: 0,
             has_io_error: parent_node.has_io_error,
             db_committed: false,
         }
@@ -966,10 +977,10 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
     fn delete_value_assumed_existence(&mut self) {
         let old_value = unsafe { self.trie_node.delete_value_unchecked() };
-        self.subtree_size_delta -= rlp_key_value_len(
-            self.full_path_to_node.path_size(),
-            old_value.len(),
-        );
+        let key_size = self.full_path_to_node.path_size();
+        self.subtree_size_delta -= rlp_key_value_len(key_size, old_value.len());
+        // The "delta" for marked deletion is considered (key, "").
+        self.delta_subtree_size += rlp_key_value_len(key_size, 0);
     }
 }
 
@@ -1030,10 +1041,11 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
     fn skip_till_child_index(&mut self, child_index: u8) -> Result<()> {
         for (
             this_child_index,
-            &SubtreeMerkleWithSize(
-                ref this_child_node_merkle_ref,
-                ref _subtree_size,
-            ),
+            &SubtreeMerkleWithSize {
+                merkle: ref this_child_node_merkle_ref,
+                subtree_size: _,
+                delta_subtree_size: _,
+            },
         ) in self
             .basic_node
             .trie_node
@@ -1109,14 +1121,16 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         &mut self, mut child_node: ReadWritePathNode<Mpt>,
     ) -> Result<Option<Mpt>> {
         self.subtree_size_delta += child_node.subtree_size_delta;
+        self.delta_subtree_size += child_node.delta_subtree_size;
 
         if !child_node.is_node_empty() {
             let subtree_size = self
                 .basic_node
                 .trie_node
                 .get_child(self.basic_node.next_child_index)
+                // Unwrap is safe. See comment below.
                 .unwrap()
-                .1
+                .subtree_size
                 + child_node.subtree_size_delta;
 
             // The safety is guaranteed because when the child doesn't
@@ -1125,10 +1139,11 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             unsafe {
                 self.basic_node.trie_node.replace_child_unchecked(
                     self.basic_node.next_child_index,
-                    SubtreeMerkleWithSize(
-                        child_node.trie_node.get_merkle().clone(),
+                    SubtreeMerkleWithSize {
+                        merkle: child_node.trie_node.get_merkle().clone(),
                         subtree_size,
-                    ),
+                        delta_subtree_size: child_node.delta_subtree_size,
+                    },
                 )
             };
 

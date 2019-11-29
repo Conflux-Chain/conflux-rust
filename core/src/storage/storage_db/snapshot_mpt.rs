@@ -12,7 +12,11 @@ pub type SnapshotMptDbValue = Box<[u8]>;
 pub struct SnapshotMptNode(pub VanillaTrieNode<SubtreeMerkleWithSize>);
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub struct SubtreeMerkleWithSize(pub MerkleHash, pub i64);
+pub struct SubtreeMerkleWithSize {
+    pub merkle: MerkleHash,
+    pub subtree_size: i64,
+    pub delta_subtree_size: i64,
+}
 
 pub trait SnapshotMptTraitReadOnly {
     fn get_merkle_root(&self) -> &MerkleHash;
@@ -53,8 +57,11 @@ impl<
 }
 
 impl SnapshotMptNode {
-    pub const EMPTY_CHILD: SubtreeMerkleWithSize =
-        SubtreeMerkleWithSize(MERKLE_NULL_NODE, 0);
+    pub const EMPTY_CHILD: SubtreeMerkleWithSize = SubtreeMerkleWithSize {
+        merkle: MERKLE_NULL_NODE,
+        subtree_size: 0,
+        delta_subtree_size: 0,
+    };
 
     pub fn new(node: VanillaTrieNode<SubtreeMerkleWithSize>) -> Self {
         Self(node)
@@ -68,7 +75,11 @@ impl SnapshotMptNode {
         let mut size = 0;
         for (
             _child_index,
-            &SubtreeMerkleWithSize(ref _merkle, ref subtree_size),
+            &SubtreeMerkleWithSize {
+                merkle: _,
+                ref subtree_size,
+                delta_subtree_size: _,
+            },
         ) in node.get_children_table_ref().iter()
         {
             size += subtree_size;
@@ -85,7 +96,11 @@ impl SnapshotMptNode {
             );
             for (
                 child_index,
-                &SubtreeMerkleWithSize(ref merkle, _subtree_size),
+                &SubtreeMerkleWithSize {
+                    ref merkle,
+                    subtree_size: _,
+                    delta_subtree_size: _,
+                },
             ) in self.get_children_table_ref().iter()
             {
                 merkle_table.as_mut().unwrap()[child_index as usize] = *merkle;
@@ -115,13 +130,20 @@ impl DerefMut for SnapshotMptNode {
 
 impl Decodable for SubtreeMerkleWithSize {
     fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self(rlp.val_at(0)?, rlp.val_at::<u64>(1)? as i64))
+        Ok(Self {
+            merkle: rlp.val_at(0)?,
+            subtree_size: rlp.val_at::<u64>(1)? as i64,
+            delta_subtree_size: rlp.val_at::<u64>(2)? as i64,
+        })
     }
 }
 
 impl Encodable for SubtreeMerkleWithSize {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2).append(&self.0).append(&(self.1 as u64));
+        s.begin_list(2)
+            .append(&self.merkle)
+            .append(&(self.subtree_size as u64))
+            .append(&(self.delta_subtree_size as u64));
     }
 }
 

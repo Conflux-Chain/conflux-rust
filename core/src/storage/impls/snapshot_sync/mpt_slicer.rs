@@ -65,10 +65,11 @@ impl<'a> MptSlicer<'a> {
 
         for (
             this_child_index,
-            &SubtreeMerkleWithSize(
-                ref _this_child_node_merkle_ref,
+            &SubtreeMerkleWithSize {
+                merkle: _,
                 ref subtree_size,
-            ),
+                delta_subtree_size: _,
+            },
         ) in current_node
             .trie_node
             .get_children_table_ref()
