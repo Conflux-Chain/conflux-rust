@@ -43,7 +43,7 @@ impl<'a> MptSlicer<'a> {
         }
     }
 
-    pub fn advance(&mut self, mut rlp_size_limit: i64) -> Result<()> {
+    pub fn advance(&mut self, mut rlp_size_limit: u64) -> Result<()> {
         let current_node = self.cursor.current_node_mut();
         // First, check the value of this node, if we are the first time
         // visiting this node.
@@ -51,12 +51,14 @@ impl<'a> MptSlicer<'a> {
             let maybe_value = current_node.value_as_slice();
             match maybe_value {
                 MptValue::Some(value) => {
-                    rlp_size_limit -= rlp_key_value_len(
+                    let key_value_size = rlp_key_value_len(
                         current_node.get_path_to_node().path_size(),
                         value.len(),
                     );
-                    if rlp_size_limit <= 0 {
+                    if rlp_size_limit <= key_value_size {
                         return Ok(());
+                    } else {
+                        rlp_size_limit -= key_value_size;
                     }
                 }
                 _ => {}

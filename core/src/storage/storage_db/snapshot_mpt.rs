@@ -14,8 +14,8 @@ pub struct SnapshotMptNode(pub VanillaTrieNode<SubtreeMerkleWithSize>);
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct SubtreeMerkleWithSize {
     pub merkle: MerkleHash,
-    pub subtree_size: i64,
-    pub delta_subtree_size: i64,
+    pub subtree_size: u64,
+    pub delta_subtree_size: u64,
 }
 
 pub trait SnapshotMptTraitReadOnly {
@@ -67,11 +67,11 @@ impl SnapshotMptNode {
         Self(node)
     }
 
-    pub fn subtree_size(&self) -> i64 { Self::initial_subtree_size(&self.0) }
+    pub fn subtree_size(&self) -> u64 { Self::initial_subtree_size(&self.0) }
 
     fn initial_subtree_size(
         node: &VanillaTrieNode<SubtreeMerkleWithSize>,
-    ) -> i64 {
+    ) -> u64 {
         let mut size = 0;
         for (
             _child_index,
@@ -132,8 +132,8 @@ impl Decodable for SubtreeMerkleWithSize {
     fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
         Ok(Self {
             merkle: rlp.val_at(0)?,
-            subtree_size: rlp.val_at::<u64>(1)? as i64,
-            delta_subtree_size: rlp.val_at::<u64>(2)? as i64,
+            subtree_size: rlp.val_at::<u64>(1)?,
+            delta_subtree_size: rlp.val_at::<u64>(2)?,
         })
     }
 }
@@ -142,8 +142,8 @@ impl Encodable for SubtreeMerkleWithSize {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2)
             .append(&self.merkle)
-            .append(&(self.subtree_size as u64))
-            .append(&(self.delta_subtree_size as u64));
+            .append(&self.subtree_size)
+            .append(&self.delta_subtree_size);
     }
 }
 

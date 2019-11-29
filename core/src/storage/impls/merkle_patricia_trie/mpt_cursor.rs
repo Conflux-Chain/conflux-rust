@@ -681,7 +681,7 @@ pub struct ReadWritePathNode<Mpt> {
     subtree_size_delta: i64,
     /// For DeltaMpt which is the difference between current snapshot and the
     /// parent snapshots.
-    delta_subtree_size: i64,
+    delta_subtree_size: u64,
 
     has_io_error: *const Cell<bool>,
     db_committed: bool,
@@ -809,7 +809,7 @@ pub trait RwPathNodeTrait<Mpt: GetRwMpt>: PathNodeTrait<Mpt> {
             let new_key_value_rlp_size =
                 rlp_key_value_len(key_size, value_size);
             this_node.get_read_write_path_node().subtree_size_delta =
-                new_key_value_rlp_size;
+                new_key_value_rlp_size as i64;
             this_node.get_read_write_path_node().delta_subtree_size =
                 new_key_value_rlp_size;
         }
@@ -957,7 +957,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
     fn replace_value_valid(&mut self, value: Box<[u8]>) {
         let key_len = self.full_path_to_node.path_size();
-        let mut size_delta: i64 = rlp_key_value_len(key_len, value.len());
+        let mut size_delta = rlp_key_value_len(key_len, value.len()) as i64;
         let maybe_old_value = self.trie_node.replace_value_valid(value);
         match maybe_old_value {
             MptValue::None => {
@@ -968,7 +968,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                 unreachable!()
             }
             MptValue::Some(old_value) => {
-                size_delta += rlp_key_value_len(key_len, old_value.len())
+                size_delta += rlp_key_value_len(key_len, old_value.len()) as i64
             }
         }
 
@@ -978,7 +978,8 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
     fn delete_value_assumed_existence(&mut self) {
         let old_value = unsafe { self.trie_node.delete_value_unchecked() };
         let key_size = self.full_path_to_node.path_size();
-        self.subtree_size_delta -= rlp_key_value_len(key_size, old_value.len());
+        self.subtree_size_delta -=
+            rlp_key_value_len(key_size, old_value.len()) as i64;
         // The "delta" for marked deletion is considered (key, "").
         self.delta_subtree_size += rlp_key_value_len(key_size, 0);
     }
@@ -1124,14 +1125,15 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         self.delta_subtree_size += child_node.delta_subtree_size;
 
         if !child_node.is_node_empty() {
-            let subtree_size = self
+            let subtree_size = (self
                 .basic_node
                 .trie_node
                 .get_child(self.basic_node.next_child_index)
                 // Unwrap is safe. See comment below.
                 .unwrap()
-                .subtree_size
-                + child_node.subtree_size_delta;
+                .subtree_size as i64
+                + child_node.subtree_size_delta)
+                as u64;
 
             // The safety is guaranteed because when the child doesn't
             // originally exist, the child was added  to the children table when
@@ -1327,23 +1329,23 @@ impl<Mpt> OptionUnwrapBorrowAssumedSomeExtension<Mpt> for Option<Mpt> {
     fn as_mut_assumed_owner(&mut self) -> &mut Mpt { self.as_mut().unwrap() }
 }
 
-pub fn rlp_str_len(len: usize) -> i64 {
+pub fn rlp_str_len(len: usize) -> u64 {
     if len <= 55 {
-        len as i64 + 1
+        len as u64 + 1
     } else {
         let mut len_of_len = 0i32;
         while (len >> (8 * len_of_len)) > 0 {
             len_of_len += 1;
         }
 
-        len as i64 + 1 + len_of_len as i64
+        len as u64 + 1 + len_of_len as u64
     }
 }
 
 /// We assume that the keys and values are serialized in separate vector,
 /// therefore we only add up those rlp string lenghts.
 /// The rlp bytes for the up-most structures are ignored for sync slicer.
-pub fn rlp_key_value_len(key_len: u16, value_len: usize) -> i64 {
+pub fn rlp_key_value_len(key_len: u16, value_len: usize) -> u64 {
     rlp_str_len(key_len.into()) + rlp_str_len(value_len)
 }
 
