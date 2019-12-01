@@ -1152,8 +1152,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             // The node won't merge with its first children, because either the
             // node has value, or the child node is the second child. The
             // assumption here is that in db and rust string comparison a string
-            // that is a prefixcore/src/storage/impls/merkle_patricia_trie/
-            // mpt_cursor.rs:397:47 of another string is considered smaller.
+            // that is a prefix of another string is considered smaller.
             if self.trie_node.has_value() {
                 Ok(child_node.write_out()?)
             } else if self.first_realized_child_index != 0 {
