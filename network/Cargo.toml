@@ -20,7 +20,7 @@ serde_derive = "1.0"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 igd = "0.7"
-libc = "0.2.7"
+libc = "0.2.66"
 rand = "0.7"
 parity-path = "0.1"
 keccak-hash = "0.3.0"
