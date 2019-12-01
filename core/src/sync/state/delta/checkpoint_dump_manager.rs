@@ -32,7 +32,7 @@ pub struct CheckpointDumpManager {
 }
 
 impl CheckpointDumpManager {
-    const MAX_CHUNK_SIZE: usize = 4 * 1024 * 1024;
+    pub const MAX_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
     pub fn initialize(&mut self, state_manager: Arc<StateManager>) {
         if self.checkpoint_dump_sender.lock().is_some() {

@@ -36,6 +36,7 @@ impl Handleable for SnapshotManifestRequest {
         let manifest = match RangedManifest::load(
             &self.checkpoint,
             self.start_chunk.clone(),
+            &ctx.manager.graph.data_man.storage_manager,
         ) {
             Ok(Some(m)) => m,
             _ => RangedManifest::default(),
