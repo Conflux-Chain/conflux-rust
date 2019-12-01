@@ -80,12 +80,11 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
-impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT>
-where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
-{
+impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT> {
     // FIXME: put most method in a trait.
 
-    pub fn new_from_one_child(child_index: u8, child: &NodeRefT) -> Self {
+    pub fn new_from_one_child(child_index: u8, child: &NodeRefT) -> Self
+    where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT> {
         let mut table = VanillaChildrenTable::default();
         table.children_count = 1;
         table.table[child_index as usize] = child.clone();
@@ -102,7 +101,8 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
         &mut self.children_count
     }
 
-    pub fn get_child(&self, child_index: u8) -> Option<&NodeRefT> {
+    pub fn get_child(&self, child_index: u8) -> Option<&NodeRefT>
+    where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT> {
         let child_ref =
             unsafe { self.table.get_unchecked(child_index as usize) };
         if child_ref.eq(ChildrenTableItem::<NodeRefT>::no_child()) {

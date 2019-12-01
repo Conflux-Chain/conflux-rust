@@ -24,8 +24,8 @@ lazy_static! {
         )
         .unwrap();
         let mpt_statements = KvdbSqliteStatements::make_statements(
-            &["node_rlp", "subtree_kv_rlp_size"],
-            &["BLOB", "INTEGER"],
+            &["node_rlp"],
+            &["BLOB"],
             SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
             false,
         )
@@ -274,12 +274,7 @@ impl SnapshotDbSqlite {
     ) -> Result<SnapshotMptValue> {
         let key = row.read::<Vec<u8>>(0)?;
         let value = row.read::<Vec<u8>>(1)?;
-        let subtree_size = row.read::<i64>(2)?;
-        Ok((
-            key.into_boxed_slice(),
-            value.into_boxed_slice(),
-            subtree_size,
-        ))
+        Ok((key.into_boxed_slice(), value.into_boxed_slice()))
     }
 
     fn open_snapshot_mpt_for_write(
