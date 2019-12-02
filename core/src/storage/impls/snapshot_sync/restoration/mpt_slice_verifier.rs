@@ -29,6 +29,7 @@ struct BoundarySubtreeIndex {
 }
 
 impl MptSliceVerifier {
+    #[allow(dead_code)]
     /// Validity of the inputs should be already checked.
     pub fn new(
         key_range_left: Vec<u8>, key_range_right_excl: Vec<u8>,
