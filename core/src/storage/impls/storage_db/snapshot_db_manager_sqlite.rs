@@ -6,7 +6,7 @@ pub struct SnapshotDbManagerSqlite {
     snapshot_path: String,
     // FIXME: add an command line option to assert that this method made
     // successfully cow_copy and print error messages if it fails.
-    force_cow: bool,
+    pub force_cow: bool,
 }
 
 // TODO: used to sync checkpoint state
@@ -19,7 +19,7 @@ impl SnapshotDbManagerSqlite {
     pub fn new(snapshot_path: String) -> Self {
         Self {
             snapshot_path: snapshot_path + "/sqlite",
-            force_cow: true,
+            force_cow: false,
         }
     }
 

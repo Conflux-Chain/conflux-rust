@@ -62,6 +62,7 @@ clap = "2"
 throttling = { path = "../util/throttling" }
 serde = "1.0"
 serde_derive = "1.0"
+log4rs = "0.9.0"
 
 [dev-dependencies]
 criterion = "0.2"
