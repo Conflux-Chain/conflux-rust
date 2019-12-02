@@ -61,7 +61,6 @@ impl<'a> State<'a> {
     pub fn new(
         db: StateDb<'a>, account_start_nonce: U256, vm: VmFactory,
     ) -> Self {
-        // TODO: get current interest and accumulate_interest from db
         let interest_rate = db.get_interest_rate().expect("no db error");
         let accumulate_interest_rate =
             db.get_accumulate_interest_rate().expect("no db error");

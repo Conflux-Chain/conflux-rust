@@ -331,7 +331,6 @@ impl<'a> CallCreateExecutive<'a> {
         substate: &mut Substate, unconfirmed_substate: Substate,
     )
     {
-        // TODO: check whether bank balance is sufficient to cover storage.
         match *result {
             Err(vm::Error::OutOfGas)
             | Err(vm::Error::BadJumpDestination { .. })

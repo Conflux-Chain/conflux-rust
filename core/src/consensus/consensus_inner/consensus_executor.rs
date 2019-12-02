@@ -1219,22 +1219,9 @@ impl ConsensusExecutionHandler {
             state.accumulate_interest_rate() + interest_rate;
         state.set_accumulate_interest_rate(accumulate_interest_rate);
 
-        // TODO: do divide here to fix units
         // Calculate
         let secondary_reward = state.total_storage_tokens() * interest_rate
             / U256::from(INTEREST_RATE_SCALE);
-        // TODO:
-        //   If we use an interest to issure secondary tokens:
-        //      1. Maybe we can do the settlement every X epochs
-        //      2. `interest * total_storage_tokens` number of tokens should
-        // distribute to miners.      3. transfer `interest *
-        // (total_tokens - total_bank_tokens) to some special account for
-        // further use.      4. do some voting to change interest
-        //      5. `total_tokens` will become `total_tokens * (1 + interest)`
-        //      6. `total_bank_tokens` will become `total_bank_tokens * (1 +
-        // interest) - total_storage_tokens * interest  If we issue
-        // secondary tokens in a fix amount every X epochs:
-        //      1. further discuss is needed.
 
         // Tx fee for each block in this epoch
         let mut tx_fee = HashMap::new();
