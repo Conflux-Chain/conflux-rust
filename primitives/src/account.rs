@@ -20,9 +20,6 @@ pub struct Account {
     pub storage_balance: U256,
     /// This is the accumulated interest rate.
     pub bank_ar: U256,
-    /// This is the minimum epoch when this account can participate a vote
-    /// event.
-    pub vote_epoch: u64,
     // TODO: check if we need the storage root, and if so, implement.
 }
 
@@ -39,7 +36,6 @@ impl Account {
             bank_balance: 0.into(),
             storage_balance: 0.into(),
             bank_ar: 0.into(),
-            vote_epoch: u64::max_value(),
         }
     }
 

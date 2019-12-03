@@ -73,10 +73,6 @@ pub enum CreateContractAddress {
 
 /// Context for VMs
 pub trait Context {
-    /// Returns the storage value for a given key if reversion happens on the
-    /// current transaction.
-    fn initial_storage_at(&self, key: &H256) -> Result<H256>;
-
     /// Returns a value for given key.
     fn storage_at(&self, key: &H256) -> Result<H256>;
 

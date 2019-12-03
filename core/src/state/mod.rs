@@ -2,11 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use self::account_entry::{AccountEntry, AccountState, OverlayAccount};
+use self::account_entry::{
+    AccountEntry, AccountState, OverlayAccount, StorageValue,
+};
 use crate::{
     bytes::Bytes,
     hash::KECCAK_EMPTY,
-    parameters::consensus_internal::GAS_PRICE_PER_STORAGE_KEY,
+    parameters::consensus_internal::RENTAL_PRICE_PER_STORAGE_KEY,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
     storage::StateRootWithAuxInfo,
     transaction_pool::SharedTransactionPool,
@@ -107,9 +109,7 @@ impl<'a> State<'a> {
                     .get_mut(address)
                     .filter(|x| x.is_dirty())
                 {
-                    if let Some(ref mut acc) =
-                        maybe_acc.account.as_mut().filter(|x| !x.is_basic())
-                    {
+                    if let Some(ref mut acc) = maybe_acc.account.as_mut() {
                         let ownership_delta =
                             acc.commit_ownership_change(&self.db);
                         for (addr, (inc, sub)) in ownership_delta {
@@ -129,12 +129,14 @@ impl<'a> State<'a> {
             }
         }
         for (addr, sub) in storage_balance_sub {
-            let delta = U256::from(sub) * U256::from(GAS_PRICE_PER_STORAGE_KEY);
+            let delta =
+                U256::from(sub) * U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
             self.sub_storage_balance(&addr, &delta)
                 .expect("no db error");
         }
         for (addr, inc) in storage_balance_inc {
-            let delta = U256::from(inc) * U256::from(GAS_PRICE_PER_STORAGE_KEY);
+            let delta =
+                U256::from(inc) * U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
             let bank_balance = self.bank_balance(&addr).expect("no db error");
             let storage_balance =
                 self.storage_balance(&addr).expect("no db error");
@@ -329,6 +331,7 @@ impl<'a> State<'a> {
     }
 
     pub fn deposit(&mut self, address: &Address, by: &U256) -> DbResult<()> {
+        // TODO: check account type, only basic account can deposit
         if !by.is_zero() {
             self.require(address, false)?.deposit(by);
             self.total_bank_tokens += *by;
@@ -347,7 +350,6 @@ impl<'a> State<'a> {
     pub fn interest_rate(&self) -> &U256 { &self.interest_rate }
 
     pub fn set_interest_rate(&mut self, new_interest_rate: U256) {
-        // TODO: may multiple the scale and change to epoch interest rate.
         self.interest_rate = new_interest_rate;
     }
 
@@ -415,19 +417,18 @@ impl<'a> State<'a> {
     ) -> DbResult<()> {
         for address in killed_addresses {
             self.db.delete(StorageKey::new_account_key(&address))?;
-            self.db
+            let storages_opt = self
+                .db
                 .delete_all(StorageKey::new_storage_root_key(&address))?;
             self.db
                 .delete_all(StorageKey::new_code_root_key(&address))?;
-            let ownership_opt = self
-                .db
-                .delete_all(StorageKey::new_ownership_root_key(&address))?;
-            if let Some(ownership) = ownership_opt {
-                for (_, value) in ownership {
-                    let address = rlp::decode::<Address>(value.as_ref())?;
+            if let Some(storage_key_value) = storages_opt {
+                for (_, value) in storage_key_value {
+                    let storage_value =
+                        rlp::decode::<StorageValue>(value.as_ref())?;
                     self.sub_storage_balance(
-                        &address,
-                        &U256::from(GAS_PRICE_PER_STORAGE_KEY),
+                        &storage_value.owner,
+                        &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
                     )?;
                 }
             }
@@ -436,9 +437,9 @@ impl<'a> State<'a> {
     }
 
     pub fn commit(
-        &mut self, epoch_id: EpochId, epoch_height: u64,
+        &mut self, epoch_id: EpochId,
     ) -> DbResult<StateRootWithAuxInfo> {
-        debug!("Commit epoch[{}] height[{}]", epoch_id, epoch_height);
+        debug!("Commit epoch[{}]", epoch_id);
         assert!(self.checkpoints.borrow().is_empty());
         self.commit_metadata()?;
 
@@ -471,10 +472,8 @@ impl<'a> State<'a> {
     }
 
     pub fn commit_and_notify(
-        &mut self, epoch_id: EpochId, epoch_height: u64,
-        txpool: &SharedTransactionPool,
-    ) -> DbResult<StateRootWithAuxInfo>
-    {
+        &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
+    ) -> DbResult<StateRootWithAuxInfo> {
         assert!(self.checkpoints.borrow().is_empty());
         self.commit_metadata()?;
 
@@ -492,7 +491,7 @@ impl<'a> State<'a> {
         self.recycle_storage(killed_addresses)?;
 
         let mut accounts = self.cache.borrow_mut();
-        debug!("Notify epoch[{}] height[{}]", epoch_id, epoch_height);
+        debug!("Notify epoch[{}]", epoch_id);
         let mut sorted_dirty_addresses = accounts
             .iter()
             .filter_map(|(address, entry)| {
@@ -508,7 +507,6 @@ impl<'a> State<'a> {
             let entry = accounts.get_mut(address).unwrap();
             entry.state = AccountState::Committed;
             if let Some(ref mut account) = entry.account {
-                account.compute_vote_height(epoch_height);
                 accounts_for_txpool.push(account.as_account());
                 account.commit(&mut self.db)?;
                 self.db.set::<Account>(
@@ -636,6 +634,7 @@ impl<'a> State<'a> {
         })
     }
 
+    /// TODO: Remove this function since it is not used outside.
     pub fn original_storage_at(
         &self, address: &Address, key: &H256,
     ) -> DbResult<H256> {
@@ -649,6 +648,7 @@ impl<'a> State<'a> {
     }
 
     /// Get the value of storage at a specific checkpoint.
+    /// TODO: Remove this function since it is not used outside.
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &Address, key: &H256,
     ) -> DbResult<Option<H256>> {
@@ -995,6 +995,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(4)))
         );
 
+        state.check_storage_balance();
         state.discard_checkpoint(); // Commit/discard c5.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1035,6 +1036,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(1)))
         );
 
+        state.check_storage_balance();
         state.discard_checkpoint(); // Commit/discard c3.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1059,6 +1061,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(0)))
         );
 
+        state.check_storage_balance();
         state.discard_checkpoint(); // Commit/discard c1.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1074,6 +1077,7 @@ mod tests {
         let k = BigEndianHash::from_uint(&U256::from(0));
         let k2 = BigEndianHash::from_uint(&U256::from(1));
 
+        state.checkpoint();
         state
             .set_storage(
                 &a,
@@ -1082,6 +1086,8 @@ mod tests {
                 a,
             )
             .unwrap();
+        state.check_storage_balance();
+        state.discard_checkpoint();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1u64)))
             .unwrap();
@@ -1147,6 +1153,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(4)))
         );
 
+        state.check_storage_balance();
         state.discard_checkpoint(); // Commit/discard c5.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1195,6 +1202,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(1)))
         );
 
+        state.check_storage_balance();
         state.discard_checkpoint(); // Commit/discard c3.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1227,6 +1235,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(0)))
         );
 
+        state.check_storage_balance();
         state.discard_checkpoint(); // Commit/discard c1.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1277,6 +1286,7 @@ mod tests {
         state
             .add_balance(&a, &U256::from(1), CleanupMode::ForceCreate)
             .unwrap();
+        state.check_storage_balance();
         state.discard_checkpoint(); // discard c2
         state.revert_to_checkpoint(); // revert to c1
         assert_eq!(state.exists(&a).unwrap(), false);
@@ -1293,6 +1303,7 @@ mod tests {
         let a = Address::from_low_u64_be(1000);
         let k = BigEndianHash::from_uint(&U256::from(0));
 
+        state.checkpoint();
         state
             .set_storage(
                 &a,
@@ -1301,6 +1312,8 @@ mod tests {
                 a,
             )
             .unwrap();
+        state.check_storage_balance();
+        state.discard_checkpoint();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1)))
             .unwrap();

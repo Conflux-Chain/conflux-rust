@@ -36,14 +36,11 @@ pub mod consensus_internal {
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
     /// This is the renting fee for one key/value pair in storage.
-    /// 1 token for 1024B, one (key, value) 512B = 0.5 token
-    pub const GAS_PRICE_PER_STORAGE_KEY: u64 = CONFLUX_TOKEN / 2;
-    pub const MIN_BANK_BALANCE_FOR_VOTING: u64 = 100000;
-    pub const MIN_VOTE_WAITING_EPOCH_COUNT: u64 = 100;
-    /// This is the number of epochs every year: 4 * 60 * 60 * 24 * 365
-    // pub const EPOCH_COUNT_PER_YEAR: u64 = 126144000;
+    /// 1 token for 1024B, the storage for one key/value pair is 64B = 1/16
+    /// token.
+    pub const RENTAL_PRICE_PER_STORAGE_KEY: u64 = CONFLUX_TOKEN / 16;
     /// This is the scale factor for interest rate: 10^18. The interest rate per
-    /// epoch stored in db will be `interest of year / EPOCH_COUNT_PER_YEAR *
+    /// epoch will be `interest of year * epoch_duration_fraction *
     /// INTEREST_RATE_SCALE`.
     pub const INTEREST_RATE_SCALE: u64 = 1_000_000_000_000_000_000;
 

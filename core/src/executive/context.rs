@@ -89,13 +89,6 @@ impl<'a, 'b: 'a> Context<'a, 'b> {
 }
 
 impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
-    fn initial_storage_at(&self, key: &H256) -> vm::Result<H256> {
-        self.state
-            .checkpoint_storage_at(0, &self.origin.address, key)
-            .map(|v| v.unwrap_or(H256::zero()))
-            .map_err(Into::into)
-    }
-
     fn storage_at(&self, key: &H256) -> vm::Result<H256> {
         self.state
             .storage_at(&self.origin.address, key)

@@ -107,10 +107,6 @@ impl MockContext {
 }
 
 impl Context for MockContext {
-    fn initial_storage_at(&self, _key: &H256) -> Result<H256> {
-        Ok(H256::zero())
-    }
-
     fn storage_at(&self, key: &H256) -> Result<H256> {
         Ok(self.store.get(key).unwrap_or(&H256::zero()).clone())
     }

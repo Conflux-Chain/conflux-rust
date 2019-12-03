@@ -929,22 +929,15 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
-            state_root = state
-                .commit_and_notify(
-                    *epoch_hash,
-                    pivot_block.block_header.height(),
-                    &self.tx_pool,
-                )
-                .unwrap();
+            state_root =
+                state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
                 ));
         } else {
-            state_root = state
-                .commit(*epoch_hash, pivot_block.block_header.height())
-                .unwrap();
+            state_root = state.commit(*epoch_hash).unwrap();
         };
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
@@ -1128,7 +1121,10 @@ impl ConsensusExecutionHandler {
 
         let epoch_size = epoch_blocks.len();
         let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
+        // This maintains the primary tokens rewarded to each miner. And it will
+        // be used to compute ratio for secondary reward.
         let mut base_reword_count: HashMap<Address, U256> = HashMap::new();
+        // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
         // Base reward and anticone penalties.
@@ -1200,18 +1196,35 @@ impl ConsensusExecutionHandler {
                 debug_assert!(reward <= U512::from(U256::max_value()));
                 let reward = U256::try_from(reward).unwrap();
                 epoch_block_total_rewards.push(reward);
-                *base_reword_count
-                    .entry(*block.block_header.author())
-                    .or_insert(0.into()) += reward;
-                total_base_reward += reward;
+                if !reward.is_zero() {
+                    *base_reword_count
+                        .entry(*block.block_header.author())
+                        .or_insert(0.into()) += reward;
+                    total_base_reward += reward;
+                }
             }
         }
 
-        let interest_rate = *state.interest_rate();
+        let prev_header = self
+            .data_man
+            .block_header_by_hash(&pivot_block.block_header.parent_hash())
+            .unwrap();
+        let current_timestamp = pivot_block.block_header.timestamp();
+        let prev_timestmap = if prev_header.timestamp() == 0 {
+            current_timestamp
+        } else {
+            prev_header.timestamp()
+        };
+
+        // Use actutal time to calculate the interest
+        let interest_rate = state.interest_rate()
+            * U256::from(current_timestamp - prev_timestmap)
+            / U256::from(60 * 60 * 24 * 355);
         // Calculate the new total tokens.
         let total_tokens = state.total_tokens()
             + state.total_bank_tokens() * interest_rate
-                / U256::from(INTEREST_RATE_SCALE);
+                / U256::from(INTEREST_RATE_SCALE)
+            + total_base_reward;
         state.set_total_tokens(total_tokens);
 
         // Calculate the new accumulate interest rate.
@@ -1346,8 +1359,9 @@ impl ConsensusExecutionHandler {
 
         for (address, mut reward) in merged_rewards {
             // Distribute the secondary reward according to primary reward.
-            reward += base_reword_count[&address] * secondary_reward
-                / total_base_reward;
+            if let Some(base_reward) = base_reword_count.get(&address) {
+                reward += base_reward * secondary_reward / total_base_reward;
+            }
             state
                 .add_balance(&address, &reward, CleanupMode::ForceCreate)
                 .unwrap();

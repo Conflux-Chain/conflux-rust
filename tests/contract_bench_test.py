@@ -160,7 +160,7 @@ class ContractBenchTest(SmartContractBenchBase):
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 2)
         assert_equal(self.rpc.get_balance(contractAddr), cost)
-        assert_greater_than(self.rpc.get_balance(self.sender), b0 - cost - fee)
+        assert_greater_than_or_equal(self.rpc.get_balance(self.sender), b0 - cost - fee)
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
@@ -182,7 +182,7 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.functions.withdraw(contract_id, self.solution).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         assert_equal(self.rpc.get_balance(contractAddr), 0)
-        assert_greater_than(self.rpc.get_balance(self.sender), b0 - fee * 2)
+        assert_greater_than_or_equal(self.rpc.get_balance(self.sender), b0 - fee * 2)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 

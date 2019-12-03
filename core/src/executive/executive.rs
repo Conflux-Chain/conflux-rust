@@ -508,7 +508,6 @@ impl<'a> CallCreateExecutive<'a> {
                     let cost = U256::zero();
                     let value = U256::from(&data[4..]);
                     if cost <= params.gas {
-                        //let mut internal_contract_out_buffer = Vec::new();
                         let internal_contract_out_buffer = Vec::new();
                         let result: vm::Result<()> = {
                             if data[0] == 182
@@ -1384,6 +1383,7 @@ mod tests {
     use crate::{
         evm::{Factory, VMType},
         machine::Machine,
+        parameters::consensus_internal::CONFLUX_TOKEN,
         state::{CleanupMode, State, Substate},
         statedb::StateDb,
         storage::{
@@ -1445,12 +1445,21 @@ mod tests {
         let mut params = ActionParams::default();
         params.address = address.clone();
         params.sender = sender.clone();
+        params.origin = sender.clone();
         params.gas = U256::from(100_000);
         params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
         params.value = ActionValue::Transfer(U256::from(0x7));
         let storage_manager = new_state_manager_for_testing();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
+        state
+            .add_balance(
+                &sender,
+                &U256::from(CONFLUX_TOKEN),
+                CleanupMode::NoEmpty,
+            )
+            .ok();
+        state.deposit(&sender, &U256::from(CONFLUX_TOKEN)).ok();
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();
