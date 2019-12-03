@@ -2,6 +2,7 @@
 
 from conflux.utils import privtoaddr, parse_as_int
 from conflux.rpc import RpcClient
+from http.client import CannotSendRequest
 from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
@@ -10,6 +11,7 @@ from test_framework.block_gen_thread import BlockGenThread
 from eth_utils import decode_hex
 from easysolc import Solc
 from web3 import Web3
+import copy
 
 class ReentrancyTest(ConfluxTestFramework):
     REQUEST_BASE = {
@@ -22,9 +24,9 @@ class ReentrancyTest(ConfluxTestFramework):
         super().__init__()
 
         self.nonce_map = {}
-        self.default_account_key = default_config['GENESIS_PRI_KEY']
-        self.default_account_address = privtoaddr(self.default_account_key)
-        self.balance_map = {self.default_account_key: default_config['TOTAL_COIN']}
+        self.genesis_priv_key = default_config['GENESIS_PRI_KEY']
+        self.genesis_addr = privtoaddr(self.genesis_priv_key)
+        self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -126,38 +128,66 @@ class ReentrancyTest(ConfluxTestFramework):
         user1_addr = privtoaddr(user1)
         user2, _ = ec_random_keys()
         user2_addr = privtoaddr(user2)
-        # tx = create_transaction(
-        #     pri_key=self.default_account_key,
-        #     receiver=privtoaddr(buggy_contract_owner),
-        #     value=1000000000000000000000000000000000,
-        #     nonce=self.get_nonce(privtoaddr(self.default_account_key)),
-        #     gas_price=ReentrancyTest.REQUEST_BASE['gas'])
-        # self.send_transaction(tx, True, False)
 
+        # setup balance
+        value = (10 ** 15 + 2000) * 10 ** 18 + ReentrancyTest.REQUEST_BASE['gas']
         tx = create_transaction(
-            pri_key=self.default_account_key,
+            pri_key=self.genesis_priv_key,
             receiver=user1_addr,
-            value=1000000000000000000000000000000000,
-            nonce=self.get_nonce(privtoaddr(self.default_account_key)),
+            value=value,
+            nonce=self.get_nonce(self.genesis_addr),
             gas_price=ReentrancyTest.REQUEST_BASE['gas'])
         self.send_transaction(tx, True, False)
 
         tx = create_transaction(
-            pri_key=self.default_account_key,
+            pri_key=self.genesis_priv_key,
             receiver=user2_addr,
-            value=1000000000000000000000000000000000,
-            nonce=self.get_nonce(privtoaddr(self.default_account_key)),
+            value=value,
+            nonce=self.get_nonce(self.genesis_addr),
             gas_price=ReentrancyTest.REQUEST_BASE['gas'])
         self.send_transaction(tx, True, False)
 
         addr = eth_utils.encode_hex(user1_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_equal(balance, 1000000000000000000000000000000000)
+        assert_equal(balance, value)
         addr = eth_utils.encode_hex(user2_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_equal(balance, 1000000000000000000000000000000000)
+        assert_equal(balance, value)
 
-        transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.default_account_key)
+        # lock balance in bank
+        node = self.nodes[0]
+        client = RpcClient(node)
+        staking_contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
+            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
+        )
+        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+        tx_conf = copy.deepcopy(ReentrancyTest.REQUEST_BASE)
+        tx_conf['to'] = staking_contract_addr
+        tx_data = decode_hex(staking_contract.functions.deposit(2000 * 10 ** 18).buildTransaction(tx_conf)["data"])
+        tx1 = client.new_tx(
+            value=0,
+            sender=eth_utils.encode_hex(user1_addr),
+            receiver=staking_contract_addr,
+            nonce=self.get_nonce(user1_addr),
+            data=tx_data,
+            gas=ReentrancyTest.REQUEST_BASE['gas'],
+            gas_price=ReentrancyTest.REQUEST_BASE['gasPrice'],
+            priv_key=eth_utils.encode_hex(user1))
+        tx2 = client.new_tx(
+            value=0,
+            sender=eth_utils.encode_hex(user2_addr),
+            receiver=staking_contract_addr,
+            nonce=self.get_nonce(user2_addr),
+            data=tx_data,
+            gas=ReentrancyTest.REQUEST_BASE['gas'],
+            gas_price=ReentrancyTest.REQUEST_BASE['gasPrice'],
+            priv_key=eth_utils.encode_hex(user2))
+        client.send_tx(tx1)
+        client.send_tx(tx2)
+        self.wait_for_tx([tx1, tx2], False)
+
+        transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.genesis_priv_key)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
 
         transaction = self.call_contract_function(self.exploit_contract, "constructor", [], user2)
@@ -170,9 +200,10 @@ class ReentrancyTest(ConfluxTestFramework):
 
         addr = eth_utils.encode_hex(user1_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_equal(balance, 899999999999999999999999950000000)
+        assert_greater_than_or_equal(balance, 899999999999999999999999950000000)
         addr = eth_utils.encode_hex(user2_addr)
-        assert_equal(balance, 899999999999999999999999950000000)
+        balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
+        assert_greater_than_or_equal(balance, 899999999999999999999999900000000)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
         assert_equal(balance, 200000000000000000000000000000000)
 
@@ -183,10 +214,10 @@ class ReentrancyTest(ConfluxTestFramework):
 
         addr = eth_utils.encode_hex(user1_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_equal(balance, 899999999999999999999999950000000)
+        assert_greater_than_or_equal(balance, 899999999999999999999999950000000)
         addr = eth_utils.encode_hex(user2_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_equal(balance, 1099999999999999999999999800000000)
+        assert_greater_than_or_equal(balance, 1099999999999999999999999800000000)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
         assert_equal(balance, 0)
 

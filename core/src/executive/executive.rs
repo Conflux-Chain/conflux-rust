@@ -27,7 +27,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 
-const STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: &str =
+pub const STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: &str =
     "443c409373ffd5c0bec1dddb7bec830856757b65";
 
 /// Returns new address created from address, nonce, and code hash
@@ -278,6 +278,33 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
+    fn deposit<'b: 'a>(
+        params: &ActionParams, state: &mut State<'b>, val: &U256,
+    ) -> vm::Result<()> {
+        if state.balance(&params.sender)? < *val {
+            Err(vm::Error::InternalContract("not enough balance to deposit"))
+        } else {
+            state.deposit(&params.sender, &val)?;
+            Ok(())
+        }
+    }
+
+    fn withdraw<'b: 'a>(
+        params: &ActionParams, state: &mut State<'b>, val: &U256,
+    ) -> vm::Result<()> {
+        if state.bank_balance(&params.sender)?
+            - state.storage_balance(&params.sender)?
+            < *val
+        {
+            Err(vm::Error::InternalContract(
+                "not enough bank balance to withdraw",
+            ))
+        } else {
+            state.withdraw(&params.sender, &val)?;
+            Ok(())
+        }
+    }
+
     fn transfer_exec_balance_and_init_contract<'b: 'a>(
         params: &ActionParams, spec: &Spec, state: &mut State<'b>,
         substate: &mut Substate,
@@ -322,8 +349,12 @@ impl<'a> CallCreateExecutive<'a> {
                 state.revert_to_checkpoint();
             }
             Ok(_) | Err(vm::Error::Internal(_)) => {
-                state.discard_checkpoint();
-                substate.accrue(unconfirmed_substate);
+                if state.check_storage_balance() {
+                    state.discard_checkpoint();
+                    substate.accrue(unconfirmed_substate);
+                } else {
+                    state.revert_to_checkpoint();
+                }
             }
         }
     }
@@ -458,39 +489,51 @@ impl<'a> CallCreateExecutive<'a> {
                         &params, self.spec, state, substate,
                     )?;
 
-                    /*
-                    let default = [];
                     let data = if let Some(ref d) = params.data {
                         d as &[u8]
                     } else {
-                        &default as &[u8]
+                        return Err(vm::Error::InternalContract(
+                            "invalid data",
+                        ));
                     };
-                    */
+                    // According to https://solidity.readthedocs.io/en/develop/abi-spec.html
+                    // data is 4 bytes `Method ID` + 32 bytes parameter.
+                    if data.len() != 36 {
+                        return Err(vm::Error::InternalContract(
+                            "invalid data",
+                        ));
+                    }
 
                     // FIXME: Implement the correct pricer!
                     let cost = U256::zero();
+                    let value = U256::from(&data[4..]);
                     if cost <= params.gas {
-                        //let mut internal_contract_out_buffer = Vec::new();
                         let internal_contract_out_buffer = Vec::new();
-                        let result: Result<(), ()> = {
-                            /*
-                            let mut builtin_output = BytesRef::Flexible(
-                                &mut internal_contract_out_buffer,
-                            );
-                            */
-                            // FIXME: execute the internal contract
-                            Ok(())
+                        let result: vm::Result<()> = {
+                            if data[0] == 182
+                                && data[1] == 181
+                                && data[2] == 95
+                                && data[3] == 37
+                            {
+                                // first 4 byts of  keccak('deposit(uint256)')
+                                // is `0xb6b55f25`
+                                Self::deposit(params, state, &value)
+                            } else if data[0] == 46
+                                && data[1] == 26
+                                && data[2] == 125
+                                && data[3] == 77
+                            {
+                                // first 4 byts of  keccak('withdraw(uint256)')
+                                // is `0x2e1a7d4d`
+                                Self::withdraw(params, state, &value)
+                            } else {
+                                Ok(())
+                            }
                         };
                         // FIXME: correct handling of error
-                        //if let Err(e) = result {
-                        if !result.is_ok() {
+                        if let Err(e) = result {
                             state.revert_to_checkpoint();
-
-                            // FIXME: need correct error value.
-                            //Err(e.into())
-                            Err(vm::Error::InternalContract(
-                                "Internal contract execution failed.",
-                            ))
+                            Err(e.into())
                         } else {
                             state.discard_checkpoint();
 
@@ -1340,6 +1383,7 @@ mod tests {
     use crate::{
         evm::{Factory, VMType},
         machine::Machine,
+        parameters::consensus_internal::CONFLUX_TOKEN,
         state::{CleanupMode, State, Substate},
         statedb::StateDb,
         storage::{
@@ -1401,12 +1445,21 @@ mod tests {
         let mut params = ActionParams::default();
         params.address = address.clone();
         params.sender = sender.clone();
+        params.origin = sender.clone();
         params.gas = U256::from(100_000);
         params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
         params.value = ActionValue::Transfer(U256::from(0x7));
         let storage_manager = new_state_manager_for_testing();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
+        state
+            .add_balance(
+                &sender,
+                &U256::from(CONFLUX_TOKEN),
+                CleanupMode::NoEmpty,
+            )
+            .ok();
+        state.deposit(&sender, &U256::from(CONFLUX_TOKEN)).ok();
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();

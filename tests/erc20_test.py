@@ -34,14 +34,31 @@ class P2PTest(ConfluxTestFramework):
             bytecode_file = os.path.join(file_dir, "contracts/erc20_bytecode.dat"),
         )
 
+        staking_contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
+            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
+        )
+
+        # lock tokens in bank
+        gas_price = 1
+        gas = 50000000
+        self.tx_conf = {"gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+        self.tx_conf["to"] = staking_contract_addr
+        tx_data = decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+        node = self.nodes[0]
+        client = RpcClient(node)
+        genesis_key = default_config["GENESIS_PRI_KEY"]
+        genesis_addr = privtoaddr(genesis_key)
+        tx = client.new_tx(value=0, receiver=staking_contract_addr, nonce=0, data=tx_data, gas=gas, gas_price=gas_price)
+        client.send_tx(tx, True)
+
         start_p2p_connection(self.nodes)
 
         self.log.info("Initializing contract")
         genesis_key = default_config["GENESIS_PRI_KEY"]
         genesis_addr = privtoaddr(genesis_key)
-        nonce = 0
-        gas_price = 1
-        gas = 50000000
+        nonce = 1
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}

@@ -100,6 +100,38 @@ impl RpcImpl {
             .map_err(RpcError::invalid_params)
     }
 
+    fn bank_balance(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let num = num.unwrap_or(EpochNumber::LatestState);
+        let address: H160 = address.into();
+        info!(
+            "RPC Request: cfx_getBankBalance address={:?} epoch_num={:?}",
+            address, num
+        );
+
+        self.consensus
+            .get_bank_balance(address, num.into())
+            .map(|x| x.into())
+            .map_err(RpcError::invalid_params)
+    }
+
+    fn storage_balance(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let num = num.unwrap_or(EpochNumber::LatestState);
+        let address: H160 = address.into();
+        info!(
+            "RPC Request: cfx_getStorageBalance address={:?} epoch_num={:?}",
+            address, num
+        );
+
+        self.consensus
+            .get_storage_balance(address, num.into())
+            .map(|x| x.into())
+            .map_err(RpcError::invalid_params)
+    }
+
     //    fn account(
     //        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
     //        epoch_num: Option<EpochNumber>,
@@ -549,6 +581,8 @@ impl Cfx for CfxHandler {
         target self.rpc_impl {
             fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;

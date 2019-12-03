@@ -53,7 +53,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf["to"] = contractAddr
 
         # interact with foo()
-        data = contract.functions.foo().buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.foo().buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 2)
@@ -62,7 +62,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
 
         # interact with goo(10), will pass modifier, emit new event
-        data = contract.functions.goo(10).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.goo(10).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
@@ -70,23 +70,23 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(logs[-1]["topics"][2], self.number_to_topic(11))
 
         # interact with goo(10), will not pass modifier, no event emitted
-        data = contract.functions.goo(10).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.goo(10).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 
         # call const function hoo()
-        data = contract.functions.hoo().buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.hoo().buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert_equal(result, self.number_to_topic(11))
 
         # call const function byte32oo(solution)
-        data = contract.functions.byte32oo(self.solution).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.byte32oo(self.solution).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert_equal(result, self.solution)
 
         # call const function getSha256(solution)
-        data = contract.functions.getSha256(self.solution).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.getSha256(self.solution).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert_equal(result, self.problem)
 
@@ -110,14 +110,14 @@ class ContractBenchTest(SmartContractBenchBase):
         self.tx_conf["to"] = contractAddr
 
         # interact with vote()
-        data = contract.functions.vote(5).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.vote(5).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 1)
         assert_equal(logs[-1]["data"], self.number_to_topic(5))
 
         # call const function winningProposal()
-        data = contract.functions.winningProposal().buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.winningProposal().buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert_equal(result, self.number_to_topic(5))
 
@@ -146,7 +146,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(logs[-1]["topics"][2], self.number_to_topic(16))
 
         # call getNow()
-        data = contract.functions.getNow().buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.getNow().buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) - int(time.time()) < 5)
 
@@ -160,12 +160,12 @@ class ContractBenchTest(SmartContractBenchBase):
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 2)
         assert_equal(self.rpc.get_balance(contractAddr), cost)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - fee)
+        assert_greater_than_or_equal(self.rpc.get_balance(self.sender), b0 - cost - fee)
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
         cid0 = contract_id
-        data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         result = result[2:]
         res = ['0x'+result[i * 64 : (i + 1) * 64] for i in range(8)]
@@ -179,15 +179,15 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(int(res[7], 0), 0)
 
         # interact with withdraw()
-        data = contract.functions.withdraw(contract_id, self.solution).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.withdraw(contract_id, self.solution).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         assert_equal(self.rpc.get_balance(contractAddr), 0)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - fee * 2)
+        assert_greater_than_or_equal(self.rpc.get_balance(self.sender), b0 - fee * 2)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 
         # call getContract
-        data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.getContract(contract_id).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         result = result[2:]
         res = ['0x'+result[i * 64 : (i + 1) * 64] for i in range(8)]
@@ -224,7 +224,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         b0 = self.rpc.get_balance(self.sender)
         # interact with recharge()
-        data = contract.functions.recharge().buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.recharge().buildTransaction(self.tx_conf)["data"]
         cost = 5000000000000000000
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
         b1 = self.rpc.get_balance(self.sender)
@@ -232,7 +232,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(bc, cost)
 
         #interact with withdraw
-        data = contract.functions.withdraw(self.sender_checksum).buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.withdraw(self.sender_checksum).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, 0)
         b2 = self.rpc.get_balance(self.sender)
         bc = self.rpc.get_balance(contractAddr)
@@ -399,7 +399,7 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.functions.balanceOf(Web3.toChecksumAddress(self.pub[1])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 50000)
-        data = contract.functions.totalSupply().buildTransaction(self.tx_conf)["data"];
+        data = contract.functions.totalSupply().buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 50000)
 
@@ -506,6 +506,14 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(int(result, 0), 0)
 
     def run_test(self):
+        solc = Solc()
+        file_dir = os.path.dirname(os.path.realpath(__file__))
+        staking_contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
+            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
+        )
+        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"
         self.priv_key = default_config["GENESIS_PRI_KEY"]
@@ -514,16 +522,27 @@ class ContractBenchTest(SmartContractBenchBase):
         self.pub = []
         self.pri = []
         self.rpc = RpcClient(self.nodes[0])
-        for i in range(10):
-          priv_key = random.randint(0, 2 ** 256).to_bytes(32, "big")
-          pub_key = encode_hex_0x(privtoaddr(priv_key))
-          self.pub.append(pub_key)
-          self.pri.append(priv_key)
-          transaction = self.rpc.new_tx(sender = self.sender, receiver = pub_key, value = 10000000000, priv_key = self.priv_key)
-          result = self.rpc.send_tx(transaction, True)
-        nonce = 0
         gas = 50000000
         gas_price = 10
+
+        # lock token for genesis account
+        self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        self.tx_conf['to'] = staking_contract_addr
+        tx_data = decode_hex(staking_contract.functions.deposit(1000000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+        tx = self.rpc.new_tx(value=0, receiver=staking_contract_addr, data=tx_data, gas=gas, gas_price=gas_price)
+        self.rpc.send_tx(tx, True)
+
+        for i in range(10):
+            priv_key = random.randint(0, 2 ** 256).to_bytes(32, "big")
+            pub_key = encode_hex_0x(privtoaddr(priv_key))
+            self.pub.append(pub_key)
+            self.pri.append(priv_key)
+            transaction = self.rpc.new_tx(sender=self.sender, receiver=pub_key, value=1000000 * 10 ** 18, priv_key=self.priv_key)
+            self.rpc.send_tx(transaction, True)
+            # deposit 10000 tokens
+            tx_data = decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+            tx = self.rpc.new_tx(value=0, sender=pub_key, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
+            self.rpc.send_tx(tx)
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         self.filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
         self.testEventContract()

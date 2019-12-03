@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 
 from conflux.utils import privtoaddr
+from eth_utils import decode_hex
+from conflux.rpc import RpcClient
+from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
+from test_framework.mininode import *
+from test_framework.util import *
 from easysolc import Solc
 
 from web3 import Web3
@@ -19,10 +24,29 @@ class VoteTokenTest(SmartContractBenchBase):
         self.vote_contract = None
         self.accounts = []
         self.num_of_options = 5
+        self.gas_price = 1
+        self.gas = 50000000
+        self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price), "chainId":0}
 
     def setup_contract(self):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
+        staking_contract = solc.get_contract_instance(
+            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
+            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
+        )
+
+        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+        self.tx_conf["to"] = staking_contract_addr
+        tx_data = decode_hex(staking_contract.functions.deposit(1000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+        node = self.nodes[0]
+        client = RpcClient(node)
+        genesis_key = default_config["GENESIS_PRI_KEY"]
+        genesis_addr = privtoaddr(genesis_key)
+        tx = client.new_tx(value=0, receiver=staking_contract_addr, nonce=self.get_nonce(genesis_addr), data=tx_data, gas=self.gas, gas_price=self.gas_price)
+        client.send_tx(tx)
+        self.wait_for_tx([tx], False)
+
         self.token_contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
                                                          contract_name="DummyErc20")
         self.vote_contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
