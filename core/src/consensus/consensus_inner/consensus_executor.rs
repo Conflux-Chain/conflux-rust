@@ -1205,20 +1205,20 @@ impl ConsensusExecutionHandler {
             }
         }
 
-        let prev_header = self
+        let parent_header = self
             .data_man
             .block_header_by_hash(&pivot_block.block_header.parent_hash())
             .unwrap();
         let current_timestamp = pivot_block.block_header.timestamp();
-        let prev_timestmap = if prev_header.timestamp() == 0 {
+        let parent_timestmap = if parent_header.timestamp() == 0 {
             current_timestamp
         } else {
-            prev_header.timestamp()
+            parent_header.timestamp()
         };
 
         // Use actutal time to calculate the interest
         let interest_rate = state.interest_rate()
-            * U256::from(current_timestamp - prev_timestmap)
+            * U256::from(current_timestamp - parent_timestmap)
             / U256::from(SECONDS_PER_YEAR);
         // Calculate the new total tokens.
         let total_tokens = state.total_tokens()
