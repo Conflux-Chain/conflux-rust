@@ -1123,7 +1123,7 @@ impl ConsensusExecutionHandler {
         let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
         // This maintains the primary tokens rewarded to each miner. And it will
         // be used to compute ratio for secondary reward.
-        let mut base_reword_count: HashMap<Address, U256> = HashMap::new();
+        let mut base_reward_count: HashMap<Address, U256> = HashMap::new();
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
@@ -1197,7 +1197,7 @@ impl ConsensusExecutionHandler {
                 let reward = U256::try_from(reward).unwrap();
                 epoch_block_total_rewards.push(reward);
                 if !reward.is_zero() {
-                    *base_reword_count
+                    *base_reward_count
                         .entry(*block.block_header.author())
                         .or_insert(0.into()) += reward;
                     total_base_reward += reward;
@@ -1219,7 +1219,7 @@ impl ConsensusExecutionHandler {
         // Use actutal time to calculate the interest
         let interest_rate = state.interest_rate()
             * U256::from(current_timestamp - prev_timestmap)
-            / U256::from(60 * 60 * 24 * 355);
+            / U256::from(SECONDS_PER_YEAR);
         // Calculate the new total tokens.
         let total_tokens = state.total_tokens()
             + state.total_bank_tokens() * interest_rate
@@ -1359,7 +1359,7 @@ impl ConsensusExecutionHandler {
 
         for (address, mut reward) in merged_rewards {
             // Distribute the secondary reward according to primary reward.
-            if let Some(base_reward) = base_reword_count.get(&address) {
+            if let Some(base_reward) = base_reward_count.get(&address) {
                 reward += base_reward * secondary_reward / total_base_reward;
             }
             state

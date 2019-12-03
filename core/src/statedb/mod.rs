@@ -5,6 +5,7 @@
 use crate::{
     bytes::Bytes,
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    parameters::consensus_internal::INITIAL_INTEREST_RATE,
     storage::{
         Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
         StateRootWithAuxInfo, Storage, StorageTrait,
@@ -144,8 +145,8 @@ impl<'a> StateDb<'a> {
         let interest_rate_key =
             StorageKey::new_storage_key(&address, Self::INTEREST_RATE_KEY);
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
-        // This number is 0.04 / EPOCH_COUNT_PER_YEAR * INTEREST_RATE_SCALE
-        Ok(interest_rate_opt.unwrap_or(U256::from(317097919)))
+        // This number is 0.04 * INTEREST_RATE_SCALE
+        Ok(interest_rate_opt.unwrap_or(U256::from(INITIAL_INTEREST_RATE)))
     }
 
     pub fn get_accumulate_interest_rate(&self) -> Result<U256> {

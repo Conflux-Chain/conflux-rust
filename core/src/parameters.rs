@@ -43,6 +43,10 @@ pub mod consensus_internal {
     /// epoch will be `interest of year * epoch_duration_fraction *
     /// INTEREST_RATE_SCALE`.
     pub const INTEREST_RATE_SCALE: u64 = 1_000_000_000_000_000_000;
+    /// This is the initial interest with scale: 0.04 * INTEREST_RATE_SCALE
+    pub const INITIAL_INTEREST_RATE: u64 = 40_000_000_000_000_000;
+    /// This is the number seconds per year
+    pub const SECONDS_PER_YEAR: u64 = 60 * 60 * 24 * 365;
 
     // This is the cap of the size of the anticone barrier. If we have more than
     // this number we will use the brute_force O(n) algorithm instead.
