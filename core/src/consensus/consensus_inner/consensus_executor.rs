@@ -30,10 +30,11 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
-    MERKLE_NULL_NODE,
+    Block, BlockHeader, BlockHeaderBuilder, SignedTransaction,
+    TransactionAddress, MERKLE_NULL_NODE,
 };
 use std::{
+    cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::From,
     fmt::{Debug, Formatter},
@@ -63,6 +64,9 @@ pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_no_reward: Vec<bool>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
+    /// This block is used to estimate interest rate in current epoch. Usually,
+    /// it is a pivot block and it is 100 epochs before current epoch.
+    pub interest_rate_est_block_header: Arc<BlockHeader>,
 }
 
 impl Debug for RewardExecutionInfo {
@@ -336,6 +340,23 @@ impl ConsensusExecutor {
                     .unwrap();
                 }
 
+                let interest_rate_est_block_height = if height > 100 {
+                   height - 100
+                } else {
+                    1
+                };
+
+                let interest_rate_est_block_hash = if interest_rate_est_block_height < inner.cur_era_genesis_height {
+                    let mut block_hash = inner.arena[inner.cur_era_genesis_block_arena_index].hash;
+                    for _ in 0..inner.cur_era_genesis_height - interest_rate_est_block_height {
+                        block_hash = *inner.data_man.block_header_by_hash(&block_hash).expect("block header must exists").parent_hash();
+                    }
+                    block_hash
+                } else {
+                    inner.arena[inner.pivot_chain[inner.height_to_pivot_index(interest_rate_est_block_height)]].hash
+                };
+                let interest_rate_est_block_header = inner.data_man.block_header_by_hash(&interest_rate_est_block_hash).expect("interest_rate_est_block must exist");
+
                 let epoch_blocks =
                     inner.get_executable_epoch_blocks(pivot_arena_index);
 
@@ -450,6 +471,7 @@ impl ConsensusExecutor {
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
+                    interest_rate_est_block_header,
                 }
             },
         )
@@ -1205,20 +1227,17 @@ impl ConsensusExecutionHandler {
             }
         }
 
-        let parent_header = self
-            .data_man
-            .block_header_by_hash(&pivot_block.block_header.parent_hash())
-            .unwrap();
-        let current_timestamp = pivot_block.block_header.timestamp();
-        let parent_timestmap = if parent_header.timestamp() == 0 {
-            current_timestamp
-        } else {
-            parent_header.timestamp()
-        };
+        let epoch_delta = max(
+            1,
+            pivot_block.block_header.height()
+                - reward_info.interest_rate_est_block_header.height(),
+        );
+        let timestamp_delta = pivot_block.block_header.timestamp()
+            - reward_info.interest_rate_est_block_header.timestamp();
 
         // Use actutal time to calculate the interest
-        let interest_rate = state.interest_rate()
-            * U256::from(current_timestamp - parent_timestmap)
+        let interest_rate = state.interest_rate() * U256::from(timestamp_delta)
+            / U256::from(epoch_delta)
             / U256::from(SECONDS_PER_YEAR);
         // Calculate the new total tokens.
         let total_tokens = state.total_tokens()
