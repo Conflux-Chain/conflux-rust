@@ -72,8 +72,7 @@ fn main() -> Result<(), Error> {
             &checkpoint,
         ))?
         .expect("state exists")
-        .delta_trie
-        .clone();
+        .get_delta_trie();
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&checkpoint_root)?
         .expect("root exists");

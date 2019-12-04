@@ -13,7 +13,7 @@ pub struct State<'a> {
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     intermediate_trie_root_merkle: MerkleHash,
     maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
-    pub delta_trie: Arc<DeltaMpt>,
+    delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
     delta_trie_key_padding: DeltaMptKeyPadding,
     intermediate_epoch_id: EpochId,
@@ -546,6 +546,8 @@ impl<'a> State<'a> {
 
         inserter.iterate(dumper)
     }
+
+    pub fn get_delta_trie(&self) -> Arc<DeltaMpt> { self.delta_trie.clone() }
 }
 
 use super::{
