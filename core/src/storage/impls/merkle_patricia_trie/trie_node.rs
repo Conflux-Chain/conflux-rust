@@ -28,6 +28,11 @@ pub trait TrieNodeTrait: Default {
             WrappedCreateFrom<T, Self::NodeRefType>;
 
     /// Unsafe because it's assumed that the child_index already exists.
+    unsafe fn get_child_mut_unchecked(
+        &mut self, child_index: u8,
+    ) -> &mut Self::NodeRefType;
+
+    /// Unsafe because it's assumed that the child_index already exists.
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
     where ChildrenTableItem<Self::NodeRefType>:
             WrappedCreateFrom<T, Self::NodeRefType>;
@@ -135,6 +140,12 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
             child,
         );
         *self.children_table.get_children_count_mut() += 1;
+    }
+
+    unsafe fn get_child_mut_unchecked(
+        &mut self, child_index: u8,
+    ) -> &mut NodeRefT {
+        self.children_table.get_child_mut_unchecked(child_index)
     }
 
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)

@@ -2,10 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// FIXME: Even for full node it should keep corresponding db
-// FIXME: to do verifiable proof for light client.
-// FIXME: And archive node may store all wire-formats and
-// FIXME: some other dbs to answer verifiable proofs.
 /// The trait for database manager of Snapshot.
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait;
@@ -18,6 +14,10 @@ pub trait SnapshotDbManagerTrait {
         &self, epoch_id: &EpochId,
     ) -> Result<Option<Self::SnapshotDb>>;
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()>;
+
+    fn new_temp_snapshot_for_full_sync(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> Result<Self::SnapshotDb>;
 }
 
 use super::{
@@ -26,4 +26,4 @@ use super::{
     },
     snapshot_db::*,
 };
-use primitives::EpochId;
+use primitives::{EpochId, MerkleHash};

@@ -3,4 +3,4 @@
 // See http://www.gnu.org/licenses/
 
 pub mod full_sync_verifier;
-pub mod mpt_slice_verifier;
+pub(self) mod mpt_slice_verifier;

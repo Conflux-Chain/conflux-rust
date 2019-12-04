@@ -100,5 +100,10 @@ error_chain! {
             description("Trie proof is invalid."),
             display("Trie proof is invalid."),
         }
+
+        InvalidSnapshotSyncProof {
+            description("Snapshot sync proof is invalid"),
+            display("Snapshot sync proof is invalid"),
+        }
     }
 }

@@ -5,64 +5,80 @@
 // The MptSliceVerifier can be used in restoration of Snapshot MPT and
 // Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be applied
 // to MptMerger to create the updated snapshot MPT.
-#[allow(unused)]
 pub struct MptSliceVerifier {
     key_value_inserter:
         MptCursorRw<SliceMptRebuilder, ReadWritePathNode<SliceMptRebuilder>>,
-    key_range_left: Vec<u8>,
-    key_range_right_excl: Vec<u8>,
 }
 
-struct SliceMptRebuilder {
+pub struct SliceMptRebuilder {
     merkle_root: MerkleHash,
-    boundary_nodes: HashMap<CompressedPathRaw, VanillaTrieNode<MerkleHash>>,
-    new_nodes: Vec<(CompressedPathRaw, SnapshotMptDbValue)>,
-    boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
+    pub boundary_nodes: HashMap<CompressedPathRaw, VanillaTrieNode<MerkleHash>>,
+    pub inner_nodes_to_write: Vec<(CompressedPathRaw, SnapshotMptNode)>,
+    pub boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
 
-    is_valid: bool,
+    pub is_valid: bool,
 }
 
 #[derive(PartialEq, Eq, Hash)]
-struct BoundarySubtreeIndex {
-    node: MerkleHash,
-    child_index: u8,
+pub struct BoundarySubtreeIndex {
+    pub parent_node: MerkleHash,
+    pub child_index: u8,
 }
 
 impl MptSliceVerifier {
-    #[allow(dead_code)]
     /// Validity of the inputs should be already checked.
     pub fn new(
-        key_range_left: Vec<u8>, key_range_right_excl: Vec<u8>,
-        left_proof: TrieProof, right_proof: TrieProof, merkle_root: MerkleHash,
+        maybe_left_proof: Option<&TrieProof>,
+        maybe_right_proof: Option<&TrieProof>, merkle_root: MerkleHash,
     ) -> Self
     {
         let mut boundary_nodes = HashMap::default();
 
-        let left_node_paths = left_proof.compute_paths_for_all_nodes();
-        for (path, trie_proof_node) in left_node_paths
-            .into_iter()
-            .zip(left_proof.nodes.into_iter())
-        {
-            boundary_nodes.insert(path, trie_proof_node.into());
+        match maybe_left_proof {
+            None => {}
+            Some(left_proof) => {
+                let left_node_paths = left_proof.compute_paths_for_all_nodes();
+                for (path, trie_proof_node) in left_node_paths
+                    .into_iter()
+                    .zip(left_proof.get_proof_nodes().iter())
+                {
+                    boundary_nodes.insert(path, (&**trie_proof_node).clone());
+                }
+            }
         }
-        let right_node_paths = right_proof.compute_paths_for_all_nodes();
-        for (path, trie_proof_node) in right_node_paths
-            .into_iter()
-            .zip(right_proof.nodes.into_iter())
-        {
-            boundary_nodes.insert(path, trie_proof_node.into());
+        match maybe_right_proof {
+            None => {}
+            Some(right_proof) => {
+                let right_node_paths =
+                    right_proof.compute_paths_for_all_nodes();
+                for (path, trie_proof_node) in right_node_paths
+                    .into_iter()
+                    .zip(right_proof.get_proof_nodes().iter())
+                {
+                    boundary_nodes.insert(path, (&**trie_proof_node).clone());
+                }
+            }
         }
         Self {
-            key_range_left,
-            key_range_right_excl,
             key_value_inserter: MptCursorRw::new(SliceMptRebuilder {
                 merkle_root,
                 boundary_nodes,
-                new_nodes: Default::default(),
+                inner_nodes_to_write: Default::default(),
                 boundary_subtree_total_size: Default::default(),
                 is_valid: true,
             }),
         }
+    }
+
+    pub fn restore<Key: Borrow<[u8]>>(
+        mut self, keys: &Vec<Key>, values: &Vec<Box<[u8]>>,
+    ) -> Result<SliceMptRebuilder> {
+        for (key, value) in keys.iter().zip(values.into_iter()) {
+            self.key_value_inserter
+                .insert(key.borrow(), value.clone())?;
+        }
+
+        Ok(self.key_value_inserter.take_mpt().unwrap())
     }
 }
 
@@ -135,7 +151,9 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
                         } else {
                             self.boundary_subtree_total_size.insert(
                                 BoundarySubtreeIndex {
-                                    node: merkle.clone(),
+                                    parent_node: boundary_node
+                                        .get_merkle()
+                                        .clone(),
                                     child_index,
                                 },
                                 *subtree_size,
@@ -145,9 +163,10 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
                 }
             }
         } else {
-            self.new_nodes.push((
+            self.inner_nodes_to_write.push((
                 CompressedPathRaw::from(path.as_ref()),
-                trie_node.rlp_bytes().into_boxed_slice(),
+                // FIXME: check if it's possible to pass by value...
+                trie_node.clone(),
             ));
         }
 
@@ -188,5 +207,4 @@ use super::super::super::{
 use crate::storage::impls::merkle_patricia_trie::walk::GetChildTrait;
 use cfx_types::H256;
 use primitives::MerkleHash;
-use rlp::*;
-use std::{collections::HashMap, hint::unreachable_unchecked};
+use std::{borrow::Borrow, collections::HashMap, hint::unreachable_unchecked};
