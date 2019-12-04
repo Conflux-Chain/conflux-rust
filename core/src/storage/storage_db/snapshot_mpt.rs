@@ -11,7 +11,7 @@ pub type SnapshotMptDbValue = Box<[u8]>;
 #[derive(Clone, Default)]
 pub struct SnapshotMptNode(pub VanillaTrieNode<SubtreeMerkleWithSize>);
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct SubtreeMerkleWithSize {
     pub merkle: MerkleHash,
     pub subtree_size: u64,
@@ -57,7 +57,7 @@ impl<
 }
 
 impl SnapshotMptNode {
-    pub const EMPTY_CHILD: SubtreeMerkleWithSize = SubtreeMerkleWithSize {
+    pub const NO_CHILD: SubtreeMerkleWithSize = SubtreeMerkleWithSize {
         merkle: MERKLE_NULL_NODE,
         subtree_size: 0,
         delta_subtree_size: 0,
@@ -162,7 +162,7 @@ impl DefaultChildrenItem<SubtreeMerkleWithSize>
     for ChildrenTableItem<SubtreeMerkleWithSize>
 {
     fn no_child() -> &'static SubtreeMerkleWithSize {
-        &SnapshotMptNode::EMPTY_CHILD
+        &SnapshotMptNode::NO_CHILD
     }
 }
 

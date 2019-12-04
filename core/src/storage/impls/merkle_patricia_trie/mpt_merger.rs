@@ -41,7 +41,7 @@ impl<'a> MptMerger<'a> {
     }
 
     // TODO(yz): Invent a trait for inserter to generalize.
-    pub fn merge(&mut self, inserter: &DeltaMptInserter) -> Result<MerkleHash> {
+    pub fn merge(&mut self, inserter: &DeltaMptIterator) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
         struct Merger<'x, 'a: 'x> {
@@ -176,7 +176,7 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
 use super::{
     super::{
         super::storage_db::snapshot_mpt::*, errors::*,
-        storage_manager::DeltaMptInserter,
+        storage_manager::DeltaMptIterator,
     },
     mpt_cursor::*,
     KVInserter,

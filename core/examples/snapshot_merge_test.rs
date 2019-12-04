@@ -12,7 +12,7 @@ use cfxcore::{
             StateManager, StateManagerTrait, StorageConfiguration,
         },
         storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        DeltaMptInserter, StateIndex,
+        DeltaMptIterator, StateIndex,
     },
     sync::Error,
 };
@@ -76,7 +76,7 @@ fn main() -> Result<(), Error> {
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&checkpoint_root)?
         .expect("root exists");
-    let delta_mpt_insert = DeltaMptInserter {
+    let delta_mpt_insert = DeltaMptIterator {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
