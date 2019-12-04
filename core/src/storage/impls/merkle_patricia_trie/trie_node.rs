@@ -249,6 +249,40 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
+#[test]
+fn test_empty_vanilla_node_encoding() {
+    let node: VanillaTrieNode<SubtreeMerkleWithSize> = Default::default();
+    let encoded = rlp::encode(&node);
+    let decoded: VanillaTrieNode<SubtreeMerkleWithSize> =
+        Rlp::new(encoded.as_slice())
+            .as_val()
+            .expect("decode success");
+    assert_eq!(node, decoded);
+}
+
+#[test]
+fn test_one_child_vanilla_node_encoding() {
+    let node: VanillaTrieNode<SubtreeMerkleWithSize> = VanillaTrieNode::new(
+        MERKLE_NULL_NODE,
+        VanillaChildrenTable::new_from_one_child(
+            0,
+            &SubtreeMerkleWithSize {
+                merkle: MERKLE_NULL_NODE,
+                subtree_size: 4,
+                delta_subtree_size: 0,
+            },
+        ),
+        None,
+        CompressedPathRaw::default(),
+    );
+    let encoded = rlp::encode(&node);
+    let decoded: VanillaTrieNode<SubtreeMerkleWithSize> =
+        Rlp::new(encoded.as_slice())
+            .as_val()
+            .expect("decode success");
+    assert_eq!(node, decoded);
+}
+
 use super::{
     super::super::utils::WrappedCreateFrom,
     children_table::*,
@@ -257,6 +291,7 @@ use super::{
     mpt_value::MptValue,
     walk::*,
 };
+use crate::storage::storage_db::SubtreeMerkleWithSize;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::vec::Vec;

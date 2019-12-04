@@ -746,15 +746,17 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             &CompressedPathRaw::default(),
         ) {
             Ok(root_trie_node) => {
-                let supposed_merkle_root =
-                    mpt.as_ref_assumed_owner().get_merkle_root();
-                assert_eq!(
-                    root_trie_node.get_merkle(),
-                    supposed_merkle_root,
-                    "loaded root trie node merkle hash {:?} != supposed merkle hash {:?}",
-                    root_trie_node.get_merkle(),
-                    supposed_merkle_root,
-                );
+                // FIXME implement get_merkle_root for mpt
+                //                let supposed_merkle_root =
+                //                    
+                // mpt.as_ref_assumed_owner().get_merkle_root();
+                //                assert_eq!(
+                //                    root_trie_node.get_merkle(),
+                //                    supposed_merkle_root,
+                //                    "loaded root trie node merkle hash {:?} !=
+                // supposed merkle hash {:?}",                  
+                // root_trie_node.get_merkle(),                 
+                // supposed_merkle_root,                );
                 root_trie_node
             }
             Err(Error(ErrorKind::SnapshotMPTTrieNodeNotFound, _)) => {

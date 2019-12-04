@@ -835,10 +835,29 @@ impl<NodeRefT: NodeRefTrait> Decodable for ChildrenTable<NodeRefT> {
     }
 }
 
+#[test]
+fn test_one_child_children_table_encoding() {
+    let table = VanillaChildrenTable::new_from_one_child(
+        0,
+        &SubtreeMerkleWithSize {
+            merkle: MERKLE_NULL_NODE,
+            subtree_size: 4,
+            delta_subtree_size: 0,
+        },
+    );
+    let encoded = rlp::encode(&table);
+    let decoded: VanillaChildrenTable<SubtreeMerkleWithSize> =
+        Rlp::new(encoded.as_slice())
+            .as_val()
+            .expect("decode success");
+    assert_eq!(table, decoded);
+}
+
 use super::{
     super::super::utils::WrappedCreateFrom,
     merkle::{ChildrenMerkleTable, MaybeMerkleTable},
 };
+use crate::storage::storage_db::SubtreeMerkleWithSize;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{fmt::*, marker::PhantomData, mem, ptr::null_mut, slice};

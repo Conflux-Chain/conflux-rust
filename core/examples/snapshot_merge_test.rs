@@ -47,34 +47,40 @@ fn main() -> Result<(), Error> {
 
     // FIXME Parameterize.
     let snapshot_dir = Path::new("./storage_db/snapshot");
-    if !snapshot_dir.exists() {
-        create_dir_all(snapshot_dir)?;
+    if snapshot_dir.exists() {
+        remove_dir_all(snapshot_dir)?;
     }
+    create_dir_all(snapshot_dir)?;
 
     // setup node 1
     println!("====================================================");
     println!("Setup node 1 ...");
-    let sm1 = new_state_manager(test_dir.join("db1").to_str().unwrap())?;
-    let snapshot_db_manager = sm1
+    let state_manager =
+        new_state_manager(test_dir.join("db1").to_str().unwrap())?;
+    let snapshot_db_manager = state_manager
         .get_storage_manager()
         .get_snapshot_manager()
         .get_snapshot_db_manager();
 
     // state1 is only used to build a delta mpt, so the snapshot within it does
     // not matter.
-    let (genesis_hash, _) = initialize_genesis(&sm1)?;
+    let (genesis_hash, _) = initialize_genesis(&state_manager)?;
     let accounts = arg_val(&matches, "accounts");
     let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
-    let (checkpoint, checkpoint_root) =
-        prepare_checkpoint(&sm1, genesis_hash, accounts, accounts_per_epoch)?;
-    let delta_mpt = sm1
+    let (snapshot1_epoch, snapshot1_state_root) = prepare_checkpoint(
+        &state_manager,
+        genesis_hash,
+        accounts,
+        accounts_per_epoch,
+    )?;
+    let delta_mpt = state_manager
         .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &checkpoint,
+            &snapshot1_epoch,
         ))?
         .expect("state exists")
         .get_delta_trie();
     let delta_mpt_root = delta_mpt
-        .get_root_node_ref(&checkpoint_root)?
+        .get_root_node_ref(&snapshot1_state_root)?
         .expect("root exists");
     let delta_mpt_insert = DeltaMptInserter {
         maybe_mpt: Some(delta_mpt),
@@ -88,13 +94,47 @@ fn main() -> Result<(), Error> {
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![],
     };
-    let snapshot2 = snapshot_db_manager.new_snapshot_by_merging(
+    let snapshot_info1 = snapshot_db_manager.new_snapshot_by_merging(
         &NULL_EPOCH,
-        checkpoint,
+        snapshot1_epoch,
         delta_mpt_insert,
         info,
     )?;
-    println!("After merging: {:?}", snapshot2);
+    println!("After merging: {:?}", snapshot_info1);
+    let (snapshot2_epoch, snapshot2_state_root) = prepare_checkpoint(
+        &state_manager,
+        snapshot1_epoch,
+        accounts,
+        accounts_per_epoch,
+    )?;
+    let delta_mpt = state_manager
+        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+            &snapshot2_epoch,
+        ))?
+        .expect("state exists")
+        .get_delta_trie();
+    let delta_mpt_root = delta_mpt
+        .get_root_node_ref(&snapshot2_state_root)?
+        .expect("root exists");
+    let delta_mpt_insert = DeltaMptInserter {
+        maybe_mpt: Some(delta_mpt),
+        maybe_root_node: Some(delta_mpt_root),
+    };
+    let info = SnapshotInfo {
+        height: 0,
+        parent_snapshot_height: 0,
+        // This is unknown for now, and we don't care.
+        merkle_root: Default::default(),
+        parent_snapshot_epoch_id: snapshot1_epoch,
+        pivot_chain_parts: vec![],
+    };
+    let snapshot_info2 = snapshot_db_manager.new_snapshot_by_merging(
+        &snapshot1_epoch,
+        snapshot2_epoch,
+        delta_mpt_insert,
+        info,
+    )?;
+    println!("After merging: {:?}", snapshot_info2);
     Ok(())
 }
 
@@ -223,7 +263,7 @@ fn prepare_checkpoint(
         .unwrap()
         .state_root
         .delta_root;
-    println!("checkpoint root: {:?}", root);
+    println!("checkpoint: epoch_id={:?}, root: {:?}", checkpoint, root);
 
     Ok((checkpoint, root))
 }
