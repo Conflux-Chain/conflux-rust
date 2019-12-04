@@ -66,7 +66,7 @@ pub struct RewardExecutionInfo {
     pub epoch_block_anticone_difficulties: Vec<U512>,
     /// This block is used to estimate interest rate in current epoch. Usually,
     /// it is a pivot block and it is 100 epochs before current epoch.
-    pub interest_rate_est_block: Arc<BlockHeader>,
+    pub interest_rate_est_block_header: Arc<BlockHeader>,
 }
 
 impl Debug for RewardExecutionInfo {
@@ -355,7 +355,7 @@ impl ConsensusExecutor {
                 } else {
                     inner.arena[inner.pivot_chain[inner.height_to_pivot_index(interest_rate_est_block_height)]].hash
                 };
-                let interest_rate_est_block = inner.data_man.block_header_by_hash(&interest_rate_est_block_hash).expect("interest_rate_est_block must exist");
+                let interest_rate_est_block_header = inner.data_man.block_header_by_hash(&interest_rate_est_block_hash).expect("interest_rate_est_block must exist");
 
                 let epoch_blocks =
                     inner.get_executable_epoch_blocks(pivot_arena_index);
@@ -471,7 +471,7 @@ impl ConsensusExecutor {
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
-                    interest_rate_est_block,
+                    interest_rate_est_block_header,
                 }
             },
         )
@@ -1230,10 +1230,10 @@ impl ConsensusExecutionHandler {
         let epoch_delta = max(
             1,
             pivot_block.block_header.height()
-                - reward_info.interest_rate_est_block.height(),
+                - reward_info.interest_rate_est_block_header.height(),
         );
         let timestamp_delta = pivot_block.block_header.timestamp()
-            - reward_info.interest_rate_est_block.timestamp();
+            - reward_info.interest_rate_est_block_header.timestamp();
 
         // Use actutal time to calculate the interest
         let interest_rate = state.interest_rate() * U256::from(timestamp_delta)
