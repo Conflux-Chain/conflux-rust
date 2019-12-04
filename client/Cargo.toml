@@ -40,7 +40,7 @@ blockgen = { path = "../blockgen" }
 txgen = { path = "../transactiongen" }
 secret-store = { path = "../secret_store" }
 primitives = { path = "../primitives" }
-log4rs = "0.8.1"
+log4rs = "0.9.0"
 rlp = "0.4.0"
 keccak-hash = "0.3.0"
 rand = "0.6"
@@ -52,7 +52,7 @@ metrics = { path = "../util/metrics" }
 delegate = "0.2.0"
 transient-hashmap = "0.4"
 rand_xorshift = "0.1.1"
-itertools = "0.5"
+itertools = "0.8"
 order-stat = "0.1"
 futures = "0.1"
 throttling = { path = "../util/throttling" }
