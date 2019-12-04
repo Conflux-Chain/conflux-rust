@@ -11,26 +11,18 @@ use cfxcore::{
         state_manager::{
             StateManager, StateManagerTrait, StorageConfiguration,
         },
-        storage_db::{
-            SingleWriterImplByFamily, SnapshotDbManagerTrait, SnapshotInfo,
-        },
-        DeltaMptInserter, KeyValueDbTrait, StateIndex,
+        storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
+        DeltaMptInserter, StateIndex,
     },
-    sync::{
-        delta::{Chunk, ChunkReader, StateDumper},
-        restore::Restorer,
-        Error,
-    },
+    sync::Error,
 };
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
 use log4rs::{
-    append::{console::ConsoleAppender, file::FileAppender},
-    config::{Appender, Config, Logger, Root},
-    encode::pattern::PatternEncoder,
+    append::console::ConsoleAppender,
+    config::{Appender, Config, Root},
 };
 use primitives::{Account, MerkleHash, StorageKey, NULL_EPOCH};
-use rlp::Rlp;
 use std::{
     cmp::min,
     fmt::Debug,
@@ -38,11 +30,11 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
-// cargo run --release -p cfxcore --example restore_checkpoint_delta
-// cargo run --release -p cfxcore --example restore_checkpoint_delta -- --help
+// cargo run --release -p cfxcore --example snapshot_merge_test
+// cargo run --release -p cfxcore --example snapshot_merge_test -- --help
 fn main() -> Result<(), Error> {
     enable_log();
     let matches = parse_args();
@@ -51,6 +43,12 @@ fn main() -> Result<(), Error> {
     let test_dir: PathBuf = arg_val(&matches, "test-dir");
     if test_dir.exists() {
         remove_dir_all(&test_dir)?;
+    }
+
+    // FIXME Parameterize.
+    let snapshot_dir = Path::new("./storage_db/snapshot");
+    if !snapshot_dir.exists() {
+        create_dir_all(snapshot_dir)?;
     }
 
     // setup node 1
@@ -62,12 +60,9 @@ fn main() -> Result<(), Error> {
         .get_snapshot_manager()
         .get_snapshot_db_manager();
 
-    let snapshot1 = snapshot_db_manager
-        .get_snapshot_by_epoch_id(&NULL_EPOCH)?
-        .expect("initial snapshot");
     // state1 is only used to build a delta mpt, so the snapshot within it does
     // not matter.
-    let (genesis_hash, genesis_root) = initialize_genesis(&sm1)?;
+    let (genesis_hash, _) = initialize_genesis(&sm1)?;
     let accounts = arg_val(&matches, "accounts");
     let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
     let (checkpoint, checkpoint_root) =
@@ -86,7 +81,7 @@ fn main() -> Result<(), Error> {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
-    let mut info = SnapshotInfo {
+    let info = SnapshotInfo {
         height: 0,
         parent_snapshot_height: 0,
         // This is unknown for now, and we don't care.
@@ -257,7 +252,7 @@ fn enable_log() {
     let stdout = ConsoleAppender::builder().build();
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
-        .build(Root::builder().appender("stdout").build(LevelFilter::Trace))
+        .build(Root::builder().appender("stdout").build(LevelFilter::Warn))
         .unwrap();
-    log4rs::init_config(config);
+    log4rs::init_config(config).expect("success");
 }

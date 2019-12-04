@@ -56,7 +56,6 @@ impl<'a> MptMerger<'a> {
             fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
                 let (key, value) = v;
                 if value.len() > 0 {
-                    println!("push key {:?}", key);
                     self.merger_mut().rw_cursor.insert(&key, value)?;
                 } else {
                     self.merger_mut().rw_cursor.delete(&key)?;

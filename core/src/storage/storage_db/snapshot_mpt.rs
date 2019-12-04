@@ -67,12 +67,21 @@ impl SnapshotMptNode {
         Self(node)
     }
 
-    pub fn subtree_size(&self) -> u64 { Self::initial_subtree_size(&self.0) }
+    pub fn subtree_size(&self, full_path: &dyn CompressedPathTrait) -> u64 {
+        Self::initial_subtree_size(&self.0, full_path)
+    }
 
     fn initial_subtree_size(
         node: &VanillaTrieNode<SubtreeMerkleWithSize>,
-    ) -> u64 {
-        let mut size = 0;
+        full_path: &dyn CompressedPathTrait,
+    ) -> u64
+    {
+        let mut size = match node.value_as_slice().into_option() {
+            None => 0,
+            Some(value) => {
+                rlp_key_value_len(full_path.path_size(), value.len())
+            }
+        };
         for (
             _child_index,
             &SubtreeMerkleWithSize {
@@ -165,6 +174,7 @@ use super::super::impls::{
         VanillaTrieNode, CHILDREN_COUNT,
     },
 };
+use crate::storage::impls::merkle_patricia_trie::mpt_cursor::rlp_key_value_len;
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
