@@ -2,6 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+lazy_static! {
+    static ref ROOT_NODE_PATH: CompressedPathRaw = CompressedPathRaw::default();
+}
 /// Cursor to access Snapshot Mpt.
 pub struct MptCursor<Mpt, PathNode> {
     mpt: Option<Mpt>,
@@ -95,14 +98,14 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
     pub fn pop_path_for_key<'k, AM: access_mode::AccessMode>(
         &mut self, key: &'k [u8],
     ) -> Result<CursorPopNodesTerminal<'k>> {
+        let path_ref = self
+            .path_nodes
+            .last()
+            .map(|node| &node.get_basic_path_node().full_path_to_node)
+            .unwrap();
         match walk::<access_mode::Write, _>(
             key,
-            &self
-                .path_nodes
-                .last()
-                .unwrap()
-                .get_basic_path_node()
-                .full_path_to_node,
+            path_ref,
             &MPT_CURSOR_GET_CHILD,
         ) {
             WalkStop::Arrived => Ok(CursorPopNodesTerminal::Arrived),
@@ -411,6 +414,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                         fork_node
                             .get_read_write_path_node()
                             .first_realized_child_index = unmatched_child_index;
+                        fork_node.get_basic_path_node_mut().next_child_index =
+                            unmatched_child_index;
                         last_node.commit(&mut fork_node)?;
 
                         // Move on to the next child: diverted path.
@@ -726,19 +731,32 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         cursor: &mut Cursor,
     ) -> Result<Self> {
         let mut mpt = cursor.take_mpt();
-        let root_trie_node = cursor.load_node_wrapper(
+        let root_trie_node = match cursor.load_node_wrapper(
             mpt.as_mut_assumed_owner(),
             &CompressedPathRaw::default(),
-        )?;
-
-        let supposed_merkle_root = mpt.as_ref_assumed_owner().get_merkle_root();
-        assert_eq!(
-            root_trie_node.get_merkle(),
-            supposed_merkle_root,
-            "loaded root trie node merkle hash {:?} != supposed merkle hash {:?}",
-            root_trie_node.get_merkle(),
-            supposed_merkle_root,
-        );
+        ) {
+            Ok(root_trie_node) => {
+                let supposed_merkle_root =
+                    mpt.as_ref_assumed_owner().get_merkle_root();
+                assert_eq!(
+                    root_trie_node.get_merkle(),
+                    supposed_merkle_root,
+                    "loaded root trie node merkle hash {:?} != supposed merkle hash {:?}",
+                    root_trie_node.get_merkle(),
+                    supposed_merkle_root,
+                );
+                root_trie_node
+            }
+            Err(Error(ErrorKind::SnapshotMPTTrieNodeNotFound, _)) => {
+                SnapshotMptNode::new(VanillaTrieNode::new(
+                    MERKLE_NULL_NODE,
+                    Default::default(),
+                    None,
+                    CompressedPathRaw::default(),
+                ))
+            }
+            Err(e) => return Err(e),
+        };
 
         Ok(cursor.new_root(BasicPathNode {
             mpt,
@@ -1129,9 +1147,9 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                 .basic_node
                 .trie_node
                 .get_child(self.basic_node.next_child_index)
-                // Unwrap is safe. See comment below.
-                .unwrap()
-                .subtree_size as i64
+                .map(|child| child.subtree_size as i64)
+                // child is NullChild means subtree_size is 0
+                .unwrap_or(0)
                 + child_node.subtree_size_delta)
                 as u64;
 

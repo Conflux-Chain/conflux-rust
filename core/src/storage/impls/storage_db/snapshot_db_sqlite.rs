@@ -12,6 +12,7 @@ pub struct SnapshotDbSqlite {
 pub struct SnapshotDbStatements {
     kvdb_statements: KvdbSqliteStatements,
     mpt_statements: KvdbSqliteStatements,
+    temp_insert_statements: KvdbSqliteStatements,
 }
 
 lazy_static! {
@@ -20,6 +21,13 @@ lazy_static! {
             &["value"],
             &["BLOB"],
             SnapshotDbSqlite::SNAPSHOT_KV_TABLE_NAME,
+            false,
+        )
+        .unwrap();
+        let temp_insert_statements = KvdbSqliteStatements::make_statements(
+            &["value"],
+            &["BLOB"],
+            SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME,
             false,
         )
         .unwrap();
@@ -34,6 +42,7 @@ lazy_static! {
         SnapshotDbStatements {
             kvdb_statements,
             mpt_statements,
+            temp_insert_statements,
         }
     };
 }
@@ -170,7 +179,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                         .kvdb_statements
                         .stmts_main_table
                         .create_table,
-                    &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef],
+                    SQLITE_NO_PARAM,
                 )?
                 .finish_ignore_rows()?;
             snapshot_db
@@ -179,7 +188,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                         .mpt_statements
                         .stmts_main_table
                         .create_table,
-                    &[&&Self::SNAPSHOT_MPT_TABLE_NAME as SqlBindableRef],
+                    SQLITE_NO_PARAM,
                 )?
                 .finish_ignore_rows()?;
             // FIXME: create index.
@@ -195,18 +204,29 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         {
             let sqlite = self.maybe_db.as_mut().unwrap();
             // FIXME: maintain snapshot_key_value_delete?
-            sqlite.execute(
-                "DELETE FROM :snapshot_table_name WHERE KEY IN (SELECT :delta_kv_delete_table_name.key)",
-                &[&&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef, &&Self::DELTA_KV_DELETE_TABLE_NAME],
-            )?.finish_ignore_rows()?;
-            sqlite.execute(
-                "INSERT OR REPLACE INTO :snapshot_table_name (key, value, version) SELECT \
-            :delta_kv_insert_table_name.key, :delta_kv_insert_table_name.value, :version",
-                &[
-                    &&Self::SNAPSHOT_KV_TABLE_NAME as SqlBindableRef,
-                    &&Self::DELTA_KV_INSERT_TABLE_NAME,
-                    &(self.snapshot_info.height as i64)]
-            )?.finish_ignore_rows()?;
+            sqlite
+                .execute(
+                    format!(
+                        "DELETE FROM {} WHERE KEY IN (SELECT key FROM {})",
+                        Self::SNAPSHOT_KV_TABLE_NAME,
+                        Self::DELTA_KV_DELETE_TABLE_NAME
+                    )
+                    .as_str(),
+                    SQLITE_NO_PARAM,
+                )?
+                .finish_ignore_rows()?;
+            sqlite
+                .execute(
+                    format!(
+                        "INSERT OR REPLACE INTO {} (key, value) \
+                         SELECT key, value FROM {}",
+                        Self::SNAPSHOT_KV_TABLE_NAME,
+                        Self::DELTA_KV_INSERT_TABLE_NAME
+                    )
+                    .as_str(),
+                    SQLITE_NO_PARAM,
+                )?
+                .finish_ignore_rows()?;
         }
 
         {
@@ -350,10 +370,10 @@ impl SnapshotDbSqlite {
         sqlite
             .execute(
                 &SNAPSHOT_DB_STATEMENTS
-                    .kvdb_statements
+                    .temp_insert_statements
                     .stmts_main_table
                     .create_table,
-                &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
+                SQLITE_NO_PARAM,
             )?
             .finish_ignore_rows()?;
 
@@ -367,18 +387,27 @@ impl SnapshotDbSqlite {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
-                SNAPSHOT_DB_STATEMENTS
-                    .kvdb_statements
+                &SNAPSHOT_DB_STATEMENTS
+                    .temp_insert_statements
                     .stmts_main_table
                     .drop_table,
-                &[&&Self::DELTA_KV_INSERT_TABLE_NAME as SqlBindableRef],
+                SQLITE_NO_PARAM,
             )?
             .finish_ignore_rows()?;
 
+        let mut strfmt_vars = HashMap::new();
+        strfmt_vars.insert(
+            "table_name".to_string(),
+            Self::DELTA_KV_DELETE_TABLE_NAME.to_string(),
+        );
         sqlite
             .execute(
-                KvdbSqliteStatements::DROP_TABLE_STATEMENT,
-                &[&&Self::DELTA_KV_DELETE_TABLE_NAME as SqlBindableRef],
+                strfmt(
+                    KvdbSqliteStatements::DROP_TABLE_STATEMENT,
+                    &strfmt_vars,
+                )?
+                .as_str(),
+                SQLITE_NO_PARAM,
             )?
             .finish_ignore_rows()?;
 
@@ -407,15 +436,10 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                 .unwrap()
                 .execute(
                     &SNAPSHOT_DB_STATEMENTS
-                        .kvdb_statements
+                        .temp_insert_statements
                         .stmts_main_table
                         .put,
-                    &[
-                        &&SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME
-                            as SqlBindableRef,
-                        &&key,
-                        &&value,
-                    ],
+                    &[&&key as SqlBindableRef, &&value],
                 )?
                 .finish_ignore_rows()?;
         } else {
@@ -466,4 +490,5 @@ use super::{
 use crate::storage::impls::storage_db::sqlite::SQLITE_NO_PARAM;
 use primitives::MerkleHash;
 use sqlite::Statement;
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
+use strfmt::strfmt;

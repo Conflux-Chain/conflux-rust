@@ -9,8 +9,12 @@ use cfxcore::{
     storage::{
         state::StateTrait,
         state_manager::{
-            StateManager, StateManagerTrait, StorageConfiguration,},
-        StateIndex,
+            StateManager, StateManagerTrait, StorageConfiguration,
+        },
+        storage_db::{
+            SingleWriterImplByFamily, SnapshotDbManagerTrait, SnapshotInfo,
+        },
+        DeltaMptInserter, KeyValueDbTrait, StateIndex,
     },
     sync::{
         delta::{Chunk, ChunkReader, StateDumper},
@@ -19,6 +23,12 @@ use cfxcore::{
     },
 };
 use clap::{App, Arg, ArgMatches};
+use log::LevelFilter;
+use log4rs::{
+    append::{console::ConsoleAppender, file::FileAppender},
+    config::{Appender, Config, Logger, Root},
+    encode::pattern::PatternEncoder,
+};
 use primitives::{Account, MerkleHash, StorageKey, NULL_EPOCH};
 use rlp::Rlp;
 use std::{
@@ -30,13 +40,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use cfxcore::storage::storage_db::{SingleWriterImplByFamily, SnapshotDbManagerTrait, SnapshotInfo};
-use cfxcore::storage::{KeyValueDbTrait, DeltaMptInserter};
-use log::LevelFilter;
-use log4rs::append::console::ConsoleAppender;
-use log4rs::append::file::FileAppender;
-use log4rs::encode::pattern::PatternEncoder;
-use log4rs::config::{Appender, Config, Logger, Root};
 
 // cargo run --release -p cfxcore --example restore_checkpoint_delta
 // cargo run --release -p cfxcore --example restore_checkpoint_delta -- --help
@@ -54,17 +57,31 @@ fn main() -> Result<(), Error> {
     println!("====================================================");
     println!("Setup node 1 ...");
     let sm1 = new_state_manager(test_dir.join("db1").to_str().unwrap())?;
-    let snapshot_db_manager = sm1.get_storage_manager().get_snapshot_manager().get_snapshot_db_manager();
+    let snapshot_db_manager = sm1
+        .get_storage_manager()
+        .get_snapshot_manager()
+        .get_snapshot_db_manager();
 
-    let snapshot1 = snapshot_db_manager.get_snapshot_by_epoch_id(&NULL_EPOCH)?.expect("initial snapshot");
-    // state1 is only used to build a delta mpt, so the snapshot within it does not matter.
+    let snapshot1 = snapshot_db_manager
+        .get_snapshot_by_epoch_id(&NULL_EPOCH)?
+        .expect("initial snapshot");
+    // state1 is only used to build a delta mpt, so the snapshot within it does
+    // not matter.
     let (genesis_hash, genesis_root) = initialize_genesis(&sm1)?;
     let accounts = arg_val(&matches, "accounts");
     let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
     let (checkpoint, checkpoint_root) =
         prepare_checkpoint(&sm1, genesis_hash, accounts, accounts_per_epoch)?;
-    let delta_mpt = sm1.get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(&checkpoint))?.expect("state exists").delta_trie.clone();
-    let delta_mpt_root = delta_mpt.get_root_node_ref(&checkpoint_root)?.expect("root exists");
+    let delta_mpt = sm1
+        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+            &checkpoint,
+        ))?
+        .expect("state exists")
+        .delta_trie
+        .clone();
+    let delta_mpt_root = delta_mpt
+        .get_root_node_ref(&checkpoint_root)?
+        .expect("root exists");
     let delta_mpt_insert = DeltaMptInserter {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
@@ -77,7 +94,12 @@ fn main() -> Result<(), Error> {
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![],
     };
-    let snapshot2 = snapshot_db_manager.new_snapshot_by_merging(&NULL_EPOCH, checkpoint, delta_mpt_insert, info)?;
+    let snapshot2 = snapshot_db_manager.new_snapshot_by_merging(
+        &NULL_EPOCH,
+        checkpoint,
+        delta_mpt_insert,
+        info,
+    )?;
     println!("After merging: {:?}", snapshot2);
     Ok(())
 }
@@ -98,7 +120,7 @@ fn parse_args<'a>() -> ArgMatches<'a> {
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts in checkpoint")
-                .default_value("1000000"),
+                .default_value("10000"),
         )
         .arg(
             Arg::with_name("accounts-per-epoch")
@@ -151,14 +173,14 @@ fn initialize_genesis(
 ) -> Result<(H256, MerkleHash), Error> {
     let mut state = manager.get_state_for_genesis_write();
 
-    state.set(
-        StorageKey::AccountKey(b"123"),
-        vec![1, 2, 3].into_boxed_slice(),
-    )?;
-    state.set(
-        StorageKey::AccountKey(b"124"),
-        vec![1, 2, 4].into_boxed_slice(),
-    )?;
+    //    state.set(
+    //        StorageKey::AccountKey(b"123"),
+    //        vec![1, 2, 3].into_boxed_slice(),
+    //    )?;
+    //    state.set(
+    //        StorageKey::AccountKey(b"124"),
+    //        vec![1, 2, 4].into_boxed_slice(),
+    //    )?;
 
     let root = state.compute_state_root()?;
     println!("genesis root: {:?}", root.state_root.delta_root);
