@@ -162,9 +162,9 @@ impl ArchiveClient {
         );
         debug!("Initialize genesis_block={:?}", genesis_block);
 
-        CHECKPOINT_DUMP_MANAGER
-            .write()
-            .initialize(storage_manager.clone());
+        //        CHECKPOINT_DUMP_MANAGER
+        //            .write()
+        //            .initialize(storage_manager.clone());
 
         let data_man = Arc::new(BlockDataManager::new(
             cache_config,

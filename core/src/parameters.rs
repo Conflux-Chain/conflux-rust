@@ -35,6 +35,18 @@ pub mod consensus_internal {
     pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
+    /// This is the renting fee for one key/value pair in storage.
+    /// 1 token for 1024B, the storage for one key/value pair is 64B = 1/16
+    /// token.
+    pub const RENTAL_PRICE_PER_STORAGE_KEY: u64 = CONFLUX_TOKEN / 16;
+    /// This is the scale factor for interest rate: 10^18. The interest rate per
+    /// epoch will be `interest of year * epoch_duration_fraction *
+    /// INTEREST_RATE_SCALE`.
+    pub const INTEREST_RATE_SCALE: u64 = 1_000_000_000_000_000_000;
+    /// This is the initial interest with scale: 0.04 * INTEREST_RATE_SCALE
+    pub const INITIAL_INTEREST_RATE: u64 = 40_000_000_000_000_000;
+    /// This is the number seconds per year
+    pub const SECONDS_PER_YEAR: u64 = 60 * 60 * 24 * 365;
 
     // This is the cap of the size of the anticone barrier. If we have more than
     // this number we will use the brute_force O(n) algorithm instead.

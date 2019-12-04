@@ -12,7 +12,7 @@ use crate::{
         state_manager::StateManager, StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
-        message::{msgid, Context, DynamicCapability},
+        message::{msgid, Context},
         state::{
             delta::{Chunk, ChunkKey},
             restore::Restorer,
@@ -186,9 +186,9 @@ impl SnapshotChunkSync {
         );
 
         let peer = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
-            .with_cap(DynamicCapability::ServeCheckpoint(Some(
-                inner.checkpoint,
-            )))
+            //            .with_cap(DynamicCapability::ServeCheckpoint(Some(
+            //                inner.checkpoint,
+            //            )))
             .select(&sync_handler.syn);
 
         sync_handler.request_manager.request_with_delay(
@@ -306,9 +306,9 @@ impl SnapshotChunkSync {
 
         // request snapshot chunks from peers concurrently
         let peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
-            .with_cap(DynamicCapability::ServeCheckpoint(Some(
-                inner.checkpoint,
-            )))
+            //            .with_cap(DynamicCapability::ServeCheckpoint(Some(
+            //                inner.checkpoint,
+            //            )))
             .select_n(self.max_download_peers, &ctx.manager.syn);
 
         for peer in peers {

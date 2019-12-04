@@ -15,7 +15,6 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethkey::Address;
-use itertools;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
@@ -31,10 +30,7 @@ pub struct MemoryDirectory {
 
 impl KeyDirectory for MemoryDirectory {
     fn load(&self) -> Result<Vec<SafeAccount>, Error> {
-        Ok(itertools::Itertools::flatten(
-            self.accounts.read().values().cloned(),
-        )
-        .collect())
+        Ok(self.accounts.read().values().cloned().flatten().collect())
     }
 
     fn update(&self, account: SafeAccount) -> Result<SafeAccount, Error> {

@@ -12,14 +12,13 @@ from test_framework.util import *
 from web3 import Web3
 from easysolc import Solc
 
-class StakingTest(ConfluxTestFramework):
+class WithdrawDepositTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 2
+        self.num_nodes = 1
 
     def setup_network(self):
         self.setup_nodes()
-        connect_sample_nodes(self.nodes, self.log)
         sync_blocks(self.nodes)
 
     def run_test(self):
@@ -45,19 +44,32 @@ class StakingTest(ConfluxTestFramework):
         block_gen_thread.start()
         self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
 
-        tx_n = 1
+        # Setup balance for node 0
+        node = self.nodes[0]
+        client = RpcClient(node)
+        (addr, priv_key) = client.rand_account()
+        self.log.info("addr=%s priv_key=%s", addr, priv_key)
+        tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=0)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
+        assert_equal(node.cfx_getBankBalance(addr), hex(0))
+
         self.tx_conf["to"] = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
-        sender_key = genesis_key
-        all_txs = []
-        for i in range(tx_n):
-            value = int(954)
-            tx_data = decode_hex(staking_contract.functions.stake(value).buildTransaction(self.tx_conf)["data"])
-            tx = create_transaction(pri_key=sender_key, receiver=decode_hex(self.tx_conf["to"]), value=0, nonce=nonce, gas=gas, gas_price=gas_price, data=tx_data)
-            self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
-            nonce += 1
-            all_txs.append(tx)
-        self.log.info("Wait for transactions to be executed")
-        self.wait_for_tx(all_txs)
+        # deposit 10**18
+        tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(self.tx_conf)["data"])
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], nonce=0, gas=gas, data=tx_data, priv_key=priv_key)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        assert_equal(node.cfx_getBankBalance(addr), hex(10 ** 18))
+
+        # withdraw 5 * 10**17
+        tx_data = decode_hex(staking_contract.functions.withdraw(5 * 10 ** 17).buildTransaction(self.tx_conf)["data"])
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], nonce=1, gas=gas, data=tx_data, priv_key=priv_key)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        assert_equal(node.cfx_getBankBalance(addr), hex(5 * 10 ** 17))
+
         block_gen_thread.stop()
         block_gen_thread.join()
         sync_blocks(self.nodes)
@@ -87,4 +99,4 @@ class StakingTest(ConfluxTestFramework):
             client.generate_block()
 
 if __name__ == "__main__":
-    StakingTest().main()
+    WithdrawDepositTest().main()
