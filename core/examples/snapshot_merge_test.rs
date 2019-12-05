@@ -76,7 +76,7 @@ fn main() -> Result<(), Error> {
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&checkpoint_root)?
         .expect("root exists");
-    let delta_mpt_insert = DeltaMptIterator {
+    let delta_mpt_iterator = DeltaMptIterator {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
@@ -87,11 +87,12 @@ fn main() -> Result<(), Error> {
         merkle_root: Default::default(),
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![],
+        serve_one_step_sync: false,
     };
     let snapshot2 = snapshot_db_manager.new_snapshot_by_merging(
         &NULL_EPOCH,
         checkpoint,
-        delta_mpt_insert,
+        delta_mpt_iterator,
         info,
     )?;
     println!("After merging: {:?}", snapshot2);

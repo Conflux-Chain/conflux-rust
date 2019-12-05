@@ -751,7 +751,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             // FIXME Handle this as a special case for SnapshotMpt
             // when maybe_db is None in SnapshotDbSqlite
             Err(Error(ErrorKind::SnapshotMPTTrieNodeNotFound, _)) => {
-                SnapshotMptNode::new(VanillaTrieNode::new(
+                SnapshotMptNode(VanillaTrieNode::new(
                     MERKLE_NULL_NODE,
                     Default::default(),
                     None,
@@ -1007,7 +1007,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
 impl<Mpt> ReadWritePathNode<Mpt> {
     /// Initial value for `self.first_realized_child_index`, meaning these is no
-    /// child.
+    /// child concluded in cursor iteration.
     const NULL_CHILD_INDEX: u8 = 16;
 
     fn get_has_io_error(&self) -> bool { self.io_error().get() }
