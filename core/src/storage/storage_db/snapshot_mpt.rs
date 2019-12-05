@@ -31,8 +31,6 @@ pub trait SnapshotMptTraitReadOnly {
 pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
     fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly;
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()>;
-    // FIXME: It seems better to pass by value, however in one place we can't
-    // move away structure field in drop().
     fn write_node(
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
     ) -> Result<()>;

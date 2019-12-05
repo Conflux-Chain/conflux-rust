@@ -26,7 +26,7 @@ impl TrieProofNode {
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> Self
     {
-        let merkle = Self::compute_merkle(
+        let merkle = compute_merkle(
             compressed_path.as_ref(),
             if children_table.get_children_count() == 0 {
                 None
@@ -41,16 +41,6 @@ impl TrieProofNode {
             maybe_value,
             compressed_path,
         ))
-    }
-
-    // \w  path: keccak([mask, [path...], keccak(rlp([[children...]?, value]))])
-    // \wo path: keccak(rlp([[children...]?, value]))
-    pub fn compute_merkle(
-        compressed_path_ref: CompressedPathRef,
-        children_merkles: MaybeMerkleTableRef, maybe_value: Option<&[u8]>,
-    ) -> MerkleHash
-    {
-        compute_merkle(compressed_path_ref, children_merkles, maybe_value)
     }
 }
 
@@ -223,7 +213,10 @@ impl TrieProof {
 
     pub fn compute_paths_for_all_nodes(&self) -> Vec<CompressedPathRaw> {
         let mut paths = Vec::with_capacity(self.nodes.len());
-        for i in 0..self.nodes.len() {
+        if let Some(node) = self.nodes.get(0) {
+            paths.push(node.compressed_path_ref().into());
+        }
+        for i in 1..self.nodes.len() {
             paths.push(CompressedPathRaw::concat(
                 &paths[self.parent_node_index[i]],
                 self.child_index[i],
@@ -275,9 +268,9 @@ impl DerefMut for TrieProofNode {
 
 use super::{
     super::errors::*,
-    merkle::{compute_merkle, MaybeMerkleTableRef},
+    merkle::compute_merkle,
     walk::{access_mode::Read, TrieNodeWalkTrait, WalkStop},
-    CompressedPathRaw, CompressedPathRef, CompressedPathTrait, TrieNodeTrait,
+    CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
     VanillaChildrenTable, VanillaTrieNode,
 };
 use cfx_types::H256;

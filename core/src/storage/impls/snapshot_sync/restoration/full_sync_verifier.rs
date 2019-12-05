@@ -136,6 +136,9 @@ impl FullSyncVerifier {
             for (path, node) in chunk_rebuilder.inner_nodes_to_write {
                 snapshot_mpt.write_node(&path, &node);
             }
+
+            // Combine changes around boundary nodes.
+            // TODO: this loop can be moved to constructor.
             for (path, node) in chunk_rebuilder.boundary_nodes {
                 let mut children_table = VanillaChildrenTable::default();
                 unsafe {

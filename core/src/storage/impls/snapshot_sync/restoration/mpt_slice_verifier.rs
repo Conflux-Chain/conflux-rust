@@ -125,7 +125,7 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
     fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
 
     fn delete_node(&mut self, _path: &dyn CompressedPathTrait) -> Result<()> {
-        // It's impossible to delete a node for FullSync / OneStepSync.
+        // It's impossible to delete a node for FullSync.
         unsafe { unreachable_unchecked() }
     }
 
@@ -165,7 +165,6 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
         } else {
             self.inner_nodes_to_write.push((
                 CompressedPathRaw::from(path.as_ref()),
-                // FIXME: check if it's possible to pass by value...
                 trie_node.clone(),
             ));
         }
