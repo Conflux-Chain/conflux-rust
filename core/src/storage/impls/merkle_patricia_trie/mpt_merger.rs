@@ -56,6 +56,7 @@ impl<'a> MptMerger<'a> {
             fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
                 let (key, value) = v;
                 println!("push key={:?}", key);
+                // FIXME key is 33 or 34 bytes?
                 if value.len() > 0 {
                     self.merger_mut().rw_cursor.insert(&key, value)?;
                 } else {

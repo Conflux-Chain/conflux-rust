@@ -163,15 +163,16 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         ))
                     } else {
                         let actual_matched_path = CompressedPathRaw::new(
-                            &last_node
-                                .get_basic_path_node()
-                                .full_path_to_node
-                                .path_slice()
+                            &matched_path.path_slice()
                                 [aligned_path_start_offset as usize..],
                             matched_path.end_mask(),
                         );
                         let original_compressed_path_ref =
                             last_trie_node.compressed_path_ref();
+                        if original_compressed_path_ref.path_size()
+                            < actual_matched_path.path_size() {
+                            println!("Error");
+                        }
                         let actual_unmatched_path_remaining =
                             CompressedPathRaw::new(
                                 &unmatched_path_remaining.path_slice()[0
@@ -180,6 +181,9 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                                         as usize],
                                 original_compressed_path_ref.end_mask(),
                             );
+                        if key_remaining.is_empty() {
+                            println!("empty");
+                        }
 
                         Ok(CursorPopNodesTerminal::PathDiverted(
                             WalkStop::PathDiverted {
@@ -748,14 +752,14 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             Ok(root_trie_node) => {
                 // FIXME implement get_merkle_root for mpt
                 //                let supposed_merkle_root =
-                //                    
+                //
                 // mpt.as_ref_assumed_owner().get_merkle_root();
                 //                assert_eq!(
                 //                    root_trie_node.get_merkle(),
                 //                    supposed_merkle_root,
                 //                    "loaded root trie node merkle hash {:?} !=
-                // supposed merkle hash {:?}",                  
-                // root_trie_node.get_merkle(),                 
+                // supposed merkle hash {:?}",
+                // root_trie_node.get_merkle(),
                 // supposed_merkle_root,                );
                 root_trie_node
             }
@@ -798,9 +802,10 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,
-            "loaded trie node merkle hash {:?} != supposed merkle hash {:?}",
+            "loaded trie node merkle hash {:?} != supposed merkle hash {:?}, path_db_key={:?}",
             trie_node.get_merkle(),
             supposed_merkle_root,
+            path_db_key,
         );
 
         let full_path_to_node = CompressedPathRaw::concat(

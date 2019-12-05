@@ -190,7 +190,11 @@ impl CompressedPathRaw {
         // TODO(yz): it happens to be the same no matter what end_mask of x is,
         // because u8 = 2 nibbles. When we switch to u32 as path unit
         // the concated size may vary.
-        let size = x_slice_len + y_slice.len();
+        let (size, end_mask) = if y_slice.is_empty() {
+            (x_slice_len + 1, CompressedPathRaw::first_nibble_mask())
+        } else {
+            (x_slice_len + y_slice.len(), y.end_mask())
+        };
 
         let mut path;
         {
@@ -219,6 +223,14 @@ impl CompressedPathRaw {
 
             if x.end_mask() == 0 {
                 slice[0..x_slice_len].copy_from_slice(x_slice);
+                if y_slice.is_empty() {
+                    slice[x_slice_len] =
+                        CompressedPathRaw::from_first_nibble(child_index);
+                } else if child_index
+                    != CompressedPathRaw::first_nibble(y_slice[0])
+                {
+                    println!("{} {:?}", y_slice[0], y_slice);
+                }
             } else {
                 slice[0..x_slice_len - 1]
                     .copy_from_slice(&x_slice[0..x_slice_len - 1]);
@@ -227,13 +239,15 @@ impl CompressedPathRaw {
                     child_index,
                 );
             }
-            slice[x_slice_len..].copy_from_slice(y_slice);
+            if !y_slice.is_empty() {
+                slice[x_slice_len..].copy_from_slice(y_slice);
+            }
         }
 
         Self {
             path_size: size as u16,
             path,
-            end_mask: y.end_mask(),
+            end_mask,
             byte_array_memory_manager: Default::default(),
         }
     }
