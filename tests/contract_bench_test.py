@@ -528,7 +528,7 @@ class ContractBenchTest(SmartContractBenchBase):
         # lock token for genesis account
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         self.tx_conf['to'] = staking_contract_addr
-        tx_data = decode_hex(staking_contract.functions.deposit(1000000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.deposit(1000000 * 10 ** 18, 90).buildTransaction(self.tx_conf)["data"])
         tx = self.rpc.new_tx(value=0, receiver=staking_contract_addr, data=tx_data, gas=gas, gas_price=gas_price)
         self.rpc.send_tx(tx, True)
 
@@ -540,7 +540,7 @@ class ContractBenchTest(SmartContractBenchBase):
             transaction = self.rpc.new_tx(sender=self.sender, receiver=pub_key, value=1000000 * 10 ** 18, priv_key=self.priv_key)
             self.rpc.send_tx(transaction, True)
             # deposit 10000 tokens
-            tx_data = decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+            tx_data = decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18, 90).buildTransaction(self.tx_conf)["data"])
             tx = self.rpc.new_tx(value=0, sender=pub_key, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
             self.rpc.send_tx(tx)
         self.tx_conf = {"from":self.sender, "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}

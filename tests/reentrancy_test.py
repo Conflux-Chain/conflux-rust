@@ -164,7 +164,7 @@ class ReentrancyTest(ConfluxTestFramework):
         staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
         tx_conf = copy.deepcopy(ReentrancyTest.REQUEST_BASE)
         tx_conf['to'] = staking_contract_addr
-        tx_data = decode_hex(staking_contract.functions.deposit(2000 * 10 ** 18).buildTransaction(tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.deposit(2000 * 10 ** 18, 90).buildTransaction(tx_conf)["data"])
         tx1 = client.new_tx(
             value=0,
             sender=eth_utils.encode_hex(user1_addr),

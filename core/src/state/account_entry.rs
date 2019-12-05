@@ -9,7 +9,7 @@ use crate::{
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
-use primitives::{Account, StorageKey};
+use primitives::{Account, DepositInfo, StorageKey};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
@@ -41,10 +41,16 @@ pub struct OverlayAccount {
     /// This is the number of tokens in bank and part of this will be used for
     /// storage.
     bank_balance: U256,
+    /// This is the number of tokens which can be withdrawed from bank.
+    mature_bank_balance: U256,
     /// This is the number of tokens in bank used for storage.
     storage_balance: U256,
     /// This is the accumulated interest rate at latest deposit.
     bank_ar: U256,
+    /// This is a list of deposit history (amount, maturity_time)
+    deposit_list: Vec<DepositInfo>,
+    /// This is the lastest timestamp when the state of account has changed.
+    timestamp: u64,
 
     // Code hash of the account.
     code_hash: H256,
@@ -57,7 +63,9 @@ pub struct OverlayAccount {
 }
 
 impl OverlayAccount {
-    pub fn new(address: &Address, account: Account, ar: U256) -> Self {
+    pub fn new(
+        address: &Address, account: Account, ar: U256, timestamp: u64,
+    ) -> Self {
         let mut overlay_account = OverlayAccount {
             address: address.clone(),
             balance: account.balance,
@@ -67,14 +75,17 @@ impl OverlayAccount {
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
             bank_balance: account.bank_balance,
+            mature_bank_balance: account.mature_bank_balance,
             storage_balance: account.storage_balance,
             bank_ar: account.bank_ar,
+            deposit_list: account.deposit_list.clone(),
+            timestamp: account.timestamp,
             code_hash: account.code_hash,
             code_size: None,
             code_cache: Arc::new(vec![]),
             reset_storage: false,
         };
-        overlay_account.interest_settlement(ar);
+        overlay_account.bank_balance_settlement(ar, timestamp);
         overlay_account
     }
 
@@ -88,8 +99,11 @@ impl OverlayAccount {
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
             bank_balance: 0.into(),
+            mature_bank_balance: 0.into(),
             storage_balance: 0.into(),
             bank_ar: 0.into(),
+            deposit_list: Vec::new(),
+            timestamp: 0,
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -109,8 +123,11 @@ impl OverlayAccount {
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
             bank_balance: 0.into(),
+            mature_bank_balance: 0.into(),
             storage_balance: 0.into(),
             bank_ar: 0.into(),
+            deposit_list: Vec::new(),
+            timestamp: 0,
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -120,17 +137,20 @@ impl OverlayAccount {
 
     pub fn as_account(&self) -> Account {
         Account {
-            address: self.address.clone(),
-            balance: self.balance.clone(),
-            nonce: self.nonce.clone(),
-            code_hash: self.code_hash.clone(),
+            address: self.address,
+            balance: self.balance,
+            nonce: self.nonce,
+            code_hash: self.code_hash,
             bank_balance: self.bank_balance,
+            mature_bank_balance: self.mature_bank_balance,
             storage_balance: self.storage_balance,
             bank_ar: self.bank_ar,
+            deposit_list: self.deposit_list.clone(),
+            timestamp: self.timestamp,
         }
     }
 
-    fn interest_settlement(&mut self, ar: U256) {
+    fn bank_balance_settlement(&mut self, ar: U256, timestamp: u64) {
         if self.bank_ar == ar {
             return;
         }
@@ -138,6 +158,30 @@ impl OverlayAccount {
         self.balance +=
             capital * (ar - self.bank_ar) / U256::from(INTEREST_RATE_SCALE);
         self.bank_ar = ar;
+        if !self.deposit_list.is_empty()
+            && self.deposit_list.last().unwrap().maturity_time > self.timestamp
+        {
+            // Binary search to find first unmature deposit info according to
+            // `self.timestamp`.
+            let mut left = 0;
+            let mut right = self.deposit_list.len() - 1;
+            while left < right {
+                let mid = (left + right - 1) >> 1;
+                if self.deposit_list[mid].maturity_time > self.timestamp {
+                    right = mid;
+                } else {
+                    left = mid + 1;
+                }
+            }
+            for i in right..self.deposit_list.len() {
+                if self.deposit_list[i].maturity_time <= timestamp {
+                    self.mature_bank_balance += self.deposit_list[i].amount;
+                } else {
+                    break;
+                }
+            }
+        }
+        self.timestamp = timestamp;
     }
 
     pub fn address(&self) -> &Address { &self.address }
@@ -145,6 +189,8 @@ impl OverlayAccount {
     pub fn balance(&self) -> &U256 { &self.balance }
 
     pub fn bank_balance(&self) -> &U256 { &self.bank_balance }
+
+    pub fn mature_bank_balance(&self) -> &U256 { &self.mature_bank_balance }
 
     pub fn storage_balance(&self) -> &U256 { &self.storage_balance }
 
@@ -186,13 +232,20 @@ impl OverlayAccount {
         self.balance = self.balance - *by;
     }
 
-    pub fn deposit(&mut self, by: &U256) {
+    pub fn deposit(&mut self, by: &U256, maturity_time: u64) {
         self.sub_balance(by);
         self.bank_balance += *by;
+        self.deposit_list.push(DepositInfo {
+            amount: *by,
+            maturity_time,
+        })
     }
 
     pub fn withdraw(&mut self, by: &U256) {
-        assert!(self.bank_balance - self.storage_balance >= *by);
+        assert!(
+            self.bank_balance - self.storage_balance >= *by
+                && self.mature_bank_balance >= *by
+        );
         self.bank_balance -= *by;
         self.add_balance(by);
     }
@@ -231,18 +284,21 @@ impl OverlayAccount {
 
     pub fn clone_basic(&self) -> Self {
         OverlayAccount {
-            address: self.address.clone(),
-            balance: self.balance.clone(),
-            nonce: self.nonce.clone(),
+            address: self.address,
+            balance: self.balance,
+            nonce: self.nonce,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
             bank_balance: self.bank_balance,
+            mature_bank_balance: self.mature_bank_balance,
             storage_balance: self.storage_balance,
             bank_ar: self.bank_ar,
-            code_hash: self.code_hash.clone(),
-            code_size: self.code_size.clone(),
+            deposit_list: self.deposit_list.clone(),
+            timestamp: self.timestamp,
+            code_hash: self.code_hash,
+            code_size: self.code_size,
             code_cache: self.code_cache.clone(),
             reset_storage: self.reset_storage,
         }
@@ -253,7 +309,6 @@ impl OverlayAccount {
         account.storage_changes = self.storage_changes.clone();
         account.ownership_cache = self.ownership_cache.clone();
         account.ownership_changes = self.ownership_changes.clone();
-        account.reset_storage = self.reset_storage;
         account
     }
 

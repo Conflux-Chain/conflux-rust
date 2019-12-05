@@ -85,8 +85,12 @@ impl StateManager {
         let mut state = StateDb::new(self.get_state_for_genesis_write());
 
         for (addr, balance) in genesis_accounts {
-            let account =
-                Account::new_empty_with_balance(&addr, &balance, &0.into());
+            let account = Account::new_empty_with_balance(
+                &addr,
+                &balance,
+                &0.into(), /* nonce */
+                0,         /* timestamp */
+            );
             state
                 .set(StorageKey::new_account_key(&addr), &account)
                 .unwrap();

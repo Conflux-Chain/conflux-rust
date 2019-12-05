@@ -929,6 +929,7 @@ impl ConsensusExecutionHandler {
             ),
             0.into(),
             self.vm.clone(),
+            pivot_block.block_header.timestamp(),
         );
         let epoch_receipts = self.process_epoch_transactions(
             &mut state,
@@ -1435,6 +1436,7 @@ impl ConsensusExecutionHandler {
             ),
             0.into(),
             self.vm.clone(),
+            pivot_block.block_header.timestamp(),
         );
         self.process_epoch_transactions(
             &mut state,
@@ -1453,6 +1455,12 @@ impl ConsensusExecutionHandler {
         let machine = new_machine_with_builtin();
         let (_state_index_guard, state_index) =
             self.data_man.get_state_readonly_index(epoch_id).into();
+        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
+        trace!("best_block_header: {:?}", best_block_header);
+        let time_stamp = match best_block_header {
+            Some(header) => header.timestamp(),
+            None => Default::default(),
+        };
         let mut state = State::new(
             StateDb::new(
                 self.data_man
@@ -1464,13 +1472,8 @@ impl ConsensusExecutionHandler {
             ),
             0.into(),
             self.vm.clone(),
+            time_stamp,
         );
-        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
-        trace!("best_block_header: {:?}", best_block_header);
-        let time_stamp = match best_block_header {
-            Some(header) => header.timestamp(),
-            None => Default::default(),
-        };
         let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),

@@ -64,20 +64,7 @@ impl<'a> StateDb<'a> {
     }
 
     pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {
-        let key = StorageKey::new_account_key(address);
-        let raw = match self.storage.get(key) {
-            Ok(maybe_value) => match maybe_value {
-                None => return Ok(None),
-                Some(raw) => raw,
-            },
-            Err(e) => {
-                return Err(e.into());
-            }
-        };
-        //        println!("get key={:?} value={:?}", key, raw);
-
-        let account = Account::new_from_rlp(address, raw.as_ref())?;
-        Ok(Some(account))
+        self.get::<Account>(StorageKey::new_account_key(address))
     }
 
     pub fn get_raw(&self, key: StorageKey) -> Result<Option<Box<[u8]>>> {

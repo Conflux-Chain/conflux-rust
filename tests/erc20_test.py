@@ -45,7 +45,7 @@ class P2PTest(ConfluxTestFramework):
         self.tx_conf = {"gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
         self.tx_conf["to"] = staking_contract_addr
-        tx_data = decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18, 90).buildTransaction(self.tx_conf)["data"])
         node = self.nodes[0]
         client = RpcClient(node)
         genesis_key = default_config["GENESIS_PRI_KEY"]
