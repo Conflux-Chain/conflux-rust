@@ -36,6 +36,15 @@ impl SnapshotDbManagerSqlite {
             + &delta_merkle_root.to_hex()
     }
 
+    fn get_full_sync_temp_snapshot_db_path(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> String {
+        self.snapshot_path.clone()
+            + "full_sync_temp_"
+            + &snapshot_epoch_id.to_hex()
+            + &merkle_root.to_hex()
+    }
+
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
     /// Ok(false) when cow copy isn't supported.
     fn try_make_cow_copy_impl(
@@ -206,6 +215,16 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         Ok(fs::remove_file(
             self.get_snapshot_db_path(snapshot_epoch_id),
         )?)
+    }
+
+    fn new_temp_snapshot_for_full_sync(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> Result<Self::SnapshotDb> {
+        let temp_db_name = self.get_full_sync_temp_snapshot_db_path(
+            snapshot_epoch_id,
+            merkle_root,
+        );
+        Self::SnapshotDb::create(&temp_db_name)
     }
 }
 

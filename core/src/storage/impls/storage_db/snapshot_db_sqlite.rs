@@ -277,7 +277,7 @@ impl SnapshotDbSqlite {
         Ok((key.into_boxed_slice(), value.into_boxed_slice()))
     }
 
-    fn open_snapshot_mpt_for_write(
+    pub fn open_snapshot_mpt_for_write(
         &mut self,
     ) -> Result<
         SnapshotMpt<

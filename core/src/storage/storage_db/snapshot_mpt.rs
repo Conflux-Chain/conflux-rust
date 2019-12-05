@@ -31,8 +31,6 @@ pub trait SnapshotMptTraitReadOnly {
 pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
     fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly;
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()>;
-    // FIXME: It seems better to pass by value, however in one place we can't
-    // move away structure field in drop().
     fn write_node(
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
     ) -> Result<()>;
@@ -63,10 +61,6 @@ impl SnapshotMptNode {
         delta_subtree_size: 0,
     };
 
-    pub fn new(node: VanillaTrieNode<SubtreeMerkleWithSize>) -> Self {
-        Self(node)
-    }
-
     pub fn subtree_size(&self) -> u64 { Self::initial_subtree_size(&self.0) }
 
     fn initial_subtree_size(
@@ -76,9 +70,7 @@ impl SnapshotMptNode {
         for (
             _child_index,
             &SubtreeMerkleWithSize {
-                merkle: _,
-                ref subtree_size,
-                delta_subtree_size: _,
+                ref subtree_size, ..
             },
         ) in node.get_children_table_ref().iter()
         {
@@ -88,20 +80,14 @@ impl SnapshotMptNode {
         size
     }
 
-    pub fn get_children_merkle(&self) -> MaybeMerkleTable {
+    pub fn get_children_merkles(&self) -> MaybeMerkleTable {
         if self.get_children_count() > 0 {
             let mut merkle_table = Some(
                 [ChildrenTableItem::<MerkleHash>::no_child().clone();
                     CHILDREN_COUNT],
             );
-            for (
-                child_index,
-                &SubtreeMerkleWithSize {
-                    ref merkle,
-                    subtree_size: _,
-                    delta_subtree_size: _,
-                },
-            ) in self.get_children_table_ref().iter()
+            for (child_index, &SubtreeMerkleWithSize { ref merkle, .. }) in
+                self.get_children_table_ref().iter()
             {
                 merkle_table.as_mut().unwrap()[child_index as usize] = *merkle;
             }
@@ -114,7 +100,7 @@ impl SnapshotMptNode {
 
 impl Decodable for SnapshotMptNode {
     fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
-        Ok(Self::new(rlp.as_val()?))
+        Ok(Self(rlp.as_val()?))
     }
 }
 

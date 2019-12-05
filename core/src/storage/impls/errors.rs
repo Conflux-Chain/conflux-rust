@@ -95,5 +95,15 @@ error_chain! {
             description("Can't find requested Delta MPT in registry."),
             display("Can't find requested Delta MPT in registry."),
         }
+
+        InvalidTrieProof {
+            description("Trie proof is invalid."),
+            display("Trie proof is invalid."),
+        }
+
+        InvalidSnapshotSyncProof {
+            description("Snapshot sync proof is invalid"),
+            display("Snapshot sync proof is invalid"),
+        }
     }
 }
