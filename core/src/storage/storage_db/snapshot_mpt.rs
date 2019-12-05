@@ -11,7 +11,7 @@ pub type SnapshotMptDbValue = Box<[u8]>;
 #[derive(Clone, Default)]
 pub struct SnapshotMptNode(pub VanillaTrieNode<SubtreeMerkleWithSize>);
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct SubtreeMerkleWithSize {
     pub merkle: MerkleHash,
     pub subtree_size: u64,
@@ -55,18 +55,27 @@ impl<
 }
 
 impl SnapshotMptNode {
-    pub const EMPTY_CHILD: SubtreeMerkleWithSize = SubtreeMerkleWithSize {
+    pub const NO_CHILD: SubtreeMerkleWithSize = SubtreeMerkleWithSize {
         merkle: MERKLE_NULL_NODE,
         subtree_size: 0,
         delta_subtree_size: 0,
     };
 
-    pub fn subtree_size(&self) -> u64 { Self::initial_subtree_size(&self.0) }
+    pub fn subtree_size(&self, full_path: &dyn CompressedPathTrait) -> u64 {
+        Self::initial_subtree_size(&self.0, full_path)
+    }
 
     fn initial_subtree_size(
         node: &VanillaTrieNode<SubtreeMerkleWithSize>,
-    ) -> u64 {
-        let mut size = 0;
+        full_path: &dyn CompressedPathTrait,
+    ) -> u64
+    {
+        let mut size = match node.value_as_slice().into_option() {
+            None => 0,
+            Some(value) => {
+                rlp_key_value_len(full_path.path_size(), value.len())
+            }
+        };
         for (
             _child_index,
             &SubtreeMerkleWithSize {
@@ -139,7 +148,7 @@ impl DefaultChildrenItem<SubtreeMerkleWithSize>
     for ChildrenTableItem<SubtreeMerkleWithSize>
 {
     fn no_child() -> &'static SubtreeMerkleWithSize {
-        &SnapshotMptNode::EMPTY_CHILD
+        &SnapshotMptNode::NO_CHILD
     }
 }
 
@@ -151,6 +160,7 @@ use super::super::impls::{
         VanillaTrieNode, CHILDREN_COUNT,
     },
 };
+use crate::storage::impls::merkle_patricia_trie::mpt_cursor::rlp_key_value_len;
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;

@@ -541,13 +541,16 @@ impl<'a> State<'a> {
     pub fn dump<DUMPER: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DUMPER,
     ) -> Result<()> {
-        let inserter = DeltaMptInserter {
+        let inserter = DeltaMptIterator {
             maybe_mpt: Some(self.delta_trie.clone()),
             maybe_root_node: self.delta_trie_root.clone(),
         };
 
         inserter.iterate(dumper)
     }
+
+    /// FIXME This is for test only.
+    pub fn get_delta_trie(&self) -> Arc<DeltaMpt> { self.delta_trie.clone() }
 }
 
 use super::{
@@ -560,7 +563,7 @@ use super::{
     merkle_patricia_trie::{KVInserter, TrieProof, VanillaChildrenTable},
     state_manager::*,
     state_proof::StateProof,
-    storage_manager::DeltaMptInserter,
+    storage_manager::DeltaMptIterator,
 };
 use parity_bytes::ToPretty;
 use primitives::{

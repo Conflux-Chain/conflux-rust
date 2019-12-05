@@ -8,7 +8,7 @@ pub trait SnapshotDbManagerTrait {
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
-        delta_mpt: DeltaMptInserter, in_progress_snapshot_info: SnapshotInfo,
+        delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
     ) -> Result<SnapshotInfo>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId,
@@ -22,7 +22,7 @@ pub trait SnapshotDbManagerTrait {
 
 use super::{
     super::impls::{
-        errors::*, storage_manager::storage_manager::DeltaMptInserter,
+        errors::*, storage_manager::storage_manager::DeltaMptIterator,
     },
     snapshot_db::*,
 };
