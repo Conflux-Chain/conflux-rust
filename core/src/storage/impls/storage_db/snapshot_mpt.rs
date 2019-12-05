@@ -84,9 +84,7 @@ where DbType:
         let key = mpt_node_path_to_db_key(path);
         match self.db.borrow_mut().get_mut(&key)? {
             None => Ok(None),
-            Some(rlp) => {
-                Ok(Some(SnapshotMptNode::new(Rlp::new(&rlp).as_val()?)))
-            }
+            Some(rlp) => Ok(Some(SnapshotMptNode(Rlp::new(&rlp).as_val()?))),
         }
     }
 

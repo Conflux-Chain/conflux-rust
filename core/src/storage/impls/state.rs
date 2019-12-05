@@ -142,14 +142,16 @@ impl<'a> State<'a> {
                 }
             };
 
-        // TODO: get from snapshot
-        // self.get_from_snapshot(access_key)
+        let maybe_value = self.get_from_snapshot(&access_key.to_key_bytes())?;
+        if with_proof {
+            // FIMXE: implement snapshot proof.
+        }
 
         let proof = StateProof::default()
             .with_delta(maybe_delta_proof)
             .with_intermediate(maybe_intermediate_proof);
 
-        Ok((None, proof))
+        Ok((maybe_value, proof))
     }
 }
 

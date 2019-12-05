@@ -16,6 +16,9 @@ pub mod trie_node;
 pub mod trie_proof;
 pub(super) mod walk;
 
+#[cfg(test)]
+mod tests;
+
 pub use self::{
     children_table::*,
     compressed_path::{

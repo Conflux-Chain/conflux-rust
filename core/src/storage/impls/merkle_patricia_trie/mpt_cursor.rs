@@ -36,9 +36,8 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
         let mut trie_nodes = Vec::with_capacity(self.path_nodes.len());
         for node in &self.path_nodes {
             let trie_node = &node.get_basic_path_node().trie_node;
-            trie_nodes.push(TrieProofNode(VanillaTrieNode::new(
-                trie_node.get_merkle().clone(),
-                trie_node.get_children_merkle().map_or_else(
+            trie_nodes.push(TrieProofNode::new(
+                trie_node.get_children_merkles().map_or_else(
                     || VanillaChildrenTable::default(),
                     |merkle_table| merkle_table.into(),
                 ),
@@ -47,9 +46,12 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     .into_option()
                     .map(|slice| slice.into()),
                 trie_node.compressed_path_ref().into(),
-            )))
+            ))
         }
-        TrieProof::new(trie_nodes)
+
+        // Unwrap is fine because the TrieProof must be valid unless the Mpt is
+        // being modified.
+        TrieProof::new(trie_nodes).unwrap()
     }
 
     pub fn push_node(&mut self, node: PathNode) { self.path_nodes.push(node); }
@@ -329,7 +331,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 }
                 let new_node = PathNode::new(
                     BasicPathNode::new(
-                        SnapshotMptNode::new(VanillaTrieNode::new(
+                        SnapshotMptNode(VanillaTrieNode::new(
                             MERKLE_NULL_NODE,
                             Default::default(),
                             Some(value),
@@ -382,7 +384,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                     as u64;
                 let mut fork_node = PathNode::new(
                     BasicPathNode::new(
-                        SnapshotMptNode::new(VanillaTrieNode::new(
+                        SnapshotMptNode(VanillaTrieNode::new(
                             MERKLE_NULL_NODE,
                             VanillaChildrenTable::new_from_one_child(
                                 unmatched_child_index,
@@ -432,7 +434,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
 
                         let value_node = PathNode::new(
                             BasicPathNode::new(
-                                SnapshotMptNode::new(VanillaTrieNode::new(
+                                SnapshotMptNode(VanillaTrieNode::new(
                                     MERKLE_NULL_NODE,
                                     Default::default(),
                                     Some(value),
@@ -865,8 +867,7 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
             None => Ok(None),
             Some(&SubtreeMerkleWithSize {
                 merkle: ref supposed_merkle_hash,
-                subtree_size: _,
-                delta_subtree_size: _,
+                ..
             }) => {
                 let mpt = self.mpt.take();
                 Ok(Some(Self::load_into(
@@ -1019,7 +1020,7 @@ impl<Mpt> ReadWritePathNode<Mpt> {
     fn compute_merkle(&mut self) -> MerkleHash {
         let path_merkle = self
             .trie_node
-            .compute_merkle(self.trie_node.get_children_merkle().as_ref());
+            .compute_merkle(self.trie_node.get_children_merkles().as_ref());
         self.trie_node.set_merkle(&path_merkle);
 
         path_merkle
@@ -1068,8 +1069,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             this_child_index,
             &SubtreeMerkleWithSize {
                 merkle: ref this_child_node_merkle_ref,
-                subtree_size: _,
-                delta_subtree_size: _,
+                ..
             },
         ) in self
             .basic_node

@@ -1,0 +1,227 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
+use crate::storage::impls::merkle_patricia_trie::VanillaChildrenTable;
+
+pub struct FullSyncVerifier {
+    number_chunks: usize,
+    merkle_root: MerkleHash,
+    chunk_boundaries: Vec<Vec<u8>>,
+    chunk_boundary_proofs: Vec<TrieProof>,
+    chunk_verified: Vec<bool>,
+    number_incomplete_chunk: usize,
+
+    pending_boundary_nodes: HashMap<CompressedPathRaw, SnapshotMptNode>,
+    boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
+
+    temp_snapshot_db: SnapshotDb,
+}
+
+#[allow(unused)]
+impl FullSyncVerifier {
+    pub fn new(
+        number_chunks: usize, chunk_boundaries: Vec<Vec<u8>>,
+        chunk_boundary_proofs: Vec<TrieProof>, merkle_root: MerkleHash,
+        snapshot_db_manager: SnapshotDbManager, epoch_id: &EpochId,
+    ) -> Result<Self>
+    {
+        if number_chunks != chunk_boundaries.len() + 1 {
+            bail!(ErrorKind::InvalidSnapshotSyncProof)
+        }
+        if number_chunks != chunk_boundary_proofs.len() + 1 {
+            bail!(ErrorKind::InvalidSnapshotSyncProof)
+        }
+        for (chunk_boundary, proof) in
+            chunk_boundaries.iter().zip(chunk_boundary_proofs.iter())
+        {
+            if merkle_root.ne(proof.get_merkle_root()) {
+                bail!(ErrorKind::InvalidSnapshotSyncProof)
+            }
+            // We don't want the proof to carry extra nodes.
+            if proof.number_leaf_nodes() != 1 {
+                bail!(ErrorKind::InvalidSnapshotSyncProof)
+            }
+            if proof.if_proves_key(&*chunk_boundary)
+                != (true, proof.get_proof_nodes().last())
+            {
+                bail!(ErrorKind::InvalidSnapshotSyncProof)
+            }
+        }
+
+        Ok(Self {
+            number_chunks,
+            merkle_root,
+            chunk_boundaries,
+            chunk_boundary_proofs,
+            chunk_verified: vec![false; number_chunks],
+            number_incomplete_chunk: number_chunks,
+            pending_boundary_nodes: Default::default(),
+            boundary_subtree_total_size: Default::default(),
+            temp_snapshot_db: snapshot_db_manager
+                .new_temp_snapshot_for_full_sync(epoch_id, &merkle_root)?,
+        })
+    }
+
+    pub fn is_completed(&self) -> bool { self.number_incomplete_chunk == 0 }
+
+    // FIXME: multi-threading, where &mut can be dropped.
+    pub fn restore_chunk<Key: Borrow<[u8]>>(
+        &mut self, chunk_index: usize, keys: &Vec<Key>, values: Vec<Box<[u8]>>,
+    ) -> Result<bool> {
+        // Check key monotone.
+        if !keys.is_empty() {
+            let mut previous = keys.first().unwrap();
+            for key in &keys[1..] {
+                if key.borrow().le(previous.borrow()) {
+                    return Ok(false);
+                }
+                previous = key;
+            }
+        }
+
+        let key_range_left;
+        let key_range_right_excl;
+        let maybe_left_proof;
+        let maybe_right_proof;
+        if chunk_index == 0 {
+            key_range_left = vec![];
+            maybe_left_proof = None;
+        } else {
+            key_range_left = self.chunk_boundaries[chunk_index - 1].clone();
+            maybe_left_proof = self.chunk_boundary_proofs.get(chunk_index - 1);
+
+            // Check key boundary.
+            if let Some(first_key) = keys.first() {
+                if first_key.borrow().lt(&*key_range_left) {
+                    return Ok(false);
+                }
+            }
+        };
+        if chunk_index == self.number_chunks - 1 {
+            key_range_right_excl = vec![];
+            maybe_right_proof = None;
+        } else {
+            key_range_right_excl = self.chunk_boundaries[chunk_index].clone();
+            maybe_right_proof = self.chunk_boundary_proofs.get(chunk_index);
+
+            // Check key boundary.
+            if let Some(last_key) = keys.last() {
+                if last_key.borrow().ge(&*key_range_right_excl) {
+                    return Ok(false);
+                }
+            }
+        }
+
+        // FIXME: multi-threading.
+        // Restore.
+        let chunk_verifier = MptSliceVerifier::new(
+            maybe_left_proof,
+            maybe_right_proof,
+            self.merkle_root.clone(),
+        );
+
+        let mut chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
+        if chunk_rebuilder.is_valid {
+            self.chunk_verified[chunk_index] = true;
+
+            // Commit key-values.
+            for (key, value) in keys.into_iter().zip(values.into_iter()) {
+                self.temp_snapshot_db.put(key.borrow(), &value)?;
+            }
+
+            // Commit inner nodes.
+            let mut snapshot_mpt =
+                self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
+            for (path, node) in chunk_rebuilder.inner_nodes_to_write {
+                snapshot_mpt.write_node(&path, &node);
+            }
+
+            // Combine changes around boundary nodes.
+            // TODO: this loop can be moved to constructor.
+            for (path, node) in chunk_rebuilder.boundary_nodes {
+                let mut children_table = VanillaChildrenTable::default();
+                unsafe {
+                    *children_table.get_children_count_mut() =
+                        node.get_children_count();
+                }
+                self.pending_boundary_nodes.insert(
+                    path,
+                    SnapshotMptNode(VanillaTrieNode::new(
+                        node.get_merkle().clone(),
+                        children_table,
+                        node.value_as_slice()
+                            .into_option()
+                            .map(|ref_v| ref_v.into()),
+                        node.compressed_path_ref().into(),
+                    )),
+                );
+            }
+            for (subtree_index, subtree_size) in
+                chunk_rebuilder.boundary_subtree_total_size
+            {
+                self.boundary_subtree_total_size
+                    .insert(subtree_index, subtree_size);
+            }
+        }
+
+        if self.is_completed() {
+            self.finalize()?
+        }
+
+        Ok(chunk_rebuilder.is_valid)
+    }
+
+    // FIXME: multi-threading
+    /// Combine and write boundary subtree nodes after all chunks have been
+    /// completed.
+    pub fn finalize(&mut self) -> Result<()> {
+        let mut snapshot_mpt =
+            self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
+
+        for (path, mut node) in self.pending_boundary_nodes.drain() {
+            let merkle = node.get_merkle().clone();
+            let mut subtree_index = BoundarySubtreeIndex {
+                parent_node: merkle,
+                child_index: 0,
+            };
+            for child_index in 0..CHILDREN_COUNT as u8 {
+                subtree_index.child_index = child_index;
+                if let Some(subtree_size) =
+                    self.boundary_subtree_total_size.get(&subtree_index)
+                {
+                    // Actually safe.
+                    unsafe {
+                        node.get_child_mut_unchecked(child_index)
+                            .subtree_size = *subtree_size;
+                    }
+                }
+            }
+
+            snapshot_mpt.write_node(&path, &node)?;
+        }
+
+        Ok(())
+    }
+}
+
+use crate::storage::{
+    impls::{
+        errors::*,
+        merkle_patricia_trie::{
+            trie_node::TrieNodeTrait, CompressedPathRaw, VanillaTrieNode,
+            CHILDREN_COUNT,
+        },
+        snapshot_sync::restoration::mpt_slice_verifier::{
+            BoundarySubtreeIndex, MptSliceVerifier,
+        },
+        state_manager::{SnapshotDb, SnapshotDbManager},
+    },
+    storage_db::{
+        key_value_db::KeyValueDbTraitSingleWriter, SnapshotDbManagerTrait,
+        SnapshotMptNode, SnapshotMptTraitSingleWriter,
+    },
+    TrieProof,
+};
+use primitives::{EpochId, MerkleHash};
+use std::{borrow::Borrow, collections::HashMap};

@@ -170,7 +170,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 
             // create proof node
             proof_nodes.push({
-                let merkle_hash = trie_node.get_merkle().clone();
                 let maybe_value = trie_node.value_clone().into_option();
                 let compressed_path = trie_node.compressed_path_ref().into();
 
@@ -178,16 +177,17 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 drop(trie_node);
                 let children_merkles =
                     self.retrieve_children_hashes(children)?;
-                TrieProofNode(VanillaTrieNode::new(
-                    merkle_hash,
+                TrieProofNode::new(
                     children_merkles.into(),
                     maybe_value,
                     compressed_path,
-                ))
+                )
             });
         }
 
-        Ok(TrieProof::new(proof_nodes))
+        // The proof can be wrong when the trie is being modified and we haven't
+        // update the merkle hash bottom-up.
+        Ok(TrieProof::new(proof_nodes)?)
     }
 
     pub fn get(&mut self, key: KeyPart) -> Result<Option<Box<[u8]>>> {
