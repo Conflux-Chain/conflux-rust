@@ -82,7 +82,7 @@ fn main() -> Result<(), Error> {
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&snapshot1_state_root)?
         .expect("root exists");
-    let delta_mpt_insert = DeltaMptIterator {
+    let delta_mpt_iterator = DeltaMptIterator {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
@@ -98,7 +98,7 @@ fn main() -> Result<(), Error> {
     let snapshot_info1 = snapshot_db_manager.new_snapshot_by_merging(
         &NULL_EPOCH,
         snapshot1_epoch,
-        delta_mpt_insert,
+        delta_mpt_iterator,
         info,
     )?;
     println!("After merging: {:?}", snapshot_info1);
@@ -117,7 +117,7 @@ fn main() -> Result<(), Error> {
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&snapshot2_state_root)?
         .expect("root exists");
-    let delta_mpt_insert = DeltaMptIterator {
+    let delta_mpt_iterator = DeltaMptIterator {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
@@ -133,7 +133,7 @@ fn main() -> Result<(), Error> {
     let snapshot_info2 = snapshot_db_manager.new_snapshot_by_merging(
         &snapshot1_epoch,
         snapshot2_epoch,
-        delta_mpt_insert,
+        delta_mpt_iterator,
         info,
     )?;
     println!("After merging: {:?}", snapshot_info2);
