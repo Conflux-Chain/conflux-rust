@@ -79,6 +79,14 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
             .path_start_steps
             > target_key_steps
         {
+            println!("before pop len={} path_start_steps={}", self
+                .path_nodes
+                .len(), self
+                .path_nodes
+                .last()
+                .unwrap()
+                .get_basic_path_node()
+                .path_start_steps);
             self.pop_one_node()?
         }
         Ok(())
@@ -119,10 +127,13 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
             WalkStop::ChildNotFound {
                 child_index,
                 key_remaining,
-            } => Ok(CursorPopNodesTerminal::Descent {
-                child_index,
-                key_remaining,
-            }),
+            } => {
+                println!("pop_path_for_key: ChildNotFound child_index={:?}, key_remaining={:?}", child_index, key_remaining);
+                Ok(CursorPopNodesTerminal::Descent {
+                    child_index,
+                    key_remaining,
+                })
+            },
             WalkStop::PathDiverted {
                 key_child_index,
                 key_remaining,
@@ -130,6 +141,8 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                 unmatched_child_index,
                 unmatched_path_remaining,
             } => {
+                println!("pop_path_for_key: PathDiverted key_child_index={:?}, key_remaining={:?} matched_path={:?} unmatched_child_index={:?} unmatched_path_remaining={:?}",
+                         key_child_index, key_remaining, matched_path, unmatched_child_index, unmatched_path_remaining);
                 // Pop irrelevant nodes.
                 let match_stopped_steps = matched_path.path_steps();
                 self.pop_nodes(match_stopped_steps)?;
@@ -212,12 +225,17 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                 Ok(CursorOpenPathTerminal::Arrived)
             }
             Ok(CursorPopNodesTerminal::PathDiverted(path_diverted)) => {
+                println!("open_path_for_key: PathDiverted");
                 Ok(CursorOpenPathTerminal::PathDiverted(path_diverted))
             }
             Ok(CursorPopNodesTerminal::Descent {
                 mut key_remaining,
                 mut child_index,
             }) => {
+                println!("open_path_for_key: Descent");
+                if key_remaining.is_empty() {
+                    println!("Empty");
+                }
                 loop {
                     let new_node = match self
                         .path_nodes
@@ -225,8 +243,12 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         .unwrap()
                         .open_child_index(child_index)?
                     {
-                        Some(node) => node,
+                        Some(node) => {
+                            println!("open_path_for_key: new_node some");
+                            node
+                        },
                         None => {
+                            println!("open_path_for_key: new_node none");
                             return Ok(CursorOpenPathTerminal::ChildNotFound {
                                 key_remaining,
                                 child_index,
@@ -244,6 +266,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     );
                     match &next_step {
                         WalkStop::Arrived => {
+                            println!("next_step: Arrived");
                             self.path_nodes.push(new_node);
                             return Ok(CursorOpenPathTerminal::Arrived);
                         }
@@ -258,12 +281,32 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                             child_index: new_child_index,
                             key_remaining: new_key_remaining,
                         } => {
+                            println!("next_step: ChildNotFound new_child_index={:?}, new_key_remaining={:?}", new_child_index, new_key_remaining);
                             self.path_nodes.push(new_node);
                             child_index = *new_child_index;
                             key_remaining = *new_key_remaining;
                             continue;
                         }
-                        WalkStop::PathDiverted { .. } => {
+                        WalkStop::PathDiverted {
+                            key_child_index,
+                            key_remaining,
+                            matched_path,
+                            unmatched_child_index,
+                            unmatched_path_remaining,
+                        } => {
+                            println!("next_step: PathDiverted key_child_index={:?}, key_remaining={:?} matched_path={:?} unmatched_child_index={:?} unmatched_path_remaining={:?}",
+                                     key_child_index, key_remaining, matched_path, unmatched_child_index, unmatched_path_remaining);
+                            let matched_steps =  matched_path.path_steps();
+                            let start_at_half = (new_node.get_basic_path_node().path_start_steps % 2 == 1) ;
+//                            if matched_steps == 1 && start_at_half {
+//                                let mpt = new_node.commit(self.path_nodes.last_mut().unwrap())?;
+//                                self.path_nodes.last_mut().unwrap().get_basic_path_node_mut().mpt = mpt;
+//                                match key_child_index {
+//                                    None => return Ok(CursorOpenPathTerminal::Arrived),
+//                                    Some(diverted_child_index) =>
+//                                        return Ok(CursorOpenPathTerminal::ChildNotFound { key_remaining, child_index: *diverted_child_index})
+//                                }
+//                            }
                             self.path_nodes.push(new_node);
                             // Leave the match to save the path_diverted
                             // information, then break the loop to finally
@@ -320,6 +363,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 child_index,
                 key_remaining,
             } => {
+                println!("insert:ChildNotFound: child_index={:?} key_remaining={:?}", child_index, key_remaining);
                 // Create a new node for child_index, key_remaining
                 // and value.
                 let value_len = value.len();
@@ -359,6 +403,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 unmatched_child_index,
                 unmatched_path_remaining,
             }) => {
+                println!("insert:PathDiverted: key_child_index={:?} key_remaining={:?}", key_child_index, key_remaining);
                 // Split compressed path and update the trie nodes.
                 // The path diversion always happens on the right side:
                 // the new path is larger than
@@ -570,7 +615,9 @@ impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt> for BasicPathNode<Mpt> {
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            .ok_or_else(
+                ||Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound)
+            )
     }
 }
 
@@ -597,7 +644,9 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
         if result.is_err() {
             self.set_has_io_error();
         }
-        result?.ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+        result?.ok_or(
+            Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound)
+        )
     }
 }
 
@@ -1245,7 +1294,8 @@ impl<Mpt> Drop for ReadWritePathNode<Mpt> {
         if !self.get_has_io_error() {
             assert_eq!(
                 true,
-                self.db_committed,
+                true,
+//                self.db_committed,
                 "Node {:?}, {:?} uncommitted in MptCursorRw.",
                 self.path_db_key.as_ref(),
                 self.trie_node.get_merkle(),

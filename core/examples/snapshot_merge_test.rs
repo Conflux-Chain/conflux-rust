@@ -154,7 +154,7 @@ fn parse_args<'a>() -> ArgMatches<'a> {
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts in checkpoint")
-                .default_value("10000"),
+                .default_value("1000"),
         )
         .arg(
             Arg::with_name("accounts-per-epoch")
@@ -162,7 +162,7 @@ fn parse_args<'a>() -> ArgMatches<'a> {
                 .takes_value(true)
                 .value_name("NUM")
                 .help("Number of accounts in each epoch")
-                .default_value("10000"),
+                .default_value("1000"),
         )
         .arg(
             Arg::with_name("max-chunk-size")

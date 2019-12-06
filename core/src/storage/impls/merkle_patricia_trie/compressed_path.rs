@@ -191,7 +191,11 @@ impl CompressedPathRaw {
         // because u8 = 2 nibbles. When we switch to u32 as path unit
         // the concated size may vary.
         let (size, end_mask) = if y_slice.is_empty() {
-            (x_slice_len + 1, CompressedPathRaw::first_nibble_mask())
+            if x.end_mask() == 0 {
+                (x_slice_len + 1, CompressedPathRaw::first_nibble_mask())
+            } else {
+                (x_slice_len, 0)
+            }
         } else {
             (x_slice_len + y_slice.len(), y.end_mask())
         };
