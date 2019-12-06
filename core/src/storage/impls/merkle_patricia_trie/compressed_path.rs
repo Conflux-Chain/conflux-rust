@@ -187,6 +187,7 @@ impl CompressedPathRaw {
         (x & Self::BITS_4_7_MASK) | second_nibble
     }
 
+    // FIXME Handle the case where y.is_empty() with a separate function.
     pub fn concat<X: CompressedPathTrait, Y: CompressedPathTrait>(
         x: &X, child_index: u8, y: &Y,
     ) -> Self {

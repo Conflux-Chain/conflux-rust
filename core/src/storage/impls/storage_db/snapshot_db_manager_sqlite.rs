@@ -107,16 +107,12 @@ impl SnapshotDbManagerSqlite {
         old_snapshot_epoch_id: &EpochId, delta_mpt: &DeltaMptIterator,
     ) -> Result<MerkleHash>
     {
-        if *old_snapshot_epoch_id == NULL_EPOCH {
-            temp_snapshot_db.direct_merge(delta_mpt)
-        } else {
-            let maybe_old_snapshot_db = SnapshotDbSqlite::open(
-                &self.get_snapshot_db_path(old_snapshot_epoch_id),
-            )?;
-            let mut old_snapshot_db = maybe_old_snapshot_db
-                .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-            temp_snapshot_db.copy_and_merge(&mut old_snapshot_db, delta_mpt)
-        }
+        let maybe_old_snapshot_db = SnapshotDbSqlite::open(
+            &self.get_snapshot_db_path(old_snapshot_epoch_id),
+        )?;
+        let mut old_snapshot_db = maybe_old_snapshot_db
+            .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
+        temp_snapshot_db.copy_and_merge(&mut old_snapshot_db, delta_mpt)
     }
 
     // FIXME Create new directories for every sqlite db
