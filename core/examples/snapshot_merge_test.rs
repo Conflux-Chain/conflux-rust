@@ -82,7 +82,7 @@ fn main() -> Result<(), Error> {
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&snapshot1_state_root)?
         .expect("root exists");
-    let delta_mpt_insert = DeltaMptInserter {
+    let delta_mpt_insert = DeltaMptIterator {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
@@ -117,7 +117,7 @@ fn main() -> Result<(), Error> {
     let delta_mpt_root = delta_mpt
         .get_root_node_ref(&snapshot2_state_root)?
         .expect("root exists");
-    let delta_mpt_insert = DeltaMptInserter {
+    let delta_mpt_insert = DeltaMptIterator {
         maybe_mpt: Some(delta_mpt),
         maybe_root_node: Some(delta_mpt_root),
     };
@@ -128,6 +128,7 @@ fn main() -> Result<(), Error> {
         merkle_root: Default::default(),
         parent_snapshot_epoch_id: snapshot1_epoch,
         pivot_chain_parts: vec![],
+        serve_one_step_sync: false,
     };
     let snapshot_info2 = snapshot_db_manager.new_snapshot_by_merging(
         &snapshot1_epoch,

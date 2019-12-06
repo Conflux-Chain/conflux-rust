@@ -271,20 +271,29 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                                 Some(diverted_child_index) => {
                                     // FIXME Better handling
                                     // If we return PathDiverted,
-                                    // new_node will be replaced by a fork_node and a last_node as its
-                                    // child. If unmatched_child_index is larger, we will need to
-                                    // access the key for this new_node when we continue the iteration, and this will
-                                    // become the access of last_node. If we are in save_as mode, last_node
-                                    // is only saved to the new snapshot and cannot be loaded from the
+                                    // new_node will be replaced by a fork_node
+                                    // and a last_node as its
+                                    // child. If unmatched_child_index is
+                                    // larger, we will need to
+                                    // access the key for this new_node when we
+                                    // continue the iteration, and this will
+                                    // become the access of last_node. If we are
+                                    // in save_as mode, last_node
+                                    // is only saved to the new snapshot and
+                                    // cannot be loaded from the
                                     // old read-only snapshot.
                                     //
-                                    // Thus we return ChildNotFound to avoid this behavior, and
-                                    // the forking will be triggered later when we access the key for new_node.
-                                    // FIXME If new_node is not accessed again, it will be lost?
+                                    // Thus we return ChildNotFound to avoid
+                                    // this behavior, and
+                                    // the forking will be triggered later when
+                                    // we access the key for new_node.
+                                    // FIXME If new_node is not accessed again,
+                                    // it will be lost?
                                     if *diverted_child_index
                                         < *unmatched_child_index
                                     {
-                                        // FIXME No need to commit, but should set db_committed.
+                                        // FIXME No need to commit, but should
+                                        // set db_committed.
                                         let mpt = new_node.commit(
                                             self.path_nodes.last_mut().unwrap(),
                                         )?;
@@ -775,9 +784,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             mpt.as_mut_assumed_owner(),
             &CompressedPathRaw::default(),
         ) {
-            Ok(root_trie_node) => {
-                root_trie_node
-            }
+            Ok(root_trie_node) => root_trie_node,
             // FIXME Handle this as a special case for SnapshotMpt
             // when maybe_db is None in SnapshotDbSqlite
             Err(Error(ErrorKind::SnapshotMPTTrieNodeNotFound, _)) => {
