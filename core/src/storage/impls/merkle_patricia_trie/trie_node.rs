@@ -291,7 +291,6 @@ use super::{
     mpt_value::MptValue,
     walk::*,
 };
-use crate::storage::storage_db::SubtreeMerkleWithSize;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::vec::Vec;

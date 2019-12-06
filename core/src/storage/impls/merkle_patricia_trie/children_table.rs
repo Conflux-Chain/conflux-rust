@@ -857,7 +857,6 @@ use super::{
     super::super::utils::WrappedCreateFrom,
     merkle::{ChildrenMerkleTable, MaybeMerkleTable},
 };
-use crate::storage::storage_db::SubtreeMerkleWithSize;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{fmt::*, marker::PhantomData, mem, ptr::null_mut, slice};
