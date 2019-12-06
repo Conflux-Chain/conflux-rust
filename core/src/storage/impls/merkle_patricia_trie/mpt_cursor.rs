@@ -79,14 +79,15 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
             .path_start_steps
             > target_key_steps
         {
-            println!("before pop len={} path_start_steps={}", self
-                .path_nodes
-                .len(), self
-                .path_nodes
-                .last()
-                .unwrap()
-                .get_basic_path_node()
-                .path_start_steps);
+            println!(
+                "before pop len={} path_start_steps={}",
+                self.path_nodes.len(),
+                self.path_nodes
+                    .last()
+                    .unwrap()
+                    .get_basic_path_node()
+                    .path_start_steps
+            );
             self.pop_one_node()?
         }
         Ok(())
@@ -133,7 +134,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     child_index,
                     key_remaining,
                 })
-            },
+            }
             WalkStop::PathDiverted {
                 key_child_index,
                 key_remaining,
@@ -183,7 +184,8 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         let original_compressed_path_ref =
                             last_trie_node.compressed_path_ref();
                         if original_compressed_path_ref.path_size()
-                            < actual_matched_path.path_size() {
+                            < actual_matched_path.path_size()
+                        {
                             println!("Error");
                         }
                         let actual_unmatched_path_remaining =
@@ -246,13 +248,13 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         Some(node) => {
                             println!("open_path_for_key: new_node some");
                             node
-                        },
+                        }
                         None => {
                             println!("open_path_for_key: new_node none");
                             return Ok(CursorOpenPathTerminal::ChildNotFound {
                                 key_remaining,
                                 child_index,
-                            })
+                            });
                         }
                     };
 
@@ -288,25 +290,51 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                             continue;
                         }
                         WalkStop::PathDiverted {
-                            key_child_index,
-                            key_remaining,
+                            key_child_index: new_key_child_index,
+                            key_remaining: new_key_remaining,
                             matched_path,
                             unmatched_child_index,
                             unmatched_path_remaining,
                         } => {
                             println!("next_step: PathDiverted key_child_index={:?}, key_remaining={:?} matched_path={:?} unmatched_child_index={:?} unmatched_path_remaining={:?}",
-                                     key_child_index, key_remaining, matched_path, unmatched_child_index, unmatched_path_remaining);
-                            let matched_steps =  matched_path.path_steps();
-                            let start_at_half = (new_node.get_basic_path_node().path_start_steps % 2 == 1) ;
-//                            if matched_steps == 1 && start_at_half {
-//                                let mpt = new_node.commit(self.path_nodes.last_mut().unwrap())?;
-//                                self.path_nodes.last_mut().unwrap().get_basic_path_node_mut().mpt = mpt;
-//                                match key_child_index {
-//                                    None => return Ok(CursorOpenPathTerminal::Arrived),
-//                                    Some(diverted_child_index) =>
-//                                        return Ok(CursorOpenPathTerminal::ChildNotFound { key_remaining, child_index: *diverted_child_index})
-//                                }
-//                            }
+                                     new_key_child_index, new_key_remaining, matched_path, unmatched_child_index, unmatched_path_remaining);
+                            //                            let matched_steps =
+                            // matched_path.path_steps();
+                            //                            let start_at_half =
+                            // (new_node.get_basic_path_node().path_start_steps
+                            // % 2 == 1) ;
+                            //                            if matched_steps == 1
+                            // && start_at_half {
+                            //                                let mpt =
+                            // new_node.commit(self.path_nodes.last_mut().
+                            // unwrap())?;
+                            //                                
+                            // self.path_nodes.last_mut().unwrap().
+                            // get_basic_path_node_mut().mpt = mpt;
+                            match new_key_child_index {
+                                None => {
+                                    return {
+                                        self.path_nodes.push(new_node);
+                                        Ok(CursorOpenPathTerminal::Arrived)
+                                    }
+                                }
+                                Some(diverted_child_index) => {
+                                    if *diverted_child_index
+                                        < *unmatched_child_index
+                                    {
+                                        let mpt = new_node.commit(
+                                            self.path_nodes.last_mut().unwrap(),
+                                        )?;
+                                        self.path_nodes
+                                            .last_mut()
+                                            .unwrap()
+                                            .get_basic_path_node_mut()
+                                            .mpt = mpt;
+                                        return Ok(CursorOpenPathTerminal::ChildNotFound { key_remaining, child_index});
+                                    }
+                                }
+                            }
+                            //                            }
                             self.path_nodes.push(new_node);
                             // Leave the match to save the path_diverted
                             // information, then break the loop to finally
@@ -363,7 +391,10 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 child_index,
                 key_remaining,
             } => {
-                println!("insert:ChildNotFound: child_index={:?} key_remaining={:?}", child_index, key_remaining);
+                println!(
+                    "insert:ChildNotFound: child_index={:?} key_remaining={:?}",
+                    child_index, key_remaining
+                );
                 // Create a new node for child_index, key_remaining
                 // and value.
                 let value_len = value.len();
@@ -377,6 +408,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             &SnapshotMptNode::EMPTY_CHILD,
                         );
                 }
+                parent_node.get_read_write_path_node().next_child_index =
+                    child_index;
                 let new_node = PathNode::new(
                     BasicPathNode::new(
                         SnapshotMptNode::new(VanillaTrieNode::new(
@@ -615,9 +648,7 @@ impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt> for BasicPathNode<Mpt> {
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or_else(
-                ||Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound)
-            )
+            .ok_or_else(|| Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -644,9 +675,7 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
         if result.is_err() {
             self.set_has_io_error();
         }
-        result?.ok_or(
-            Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound)
-        )
+        result?.ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -1164,6 +1193,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                                 &mut child_node,
                             )?;
                         }
+                        self.basic_node.mpt = child_node.mpt.take();
                         self.the_first_child = Some(Box::new(child_node));
                     } else {
                         // There are more than one child. Path compression is
@@ -1189,7 +1219,8 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                             MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
                                 &mut child_node,
                             )?;
-                            child_node.write_out()?;
+                            let mpt = child_node.write_out()?;
+                            self.basic_node.mpt = mpt;
                         }
                     }
                 }
@@ -1295,7 +1326,7 @@ impl<Mpt> Drop for ReadWritePathNode<Mpt> {
             assert_eq!(
                 true,
                 true,
-//                self.db_committed,
+                //                self.db_committed,
                 "Node {:?}, {:?} uncommitted in MptCursorRw.",
                 self.path_db_key.as_ref(),
                 self.trie_node.get_merkle(),
