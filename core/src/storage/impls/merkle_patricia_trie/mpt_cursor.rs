@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-const NULL_CHILD_INDEX: u8 = 16;
-
 /// Cursor to access Snapshot Mpt.
 pub struct MptCursor<Mpt, PathNode> {
     mpt: Option<Mpt>,
@@ -38,9 +36,8 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
         let mut trie_nodes = Vec::with_capacity(self.path_nodes.len());
         for node in &self.path_nodes {
             let trie_node = &node.get_basic_path_node().trie_node;
-            trie_nodes.push(TrieProofNode(VanillaTrieNode::new(
-                trie_node.get_merkle().clone(),
-                trie_node.get_children_merkle().map_or_else(
+            trie_nodes.push(TrieProofNode::new(
+                trie_node.get_children_merkles().map_or_else(
                     || VanillaChildrenTable::default(),
                     |merkle_table| merkle_table.into(),
                 ),
@@ -49,9 +46,12 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     .into_option()
                     .map(|slice| slice.into()),
                 trie_node.compressed_path_ref().into(),
-            )))
+            ))
         }
-        TrieProof::new(trie_nodes)
+
+        // Unwrap is fine because the TrieProof must be valid unless the Mpt is
+        // being modified.
+        TrieProof::new(trie_nodes).unwrap()
     }
 
     pub fn push_node(&mut self, node: PathNode) { self.path_nodes.push(node); }
@@ -97,14 +97,14 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
     pub fn pop_path_for_key<'k, AM: access_mode::AccessMode>(
         &mut self, key: &'k [u8],
     ) -> Result<CursorPopNodesTerminal<'k>> {
-        let path_ref = self
-            .path_nodes
-            .last()
-            .map(|node| &node.get_basic_path_node().full_path_to_node)
-            .unwrap();
         match walk::<access_mode::Write, _>(
             key,
-            path_ref,
+            &self
+                .path_nodes
+                .last()
+                .unwrap()
+                .get_basic_path_node()
+                .full_path_to_node,
             &MPT_CURSOR_GET_CHILD,
         ) {
             WalkStop::Arrived => Ok(CursorPopNodesTerminal::Arrived),
@@ -269,9 +269,22 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                                     }
                                 }
                                 Some(diverted_child_index) => {
+                                    // FIXME Better handling
+                                    // If we return PathDiverted,
+                                    // new_node will be replaced by a fork_node and a last_node as its
+                                    // child. If unmatched_child_index is larger, we will need to
+                                    // access the key for this new_node when we continue the iteration, and this will
+                                    // become the access of last_node. If we are in save_as mode, last_node
+                                    // is only saved to the new snapshot and cannot be loaded from the
+                                    // old read-only snapshot.
+                                    //
+                                    // Thus we return ChildNotFound to avoid this behavior, and
+                                    // the forking will be triggered later when we access the key for new_node.
+                                    // FIXME If new_node is not accessed again, it will be lost?
                                     if *diverted_child_index
                                         < *unmatched_child_index
                                     {
+                                        // FIXME No need to commit, but should set db_committed.
                                         let mpt = new_node.commit(
                                             self.path_nodes.last_mut().unwrap(),
                                         )?;
@@ -350,14 +363,14 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                         .trie_node
                         .add_new_child_unchecked(
                             child_index,
-                            &SnapshotMptNode::EMPTY_CHILD,
+                            &SubtreeMerkleWithSize::default(),
                         );
                 }
                 parent_node.get_read_write_path_node().next_child_index =
                     child_index;
                 let new_node = PathNode::new(
                     BasicPathNode::new(
-                        SnapshotMptNode::new(VanillaTrieNode::new(
+                        SnapshotMptNode(VanillaTrieNode::new(
                             MERKLE_NULL_NODE,
                             Default::default(),
                             Some(value),
@@ -397,29 +410,24 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
 
                 let value_len = value.len();
                 let insert_value_at_fork = key_child_index.is_none();
+                let mut last_node_as_child = SubtreeMerkleWithSize::default();
+                // TODO Better documentation about when these fields are
+                // assigned and when they can be used.
+                last_node_as_child.subtree_size = (last_node
+                    .get_read_only_path_node()
+                    .trie_node
+                    .subtree_size(
+                        last_node.get_read_only_path_node().get_path_to_node(),
+                    ) as i64
+                    - last_node.get_read_only_path_node().subtree_size_delta)
+                    as u64;
                 let mut fork_node = PathNode::new(
                     BasicPathNode::new(
-                        SnapshotMptNode::new(VanillaTrieNode::new(
+                        SnapshotMptNode(VanillaTrieNode::new(
                             MERKLE_NULL_NODE,
                             VanillaChildrenTable::new_from_one_child(
                                 unmatched_child_index,
-                                &SubtreeMerkleWithSize {
-                                    merkle: MERKLE_NULL_NODE,
-                                    subtree_size: (last_node
-                                        .get_read_only_path_node()
-                                        .trie_node
-                                        .subtree_size(
-                                            last_node
-                                                .get_read_only_path_node()
-                                                .get_path_to_node(),
-                                        )
-                                        as i64
-                                        - last_node
-                                            .get_read_only_path_node()
-                                            .subtree_size_delta)
-                                        as u64,
-                                    delta_subtree_size: 0,
-                                },
+                                &last_node_as_child,
                             ),
                             // The value isn't set when insert_value_at_fork
                             // because the compiler
@@ -435,6 +443,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                     parent_node,
                     if insert_value_at_fork { value_len } else { 0 },
                 );
+                fork_node.get_read_write_path_node().next_child_index =
+                    unmatched_child_index;
                 last_node.get_read_write_path_node().path_db_key =
                     CompressedPathRaw::concat(
                         &fork_node.get_basic_path_node().full_path_to_node,
@@ -448,31 +458,28 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                         fork_node
                             .get_read_write_path_node()
                             .first_realized_child_index = unmatched_child_index;
-                        fork_node.get_basic_path_node_mut().next_child_index =
-                            unmatched_child_index;
                         let mpt = last_node.commit(&mut fork_node)?;
 
                         // Move on to the next child: diverted path.
                         fork_node.get_read_write_path_node().next_child_index =
                             child_index;
-
                         fork_node
                             .get_read_write_path_node()
                             .trie_node
                             .add_new_child_unchecked(
                                 child_index,
-                                &SnapshotMptNode::EMPTY_CHILD,
+                                &SubtreeMerkleWithSize::default(),
                             );
 
-                        let mut value_node = PathNode::new(
+                        let value_node = PathNode::new(
                             BasicPathNode::new(
-                                SnapshotMptNode::new(VanillaTrieNode::new(
+                                SnapshotMptNode(VanillaTrieNode::new(
                                     MERKLE_NULL_NODE,
                                     Default::default(),
                                     Some(value),
                                     key_remaining.into(),
                                 )),
-                                fork_node.take_mpt(),
+                                mpt,
                                 &fork_node
                                     .get_basic_path_node()
                                     .full_path_to_node,
@@ -481,15 +488,11 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             &fork_node,
                             value_len,
                         );
-                        value_node.get_basic_path_node_mut().mpt = mpt;
 
                         self.path_nodes.push(fork_node);
                         self.path_nodes.push(value_node);
                     },
                     None => {
-                        fork_node.get_read_write_path_node().next_child_index =
-                            unmatched_child_index;
-
                         fork_node
                             .get_read_write_path_node()
                             .trie_node
@@ -592,7 +595,7 @@ impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt> for BasicPathNode<Mpt> {
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or_else(|| Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -643,7 +646,8 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
     ) -> ReadWritePathNode<Mpt> {
         ReadWritePathNode {
             basic_node,
-            first_realized_child_index: NULL_CHILD_INDEX,
+            first_realized_child_index:
+                ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
             the_first_child: None,
             subtree_size_delta: 0,
             delta_subtree_size: 0,
@@ -772,21 +776,12 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             &CompressedPathRaw::default(),
         ) {
             Ok(root_trie_node) => {
-                // FIXME implement get_merkle_root for mpt
-                //                let supposed_merkle_root =
-                //
-                // mpt.as_ref_assumed_owner().get_merkle_root();
-                //                assert_eq!(
-                //                    root_trie_node.get_merkle(),
-                //                    supposed_merkle_root,
-                //                    "loaded root trie node merkle hash {:?} !=
-                // supposed merkle hash {:?}",
-                // root_trie_node.get_merkle(),
-                // supposed_merkle_root,                );
                 root_trie_node
             }
+            // FIXME Handle this as a special case for SnapshotMpt
+            // when maybe_db is None in SnapshotDbSqlite
             Err(Error(ErrorKind::SnapshotMPTTrieNodeNotFound, _)) => {
-                SnapshotMptNode::new(VanillaTrieNode::new(
+                SnapshotMptNode(VanillaTrieNode::new(
                     MERKLE_NULL_NODE,
                     Default::default(),
                     None,
@@ -903,8 +898,7 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
             None => Ok(None),
             Some(&SubtreeMerkleWithSize {
                 merkle: ref supposed_merkle_hash,
-                subtree_size: _,
-                delta_subtree_size: _,
+                ..
             }) => {
                 let mpt = self.mpt.take();
                 Ok(Some(Self::load_into(
@@ -922,7 +916,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
     fn new_loaded(basic_node: BasicPathNode<Mpt>, parent_node: &Self) -> Self {
         Self {
             basic_node,
-            first_realized_child_index: NULL_CHILD_INDEX,
+            first_realized_child_index: Self::NULL_CHILD_INDEX,
             the_first_child: None,
             subtree_size_delta: 0,
             delta_subtree_size: 0,
@@ -1043,17 +1037,21 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 }
 
 impl<Mpt> ReadWritePathNode<Mpt> {
+    /// Initial value for `self.first_realized_child_index`, meaning these is no
+    /// child concluded in cursor iteration.
+    const NULL_CHILD_INDEX: u8 = 16;
+
     fn get_has_io_error(&self) -> bool { self.io_error().get() }
 
     fn is_node_empty(&self) -> bool {
         !self.trie_node.has_value()
-            && self.first_realized_child_index == NULL_CHILD_INDEX
+            && self.first_realized_child_index == Self::NULL_CHILD_INDEX
     }
 
     fn compute_merkle(&mut self) -> MerkleHash {
         let path_merkle = self
             .trie_node
-            .compute_merkle(self.trie_node.get_children_merkle().as_ref());
+            .compute_merkle(self.trie_node.get_children_merkles().as_ref());
         self.trie_node.set_merkle(&path_merkle);
 
         path_merkle
@@ -1102,8 +1100,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             this_child_index,
             &SubtreeMerkleWithSize {
                 merkle: ref this_child_node_merkle_ref,
-                subtree_size: _,
-                delta_subtree_size: _,
+                ..
             },
         ) in self
             .basic_node
@@ -1115,7 +1112,8 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             if this_child_index < child_index {
                 // Handle compressed path logics.
                 if !self.trie_node.has_value() {
-                    if self.first_realized_child_index == NULL_CHILD_INDEX {
+                    if self.first_realized_child_index == Self::NULL_CHILD_INDEX
+                    {
                         // Even though this child isn't modified, path
                         // compression may happen if all
                         // later children are deleted.
@@ -1189,9 +1187,9 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                 .basic_node
                 .trie_node
                 .get_child(self.basic_node.next_child_index)
-                .map(|child| child.subtree_size as i64)
-                // child is NullChild means subtree_size is 0
-                .unwrap_or(0)
+                // Unwrap is safe. See comment below.
+                .unwrap()
+                .subtree_size as i64
                 + child_node.subtree_size_delta)
                 as u64;
 
@@ -1215,7 +1213,8 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             // that is a prefix of another string is considered smaller.
             if self.trie_node.has_value() {
                 Ok(child_node.write_out()?)
-            } else if self.first_realized_child_index != NULL_CHILD_INDEX {
+            } else if self.first_realized_child_index != Self::NULL_CHILD_INDEX
+            {
                 Self::write_out_pending_child(
                     &mut child_node.mpt,
                     &mut self.the_first_child,
@@ -1269,8 +1268,7 @@ impl<Mpt> Drop for ReadWritePathNode<Mpt> {
         if !self.get_has_io_error() {
             assert_eq!(
                 true,
-                true,
-                //                self.db_committed,
+                self.db_committed,
                 "Node {:?}, {:?} uncommitted in MptCursorRw.",
                 self.path_db_key.as_ref(),
                 self.trie_node.get_merkle(),

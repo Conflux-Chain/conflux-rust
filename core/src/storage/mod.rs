@@ -31,7 +31,7 @@ pub use self::{
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
             sqlite::SqliteConnection,
         },
-        storage_manager::DeltaMptInserter,
+        storage_manager::DeltaMptIterator,
     },
     state::{State as Storage, StateTrait as StorageTrait},
     state_manager::{

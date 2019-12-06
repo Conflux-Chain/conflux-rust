@@ -260,7 +260,7 @@ impl StorageManager {
 
     pub fn check_make_register_snapshot_background(
         this: Arc<Self>, snapshot_epoch_id: EpochId, height: u64,
-        delta_db: DeltaMptInserter,
+        delta_db: DeltaMptIterator,
     ) -> Result<()>
     {
         let this_cloned = this.clone();
@@ -288,6 +288,7 @@ impl StorageManager {
         }
 
         let in_progress_snapshot_info = SnapshotInfo {
+            serve_one_step_sync: true,
             height: height as u64,
             parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
             // This is unknown for now, and we don't care.
@@ -601,17 +602,12 @@ impl StorageManager {
 }
 
 #[derive(Clone)]
-pub struct DeltaMptInserter {
+pub struct DeltaMptIterator {
     pub maybe_mpt: Option<Arc<DeltaMpt>>,
     pub maybe_root_node: Option<NodeRefDeltaMpt>,
 }
 
-impl DeltaMptInserter {
-    pub fn get_merkle_root(&self) -> MerkleHash {
-        // FIXME: implement.
-        unimplemented!()
-    }
-
+impl DeltaMptIterator {
     pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
@@ -663,7 +659,7 @@ use super::{
     *,
 };
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{EpochId, MerkleHash, NULL_EPOCH};
+use primitives::{EpochId, NULL_EPOCH};
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},

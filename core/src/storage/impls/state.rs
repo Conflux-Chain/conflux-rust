@@ -142,14 +142,16 @@ impl<'a> State<'a> {
                 }
             };
 
-        // TODO: get from snapshot
-        // self.get_from_snapshot(access_key)
+        let maybe_value = self.get_from_snapshot(&access_key.to_key_bytes())?;
+        if with_proof {
+            // FIMXE: implement snapshot proof.
+        }
 
         let proof = StateProof::default()
             .with_delta(maybe_delta_proof)
             .with_intermediate(maybe_intermediate_proof);
 
-        Ok((None, proof))
+        Ok((maybe_value, proof))
     }
 }
 
@@ -539,7 +541,7 @@ impl<'a> State<'a> {
     pub fn dump<DUMPER: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DUMPER,
     ) -> Result<()> {
-        let inserter = DeltaMptInserter {
+        let inserter = DeltaMptIterator {
             maybe_mpt: Some(self.delta_trie.clone()),
             maybe_root_node: self.delta_trie_root.clone(),
         };
@@ -547,6 +549,7 @@ impl<'a> State<'a> {
         inserter.iterate(dumper)
     }
 
+    /// FIXME This is for test only.
     pub fn get_delta_trie(&self) -> Arc<DeltaMpt> { self.delta_trie.clone() }
 }
 
@@ -560,7 +563,7 @@ use super::{
     merkle_patricia_trie::{KVInserter, TrieProof, VanillaChildrenTable},
     state_manager::*,
     state_proof::StateProof,
-    storage_manager::DeltaMptInserter,
+    storage_manager::DeltaMptIterator,
 };
 use parity_bytes::ToPretty;
 use primitives::{

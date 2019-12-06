@@ -12,7 +12,7 @@ use cfxcore::{
             StateManager, StateManagerTrait, StorageConfiguration,
         },
         storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        DeltaMptInserter, StateIndex,
+        DeltaMptIterator, StateIndex,
     },
     sync::Error,
 };
@@ -93,6 +93,7 @@ fn main() -> Result<(), Error> {
         merkle_root: Default::default(),
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![],
+        serve_one_step_sync: false,
     };
     let snapshot_info1 = snapshot_db_manager.new_snapshot_by_merging(
         &NULL_EPOCH,

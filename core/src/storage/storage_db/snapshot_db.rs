@@ -4,6 +4,8 @@
 
 #[derive(Clone, Debug)]
 pub struct SnapshotInfo {
+    pub serve_one_step_sync: bool,
+
     pub merkle_root: MerkleHash,
     pub parent_snapshot_height: u64,
     pub height: u64,
@@ -16,6 +18,7 @@ pub struct SnapshotInfo {
 impl SnapshotInfo {
     pub fn genesis_snapshot_info() -> Self {
         Self {
+            serve_one_step_sync: false,
             merkle_root: MERKLE_NULL_NODE,
             parent_snapshot_height: 0,
             height: 0,
@@ -66,18 +69,18 @@ pub trait SnapshotDbTrait:
     fn create(snapshot_path: &str) -> Result<Self>;
 
     fn direct_merge(
-        &mut self, delta_mpt: &DeltaMptInserter,
+        &mut self, delta_mpt: &DeltaMptIterator,
     ) -> Result<MerkleHash>;
 
     // FIXME: the type of old_snapshot_db is not Self, but
     // FIXME: a Box<dyn 'a + KeyValueDbTraitOwnedRead>
     fn copy_and_merge(
-        &mut self, old_snapshot_db: &mut Self, delta_mpt: &DeltaMptInserter,
+        &mut self, old_snapshot_db: &mut Self, delta_mpt: &DeltaMptIterator,
     ) -> Result<MerkleHash>;
 }
 
 use super::{
-    super::impls::{errors::*, storage_manager::DeltaMptInserter},
+    super::impls::{errors::*, storage_manager::DeltaMptIterator},
     key_value_db::{
         KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitSingleWriter,

@@ -6,7 +6,7 @@ pub struct SnapshotDbManagerSqlite {
     snapshot_path: String,
     // FIXME: add an command line option to assert that this method made
     // successfully cow_copy and print error messages if it fails.
-    pub force_cow: bool,
+    force_cow: bool,
 }
 
 // TODO: used to sync checkpoint state
@@ -34,6 +34,15 @@ impl SnapshotDbManagerSqlite {
             + "merge_temp_"
             + &old_snapshot_epoch_id.to_hex()
             + &delta_merkle_root.to_hex()
+    }
+
+    fn get_full_sync_temp_snapshot_db_path(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> String {
+        self.snapshot_path.clone()
+            + "full_sync_temp_"
+            + &snapshot_epoch_id.to_hex()
+            + &merkle_root.to_hex()
     }
 
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
@@ -95,7 +104,7 @@ impl SnapshotDbManagerSqlite {
 
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotDbSqlite,
-        old_snapshot_epoch_id: &EpochId, delta_mpt: &DeltaMptInserter,
+        old_snapshot_epoch_id: &EpochId, delta_mpt: &DeltaMptIterator,
     ) -> Result<MerkleHash>
     {
         if *old_snapshot_epoch_id == NULL_EPOCH {
@@ -126,7 +135,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
-        delta_mpt: DeltaMptInserter,
+        delta_mpt: DeltaMptIterator,
         mut in_progress_snapshot_info: SnapshotInfo,
     ) -> Result<SnapshotInfo>
     {
@@ -163,25 +172,34 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 );
 
                 let mut snapshot_db;
-                let new_snapshot_root = if self.try_make_cow_copy(
-                    &self.get_snapshot_db_path(old_snapshot_epoch_id),
-                    &temp_db_name,
-                )? {
-                    // open the database.
-                    snapshot_db =
-                        Self::SnapshotDb::open(&temp_db_name)?.unwrap();
-
-                    // iterate and insert into temp table.
+                let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH
+                {
+                    // direct merge the first snapshot
+                    snapshot_db = Self::SnapshotDb::create(&temp_db_name)?;
+                    // TODO No need to dump delta mpt?
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge(&delta_mpt)?
                 } else {
-                    snapshot_db = Self::SnapshotDb::create(&temp_db_name)?;
-                    snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                    self.copy_and_merge(
-                        &mut snapshot_db,
-                        old_snapshot_epoch_id,
-                        &delta_mpt,
-                    )?
+                    if self.try_make_cow_copy(
+                        &self.get_snapshot_db_path(old_snapshot_epoch_id),
+                        &temp_db_name,
+                    )? {
+                        // open the database.
+                        snapshot_db =
+                            Self::SnapshotDb::open(&temp_db_name)?.unwrap();
+
+                        // iterate and insert into temp table.
+                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                        snapshot_db.direct_merge(&delta_mpt)?
+                    } else {
+                        snapshot_db = Self::SnapshotDb::create(&temp_db_name)?;
+                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                        self.copy_and_merge(
+                            &mut snapshot_db,
+                            old_snapshot_epoch_id,
+                            &delta_mpt,
+                        )?
+                    }
                 };
 
                 in_progress_snapshot_info.merkle_root =
@@ -216,6 +234,16 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             self.get_snapshot_db_path(snapshot_epoch_id),
         )?)
     }
+
+    fn new_temp_snapshot_for_full_sync(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> Result<Self::SnapshotDb> {
+        let temp_db_name = self.get_full_sync_temp_snapshot_db_path(
+            snapshot_epoch_id,
+            merkle_root,
+        );
+        Self::SnapshotDb::create(&temp_db_name)
+    }
 }
 
 use super::{
@@ -224,7 +252,7 @@ use super::{
             SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
         },
         errors::*,
-        storage_manager::DeltaMptInserter,
+        storage_manager::DeltaMptIterator,
     },
     snapshot_db_sqlite::*,
 };
