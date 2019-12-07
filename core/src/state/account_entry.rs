@@ -235,10 +235,19 @@ impl OverlayAccount {
     pub fn deposit(&mut self, by: &U256, maturity_time: u64) {
         self.sub_balance(by);
         self.bank_balance += *by;
-        self.deposit_list.push(DepositInfo {
-            amount: *by,
-            maturity_time,
-        })
+        // Insert to maintain sorted order.
+        // TODO: this is O(|deposit_list|), quiet slow.
+        let pos = self
+            .deposit_list
+            .binary_search_by_key(&maturity_time, |info| info.maturity_time)
+            .unwrap_or_else(|e| e);
+        self.deposit_list.insert(
+            pos,
+            DepositInfo {
+                amount: *by,
+                maturity_time,
+            },
+        )
     }
 
     pub fn withdraw(&mut self, by: &U256) {
