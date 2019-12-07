@@ -317,7 +317,7 @@ impl StateManager {
             self.storage_manager.clone(),
             intermediate_epoch_id.clone(),
             new_height,
-            DeltaMptInserter {
+            DeltaMptIterator {
                 maybe_mpt: intermediate_trie,
                 maybe_root_node: intermediate_trie_root,
             },
@@ -398,7 +398,7 @@ use super::{
         delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
         snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
     },
-    storage_manager::storage_manager::{DeltaMptInserter, StorageManager},
+    storage_manager::storage_manager::{DeltaMptIterator, StorageManager},
 };
 use crate::{ext_db::SystemDB, statedb::StateDb};
 use cfx_types::{Address, U256};

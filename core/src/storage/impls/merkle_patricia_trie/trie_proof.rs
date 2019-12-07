@@ -2,91 +2,159 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
-use primitives::{MerkleHash, MERKLE_NULL_NODE};
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-};
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TrieProof {
+    /// The first node must be the root node. Child node must come later than
+    /// parent node.
+    nodes: Vec<TrieProofNode>,
+    merkle_to_node_index: HashMap<MerkleHash, usize>,
+    /// Root node doesn't have parent, so we set an invalid parent_index:
+    /// number_nodes.
+    parent_node_index: Vec<usize>,
+    // Root node doesn't have parent, so we leave child_index[0]
+    // default-initialized to 0.
+    child_index: Vec<u8>,
+    number_leaf_nodes: u32,
+}
 
-use super::{
-    merkle::compute_merkle,
-    walk::{access_mode::Read, TrieNodeWalkTrait, WalkStop},
-    TrieNodeTrait, VanillaTrieNode,
-};
-use rlp_derive::{RlpDecodable, RlpEncodable};
-
-#[derive(Clone, Debug, Default, PartialEq, RlpDecodable, RlpEncodable)]
-// FIXME: in rlp encode / decode, children_count should be omitted.
-pub struct TrieProofNode(pub VanillaTrieNode<MerkleHash>);
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TrieProofNode(VanillaTrieNode<MerkleHash>);
 
 impl TrieProofNode {
-    pub fn is_valid(&self) -> bool {
-        self.compute_merkle().eq(self.get_merkle())
+    pub fn new(
+        children_table: VanillaChildrenTable<MerkleHash>,
+        maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
+    ) -> Self
+    {
+        let merkle = compute_merkle(
+            compressed_path.as_ref(),
+            if children_table.get_children_count() == 0 {
+                None
+            } else {
+                Some(children_table.get_children_table())
+            },
+            maybe_value.as_ref().map(|v| v.as_ref()),
+        );
+        Self(VanillaTrieNode::new(
+            merkle,
+            children_table,
+            maybe_value,
+            compressed_path,
+        ))
     }
-
-    // \w  path: keccak([mask, [path...], keccak(rlp([[children...]?, value]))])
-    // \wo path: keccak(rlp([[children...]?, value]))
-    pub fn compute_merkle(&self) -> MerkleHash {
-        compute_merkle(
-            self.compressed_path_ref(),
-            self.get_children_merkle(),
-            self.value_as_slice().into_option(),
-        )
-    }
-}
-
-impl Deref for TrieProofNode {
-    type Target = VanillaTrieNode<MerkleHash>;
-
-    fn deref(&self) -> &Self::Target { &self.0 }
-}
-
-impl DerefMut for TrieProofNode {
-    fn deref_mut(&mut self) -> &mut <Self as Deref>::Target { &mut self.0 }
-}
-
-#[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
-pub struct TrieProof {
-    pub nodes: Vec<TrieProofNode>,
 }
 
 impl TrieProof {
-    pub fn new(nodes: Vec<TrieProofNode>) -> Self { TrieProof { nodes } }
+    pub const MAX_NODES: usize = 1000;
+
+    /// Makes sure that the proof nodes are valid and connected at the time of
+    /// creation.
+    pub fn new(nodes: Vec<TrieProofNode>) -> Result<Self> {
+        let merkle_to_node_index = nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| (node.get_merkle().clone(), index))
+            .collect::<HashMap<H256, usize>>();
+        let number_nodes = nodes.len();
+        let mut parent_node_index = Vec::with_capacity(number_nodes);
+        let mut child_index = Vec::with_capacity(number_nodes);
+        let mut is_non_leaf = vec![false; number_nodes];
+
+        // Connectivity check.
+        let mut connected_child_parent_map =
+            HashMap::<MerkleHash, (usize, u8), RandomState>::default();
+        match nodes.get(0) {
+            None => {}
+            Some(node) => {
+                connected_child_parent_map
+                    .insert(node.get_merkle().clone(), (number_nodes, 0));
+            }
+        }
+        for (parent_index, node) in nodes.iter().enumerate() {
+            match connected_child_parent_map.get(node.get_merkle()) {
+                // Not connected.
+                None => bail!(ErrorKind::InvalidTrieProof),
+                Some((parent_index, child_index_of_parent)) => {
+                    parent_node_index.push(*parent_index);
+                    child_index.push(*child_index_of_parent);
+                    if *parent_index < number_nodes {
+                        is_non_leaf[*parent_index] = true;
+                    }
+                }
+            }
+            for (child_index, child_merkle) in
+                node.get_children_table_ref().iter()
+            {
+                connected_child_parent_map
+                    .insert(child_merkle.clone(), (parent_index, child_index));
+            }
+        }
+
+        let mut number_leaf_nodes = 0;
+        for non_leaf in is_non_leaf {
+            if !non_leaf {
+                number_leaf_nodes += 1;
+            }
+        }
+
+        Ok(TrieProof {
+            nodes,
+            merkle_to_node_index,
+            parent_node_index,
+            child_index,
+            number_leaf_nodes,
+        })
+    }
+
+    pub fn get_merkle_root(&self) -> &MerkleHash {
+        match self.nodes.get(0) {
+            None => &MERKLE_NULL_NODE,
+            Some(node) => node.get_merkle(),
+        }
+    }
 
     /// Verify that the trie `root` has `value` under `key`.
     /// Use `None` for exclusion proofs (i.e. there is no value under `key`).
     // NOTE: This API cannot be used to prove that there is a value under `key`
     // but it does not equal a given value. We add this later on if it's needed.
     pub fn is_valid_kv(
-        &self, key: &[u8], value: Option<&[u8]>, root: MerkleHash,
+        &self, key: &[u8], value: Option<&[u8]>, root: &MerkleHash,
     ) -> bool {
-        self.is_valid(key, &root, |node| match node {
+        self.is_valid(key, root, |node| match node {
             None => value == None,
             Some(node) => value == node.value_as_slice().into_option(),
         })
     }
 
+    /// Check if the key can be proved. The only reason of inability to prove a
+    /// key is missing nodes.
+    pub fn if_proves_key(&self, key: &[u8]) -> (bool, Option<&TrieProofNode>) {
+        let mut proof_node = None;
+        let proof_node_mut = &mut proof_node;
+        let proves = self.is_valid(key, self.get_merkle_root(), |maybe_node| {
+            *proof_node_mut = maybe_node.clone();
+            true
+        });
+        drop(proof_node_mut);
+        (proves, proof_node)
+    }
+
+    #[cfg(test)]
     /// Verify that the trie `root` has a node with `hash` under `path`.
     /// Use `MERKLE_NULL_NODE` for exclusion proofs (i.e. `path` does not exist
     /// or leads to another hash).
     pub fn is_valid_path_to(
-        &self, path: &[u8], hash: MerkleHash, root: MerkleHash,
+        &self, path: &[u8], hash: &MerkleHash, root: &MerkleHash,
     ) -> bool {
-        self.is_valid(path, &root, |node| match node {
-            None => hash == MERKLE_NULL_NODE,
-            Some(node) => hash == *node.get_merkle(),
+        self.is_valid(path, root, |node| match node {
+            None => hash.eq(&MERKLE_NULL_NODE),
+            Some(node) => hash == node.get_merkle(),
         })
     }
 
-    /// Verify that the trie `root` has a node under `key`.
-    pub fn is_valid_key(&self, key: &[u8], root: &MerkleHash) -> bool {
-        self.is_valid(key, root, |node| node.is_some())
-    }
-
-    fn is_valid(
-        &self, path: &[u8], root: &MerkleHash,
-        pred: impl FnOnce(Option<&TrieProofNode>) -> bool,
+    fn is_valid<'this: 'pred_param, 'pred_param>(
+        &'this self, path: &[u8], root: &MerkleHash,
+        pred: impl FnOnce(Option<&'pred_param TrieProofNode>) -> bool,
     ) -> bool
     {
         // empty trie
@@ -97,31 +165,21 @@ impl TrieProof {
         // NOTE: an empty proof is only valid if it is an
         // exclusion proof for an empty trie, covered above
 
-        // store (hash -> node) mapping
-        let nodes = self
-            .nodes
-            .iter()
-            .map(|node| (node.get_merkle(), node))
-            .collect::<HashMap<&H256, &TrieProofNode>>();
-
         // traverse the trie along `path`
         let mut key = path;
         let mut hash = root;
 
         loop {
-            let node = match nodes.get(hash) {
-                Some(node) => node,
+            let node = match self.merkle_to_node_index.get(hash) {
+                Some(node_index) =>
+                // The node_index is guaranteed to exist so it's actually safe.
+                unsafe { self.nodes.get_unchecked(*node_index) }
                 None => {
-                    // missing node
-                    debug_assert!(!hash.eq(&MERKLE_NULL_NODE)); // this should lead to `ChildNotFound`
+                    // Missing node. The proof can be invalid or incomplete for
+                    // the key.
                     return false;
                 }
             };
-
-            // node hash does not match its contents
-            if !node.is_valid() {
-                return false;
-            }
 
             match node.walk::<Read>(key) {
                 WalkStop::Arrived => {
@@ -144,223 +202,81 @@ impl TrieProof {
             }
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        super::{
-            CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
-            VanillaTrieNode,
-        },
-        TrieProof, TrieProofNode,
-    };
-    use primitives::MERKLE_NULL_NODE;
+    #[inline]
+    pub fn number_nodes(&self) -> usize { self.nodes.len() }
 
-    #[test]
-    fn test_rlp() {
-        let node1 = TrieProofNode::default();
-        assert_eq!(node1, rlp::decode(&rlp::encode(&node1)).unwrap());
+    #[inline]
+    pub fn number_leaf_nodes(&self) -> u32 { self.number_leaf_nodes }
 
-        let node2 = {
-            let mut node = TrieProofNode(VanillaTrieNode::new(
-                MERKLE_NULL_NODE,
-                Default::default(),
-                Some(Box::new([0x03, 0x04, 0x05])),
-                CompressedPathRaw::new(
-                    &[0x00, 0x01, 0x02],
-                    CompressedPathRaw::first_nibble_mask(),
-                ),
-            ));
-            // Use .0 to avoid annoying rust compiler error: "cannot borrow
-            // `node` as immutable because it is also borrowed as mutable"
-            node.0.set_merkle(&node.compute_merkle());
-            node
-        };
+    pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
 
-        assert_eq!(node2, rlp::decode(&rlp::encode(&node2)).unwrap());
+    pub fn compute_paths_for_all_nodes(&self) -> Vec<CompressedPathRaw> {
+        let mut paths = Vec::with_capacity(self.nodes.len());
+        if let Some(node) = self.nodes.get(0) {
+            paths.push(node.compressed_path_ref().into());
+        }
+        for i in 1..self.nodes.len() {
+            paths.push(CompressedPathRaw::concat(
+                &paths[self.parent_node_index[i]],
+                self.child_index[i],
+                &self.nodes[i].compressed_path_ref(),
+            ))
+        }
 
-        let proof = TrieProof::default();
-        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
-
-        let nodes = [node1, node2].iter().cloned().cycle().take(20).collect();
-        let proof = TrieProof::new(nodes);
-        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
-    }
-
-    #[test]
-    fn test_proofs() {
-        //       ------|path: []|-----
-        //      |                     |
-        //      |              |path: [0x00, 0x00]|
-        //      |                     |
-        // |path: [0x20]|   |path: [0x30]            |
-        // |val : [0x02]|   |val : [0x00, 0x00, 0x03]|
-
-        let (key1, value1) = ([0x20], [0x02]);
-        let (key2, value2) = ([0x00, 0x00, 0x30], [0x00, 0x00, 0x03]);
-
-        let leaf1 = {
-            let mut node = TrieProofNode(VanillaTrieNode::new(
-                MERKLE_NULL_NODE,
-                Default::default(),
-                Some(Box::new(value1)),
-                (&[0x20u8][..]).into(),
-            ));
-            node.0.set_merkle(&node.compute_merkle());
-            node
-        };
-
-        let leaf2 = {
-            let mut node = TrieProofNode(VanillaTrieNode::new(
-                MERKLE_NULL_NODE,
-                Default::default(),
-                Some(Box::new(value2)),
-                (&[0x30u8][..]).into(),
-            ));
-            node.0.set_merkle(&node.compute_merkle());
-            node
-        };
-
-        let ext = {
-            let mut children = [MERKLE_NULL_NODE; 16];
-            children[0x03] = leaf2.get_merkle().clone();
-
-            let mut node = TrieProofNode(VanillaTrieNode::new(
-                MERKLE_NULL_NODE,
-                children.into(),
-                None,
-                (&[0x00u8, 0x00u8][..]).into(),
-            ));
-            node.0.set_merkle(&node.compute_merkle());
-
-            node
-        };
-
-        let branch = {
-            let mut children = [MERKLE_NULL_NODE; 16];
-            children[0x00] = ext.compute_merkle();
-            children[0x02] = leaf1.compute_merkle();
-
-            let mut node = TrieProofNode(VanillaTrieNode::new(
-                MERKLE_NULL_NODE,
-                children.into(),
-                None,
-                Default::default(),
-            ));
-            node.0.set_merkle(&node.compute_merkle());
-
-            node
-        };
-
-        let leaf1_hash = leaf1.compute_merkle();
-        let leaf2_hash = leaf2.compute_merkle();
-        let ext_hash = ext.compute_merkle();
-        let branch_hash = branch.compute_merkle();
-        let root = branch_hash.clone();
-        let null = MERKLE_NULL_NODE;
-
-        // empty proof
-        let proof = TrieProof::new(vec![]);
-        assert!(proof.is_valid_kv(&[0x00], None, null));
-        assert!(!proof.is_valid_kv(&[0x00], None, leaf1_hash));
-        assert!(!proof.is_valid_kv(&key1, Some(&[0x00]), null));
-
-        // missing node
-        let proof = TrieProof::new(vec![ext.clone(), branch.clone()]);
-        assert!(!proof.is_valid_kv(&key2, Some(&value2), root));
-
-        // wrong hash
-        let mut leaf2_wrong = leaf2.clone();
-        let mut wrong_merkle = leaf2_wrong.get_merkle().clone();
-        wrong_merkle.as_bytes_mut()[0] = 0x00;
-        leaf2_wrong.set_merkle(&wrong_merkle);
-
-        let proof = TrieProof::new(vec![
-            leaf1.clone(),
-            leaf2_wrong,
-            ext.clone(),
-            branch.clone(),
-        ]);
-        assert!(!proof.is_valid_kv(&key2, Some(&value2), root));
-
-        // wrong value
-        assert!(!proof.is_valid_kv(&key2, Some(&[0x00, 0x00, 0x04]), root));
-
-        // valid proof
-        let proof = TrieProof::new(vec![
-            leaf1.clone(),
-            leaf2.clone(),
-            ext.clone(),
-            branch.clone(),
-        ]);
-
-        assert!(proof.is_valid_kv(&key1, Some(&value1), root));
-        assert!(proof.is_valid_kv(&key2, Some(&value2), root));
-        assert!(proof.is_valid_kv(&[0x01], None, root));
-
-        // wrong root
-        assert!(!proof.is_valid_kv(&key2, Some(&value2), leaf1_hash));
-
-        // path to `branch` (root)
-        let key = &[];
-        assert!(proof.is_valid_path_to(key, branch_hash, root));
-        assert!(!proof.is_valid_path_to(key, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(key, ext_hash, root));
-        assert!(!proof.is_valid_path_to(key, leaf2_hash, root));
-
-        // path to `leaf1`
-        let compressed_path_ref = leaf1.compressed_path_ref();
-        let path = compressed_path_ref.path_slice();
-        assert!(proof.is_valid_path_to(path, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(path, branch_hash, root));
-        assert!(!proof.is_valid_path_to(path, ext_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
-
-        // path to `ext`
-        let compressed_path_ref = ext.compressed_path_ref();
-        let path = compressed_path_ref.path_slice();
-        assert!(proof.is_valid_path_to(path, ext_hash, root));
-        assert!(!proof.is_valid_path_to(path, branch_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
-
-        // path to `leaf2`
-        let path = &key2[..];
-        assert!(proof.is_valid_path_to(path, leaf2_hash, root));
-        assert!(!proof.is_valid_path_to(path, branch_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(path, ext_hash, root));
-
-        // non-existent prefix
-        let path = &[0x00];
-        assert!(proof.is_valid_path_to(path, null, root));
-        assert!(!proof.is_valid_path_to(path, branch_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(path, ext_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
-
-        // non-existent path
-        let path = &[0x10];
-        assert!(proof.is_valid_path_to(path, null, root));
-        assert!(!proof.is_valid_path_to(path, branch_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(path, ext_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
-
-        // non-existent path with existing prefix
-        let path = &[0x00, 0x00, 0x30, 0x04];
-        assert!(proof.is_valid_path_to(path, null, root));
-        assert!(!proof.is_valid_path_to(path, branch_hash, root));
-        assert!(!proof.is_valid_path_to(path, ext_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf1_hash, root));
-        assert!(!proof.is_valid_path_to(path, leaf2_hash, root));
-
-        // empty trie
-        assert!(proof.is_valid_path_to(&[], null, null));
-        assert!(proof.is_valid_path_to(&[0x00], null, null));
-
-        assert!(!proof.is_valid_path_to(&[], branch_hash, null));
-        assert!(!proof.is_valid_path_to(&[0x00], branch_hash, null));
+        paths
     }
 }
+
+impl Encodable for TrieProof {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_list(&self.nodes); }
+}
+
+impl Decodable for TrieProof {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        if rlp.item_count()? > Self::MAX_NODES {
+            return Err(DecoderError::Custom("TrieProof too long."));
+        }
+        match Self::new(rlp.as_list()?) {
+            Err(_) => Err(DecoderError::Custom("Invalid TrieProof")),
+            Ok(proof) => Ok(proof),
+        }
+    }
+}
+
+// FIXME: in rlp encode / decode, children_count and merkle_hash should be
+// omitted.
+impl Encodable for TrieProofNode {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.0); }
+}
+
+impl Decodable for TrieProofNode {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        Ok(Self(rlp.as_val()?))
+    }
+}
+
+impl Deref for TrieProofNode {
+    type Target = VanillaTrieNode<MerkleHash>;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for TrieProofNode {
+    fn deref_mut(&mut self) -> &mut <Self as Deref>::Target { &mut self.0 }
+}
+
+use super::{
+    super::errors::*,
+    merkle::compute_merkle,
+    walk::{access_mode::Read, TrieNodeWalkTrait, WalkStop},
+    CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
+    VanillaChildrenTable, VanillaTrieNode,
+};
+use cfx_types::H256;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
+use rlp::*;
+use std::{
+    collections::{hash_map::RandomState, HashMap},
+    ops::{Deref, DerefMut},
+};

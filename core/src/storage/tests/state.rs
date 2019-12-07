@@ -550,19 +550,11 @@ fn test_proofs() {
         // invalid value
         assert!(!proof.is_valid_kv(key, Some(&[0x00; 100][..]), root.clone()));
 
-        // invalid hash
-        let mut invalid_proof = proof.clone();
-        if let Some(delta_proof) = &mut invalid_proof.delta_proof {
-            let mut wrong_merkle = delta_proof.nodes[0].get_merkle().clone();
-            wrong_merkle.as_bytes_mut()[0] = 0x00;
-            delta_proof.nodes[0].set_merkle(&wrong_merkle);
-        }
-
-        assert!(!invalid_proof.is_valid_kv(key, value, root.clone()));
+        // invalid non-existence.
+        assert!(!proof.is_valid_kv(key, None, root.clone()));
 
         // test rlp
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
-        assert_ne!(proof, rlp::decode(&rlp::encode(&invalid_proof)).unwrap());
     }
 
     let nonexistent_keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)

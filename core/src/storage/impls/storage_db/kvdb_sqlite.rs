@@ -33,10 +33,10 @@ pub struct KvdbSqliteStatements {
 
 pub struct KvdbSqliteStatementsPerTable {
     pub create_table: String,
-    pub drop_table: &'static str,
+    pub drop_table: String,
     pub get: String,
     pub put: String,
-    pub delete: &'static str,
+    pub delete: String,
     pub range_select_statement: String,
     pub range_select_till_end_statement: String,
     pub range_excl_select_statement: String,
@@ -133,7 +133,10 @@ impl KvdbSqliteStatementsPerTable {
 
         Ok(Self {
             create_table: strfmt(create_table_sql, &strfmt_vars)?,
-            drop_table: KvdbSqliteStatements::DROP_TABLE_STATEMENT,
+            drop_table: strfmt(
+                KvdbSqliteStatements::DROP_TABLE_STATEMENT,
+                &strfmt_vars,
+            )?,
             get: strfmt(
                 KvdbSqliteStatements::GET_STATEMENT_TMPL,
                 &strfmt_vars,
@@ -142,7 +145,10 @@ impl KvdbSqliteStatementsPerTable {
                 KvdbSqliteStatements::PUT_STATEMENT_TMPL,
                 &strfmt_vars,
             )?,
-            delete: KvdbSqliteStatements::DELETE_STATEMENT,
+            delete: strfmt(
+                KvdbSqliteStatements::DELETE_STATEMENT,
+                &strfmt_vars,
+            )?,
             range_select_statement: strfmt(
                 KvdbSqliteStatements::RANGE_SELECT_STATEMENT,
                 &strfmt_vars,
@@ -647,7 +653,7 @@ where ValueType::PutType: SqlBindableValue
             None => Err(Error::from(ErrorKind::DbNotExist)),
             Some(conn) => {
                 conn.execute(
-                    statements.stmts_bytes_key_table.delete,
+                    &statements.stmts_bytes_key_table.delete,
                     &[&&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
@@ -664,7 +670,7 @@ where ValueType::PutType: SqlBindableValue
             None => Err(Error::from(ErrorKind::DbNotExist)),
             Some(conn) => {
                 conn.execute(
-                    statements.stmts_main_table.delete,
+                    &statements.stmts_main_table.delete,
                     &[&key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;

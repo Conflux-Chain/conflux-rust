@@ -287,6 +287,12 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
         );
     }
 
+    unsafe fn get_child_mut_unchecked(
+        &mut self, child_index: u8,
+    ) -> &mut Self::NodeRefType {
+        self.children_table.get_child_mut_unchecked(child_index)
+    }
+
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
     where ChildrenTableItem<NodeRefDeltaMptCompact>:
             WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
