@@ -624,14 +624,19 @@ mod tests {
         std::fs::create_dir_all(&path_dir).ok();
         let log_device_manager = LogDeviceManager::new(path_dir.clone());
         assert_eq!(log_device_manager.get_device_num(), 0);
+        assert_eq!(log_device_manager.get_device_num_from_db(), 0);
         log_device_manager.create_new_device();
         assert_eq!(log_device_manager.get_device_num(), 1);
+        assert_eq!(log_device_manager.get_device_num_from_db(), 1);
         log_device_manager.create_new_device();
         assert_eq!(log_device_manager.get_device_num(), 2);
+        assert_eq!(log_device_manager.get_device_num_from_db(), 2);
         log_device_manager.create_new_device();
         assert_eq!(log_device_manager.get_device_num(), 3);
+        assert_eq!(log_device_manager.get_device_num_from_db(), 3);
         log_device_manager.create_new_device();
         assert_eq!(log_device_manager.get_device_num(), 4);
+        assert_eq!(log_device_manager.get_device_num_from_db(), 4);
 
         let mut log_device_path_dir = path_dir.clone();
         let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
