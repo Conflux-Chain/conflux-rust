@@ -135,21 +135,22 @@ impl LogDeviceManager {
     }
 
     pub fn create_new_device(&self) -> usize {
-        let device_num = self.get_device_num();
+        let new_device_id = self.get_device_num();
         let mut log_device_filename = String::from(LOG_DEVICE_DIR_PREFIX);
-        log_device_filename.push_str(device_num.to_string().as_str());
+        log_device_filename.push_str(new_device_id.to_string().as_str());
         let mut device_path_dir = self.path_dir.clone();
         device_path_dir.push(log_device_filename.as_str());
         let log_device = LogDevice::new(
             device_path_dir,
-            device_num,
+            new_device_id,
             self.db.clone(),
             false, /* open */
         );
         self.devices.lock().push(Arc::new(log_device));
-        self.set_device_num_to_db(device_num);
+        let new_device_num = new_device_id + 1;
+        self.set_device_num_to_db(new_device_num);
         self.db.key_value().flush().expect("DB flush failed.");
-        device_num
+        new_device_id
     }
 }
 
@@ -263,7 +264,9 @@ impl LogDevice {
     }
 
     pub fn trim(&self, segment: u64) {
-        if let Some(new_head) = self.inner.lock().check_trim(segment) {
+        let new_head = self.inner.lock().check_trim(segment);
+        if new_head.is_some() {
+            let new_head = new_head.unwrap();
             self.set_stripe_info_to_db(self.head_db_key.as_bytes(), &new_head);
             self.db.key_value().flush().expect("DB flush failed.");
             self.inner.lock().trim(&new_head);
@@ -442,40 +445,38 @@ impl LogDeviceInner {
 
 #[cfg(test)]
 mod tests {
-    use super::LogDeviceManager;
+    use super::{
+        LogDevice, LogDeviceManager, LOG_DEVICE_DIR_PREFIX,
+        NUM_OF_STRIPES_PER_SEGMENT,
+    };
+    use crate::StripeReference;
     use byteorder::{ByteOrder, LittleEndian};
     use rand::Rng;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, sync::Arc};
 
-    #[test]
-    #[should_panic(expected = "Incorrect payload size.")]
-    fn test_append_log_device() {
-        let path_dir = String::from("./ldm");
-        let path_dir = PathBuf::from(path_dir);
-        std::fs::remove_dir_all(&path_dir).ok();
-        std::fs::create_dir_all(&path_dir).ok();
-        let log_device_manager = LogDeviceManager::new(path_dir);
-        assert_eq!(log_device_manager.get_device_num(), 0);
-        let device_id = log_device_manager.create_new_device();
-        assert_eq!(log_device_manager.get_device_num(), 1);
-        let log_device = log_device_manager.get_device(device_id).unwrap();
-        let mut stripes = Vec::new();
-        let mut stripe_refs = Vec::new();
-
-        // Generate random stripes and append.
-        for i in 0..10 {
+    fn gen_random_and_append(
+        log_device: Arc<LogDevice>, stripes: &mut Vec<Vec<u8>>,
+        stripe_refs: &mut Vec<StripeReference>, start: usize, end: usize,
+    )
+    {
+        for i in start..end {
             let mut stripe: Vec<u8> = Vec::new();
             let stripe_size = rand::thread_rng().gen_range(4, 1024 * 64);
-            stripe.resize(stripe_size, i);
+            stripe.resize(stripe_size, i as u8);
             let payload_size = stripe_size - 4;
             LittleEndian::write_u32(&mut stripe[0..4], payload_size as u32);
             let stripe_ref = log_device.append_stripe(&stripe).unwrap();
             stripes.push(stripe);
             stripe_refs.push(stripe_ref);
         }
+    }
 
-        // Read appended stripes and check.
-        for i in 0..10 {
+    fn read_and_check(
+        log_device: Arc<LogDevice>, stripes: &Vec<Vec<u8>>,
+        stripe_refs: &Vec<StripeReference>, start: usize, end: usize,
+    )
+    {
+        for i in start..end {
             let stripe = &stripes[i];
             let stripe_ref = &stripe_refs[i];
             let read_stripe = log_device
@@ -489,8 +490,181 @@ mod tests {
             assert_eq!(matching, stripe.len());
             assert_eq!(matching, read_stripe.len());
         }
+    }
 
-        stripes[0][0] += 1;
-        log_device.append_stripe(&stripes[0]).ok();
+    fn create_and_append(
+        stripes: &mut Vec<Vec<u8>>, stripe_refs: &mut Vec<StripeReference>,
+    ) {
+        let path_dir = String::from("./ldm_open");
+        let path_dir = PathBuf::from(path_dir);
+        std::fs::remove_dir_all(&path_dir).ok();
+        std::fs::create_dir_all(&path_dir).ok();
+        let log_device_manager = LogDeviceManager::new(path_dir.clone());
+        assert_eq!(log_device_manager.get_device_num(), 0);
+        let device_id = log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 1);
+        assert_eq!(log_device_manager.get_device_num_from_db(), 1);
+        let log_device = log_device_manager.get_device(device_id).unwrap();
+
+        gen_random_and_append(log_device.clone(), stripes, stripe_refs, 0, 10);
+        read_and_check(log_device.clone(), stripes, stripe_refs, 0, 10);
+    }
+
+    fn open_and_read(
+        stripes: &Vec<Vec<u8>>, stripe_refs: &Vec<StripeReference>,
+    ) {
+        let path_dir = String::from("./ldm_open");
+        let path_dir = PathBuf::from(path_dir);
+        let log_device_manager = LogDeviceManager::new(path_dir.clone());
+        assert_eq!(log_device_manager.get_device_num(), 1);
+        let log_device = log_device_manager.get_device(0).unwrap();
+
+        read_and_check(log_device.clone(), stripes, stripe_refs, 0, 10);
+        std::fs::remove_dir_all(&path_dir).ok();
+    }
+
+    #[test]
+    fn test_open_log_device() {
+        let mut stripes = Vec::new();
+        let mut stripe_refs = Vec::new();
+
+        create_and_append(&mut stripes, &mut stripe_refs);
+        open_and_read(&stripes, &stripe_refs);
+    }
+
+    #[test]
+    fn test_append_log_device() {
+        let path_dir = String::from("./ldm_append");
+        let path_dir = PathBuf::from(path_dir);
+        std::fs::remove_dir_all(&path_dir).ok();
+        std::fs::create_dir_all(&path_dir).ok();
+        let log_device_manager = LogDeviceManager::new(path_dir.clone());
+        assert_eq!(log_device_manager.get_device_num(), 0);
+        let device_id = log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 1);
+        let log_device = log_device_manager.get_device(device_id).unwrap();
+        let mut stripes = Vec::new();
+        let mut stripe_refs = Vec::new();
+
+        gen_random_and_append(
+            log_device.clone(),
+            &mut stripes,
+            &mut stripe_refs,
+            0,
+            10,
+        );
+        read_and_check(log_device.clone(), &stripes, &stripe_refs, 0, 10);
+        std::fs::remove_dir_all(&path_dir).ok();
+    }
+
+    #[test]
+    fn test_trim_log_device() {
+        let path_dir = String::from("./ldm_trim");
+        let path_dir = PathBuf::from(path_dir);
+        std::fs::remove_dir_all(&path_dir).ok();
+        std::fs::create_dir_all(&path_dir).ok();
+        let log_device_manager = LogDeviceManager::new(path_dir.clone());
+        assert_eq!(log_device_manager.get_device_num(), 0);
+        let device_id = log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 1);
+        let log_device = log_device_manager.get_device(device_id).unwrap();
+        let mut stripes = Vec::new();
+        let mut stripe_refs = Vec::new();
+
+        gen_random_and_append(
+            log_device.clone(),
+            &mut stripes,
+            &mut stripe_refs,
+            0,
+            4 * NUM_OF_STRIPES_PER_SEGMENT as usize,
+        );
+
+        let mut log_device_path_dir = path_dir.clone();
+        let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
+        log_device_dir.push_str("0");
+        log_device_path_dir.push(log_device_dir.as_str());
+
+        let mut segment_0_path = log_device_path_dir.clone();
+        segment_0_path.push("segment_0");
+        let mut segment_1_path = log_device_path_dir.clone();
+        segment_1_path.push("segment_1");
+        let mut segment_2_path = log_device_path_dir.clone();
+        segment_2_path.push("segment_2");
+        let mut segment_3_path = log_device_path_dir.clone();
+        segment_3_path.push("segment_3");
+
+        assert!(segment_0_path.exists());
+        assert!(segment_1_path.exists());
+        assert!(segment_2_path.exists());
+        assert!(segment_3_path.exists());
+
+        log_device.trim(2);
+
+        assert!(!segment_0_path.exists());
+        assert!(!segment_1_path.exists());
+        assert!(segment_2_path.exists());
+        assert!(segment_3_path.exists());
+
+        read_and_check(
+            log_device.clone(),
+            &stripes,
+            &stripe_refs,
+            2 * NUM_OF_STRIPES_PER_SEGMENT as usize,
+            4 * NUM_OF_STRIPES_PER_SEGMENT as usize,
+        );
+
+        std::fs::remove_dir_all(&path_dir).ok();
+    }
+
+    #[test]
+    fn test_create_log_device() {
+        let path_dir = String::from("./ldm_create");
+        let path_dir = PathBuf::from(path_dir);
+        std::fs::remove_dir_all(&path_dir).ok();
+        std::fs::create_dir_all(&path_dir).ok();
+        let log_device_manager = LogDeviceManager::new(path_dir.clone());
+        assert_eq!(log_device_manager.get_device_num(), 0);
+        log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 1);
+        log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 2);
+        log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 3);
+        log_device_manager.create_new_device();
+        assert_eq!(log_device_manager.get_device_num(), 4);
+
+        let mut log_device_path_dir = path_dir.clone();
+        let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
+        log_device_dir.push_str("0");
+        log_device_path_dir.push(log_device_dir.as_str());
+        let mut segment_0_path = log_device_path_dir.clone();
+        segment_0_path.push("segment_0");
+        assert!(segment_0_path.exists());
+
+        let mut log_device_path_dir = path_dir.clone();
+        let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
+        log_device_dir.push_str("1");
+        log_device_path_dir.push(log_device_dir.as_str());
+        let mut segment_0_path = log_device_path_dir.clone();
+        segment_0_path.push("segment_0");
+        assert!(segment_0_path.exists());
+
+        let mut log_device_path_dir = path_dir.clone();
+        let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
+        log_device_dir.push_str("2");
+        log_device_path_dir.push(log_device_dir.as_str());
+        let mut segment_0_path = log_device_path_dir.clone();
+        segment_0_path.push("segment_0");
+        assert!(segment_0_path.exists());
+
+        let mut log_device_path_dir = path_dir.clone();
+        let mut log_device_dir = String::from(LOG_DEVICE_DIR_PREFIX);
+        log_device_dir.push_str("3");
+        log_device_path_dir.push(log_device_dir.as_str());
+        let mut segment_0_path = log_device_path_dir.clone();
+        segment_0_path.push("segment_0");
+        assert!(segment_0_path.exists());
+
+        std::fs::remove_dir_all(&path_dir).ok();
     }
 }
