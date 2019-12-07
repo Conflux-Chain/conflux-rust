@@ -28,15 +28,11 @@ class NodeLocalView:
             self.right_subtree_weight += 1
         self.update_chirality()
 
-    # TODO: Rewrite the initial subtree weight value, and assume that
-    # the left subtree root hash is better than the right one.
     def update_chirality(self):
-        if self.left_subtree_weight > self.right_subtree_weight:
+        if self.left_subtree_weight >= self.right_subtree_weight:
             self.chirality = "L"
-        else self.right_subtree_weight > self.left_subtree_weight:
-            self.chirality = "R"
         else:
-            self.chirality = "L" if random.randint(0, 1) == 0 else "R"
+            self.chirality = "R"
 
 
 class Simulator:
@@ -78,6 +74,7 @@ class Simulator:
 
     def run_test(self):
 
+
         # Initialize the target's tree
         nodes_to_keep_left = list(range(0, self.env.num_nodes, 2))
         nodes_to_keep_right = list(range(1, self.env.num_nodes, 2))
@@ -86,9 +83,10 @@ class Simulator:
             self.nodes[i].chirality = "L"
         for i in nodes_to_keep_right:
             self.nodes[i].chirality = "R"
+            self.nodes[i].deliver_block(0, "R")
 
         # Executed the simulation
-        block_id = 0
+        block_id = 1
         timestamp = 0
         while timestamp < self.env.termination_time:
             timestamp += random.expovariate(1 / self.env.average_block_period)
@@ -100,7 +98,7 @@ class Simulator:
                 # Decide attack target
                 withhold_queue, chirality, target = (self.left_withheld_blocks_queue, "L", nodes_to_keep_left) \
                     if self.left_withheld_blocks_queue.qsize() + self.left_subtree_weight \
-                       < self.right_withheld_blocks_queue.qsize() + self.right_subtree_weight else\
+                       <= self.right_withheld_blocks_queue.qsize() + self.right_subtree_weight else\
                     (self.right_withheld_blocks_queue, "R", nodes_to_keep_right)
                 withhold_queue.put(block_id)
             else:
@@ -210,7 +208,7 @@ if __name__=="__main__":
     repeats = 100
     p = multiprocessing.Pool(cpu_num)
     begin = time.time()
-    attack_last_time = sorted(p.apply(slave_simulator) for x in range(repeats))
+    attack_last_time = sorted(map(lambda x: x.get(), [p.apply_async(slave_simulator) for x in range(repeats)]))
     samples = 10
     print("len: %s" % len(attack_last_time))
     print(list(map(lambda percentile: attack_last_time[int((repeats - 1) * percentile / samples)], range(samples + 1))))
