@@ -510,8 +510,8 @@ mod tests {
         read_and_check(log_device.clone(), stripes, stripe_refs, 0, 10);
     }
 
-    fn open_and_read(
-        stripes: &Vec<Vec<u8>>, stripe_refs: &Vec<StripeReference>,
+    fn open_and_append_and_read(
+        stripes: &mut Vec<Vec<u8>>, stripe_refs: &mut Vec<StripeReference>,
     ) {
         let path_dir = String::from("./ldm_open");
         let path_dir = PathBuf::from(path_dir);
@@ -519,7 +519,8 @@ mod tests {
         assert_eq!(log_device_manager.get_device_num(), 1);
         let log_device = log_device_manager.get_device(0).unwrap();
 
-        read_and_check(log_device.clone(), stripes, stripe_refs, 0, 10);
+        gen_random_and_append(log_device.clone(), stripes, stripe_refs, 10, 20);
+        read_and_check(log_device.clone(), stripes, stripe_refs, 0, 20);
         std::fs::remove_dir_all(&path_dir).ok();
     }
 
@@ -529,7 +530,7 @@ mod tests {
         let mut stripe_refs = Vec::new();
 
         create_and_append(&mut stripes, &mut stripe_refs);
-        open_and_read(&stripes, &stripe_refs);
+        open_and_append_and_read(&mut stripes, &mut stripe_refs);
     }
 
     #[test]
