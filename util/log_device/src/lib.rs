@@ -45,7 +45,7 @@ const SEGMENT_FILE_NAME_PREFIX: &str = "segment_";
 #[derive(Clone, Copy, Debug, Default, RlpDecodable, RlpEncodable)]
 pub struct StripeReference {
     /// Segment id of the stripe.
-    segment: u64,
+    segment_id: u64,
     /// Offset in bytes of the stripe in the segment.
     offset: u64,
 }
@@ -187,7 +187,7 @@ impl LogDevice {
         } else {
             let tail = StripeInfo {
                 stripe_ref: StripeReference {
-                    segment: 0,
+                    segment_id: 0,
                     offset: 0,
                 },
                 stripe_id: 0,
@@ -247,14 +247,12 @@ impl LogDevice {
         self.db.key_value().write(tx).expect("DB write failed.");
     }
 
-    pub fn append_stripe(
-        &self, stripe: &[u8],
-    ) -> Result<StripeReference, Error> {
-        let (appended_stripe_ref, tail) =
+    pub fn append_stripe(&self, stripe: &[u8]) -> Result<StripeInfo, Error> {
+        let (appended_stripe, tail) =
             self.inner.lock().append_stripe(stripe)?;
         self.set_stripe_info_to_db(self.tail_db_key.as_bytes(), &tail);
         self.db.key_value().flush()?;
-        Ok(appended_stripe_ref)
+        Ok(appended_stripe)
     }
 
     pub fn get_stripe(
@@ -263,19 +261,20 @@ impl LogDevice {
         self.inner.lock().get_stripe(stripe_ref)
     }
 
-    pub fn trim(&self, segment: u64) {
-        let new_head = self.inner.lock().check_trim(segment);
+    pub fn trim(&self, stripe: &StripeInfo) {
+        let mut inner = self.inner.lock();
+        let new_head = inner.check_trim(stripe.stripe_ref.segment_id);
         if new_head.is_some() {
             let new_head = new_head.unwrap();
             self.set_stripe_info_to_db(self.head_db_key.as_bytes(), &new_head);
             self.db.key_value().flush().expect("DB flush failed.");
-            self.inner.lock().trim(&new_head);
+            inner.trim(&new_head);
         }
     }
 
-    pub fn segment_to_file_name(segment: u64) -> String {
+    pub fn segment_to_file_name(segment_id: u64) -> String {
         let mut filename = String::from(SEGMENT_FILE_NAME_PREFIX);
-        filename.push_str(segment.to_string().as_str());
+        filename.push_str(segment_id.to_string().as_str());
         filename
     }
 }
@@ -308,11 +307,12 @@ impl LogDeviceInner {
         self.tail = tail;
 
         // Open and check the file holding the tail.
-        let segment_path = self.segment_to_path(self.tail.stripe_ref.segment);
+        let segment_path =
+            self.segment_to_path(self.tail.stripe_ref.segment_id);
         let create = if segment_path.exists() {
             false
         } else {
-            assert_eq!(self.tail.stripe_ref.segment, 0);
+            assert_eq!(self.tail.stripe_ref.segment_id, 0);
             assert_eq!(self.tail.stripe_ref.offset, 0);
             assert_eq!(self.tail.stripe_id, 0);
             std::fs::create_dir_all(&self.path_dir)
@@ -330,7 +330,7 @@ impl LogDeviceInner {
             .expect("Failed to seek segment file.");
         assert_eq!(offset, self.tail.stripe_ref.offset);
         self.file_cache
-            .insert(self.tail.stripe_ref.segment, segment_file);
+            .insert(self.tail.stripe_ref.segment_id, segment_file);
     }
 
     fn segment_to_path(&self, segment: u64) -> PathBuf {
@@ -342,33 +342,33 @@ impl LogDeviceInner {
 
     pub fn append_stripe(
         &mut self, stripe: &[u8],
-    ) -> Result<(StripeReference, StripeInfo), Error> {
+    ) -> Result<(StripeInfo, StripeInfo), Error> {
         // Check size.
         let payload_size = LittleEndian::read_u32(&stripe[0..4]) as usize;
         assert_eq!(payload_size + 4, stripe.len(), "Incorrect payload size.");
 
         if self.tail.stripe_id == NUM_OF_STRIPES_PER_SEGMENT {
             // The current segment is full. Need to create new segment.
-            self.tail.stripe_ref.segment += 1;
+            self.tail.stripe_ref.segment_id += 1;
             self.tail.stripe_ref.offset = 0;
             self.tail.stripe_id = 0;
 
             // Create new segment file.
             let segment_path =
-                self.segment_to_path(self.tail.stripe_ref.segment);
+                self.segment_to_path(self.tail.stripe_ref.segment_id);
             let segment_file = OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create_new(true)
                 .open(&segment_path)?;
             self.file_cache
-                .insert(self.tail.stripe_ref.segment, segment_file);
+                .insert(self.tail.stripe_ref.segment_id, segment_file);
         }
 
         // Append stripe to segment file.
         let segment_file = self
             .file_cache
-            .get_mut(&self.tail.stripe_ref.segment)
+            .get_mut(&self.tail.stripe_ref.segment_id)
             .unwrap();
         let write_size = segment_file.write(stripe)?;
         // FIXME: for better error handling.
@@ -377,28 +377,28 @@ impl LogDeviceInner {
         assert_eq!(segment_file.seek(SeekFrom::End(0)).unwrap(), offset);
         segment_file.flush()?;
 
-        let appended_stripe_ref = self.tail.stripe_ref;
+        let appended_stripe = self.tail;
         // Update tail information.
         self.tail.stripe_id += 1;
         self.tail.stripe_ref.offset = offset;
-        Ok((appended_stripe_ref, self.tail))
+        Ok((appended_stripe, self.tail))
     }
 
     pub fn get_stripe(
         &mut self, stripe_ref: &StripeReference,
     ) -> Result<Vec<u8>, Error> {
-        if !self.file_cache.contains_key(&stripe_ref.segment) {
+        if !self.file_cache.contains_key(&stripe_ref.segment_id) {
             // The segment file hasn't been accessed. Open and cache it.
-            let segment_path = self.segment_to_path(stripe_ref.segment);
+            let segment_path = self.segment_to_path(stripe_ref.segment_id);
             let segment_file = OpenOptions::new()
                 .read(true)
                 .write(true)
                 .open(&segment_path)?;
-            self.file_cache.insert(stripe_ref.segment, segment_file);
+            self.file_cache.insert(stripe_ref.segment_id, segment_file);
         }
 
         let segment_file =
-            self.file_cache.get_mut(&stripe_ref.segment).unwrap();
+            self.file_cache.get_mut(&stripe_ref.segment_id).unwrap();
         let offset = segment_file.seek(SeekFrom::Start(stripe_ref.offset))?;
         assert_eq!(offset, stripe_ref.offset);
         let mut stripe: Vec<u8> = Vec::new();
@@ -415,12 +415,15 @@ impl LogDeviceInner {
         Ok(stripe)
     }
 
-    pub fn check_trim(&self, segment: u64) -> Option<StripeInfo> {
-        if segment >= self.head.stripe_ref.segment
-            && segment <= self.tail.stripe_ref.segment
+    pub fn check_trim(&self, segment_id: u64) -> Option<StripeInfo> {
+        if segment_id >= self.head.stripe_ref.segment_id
+            && segment_id <= self.tail.stripe_ref.segment_id
         {
             Some(StripeInfo {
-                stripe_ref: StripeReference { segment, offset: 0 },
+                stripe_ref: StripeReference {
+                    segment_id,
+                    offset: 0,
+                },
                 stripe_id: 0,
             })
         } else {
@@ -432,7 +435,8 @@ impl LogDeviceInner {
         let old_head = self.head;
         self.head = *new_head;
 
-        for segment in old_head.stripe_ref.segment..self.head.stripe_ref.segment
+        for segment in
+            old_head.stripe_ref.segment_id..self.head.stripe_ref.segment_id
         {
             self.file_cache.remove(&segment);
             let segment_path = self.segment_to_path(segment);
@@ -449,7 +453,7 @@ mod tests {
         LogDevice, LogDeviceManager, LOG_DEVICE_DIR_PREFIX,
         NUM_OF_STRIPES_PER_SEGMENT,
     };
-    use crate::StripeReference;
+    use crate::{StripeInfo, StripeReference};
     use byteorder::{ByteOrder, LittleEndian};
     use rand::Rng;
     use std::{path::PathBuf, sync::Arc};
@@ -465,9 +469,9 @@ mod tests {
             stripe.resize(stripe_size, i as u8);
             let payload_size = stripe_size - 4;
             LittleEndian::write_u32(&mut stripe[0..4], payload_size as u32);
-            let stripe_ref = log_device.append_stripe(&stripe).unwrap();
+            let stripe_info = log_device.append_stripe(&stripe).unwrap();
             stripes.push(stripe);
-            stripe_refs.push(stripe_ref);
+            stripe_refs.push(stripe_info.stripe_ref);
         }
     }
 
@@ -599,7 +603,14 @@ mod tests {
         assert!(segment_2_path.exists());
         assert!(segment_3_path.exists());
 
-        log_device.trim(2);
+        let strip_info = StripeInfo {
+            stripe_ref: StripeReference {
+                segment_id: 2,
+                offset: 0,
+            },
+            stripe_id: 0,
+        };
+        log_device.trim(&strip_info);
 
         assert!(!segment_0_path.exists());
         assert!(!segment_1_path.exists());
