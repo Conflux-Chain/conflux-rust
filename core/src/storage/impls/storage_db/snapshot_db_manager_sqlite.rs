@@ -115,8 +115,14 @@ impl SnapshotDbManagerSqlite {
         temp_snapshot_db.copy_and_merge(&mut old_snapshot_db, delta_mpt)
     }
 
+    // FIXME Create new directories for every sqlite db
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
-        Ok(fs::rename(old_path, new_path)?)
+        fn wal_path(db_path: &str) -> String { db_path.to_string() + "-wal" }
+        fn shm_path(db_path: &str) -> String { db_path.to_string() + "-shm" }
+        fs::rename(old_path, new_path)?;
+        fs::rename(wal_path(old_path).as_str(), wal_path(new_path).as_str())?;
+        fs::rename(shm_path(old_path).as_str(), shm_path(new_path).as_str())?;
+        Ok(())
     }
 }
 

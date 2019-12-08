@@ -211,6 +211,8 @@ impl TrieProof {
 
     pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
 
+    /// FIXME Compute full_path for all nodes first, and them compute the
+    /// path_db_key
     pub fn compute_paths_for_all_nodes(&self) -> Vec<CompressedPathRaw> {
         let mut paths = Vec::with_capacity(self.nodes.len());
         if let Some(node) = self.nodes.get(0) {

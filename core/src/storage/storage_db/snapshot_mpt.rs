@@ -135,7 +135,7 @@ impl Decodable for SubtreeMerkleWithSize {
 
 impl Encodable for SubtreeMerkleWithSize {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2)
+        s.begin_list(3)
             .append(&self.merkle)
             .append(&self.subtree_size)
             .append(&self.delta_subtree_size);

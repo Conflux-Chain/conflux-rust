@@ -59,13 +59,13 @@ impl KvdbSqliteStatements {
         "INSERT OR REPLACE INTO {table_name} VALUES (:key, {value_columns_to_bind})";
     pub const RANGE_EXCL_SELECT_STATEMENT: &'static str =
         "SELECT key, {value_columns} FROM {table_name} \
-        WHERE key > :lower_bound_excl AND key < :upper_bound_excl ORDERED BY key ASC";
+        WHERE key > :lower_bound_excl AND key < :upper_bound_excl ORDER BY key ASC";
     pub const RANGE_SELECT_STATEMENT: &'static str =
         "SELECT key, {value_columns} FROM {table_name} \
-        WHERE key >= :lower_bound_excl AND key < :upper_bound_excl ORDERED BY key ASC";
+        WHERE key >= :lower_bound_excl AND key < :upper_bound_excl ORDER BY key ASC";
     pub const RANGE_SELECT_STATEMENT_TILL_END: &'static str =
         "SELECT key, {value_columns} FROM {table_name} \
-         WHERE key >= :lower_bound_excl ORDERED BY key ASC";
+         WHERE key >= :lower_bound_excl ORDER BY key ASC";
 
     pub fn make_statements(
         value_column_names: &[&str], value_column_types: &[&str],

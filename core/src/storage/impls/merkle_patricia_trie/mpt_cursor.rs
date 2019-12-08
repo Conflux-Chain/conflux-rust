@@ -163,10 +163,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         ))
                     } else {
                         let actual_matched_path = CompressedPathRaw::new(
-                            &last_node
-                                .get_basic_path_node()
-                                .full_path_to_node
-                                .path_slice()
+                            &matched_path.path_slice()
                                 [aligned_path_start_offset as usize..],
                             matched_path.end_mask(),
                         );
@@ -259,7 +256,56 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                             key_remaining = *new_key_remaining;
                             continue;
                         }
-                        WalkStop::PathDiverted { .. } => {
+                        WalkStop::PathDiverted {
+                            key_child_index: new_key_child_index,
+                            unmatched_child_index,
+                            ..
+                        } => {
+                            match new_key_child_index {
+                                None => {
+                                    return {
+                                        self.path_nodes.push(new_node);
+                                        Ok(CursorOpenPathTerminal::Arrived)
+                                    }
+                                }
+                                Some(diverted_child_index) => {
+                                    // FIXME Better handling
+                                    // If we return PathDiverted,
+                                    // new_node will be replaced by a fork_node
+                                    // and a last_node as its
+                                    // child. If unmatched_child_index is
+                                    // larger, we will need to
+                                    // access the key for this new_node when we
+                                    // continue the iteration, and this will
+                                    // become the access of last_node. If we are
+                                    // in save_as mode, last_node
+                                    // is only saved to the new snapshot and
+                                    // cannot be loaded from the
+                                    // old read-only snapshot.
+                                    //
+                                    // Thus we return ChildNotFound to avoid
+                                    // this behavior, and
+                                    // the forking will be triggered later when
+                                    // we access the key for new_node.
+                                    // FIXME If new_node is not accessed again,
+                                    // it will be lost?
+                                    if *diverted_child_index
+                                        < *unmatched_child_index
+                                    {
+                                        // FIXME No need to commit, but should
+                                        // set db_committed.
+                                        let mpt = new_node.commit(
+                                            self.path_nodes.last_mut().unwrap(),
+                                        )?;
+                                        self.path_nodes
+                                            .last_mut()
+                                            .unwrap()
+                                            .get_basic_path_node_mut()
+                                            .mpt = mpt;
+                                        return Ok(CursorOpenPathTerminal::ChildNotFound { key_remaining, child_index});
+                                    }
+                                }
+                            }
                             self.path_nodes.push(new_node);
                             // Leave the match to save the path_diverted
                             // information, then break the loop to finally
@@ -329,6 +375,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             &SubtreeMerkleWithSize::default(),
                         );
                 }
+                parent_node.get_read_write_path_node().next_child_index =
+                    child_index;
                 let new_node = PathNode::new(
                     BasicPathNode::new(
                         SnapshotMptNode(VanillaTrieNode::new(
@@ -736,18 +784,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             mpt.as_mut_assumed_owner(),
             &CompressedPathRaw::default(),
         ) {
-            Ok(root_trie_node) => {
-                let supposed_merkle_root =
-                    mpt.as_ref_assumed_owner().get_merkle_root();
-                assert_eq!(
-                    root_trie_node.get_merkle(),
-                    supposed_merkle_root,
-                    "loaded root trie node merkle hash {:?} != supposed merkle hash {:?}",
-                    root_trie_node.get_merkle(),
-                    supposed_merkle_root,
-                );
-                root_trie_node
-            }
+            Ok(root_trie_node) => root_trie_node,
             // FIXME Handle this as a special case for SnapshotMpt
             // when maybe_db is None in SnapshotDbSqlite
             Err(Error(ErrorKind::SnapshotMPTTrieNodeNotFound, _)) => {
@@ -789,9 +826,10 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,
-            "loaded trie node merkle hash {:?} != supposed merkle hash {:?}",
+            "loaded trie node merkle hash {:?} != supposed merkle hash {:?}, path_db_key={:?}",
             trie_node.get_merkle(),
             supposed_merkle_root,
+            path_db_key,
         );
 
         let full_path_to_node = CompressedPathRaw::concat(
@@ -1104,6 +1142,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                                 &mut child_node,
                             )?;
                         }
+                        self.basic_node.mpt = child_node.mpt.take();
                         self.the_first_child = Some(Box::new(child_node));
                     } else {
                         // There are more than one child. Path compression is
@@ -1129,7 +1168,8 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                             MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
                                 &mut child_node,
                             )?;
-                            child_node.write_out()?;
+                            let mpt = child_node.write_out()?;
+                            self.basic_node.mpt = mpt;
                         }
                     }
                 }
