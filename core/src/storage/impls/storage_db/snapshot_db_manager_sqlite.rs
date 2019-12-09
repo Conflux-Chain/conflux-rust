@@ -18,7 +18,7 @@ impl Default for SnapshotDbManagerSqlite {
 impl SnapshotDbManagerSqlite {
     pub fn new(snapshot_path: String) -> Self {
         Self {
-            snapshot_path: snapshot_path + "/sqlite",
+            snapshot_path: snapshot_path + "/sqlite_",
             force_cow: false,
         }
     }

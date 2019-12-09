@@ -354,13 +354,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 unmatched_child_index,
                 unmatched_path_remaining,
             }) => {
-                let mut last_node = self.path_nodes.pop().unwrap();
+                let last_node = self.path_nodes.pop().unwrap();
                 let parent_node = self.path_nodes.last_mut().unwrap();
-
-                last_node
-                    .get_read_write_path_node()
-                    .trie_node
-                    .set_compressed_path(unmatched_path_remaining);
 
                 let value_len = value.len();
                 let insert_value_at_fork = key_child_index.is_none();
@@ -392,33 +387,55 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             None,
                             matched_path,
                         )),
-                        parent_node.take_mpt(),
+                        None,
                         &parent_node.get_basic_path_node().full_path_to_node,
                         parent_node.get_basic_path_node().next_child_index,
                     ),
                     parent_node,
                     if insert_value_at_fork { value_len } else { 0 },
                 );
-                last_node.get_read_write_path_node().path_db_key =
-                    CompressedPathRaw::extend_path(
-                        &fork_node.get_basic_path_node().full_path_to_node,
-                        unmatched_child_index,
-                    );
-                fork_node.get_basic_path_node_mut().mpt = last_node.take_mpt();
-                fork_node
-                    .get_read_write_path_node()
-                    .maybe_compressed_path_split_child_index =
-                    unmatched_child_index;
-                fork_node
-                    .get_read_write_path_node()
-                    .maybe_compressed_path_split_child_node =
-                    Some(Box::new(last_node.into_read_write_path_node()));
+
+                // "delete" last node when necessary, and create a new node for
+                // the unmatched path.
+                let mut unmatched_child_node = last_node
+                    .unmatched_child_node_for_path_diversion(
+                        CompressedPathRaw::extend_path(
+                            &fork_node.get_basic_path_node().full_path_to_node,
+                            unmatched_child_index,
+                        ),
+                        unmatched_path_remaining,
+                    )?;
+
+                // Unmatched path on the right hand side.
+                if key_child_index.is_none()
+                    || key_child_index.unwrap() < unmatched_child_index
+                {
+                    // The unmatched subtree is not yet opened for operations,
+                    // so it's kept under maybe_compressed_path_split_child_*
+                    // fields of the fork node and will be processed later.
+                    fork_node.get_basic_path_node_mut().mpt =
+                        unmatched_child_node.take_mpt();
+                    fork_node
+                        .get_read_write_path_node()
+                        .maybe_compressed_path_split_child_index =
+                        unmatched_child_index;
+                    fork_node
+                        .get_read_write_path_node()
+                        .maybe_compressed_path_split_child_node =
+                        Some(Box::new(unmatched_child_node));
+                } else {
+                    // Path forked on the right side, the update in the subtree
+                    // of last_node has finished.
+                    // Commit last_node with parent as fork_node.
+                    fork_node.get_read_write_path_node().next_child_index =
+                        unmatched_child_index;
+                    fork_node.get_read_write_path_node().mpt =
+                        unmatched_child_node
+                            .commit(fork_node.get_read_write_path_node())?;
+                }
                 match key_child_index {
                     Some(child_index) => unsafe {
-                        // Move on to the next child: diverted path.
-                        fork_node
-                            .get_read_write_path_node()
-                            .skip_till_child_index(child_index)?;
+                        // Move on to the next child.
                         fork_node.get_read_write_path_node().next_child_index =
                             child_index;
                         fork_node
@@ -649,15 +666,14 @@ impl<Mpt> BasicPathNode<Mpt> {
             &trie_node.compressed_path_ref(),
         );
 
+        let path_db_key =
+            CompressedPathRaw::extend_path(parent_path, child_index);
         Self {
             mpt,
             trie_node,
-            path_start_steps: parent_path.path_steps() + 1,
+            path_start_steps: path_db_key.path_steps(),
             full_path_to_node,
-            path_db_key: CompressedPathRaw::extend_path(
-                parent_path,
-                child_index,
-            ),
+            path_db_key,
             next_child_index: 0,
         }
     }
@@ -693,8 +709,6 @@ pub struct ReadWritePathNode<Mpt> {
     /// compressed path with the original children table. We must keep the
     /// new child, since we may recurse into the subtree of the new child
     /// later.
-    ///
-    /// maybe_compressed_path_split_child_index once set never changes.
     maybe_compressed_path_split_child_index: u8,
     maybe_compressed_path_split_child_node: Option<Box<ReadWritePathNode<Mpt>>>,
 
@@ -814,7 +828,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             BasicPathNode {
                 mpt,
                 trie_node,
-                path_start_steps: parent_path.path_steps() + 1,
+                path_start_steps: path_db_key.path_steps(),
                 full_path_to_node,
                 path_db_key,
                 next_child_index: 0,
@@ -827,7 +841,9 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 }
 
 // TODO: What's the value of RwPathNodeTrait? It seems sufficient now to have
-// only ReadWritePathNode.
+// only ReadWritePathNode. We may have a chance to move out subtree_size related
+// fields from ReadWritePathNode and create a new SnapshotMptRWPathNode to for
+// maintenance of subtree size.
 pub trait RwPathNodeTrait<Mpt: GetRwMpt>: PathNodeTrait<Mpt> {
     fn new(
         basic_node: BasicPathNode<Mpt>, parent_node: &Self, value_size: usize,
@@ -854,7 +870,10 @@ pub trait RwPathNodeTrait<Mpt: GetRwMpt>: PathNodeTrait<Mpt> {
 
     fn get_read_only_path_node(&self) -> &ReadWritePathNode<Mpt>;
 
-    fn into_read_write_path_node(self) -> ReadWritePathNode<Mpt>;
+    fn unmatched_child_node_for_path_diversion(
+        self, new_path_db_key: CompressedPathRaw,
+        new_compressed_path: CompressedPathRaw,
+    ) -> Result<ReadWritePathNode<Mpt>>;
 
     fn replace_value_valid(&mut self, value: Box<[u8]>);
 
@@ -1006,7 +1025,45 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
     fn get_read_only_path_node(&self) -> &ReadWritePathNode<Mpt> { self }
 
-    fn into_read_write_path_node(self) -> ReadWritePathNode<Mpt> { self }
+    /// When a node's compressed path is split under PathDiverted insertion, we
+    /// must "remove" the original node, create a new node for the
+    /// unmatched_path and children_table.
+    fn unmatched_child_node_for_path_diversion(
+        mut self, new_path_db_key: CompressedPathRaw,
+        new_compressed_path: CompressedPathRaw,
+    ) -> Result<Self>
+    {
+        let mut child_node = Self {
+            basic_node: BasicPathNode {
+                mpt: None,
+                trie_node: Default::default(),
+                path_start_steps: new_path_db_key.path_steps(),
+                full_path_to_node: self.full_path_to_node.clone(),
+                path_db_key: new_path_db_key,
+                next_child_index: self.next_child_index,
+            },
+            maybe_first_realized_child_index: self
+                .maybe_first_realized_child_index,
+            the_first_child_if_pending: self.the_first_child_if_pending.take(),
+            maybe_compressed_path_split_child_index: self
+                .maybe_compressed_path_split_child_index,
+            maybe_compressed_path_split_child_node: self
+                .maybe_compressed_path_split_child_node
+                .take(),
+            subtree_size_delta: self.subtree_size_delta,
+            delta_subtree_size: self.delta_subtree_size,
+            has_io_error: self.has_io_error,
+            db_committed: self.db_committed,
+        };
+
+        mem::swap(&mut child_node.trie_node, &mut self.trie_node);
+        child_node.mpt = self.write_out()?;
+        child_node
+            .trie_node
+            .set_compressed_path(new_compressed_path);
+
+        Ok(child_node)
+    }
 
     fn replace_value_valid(&mut self, value: Box<[u8]>) {
         let key_len = self.full_path_to_node.path_size();
