@@ -254,7 +254,6 @@ fn add_epoch_with_accounts(
             &addr,
             &i.into(), /* balance */
             &0.into(), /* nonce */
-            0,         /* timestamp */
         );
         state
             .set(StorageKey::new_account_key(&addr), &account)

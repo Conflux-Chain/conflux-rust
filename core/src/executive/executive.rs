@@ -280,17 +280,13 @@ impl<'a> CallCreateExecutive<'a> {
 
     fn deposit<'b: 'a>(
         params: &ActionParams, state: &mut State<'b>, val: &U256,
-        duration_in_day: u64,
+        deposit_time: u64,
     ) -> vm::Result<()>
     {
         if state.balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
         } else {
-            state.deposit(
-                &params.sender,
-                &val,
-                duration_in_day * 60 * 60 * 24,
-            )?;
+            state.deposit(&params.sender, &val, deposit_time)?;
             Ok(())
         }
     }
@@ -301,7 +297,6 @@ impl<'a> CallCreateExecutive<'a> {
         if state.bank_balance(&params.sender)?
             - state.storage_balance(&params.sender)?
             < *val
-            || state.mature_bank_balance(&params.sender)? < *val
         {
             Err(vm::Error::InternalContract(
                 "not enough bank balance to withdraw",
@@ -513,38 +508,25 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                     let internal_contract_out_buffer = Vec::new();
                     let result: vm::Result<()> = {
-                        if data[0] == 226
-                            && data[1] == 187
-                            && data[2] == 177
-                            && data[3] == 88
+                        if data[0] == 182
+                            && data[1] == 181
+                            && data[2] == 95
+                            && data[3] == 37
                         {
                             // The first 4 byts of
-                            // keccak('deposit(uint256,uint256)') is
-                            // `0xe2bbb158`.
-                            // 4 bytes `Method ID` + 32 bytes `amount` + 32
-                            // bytes `duration_in_day`.
-                            if data.len() != 68 {
+                            // keccak('deposit(uint256)') is
+                            // `0xb6b55f25`.
+                            // 4 bytes `Method ID` + 32 bytes `amount`
+                            if data.len() != 36 {
                                 Err(vm::Error::InternalContract("invalid data"))
                             } else {
                                 let amount = U256::from(&data[4..36]);
-                                let duration_in_day =
-                                    U256::from(&data[36..68]).low_u64();
-                                // This is supposed to be the end of the Earth:
-                                // 5 billion years.
-                                if duration_in_day < 1
-                                    || duration_in_day > 1_825_000_000_000
-                                {
-                                    Err(vm::Error::InternalContract(
-                                        "invalid duration in day",
-                                    ))
-                                } else {
-                                    Self::deposit(
-                                        params,
-                                        state,
-                                        &amount,
-                                        duration_in_day,
-                                    )
-                                }
+                                Self::deposit(
+                                    params,
+                                    state,
+                                    &amount,
+                                    self.env.timestamp,
+                                )
                             }
                         } else if data[0] == 46
                             && data[1] == 26

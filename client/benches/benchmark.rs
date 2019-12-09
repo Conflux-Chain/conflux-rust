@@ -86,7 +86,6 @@ fn txexe_benchmark(c: &mut Criterion) {
                 ),
                 0.into(), /* account_start_nonce */
                 VmFactory::new(1024 * 32),
-                0, /* timestamp */
             );
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             let mut nonce_increased = false;

@@ -11,7 +11,6 @@ pub fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
         StateDb::new(storage_manager.get_state_for_genesis_write()),
         0.into(), /* nonce */
         VmFactory::default(),
-        0, /* timestamp */
     )
 }
 
@@ -22,6 +21,5 @@ pub fn get_state_for_genesis_write_with_factory(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
         0.into(), /* nonce */
         factory.into(),
-        0, /* timestamp */
     )
 }

@@ -929,7 +929,6 @@ impl ConsensusExecutionHandler {
             ),
             0.into(),
             self.vm.clone(),
-            pivot_block.block_header.timestamp(),
         );
         let epoch_receipts = self.process_epoch_transactions(
             &mut state,
@@ -1436,7 +1435,6 @@ impl ConsensusExecutionHandler {
             ),
             0.into(),
             self.vm.clone(),
-            pivot_block.block_header.timestamp(),
         );
         self.process_epoch_transactions(
             &mut state,
@@ -1472,7 +1470,6 @@ impl ConsensusExecutionHandler {
             ),
             0.into(),
             self.vm.clone(),
-            time_stamp,
         );
         let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number

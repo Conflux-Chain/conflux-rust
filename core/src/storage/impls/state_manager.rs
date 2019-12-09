@@ -89,7 +89,6 @@ impl StateManager {
                 &addr,
                 &balance,
                 &0.into(), /* nonce */
-                0,         /* timestamp */
             );
             state
                 .set(StorageKey::new_account_key(&addr), &account)

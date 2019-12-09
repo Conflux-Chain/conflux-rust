@@ -541,7 +541,6 @@ impl SpecialTransactionGenerator {
                 &start_address,
                 &start_balance,
                 &0.into(), /* nonce */
-                0,         /* timestamp */
             ),
             start_erc20_balance,
         );
@@ -634,7 +633,6 @@ impl SpecialTransactionGenerator {
                                     &address,
                                     &0.into(), /* balance */
                                     &0.into(), /* nonce */
-                                    0,         /* timestamp */
                                 ),
                                 0.into(),
                             ),

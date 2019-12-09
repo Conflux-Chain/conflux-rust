@@ -737,7 +737,6 @@ impl ConsensusGraph {
             state_db,
             0.into(),           /* account_start_nonce */
             Default::default(), /* vm */
-            0,                  /* timestamp */
         );
         state
             .nonce(&address)
@@ -765,7 +764,6 @@ impl ConsensusGraph {
                         StateDb::new(db),
                         0.into(),           /* account_start_nonce */
                         Default::default(), /* vm */
-                        0,                  /* timestamp */
                     )
                 })
                 .expect("Best state has been executed")

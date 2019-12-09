@@ -57,16 +57,12 @@ pub struct State<'a> {
     interest_rate: U256,
     accumulate_interest_rate: U256,
     vm: VmFactory,
-    /// This is the timestamp of current epoch block.
-    timestamp: u64,
 }
 
 impl<'a> State<'a> {
     pub fn new(
         db: StateDb<'a>, account_start_nonce: U256, vm: VmFactory,
-        timestamp: u64,
-    ) -> Self
-    {
+    ) -> Self {
         let interest_rate = db.get_interest_rate().expect("no db error");
         let accumulate_interest_rate =
             db.get_accumulate_interest_rate().expect("no db error");
@@ -86,7 +82,6 @@ impl<'a> State<'a> {
             interest_rate,
             accumulate_interest_rate,
             vm,
-            timestamp,
         }
     }
 
@@ -274,12 +269,6 @@ impl<'a> State<'a> {
         })
     }
 
-    pub fn mature_bank_balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
-            acc.map_or(U256::zero(), |account| *account.mature_bank_balance())
-        })
-    }
-
     pub fn storage_balance(&self, address: &Address) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, true, |acc| {
             acc.map_or(U256::zero(), |account| *account.storage_balance())
@@ -342,12 +331,11 @@ impl<'a> State<'a> {
     }
 
     pub fn deposit(
-        &mut self, address: &Address, by: &U256, duration_in_sec: u64,
+        &mut self, address: &Address, by: &U256, deposit_time: u64,
     ) -> DbResult<()> {
         // TODO: check account type, only basic account can deposit
         if !by.is_zero() {
-            self.require(address, false)?
-                .deposit(by, self.timestamp + duration_in_sec);
+            self.require(address, false)?.deposit(by, deposit_time);
             self.total_bank_tokens += *by;
         }
         Ok(())
@@ -755,12 +743,7 @@ impl<'a> State<'a> {
         }
 
         let mut maybe_acc = self.db.get_account(address)?.map(|acc| {
-            OverlayAccount::new(
-                address,
-                acc,
-                self.accumulate_interest_rate,
-                self.timestamp,
-            )
+            OverlayAccount::new(address, acc, self.accumulate_interest_rate)
         });
         if let Some(ref mut account) = maybe_acc.as_mut() {
             if !Self::update_account_cache(require, account, &self.db) {
@@ -804,12 +787,7 @@ impl<'a> State<'a> {
         let contains_key = self.cache.borrow().contains_key(address);
         if !contains_key {
             let account = self.db.get_account(address)?.map(|acc| {
-                OverlayAccount::new(
-                    address,
-                    acc,
-                    self.accumulate_interest_rate,
-                    self.timestamp,
-                )
+                OverlayAccount::new(address, acc, self.accumulate_interest_rate)
             });
             self.insert_cache(address, AccountEntry::new_clean(account));
         }
@@ -870,7 +848,6 @@ mod tests {
             ),
             0.into(), /* account_start_nonce */
             VmFactory::default(),
-            0, /* timestamp */
         )
     }
 
@@ -879,7 +856,6 @@ mod tests {
             StateDb::new(storage_manager.get_state_for_genesis_write()),
             0.into(), /* account_start_nonce */
             VmFactory::default(),
-            0, /* timestamp */
         )
     }
 

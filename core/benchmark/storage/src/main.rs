@@ -1704,7 +1704,6 @@ impl TxReplayer {
                         &receiver,
                         &tx.amount_wei, /* balance */
                         &0.into(), /* nonce */
-                        0, /* timestamp */
                     );
                 }
             }
