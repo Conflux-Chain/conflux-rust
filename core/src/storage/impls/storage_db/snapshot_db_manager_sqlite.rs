@@ -46,7 +46,8 @@ impl SnapshotDbManagerSqlite {
     }
 
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
-    /// Ok(false) when cow copy isn't supported.
+    /// Ok(false) when we are running on an OS where cow copy isn't implemented
+    /// yet.
     fn try_make_cow_copy_impl(
         old_snapshot_path: &str, new_snapshot_path: &str,
     ) -> Result<bool> {
@@ -57,7 +58,7 @@ impl SnapshotDbManagerSqlite {
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path)
                 .output()?
-        } else if cfg!(target_os = "mac") {
+        } else if cfg!(target_os = "macos") {
             // APFS
             Command::new("cp")
                 .arg("-c")
@@ -85,7 +86,11 @@ impl SnapshotDbManagerSqlite {
             Self::try_make_cow_copy_impl(old_snapshot_path, new_snapshot_path);
 
         if result.is_err() {
-            result
+            if self.force_cow {
+                result
+            } else {
+                Ok(false)
+            }
         } else if result.unwrap() == false {
             if self.force_cow {
                 // FIXME: Check error string.
@@ -115,13 +120,18 @@ impl SnapshotDbManagerSqlite {
         temp_snapshot_db.copy_and_merge(&mut old_snapshot_db, delta_mpt)
     }
 
-    // FIXME Create new directories for every sqlite db
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
-        fn wal_path(db_path: &str) -> String { db_path.to_string() + "-wal" }
-        fn shm_path(db_path: &str) -> String { db_path.to_string() + "-shm" }
-        fs::rename(old_path, new_path)?;
-        fs::rename(wal_path(old_path).as_str(), wal_path(new_path).as_str())?;
-        fs::rename(shm_path(old_path).as_str(), shm_path(new_path).as_str())?;
+        if SqliteConnection::remove_temporary_files_for_db(old_path)? {
+            // The db is unclean, which shouldn't happen. We remove the
+            // snapshot_db file.
+            fs::remove_file(old_path)?;
+            bail!(ErrorKind::DbIsUnclean);
+
+        // FIXME: at start-up, scan if any db is unclean, and if so do
+        // something.
+        } else {
+            fs::rename(old_path, new_path)?;
+        }
         Ok(())
     }
 }
@@ -248,6 +258,7 @@ use super::{
             SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
         },
         errors::*,
+        storage_db::sqlite::SqliteConnection,
         storage_manager::DeltaMptIterator,
     },
     snapshot_db_sqlite::*,

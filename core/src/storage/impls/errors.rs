@@ -61,14 +61,19 @@ error_chain! {
         }
 
         DbNotExist {
-            description("Failed to operate on an empty db."),
-            display("Failed to operate on an empty db."),
+            description("Not allowed to operate on an readonly empty db."),
+            display("Not allowed to operate on an readonly empty db."),
         }
 
         // TODO(yz): add error details.
         DbValueError {
             description("Unexpected result from db query."),
             display("Unexpected result from db query."),
+        }
+
+        DbIsUnclean {
+            description("Db is unclean."),
+            display("Db is unclean."),
         }
 
         SnapshotCowCreation {
