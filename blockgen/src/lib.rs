@@ -206,7 +206,7 @@ impl BlockGenerator {
             .as_secs();
 
         // Adjust the timestamp of the currently mined block to be later
-        // than its parent's.
+        // than or equal to its parent's.
         // See comments in verify_header_graph_ready_block()
         let my_timestamp = max(parent_timestamp, now);
 
