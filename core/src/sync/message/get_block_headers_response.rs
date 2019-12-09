@@ -132,7 +132,9 @@ impl GetBlockHeadersResponse {
                 // process it and request its dependence once.
                 continue;
             }
-            // check timestamp drift
+
+            // Check timestamp drift
+            // See comments in verify_header_graph_ready_block()
             if ctx.manager.graph.verification_config.verify_timestamp {
                 if header.timestamp() > now_timestamp + ACCEPTABLE_TIME_DRIFT {
                     ctx.manager.future_blocks.insert(header.clone());
