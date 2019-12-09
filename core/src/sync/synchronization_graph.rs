@@ -703,11 +703,11 @@ impl SynchronizationGraphInner {
         // the timestamp of the block. Otherwise, this block can be added
         // into the graph.
         // Meanwhile, Conflux also requires that the timestamp of each
-        // block must be later than its parent's timestamp. This is
-        // achieved through adjusting the timestamp of a newly generated
-        // block to the one later than its parent's timestamp. This is
-        // also enough for difficulty adjustment computation where the
-        // timespan in the adjustment period is only computed based on
+        // block must be later than or equal to its parent's timestamp.
+        // This is achieved through adjusting the timestamp of a newly
+        // generated block to the one later than its parent's timestamp.
+        // This is also enough for difficulty adjustment computation where
+        // the timespan in the adjustment period is only computed based on
         // timestamps of pivot chain blocks.
         let my_timestamp = self.arena[index].block_header.timestamp();
         if parent_timestamp > my_timestamp {
