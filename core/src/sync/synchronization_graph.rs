@@ -691,7 +691,24 @@ impl SynchronizationGraphInner {
             })));
         }
 
-        // Verify the timestamp being correctly set
+        // Verify the timestamp being correctly set.
+        // Conflux tries to maintain the timestamp drift among blocks
+        // in the graph, which probably being generated at the same time,
+        // within a small bound (specified by ACCEPTABLE_TIME_DRIFT).
+        // This is achieved through the following mechanism. Anytime
+        // when receiving a new block from the peer, if the timestamp of
+        // the block is more than ACCEPTABLE_TIME_DRIFT later than the
+        // current timestamp of the node, the block is postponed to be
+        // added into the graph until the current timestamp passes the
+        // the timestamp of the block. Otherwise, this block can be added
+        // into the graph.
+        // Meanwhile, Conflux also requires that the timestamp of each
+        // block must be later than its parent's timestamp. This is
+        // achieved through adjusting the timestamp of a newly generated
+        // block to the one later than its parent's timestamp. This is
+        // also enough for difficulty adjustment computation where the
+        // timespan in the adjustment period is only computed based on
+        // timestamps of pivot chain blocks.
         let my_timestamp = self.arena[index].block_header.timestamp();
         if parent_timestamp > my_timestamp {
             let my_timestamp = UNIX_EPOCH + Duration::from_secs(my_timestamp);
