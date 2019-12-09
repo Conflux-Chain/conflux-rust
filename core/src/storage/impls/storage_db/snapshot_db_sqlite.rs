@@ -314,6 +314,7 @@ impl SnapshotDbSqlite {
         >,
     > {
         Ok(SnapshotMpt {
+            merkle_root: self.snapshot_info.merkle_root.clone(),
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
@@ -340,6 +341,7 @@ impl SnapshotDbSqlite {
         >,
     > {
         Ok(SnapshotMpt {
+            merkle_root: self.snapshot_info.merkle_root.clone(),
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMutReadOnly::new((
                     self.maybe_db.as_mut(),

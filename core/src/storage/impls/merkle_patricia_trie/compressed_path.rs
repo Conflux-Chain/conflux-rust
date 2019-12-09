@@ -142,6 +142,8 @@ impl<'a> From<CompressedPathRef<'a>> for CompressedPathRaw {
 }
 
 impl CompressedPathRaw {
+    /// Create a new CompressedPathRaw from valid (path_slice, end_mask)
+    /// combination.
     pub fn new(path_slice: &[u8], end_mask: u8) -> Self {
         let path_size = path_slice.len();
 
@@ -153,6 +155,21 @@ impl CompressedPathRaw {
         }
     }
 
+    #[inline]
+    fn last_byte_mut(&mut self) -> &mut u8 {
+        // Safe, because the index is valid.
+        unsafe {
+            self.path
+                .get_slice_mut(self.path_size as usize)
+                .get_unchecked_mut(self.path_size as usize - 1)
+        }
+    }
+
+    #[inline]
+    fn apply_mask(&mut self, end_mask: u8) {
+        *self.last_byte_mut() &= end_mask;
+    }
+
     pub fn new_and_apply_mask(path_slice: &[u8], end_mask: u8) -> Self {
         let path_size = path_slice.len();
         let mut ret = Self {
@@ -161,7 +178,7 @@ impl CompressedPathRaw {
             end_mask,
             byte_array_memory_manager: Default::default(),
         };
-        ret.path.get_slice_mut(path_size)[path_size - 1] &= end_mask;
+        ret.apply_mask(end_mask);
 
         ret
     }
@@ -187,8 +204,38 @@ impl CompressedPathRaw {
         (x & Self::BITS_4_7_MASK) | second_nibble
     }
 
-    // FIXME Handle the case where y.is_empty() with a separate function.
-    pub fn concat<X: CompressedPathTrait, Y: CompressedPathTrait>(
+    pub fn extend_path<X: CompressedPathTrait>(x: &X, child_index: u8) -> Self {
+        let new_size;
+        let end_mask;
+        // Need to extend the length.
+        if x.end_mask() == 0 {
+            new_size = x.path_size() + 1;
+            end_mask = Self::first_nibble_mask();
+        } else {
+            new_size = x.path_size();
+            end_mask = 0;
+        }
+        let mut ret = Self::new_zeroed(new_size, end_mask);
+        ret.path.get_slice_mut(new_size as usize)[0..x.path_size() as usize]
+            .copy_from_slice(x.path_slice());
+        // The last byte is a half-byte.
+        if x.end_mask() == 0 {
+            *ret.last_byte_mut() = Self::from_first_nibble(child_index);
+        } else {
+            let last_byte = *ret.last_byte_mut();
+            *ret.last_byte_mut() =
+                Self::set_second_nibble(last_byte, child_index);
+        }
+
+        ret
+    }
+
+    /// y must be a valid path following x. i.e. when x ends with a full byte, y
+    /// must be non-empty and start with nibble child_index.
+    pub fn join_connected_paths<
+        X: CompressedPathTrait,
+        Y: CompressedPathTrait,
+    >(
         x: &X, child_index: u8, y: &Y,
     ) -> Self {
         let x_slice = x.path_slice();
@@ -198,15 +245,7 @@ impl CompressedPathRaw {
         // TODO(yz): it happens to be the same no matter what end_mask of x is,
         // because u8 = 2 nibbles. When we switch to u32 as path unit
         // the concated size may vary.
-        let (size, end_mask) = if y_slice.is_empty() {
-            if x.end_mask() == 0 {
-                (x_slice_len + 1, CompressedPathRaw::first_nibble_mask())
-            } else {
-                (x_slice_len, 0)
-            }
-        } else {
-            (x_slice_len + y_slice.len(), y.end_mask())
-        };
+        let size = x_slice_len + y_slice.len();
 
         let mut path;
         {
@@ -235,14 +274,6 @@ impl CompressedPathRaw {
 
             if x.end_mask() == 0 {
                 slice[0..x_slice_len].copy_from_slice(x_slice);
-                if y_slice.is_empty() {
-                    slice[x_slice_len] =
-                        CompressedPathRaw::from_first_nibble(child_index);
-                } else if child_index
-                    != CompressedPathRaw::first_nibble(y_slice[0])
-                {
-                    println!("{} {:?}", y_slice[0], y_slice);
-                }
             } else {
                 slice[0..x_slice_len - 1]
                     .copy_from_slice(&x_slice[0..x_slice_len - 1]);
@@ -251,15 +282,13 @@ impl CompressedPathRaw {
                     child_index,
                 );
             }
-            if !y_slice.is_empty() {
-                slice[x_slice_len..].copy_from_slice(y_slice);
-            }
+            slice[x_slice_len..].copy_from_slice(y_slice);
         }
 
         Self {
             path_size: size as u16,
             path,
-            end_mask,
+            end_mask: y.end_mask(),
             byte_array_memory_manager: Default::default(),
         }
     }

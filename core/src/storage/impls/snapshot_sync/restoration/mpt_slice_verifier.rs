@@ -37,7 +37,8 @@ impl MptSliceVerifier {
         match maybe_left_proof {
             None => {}
             Some(left_proof) => {
-                let left_node_paths = left_proof.compute_paths_for_all_nodes();
+                let left_node_paths =
+                    left_proof.compute_snapshot_mpt_key_for_all_nodes();
                 for (path, trie_proof_node) in left_node_paths
                     .into_iter()
                     .zip(left_proof.get_proof_nodes().iter())
@@ -50,7 +51,7 @@ impl MptSliceVerifier {
             None => {}
             Some(right_proof) => {
                 let right_node_paths =
-                    right_proof.compute_paths_for_all_nodes();
+                    right_proof.compute_snapshot_mpt_key_for_all_nodes();
                 for (path, trie_proof_node) in right_node_paths
                     .into_iter()
                     .zip(right_proof.get_proof_nodes().iter())
