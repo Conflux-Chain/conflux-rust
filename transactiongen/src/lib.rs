@@ -540,7 +540,7 @@ impl SpecialTransactionGenerator {
             Account::new_empty_with_balance(
                 &start_address,
                 &start_balance,
-                &0.into(),
+                &0.into(), /* nonce */
             ),
             start_erc20_balance,
         );
@@ -631,8 +631,8 @@ impl SpecialTransactionGenerator {
                                 kp,
                                 Account::new_empty_with_balance(
                                     &address,
-                                    &0.into(),
-                                    &0.into(),
+                                    &0.into(), /* balance */
+                                    &0.into(), /* nonce */
                                 ),
                                 0.into(),
                             ),

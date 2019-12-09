@@ -733,7 +733,11 @@ impl ConsensusGraph {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        let state = State::new(state_db, 0.into(), Default::default());
+        let state = State::new(
+            state_db,
+            0.into(),           /* account_start_nonce */
+            Default::default(), /* vm */
+        );
         state
             .nonce(&address)
             .map_err(|err| format!("Get transaction count error: {:?}", err))
@@ -756,7 +760,11 @@ impl ConsensusGraph {
         {
             state
                 .map(|db| {
-                    State::new(StateDb::new(db), 0.into(), Default::default())
+                    State::new(
+                        StateDb::new(db),
+                        0.into(),           /* account_start_nonce */
+                        Default::default(), /* vm */
+                    )
                 })
                 .expect("Best state has been executed")
         } else {

@@ -9,7 +9,7 @@ use crate::{
 pub fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
     State::new(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
-        0.into(),
+        0.into(), /* nonce */
         VmFactory::default(),
     )
 }
@@ -19,7 +19,7 @@ pub fn get_state_for_genesis_write_with_factory(
 ) -> State {
     State::new(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
-        0.into(),
+        0.into(), /* nonce */
         factory.into(),
     )
 }

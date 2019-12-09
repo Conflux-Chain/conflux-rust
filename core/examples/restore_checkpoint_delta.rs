@@ -250,8 +250,11 @@ fn add_epoch_with_accounts(
     let mut state = StateDb::new(state);
     for i in 0..accounts {
         let addr = Address::random();
-        let account =
-            Account::new_empty_with_balance(&addr, &i.into(), &0.into());
+        let account = Account::new_empty_with_balance(
+            &addr,
+            &i.into(), /* balance */
+            &0.into(), /* nonce */
+        );
         state
             .set(StorageKey::new_account_key(&addr), &account)
             .unwrap();

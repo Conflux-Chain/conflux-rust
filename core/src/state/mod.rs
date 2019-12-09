@@ -330,10 +330,12 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    pub fn deposit(&mut self, address: &Address, by: &U256) -> DbResult<()> {
+    pub fn deposit(
+        &mut self, address: &Address, by: &U256, deposit_time: u64,
+    ) -> DbResult<()> {
         // TODO: check account type, only basic account can deposit
         if !by.is_zero() {
-            self.require(address, false)?.deposit(by);
+            self.require(address, false)?.deposit(by, deposit_time);
             self.total_bank_tokens += *by;
         }
         Ok(())
@@ -844,7 +846,7 @@ mod tests {
                     .unwrap()
                     .unwrap(),
             ),
-            0.into(),
+            0.into(), /* account_start_nonce */
             VmFactory::default(),
         )
     }
@@ -852,7 +854,7 @@ mod tests {
     fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
         State::new(
             StateDb::new(storage_manager.get_state_for_genesis_write()),
-            0.into(),
+            0.into(), /* account_start_nonce */
             VmFactory::default(),
         )
     }

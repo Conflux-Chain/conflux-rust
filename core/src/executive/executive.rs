@@ -280,11 +280,13 @@ impl<'a> CallCreateExecutive<'a> {
 
     fn deposit<'b: 'a>(
         params: &ActionParams, state: &mut State<'b>, val: &U256,
-    ) -> vm::Result<()> {
+        deposit_time: u64,
+    ) -> vm::Result<()>
+    {
         if state.balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
         } else {
-            state.deposit(&params.sender, &val)?;
+            state.deposit(&params.sender, &val, deposit_time)?;
             Ok(())
         }
     }
@@ -492,65 +494,74 @@ impl<'a> CallCreateExecutive<'a> {
                     let data = if let Some(ref d) = params.data {
                         d as &[u8]
                     } else {
+                        state.revert_to_checkpoint();
                         return Err(vm::Error::InternalContract(
                             "invalid data",
                         ));
                     };
-                    // According to https://solidity.readthedocs.io/en/develop/abi-spec.html
-                    // data is 4 bytes `Method ID` + 32 bytes parameter.
-                    if data.len() != 36 {
-                        return Err(vm::Error::InternalContract(
-                            "invalid data",
-                        ));
-                    }
 
                     // FIXME: Implement the correct pricer!
                     let cost = U256::zero();
-                    let value = U256::from(&data[4..]);
-                    if cost <= params.gas {
-                        let internal_contract_out_buffer = Vec::new();
-                        let result: vm::Result<()> = {
-                            if data[0] == 182
-                                && data[1] == 181
-                                && data[2] == 95
-                                && data[3] == 37
-                            {
-                                // first 4 byts of  keccak('deposit(uint256)')
-                                // is `0xb6b55f25`
-                                Self::deposit(params, state, &value)
-                            } else if data[0] == 46
-                                && data[1] == 26
-                                && data[2] == 125
-                                && data[3] == 77
-                            {
-                                // first 4 byts of  keccak('withdraw(uint256)')
-                                // is `0x2e1a7d4d`
-                                Self::withdraw(params, state, &value)
-                            } else {
-                                Ok(())
-                            }
-                        };
-                        // FIXME: correct handling of error
-                        if let Err(e) = result {
-                            state.revert_to_checkpoint();
-                            Err(e.into())
-                        } else {
-                            state.discard_checkpoint();
-
-                            let out_len = internal_contract_out_buffer.len();
-                            Ok(FinalizationResult {
-                                gas_left: params.gas - cost,
-                                return_data: ReturnData::new(
-                                    internal_contract_out_buffer,
-                                    0,
-                                    out_len,
-                                ),
-                                apply_state: true,
-                            })
-                        }
-                    } else {
+                    if cost > params.gas {
                         state.revert_to_checkpoint();
-                        Err(vm::Error::OutOfGas)
+                        return Err(vm::Error::OutOfGas);
+                    }
+                    let internal_contract_out_buffer = Vec::new();
+                    let result: vm::Result<()> = {
+                        if data[0] == 182
+                            && data[1] == 181
+                            && data[2] == 95
+                            && data[3] == 37
+                        {
+                            // The first 4 byts of
+                            // keccak('deposit(uint256)') is
+                            // `0xb6b55f25`.
+                            // 4 bytes `Method ID` + 32 bytes `amount`
+                            if data.len() != 36 {
+                                Err(vm::Error::InternalContract("invalid data"))
+                            } else {
+                                let amount = U256::from(&data[4..36]);
+                                Self::deposit(
+                                    params,
+                                    state,
+                                    &amount,
+                                    self.env.timestamp,
+                                )
+                            }
+                        } else if data[0] == 46
+                            && data[1] == 26
+                            && data[2] == 125
+                            && data[3] == 77
+                        {
+                            // The first 4 byts of
+                            // keccak('withdraw(uint256)') is `0x2e1a7d4d`.
+                            // 4 bytes `Method ID` + 32 bytes `amount`.
+                            if data.len() != 36 {
+                                Err(vm::Error::InternalContract("invalid data"))
+                            } else {
+                                let amount = U256::from(&data[4..36]);
+                                Self::withdraw(params, state, &amount)
+                            }
+                        } else {
+                            Ok(())
+                        }
+                    };
+                    if let Err(e) = result {
+                        state.revert_to_checkpoint();
+                        Err(e.into())
+                    } else {
+                        state.discard_checkpoint();
+
+                        let out_len = internal_contract_out_buffer.len();
+                        Ok(FinalizationResult {
+                            gas_left: params.gas - cost,
+                            return_data: ReturnData::new(
+                                internal_contract_out_buffer,
+                                0,
+                                out_len,
+                            ),
+                            apply_state: true,
+                        })
                     }
                 };
 
@@ -1459,7 +1470,13 @@ mod tests {
                 CleanupMode::NoEmpty,
             )
             .ok();
-        state.deposit(&sender, &U256::from(CONFLUX_TOKEN)).ok();
+        state
+            .deposit(
+                &sender,
+                &U256::from(CONFLUX_TOKEN),
+                1, /* duration_in_sec */
+            )
+            .ok();
         state
             .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
             .unwrap();

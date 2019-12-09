@@ -30,7 +30,7 @@ pub type LastHashes = Vec<H256>;
 
 /// Information concerning the execution environment for a
 /// message-call/contract-creation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Env {
     /// The block number.
     pub number: BlockNumber,
@@ -48,20 +48,6 @@ pub struct Env {
     pub gas_used: U256,
 }
 
-impl Default for Env {
-    fn default() -> Self {
-        Env {
-            number: 0,
-            author: Address::default(),
-            timestamp: 0,
-            difficulty: 0.into(),
-            gas_limit: 0.into(),
-            last_hashes: Arc::new(vec![]),
-            gas_used: 0.into(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,6 +56,12 @@ mod tests {
     fn it_can_be_created_as_default() {
         let default_env = Env::default();
 
+        assert_eq!(default_env.number, 0);
+        assert_eq!(default_env.author, Address::default());
+        assert_eq!(default_env.timestamp, 0);
         assert_eq!(default_env.difficulty, 0.into());
+        assert_eq!(default_env.gas_limit, 0.into());
+        assert!(default_env.last_hashes.is_empty());
+        assert_eq!(default_env.gas_used, 0.into());
     }
 }

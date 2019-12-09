@@ -1702,8 +1702,8 @@ impl TxReplayer {
                 _ => {
                     account = Account::new_empty_with_balance(
                         &receiver,
-                        &tx.amount_wei,
-                        &0.into(),
+                        &tx.amount_wei, /* balance */
+                        &0.into(), /* nonce */
                     );
                 }
             }

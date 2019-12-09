@@ -9,7 +9,7 @@ use crate::{
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
-use primitives::{Account, StorageKey};
+use primitives::{Account, DepositInfo, StorageKey};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
@@ -45,6 +45,9 @@ pub struct OverlayAccount {
     storage_balance: U256,
     /// This is the accumulated interest rate at latest deposit.
     bank_ar: U256,
+    /// This is a list of deposit history (`amount`, `deposit_time`), in sorted
+    /// order of `deposit_time`.
+    deposit_list: Vec<DepositInfo>,
 
     // Code hash of the account.
     code_hash: H256,
@@ -69,12 +72,13 @@ impl OverlayAccount {
             bank_balance: account.bank_balance,
             storage_balance: account.storage_balance,
             bank_ar: account.bank_ar,
+            deposit_list: account.deposit_list.clone(),
             code_hash: account.code_hash,
             code_size: None,
             code_cache: Arc::new(vec![]),
             reset_storage: false,
         };
-        overlay_account.interest_settlement(ar);
+        overlay_account.bank_balance_settlement(ar);
         overlay_account
     }
 
@@ -90,6 +94,7 @@ impl OverlayAccount {
             bank_balance: 0.into(),
             storage_balance: 0.into(),
             bank_ar: 0.into(),
+            deposit_list: Vec::new(),
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -111,6 +116,7 @@ impl OverlayAccount {
             bank_balance: 0.into(),
             storage_balance: 0.into(),
             bank_ar: 0.into(),
+            deposit_list: Vec::new(),
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -120,17 +126,18 @@ impl OverlayAccount {
 
     pub fn as_account(&self) -> Account {
         Account {
-            address: self.address.clone(),
-            balance: self.balance.clone(),
-            nonce: self.nonce.clone(),
-            code_hash: self.code_hash.clone(),
+            address: self.address,
+            balance: self.balance,
+            nonce: self.nonce,
+            code_hash: self.code_hash,
             bank_balance: self.bank_balance,
             storage_balance: self.storage_balance,
             bank_ar: self.bank_ar,
+            deposit_list: self.deposit_list.clone(),
         }
     }
 
-    fn interest_settlement(&mut self, ar: U256) {
+    fn bank_balance_settlement(&mut self, ar: U256) {
         if self.bank_ar == ar {
             return;
         }
@@ -186,15 +193,33 @@ impl OverlayAccount {
         self.balance = self.balance - *by;
     }
 
-    pub fn deposit(&mut self, by: &U256) {
+    pub fn deposit(&mut self, by: &U256, deposit_time: u64) {
         self.sub_balance(by);
         self.bank_balance += *by;
+        // The `deposit_time` is naturally in sorted order.
+        self.deposit_list.push(DepositInfo {
+            amount: *by,
+            deposit_time,
+        })
     }
 
     pub fn withdraw(&mut self, by: &U256) {
         assert!(self.bank_balance - self.storage_balance >= *by);
         self.bank_balance -= *by;
         self.add_balance(by);
+        let mut rest = *by;
+        // We prefer to consume latest deposit, since it will maximize the
+        // voting rights.
+        while !rest.is_zero() {
+            assert!(!self.deposit_list.is_empty());
+            if rest >= self.deposit_list.last().unwrap().amount {
+                rest -= self.deposit_list.last().unwrap().amount;
+                self.deposit_list.pop();
+            } else {
+                self.deposit_list.last_mut().unwrap().amount -= rest;
+                rest = 0.into();
+            }
+        }
     }
 
     pub fn add_storage_balance(&mut self, by: &U256) {
@@ -231,9 +256,9 @@ impl OverlayAccount {
 
     pub fn clone_basic(&self) -> Self {
         OverlayAccount {
-            address: self.address.clone(),
-            balance: self.balance.clone(),
-            nonce: self.nonce.clone(),
+            address: self.address,
+            balance: self.balance,
+            nonce: self.nonce,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -241,8 +266,9 @@ impl OverlayAccount {
             bank_balance: self.bank_balance,
             storage_balance: self.storage_balance,
             bank_ar: self.bank_ar,
-            code_hash: self.code_hash.clone(),
-            code_size: self.code_size.clone(),
+            deposit_list: self.deposit_list.clone(),
+            code_hash: self.code_hash,
+            code_size: self.code_size,
             code_cache: self.code_cache.clone(),
             reset_storage: self.reset_storage,
         }
@@ -253,7 +279,6 @@ impl OverlayAccount {
         account.storage_changes = self.storage_changes.clone();
         account.ownership_cache = self.ownership_cache.clone();
         account.ownership_changes = self.ownership_changes.clone();
-        account.reset_storage = self.reset_storage;
         account
     }
 
@@ -550,5 +575,148 @@ impl AccountEntry {
 
     pub fn exists_and_is_null(&self) -> bool {
         self.account.as_ref().map_or(false, |acc| acc.is_null())
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_overlay_account_create() {
+        let address = Address::zero();
+        let account = Account {
+            address,
+            balance: 0.into(),
+            nonce: 0.into(),
+            code_hash: KECCAK_EMPTY,
+            bank_balance: 0.into(),
+            storage_balance: 0.into(),
+            bank_ar: 0.into(),
+            deposit_list: Vec::new(),
+        };
+        // test new from account 1
+        let overlay_account = OverlayAccount::new(&address, account, 0.into());
+        assert!(overlay_account.deposit_list.is_empty());
+        assert_eq!(overlay_account.address, address);
+        assert_eq!(overlay_account.balance, 0.into());
+        assert_eq!(overlay_account.nonce, 0.into());
+        assert_eq!(overlay_account.bank_balance, 0.into());
+        assert_eq!(overlay_account.storage_balance, 0.into());
+        assert_eq!(overlay_account.bank_ar, 0.into());
+        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
+        assert_eq!(overlay_account.reset_storage, false);
+        let account = Account {
+            address,
+            balance: 101.into(),
+            nonce: 55.into(),
+            code_hash: KECCAK_EMPTY,
+            bank_balance: 11111.into(),
+            storage_balance: 455.into(),
+            bank_ar: 1.into(),
+            deposit_list: Vec::new(),
+        };
+
+        // test new from account 2
+        let overlay_account = OverlayAccount::new(&address, account, 1.into());
+        assert!(overlay_account.deposit_list.is_empty());
+        assert_eq!(overlay_account.address, address);
+        assert_eq!(overlay_account.balance, 101.into());
+        assert_eq!(overlay_account.nonce, 55.into());
+        assert_eq!(overlay_account.bank_balance, 11111.into());
+        assert_eq!(overlay_account.storage_balance, 455.into());
+        assert_eq!(overlay_account.bank_ar, 1.into());
+        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
+        assert_eq!(overlay_account.reset_storage, false);
+
+        // test new basic
+        let overlay_account =
+            OverlayAccount::new_basic(&address, 1011.into(), 12345.into());
+        assert!(overlay_account.deposit_list.is_empty());
+        assert_eq!(overlay_account.address, address);
+        assert_eq!(overlay_account.balance, 1011.into());
+        assert_eq!(overlay_account.nonce, 12345.into());
+        assert_eq!(overlay_account.bank_balance, 0.into());
+        assert_eq!(overlay_account.storage_balance, 0.into());
+        assert_eq!(overlay_account.bank_ar, 0.into());
+        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
+        assert_eq!(overlay_account.reset_storage, false);
+
+        // test new contract
+        let overlay_account = OverlayAccount::new_contract(
+            &address,
+            5678.into(),
+            1234.into(),
+            true,
+        );
+        assert!(overlay_account.deposit_list.is_empty());
+        assert_eq!(overlay_account.address, address);
+        assert_eq!(overlay_account.balance, 5678.into());
+        assert_eq!(overlay_account.nonce, 1234.into());
+        assert_eq!(overlay_account.bank_balance, 0.into());
+        assert_eq!(overlay_account.storage_balance, 0.into());
+        assert_eq!(overlay_account.bank_ar, 0.into());
+        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
+        assert_eq!(overlay_account.reset_storage, true);
+    }
+
+    #[test]
+    fn test_deposit_and_withdraw() {
+        let address = Address::zero();
+        let account = Account {
+            address,
+            balance: 0.into(),
+            nonce: 0.into(),
+            code_hash: KECCAK_EMPTY,
+            bank_balance: 0.into(),
+            storage_balance: 0.into(),
+            bank_ar: 0.into(),
+            deposit_list: Vec::new(),
+        };
+        let mut overlay_account =
+            OverlayAccount::new(&address, account, 0.into());
+        // add balance
+        overlay_account.add_balance(&200000.into());
+        assert_eq!(*overlay_account.balance(), U256::from(200000));
+        // deposit
+        overlay_account.deposit(&100000.into(), 1);
+        assert_eq!(*overlay_account.balance(), U256::from(100000));
+        overlay_account.deposit(&10000.into(), 2);
+        assert_eq!(*overlay_account.balance(), U256::from(90000));
+        overlay_account.deposit(&1000.into(), 3);
+        assert_eq!(*overlay_account.balance(), U256::from(89000));
+        overlay_account.deposit(&100.into(), 4);
+        assert_eq!(*overlay_account.balance(), U256::from(88900));
+        overlay_account.deposit(&10.into(), 5);
+        assert_eq!(*overlay_account.balance(), U256::from(88890));
+        overlay_account.deposit(&5.into(), 6);
+        assert_eq!(*overlay_account.balance(), U256::from(88885));
+        overlay_account.deposit(&1.into(), 7);
+        assert_eq!(*overlay_account.balance(), U256::from(88884));
+        assert_eq!(overlay_account.deposit_list.len(), 7);
+        assert_eq!(*overlay_account.bank_balance(), U256::from(111116));
+        assert_eq!(*overlay_account.storage_balance(), U256::from(0));
+        // add storage
+        overlay_account.add_storage_balance(&11116.into());
+        assert_eq!(*overlay_account.storage_balance(), U256::from(11116));
+        // do interest settlement
+        assert_eq!(overlay_account.bank_ar, U256::from(0));
+        overlay_account
+            .bank_balance_settlement(U256::from(INTEREST_RATE_SCALE));
+        assert_eq!(overlay_account.bank_ar, U256::from(INTEREST_RATE_SCALE));
+        assert_eq!(*overlay_account.balance(), U256::from(188884));
+        assert_eq!(*overlay_account.bank_balance(), U256::from(111116));
+        assert_eq!(*overlay_account.storage_balance(), U256::from(11116));
+        // withdraw
+        overlay_account.withdraw(&5.into());
+        assert_eq!(overlay_account.deposit_list.len(), 6);
+        assert_eq!(overlay_account.deposit_list[5].amount, 1.into());
+        assert_eq!(*overlay_account.bank_balance(), U256::from(111111));
+        assert_eq!(*overlay_account.balance(), U256::from(188889));
+        overlay_account.withdraw(&100.into());
+        assert_eq!(overlay_account.deposit_list.len(), 4);
+        assert_eq!(overlay_account.deposit_list[3].amount, 11.into());
+        assert_eq!(*overlay_account.bank_balance(), U256::from(111011));
+        assert_eq!(*overlay_account.balance(), U256::from(188989));
     }
 }
