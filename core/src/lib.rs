@@ -57,7 +57,6 @@ pub mod light_protocol;
 pub mod machine;
 pub mod miner;
 pub mod pow;
-pub(crate) mod snapshot;
 pub mod state;
 pub mod state_exposer;
 pub mod statedb;
