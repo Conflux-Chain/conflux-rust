@@ -18,7 +18,7 @@ impl Default for SnapshotDbManagerSqlite {
 impl SnapshotDbManagerSqlite {
     pub fn new(snapshot_path: String) -> Self {
         Self {
-            snapshot_path: snapshot_path + "/sqlite",
+            snapshot_path: snapshot_path + "/sqlite_",
             force_cow: false,
         }
     }
@@ -46,7 +46,8 @@ impl SnapshotDbManagerSqlite {
     }
 
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
-    /// Ok(false) when cow copy isn't supported.
+    /// Ok(false) when we are running on an OS where cow copy isn't implemented
+    /// yet.
     fn try_make_cow_copy_impl(
         old_snapshot_path: &str, new_snapshot_path: &str,
     ) -> Result<bool> {
@@ -57,7 +58,7 @@ impl SnapshotDbManagerSqlite {
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path)
                 .output()?
-        } else if cfg!(target_os = "mac") {
+        } else if cfg!(target_os = "macos") {
             // APFS
             Command::new("cp")
                 .arg("-c")
@@ -85,7 +86,11 @@ impl SnapshotDbManagerSqlite {
             Self::try_make_cow_copy_impl(old_snapshot_path, new_snapshot_path);
 
         if result.is_err() {
-            result
+            if self.force_cow {
+                result
+            } else {
+                Ok(false)
+            }
         } else if result.unwrap() == false {
             if self.force_cow {
                 // FIXME: Check error string.
@@ -116,7 +121,18 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
-        Ok(fs::rename(old_path, new_path)?)
+        if SqliteConnection::remove_temporary_files_for_db(old_path)? {
+            // The db is unclean, which shouldn't happen. We remove the
+            // snapshot_db file.
+            fs::remove_file(old_path)?;
+            bail!(ErrorKind::DbIsUnclean);
+
+        // FIXME: at start-up, scan if any db is unclean, and if so do
+        // something.
+        } else {
+            fs::rename(old_path, new_path)?;
+        }
+        Ok(())
     }
 }
 
@@ -242,6 +258,7 @@ use super::{
             SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
         },
         errors::*,
+        storage_db::sqlite::SqliteConnection,
         storage_manager::DeltaMptIterator,
     },
     snapshot_db_sqlite::*,

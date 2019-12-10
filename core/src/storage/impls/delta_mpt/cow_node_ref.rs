@@ -270,7 +270,7 @@ impl CowNodeRef {
                     &allocator,
                     db,
                 )?;
-                let key_prefix = CompressedPathRaw::concat(
+                let key_prefix = CompressedPathRaw::join_connected_paths(
                     &key_prefix,
                     i,
                     &child_node.compressed_path_ref(),
@@ -582,7 +582,7 @@ impl CowNodeRef {
                 &allocator,
                 db,
             )?;
-            let key_prefix = CompressedPathRaw::concat(
+            let key_prefix = CompressedPathRaw::join_connected_paths(
                 &key_prefix,
                 i,
                 &child_node.compressed_path_ref(),
@@ -702,7 +702,7 @@ impl CowNodeRef {
             &allocator,
             db,
         )?;
-        let new_path = CompressedPathRaw::concat(
+        let new_path = CompressedPathRaw::join_connected_paths(
             &path_prefix,
             child_index,
             &child_trie_node.compressed_path_ref(),

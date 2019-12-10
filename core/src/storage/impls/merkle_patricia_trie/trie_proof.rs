@@ -211,20 +211,32 @@ impl TrieProof {
 
     pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
 
-    pub fn compute_paths_for_all_nodes(&self) -> Vec<CompressedPathRaw> {
-        let mut paths = Vec::with_capacity(self.nodes.len());
+    pub fn compute_snapshot_mpt_key_for_all_nodes(
+        &self,
+    ) -> Vec<CompressedPathRaw> {
+        let mut full_paths = Vec::with_capacity(self.nodes.len());
+        let mut keys = Vec::with_capacity(self.nodes.len());
+        // At the time of coding, The root node is guaranteed to have empty
+        // compressed_path. But to be on the safe side, we use the root
+        // node's compressed path as its full path.
         if let Some(node) = self.nodes.get(0) {
-            paths.push(node.compressed_path_ref().into());
+            full_paths.push(node.compressed_path_ref().into());
+            keys.push(CompressedPathRaw::default());
         }
         for i in 1..self.nodes.len() {
-            paths.push(CompressedPathRaw::concat(
-                &paths[self.parent_node_index[i]],
+            full_paths.push(CompressedPathRaw::join_connected_paths(
+                &full_paths[self.parent_node_index[i]],
                 self.child_index[i],
                 &self.nodes[i].compressed_path_ref(),
-            ))
+            ));
+
+            keys.push(CompressedPathRaw::extend_path(
+                &full_paths[self.parent_node_index[i]],
+                self.child_index[i],
+            ));
         }
 
-        paths
+        keys
     }
 }
 

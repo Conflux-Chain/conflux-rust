@@ -344,7 +344,8 @@ impl StorageManager {
         Ok(())
     }
 
-    fn register_new_snapshot(&self, new_snapshot_info: SnapshotInfo) {
+    /// This function is made public only for testing.
+    pub fn register_new_snapshot(&self, new_snapshot_info: SnapshotInfo) {
         // FIXME: update db about new current_snapshots.
 
         let snapshot_epoch_id = new_snapshot_info.get_snapshot_epoch_id();

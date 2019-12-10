@@ -26,15 +26,34 @@ impl Drop for SqliteConnection {
         // be left open because sqlite3_close returns BUSY.
         // https://www.sqlite.org/c3ref/close.html
         self.cached_statements.get_mut().clear();
-        if self.close().is_err() {
-            error!("Closing sqlite connection while still being used. \
-            The sqlite connection will be closed when all pending resources \
-            are released. However it suggests that the code may not managing \
-            object ownership and lifetime of sqlite execution well.");
-            self.close_v2().ok();
+        // We would like to check return value of sqlite close, and run close_v2
+        // when necessary. After that we'd like to prevent Connection's drop
+        // from running. To do so we open a new Connection and overwrite
+        // self.connection.
+        //
+        // When we can't open a new connection successfully, give up and simply
+        // let Connection close the db. However we lose the ability to
+        // run close_v2() if close fails.
+        unsafe {
+            if let Ok(new_connection) = Connection::open_with_flags(
+                self.info.path.clone(),
+                Self::default_open_flags().set_read_write(),
+            ) {
+                self.connection.get_mut().remove_busy_handler().ok();
+                if self.close().is_err() {
+                    error!(
+                        "Closing sqlite connection while still being used.
+                         The sqlite connection will be closed when all pending
+                         resources are released. However it suggests that the
+                         code may not managing object ownership and lifetime
+                         of sqlite execution well."
+                    );
+                    self.close_v2().ok();
+                }
+
+                std::ptr::write(self.connection.get_mut(), new_connection);
+            }
         }
-        // FIXME: check if the close of underlying Connection cause any issue.
-        // It seems fine.
     }
 }
 
@@ -83,6 +102,10 @@ impl SqliteConnection {
             Self::default_open_flags().set_read_write().set_create(),
         )?;
         conn.execute("PRAGMA journal_mode=WAL")?;
+        // Prevent other processes from accessing the db.
+        // The "-shm" file will not be created,
+        // see https://www.sqlite.org/tempfiles.html#shared_memory_files.
+        conn.execute("PRAGMA locking_mode=EXCLUSIVE")?;
         Ok(())
     }
 
@@ -171,6 +194,37 @@ impl SqliteConnection {
 
     pub fn lock_statement_cache(&self) -> MutexGuard<StatementCache> {
         self.cached_statements.lock()
+    }
+
+    pub fn possible_temporary_files(db_path: &str) -> Vec<String> {
+        let mut paths = vec![];
+        paths.push(Self::wal_path(db_path));
+
+        paths
+    }
+
+    fn wal_path(db_path: &str) -> String { db_path.to_string() + "-wal" }
+
+    /// Return whether there are any temporary files, which means that the db is
+    /// unclean.
+    pub fn remove_temporary_files_for_db(db_path: &str) -> Result<bool> {
+        let mut removed = false;
+        for path in Self::possible_temporary_files(db_path) {
+            match fs::remove_file(path) {
+                Ok(_) => {
+                    removed = true;
+                }
+                Err(e) => {
+                    if e.kind() == IoErrorKind::NotFound {
+                        // This is fine, pass.
+                    } else {
+                        bail!(e)
+                    }
+                }
+            }
+        }
+
+        Ok(removed)
     }
 }
 
@@ -615,6 +669,8 @@ use sqlite3_sys as sqlite_ffi;
 use std::{
     borrow::Borrow,
     collections::HashMap,
+    fs,
+    io::ErrorKind as IoErrorKind,
     ops::Deref,
     path::{Path, PathBuf},
     pin::Pin,

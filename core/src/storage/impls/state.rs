@@ -548,9 +548,6 @@ impl<'a> State<'a> {
 
         inserter.iterate(dumper)
     }
-
-    /// FIXME This is for test only.
-    pub fn get_delta_trie(&self) -> Arc<DeltaMpt> { self.delta_trie.clone() }
 }
 
 use super::{

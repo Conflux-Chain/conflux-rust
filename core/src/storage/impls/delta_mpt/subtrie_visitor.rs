@@ -451,7 +451,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     return Ok((None, false, node_cow.into_child()));
                 }
                 // To enumerate the subtree.
-                key_prefix = CompressedPathRaw::concat(
+                key_prefix = CompressedPathRaw::join_connected_paths(
                     &key,
                     unmatched_child_index,
                     &unmatched_path_remaining,
