@@ -46,31 +46,48 @@ impl SnapshotDbManagerSqlite {
     }
 
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
-    /// Ok(false) when we are running on an OS where cow copy isn't implemented
-    /// yet.
-    fn try_make_cow_copy_impl(
-        old_snapshot_path: &str, new_snapshot_path: &str,
+    /// Ok(false) when we are running on a system where cow copy isn't
+    /// available.
+    fn try_make_snapshot_cow_copy_impl(
+        &self, old_snapshot_path: &str, new_snapshot_path: &str,
     ) -> Result<bool> {
-        let output = if cfg!(target_os = "linux") {
+        let mut command;
+        if cfg!(target_os = "linux") {
             // XFS
-            Command::new("cp")
-                .arg("--reflink")
+            command = Command::new("cp");
+            command
+                .arg("-R --reflink=always")
                 .arg(old_snapshot_path)
-                .arg(new_snapshot_path)
-                .output()?
-        } else if cfg!(target_os = "macos") {
+                .arg(new_snapshot_path);
+        } else if cfg!(target_os = "mac") {
             // APFS
-            Command::new("cp")
-                .arg("-c")
+            command = Command::new("cp");
+            command
+                .arg("-R -c")
                 .arg(old_snapshot_path)
-                .arg(new_snapshot_path)
-                .output()?
+                .arg(new_snapshot_path);
         } else {
             return Ok(false);
         };
-        if !output.status.success() {
-            // FIXME: print command line outputs.
-            Err(ErrorKind::SnapshotCowCreation.into())
+
+        let command_result = command.output();
+        if command_result.is_err() {
+            fs::remove_dir_all(new_snapshot_path)?;
+        }
+        if !command_result?.status.success() {
+            if self.force_cow {
+                error!(
+                    "COW copy failed, check file system support. Command {:?}",
+                    command,
+                );
+                Err(ErrorKind::SnapshotCowCreation.into())
+            } else {
+                info!(
+                    "COW copy failed, check file system support. Command {:?}",
+                    command,
+                );
+                Ok(false)
+            }
         } else {
             Ok(true)
         }
@@ -79,18 +96,16 @@ impl SnapshotDbManagerSqlite {
     /// Returns error when cow copy fails, or when cow copy isn't supported with
     /// force_cow setting enabled; Ok(true) when cow copy succeeded;
     /// Ok(false) when cow copy isn't supported with force_cow setting disabled.
-    fn try_make_cow_copy(
+    fn try_make_snapshot_cow_copy(
         &self, old_snapshot_path: &str, new_snapshot_path: &str,
     ) -> Result<bool> {
-        let result =
-            Self::try_make_cow_copy_impl(old_snapshot_path, new_snapshot_path);
+        let result = self.try_make_snapshot_cow_copy_impl(
+            old_snapshot_path,
+            new_snapshot_path,
+        );
 
         if result.is_err() {
-            if self.force_cow {
-                result
-            } else {
-                Ok(false)
-            }
+            Ok(false)
         } else if result.unwrap() == false {
             if self.force_cow {
                 // FIXME: Check error string.
@@ -121,18 +136,7 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
-        if SqliteConnection::remove_temporary_files_for_db(old_path)? {
-            // The db is unclean, which shouldn't happen. We remove the
-            // snapshot_db file.
-            fs::remove_file(old_path)?;
-            bail!(ErrorKind::DbIsUnclean);
-
-        // FIXME: at start-up, scan if any db is unclean, and if so do
-        // something.
-        } else {
-            fs::rename(old_path, new_path)?;
-        }
-        Ok(())
+        Ok(fs::rename(old_path, new_path)?)
     }
 }
 
@@ -166,7 +170,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             Some(_) => {
                 // Unwrap here is safe because the delta MPT is guaranteed not
                 // empty.
-                let temp_db_name = self.get_merge_temp_snapshot_db_path(
+                let temp_db_path = self.get_merge_temp_snapshot_db_path(
                     old_snapshot_epoch_id,
                     &delta_mpt
                         .maybe_mpt
@@ -181,24 +185,24 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH
                 {
                     // direct merge the first snapshot
-                    snapshot_db = Self::SnapshotDb::create(&temp_db_name)?;
+                    snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
                     // TODO No need to dump delta mpt?
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge(&delta_mpt)?
                 } else {
-                    if self.try_make_cow_copy(
+                    if self.try_make_snapshot_cow_copy(
                         &self.get_snapshot_db_path(old_snapshot_epoch_id),
-                        &temp_db_name,
+                        &temp_db_path,
                     )? {
                         // open the database.
                         snapshot_db =
-                            Self::SnapshotDb::open(&temp_db_name)?.unwrap();
+                            Self::SnapshotDb::open(&temp_db_path)?.unwrap();
 
                         // iterate and insert into temp table.
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         snapshot_db.direct_merge(&delta_mpt)?
                     } else {
-                        snapshot_db = Self::SnapshotDb::create(&temp_db_name)?;
+                        snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
                             &mut snapshot_db,
@@ -214,7 +218,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     .set_snapshot_info(in_progress_snapshot_info.clone());
                 drop(snapshot_db);
                 Self::rename_snapshot_db(
-                    &temp_db_name,
+                    &temp_db_path,
                     &self.get_snapshot_db_path(&snapshot_epoch_id),
                 )?;
 
@@ -236,7 +240,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
-        Ok(fs::remove_file(
+        Ok(fs::remove_dir_all(
             self.get_snapshot_db_path(snapshot_epoch_id),
         )?)
     }
@@ -244,11 +248,11 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     fn new_temp_snapshot_for_full_sync(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
     ) -> Result<Self::SnapshotDb> {
-        let temp_db_name = self.get_full_sync_temp_snapshot_db_path(
+        let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
             snapshot_epoch_id,
             merkle_root,
         );
-        Self::SnapshotDb::create(&temp_db_name)
+        Self::SnapshotDb::create(&temp_db_path)
     }
 }
 
@@ -258,7 +262,6 @@ use super::{
             SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
         },
         errors::*,
-        storage_db::sqlite::SqliteConnection,
         storage_manager::DeltaMptIterator,
     },
     snapshot_db_sqlite::*,
