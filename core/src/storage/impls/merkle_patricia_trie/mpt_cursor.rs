@@ -618,6 +618,7 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
     ) -> ReadWritePathNode<Mpt> {
         ReadWritePathNode {
             basic_node,
+            is_loaded: true,
             maybe_first_realized_child_index:
                 ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
             the_first_child_if_pending: None,
@@ -691,6 +692,8 @@ impl<Mpt> Deref for BasicPathNode<Mpt> {
 
 pub struct ReadWritePathNode<Mpt> {
     basic_node: BasicPathNode<Mpt>,
+
+    is_loaded: bool,
 
     /// When the node has only one child and no value after operations in its
     /// subtree, the node should be combined with its child. We keep the
@@ -849,6 +852,7 @@ pub trait RwPathNodeTrait<Mpt: GetRwMpt>: PathNodeTrait<Mpt> {
         basic_node: BasicPathNode<Mpt>, parent_node: &Self, value_size: usize,
     ) -> Self {
         let mut this_node = Self::new_loaded(basic_node, parent_node);
+        this_node.get_read_write_path_node().is_loaded = false;
 
         if value_size > 0 {
             let key_size = this_node
@@ -919,6 +923,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
     fn new_loaded(basic_node: BasicPathNode<Mpt>, parent_node: &Self) -> Self {
         Self {
             basic_node,
+            is_loaded: true,
             maybe_first_realized_child_index: Self::NULL_CHILD_INDEX,
             the_first_child_if_pending: None,
             maybe_compressed_path_split_child_index: Self::NULL_CHILD_INDEX,
@@ -1033,31 +1038,40 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
         new_compressed_path: CompressedPathRaw,
     ) -> Result<Self>
     {
-        let mut child_node = Self {
-            basic_node: BasicPathNode {
-                mpt: None,
-                trie_node: Default::default(),
-                path_start_steps: new_path_db_key.path_steps(),
-                full_path_to_node: self.full_path_to_node.clone(),
-                path_db_key: new_path_db_key,
-                next_child_index: self.next_child_index,
-            },
-            maybe_first_realized_child_index: self
-                .maybe_first_realized_child_index,
-            the_first_child_if_pending: self.the_first_child_if_pending.take(),
-            maybe_compressed_path_split_child_index: self
-                .maybe_compressed_path_split_child_index,
-            maybe_compressed_path_split_child_node: self
-                .maybe_compressed_path_split_child_node
-                .take(),
-            subtree_size_delta: self.subtree_size_delta,
-            delta_subtree_size: self.delta_subtree_size,
-            has_io_error: self.has_io_error,
-            db_committed: self.db_committed,
+        let mut child_node;
+        if self.is_loaded {
+            child_node = Self {
+                basic_node: BasicPathNode {
+                    mpt: None,
+                    trie_node: Default::default(),
+                    path_start_steps: new_path_db_key.path_steps(),
+                    full_path_to_node: self.full_path_to_node.clone(),
+                    path_db_key: new_path_db_key,
+                    next_child_index: self.next_child_index,
+                },
+                is_loaded: false,
+                maybe_first_realized_child_index: self
+                    .maybe_first_realized_child_index,
+                the_first_child_if_pending: self
+                    .the_first_child_if_pending
+                    .take(),
+                maybe_compressed_path_split_child_index: self
+                    .maybe_compressed_path_split_child_index,
+                maybe_compressed_path_split_child_node: self
+                    .maybe_compressed_path_split_child_node
+                    .take(),
+                subtree_size_delta: self.subtree_size_delta,
+                delta_subtree_size: self.delta_subtree_size,
+                has_io_error: self.has_io_error,
+                db_committed: self.db_committed,
+            };
+
+            mem::swap(&mut child_node.trie_node, &mut self.trie_node);
+            child_node.mpt = self.write_out()?;
+        } else {
+            child_node = self;
         };
 
-        mem::swap(&mut child_node.trie_node, &mut self.trie_node);
-        child_node.mpt = self.write_out()?;
         child_node
             .trie_node
             .set_compressed_path(new_compressed_path);
