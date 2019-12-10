@@ -1797,4 +1797,114 @@ mod tests {
             _ => assert!(false, "Expected not enough cash error. {:?}", res),
         }
     }
+
+    #[test]
+    fn test_deposit_withdraw() {
+        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
+        let sender = Address::zero();
+        let storage_manager = new_state_manager_for_testing();
+        let mut state =
+            get_state_for_genesis_write_with_factory(&storage_manager, factory);
+        let env = Env::default();
+        let machine = make_byzantium_machine(0);
+        let spec = machine.spec(env.number);
+        let mut substate = Substate::new();
+        state
+            .add_balance(
+                &sender,
+                &U256::from(1_000_000_000_000u64),
+                CleanupMode::NoEmpty,
+            )
+            .unwrap();
+
+        let mut params = ActionParams::default();
+        params.code_address =
+            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
+                .unwrap();
+        params.address = params.code_address;
+        params.sender = sender;
+        params.origin = sender;
+        params.gas = U256::from(100000);
+        params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e800".from_hex().unwrap());
+
+        // wrong call type
+        let result = Executive::new(&mut state, &env, &machine, &spec)
+            .call(params.clone(), &mut substate);
+        assert!(result.is_err());
+        assert_eq!(
+            state.balance(&sender).unwrap(),
+            U256::from(1_000_000_000_000u64)
+        );
+        assert_eq!(state.bank_balance(&sender).unwrap(), U256::from(0));
+
+        // everything is fine
+        params.call_type = CallType::Call;
+        let result = Executive::new(&mut state, &env, &machine, &spec)
+            .call(params.clone(), &mut substate);
+        assert!(result.is_ok());
+        assert_eq!(
+            state.balance(&sender).unwrap(),
+            U256::from(900_000_000_000u64)
+        );
+        assert_eq!(
+            state.bank_balance(&sender).unwrap(),
+            U256::from(100_000_000_000u64)
+        );
+
+        // empty data
+        params.data = None;
+        let result = Executive::new(&mut state, &env, &machine, &spec)
+            .call(params.clone(), &mut substate);
+        assert!(result.is_err());
+        assert_eq!(
+            state.balance(&sender).unwrap(),
+            U256::from(900_000_000_000u64)
+        );
+        assert_eq!(
+            state.bank_balance(&sender).unwrap(),
+            U256::from(100_000_000_000u64)
+        );
+
+        // less data
+        params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
+        let result = Executive::new(&mut state, &env, &machine, &spec)
+            .call(params.clone(), &mut substate);
+        assert!(result.is_err());
+        assert_eq!(
+            state.balance(&sender).unwrap(),
+            U256::from(900_000_000_000u64)
+        );
+        assert_eq!(
+            state.bank_balance(&sender).unwrap(),
+            U256::from(100_000_000_000u64)
+        );
+
+        // more data
+        params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e80000".from_hex().unwrap());
+        let result = Executive::new(&mut state, &env, &machine, &spec)
+            .call(params.clone(), &mut substate);
+        assert!(result.is_err());
+        assert_eq!(
+            state.balance(&sender).unwrap(),
+            U256::from(900_000_000_000u64)
+        );
+        assert_eq!(
+            state.bank_balance(&sender).unwrap(),
+            U256::from(100_000_000_000u64)
+        );
+
+        // withdraw
+        params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
+        let result = Executive::new(&mut state, &env, &machine, &spec)
+            .call(params.clone(), &mut substate);
+        assert!(result.is_ok());
+        assert_eq!(
+            state.balance(&sender).unwrap(),
+            U256::from(950_000_000_000u64)
+        );
+        assert_eq!(
+            state.bank_balance(&sender).unwrap(),
+            U256::from(50_000_000_000u64)
+        );
+    }
 }
