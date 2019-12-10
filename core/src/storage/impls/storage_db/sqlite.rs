@@ -26,15 +26,34 @@ impl Drop for SqliteConnection {
         // be left open because sqlite3_close returns BUSY.
         // https://www.sqlite.org/c3ref/close.html
         self.cached_statements.get_mut().clear();
-        if self.close().is_err() {
-            error!("Closing sqlite connection while still being used. \
-            The sqlite connection will be closed when all pending resources \
-            are released. However it suggests that the code may not managing \
-            object ownership and lifetime of sqlite execution well.");
-            self.close_v2().ok();
+        // We would like to check return value of sqlite close, and run close_v2
+        // when necessary. After that we'd like to prevent Connection's drop
+        // from running. To do so we open a new Connection and overwrite
+        // self.connection.
+        //
+        // When we can't open a new connection successfully, give up and simply
+        // let Connection close the db. However we lose the ability to
+        // run close_v2() if close fails.
+        unsafe {
+            if let Ok(new_connection) = Connection::open_with_flags(
+                self.info.path.clone(),
+                Self::default_open_flags().set_read_write(),
+            ) {
+                self.connection.get_mut().remove_busy_handler().ok();
+                if self.close().is_err() {
+                    error!(
+                        "Closing sqlite connection while still being used.
+                         The sqlite connection will be closed when all pending
+                         resources are released. However it suggests that the
+                         code may not managing object ownership and lifetime
+                         of sqlite execution well."
+                    );
+                    self.close_v2().ok();
+                }
+
+                std::ptr::write(self.connection.get_mut(), new_connection);
+            }
         }
-        // FIXME: check if the close of underlying Connection cause any issue.
-        // It seems fine.
     }
 }
 
