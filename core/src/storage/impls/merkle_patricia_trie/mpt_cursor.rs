@@ -1142,7 +1142,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         if self.is_node_empty() {
             // In-place mode.
             let io_mpts = self.basic_node.mpt.as_mut_assumed_owner();
-            if io_mpts.is_in_place_update() {
+            if io_mpts.is_in_place_update() && self.is_loaded {
                 let result = io_mpts
                     .get_write_mpt()
                     .delete_node(&self.basic_node.path_db_key);
