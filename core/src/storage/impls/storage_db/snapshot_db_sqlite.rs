@@ -146,7 +146,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn open(snapshot_path: &str) -> Result<Option<SnapshotDbSqlite>> {
         let file_exists = Path::new(&snapshot_path).exists();
         let sqlite_open_result = SqliteConnection::open(
-            &snapshot_path,
+            &Self::db_file_paths(snapshot_path)[0],
             true,
             SqliteConnection::default_open_flags(),
         );
@@ -162,14 +162,27 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     }
 
     fn create(snapshot_path: &str) -> Result<SnapshotDbSqlite> {
-        let mut ok_result = Ok(SnapshotDbSqlite {
-            maybe_db: Some(SqliteConnection::create_and_open(
-                &snapshot_path,
-                SqliteConnection::default_open_flags(),
-            )?),
-            // FIXME: set snapshot info at creation or ..?
-            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
-        });
+        fs::create_dir(snapshot_path).ok();
+
+        let create_result = SqliteConnection::create_and_open(
+            &Self::db_file_paths(snapshot_path)[0],
+            SqliteConnection::default_open_flags(),
+        );
+
+        let mut ok_result;
+        match create_result {
+            Err(e) => {
+                fs::remove_dir_all(snapshot_path)?;
+                bail!(e);
+            }
+            Ok(db_conn) => {
+                ok_result = Ok(SnapshotDbSqlite {
+                    maybe_db: Some(db_conn),
+                    // FIXME: set snapshot info at creation or ..?
+                    snapshot_info: SnapshotInfo::genesis_snapshot_info(),
+                });
+            }
+        }
 
         {
             let snapshot_db =
@@ -257,6 +270,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 }
 
 impl SnapshotDbSqlite {
+    pub fn db_file_paths(db_path: &str) -> Vec<String> {
+        vec![db_path.to_string() + "/shard_00"]
+    }
+
     pub fn try_clone(&self) -> Result<Self> {
         Ok(Self {
             maybe_db: match &self.maybe_db {
@@ -494,5 +511,5 @@ use super::{
 use crate::storage::impls::storage_db::sqlite::SQLITE_NO_PARAM;
 use primitives::MerkleHash;
 use sqlite::Statement;
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 use strfmt::strfmt;

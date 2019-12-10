@@ -199,33 +199,14 @@ impl SqliteConnection {
     pub fn possible_temporary_files(db_path: &str) -> Vec<String> {
         let mut paths = vec![];
         paths.push(Self::wal_path(db_path));
+        paths.push(Self::shm_path(db_path));
 
         paths
     }
 
     fn wal_path(db_path: &str) -> String { db_path.to_string() + "-wal" }
 
-    /// Return whether there are any temporary files, which means that the db is
-    /// unclean.
-    pub fn remove_temporary_files_for_db(db_path: &str) -> Result<bool> {
-        let mut removed = false;
-        for path in Self::possible_temporary_files(db_path) {
-            match fs::remove_file(path) {
-                Ok(_) => {
-                    removed = true;
-                }
-                Err(e) => {
-                    if e.kind() == IoErrorKind::NotFound {
-                        // This is fine, pass.
-                    } else {
-                        bail!(e)
-                    }
-                }
-            }
-        }
-
-        Ok(removed)
-    }
+    fn shm_path(db_path: &str) -> String { db_path.to_string() + "-shm" }
 }
 
 /// Upstream didn't implement Bindable for trait object, which makes passing
@@ -669,8 +650,6 @@ use sqlite3_sys as sqlite_ffi;
 use std::{
     borrow::Borrow,
     collections::HashMap,
-    fs,
-    io::ErrorKind as IoErrorKind,
     ops::Deref,
     path::{Path, PathBuf},
     pin::Pin,
