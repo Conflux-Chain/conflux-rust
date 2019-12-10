@@ -70,7 +70,7 @@ fn main() -> Result<(), Error> {
     let (genesis_hash, _) = initialize_genesis(&state_manager)?;
     let accounts = arg_val(&matches, "accounts");
     let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
-    let (snapshot1_epoch, snapshot1_delta_root) = prepare_checkpoint(
+    let (snapshot1_epoch, snapshot1_delta_root) = prepare_state(
         &state_manager,
         genesis_hash,
         accounts,
@@ -103,7 +103,7 @@ fn main() -> Result<(), Error> {
     )?;
     storage_manager.register_new_snapshot(snapshot_info1.clone());
     println!("After merging: {:?}", snapshot_info1);
-    let (snapshot2_epoch, snapshot2_delta_root) = prepare_checkpoint(
+    let (snapshot2_epoch, snapshot2_delta_root) = prepare_state(
         &state_manager,
         snapshot1_epoch,
         accounts,
@@ -228,19 +228,19 @@ fn initialize_genesis(
     Ok((genesis_hash, root.state_root.delta_root))
 }
 
-fn prepare_checkpoint(
+fn prepare_state(
     manager: &StateManager, parent: H256, accounts: usize,
     accounts_per_epoch: usize,
 ) -> Result<(H256, MerkleHash), Error>
 {
-    println!("begin to add {} accounts for checkpoint ...", accounts);
+    println!("begin to add {} accounts for snapshot...", accounts);
     let start = Instant::now();
-    let mut checkpoint = parent;
+    let mut epoch_id = parent;
     let mut pending = accounts;
     while pending > 0 {
         let n = min(accounts_per_epoch, pending);
         let start2 = Instant::now();
-        checkpoint = add_epoch_with_accounts(manager, &checkpoint, n);
+        epoch_id = add_epoch_with_accounts(manager, &epoch_id, n);
         pending -= n;
         let progress = (accounts - pending) * 100 / accounts;
         println!(
@@ -256,16 +256,16 @@ fn prepare_checkpoint(
     let root = manager
         // TODO consider snapshot.
         .get_state_no_commit(StateIndex::new_for_test_only_delta_mpt(
-            &checkpoint,
+            &epoch_id,
         ))?
         .unwrap()
         .get_state_root()?
         .unwrap()
         .state_root
         .delta_root;
-    println!("checkpoint: epoch_id={:?}, root: {:?}", checkpoint, root);
+    println!("checkpoint: epoch_id={:?}, root: {:?}", epoch_id, root);
 
-    Ok((checkpoint, root))
+    Ok((epoch_id, root))
 }
 
 fn add_epoch_with_accounts(
