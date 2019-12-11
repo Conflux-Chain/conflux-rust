@@ -194,9 +194,12 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         &self.get_snapshot_db_path(old_snapshot_epoch_id),
                         &temp_db_path,
                     )? {
-                        // open the database.
+                        // open the copied database.
                         snapshot_db =
                             Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+
+                        // Drop copied old snapshot delta mpt dump
+                        snapshot_db.drop_delta_mpt_dump()?;
 
                         // iterate and insert into temp table.
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
@@ -239,9 +242,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         }
     }
 
+    /// FIXME remove the directory for db
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
         Ok(fs::remove_dir_all(
-            self.get_snapshot_db_path(snapshot_epoch_id),
+            &self.get_snapshot_db_path(snapshot_epoch_id),
         )?)
     }
 

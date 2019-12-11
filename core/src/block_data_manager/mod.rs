@@ -247,7 +247,7 @@ impl BlockDataManager {
         self.storage_manager
             .get_state_no_commit(StateIndex::new_for_readonly(
                 &true_genesis_hash,
-                &StateRootWithAuxInfo::genesis(&true_genesis_hash),
+                &StateRootWithAuxInfo::genesis(&true_genesis_hash).aux_info,
             ))
             .unwrap()
             .unwrap()
@@ -938,7 +938,7 @@ impl BlockDataManager {
             None => None,
             Some(execution_commitment) => Some(StateIndex::new_for_readonly(
                 block_hash,
-                &execution_commitment.state_root_with_aux_info,
+                &execution_commitment.state_root_with_aux_info.aux_info,
             )),
         };
 

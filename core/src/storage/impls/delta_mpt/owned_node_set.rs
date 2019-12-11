@@ -6,7 +6,7 @@
 #[derive(Default, Debug)]
 pub struct OwnedNodeSet {
     dirty: BTreeMap<ActualSlabIndex, Option<DeltaMptDbKey>>,
-    committed: BTreeSet<DeltaMptDbKey>,
+    pub committed: BTreeSet<DeltaMptDbKey>,
 }
 
 impl OwnedNodeSet {

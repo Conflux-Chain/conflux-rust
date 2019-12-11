@@ -6,13 +6,17 @@ use crate::hash::KECCAK_EMPTY;
 use cfx_types::{Address, H256, U256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(Clone, Debug, RlpDecodable, RlpEncodable)]
+#[derive(
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+)]
 pub struct DepositInfo {
     pub amount: U256,
     pub deposit_time: u64,
 }
 
-#[derive(Clone, Debug, RlpDecodable, RlpEncodable)]
+#[derive(
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+)]
 pub struct Account {
     pub address: Address,
     pub balance: U256,

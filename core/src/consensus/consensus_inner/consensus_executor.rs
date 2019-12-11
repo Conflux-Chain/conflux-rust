@@ -884,7 +884,10 @@ impl ConsensusExecutionHandler {
                     .unwrap()
                     .state_root_with_aux_info;
                 self.tx_pool.set_best_executed_epoch(
-                    StateIndex::new_for_readonly(epoch_hash, state_root),
+                    StateIndex::new_for_readonly(
+                        epoch_hash,
+                        &state_root.aux_info,
+                    ),
                 );
             }
             debug!("Skip execution in prefix {:?}", epoch_hash);
@@ -920,7 +923,8 @@ impl ConsensusExecutionHandler {
                             )
                             // Unwrapping is safe because the state exists.
                             .unwrap()
-                            .state_root_with_aux_info,
+                            .state_root_with_aux_info
+                            .aux_info,
                         pivot_block.block_header.height() - 1,
                     ))
                     .expect("No db error")
@@ -956,7 +960,7 @@ impl ConsensusExecutionHandler {
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
-                    &state_root,
+                    &state_root.aux_info,
                 ));
         } else {
             state_root = state.commit(*epoch_hash).unwrap();
@@ -1426,7 +1430,8 @@ impl ConsensusExecutionHandler {
                             )
                             // Unwrapping is safe because the state exists.
                             .unwrap()
-                            .state_root_with_aux_info,
+                            .state_root_with_aux_info
+                            .aux_info,
                         pivot_block.block_header.height() - 1,
                     ))
                     .unwrap()
