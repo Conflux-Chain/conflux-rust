@@ -241,7 +241,8 @@ impl StateManager {
         if parent_state_index
             .maybe_delta_trie_height
             .unwrap_or_default() as u64
-            == SNAPSHOT_EPOCHS_CAPACITY
+            == 0
+            && parent_state_index.maybe_height.unwrap_or_default() != 0
         {
             let maybe_snapshot = self
                 .storage_manager
