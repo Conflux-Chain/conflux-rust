@@ -1513,35 +1513,6 @@ impl ConsensusNewBlockHandler {
         }
         let storage_manager =
             self.data_man.storage_manager.get_storage_manager();
-        let parent_snapshot_height = if state_boundary_height
-            <= storage_manager.get_snapshot_epoch_count() as u64
-        {
-            0
-        } else {
-            state_boundary_height
-                - storage_manager.get_snapshot_epoch_count() as u64
-        };
-        // FIXME Most are fake because not used now
-        // And it's also not correct to unconditionally set delta_mpt and
-        // intermediate_mpt as Some
-        let snapshot_info = SnapshotInfo {
-            serve_one_step_sync: false,
-            merkle_root: Default::default(),
-            parent_snapshot_height,
-            height: state_boundary_height,
-            parent_snapshot_epoch_id: Default::default(),
-            pivot_chain_parts: vec![start_hash],
-        };
-        storage_manager.register_new_snapshot(snapshot_info.clone(), true);
-        storage_manager
-            .get_delta_mpt(&start_hash)
-            .expect("No db error");
-        storage_manager
-            .reregister_genesis_snapshot(&start_hash)
-            .expect("No db error");
-        storage_manager
-            .get_delta_mpt(&start_hash)
-            .expect("No db error");
         let mut parent_snapshot_id = start_hash;
         for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
@@ -1604,7 +1575,8 @@ impl ConsensusNewBlockHandler {
                             .expect("No db error")
                             .get_merkle_root();
                         storage_manager
-                            .register_new_snapshot(snapshot_info, false);
+                            .register_new_snapshot(snapshot_info)
+                            .expect("No db error");
                         // Setup delta_mpt
                         storage_manager
                             .get_delta_mpt(&pivot_hash)

@@ -107,10 +107,10 @@ impl FullClient {
         .map_err(|e| format!("Failed to open database {:?}", e))?;
 
         let secret_store = Arc::new(SecretStore::new());
-        let storage_manager = Arc::new(StorageManager::new(
-            ledger_db.clone(),
-            conf.storage_config(),
-        ));
+        let storage_manager = Arc::new(
+            StorageManager::new(ledger_db.clone(), conf.storage_config())
+                .expect("Failed to initialize storage"),
+        );
         {
             let storage_manager_log_weak_ptr = Arc::downgrade(&storage_manager);
             let exit_clone = exit.clone();
