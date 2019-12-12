@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import collections
 import queue
 import random
 import multiprocessing
@@ -13,11 +14,15 @@ class Parameters:
 
 class NodeLocalView:
 
-    def __init__(self,num_nodes):
+    def __init__(self, node_id):
+        self.node_id = node_id
         self.left_subtree_weight = 0
         self.right_subtree_weight = 0
         self.received = set()
         self.update_chirality()
+
+    def __repr__(self):
+        return f"NodeWeight({self.left_subtree_weight}, {self.right_subtree_weight})"
 
     def deliver_block(self, block_id, chirality):
         self.received.add(block_id)
@@ -37,7 +42,7 @@ class NodeLocalView:
 
 class Simulator:
 
-    def __init__(self, env, threshold):
+    def __init__(self, env, attack_params):
         self.env = env
         # Parameters checker
         for attr in ["num_nodes","average_block_period","evil_rate","latency","out_degree","termination_time"]:
@@ -45,17 +50,29 @@ class Simulator:
                 print("{} unset".format(attr))
                 exit()
 
-        self.threshold = threshold
+        self.attack_params = attack_params
         self.message_queue = queue.PriorityQueue()
 
     def setup_chain(self):
         self.nodes = []
         for i in range(self.env.num_nodes):
-            self.nodes.append(NodeLocalView(self.env.num_nodes))
+            self.nodes.append(NodeLocalView(i))
+
+        # Initialize adversary.
+        self.debug_allow_borrow = self.env.debug_allow_borrow
         self.left_subtree_weight = 0
         self.right_subtree_weight = 0
         self.left_withheld_blocks_queue = queue.Queue()
         self.right_withheld_blocks_queue = queue.Queue()
+        self.total_borrowed_blocks = 0
+        self.left_borrowed_blocks = 0
+        self.right_borrowed_blocks = 0
+        self.withhold_done = False
+        # The number of recent blocks mined under left side sent to the network.
+        self.adv_left_recent_sent_blocks = collections.deque()
+        self.adv_right_recent_sent_blocks = collections.deque()
+        self.honest_left_recent_sent_blocks = collections.deque()
+        self.honest_right_recent_sent_blocks = collections.deque()
 
     def setup_network(self):
         self.neighbors = []
@@ -84,6 +101,9 @@ class Simulator:
         for i in nodes_to_keep_right:
             self.nodes[i].chirality = "R"
             self.nodes[i].deliver_block(0, "R")
+            self.broadcast(0, i, "R", 0)
+        self.honest_right_recent_sent_blocks.append((0, 0))
+        self.right_subtree_weight += 1
 
         # Executed the simulation
         block_id = 1
@@ -98,7 +118,7 @@ class Simulator:
                 # Decide attack target
                 withhold_queue, chirality, target = (self.left_withheld_blocks_queue, "L", nodes_to_keep_left) \
                     if self.left_withheld_blocks_queue.qsize() + self.left_subtree_weight \
-                       <= self.right_withheld_blocks_queue.qsize() + self.right_subtree_weight else\
+                       < self.right_withheld_blocks_queue.qsize() + self.right_subtree_weight else\
                     (self.right_withheld_blocks_queue, "R", nodes_to_keep_right)
                 withhold_queue.put(block_id)
             else:
@@ -110,46 +130,124 @@ class Simulator:
                 self.nodes[miner].deliver_block(block_id, chirality)
                 if chirality == "L":
                     self.left_subtree_weight += 1
+                    self.honest_left_recent_sent_blocks.append((timestamp, block_id))
                 else:
                     self.right_subtree_weight += 1
+                    self.honest_right_recent_sent_blocks.append((timestamp, block_id))
                 # Broadcast new blocks to neighbours
                 self.broadcast(timestamp, miner, chirality, block_id)
 
+            self.maintain_recent_blocks(timestamp)
+
             self.adversary_strategy(
-                adversary_mined, self.left_subtree_weight - self.right_subtree_weight,
+                adversary_mined,
+                self.left_subtree_weight - self.right_subtree_weight
+                - len(self.honest_left_recent_sent_blocks) + len(self.honest_right_recent_sent_blocks),
                 timestamp, [nodes_to_keep_left, nodes_to_keep_right],
                 [self.left_withheld_blocks_queue, self.right_withheld_blocks_queue])
             block_id += 1
 
+            self.process_network_events(timestamp)
+
+            """
+            print(f"local views after action:\n\tleft targets: %s,\n\tright targets: %s\n" % (
+                repr([self.nodes[i] for i in targets[0]]),
+                repr([self.nodes[i] for i in targets[1]]),
+            ))
+            """
+
             if self.is_chain_merged():
-                print("Chain merged after {} seconds".format(timestamp))
+                print(f"Chain merged after {timestamp} seconds")
                 return timestamp
 
-        print("Chain unmerged after {} seconds... ".format(self.env.termination_time))
+        print(f"Chain unmerged after {self.env.termination_time} seconds... ")
         return self.env.termination_time
 
-    def adversary_strategy(self, adversary_mined, global_subtree_weight_diff, timestamp, targets, withhold_queues):
-        if adversary_mined:
-            if global_subtree_weight_diff >= 0:
-                anti_chirality = "R"
-                target = targets[1]
-                withhold_queue = withhold_queues[1]
+    def maintain_recent_blocks(self, timestamp):
+        non_recent_timestamp = timestamp - self.attack_params["recent_timeout"]
+        for recent_sent_blocks in [
+            self.adv_left_recent_sent_blocks, self.adv_right_recent_sent_blocks,
+            self.honest_left_recent_sent_blocks, self.honest_right_recent_sent_blocks,
+        ]:
+            while len(recent_sent_blocks) > 0 \
+                and recent_sent_blocks[0][0] <= non_recent_timestamp:
+                recent_sent_blocks.popleft()
+
+
+    def adversary_send_withheld_block(self, chirality, target, timestamp):
+        if chirality == "L":
+            withheld_queue = self.left_withheld_blocks_queue
+            recent_sent_blocks = self.adv_left_recent_sent_blocks
+        else:
+            withheld_queue = self.right_withheld_blocks_queue
+            recent_sent_blocks = self.adv_right_recent_sent_blocks
+        if withheld_queue.empty():
+            if self.debug_allow_borrow:
+                self.total_borrowed_blocks += 1
+                if chirality == "L":
+                    self.left_borrowed_blocks += 1
+                else:
+                    self.right_borrowed_blocks += 1
+                blk = -self.total_borrowed_blocks
             else:
+                return
+        else:
+            blk = withheld_queue.get()
+
+        if chirality == "L":
+            self.left_subtree_weight += 1
+        else:
+            self.right_subtree_weight += 1
+
+        for node in target:
+            self.message_queue.put((timestamp, node, chirality, blk))
+
+        recent_sent_blocks.append((timestamp, blk))
+        self.maintain_recent_blocks(timestamp)
+
+
+    def adversary_strategy(self, adversary_mined, global_subtree_weight_diff, timestamp, targets, withhold_queues):
+            if withhold_queues[0].qsize() + withhold_queues[1].qsize() >= self.attack_params["withhold"]:
+                self.withhold_done = True
+
+            adv_recent_sent_left = len(self.adv_left_recent_sent_blocks)
+            adv_recent_sent_right = len(self.adv_right_recent_sent_blocks)
+            approx_right_target_subtree_weight_diff = global_subtree_weight_diff - adv_recent_sent_left
+            approx_left_target_subtree_weight_diff = global_subtree_weight_diff + adv_recent_sent_right
+            extra_send = self.attack_params["extra_send"]
+            left_send_count = -approx_left_target_subtree_weight_diff + extra_send
+            right_send_count = approx_right_target_subtree_weight_diff + 1 + extra_send
+
+            # Debug output only, estimation.
+            """
+            honest_recent_mined_left = len(self.honest_left_recent_sent_blocks)
+            honest_recent_mined_right = len(self.honest_right_recent_sent_blocks)
+            all_received_left = self.left_subtree_weight - adv_recent_sent_left - honest_recent_mined_left
+            all_received_right = self.right_subtree_weight - adv_recent_sent_right - honest_recent_mined_right
+            left_target_received_left = self.left_subtree_weight - honest_recent_mined_left
+            right_target_received_right = self.right_subtree_weight - honest_recent_mined_right
+
+            print(f"Global view before action: ({self.left_subtree_weight}, {self.right_subtree_weight}); "
+                  f"Honest recent mined: ({honest_recent_mined_left}, {honest_recent_mined_right}), "
+                  f"Adv recent sent: ({adv_recent_sent_left}, {adv_recent_sent_right}), "
+                  f"Est. all received: ({all_received_left}, {all_received_right}), "
+                  f"left received: ({left_target_received_left}, {all_received_right}), "
+                  f"right received: ({all_received_left}, {right_target_received_right}); "
+                  f"Adv to send: ({left_send_count}, {right_send_count}) in which extra_send {extra_send}, "
+                  f"adv withhold: ({self.left_withheld_blocks_queue.qsize()}, {self.right_withheld_blocks_queue.qsize()}); "
+                  f"adv borrowed blocks: ({self.left_borrowed_blocks}, {self.right_borrowed_blocks})."
+            )
+            """
+
+            if (self.debug_allow_borrow or self.withhold_done) and left_send_count > 0:
                 anti_chirality = "L"
-                target = targets[0]
-                withhold_queue = withhold_queues[0]
-            send_count = abs(global_subtree_weight_diff)
-            if send_count >= self.threshold:
-                for i in range(send_count):
-                    if withhold_queue.empty():
-                        break
-                    blk = withhold_queue.get()
-                    if anti_chirality == "L":
-                        self.left_subtree_weight += 1
-                    else:
-                        self.right_subtree_weight += 1
-                    for j in target:
-                        self.message_queue.put((timestamp, j, anti_chirality, blk))
+                for i in range(left_send_count):
+                    self.adversary_send_withheld_block(anti_chirality, targets[0], timestamp)
+
+            if (self.debug_allow_borrow or self.withhold_done) and right_send_count > 0:
+                anti_chirality = "R"
+                for i in range(right_send_count):
+                    self.adversary_send_withheld_block(anti_chirality, targets[1], timestamp)
 
 
     def is_chain_merged(self):
@@ -194,18 +292,19 @@ class Simulator:
 
 def slave_simulator():
     env = Parameters()
-    env.num_nodes = 6
+    env.num_nodes = 100
     env.average_block_period = 0.25
-    env.evil_rate = 0.2
+    env.evil_rate = 0.218
     env.latency = 10
-    env.out_degree = 5
-    env.termination_time = 20000
+    env.out_degree = 99
+    env.termination_time = 5400
+    env.debug_allow_borrow = False
 
-    return Simulator(env,3).main()
+    return Simulator(env, {"withhold": 10, "recent_timeout": 10, "extra_send": 1}).main()
 
 if __name__=="__main__":
     cpu_num = multiprocessing.cpu_count()
-    repeats = 100
+    repeats = 20
     p = multiprocessing.Pool(cpu_num)
     begin = time.time()
     attack_last_time = sorted(map(lambda x: x.get(), [p.apply_async(slave_simulator) for x in range(repeats)]))
