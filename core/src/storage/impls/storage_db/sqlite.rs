@@ -176,7 +176,7 @@ impl SqliteConnection {
         Ok(MaybeRows(statement.execute(params)?))
     }
 
-    pub fn execute<'p, Param: Borrow<dyn SqlBindable + 'p>>(
+    pub fn execute<'p, Param: Debug + Borrow<dyn SqlBindable + 'p>>(
         &mut self, sql: &str, params: &[Param],
     ) -> Result<MaybeRows<'_>> {
         let db = self.connection.get_mut();
@@ -212,7 +212,7 @@ impl SqliteConnection {
 /// Upstream didn't implement Bindable for trait object, which makes passing
 /// an array of params impossible. Therefore we define a new trait and implement
 /// Bindable for its trait object.
-pub trait SqlBindable {
+pub trait SqlBindable: Debug {
     fn bind(&self, statement: &mut Statement, i: usize) -> sqlite::Result<()>;
 }
 
@@ -238,7 +238,7 @@ impl SqlBindable for i64 {
     }
 }
 
-impl<'a, T: 'a + Deref> SqlBindable for Pin<T>
+impl<'a, T: 'a + Deref + Debug> SqlBindable for Pin<T>
 where for<'x> &'x T::Target: Bindable
 {
     fn bind(&self, statement: &mut Statement, i: usize) -> sqlite::Result<()> {
@@ -246,7 +246,7 @@ where for<'x> &'x T::Target: Bindable
     }
 }
 
-impl<'a, T: 'a + ?Sized> SqlBindable for &'a T
+impl<'a, T: 'a + ?Sized + Debug> SqlBindable for &'a T
 where T: SqlDerefBindable<'a>
 {
     fn bind(&self, statement: &mut Statement, i: usize) -> sqlite::Result<()> {
@@ -653,6 +653,7 @@ use sqlite3_sys as sqlite_ffi;
 use std::{
     borrow::Borrow,
     collections::HashMap,
+    fmt::Debug,
     ops::Deref,
     path::{Path, PathBuf},
     pin::Pin,

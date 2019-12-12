@@ -770,28 +770,38 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         let supposed_merkle_root = mpt.as_ref_assumed_owner().get_merkle_root();
         // Special case for Genesis snapshot, where the mpt is an non-existence
         // db, to which the load_node_wrapper fails.
-        let root_trie_node = if MERKLE_NULL_NODE.eq(supposed_merkle_root) {
-            SnapshotMptNode(VanillaTrieNode::new(
+        //        let root_trie_node = if
+        // MERKLE_NULL_NODE.eq(supposed_merkle_root) {
+        // SnapshotMptNode(VanillaTrieNode::new(
+        // MERKLE_NULL_NODE,                Default::default(),
+        //                None,
+        //                CompressedPathRaw::default(),
+        //            ))
+        //        } else {
+        //            cursor.load_node_wrapper(
+        //                mpt.as_mut_assumed_owner(),
+        //                &CompressedPathRaw::default(),
+        //            )?
+        //        };
+        let root_trie_node = cursor
+            .load_node_wrapper(
+                mpt.as_mut_assumed_owner(),
+                &CompressedPathRaw::default(),
+            )
+            .unwrap_or(SnapshotMptNode(VanillaTrieNode::new(
                 MERKLE_NULL_NODE,
                 Default::default(),
                 None,
                 CompressedPathRaw::default(),
-            ))
-        } else {
-            cursor.load_node_wrapper(
-                mpt.as_mut_assumed_owner(),
-                &CompressedPathRaw::default(),
-            )?
-        };
+            )));
 
-        let supposed_merkle_root = mpt.as_ref_assumed_owner().get_merkle_root();
-        assert_eq!(
-            root_trie_node.get_merkle(),
-            supposed_merkle_root,
-            "loaded root trie node merkle hash {:?} != supposed merkle hash {:?}",
-            root_trie_node.get_merkle(),
-            supposed_merkle_root,
-        );
+        //        assert_eq!(
+        //            root_trie_node.get_merkle(),
+        //            supposed_merkle_root,
+        //            "loaded root trie node merkle hash {:?} != supposed merkle
+        // hash {:?}",            root_trie_node.get_merkle(),
+        //            supposed_merkle_root,
+        //        );
 
         Ok(cursor.new_root(BasicPathNode {
             mpt,
@@ -1072,6 +1082,9 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             mem::swap(&mut child_node.trie_node, &mut self.trie_node);
             child_node.mpt = self.write_out()?;
         } else {
+            self.get_basic_path_node_mut().path_start_steps =
+                new_path_db_key.path_steps();
+            self.get_basic_path_node_mut().path_db_key = new_path_db_key;
             child_node = self;
         };
 
@@ -1301,6 +1314,13 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         self.delta_subtree_size += child_node.delta_subtree_size;
 
         if !child_node.is_node_empty() {
+            if self
+                .basic_node
+                .trie_node
+                .get_child(self.basic_node.next_child_index)
+                .is_none() {
+                println!("");
+            }
             let subtree_size = (self
                 .basic_node
                 .trie_node
