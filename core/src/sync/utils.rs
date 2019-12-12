@@ -143,6 +143,7 @@ pub fn initialize_synchronization_graph(
     );
     let sync_config = SyncGraphConfig {
         enable_state_expose: false,
+        is_consortium: false,
     };
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {

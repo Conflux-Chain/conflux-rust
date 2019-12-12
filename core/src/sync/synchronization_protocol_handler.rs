@@ -243,6 +243,7 @@ pub struct SynchronizationProtocolHandler {
 
 #[derive(Clone)]
 pub struct ProtocolConfiguration {
+    pub is_consortium: bool,
     pub send_tx_period: Duration,
     pub check_request_period: Duration,
     pub block_cache_gc_period: Duration,
@@ -312,6 +313,8 @@ impl SynchronizationProtocolHandler {
             light_provider,
         }
     }
+
+    pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
 
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
         self.graph.get_to_propagate_trans()

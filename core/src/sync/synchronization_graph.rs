@@ -53,6 +53,7 @@ const BLOCK_GRAPH_READY: u8 = 4;
 #[derive(Copy, Clone)]
 pub struct SyncGraphConfig {
     pub enable_state_expose: bool,
+    pub is_consortium: bool,
 }
 
 #[derive(Debug)]
@@ -748,50 +749,54 @@ impl SynchronizationGraphInner {
             })));
         }
 
-        // Verify difficulty being correctly set
-        let mut difficulty_invalid = false;
-        let my_diff = *self.arena[index].block_header.difficulty();
-        let mut min_diff = my_diff;
-        let mut max_diff = my_diff;
-        let initial_difficulty: U256 =
-            self.pow_config.initial_difficulty.into();
+        if !self.config.is_consortium {
+            // Verify difficulty being correctly set
+            let mut difficulty_invalid = false;
+            let my_diff = *self.arena[index].block_header.difficulty();
+            let mut min_diff = my_diff;
+            let mut max_diff = my_diff;
+            let initial_difficulty: U256 =
+                self.pow_config.initial_difficulty.into();
 
-        if parent_height < self.pow_config.difficulty_adjustment_epoch_period {
-            if my_diff != initial_difficulty {
-                difficulty_invalid = true;
-                min_diff = initial_difficulty;
-                max_diff = initial_difficulty;
-            }
-        } else {
-            let last_period_upper = (parent_height
-                / self.pow_config.difficulty_adjustment_epoch_period)
-                * self.pow_config.difficulty_adjustment_epoch_period;
-            if last_period_upper != parent_height {
-                // parent_epoch should not trigger difficulty adjustment
-                if my_diff != parent_difficulty {
+            if parent_height
+                < self.pow_config.difficulty_adjustment_epoch_period
+            {
+                if my_diff != initial_difficulty {
                     difficulty_invalid = true;
-                    min_diff = parent_difficulty;
-                    max_diff = parent_difficulty;
+                    min_diff = initial_difficulty;
+                    max_diff = initial_difficulty;
                 }
             } else {
-                let (lower, upper) =
-                    self.pow_config.get_adjustment_bound(parent_difficulty);
-                min_diff = lower;
-                max_diff = upper;
-                if my_diff < min_diff || my_diff > max_diff {
-                    difficulty_invalid = true;
+                let last_period_upper = (parent_height
+                    / self.pow_config.difficulty_adjustment_epoch_period)
+                    * self.pow_config.difficulty_adjustment_epoch_period;
+                if last_period_upper != parent_height {
+                    // parent_epoch should not trigger difficulty adjustment
+                    if my_diff != parent_difficulty {
+                        difficulty_invalid = true;
+                        min_diff = parent_difficulty;
+                        max_diff = parent_difficulty;
+                    }
+                } else {
+                    let (lower, upper) =
+                        self.pow_config.get_adjustment_bound(parent_difficulty);
+                    min_diff = lower;
+                    max_diff = upper;
+                    if my_diff < min_diff || my_diff > max_diff {
+                        difficulty_invalid = true;
+                    }
                 }
             }
-        }
 
-        if difficulty_invalid {
-            return Err(From::from(BlockError::InvalidDifficulty(
-                OutOfBounds {
-                    min: Some(min_diff),
-                    max: Some(max_diff),
-                    found: my_diff,
-                },
-            )));
+            if difficulty_invalid {
+                return Err(From::from(BlockError::InvalidDifficulty(
+                    OutOfBounds {
+                        min: Some(min_diff),
+                        max: Some(max_diff),
+                        found: my_diff,
+                    },
+                )));
+            }
         }
 
         Ok(())
@@ -914,6 +919,7 @@ pub struct SynchronizationGraph {
     pub data_man: Arc<BlockDataManager>,
     pub initial_missed_block_hashes: Mutex<HashSet<H256>>,
     pub verification_config: VerificationConfig,
+    pub sync_config: SyncGraphConfig,
     pub statistics: SharedStatistics,
     /// This is the hash of latest graph ready block
     /// Since the critical section is very short, a `Mutex` is enough.
@@ -932,7 +938,7 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        config: SyncGraphConfig, is_full_node: bool,
+        sync_config: SyncGraphConfig, is_full_node: bool,
     ) -> Self
     {
         let data_man = consensus.data_man.clone();
@@ -945,7 +951,7 @@ impl SynchronizationGraph {
             SynchronizationGraphInner::with_genesis_block(
                 genesis_block_header.clone(),
                 pow_config,
-                config,
+                sync_config,
                 data_man.clone(),
             ),
         ));
@@ -954,6 +960,7 @@ impl SynchronizationGraph {
             data_man: data_man.clone(),
             initial_missed_block_hashes: Mutex::new(HashSet::new()),
             verification_config,
+            sync_config,
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
@@ -981,6 +988,8 @@ impl SynchronizationGraph {
             .expect("Cannot fail");
         sync_graph
     }
+
+    pub fn is_consortium(&self) -> bool { self.sync_config.is_consortium }
 
     pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
         self.inner
@@ -1183,12 +1192,16 @@ impl SynchronizationGraph {
         referees: &Vec<H256>, difficulty: &U256,
     ) -> bool
     {
-        self.consensus.check_mining_adaptive_block(
-            inner,
-            parent_hash,
-            referees,
-            difficulty,
-        )
+        if !self.is_consortium() {
+            self.consensus.check_mining_adaptive_block(
+                inner,
+                parent_hash,
+                referees,
+                difficulty,
+            )
+        } else {
+            false
+        }
     }
 
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {

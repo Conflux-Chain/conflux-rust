@@ -155,6 +155,7 @@ build_config! {
         // Controls block generation speed.
         // Only effective in `dev` mode and `start_mining` is false
         (dev_block_interval_ms, (u64), 250)
+        (is_consortium, (bool), false)
     }
     {
         (
@@ -361,6 +362,7 @@ impl Configuration {
 
     pub fn protocol_config(&self) -> ProtocolConfiguration {
         ProtocolConfiguration {
+            is_consortium: self.raw_conf.is_consortium,
             send_tx_period: Duration::from_millis(
                 self.raw_conf.send_tx_period_ms,
             ),
@@ -424,6 +426,7 @@ impl Configuration {
     pub fn sync_graph_config(&self) -> SyncGraphConfig {
         SyncGraphConfig {
             enable_state_expose: self.raw_conf.enable_state_expose,
+            is_consortium: self.raw_conf.is_consortium,
         }
     }
 
@@ -483,6 +486,8 @@ impl Configuration {
             _ => false,
         }
     }
+
+    pub fn is_consortium(&self) -> bool { self.raw_conf.is_consortium }
 }
 
 /// Validates and formats bootnodes option.
