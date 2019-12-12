@@ -18,8 +18,7 @@ pub type SharedStateManager = Arc<StateManager>;
 // size of delta trie.
 pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 1_000_000_000_000_000;
 pub fn height_to_delta_height(height: u64) -> u32 {
-    ((height + SNAPSHOT_EPOCHS_CAPACITY - 1) % SNAPSHOT_EPOCHS_CAPACITY) as u32
-        + 1
+    (height % SNAPSHOT_EPOCHS_CAPACITY) as u32
 }
 
 pub struct StateReadonlyIndex {
