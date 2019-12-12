@@ -68,50 +68,18 @@ impl Encodable for StateRootAuxInfo {
         s.begin_list(4)
             .append(&self.snapshot_epoch_id)
             .append(&self.intermediate_epoch_id)
-            .append(
-                &self
-                    .maybe_intermediate_mpt_key_padding
-                    .as_ref()
-                    .map(|padding| &padding[..]),
-            )
+            .append(&self.maybe_intermediate_mpt_key_padding)
             .append(&&self.delta_mpt_key_padding[..]);
     }
 }
 
 impl Decodable for StateRootAuxInfo {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let mut maybe_intermediate_mpt_key_padding: Option<DeltaMptKeyPadding> =
-            Default::default();
-        {
-            let rlp_parsed = rlp.val_at::<Option<Vec<u8>>>(2)?;
-            if rlp_parsed.is_some() {
-                if rlp_parsed.as_ref().unwrap().len()
-                    != DELTA_MPT_KEY_PADDING_BYTES
-                {
-                    return Err(DecoderError::Custom(
-                        "incorrect length for KeyPadding.",
-                    ));
-                }
-                maybe_intermediate_mpt_key_padding.as_mut().unwrap()[..]
-                    .copy_from_slice(&rlp_parsed.as_ref().unwrap());
-            }
-        }
-        let mut delta_mpt_key_padding: DeltaMptKeyPadding = Default::default();
-        {
-            let rlp_parsed = rlp.val_at::<Vec<u8>>(3)?;
-            if rlp_parsed.len() != DELTA_MPT_KEY_PADDING_BYTES {
-                return Err(DecoderError::Custom(
-                    "incorrect length for KeyPadding.",
-                ));
-            }
-            delta_mpt_key_padding[..].copy_from_slice(&rlp_parsed);
-        }
-
         Ok(Self {
             snapshot_epoch_id: rlp.val_at(0)?,
             intermediate_epoch_id: rlp.val_at(1)?,
-            maybe_intermediate_mpt_key_padding,
-            delta_mpt_key_padding,
+            maybe_intermediate_mpt_key_padding: rlp.val_at(2)?,
+            delta_mpt_key_padding: rlp.val_at(3)?,
         })
     }
 }
@@ -135,7 +103,7 @@ impl Decodable for StateRootWithAuxInfo {
 
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot,
-    DELTA_MPT_KEY_PADDING_BYTES, GENESIS_DELTA_MPT_KEY_PADDING, NULL_EPOCH,
+    GENESIS_DELTA_MPT_KEY_PADDING, NULL_EPOCH,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde_derive::{Deserialize, Serialize};
