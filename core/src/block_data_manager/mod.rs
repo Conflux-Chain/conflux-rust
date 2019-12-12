@@ -23,7 +23,7 @@ use primitives::{
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block, BlockHeader, EpochId, SignedTransaction, TransactionAddress,
-    TransactionWithSignature,
+    TransactionWithSignature, NULL_EPOCH,
 };
 use rlp::DecoderError;
 use std::{
@@ -943,6 +943,28 @@ impl BlockDataManager {
         };
 
         GuardedValue::new(guard, maybe_state_index)
+    }
+
+    // TODO: There could be io error when getting block by hash.
+    pub fn get_parent_epochs_for(
+        &self, mut block: EpochId, mut count: u64,
+    ) -> (EpochId, Vec<EpochId>) {
+        let mut epochs_reverse_order = vec![];
+        while count > 0 {
+            info!("getting parent for block {:?}", block);
+            epochs_reverse_order.push(block);
+            block = *self.block_header_by_hash(&block).unwrap().parent_hash();
+            if block == NULL_EPOCH
+                || block == *self.cur_consensus_era_genesis_hash.read()
+            {
+                break;
+            }
+            count -= 1;
+        }
+
+        info!("get_parent_epochs stopped at block {:?}", block);
+        epochs_reverse_order.reverse();
+        (block, epochs_reverse_order)
     }
 }
 
