@@ -312,7 +312,7 @@ impl StateManager {
     /// Check if we can make a new snapshot, and if so, make it in background.
     pub(super) fn check_make_snapshot(
         &self, intermediate_trie: Arc<DeltaMpt>,
-        intermediate_trie_root: Option<NodeRefDeltaMpt>,
+        intermediate_trie_root: NodeRefDeltaMpt,
         intermediate_epoch_id: &EpochId, new_height: u64,
     ) -> Result<()>
     {
@@ -322,7 +322,7 @@ impl StateManager {
             new_height,
             DeltaMptIterator {
                 mpt: intermediate_trie,
-                maybe_root_node: intermediate_trie_root,
+                root_node: intermediate_trie_root,
             },
         )
     }

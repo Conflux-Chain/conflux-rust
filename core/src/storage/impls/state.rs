@@ -320,7 +320,9 @@ impl<'a> StateTrait for State<'a> {
             if let Some(intermediate_trie) = &self.maybe_intermediate_trie {
                 self.manager.check_make_snapshot(
                     intermediate_trie.clone(),
-                    self.intermediate_trie_root.clone(),
+                    self.intermediate_trie_root.as_ref().expect(
+                        "root is not None when intermediate_trie is not None",
+                    ).clone(),
                     &self.intermediate_epoch_id,
                     self.height.clone().unwrap(),
                 )?;
@@ -550,12 +552,16 @@ impl<'a> State<'a> {
     pub fn dump<DUMPER: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DUMPER,
     ) -> Result<()> {
-        let inserter = DeltaMptIterator {
-            mpt: self.delta_trie.clone(),
-            maybe_root_node: self.delta_trie_root.clone(),
-        };
-
-        inserter.iterate(dumper)
+        match &self.delta_trie_root {
+            None => Ok(()),
+            Some(root_node) => {
+                let inserter = DeltaMptIterator {
+                    mpt: self.delta_trie.clone(),
+                    root_node: root_node.clone(),
+                };
+                inserter.iterate(dumper)
+            }
+        }
     }
 }
 

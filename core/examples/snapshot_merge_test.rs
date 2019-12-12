@@ -108,7 +108,7 @@ fn main() -> Result<(), Error> {
         .expect("root exists");
     let delta_mpt_iterator = DeltaMptIterator {
         mpt: delta_mpt,
-        maybe_root_node: Some(delta_mpt_root),
+        root_node: delta_mpt_root,
     };
 
     let info = SnapshotInfo {
@@ -159,7 +159,7 @@ fn main() -> Result<(), Error> {
         .expect("root exists");
     let delta_mpt_iterator = DeltaMptIterator {
         mpt: delta_mpt,
-        maybe_root_node: Some(delta_mpt_root),
+        root_node: delta_mpt_root,
     };
     let info = SnapshotInfo {
         height,

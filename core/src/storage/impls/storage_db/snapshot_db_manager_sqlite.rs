@@ -150,81 +150,57 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     ) -> Result<SnapshotInfo>
     {
         // FIXME: clean-up when error happens.
-        match &delta_mpt.maybe_root_node {
-            None => {
-                // This is only for the special case for the second delta mpt.
-                // For the first a few blocks, the state is [Empty snapshot,
-                // empty intermediate mpt, delta mpt],
-                // then [Empty snapshot, intermediate mpt, delta mpt].
-                // The merge of Empty snapshot and empty intermediate mpt
-                // resulting into an empty snapshot, falls into this code path,
-                // where we do nothing.
-                Ok(self
-                    .get_snapshot_by_epoch_id(
-                        &in_progress_snapshot_info.parent_snapshot_epoch_id,
-                    )?
-                    .unwrap()
-                    .get_snapshot_info()
-                    .clone())
-            }
-            Some(_) => {
-                // Unwrap here is safe because the delta MPT is guaranteed not
-                // empty.
-                let temp_db_path = self.get_merge_temp_snapshot_db_path(
+        // Unwrap here is safe because the delta MPT is guaranteed not
+        // empty.
+        let temp_db_path = self.get_merge_temp_snapshot_db_path(
+            old_snapshot_epoch_id,
+            &delta_mpt
+                .mpt
+                .get_merkle(Some(delta_mpt.root_node.clone()))?
+                .unwrap(),
+        );
+
+        let mut snapshot_db;
+        let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH {
+            // direct merge the first snapshot
+            snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
+            // TODO No need to dump delta mpt?
+            snapshot_db.dump_delta_mpt(&delta_mpt)?;
+            snapshot_db.direct_merge(&delta_mpt)?
+        } else {
+            if self.try_make_snapshot_cow_copy(
+                &self.get_snapshot_db_path(old_snapshot_epoch_id),
+                &temp_db_path,
+            )? {
+                // open the copied database.
+                snapshot_db = Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+
+                // Drop copied old snapshot delta mpt dump
+                snapshot_db.drop_delta_mpt_dump()?;
+
+                // iterate and insert into temp table.
+                snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                snapshot_db.direct_merge(&delta_mpt)?
+            } else {
+                snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
+                snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                self.copy_and_merge(
+                    &mut snapshot_db,
                     old_snapshot_epoch_id,
-                    &delta_mpt
-                        .mpt
-                        .get_merkle(delta_mpt.maybe_root_node.clone())?
-                        .unwrap(),
-                );
-
-                let mut snapshot_db;
-                let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH
-                {
-                    // direct merge the first snapshot
-                    snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
-                    // TODO No need to dump delta mpt?
-                    snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                    snapshot_db.direct_merge(&delta_mpt)?
-                } else {
-                    if self.try_make_snapshot_cow_copy(
-                        &self.get_snapshot_db_path(old_snapshot_epoch_id),
-                        &temp_db_path,
-                    )? {
-                        // open the copied database.
-                        snapshot_db =
-                            Self::SnapshotDb::open(&temp_db_path)?.unwrap();
-
-                        // Drop copied old snapshot delta mpt dump
-                        snapshot_db.drop_delta_mpt_dump()?;
-
-                        // iterate and insert into temp table.
-                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                        snapshot_db.direct_merge(&delta_mpt)?
-                    } else {
-                        snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
-                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                        self.copy_and_merge(
-                            &mut snapshot_db,
-                            old_snapshot_epoch_id,
-                            &delta_mpt,
-                        )?
-                    }
-                };
-
-                in_progress_snapshot_info.merkle_root =
-                    new_snapshot_root.clone();
-                snapshot_db
-                    .set_snapshot_info(in_progress_snapshot_info.clone());
-                drop(snapshot_db);
-                Self::rename_snapshot_db(
-                    &temp_db_path,
-                    &self.get_snapshot_db_path(&snapshot_epoch_id),
-                )?;
-
-                Ok(in_progress_snapshot_info)
+                    &delta_mpt,
+                )?
             }
-        }
+        };
+
+        in_progress_snapshot_info.merkle_root = new_snapshot_root.clone();
+        snapshot_db.set_snapshot_info(in_progress_snapshot_info.clone());
+        drop(snapshot_db);
+        Self::rename_snapshot_db(
+            &temp_db_path,
+            &self.get_snapshot_db_path(&snapshot_epoch_id),
+        )?;
+
+        Ok(in_progress_snapshot_info)
     }
 
     fn get_snapshot_by_epoch_id(
