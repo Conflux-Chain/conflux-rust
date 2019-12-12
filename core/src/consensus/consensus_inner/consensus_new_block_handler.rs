@@ -1319,6 +1319,8 @@ impl ConsensusNewBlockHandler {
             .data_man
             .get_epoch_execution_commitment(&confirmed_epoch_hash)
         {
+            // FIXME: convert the epoch hash to the most recent snapshottable
+            // hash.
             self.data_man
                 .storage_manager
                 .get_storage_manager()

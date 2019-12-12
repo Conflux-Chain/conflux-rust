@@ -23,17 +23,17 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
     for StorageManagerFullNode<SnapshotDbManager>
 {
     fn remove_old_pivot_snapshot(
-        &self, _snapshot_epoch_id: &EpochId,
+        &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
-        // FIXME: implement, delete snapshot
-        unimplemented!()
+        self.get_snapshot_db_manager()
+            .destroy_snapshot(snapshot_epoch_id)
     }
 
     fn remove_non_pivot_snapshot(
-        &self, _snapshot_epoch_id: &EpochId,
+        &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
-        // FIXME: implement, delete snapshot
-        unimplemented!()
+        self.get_snapshot_db_manager()
+            .destroy_snapshot(snapshot_epoch_id)
     }
 }
 

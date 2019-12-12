@@ -18,6 +18,9 @@ pub struct SubtreeMerkleWithSize {
     pub delta_subtree_size: u64,
 }
 
+// TODO: The key for SnapshotMpt should be changed to something else because
+// TODO: we'd like to use a multi-version snapshot db to manage multiple
+// TODO: snapshots.
 pub trait SnapshotMptTraitReadOnly {
     fn get_merkle_root(&self) -> &MerkleHash;
     fn load_node(
