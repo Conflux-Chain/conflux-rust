@@ -242,10 +242,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         }
     }
 
-    /// FIXME remove the directory for db
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
         Ok(fs::remove_dir_all(
-            &self.get_snapshot_db_path(snapshot_epoch_id),
+            self.get_snapshot_db_path(snapshot_epoch_id),
         )?)
     }
 

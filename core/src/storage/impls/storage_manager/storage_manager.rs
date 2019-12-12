@@ -286,9 +286,8 @@ impl StorageManager {
                 mpt.get_parent_epoch(&epoch_id)?.unwrap()
             }
             None => {
-                // Just move delta_mpt to intermediate_mpt, snapshot is kept
-                // empty pivot_chain_parts will not be used for
-                // the first snapshot
+                // Move delta_mpt to intermediate_mpt and keep snapshot empty.
+                // FIXME pivot_chain_parts is still Default.
                 NULL_EPOCH
             }
         };
