@@ -241,8 +241,7 @@ impl StateManager {
         if parent_state_index
             .maybe_delta_trie_height
             .unwrap_or_default() as u64
-            == 0
-            && parent_state_index.maybe_height.unwrap_or_default() != 0
+            == SNAPSHOT_EPOCHS_CAPACITY
         {
             let maybe_snapshot = self
                 .storage_manager
@@ -312,7 +311,7 @@ impl StateManager {
 
     /// Check if we can make a new snapshot, and if so, make it in background.
     pub(super) fn check_make_snapshot(
-        &self, intermediate_trie: Option<Arc<DeltaMpt>>,
+        &self, intermediate_trie: Arc<DeltaMpt>,
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
         intermediate_epoch_id: &EpochId, new_height: u64,
     ) -> Result<()>
@@ -322,7 +321,7 @@ impl StateManager {
             intermediate_epoch_id.clone(),
             new_height,
             DeltaMptIterator {
-                maybe_mpt: intermediate_trie,
+                mpt: intermediate_trie,
                 maybe_root_node: intermediate_trie_root,
             },
         )

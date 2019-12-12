@@ -173,10 +173,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 let temp_db_path = self.get_merge_temp_snapshot_db_path(
                     old_snapshot_epoch_id,
                     &delta_mpt
-                        .maybe_mpt
-                        .as_ref()
-                        .as_ref()
-                        .unwrap()
+                        .mpt
                         .get_merkle(delta_mpt.maybe_root_node.clone())?
                         .unwrap(),
                 );

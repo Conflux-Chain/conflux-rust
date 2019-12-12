@@ -271,26 +271,18 @@ impl StorageManager {
         let mut pivot_chain_parts =
             vec![Default::default(); SNAPSHOT_EPOCHS_CAPACITY as usize];
         // Calculate pivot chain parts.
-        let parent_snapshot_epoch_id = match delta_db.maybe_mpt.as_ref() {
-            Some(mpt) => {
-                let mut epoch_id = snapshot_epoch_id.clone();
-                let mut delta_height = SNAPSHOT_EPOCHS_CAPACITY as usize - 1;
-                pivot_chain_parts[delta_height] = epoch_id.clone();
-                while delta_height > 0 {
-                    // FIXME: maybe not unwrap, but throw an error about db
-                    // corruption.
-                    epoch_id = mpt.get_parent_epoch(&epoch_id)?.unwrap();
-                    delta_height -= 1;
-                    pivot_chain_parts[delta_height] = epoch_id.clone();
-                }
-                mpt.get_parent_epoch(&epoch_id)?.unwrap()
-            }
-            None => {
-                // Move delta_mpt to intermediate_mpt and keep snapshot empty.
-                // FIXME pivot_chain_parts is still Default.
-                NULL_EPOCH
-            }
-        };
+        let mut epoch_id = snapshot_epoch_id.clone();
+        let mut delta_height = SNAPSHOT_EPOCHS_CAPACITY as usize - 1;
+        pivot_chain_parts[delta_height] = epoch_id.clone();
+        while delta_height > 0 {
+            // FIXME: maybe not unwrap, but throw an error about db
+            // corruption.
+            epoch_id = delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
+            delta_height -= 1;
+            pivot_chain_parts[delta_height] = epoch_id.clone();
+        }
+        let parent_snapshot_epoch_id =
+            delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
 
         let in_progress_snapshot_info = SnapshotInfo {
             serve_one_step_sync: true,
@@ -610,7 +602,7 @@ impl StorageManager {
 
 #[derive(Clone)]
 pub struct DeltaMptIterator {
-    pub maybe_mpt: Option<Arc<DeltaMpt>>,
+    pub mpt: Arc<DeltaMpt>,
     pub maybe_root_node: Option<NodeRefDeltaMpt>,
 }
 
@@ -621,20 +613,19 @@ impl DeltaMptIterator {
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {
-                let mpt = self.maybe_mpt.as_ref().unwrap();
-                let db = &mut *mpt.db_owned_read()?;
+                let db = &mut *self.mpt.db_owned_read()?;
                 let owned_node_set = Default::default();
                 let mut cow_root_node =
                     CowNodeRef::new(root_node.clone(), &owned_node_set);
                 let guarded_trie_node =
                     GuardedValue::take(cow_root_node.get_trie_node(
-                        mpt.get_node_memory_manager(),
-                        &mpt.get_node_memory_manager().get_allocator(),
+                        self.mpt.get_node_memory_manager(),
+                        &self.mpt.get_node_memory_manager().get_allocator(),
                         db,
                     )?);
                 cow_root_node.iterate_internal(
                     &owned_node_set,
-                    mpt,
+                    &self.mpt,
                     guarded_trie_node,
                     CompressedPathRaw::new_zeroed(0, 0),
                     dumper,
