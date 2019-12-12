@@ -1,6 +1,6 @@
 use crate::{
     statedb::{Result as StateDbResult, StateDb},
-    storage::Storage,
+    storage::StorageState,
 };
 use cfx_types::Address;
 use primitives::Account;
@@ -12,7 +12,7 @@ pub struct AccountCache<'storage> {
 }
 
 impl<'storage> AccountCache<'storage> {
-    pub fn new(storage: Storage<'storage>) -> Self {
+    pub fn new(storage: StorageState<'storage>) -> Self {
         AccountCache {
             accounts: HashMap::new(),
             storage: StateDb::new(storage),

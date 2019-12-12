@@ -332,6 +332,12 @@ struct FakeSnapshotDbManager {
 impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     type SnapshotDb = Arc<Mutex<FakeSnapshotDb>>;
 
+    fn scan_persist_state(
+        &self, _snapshot_info_map: &mut HashMap<EpochId, SnapshotInfo>,
+    ) -> Result<Vec<H256>> {
+        unimplemented!()
+    }
+
     fn new_snapshot_by_merging(
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,

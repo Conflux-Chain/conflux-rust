@@ -4,7 +4,10 @@ use crate::{
         EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
-    storage::{storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite},
+    storage::{
+        storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
+        KvdbSqliteStatements,
+    },
     verification::VerificationConfig,
 };
 use byteorder::{ByteOrder, LittleEndian};
@@ -86,14 +89,19 @@ impl DBManager {
             DBTable::EpochNumbers,
         ] {
             let table_str = sqlite_db_table(table);
-            let sqlite_db = KvdbSqlite::create_and_open(
+            let (_, sqlite_db) = KvdbSqlite::open_or_create(
                 &db_path.join(table_str.as_str()), /* Use separate database
                                                     * for
                                                     * different table */
-                table_str.as_str(),
-                &[&"value"],
-                &[&"BLOB"],
-                false,
+                Arc::new(
+                    KvdbSqliteStatements::make_statements(
+                        &[&"value"],
+                        &[&"BLOB"],
+                        table_str.as_str(),
+                        false,
+                    )
+                    .unwrap(),
+                ),
             )
             .expect("Open sqlite failure");
             table_db.insert(

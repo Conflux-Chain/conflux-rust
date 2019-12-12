@@ -4,6 +4,7 @@
 
 #[derive(Clone, Debug, Default)]
 pub struct SnapshotInfo {
+    // FIXME: update serve_one_step_sync at maintenance.
     pub serve_one_step_sync: bool,
 
     pub merkle_root: MerkleHash,
@@ -83,6 +84,31 @@ pub trait SnapshotDbTrait:
     ) -> Result<MerkleHash>;
 }
 
+impl Encodable for SnapshotInfo {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(6)
+            .append(&self.merkle_root)
+            .append(&self.height)
+            .append(&self.serve_one_step_sync)
+            .append(&self.parent_snapshot_epoch_id)
+            .append(&self.parent_snapshot_height)
+            .append_list(&self.pivot_chain_parts);
+    }
+}
+
+impl Decodable for SnapshotInfo {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        Ok(Self {
+            merkle_root: rlp.val_at(0)?,
+            height: rlp.val_at(1)?,
+            serve_one_step_sync: rlp.val_at(2)?,
+            parent_snapshot_epoch_id: rlp.val_at(3)?,
+            parent_snapshot_height: rlp.val_at(4)?,
+            pivot_chain_parts: rlp.list_at(5)?,
+        })
+    }
+}
+
 use super::{
     super::impls::errors::*,
     key_value_db::{
@@ -94,3 +120,4 @@ use crate::storage::storage_db::{
     SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
 };
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};

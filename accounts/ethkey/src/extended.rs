@@ -59,7 +59,7 @@ impl From<u32> for Derivation<u32> {
 }
 
 impl Label for H256 {
-    fn len() -> usize { 32 }
+    fn len() -> usize { Self::len_bytes() }
 
     fn store(&self, target: &mut [u8]) {
         (&mut target[0..32]).copy_from_slice(self.as_bytes());

@@ -1532,7 +1532,10 @@ impl ConsensusNewBlockHandler {
             parent_snapshot_epoch_id: Default::default(),
             pivot_chain_parts: vec![start_hash],
         };
-        storage_manager.register_new_snapshot(snapshot_info.clone(), true);
+        // FIXME: wtf?
+        storage_manager
+            .register_new_snapshot(snapshot_info.clone())
+            .unwrap();
         storage_manager
             .get_delta_mpt(&start_hash)
             .expect("No db error");
@@ -1604,7 +1607,8 @@ impl ConsensusNewBlockHandler {
                             .expect("No db error")
                             .get_merkle_root();
                         storage_manager
-                            .register_new_snapshot(snapshot_info, false);
+                            .register_new_snapshot(snapshot_info)
+                            .expect("No db error");
                         // Setup delta_mpt
                         storage_manager
                             .get_delta_mpt(&pivot_hash)

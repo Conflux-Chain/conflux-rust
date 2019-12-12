@@ -9,6 +9,18 @@ impl DeltaDbManagerSqlite {
 
     #[allow(unused)]
     pub fn new(_num_shards: u16) -> Self { Self {} }
+
+    pub fn kvdb_sqlite_statements() -> Arc<KvdbSqliteStatements> {
+        Arc::new(
+            KvdbSqliteStatements::make_statements(
+                &[&"value"],
+                &[&"BLOB"],
+                Self::DELTA_DB_TABLE_NAME,
+                true,
+            )
+            .unwrap(),
+        )
+    }
 }
 
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
@@ -17,10 +29,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
         KvdbSqlite::create_and_open(
             delta_db_name,
-            Self::DELTA_DB_TABLE_NAME,
-            &[&"value"],
-            &[&"BLOB"],
-            true,
+            Self::kvdb_sqlite_statements(),
         )
     }
 
@@ -41,4 +50,5 @@ use super::{
     },
     kvdb_sqlite::KvdbSqlite,
 };
-use std::fs::remove_file;
+use crate::storage::impls::storage_db::kvdb_sqlite::KvdbSqliteStatements;
+use std::{fs::remove_file, sync::Arc};

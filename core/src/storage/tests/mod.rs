@@ -62,6 +62,7 @@ pub fn new_state_manager_for_testing() -> StateManager {
             },
         },
     )
+    .unwrap()
 }
 
 #[derive(Default)]

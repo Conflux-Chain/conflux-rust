@@ -37,7 +37,7 @@ impl Handleable for SnapshotChunkResponse {
             ctx,
             request.chunk_key.clone(),
             self.chunk,
-        );
+        )?;
 
         Ok(())
     }

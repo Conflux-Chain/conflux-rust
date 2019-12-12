@@ -453,7 +453,10 @@ impl ScopedStatement {
 }
 
 pub trait ValueReadImpl<Kind: ?Sized>: Sized {
-    fn from_row_impl(row: &Statement<'_>) -> Result<Self>;
+    fn from_row_impl(row: &Statement<'_>, value_column: usize) -> Result<Self>;
+    fn from_kv_row_impl(
+        row: &Statement<'_>, key: &mut dyn SqlReadableIntoSelf,
+    ) -> Result<Self>;
 }
 
 pub trait ValueRead {
@@ -467,8 +470,15 @@ impl ValueRead for Box<[u8]> {
 impl<ValueType: SqlReadable> ValueReadImpl<dyn SqlReadableIntoSelf>
     for ValueType
 {
-    fn from_row_impl(row: &Statement<'_>) -> Result<Self> {
-        ValueType::from_column(row, 0)
+    fn from_row_impl(row: &Statement<'_>, value_column: usize) -> Result<Self> {
+        ValueType::from_column(row, value_column)
+    }
+
+    fn from_kv_row_impl(
+        row: &Statement<'_>, key: &mut dyn SqlReadableIntoSelf,
+    ) -> Result<Self> {
+        key.read_into_self(row, 0)?;
+        ValueType::from_column(row, 1)
     }
 }
 
@@ -483,13 +493,16 @@ impl<
         ValueType: Default + TupleIndexExt + TupleIterate<dyn SqlReadableIntoSelf>,
     > ValueReadImpl<dyn ElementSatisfy<dyn SqlReadableIntoSelf>> for ValueType
 {
-    fn from_row_impl(row: &Statement<'_>) -> Result<ValueType> {
+    fn from_row_impl(
+        row: &Statement<'_>, value_column: usize,
+    ) -> Result<ValueType> {
         let mut result = Ok(ValueType::default());
 
         struct Load<'r, 'db, ValueType> {
             t: &'r mut ValueType,
             row: &'r Statement<'db>,
             error: Option<Error>,
+            value_column: usize,
         }
 
         impl<ValueType: TupleIndexExt>
@@ -508,7 +521,7 @@ impl<
                         >::to_constrain_object_mut(
                             Index::getter_for_tuple_mut(self.t).get_mut_impl(),
                         )
-                        .read_into_self(self.row, index);
+                        .read_into_self(self.row, index + self.value_column);
 
                         if column_read_result.is_err() {
                             self.error = column_read_result.err()
@@ -523,6 +536,7 @@ impl<
             t: result.as_mut().unwrap(),
             row,
             error: None,
+            value_column,
         };
         ValueType::iterate(&mut loader);
 
@@ -530,6 +544,13 @@ impl<
             Some(e) => bail!(e),
             None => result,
         }
+    }
+
+    fn from_kv_row_impl(
+        row: &Statement<'_>, key: &mut dyn SqlReadableIntoSelf,
+    ) -> Result<Self> {
+        key.read_into_self(row, 0)?;
+        Self::from_row_impl(row, 1)
     }
 }
 

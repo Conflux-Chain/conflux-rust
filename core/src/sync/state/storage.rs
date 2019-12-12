@@ -6,9 +6,8 @@ use crate::{
     storage::{
         storage_db::{
             key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait,
-            SnapshotDbManagerTrait,
         },
-        MptSlicer, SnapshotDbManagerSqlite, StorageManager, TrieProof,
+        MptSlicer, StorageManager, TrieProof,
     },
     sync::{Error, ErrorKind},
 };
@@ -258,13 +257,17 @@ impl Chunk {
 
     pub fn load(
         checkpoint: &H256, chunk_key: &ChunkKey,
-    ) -> Result<Option<Chunk>, Error> {
+        storage_manager: &StorageManager,
+    ) -> Result<Option<Chunk>, Error>
+    {
         debug!(
             "begin to load chunk, checkpoint = {:?}, key = {:?}",
             checkpoint, chunk_key
         );
 
-        let snapshot_db_manager = SnapshotDbManagerSqlite::default();
+        let snapshot_db_manager =
+            storage_manager.get_storage_manager().get_snapshot_manager();
+
         let mut snapshot_db =
             match snapshot_db_manager.get_snapshot_by_epoch_id(checkpoint)? {
                 Some(db) => db,

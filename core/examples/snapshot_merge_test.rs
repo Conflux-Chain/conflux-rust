@@ -48,8 +48,7 @@ fn main() -> Result<(), Error> {
         remove_dir_all(&test_dir)?;
     }
 
-    // FIXME Parameterize.
-    let snapshot_dir = Path::new("./storage_db/snapshot");
+    let snapshot_dir = Path::new(StorageConfiguration::SNAPSHOT_DIR);
     if snapshot_dir.exists() {
         remove_dir_all(snapshot_dir)?;
     }
@@ -120,7 +119,7 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info1.clone(), false);
+    storage_manager.register_new_snapshot(snapshot_info1.clone())?;
     println!("After merging: {:?}", snapshot_info1);
     let aux_info2 = StateRootAuxInfo {
         snapshot_epoch_id: NULL_EPOCH,
@@ -175,7 +174,7 @@ fn main() -> Result<(), Error> {
         snapshot_info2,
         accounts_map.len()
     );
-    storage_manager.register_new_snapshot(snapshot_info2.clone(), false);
+    storage_manager.register_new_snapshot(snapshot_info2.clone())?;
     let snapshot2 = snapshot_db_manager
         .get_snapshot_by_epoch_id(&snapshot2_epoch)?
         .expect("exists");
@@ -232,7 +231,7 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info3.clone(), false);
+    storage_manager.register_new_snapshot(snapshot_info3.clone())?;
     assert_eq!(snapshot_info3.merkle_root, snapshot_info2.merkle_root);
     Ok(())
 }
@@ -297,7 +296,7 @@ fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
 
     let mut storage_conf = StorageConfiguration::default();
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
-    Ok(Arc::new(StateManager::new(db, storage_conf)))
+    Ok(Arc::new(StateManager::new(db, storage_conf).unwrap()))
 }
 
 fn initialize_genesis(

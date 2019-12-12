@@ -10,7 +10,7 @@ use crate::{
     storage::{
         state_manager::StateIndex, utils::guarded_value::*,
         StateRootWithAuxInfo, StorageManager, StorageManagerTrait,
-        StorageTrait,
+        StorageStateTrait,
     },
 };
 use cfx_types::{Bloom, H256};

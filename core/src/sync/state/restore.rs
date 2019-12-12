@@ -6,7 +6,7 @@ use crate::{
     storage::{
         state_manager::StateManager,
         storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        FullSyncVerifier, SnapshotDbManagerSqlite,
+        FullSyncVerifier, Result as StorageResult, SnapshotDbManagerSqlite,
     },
     sync::state::storage::{Chunk, ChunkKey},
 };
@@ -70,7 +70,7 @@ impl Restorer {
     /// Start to restore chunks asynchronously.
     pub fn finalize_restoration(
         &self, state_manager: Arc<StateManager>, snapshot_info: SnapshotInfo,
-    ) {
+    ) -> StorageResult<()> {
         state_manager
             .get_storage_manager()
             .get_snapshot_manager()
@@ -82,9 +82,10 @@ impl Restorer {
             .expect("Fail to finalize full sync");
         state_manager
             .get_storage_manager()
-            .register_new_snapshot(snapshot_info, true);
+            .register_new_snapshot(snapshot_info)?;
 
-        debug!("complete to restore snapshot chunks");
+        debug!("Completed snapshot restoration.");
+        Ok(())
     }
 }
 
