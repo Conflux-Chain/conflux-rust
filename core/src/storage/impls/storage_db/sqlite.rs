@@ -327,7 +327,10 @@ impl<'db> MaybeRows<'db> {
 
         match state {
             State::Row => Ok(Some(Self::statement_ref(maybe_statement))),
-            State::Done => Ok(None),
+            State::Done => {
+                *maybe_statement = None;
+                Ok(None)
+            }
         }
     }
 }
