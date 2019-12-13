@@ -42,7 +42,6 @@ impl<'a> MptMerger<'a> {
 
     // This is test only.
     #[allow(unused)]
-    pub fn merge(&mut self, inserter: &DeltaMptIterator) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
         struct Merger<'x, 'a: 'x> {
@@ -186,3 +185,4 @@ use super::{
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
+use crate::storage::impls::storage_db::snapshot_db_manager_sqlite::DumpedDeltaMptIterator;

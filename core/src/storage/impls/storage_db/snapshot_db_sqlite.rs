@@ -441,7 +441,7 @@ impl SnapshotDbSqlite {
     // FIXME: how to handle row_id, this should go to the merkle tree?
     pub fn dump_delta_mpt(
         &mut self, delta_mpt: &DeltaMptIterator,
-    ) -> Result<()> {
+    ) -> Result<DumpedDeltaMptIterator> {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
@@ -463,7 +463,10 @@ impl SnapshotDbSqlite {
             .finish_ignore_rows()?;
 
         // Dump code.
-        delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))
+        delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))?;
+        let mut dumped = DumpedDeltaMptIterator::default();
+        delta_mpt.iterate(&mut dumped);
+        Ok(dumped)
     }
 
     /// Dropping is optional, because these tables are necessary to provide
@@ -535,7 +538,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = x;
         let mut addr = Address::default();
-        let snapshot_kvdb_key =
+        let snapshot_key =
             StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
                 .to_key_bytes();
 
@@ -549,7 +552,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                         .delta_mpt_set_keys_statements
                         .stmts_main_table
                         .put,
-                    &[&&snapshot_kvdb_key as SqlBindableRef, &&value],
+                    &[&&snapshot_key as SqlBindableRef, &&value],
                 )?
                 .finish_ignore_rows()?;
         } else {
@@ -562,7 +565,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                         .delta_mpt_delete_keys_statements
                         .stmts_main_table
                         .put,
-                    &[&&snapshot_kvdb_key as SqlBindableRef],
+                    &[&&snapshot_key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
         }
@@ -609,3 +612,4 @@ use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, StorageKey};
 use sqlite::Statement;
 use std::{fs, path::Path, sync::Arc};
+use crate::storage::impls::storage_db::snapshot_db_manager_sqlite::DumpedDeltaMptIterator;
