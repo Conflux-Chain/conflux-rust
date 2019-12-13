@@ -5,8 +5,6 @@
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
 // processed to use in DeltaMpt.
 
-use std::hint::unreachable_unchecked;
-
 #[derive(Debug, Clone, Copy)]
 pub enum StorageKey<'a> {
     AccountKey(&'a [u8]),
@@ -209,11 +207,39 @@ impl<'a> StorageKey<'a> {
 /// and it's used to compute padding bytes for address and storage_key. The
 /// padding setup is against an attack where adversary artificially build deep
 /// paths in MPT.
-pub type DeltaMptKeyPadding = [u8; delta_mpt_storage_key::KEY_PADDING_BYTES];
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeltaMptKeyPadding([u8; delta_mpt_storage_key::KEY_PADDING_BYTES]);
 pub use delta_mpt_storage_key::KEY_PADDING_BYTES as DELTA_MPT_KEY_PADDING_BYTES;
 lazy_static! {
     pub static ref GENESIS_DELTA_MPT_KEY_PADDING: DeltaMptKeyPadding =
         StorageKey::delta_mpt_padding(&MERKLE_NULL_NODE, &MERKLE_NULL_NODE);
+}
+
+impl Deref for DeltaMptKeyPadding {
+    type Target = [u8; delta_mpt_storage_key::KEY_PADDING_BYTES];
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for DeltaMptKeyPadding {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+impl Encodable for DeltaMptKeyPadding {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&&self[..]); }
+}
+
+impl Decodable for DeltaMptKeyPadding {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        let v = rlp.as_val::<Vec<u8>>()?;
+        let mut array = DeltaMptKeyPadding::default();
+        if v.len() != delta_mpt_storage_key::KEY_PADDING_BYTES {
+            Err(DecoderError::RlpInconsistentLengthAndData)
+        } else {
+            array[..].copy_from_slice(&v);
+            Ok(array)
+        }
+    }
 }
 
 mod delta_mpt_storage_key {
@@ -260,10 +286,10 @@ mod delta_mpt_storage_key {
     ) -> DeltaMptKeyPadding {
         let mut padded =
             Vec::with_capacity(KEY_PADDING_BYTES + storage_key.len());
-        padded.extend_from_slice(padding);
+        padded.extend_from_slice(&padding.0);
         padded.extend_from_slice(storage_key);
 
-        keccak(padded).0
+        DeltaMptKeyPadding(keccak(padded).0)
     }
 
     fn extend_address(
@@ -364,7 +390,7 @@ mod delta_mpt_storage_key {
             );
             buffer.extend_from_slice(&snapshot_root.0);
             buffer.extend_from_slice(&intermediate_delta_root.0);
-            keccak(&buffer).0
+            DeltaMptKeyPadding(keccak(&buffer).0)
         }
 
         pub fn from_delta_mpt_key(
@@ -420,4 +446,11 @@ mod delta_mpt_storage_key {
 use super::{MerkleHash, MERKLE_NULL_NODE};
 use cfx_types::{Address, H256};
 use hash::keccak;
-use std::{convert::AsRef, vec::Vec};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde::{Deserialize, Serialize};
+use std::{
+    convert::AsRef,
+    hint::unreachable_unchecked,
+    ops::{Deref, DerefMut},
+    vec::Vec,
+};

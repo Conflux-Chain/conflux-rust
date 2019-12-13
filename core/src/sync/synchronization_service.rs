@@ -37,9 +37,11 @@ impl SynchronizationService {
             is_full_node,
             protocol_config,
             initial_sync_phase,
-            sync_graph,
+            sync_graph.clone(),
             light_provider,
         ));
+
+        assert_eq!(sync_handler.is_consortium(), sync_graph.is_consortium());
 
         SynchronizationService {
             network,

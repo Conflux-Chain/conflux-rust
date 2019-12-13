@@ -9,7 +9,9 @@ use crate::{
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
-        state_manager::StateManager, StateRootAuxInfo, StateRootWithAuxInfo,
+        state_manager::{StateManager, SNAPSHOT_EPOCHS_CAPACITY},
+        storage_db::SnapshotInfo,
+        StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
         message::{msgid, Context},
@@ -27,7 +29,9 @@ use crate::{
 use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
-use primitives::{BlockHeaderBuilder, Receipt, StateRoot};
+use primitives::{
+    BlockHeaderBuilder, Receipt, StateRoot, StorageKey, NULL_EPOCH,
+};
 use std::{
     collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
@@ -70,21 +74,19 @@ impl Debug for Status {
     }
 }
 
-#[derive(Default)]
 struct Inner {
     checkpoint: H256,
     trusted_blame_block: H256,
     status: Status,
 
-    // blame state that used to verify restored state root
-    true_state_root_by_blame_info: StateRoot,
-    // Point to the corresponding entry to the checkpoint in the blame vectors.
+    /// State root verified by blame.
+    true_state_root_by_blame_info: StateRootWithAuxInfo,
+    /// Point to the corresponding entry to the snapshot in the blame vectors.
     blame_vec_offset: usize,
-    state_root_with_aux_info_vec: Vec<StateRootWithAuxInfo>,
-    state_blame_vec: Vec<H256>,
     receipt_blame_vec: Vec<H256>,
     bloom_blame_vec: Vec<H256>,
     epoch_receipts: Vec<(H256, H256, Arc<Vec<Receipt>>)>,
+    snapshot_info: SnapshotInfo,
 
     // download
     pending_chunks: VecDeque<ChunkKey>,
@@ -95,13 +97,42 @@ struct Inner {
     restorer: Restorer,
 }
 
+impl Default for Inner {
+    fn default() -> Self {
+        Self {
+            checkpoint: Default::default(),
+            trusted_blame_block: Default::default(),
+            status: Default::default(),
+
+            true_state_root_by_blame_info: StateRootWithAuxInfo {
+                state_root: Default::default(),
+                aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
+            },
+            blame_vec_offset: Default::default(),
+            receipt_blame_vec: Default::default(),
+            bloom_blame_vec: Default::default(),
+            epoch_receipts: Default::default(),
+            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
+
+            pending_chunks: Default::default(),
+            downloading_chunks: Default::default(),
+            num_downloaded: Default::default(),
+
+            restorer: Default::default(),
+        }
+    }
+}
+
 impl Inner {
     fn reset(&mut self, checkpoint: H256, trusted_blame_block: H256) {
         self.checkpoint = checkpoint.clone();
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
-        self.true_state_root_by_blame_info = StateRoot::default();
-        self.state_blame_vec.clear();
+        self.true_state_root_by_blame_info = StateRootWithAuxInfo {
+            state_root: Default::default(),
+            aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
+        };
+        self.snapshot_info = SnapshotInfo::genesis_snapshot_info();
         self.receipt_blame_vec.clear();
         self.bloom_blame_vec.clear();
         self.pending_chunks.clear();
@@ -230,15 +261,14 @@ impl SnapshotChunkSync {
                 ctx,
                 &inner.checkpoint,
                 &inner.trusted_blame_block,
-                &mut inner.state_blame_vec,
-                &mut inner.state_root_with_aux_info_vec,
                 &response.state_root_vec,
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
             ) {
-                Some((blame_vec_offset, state)) => {
+                Some((blame_vec_offset, state, snapshot_info)) => {
                     inner.true_state_root_by_blame_info = state;
                     inner.blame_vec_offset = blame_vec_offset;
+                    inner.snapshot_info = snapshot_info;
                 }
                 None => {
                     warn!("failed to validate the blame state, re-sync manifest from other peer");
@@ -264,7 +294,7 @@ impl SnapshotChunkSync {
 
             // Check proofs for keys.
             if let Err(e) = response.manifest.validate(
-                &inner.true_state_root_by_blame_info.snapshot_root,
+                &inner.true_state_root_by_blame_info.state_root.snapshot_root,
                 &request.start_chunk,
             ) {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
@@ -419,7 +449,7 @@ impl SnapshotChunkSync {
 
         // verify the blame state
         let root = inner.restorer.restored_state_root(state_manager);
-        if root == inner.true_state_root_by_blame_info {
+        if root == inner.true_state_root_by_blame_info.state_root {
             info!("Snapshot chunks restored successfully");
             inner.status = Status::Completed;
         } else {
@@ -436,7 +466,6 @@ impl SnapshotChunkSync {
         &self, sync_handler: &SynchronizationProtocolHandler,
     ) {
         let inner = self.inner.read();
-        let mut hashes = Vec::new();
         let mut deferred_block_hash = inner.trusted_blame_block;
         for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
             deferred_block_hash = *sync_handler
@@ -446,8 +475,12 @@ impl SnapshotChunkSync {
                 .expect("All headers exist")
                 .parent_hash();
         }
-        for i in 0..(inner.blame_vec_offset + REWARD_EPOCH_COUNT as usize) {
-            hashes.push(deferred_block_hash);
+        // FIXME: Because state_root_aux_info can't be computed for state block
+        // FIXME: before snapshot, for the reward epoch count, maybe
+        // FIXME: save it to a dedicated place for reward computation.
+        for i in inner.blame_vec_offset
+            ..(inner.blame_vec_offset + REWARD_EPOCH_COUNT as usize)
+        {
             info!(
                 "insert_epoch_execution_commitment for block hash {:?}",
                 &deferred_block_hash
@@ -457,7 +490,10 @@ impl SnapshotChunkSync {
                 .data_man
                 .insert_epoch_execution_commitment(
                     deferred_block_hash,
-                    inner.state_root_with_aux_info_vec[i].clone(),
+                    // FIXME: the state root is wrong for epochs before sync
+                    // point. FIXME: but these information
+                    // won't be used.
+                    inner.true_state_root_by_blame_info.clone(),
                     inner.receipt_blame_vec[i],
                     inner.bloom_blame_vec[i],
                 );
@@ -476,6 +512,12 @@ impl SnapshotChunkSync {
                 true, /* persistent */
             );
         }
+        sync_handler
+            .graph
+            .data_man
+            .storage_manager
+            .get_storage_manager()
+            .register_new_snapshot(inner.snapshot_info.clone());
     }
 
     pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {
@@ -490,19 +532,19 @@ impl SnapshotChunkSync {
     }
 
     fn validate_blame_states(
-        ctx: &Context, checkpoint: &H256, trusted_blame_block: &H256,
-        out_state_blame_vec: &mut Vec<H256>,
-        out_state_root_with_aux_info_vec: &mut Vec<StateRootWithAuxInfo>,
+        ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
         state_root_vec: &Vec<StateRoot>, receipt_blame_vec: &Vec<H256>,
         bloom_blame_vec: &Vec<H256>,
-    ) -> Option<(usize, StateRoot)>
+    ) -> Option<(usize, StateRootWithAuxInfo, SnapshotInfo)>
     {
+        let mut state_blame_vec = vec![];
+
         // these two header must exist in disk, it's safe to unwrap
-        let checkpoint = ctx
+        let snapshot_block_header = ctx
             .manager
             .graph
             .data_man
-            .block_header_by_hash(checkpoint)
+            .block_header_by_hash(snapshot_epoch_id)
             .expect("checkpoint header must exist");
         let trusted_blame_block = ctx
             .manager
@@ -513,21 +555,21 @@ impl SnapshotChunkSync {
 
         // check checkpoint position in `out_state_blame_vec`
         let offset = (trusted_blame_block.height()
-            - (checkpoint.height() + DEFERRED_STATE_EPOCH_COUNT))
+            - (snapshot_block_header.height() + DEFERRED_STATE_EPOCH_COUNT))
             as usize;
         if offset >= state_root_vec.len() {
             return None;
         }
 
-        let min_vec_len = if checkpoint.height() == 0 {
+        let min_vec_len = if snapshot_block_header.height() == 0 {
             trusted_blame_block.height()
                 - DEFERRED_STATE_EPOCH_COUNT
-                - checkpoint.height()
+                - snapshot_block_header.height()
                 + 1
         } else {
             trusted_blame_block.height()
                 - DEFERRED_STATE_EPOCH_COUNT
-                - checkpoint.height()
+                - snapshot_block_header.height()
                 + REWARD_EPOCH_COUNT
         };
         let mut trusted_blocks = Vec::new();
@@ -536,17 +578,6 @@ impl SnapshotChunkSync {
         let mut block_hash = trusted_blame_block.hash();
         let mut vec_len: usize = 0;
         trusted_blocks.push(trusted_blame_block);
-
-        // Construct out_state_root_with_aux_info_vec.
-        out_state_root_with_aux_info_vec.clear();
-        for state_root in state_root_vec {
-            out_state_root_with_aux_info_vec.push(StateRootWithAuxInfo {
-                state_root: state_root.clone(),
-                // FIXME: build StateRootAuxInfo till the snapshot.
-                aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
-            });
-        }
-        // FIXME: build StateRootAuxInfo till the snapshot.
 
         // verify the length of vector.
         loop {
@@ -580,19 +611,18 @@ impl SnapshotChunkSync {
             return None;
         }
         // Construct out_state_blame_vec.
-        out_state_blame_vec.clear();
+        state_blame_vec.clear();
         for state_root in state_root_vec {
-            out_state_blame_vec.push(state_root.compute_state_root_hash());
+            state_blame_vec.push(state_root.compute_state_root_hash());
         }
         let mut slice_begin = 0;
         for trusted_block in trusted_blocks {
             let slice_end = slice_begin + trusted_block.blame() as usize + 1;
-            // FIXME: verify state_root_with_aux_info ..
             let deferred_state_root = if trusted_block.blame() == 0 {
-                out_state_blame_vec[slice_begin].clone()
+                state_blame_vec[slice_begin].clone()
             } else {
                 BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                    out_state_blame_vec[slice_begin..slice_end].to_vec(),
+                    state_blame_vec[slice_begin..slice_end].to_vec(),
                 )
             };
             let deferred_receipts_root = if trusted_block.blame() == 0 {
@@ -622,7 +652,55 @@ impl SnapshotChunkSync {
             slice_begin = slice_end;
         }
 
-        Some((offset, state_root_vec[offset].clone()))
+        let (mut parent_snapshot_epoch, pivot_chain_parts) =
+            ctx.manager.graph.data_man.get_parent_epochs_for(
+                snapshot_epoch_id.clone(),
+                SNAPSHOT_EPOCHS_CAPACITY,
+            );
+        // FIXME: This is temporary hack because we haven't enabled snapshot
+        // yet.
+        debug!(
+            "parent_snapshot_epoch for synced snapshot: {:?}",
+            parent_snapshot_epoch
+        );
+        parent_snapshot_epoch = NULL_EPOCH;
+        // FIXME: END OF HACK.
+
+        let parent_snapshot_height = if parent_snapshot_epoch == NULL_EPOCH {
+            0
+        } else {
+            ctx.manager
+                .graph
+                .data_man
+                .block_header_by_hash(&parent_snapshot_epoch)
+                .unwrap()
+                .height()
+        };
+
+        Some((
+            offset,
+            StateRootWithAuxInfo {
+                state_root: state_root_vec[offset].clone(),
+                aux_info: StateRootAuxInfo {
+                    snapshot_epoch_id: parent_snapshot_epoch,
+                    delta_mpt_key_padding: StorageKey::delta_mpt_padding(
+                        &state_root_vec[offset].snapshot_root,
+                        &state_root_vec[offset].intermediate_delta_root,
+                    ),
+                    intermediate_epoch_id: *snapshot_epoch_id,
+                    // We don't necessarily need to know.
+                    maybe_intermediate_mpt_key_padding: None,
+                },
+            },
+            SnapshotInfo {
+                serve_one_step_sync: false,
+                merkle_root: state_root_vec[offset].snapshot_root,
+                height: snapshot_block_header.height(),
+                parent_snapshot_epoch_id: parent_snapshot_epoch,
+                parent_snapshot_height,
+                pivot_chain_parts,
+            },
+        ))
     }
 
     fn validate_epoch_receipts(

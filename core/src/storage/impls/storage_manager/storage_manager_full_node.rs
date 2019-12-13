@@ -25,7 +25,6 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
     fn remove_old_pivot_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
-        // FIXME: implement, delete snapshot
         self.get_snapshot_db_manager()
             .destroy_snapshot(snapshot_epoch_id)
     }
@@ -33,7 +32,6 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
     fn remove_non_pivot_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
-        // FIXME: implement, delete snapshot
         self.get_snapshot_db_manager()
             .destroy_snapshot(snapshot_epoch_id)
     }
