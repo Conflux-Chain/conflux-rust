@@ -58,82 +58,67 @@ impl StateProof {
             .as_ref()
             .map(|p| storage_key.to_delta_mpt_key_bytes(p));
 
-        // FIXME: if peer send proof with v1, v2, v3, where v2 and v3 are
-        // FIXME: non-mandatory the code below falsely assume that v1
-        // FIXME: and v2 must be non-existence proof.
-        match (
-            value,
-            &self.delta_proof,
-            &self.intermediate_proof,
-            &self.snapshot_proof,
-        ) {
-            // proof of existence for key in delta trie
-            (Some(_), Some(p1), None, None) => {
-                p1.is_valid_kv(&delta_mpt_key, value, delta_root)
+        let tombstone_value = MptValue::<Box<[u8]>>::TombStone.unwrap();
+        let delta_value = if value.is_some() {
+            // Actual value.
+            value.clone()
+        } else {
+            // Tombstone value.
+            Some(&*tombstone_value)
+        };
+
+        // The delta proof must prove the key-value or key non-existence.
+        match &self.delta_proof {
+            Some(proof) => {
+                // Existence proof.
+                if proof.is_valid_kv(&delta_mpt_key, delta_value, delta_root) {
+                    return true;
+                }
+                // Non-existence proof.
+                if !proof.is_valid_kv(&delta_mpt_key, None, delta_root) {
+                    return false;
+                }
             }
-            // proof of existence for key in intermediate trie
-            (Some(_), Some(p1), Some(p2), None) => {
-                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
-                    && p2.is_valid_kv(
-                        maybe_intermediate_mpt_key.as_ref().unwrap(),
-                        value,
-                        intermediate_root,
-                    )
+            None => {
+                // Delta proof can only be empty when the delta_trie is empty so
+                // far and we are verifying a non-existence
+                // proof.
+                if value.is_some() || delta_root.ne(&MERKLE_NULL_NODE) {
+                    return false;
+                }
             }
-            // proof of existence for key in snapshot
-            (Some(_), Some(p1), maybe_p2, Some(p3)) => {
-                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
-                    && maybe_p2.as_ref().map_or(
-                        intermediate_root.eq(&MERKLE_NULL_NODE),
-                        |p2| {
-                            p2.is_valid_kv(
-                                maybe_intermediate_mpt_key.as_ref().unwrap(),
-                                None,
-                                intermediate_root,
-                            )
-                        },
-                    )
-                    && p3.is_valid_kv(key, value, snapshot_root)
+        }
+
+        // Now check intermediate_proof since it's required. Same logic applies.
+        match &self.intermediate_proof {
+            Some(proof) => {
+                if proof.is_valid_kv(
+                    maybe_intermediate_mpt_key.as_ref().unwrap(),
+                    delta_value,
+                    intermediate_root,
+                ) {
+                    return true;
+                }
+                if !proof.is_valid_kv(
+                    maybe_intermediate_mpt_key.as_ref().unwrap(),
+                    None,
+                    intermediate_root,
+                ) {
+                    return false;
+                }
             }
-            // proof of non-existence with a single trie
-            (None, Some(p1), None, None) => {
-                p1.is_valid_kv(key, MptValue::TombStone.unwrap(), delta_root)
-                    && intermediate_root.eq(&MERKLE_NULL_NODE)
-                    && snapshot_root.eq(&MERKLE_NULL_NODE)
+            None => {
+                // When intermediate trie exists, the proof can't be empty.
+                if intermediate_root.ne(&MERKLE_NULL_NODE) {
+                    return false;
+                }
             }
-            // proof of non-existence with two tries
-            (None, Some(p1), Some(p2), None) => {
-                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
-                    && p2.is_valid_kv(
-                        maybe_intermediate_mpt_key.as_ref().unwrap(),
-                        MptValue::TombStone.unwrap(),
-                        intermediate_root,
-                    )
-                    && snapshot_root.eq(&MERKLE_NULL_NODE)
-            }
-            // proof of non-existence with all tries
-            (None, Some(p1), maybe_p2, Some(p3)) => {
-                p1.is_valid_kv(&delta_mpt_key, None, delta_root)
-                    && maybe_p2.as_ref().map_or(
-                        intermediate_root.eq(&MERKLE_NULL_NODE),
-                        |p2| {
-                            p2.is_valid_kv(
-                                maybe_intermediate_mpt_key.as_ref().unwrap(),
-                                None,
-                                intermediate_root,
-                            )
-                        },
-                    )
-                    && p3.is_valid_kv(key, None, snapshot_root)
-            }
-            // no proofs available
-            (_, None, None, None) => {
-                value.is_none()
-                    && delta_root.eq(&MERKLE_NULL_NODE)
-                    && intermediate_root.eq(&MERKLE_NULL_NODE)
-                    && snapshot_root.eq(&MERKLE_NULL_NODE)
-            }
-            _ => false,
+        }
+
+        // At last, check snapshot
+        match &self.snapshot_proof {
+            None => false,
+            Some(proof) => proof.is_valid_kv(key, value, snapshot_root),
         }
     }
 }
