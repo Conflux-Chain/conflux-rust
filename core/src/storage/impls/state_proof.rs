@@ -80,10 +80,8 @@ impl StateProof {
                 }
             }
             None => {
-                // Delta proof can only be empty when the delta_trie is empty so
-                // far and we are verifying a non-existence
-                // proof.
-                if value.is_some() || delta_root.ne(&MERKLE_NULL_NODE) {
+                // When delta trie exists, the proof can't be empty.
+                if delta_root.ne(&MERKLE_NULL_NODE) {
                     return false;
                 }
             }
@@ -92,6 +90,9 @@ impl StateProof {
         // Now check intermediate_proof since it's required. Same logic applies.
         match &self.intermediate_proof {
             Some(proof) => {
+                if maybe_intermediate_mpt_key.is_none() {
+                    return false;
+                }
                 if proof.is_valid_kv(
                     maybe_intermediate_mpt_key.as_ref().unwrap(),
                     delta_value,
