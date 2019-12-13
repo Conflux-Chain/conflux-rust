@@ -24,6 +24,7 @@ pub struct KvdbSqliteBorrowMutReadOnly<'db, ValueType> {
     __marker_value: PhantomData<ValueType>,
 }
 
+#[derive(Clone)]
 pub struct KvdbSqliteStatements {
     pub stmts_main_table: KvdbSqliteStatementsPerTable,
     /// When numbered key is turned off, the bytes_key_table is the same as the
@@ -31,6 +32,7 @@ pub struct KvdbSqliteStatements {
     pub stmts_bytes_key_table: KvdbSqliteStatementsPerTable,
 }
 
+#[derive(Clone)]
 pub struct KvdbSqliteStatementsPerTable {
     pub create_table: String,
     pub drop_table: String,
@@ -46,25 +48,25 @@ impl KvdbSqliteStatements {
     pub const BYTES_KEY_TABLE_SUFFIX: &'static str = "_bytes_key";
     // TODO(yz): check if WITHOUT ROWID is faster: see https://www.sqlite.org/withoutrowid.html.
     pub const CREATE_TABLE_BLOB_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE IF NOT EXISTS {table_name} ( key BLOB PRIMARY KEY, {value_columns_def} ) WITHOUT ROWID";
+        "CREATE TABLE IF NOT EXISTS {table_name} ( key BLOB PRIMARY KEY {comma_value_columns_def} ) WITHOUT ROWID";
     // INTEGER PRIMARY KEY is special, see https://www.sqlite.org/lang_createtable.html#rowid.
     pub const CREATE_TABLE_NUMBER_KV_STATEMENT_TMPL: &'static str =
-        "CREATE TABLE IF NOT EXISTS {table_name} ( key INTEGER PRIMARY KEY, {value_columns_def} )";
+        "CREATE TABLE IF NOT EXISTS {table_name} ( key INTEGER PRIMARY KEY {comma_value_columns_def} )";
     pub const DELETE_STATEMENT: &'static str =
         "DELETE FROM {table_name} where key = :key";
     pub const DROP_TABLE_STATEMENT: &'static str = "DROP TABLE {table_name}";
     pub const GET_STATEMENT_TMPL: &'static str =
         "SELECT {value_columns} FROM {table_name} WHERE key = :key";
     pub const PUT_STATEMENT_TMPL: &'static str =
-        "INSERT OR REPLACE INTO {table_name} VALUES (:key, {value_columns_to_bind})";
+        "INSERT OR REPLACE INTO {table_name} VALUES (:key {comma_value_columns_to_bind})";
     pub const RANGE_EXCL_SELECT_STATEMENT: &'static str =
-        "SELECT key, {value_columns} FROM {table_name} \
+        "SELECT key {comma_value_columns} FROM {table_name} \
         WHERE key > :lower_bound_excl AND key < :upper_bound_excl ORDER BY key ASC";
     pub const RANGE_SELECT_STATEMENT: &'static str =
-        "SELECT key, {value_columns} FROM {table_name} \
+        "SELECT key {comma_value_columns} FROM {table_name} \
         WHERE key >= :lower_bound_excl AND key < :upper_bound_excl ORDER BY key ASC";
     pub const RANGE_SELECT_STATEMENT_TILL_END: &'static str =
-        "SELECT key, {value_columns} FROM {table_name} \
+        "SELECT key {comma_value_columns} FROM {table_name} \
          WHERE key >= :lower_bound_excl ORDER BY key ASC";
 
     pub fn make_statements(
@@ -125,10 +127,19 @@ impl KvdbSqliteStatementsPerTable {
             .join(", ");
 
         let mut strfmt_vars = HashMap::new();
-        strfmt_vars.insert("value_columns_def".to_string(), value_columns_def);
-        strfmt_vars.insert("value_columns".to_string(), value_columns);
-        strfmt_vars
-            .insert("value_columns_to_bind".to_string(), value_columns_to_bind);
+        strfmt_vars.insert(
+            "comma_value_columns_def".to_string(),
+            ", ".to_string() + &value_columns_def,
+        );
+        strfmt_vars.insert("value_columns".to_string(), value_columns.clone());
+        strfmt_vars.insert(
+            "comma_value_columns".to_string(),
+            ", ".to_string() + &value_columns,
+        );
+        strfmt_vars.insert(
+            "comma_value_columns_to_bind".to_string(),
+            ", ".to_string() + &value_columns_to_bind,
+        );
         strfmt_vars.insert("table_name".to_string(), table_name.to_string());
 
         Ok(Self {
@@ -167,19 +178,13 @@ impl KvdbSqliteStatementsPerTable {
 
 impl<ValueType> KvdbSqlite<ValueType> {
     pub fn new(
-        connection: Option<SqliteConnection>, table_name: &str,
-        with_number_key_table: bool, value_column_names: &[&str],
-        value_column_types: &[&str],
+        connection: Option<SqliteConnection>,
+        statements: Arc<KvdbSqliteStatements>,
     ) -> Result<Self>
     {
         Ok(Self {
             connection,
-            statements: Arc::new(KvdbSqliteStatements::make_statements(
-                value_column_names,
-                value_column_types,
-                table_name,
-                with_number_key_table,
-            )?),
+            statements,
             __marker_value: Default::default(),
         })
     }
@@ -473,6 +478,7 @@ impl<ValueType: PutType> KeyValueDbTypes
     type ValueType = ValueType;
 }
 
+enable_deref_for_self! {KvdbSqlite<Box<[u8]>>}
 // FIXME: check if the error is SQLITE_BUSY, and if so, assert.
 // FIXME: our code should not hit this error.
 impl<

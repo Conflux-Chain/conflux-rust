@@ -124,7 +124,7 @@ impl SnapshotDbManagerSqlite {
 
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotDbSqlite,
-        old_snapshot_epoch_id: &EpochId, delta_mpt: &DeltaMptIterator,
+        old_snapshot_epoch_id: &EpochId,
     ) -> Result<MerkleHash>
     {
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
@@ -132,7 +132,7 @@ impl SnapshotDbManagerSqlite {
         )?;
         let mut old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-        temp_snapshot_db.copy_and_merge(&mut old_snapshot_db, delta_mpt)
+        temp_snapshot_db.copy_and_merge(&mut old_snapshot_db)
     }
 
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
@@ -183,9 +183,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 {
                     // direct merge the first snapshot
                     snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
-                    // TODO No need to dump delta mpt?
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                    snapshot_db.direct_merge(&delta_mpt)?
+                    snapshot_db.direct_merge()?
                 } else {
                     if self.try_make_snapshot_cow_copy(
                         &self.get_snapshot_db_path(old_snapshot_epoch_id),
@@ -200,14 +199,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
                         // iterate and insert into temp table.
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                        snapshot_db.direct_merge(&delta_mpt)?
+                        snapshot_db.direct_merge()?
                     } else {
                         snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
                             &mut snapshot_db,
                             old_snapshot_epoch_id,
-                            &delta_mpt,
                         )?
                     }
                 };

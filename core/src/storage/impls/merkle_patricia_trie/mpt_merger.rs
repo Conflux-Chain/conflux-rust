@@ -40,7 +40,8 @@ impl<'a> MptMerger<'a> {
         }
     }
 
-    // TODO(yz): Invent a trait for inserter to generalize.
+    // This is test only.
+    #[allow(unused)]
     pub fn merge(&mut self, inserter: &DeltaMptIterator) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
@@ -69,26 +70,28 @@ impl<'a> MptMerger<'a> {
         self.rw_cursor.finish()
     }
 
-    // Will be modified and used when syncing snapshot.
-    #[allow(unused)]
     /// The iterators operate on key, value store.
     pub fn merge_insertion_deletion_separated<'k>(
-        &mut self, mut delete_keys_iter: impl Iterator<Item = &'k [u8]>,
-        mut insert_keys_iter: impl Iterator<Item = (&'k [u8], Box<[u8]>)>,
+        &mut self,
+        mut delete_keys_iter: impl FallibleIterator<Item = Vec<u8>, Error = Error>,
+        mut insert_keys_iter: impl FallibleIterator<
+            Item = (Vec<u8>, Box<[u8]>),
+            Error = Error,
+        >,
     ) -> Result<MerkleHash>
     {
         self.rw_cursor.load_root()?;
 
-        let mut key_to_delete = delete_keys_iter.next();
-        let mut key_value_to_insert = insert_keys_iter.next();
+        let mut key_to_delete = delete_keys_iter.next()?;
+        let mut key_value_to_insert = insert_keys_iter.next()?;
 
         loop {
             if key_to_delete.is_none() {
                 if key_value_to_insert.is_some() {
                     let (key, value) = key_value_to_insert.unwrap();
-                    self.rw_cursor.insert(key, value)?;
-                    while let Some((key, value)) = insert_keys_iter.next() {
-                        self.rw_cursor.insert(key, value)?;
+                    self.rw_cursor.insert(&key, value)?;
+                    while let Some((key, value)) = insert_keys_iter.next()? {
+                        self.rw_cursor.insert(&key, value)?;
                     }
                     break;
                 }
@@ -97,8 +100,8 @@ impl<'a> MptMerger<'a> {
             if key_value_to_insert.is_none() {
                 if key_to_delete.is_some() {
                     self.rw_cursor.delete(key_to_delete.as_ref().unwrap())?;
-                    while let Some(key) = delete_keys_iter.next() {
-                        self.rw_cursor.delete(key)?;
+                    while let Some(key) = delete_keys_iter.next()? {
+                        self.rw_cursor.delete(&key)?;
                     }
                     break;
                 }
@@ -109,14 +112,13 @@ impl<'a> MptMerger<'a> {
             // value must present in the final merged result for it to be in the
             // diff.
             let key_delete = key_to_delete.as_ref().unwrap();
-            let key_insert = &key_value_to_insert.as_ref().unwrap().0;
-            if key_delete <= key_insert {
+            if key_delete <= &key_value_to_insert.as_ref().unwrap().0 {
                 self.rw_cursor.delete(key_delete)?;
-                key_to_delete = delete_keys_iter.next();
+                key_to_delete = delete_keys_iter.next()?;
             } else {
-                self.rw_cursor
-                    .insert(key_insert, key_value_to_insert.unwrap().1)?;
-                key_value_to_insert = insert_keys_iter.next();
+                let (key_insert, value) = key_value_to_insert.take().unwrap();
+                self.rw_cursor.insert(&key_insert, value)?;
+                key_value_to_insert = insert_keys_iter.next()?;
             }
         }
 
@@ -181,4 +183,5 @@ use super::{
     mpt_cursor::*,
     KVInserter,
 };
+use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;

@@ -68,19 +68,15 @@ pub trait SnapshotDbTrait:
     // FIXME: what should be stored after a snapshot is created?
     fn create(snapshot_path: &str) -> Result<Self>;
 
-    fn direct_merge(
-        &mut self, delta_mpt: &DeltaMptIterator,
-    ) -> Result<MerkleHash>;
+    fn direct_merge(&mut self) -> Result<MerkleHash>;
 
-    // FIXME: the type of old_snapshot_db is not Self, but
-    // FIXME: a Box<dyn 'a + KeyValueDbTraitOwnedRead>
     fn copy_and_merge(
-        &mut self, old_snapshot_db: &mut Self, delta_mpt: &DeltaMptIterator,
+        &mut self, old_snapshot_db: &mut Self,
     ) -> Result<MerkleHash>;
 }
 
 use super::{
-    super::impls::{errors::*, storage_manager::DeltaMptIterator},
+    super::impls::errors::*,
     key_value_db::{
         KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitSingleWriter,
