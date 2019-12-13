@@ -92,6 +92,9 @@ impl StateProof {
         // Now check intermediate_proof since it's required. Same logic applies.
         match &self.intermediate_proof {
             Some(proof) => {
+                if maybe_intermediate_mpt_key.is_none() {
+                    return false;
+                }
                 if proof.is_valid_kv(
                     maybe_intermediate_mpt_key.as_ref().unwrap(),
                     delta_value,

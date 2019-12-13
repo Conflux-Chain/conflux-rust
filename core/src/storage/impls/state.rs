@@ -125,7 +125,7 @@ impl<'a> State<'a> {
         // Can't offer proof if we are operating on a synced snapshot, which is
         // missing intermediate mpt.
         if with_proof
-            && !self.maybe_intermediate_trie_key_padding.is_none()
+            && self.maybe_intermediate_trie_key_padding.is_none()
             && self.intermediate_epoch_id != NULL_EPOCH
         {
             with_proof = false;
