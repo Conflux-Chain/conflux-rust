@@ -303,14 +303,6 @@ impl<'a> StateTrait for State<'a> {
         if commit_result.is_err() {
             self.revert();
         }
-        StorageManager::mpt_commit_state_root(
-            &self.delta_trie,
-            epoch_id,
-            &merkle_root,
-            self.parent_epoch_id,
-            self.delta_trie_root.clone(),
-        );
-
         // TODO: use a better criteria and put it in consensus maybe.
         if self.delta_trie_height.unwrap() as u64
             >= SNAPSHOT_EPOCHS_CAPACITY / 2
@@ -571,7 +563,6 @@ use super::{
     state_proof::StateProof,
     storage_manager::DeltaMptIterator,
 };
-use crate::storage::StorageManager;
 use parity_bytes::ToPretty;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,

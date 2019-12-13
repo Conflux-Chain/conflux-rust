@@ -152,11 +152,11 @@ impl Default for StorageConfiguration {
     }
 }
 
-use super::{
+use crate::storage::{
     impls::{defaults, errors::*},
     state::State,
+    StateRootAuxInfo,
 };
-use crate::storage::StateRootAuxInfo;
 use primitives::{
     DeltaMptKeyPadding, EpochId, GENESIS_DELTA_MPT_KEY_PADDING,
     MERKLE_NULL_NODE,

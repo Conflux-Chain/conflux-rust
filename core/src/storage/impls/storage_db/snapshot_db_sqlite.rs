@@ -419,7 +419,6 @@ impl SnapshotDbSqlite {
 
     fn apply_update_to_kvdb(&mut self) -> Result<()> {
         let sqlite = self.maybe_db.as_mut().unwrap();
-        // FIXME: maintain snapshot_key_value_delete?
         sqlite
             .execute(
                 format!(
