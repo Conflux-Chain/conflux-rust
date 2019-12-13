@@ -6,6 +6,7 @@ use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY_LIST_RLP},
     receipt::Receipt,
+    NULL_EPOCH,
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
@@ -285,7 +286,7 @@ pub struct BlockHeaderBuilder {
 impl BlockHeaderBuilder {
     pub fn new() -> Self {
         Self {
-            parent_hash: H256::default(),
+            parent_hash: NULL_EPOCH,
             height: 0,
             timestamp: 0,
             author: Address::default(),

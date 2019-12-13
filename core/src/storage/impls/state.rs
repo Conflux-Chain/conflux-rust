@@ -337,6 +337,7 @@ impl<'a> StateTrait for State<'a> {
         // TODO: use a better criteria and put it in consensus maybe.
         if self.delta_trie_height.unwrap() as u64
             >= SNAPSHOT_EPOCHS_CAPACITY / 2
+            && self.maybe_intermediate_trie.is_some()
         {
             // FIXME: There are 2 cases when intermediate trie is None, we must
             // clarify.
