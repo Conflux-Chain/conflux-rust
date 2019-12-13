@@ -173,10 +173,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 let temp_db_path = self.get_merge_temp_snapshot_db_path(
                     old_snapshot_epoch_id,
                     &delta_mpt
-                        .maybe_mpt
-                        .as_ref()
-                        .as_ref()
-                        .unwrap()
+                        .mpt
                         .get_merkle(delta_mpt.maybe_root_node.clone())?
                         .unwrap(),
                 );
@@ -194,9 +191,12 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         &self.get_snapshot_db_path(old_snapshot_epoch_id),
                         &temp_db_path,
                     )? {
-                        // open the database.
+                        // open the copied database.
                         snapshot_db =
                             Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+
+                        // Drop copied old snapshot delta mpt dump
+                        snapshot_db.drop_delta_mpt_dump()?;
 
                         // iterate and insert into temp table.
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;

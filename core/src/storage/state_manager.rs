@@ -103,36 +103,32 @@ impl<'a> StateIndex<'a> {
     /// Height is used to check for shifting snapshot.
     /// The state root and height information should be provided from consensus.
     pub fn new_for_next_epoch(
-        base_epoch_id: &'a EpochId, state_root: &'a StateRootWithAuxInfo,
-        height: u64,
-    ) -> Self
-    {
+        base_epoch_id: &'a EpochId, aux_info: &'a StateRootAuxInfo, height: u64,
+    ) -> Self {
         Self {
-            snapshot_epoch_id: &state_root.aux_info.snapshot_epoch_id,
-            intermediate_epoch_id: &state_root.aux_info.intermediate_epoch_id,
-            maybe_intermediate_mpt_key_padding: state_root
-                .aux_info
+            snapshot_epoch_id: &aux_info.snapshot_epoch_id,
+            intermediate_epoch_id: &aux_info.intermediate_epoch_id,
+            maybe_intermediate_mpt_key_padding: aux_info
                 .maybe_intermediate_mpt_key_padding
                 .as_ref(),
             epoch_id: base_epoch_id,
-            delta_mpt_key_padding: &state_root.aux_info.delta_mpt_key_padding,
+            delta_mpt_key_padding: &aux_info.delta_mpt_key_padding,
             maybe_delta_trie_height: Some(height_to_delta_height(height)),
             maybe_height: Some(height),
         }
     }
 
     pub fn new_for_readonly(
-        epoch_id: &'a EpochId, state_root: &'a StateRootWithAuxInfo,
+        epoch_id: &'a EpochId, aux_info: &'a StateRootAuxInfo,
     ) -> Self {
         Self {
-            snapshot_epoch_id: &state_root.aux_info.snapshot_epoch_id,
-            intermediate_epoch_id: &state_root.aux_info.intermediate_epoch_id,
-            maybe_intermediate_mpt_key_padding: state_root
-                .aux_info
+            snapshot_epoch_id: &aux_info.snapshot_epoch_id,
+            intermediate_epoch_id: &aux_info.intermediate_epoch_id,
+            maybe_intermediate_mpt_key_padding: aux_info
                 .maybe_intermediate_mpt_key_padding
                 .as_ref(),
             epoch_id,
-            delta_mpt_key_padding: &state_root.aux_info.delta_mpt_key_padding,
+            delta_mpt_key_padding: &aux_info.delta_mpt_key_padding,
             maybe_delta_trie_height: None,
             maybe_height: None,
         }
@@ -160,10 +156,10 @@ impl Default for StorageConfiguration {
     }
 }
 
-use super::{
+use crate::storage::{
     impls::{defaults, errors::*},
     state::State,
-    StateRootWithAuxInfo,
+    StateRootAuxInfo,
 };
 use primitives::{
     DeltaMptKeyPadding, EpochId, GENESIS_DELTA_MPT_KEY_PADDING,

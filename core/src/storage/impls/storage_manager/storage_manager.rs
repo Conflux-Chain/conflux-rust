@@ -183,6 +183,7 @@ impl StorageManager {
             }
         }
 
+        // FIXME This always succeeds with the same delta_db opened now.
         // If the DeltaMpt already exists, the empty delta db creation should
         // fail already.
         let db_result = storage_manager.delta_db_manager.new_empty_delta_db(
@@ -269,23 +270,19 @@ impl StorageManager {
 
         let mut pivot_chain_parts =
             vec![Default::default(); SNAPSHOT_EPOCHS_CAPACITY as usize];
-        let parent_snapshot_epoch_id;
-        {
-            // Calculate pivot chain parts.
-            let mpt = delta_db.maybe_mpt.as_ref().unwrap();
-            let mut epoch_id = snapshot_epoch_id.clone();
-            let mut delta_height = SNAPSHOT_EPOCHS_CAPACITY as usize - 1;
+        // Calculate pivot chain parts.
+        let mut epoch_id = snapshot_epoch_id.clone();
+        let mut delta_height = SNAPSHOT_EPOCHS_CAPACITY as usize - 1;
+        pivot_chain_parts[delta_height] = epoch_id.clone();
+        while delta_height > 0 {
+            // FIXME: maybe not unwrap, but throw an error about db
+            // corruption.
+            epoch_id = delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
+            delta_height -= 1;
             pivot_chain_parts[delta_height] = epoch_id.clone();
-            while delta_height > 0 {
-                // FIXME: maybe not unwrap, but throw an error about db
-                // corruption.
-                epoch_id = mpt.get_parent_epoch(&epoch_id)?.unwrap();
-                delta_height -= 1;
-                pivot_chain_parts[delta_height] = epoch_id.clone();
-            }
-            parent_snapshot_epoch_id =
-                mpt.get_parent_epoch(&epoch_id)?.unwrap();
         }
+        let parent_snapshot_epoch_id =
+            delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
 
         let in_progress_snapshot_info = SnapshotInfo {
             serve_one_step_sync: true,
@@ -586,25 +583,26 @@ impl StorageManager {
         Ok(())
     }
 
+    /// FIXME Enable later.
     pub fn log_usage(&self) {
         // FIXME: log usage for all delta mpt.
         // Log the usage of the delta mpt for the first snapshot.
         // FIXME: due to initialization problems the delta mpt may not be
         // available?
-        self.snapshot_associated_mpts_by_epoch
-            .read()
-            .get(&NULL_EPOCH)
-            .unwrap()
-            .1
-            .as_ref()
-            .unwrap()
-            .log_usage();
+        //        self.snapshot_associated_mpts_by_epoch
+        //            .read()
+        //            .get(&NULL_EPOCH)
+        //            .unwrap()
+        //            .1
+        //            .as_ref()
+        //            .unwrap()
+        //            .log_usage();
     }
 }
 
 #[derive(Clone)]
 pub struct DeltaMptIterator {
-    pub maybe_mpt: Option<Arc<DeltaMpt>>,
+    pub mpt: Arc<DeltaMpt>,
     pub maybe_root_node: Option<NodeRefDeltaMpt>,
 }
 
@@ -615,20 +613,19 @@ impl DeltaMptIterator {
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {
-                let mpt = self.maybe_mpt.as_ref().unwrap();
-                let db = &mut *mpt.db_owned_read()?;
+                let db = &mut *self.mpt.db_owned_read()?;
                 let owned_node_set = Default::default();
                 let mut cow_root_node =
                     CowNodeRef::new(root_node.clone(), &owned_node_set);
                 let guarded_trie_node =
                     GuardedValue::take(cow_root_node.get_trie_node(
-                        mpt.get_node_memory_manager(),
-                        &mpt.get_node_memory_manager().get_allocator(),
+                        self.mpt.get_node_memory_manager(),
+                        &self.mpt.get_node_memory_manager().get_allocator(),
                         db,
                     )?);
                 cow_root_node.iterate_internal(
                     &owned_node_set,
-                    mpt,
+                    &self.mpt,
                     guarded_trie_node,
                     CompressedPathRaw::new_zeroed(0, 0),
                     dumper,

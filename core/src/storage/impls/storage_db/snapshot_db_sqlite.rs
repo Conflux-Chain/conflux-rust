@@ -216,42 +216,13 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn direct_merge(
         &mut self, delta_mpt: &DeltaMptIterator,
     ) -> Result<MerkleHash> {
-        {
-            let sqlite = self.maybe_db.as_mut().unwrap();
-            // FIXME: maintain snapshot_key_value_delete?
-            sqlite
-                .execute(
-                    format!(
-                        "DELETE FROM {} WHERE KEY IN (SELECT key FROM {})",
-                        Self::SNAPSHOT_KV_TABLE_NAME,
-                        Self::DELTA_KV_DELETE_TABLE_NAME
-                    )
-                    .as_str(),
-                    SQLITE_NO_PARAM,
-                )?
-                .finish_ignore_rows()?;
-            sqlite
-                .execute(
-                    format!(
-                        "INSERT OR REPLACE INTO {} (key, value) \
-                         SELECT key, value FROM {}",
-                        Self::SNAPSHOT_KV_TABLE_NAME,
-                        Self::DELTA_KV_INSERT_TABLE_NAME
-                    )
-                    .as_str(),
-                    SQLITE_NO_PARAM,
-                )?
-                .finish_ignore_rows()?;
-        }
-
-        {
-            let mut mpt_to_modify = self.open_snapshot_mpt_for_write()?;
-            let mut mpt_merger = MptMerger::new(
-                None,
-                &mut mpt_to_modify as &mut dyn SnapshotMptTraitSingleWriter,
-            );
-            mpt_merger.merge(delta_mpt)
-        }
+        self.apply_update_to_kvdb()?;
+        let mut mpt_to_modify = self.open_snapshot_mpt_for_write()?;
+        let mut mpt_merger = MptMerger::new(
+            None,
+            &mut mpt_to_modify as &mut dyn SnapshotMptTraitSingleWriter,
+        );
+        mpt_merger.merge(delta_mpt)
     }
 
     fn copy_and_merge(
@@ -259,6 +230,17 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         delta_mpt: &DeltaMptIterator,
     ) -> Result<MerkleHash>
     {
+        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator();
+        let mut iter = kv_iter.iter_range(&[], None)?;
+        while let Ok(kv_item) = iter.next() {
+            match kv_item {
+                Some((k, v)) => {
+                    self.put(&k, &v)?;
+                }
+                None => break,
+            }
+        }
+        self.apply_update_to_kvdb()?;
         let mut base_mpt = old_snapshot_db.open_snapshot_mpt_read_only()?;
         let mut save_as_mpt = self.open_snapshot_mpt_for_write()?;
         let mut mpt_merger = MptMerger::new(
@@ -434,6 +416,34 @@ impl SnapshotDbSqlite {
 
         Ok(())
     }
+
+    fn apply_update_to_kvdb(&mut self) -> Result<()> {
+        let sqlite = self.maybe_db.as_mut().unwrap();
+        sqlite
+            .execute(
+                format!(
+                    "DELETE FROM {} WHERE KEY IN (SELECT key FROM {})",
+                    Self::SNAPSHOT_KV_TABLE_NAME,
+                    Self::DELTA_KV_DELETE_TABLE_NAME
+                )
+                .as_str(),
+                SQLITE_NO_PARAM,
+            )?
+            .finish_ignore_rows()?;
+        sqlite
+            .execute(
+                format!(
+                    "INSERT OR REPLACE INTO {} (key, value) \
+                     SELECT key, value FROM {}",
+                    Self::SNAPSHOT_KV_TABLE_NAME,
+                    Self::DELTA_KV_INSERT_TABLE_NAME
+                )
+                .as_str(),
+                SQLITE_NO_PARAM,
+            )?
+            .finish_ignore_rows()?;
+        Ok(())
+    }
 }
 
 pub struct DeltaMptDumperSqlite<'a> {
@@ -448,7 +458,11 @@ impl<'a> DeltaMptDumperSqlite<'a> {
 
 impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
-        let (key, value) = x;
+        let (mpt_key, value) = x;
+        let mut addr = Address::default();
+        let snapshot_kvdb_key =
+            StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
+                .to_key_bytes();
 
         if value.len() > 0 {
             self.snapshot_db
@@ -460,7 +474,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                         .delta_mpt_set_keys_statements
                         .stmts_main_table
                         .put,
-                    &[&&key as SqlBindableRef, &&value],
+                    &[&&snapshot_kvdb_key as SqlBindableRef, &&value],
                 )?
                 .finish_ignore_rows()?;
         } else {
@@ -474,7 +488,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                         SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME
                     )
                     .as_str(),
-                    &[&&key as SqlBindableRef],
+                    &[&&snapshot_kvdb_key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
         }
@@ -508,8 +522,13 @@ use super::{
     snapshot_mpt::SnapshotMpt,
     sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
-use crate::storage::impls::storage_db::sqlite::SQLITE_NO_PARAM;
-use primitives::MerkleHash;
+use crate::storage::{
+    impls::storage_db::sqlite::SQLITE_NO_PARAM,
+    storage_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},
+};
+use cfx_types::Address;
+use fallible_iterator::FallibleIterator;
+use primitives::{MerkleHash, StorageKey};
 use sqlite::Statement;
 use std::{collections::HashMap, fs, path::Path};
 use strfmt::strfmt;

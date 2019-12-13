@@ -333,20 +333,21 @@ impl<'a> StateTrait for State<'a> {
         if commit_result.is_err() {
             self.revert();
         }
-
         // TODO: use a better criteria and put it in consensus maybe.
         if self.delta_trie_height.unwrap() as u64
             >= SNAPSHOT_EPOCHS_CAPACITY / 2
             && self.maybe_intermediate_trie.is_some()
         {
-            // FIXME: There are 2 cases when intermediate trie is None, we must
-            // clarify.
-            self.manager.check_make_snapshot(
-                self.maybe_intermediate_trie.clone(),
-                self.intermediate_trie_root.clone(),
-                &self.intermediate_epoch_id,
-                self.height.clone().unwrap(),
-            )?;
+            // maybe_intermediate_trie is None if this happens before the first
+            // snapshot after genesis/FullSync-snapshot
+            if let Some(intermediate_trie) = &self.maybe_intermediate_trie {
+                self.manager.check_make_snapshot(
+                    intermediate_trie.clone(),
+                    self.intermediate_trie_root.clone(),
+                    &self.intermediate_epoch_id,
+                    self.height.clone().unwrap(),
+                )?;
+            }
         }
 
         commit_result
@@ -573,7 +574,7 @@ impl<'a> State<'a> {
         &self, dumper: &mut DUMPER,
     ) -> Result<()> {
         let inserter = DeltaMptIterator {
-            maybe_mpt: Some(self.delta_trie.clone()),
+            mpt: self.delta_trie.clone(),
             maybe_root_node: self.delta_trie_root.clone(),
         };
 

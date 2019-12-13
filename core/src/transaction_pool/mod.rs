@@ -107,7 +107,7 @@ impl TransactionPool {
             best_executed_epoch: Mutex::new(StateReadonlyIndex::from_ref(
                 StateIndex::new_for_readonly(
                     &genesis_hash,
-                    &data_man.true_genesis_state_root(),
+                    &data_man.true_genesis_state_root().aux_info,
                 ),
             )),
             consensus_best_info: Mutex::new(Arc::new(Default::default())),

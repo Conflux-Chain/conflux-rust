@@ -327,7 +327,10 @@ impl<'db> MaybeRows<'db> {
 
         match state {
             State::Row => Ok(Some(Self::statement_ref(maybe_statement))),
-            State::Done => Ok(None),
+            State::Done => {
+                *maybe_statement = None;
+                Ok(None)
+            }
         }
     }
 }
@@ -367,13 +370,13 @@ impl<'db, Item, F: FnMut(&Statement<'db>) -> Result<Item>> FallibleIterator
     type Item = Item;
 
     fn next(&mut self) -> Result<Option<Self::Item>> {
-        match MaybeRows::next(&mut self.maybe_rows) {
-            Err(e) => Err(e),
-            Ok(None) => Ok(None),
-            Ok(Some(row)) => match (self.f)(row) {
-                Err(e) => Err(e),
-                Ok(value) => Ok(Some(value)),
-            },
+        if self.maybe_rows.is_none() {
+            Ok(None)
+        } else {
+            let value =
+                (self.f)(MaybeRows::statement_ref(&mut self.maybe_rows))?;
+            MaybeRows::next(&mut self.maybe_rows)?;
+            Ok(Some(value))
         }
     }
 }

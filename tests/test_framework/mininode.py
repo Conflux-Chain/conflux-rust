@@ -177,7 +177,7 @@ class P2PConnection(asyncore.dispatcher):
                 if packet_id == PACKET_HELLO:
                     self.on_hello(payload)
                 elif packet_id == PACKET_DISCONNECT:
-                    disconnect = rlp.decode(payload, Disconnect)
+                    disconnect = Disconnect(payload[0], payload[1:])
                     self.on_disconnect(disconnect)
                 else:
                     assert packet_id == PACKET_PROTOCOL

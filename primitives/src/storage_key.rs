@@ -295,9 +295,9 @@ mod delta_mpt_storage_key {
     fn extend_address(
         key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
     ) {
-        let hash = compute_address_keypart(address, padding);
+        let padded_address = compute_address_keypart(address, padding);
 
-        key.extend_from_slice(hash.as_ref());
+        key.extend_from_slice(padded_address.as_ref());
     }
 
     pub fn new_account_key(
