@@ -190,13 +190,13 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         Ok(TrieProof::new(proof_nodes)?)
     }
 
-    pub fn get(&mut self, key: KeyPart) -> Result<Option<Box<[u8]>>> {
+    pub fn get(&mut self, key: KeyPart) -> Result<MptValue<Box<[u8]>>> {
         let allocator = self.node_memory_manager().get_allocator();
         let maybe_trie_node = self.get_trie_node(key, &allocator)?;
 
         Ok(match maybe_trie_node {
-            None => None,
-            Some(trie_node) => trie_node.value_clone().into_option(),
+            None => MptValue::None,
+            Some(trie_node) => trie_node.value_clone(),
         })
     }
 

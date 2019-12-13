@@ -59,7 +59,7 @@ impl<'a> State<'a> {
     fn get_from_delta(
         &self, mpt: &'a DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
         access_key: &[u8], with_proof: bool,
-    ) -> Result<(Option<Box<[u8]>>, Option<TrieProof>)>
+    ) -> Result<(MptValue<Box<[u8]>>, Option<TrieProof>)>
     {
         // Get won't create any new nodes so it's fine to pass an empty
         // owned_node_set.
@@ -67,7 +67,7 @@ impl<'a> State<'a> {
             Some(Default::default());
 
         match maybe_root_node {
-            None => Ok((None, None)),
+            None => Ok((MptValue::None, None)),
             Some(root_node) => {
                 let maybe_value = SubTrieVisitor::new(
                     mpt,
@@ -93,63 +93,93 @@ impl<'a> State<'a> {
         }
     }
 
-    // FIXME: the current implementation is serialized, which may not be good.
     pub fn get_from_snapshot(
-        &self, access_key: &[u8],
-    ) -> Result<Option<Box<[u8]>>> {
-        self.snapshot_db.get(access_key)
+        &self, access_key: &[u8], with_proof: bool,
+    ) -> Result<(Option<Box<[u8]>>, Option<TrieProof>)> {
+        let mut snapshot_db_new_connection = self.snapshot_db.try_clone()?;
+        let value = snapshot_db_new_connection.get(access_key)?;
+        Ok((
+            value,
+            if with_proof {
+                let mut mpt =
+                    snapshot_db_new_connection.open_snapshot_mpt_read_only()?;
+                let mut cursor = MptCursor::<
+                    &mut dyn SnapshotMptTraitReadOnly,
+                    BasicPathNode<&mut dyn SnapshotMptTraitReadOnly>,
+                >::new(&mut mpt);
+                cursor.load_root()?;
+                cursor.open_path_for_key::<access_mode::Read>(access_key)?;
+                let proof = cursor.to_proof();
+                cursor.finish()?;
+
+                Some(proof)
+            } else {
+                None
+            },
+        ))
     }
 
     fn get_from_all_tries(
-        &self, access_key: StorageKey, with_proof: bool,
+        &self, access_key: StorageKey, mut with_proof: bool,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        // Can't offer proof if we are operating on a synced snapshot, which is
+        // missing intermediate mpt.
+        if with_proof
+            && self.maybe_intermediate_trie_key_padding.is_none()
+            && self.intermediate_epoch_id != NULL_EPOCH
+        {
+            with_proof = false;
+        }
+
+        let mut proof = StateProof::default();
+
         let (maybe_value, maybe_delta_proof) = self.get_from_delta(
             &self.delta_trie,
             self.delta_trie_root.clone(),
             &access_key.to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
             with_proof,
         )?;
+        proof.with_delta(maybe_delta_proof);
 
-        if maybe_value.is_some() {
-            let proof = StateProof::default().with_delta(maybe_delta_proof);
-            return Ok((maybe_value, proof));
+        match maybe_value {
+            MptValue::Some(value) => {
+                return Ok((Some(value), proof));
+            }
+            MptValue::TombStone => {
+                return Ok((None, proof));
+            }
+            _ => {}
         }
 
-        let maybe_intermediate_proof =
-            match self.maybe_intermediate_trie.as_ref() {
-                None => None,
-                Some(_) => {
-                    let (maybe_value, maybe_proof) = self.get_from_delta(
-                        self.maybe_intermediate_trie.as_ref().as_ref().unwrap(),
-                        self.intermediate_trie_root.clone(),
-                        &access_key.to_delta_mpt_key_bytes(
-                            &self
-                                .maybe_intermediate_trie_key_padding
-                                .as_ref()
-                                .unwrap(),
-                        ),
-                        with_proof,
-                    )?;
+        if let Some(intermediate_trie) = self.maybe_intermediate_trie.as_ref() {
+            let (maybe_value, maybe_proof) = self.get_from_delta(
+                intermediate_trie,
+                self.intermediate_trie_root.clone(),
+                &access_key.to_delta_mpt_key_bytes(
+                    &self.maybe_intermediate_trie_key_padding.as_ref().unwrap(),
+                ),
+                with_proof,
+            )?;
 
-                    if maybe_value.is_some() {
-                        let proof = StateProof::default()
-                            .with_delta(maybe_delta_proof)
-                            .with_intermediate(maybe_proof);
-                        return Ok((maybe_value, proof));
-                    }
+            proof.with_intermediate(
+                maybe_proof,
+                self.maybe_intermediate_trie_key_padding.clone(),
+            );
 
-                    maybe_proof
+            match maybe_value {
+                MptValue::Some(value) => {
+                    return Ok((Some(value), proof));
                 }
-            };
-
-        let maybe_value = self.get_from_snapshot(&access_key.to_key_bytes())?;
-        if with_proof {
-            // FIMXE: implement snapshot proof.
+                MptValue::TombStone => {
+                    return Ok((None, proof));
+                }
+                _ => {}
+            }
         }
 
-        let proof = StateProof::default()
-            .with_delta(maybe_delta_proof)
-            .with_intermediate(maybe_intermediate_proof);
+        let (maybe_value, maybe_proof) =
+            self.get_from_snapshot(&access_key.to_key_bytes(), with_proof)?;
+        proof.with_snapshot(maybe_proof);
 
         Ok((maybe_value, proof))
     }
@@ -550,22 +580,28 @@ impl<'a> State<'a> {
     }
 }
 
-use super::{
-    super::{
-        state::*, state_manager::*, storage_db::*, StateRootAuxInfo,
-        StateRootWithAuxInfo,
+use crate::storage::{
+    impls::{
+        delta_mpt::{node_memory_manager::ActualSlabIndex, *},
+        errors::*,
+        merkle_patricia_trie::{
+            mpt_cursor::{BasicPathNode, MptCursor},
+            walk::access_mode,
+            KVInserter, MptValue, TrieProof, VanillaChildrenTable,
+        },
+        state_manager::*,
+        state_proof::StateProof,
+        storage_manager::DeltaMptIterator,
     },
-    delta_mpt::{node_memory_manager::ActualSlabIndex, *},
-    errors::*,
-    merkle_patricia_trie::{KVInserter, TrieProof, VanillaChildrenTable},
+    state::*,
     state_manager::*,
-    state_proof::StateProof,
-    storage_manager::DeltaMptIterator,
+    storage_db::*,
+    StateRootAuxInfo, StateRootWithAuxInfo,
 };
 use parity_bytes::ToPretty;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,
-    MERKLE_NULL_NODE,
+    MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
     cell::UnsafeCell,
