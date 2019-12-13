@@ -5,8 +5,10 @@
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db: Option<SqliteConnection>,
-    // FIXME: load / save on open / set.
-    snapshot_info: SnapshotInfo,
+    // FIXME: Move this to state, and decide which structs are for
+    // multi-version mpt, and which are for a single mpt tree with a fixed
+    // root node.
+    pub merkle_root: MerkleHash,
 }
 
 pub struct SnapshotDbStatements {
@@ -138,17 +140,13 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self {
         Self {
             maybe_db: None,
-            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
+            merkle_root: MERKLE_NULL_NODE,
         }
     }
 
-    fn get_snapshot_info(&self) -> &SnapshotInfo { &self.snapshot_info }
-
-    fn set_snapshot_info(&mut self, snapshot_info: SnapshotInfo) {
-        self.snapshot_info = snapshot_info;
-    }
-
-    fn open(snapshot_path: &str) -> Result<Option<SnapshotDbSqlite>> {
+    fn open(
+        snapshot_path: &str, merkle_root: MerkleHash,
+    ) -> Result<Option<SnapshotDbSqlite>> {
         let file_exists = Path::new(&snapshot_path).exists();
         let sqlite_open_result = SqliteConnection::open(
             &Self::db_file_paths(snapshot_path)[0],
@@ -158,15 +156,16 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         if file_exists {
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db: Some(sqlite_open_result?),
-                // FIXME: load snapshot info from db.
-                snapshot_info: SnapshotInfo::genesis_snapshot_info(),
+                merkle_root,
             }));
         } else {
             return Ok(None);
         }
     }
 
-    fn create(snapshot_path: &str) -> Result<SnapshotDbSqlite> {
+    fn create(
+        snapshot_path: &str, merkle_root: MerkleHash,
+    ) -> Result<SnapshotDbSqlite> {
         fs::create_dir(snapshot_path).ok();
 
         let create_result = SqliteConnection::create_and_open(
@@ -183,8 +182,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             Ok(db_conn) => {
                 ok_result = Ok(SnapshotDbSqlite {
                     maybe_db: Some(db_conn),
-                    // FIXME: set snapshot info at creation or ..?
-                    snapshot_info: SnapshotInfo::genesis_snapshot_info(),
+                    merkle_root,
                 });
             }
         }
@@ -279,7 +277,7 @@ impl SnapshotDbSqlite {
                 None => None,
                 Some(conn) => Some(conn.try_clone()?),
             },
-            snapshot_info: self.snapshot_info.clone(),
+            merkle_root: self.merkle_root.clone(),
         })
     }
 
@@ -330,7 +328,7 @@ impl SnapshotDbSqlite {
         >,
     > {
         Ok(SnapshotMpt {
-            merkle_root: self.snapshot_info.merkle_root.clone(),
+            merkle_root: self.merkle_root.clone(),
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
@@ -357,7 +355,7 @@ impl SnapshotDbSqlite {
         >,
     > {
         Ok(SnapshotMpt {
-            merkle_root: self.snapshot_info.merkle_root.clone(),
+            merkle_root: self.merkle_root.clone(),
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMutReadOnly::new((
                     self.maybe_db.as_mut(),
@@ -465,7 +463,7 @@ impl SnapshotDbSqlite {
         // Dump code.
         delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))?;
         let mut dumped = DumpedDeltaMptIterator::default();
-        delta_mpt.iterate(&mut dumped);
+        delta_mpt.iterate(&mut dumped)?;
         Ok(dumped)
     }
 
@@ -588,9 +586,9 @@ use super::{
         super::storage_db::{
             KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
             KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
-            SingleWriterImplFamily, SnapshotDbTrait, SnapshotInfo,
-            SnapshotMptDbValue, SnapshotMptTraitReadOnly,
-            SnapshotMptTraitSingleWriter, SnapshotMptValue,
+            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+            SnapshotMptValue,
         },
         errors::*,
         merkle_patricia_trie::{KVInserter, MptMerger},
@@ -604,12 +602,14 @@ use super::{
     sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
 use crate::storage::{
-    impls::storage_db::sqlite::SQLITE_NO_PARAM,
+    impls::storage_db::{
+        snapshot_db_manager_sqlite::DumpedDeltaMptIterator,
+        sqlite::SQLITE_NO_PARAM,
+    },
     storage_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},
 };
 use cfx_types::Address;
 use fallible_iterator::FallibleIterator;
-use primitives::{MerkleHash, StorageKey};
+use primitives::{MerkleHash, StorageKey, MERKLE_NULL_NODE};
 use sqlite::Statement;
 use std::{fs, path::Path, sync::Arc};
-use crate::storage::impls::storage_db::snapshot_db_manager_sqlite::DumpedDeltaMptIterator;

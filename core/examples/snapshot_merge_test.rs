@@ -219,7 +219,7 @@ fn main() -> Result<(), Error> {
         .get_root_node_ref(&snapshot3_delta_root)?
         .expect("root exists");
     let delta_mpt_iterator = DeltaMptIterator {
-        maybe_mpt: Some(delta_mpt),
+        mpt: delta_mpt,
         maybe_root_node: Some(delta_mpt_root),
     };
 

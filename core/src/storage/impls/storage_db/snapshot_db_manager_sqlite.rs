@@ -4,6 +4,9 @@
 
 pub struct SnapshotDbManagerSqlite {
     snapshot_path: String,
+    // TODO GC merkle_root
+    merkle_root_by_snapshot_epoch_id: RwLock<HashMap<EpochId, MerkleHash>>,
+    snapshot_metadata_db: Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
     // FIXME: add an command line option to assert that this method made
     // successfully cow_copy and print error messages if it fails.
     force_cow: bool,
@@ -16,10 +19,16 @@ impl Default for SnapshotDbManagerSqlite {
 }
 
 impl SnapshotDbManagerSqlite {
-    pub fn new(snapshot_path: String) -> Self {
+    pub fn new(
+        snapshot_path: String,
+        snapshot_metadata_db: Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
+    ) -> Self
+    {
         Self {
             snapshot_path: snapshot_path + "/sqlite_",
             force_cow: false,
+            merkle_root_by_snapshot_epoch_id: Default::default(),
+            snapshot_metadata_db,
         }
     }
 
@@ -125,10 +134,12 @@ impl SnapshotDbManagerSqlite {
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotDbSqlite,
         old_snapshot_epoch_id: &EpochId,
+        delta_mpt: &DumpedDeltaMptIterator,
     ) -> Result<MerkleHash>
     {
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
             &self.get_snapshot_db_path(old_snapshot_epoch_id),
+            *old_snapshot_merkle_root,
         )?;
         let mut old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
@@ -137,6 +148,42 @@ impl SnapshotDbManagerSqlite {
 
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
         Ok(fs::rename(old_path, new_path)?)
+    }
+
+    fn insert_snapshot_merkle_root(
+        &self, snapshot_epoch_id: EpochId, merkle_root: MerkleHash,
+    ) -> Result<()> {
+        self.merkle_root_by_snapshot_epoch_id
+            .write()
+            .insert(snapshot_epoch_id, merkle_root);
+        self.snapshot_metadata_db
+            .put(snapshot_epoch_id.as_bytes(), &rlp::encode(&merkle_root))?;
+        Ok(())
+    }
+
+    fn load_snapshot_merkle_root_from_db(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Result<Option<MerkleHash>> {
+        let bytes = self
+            .snapshot_metadata_db
+            .get(snapshot_epoch_id.as_bytes())?;
+        match bytes {
+            Some(b) => Ok(rlp::decode(&b)?),
+            None => Ok(None),
+        }
+    }
+
+    fn get_snapshot_merkle_root(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Result<Option<MerkleHash>> {
+        match self
+            .merkle_root_by_snapshot_epoch_id
+            .read()
+            .get(snapshot_epoch_id)
+        {
+            Some(merkle_root) => Ok(Some(*merkle_root)),
+            None => self.load_snapshot_merkle_root_from_db(snapshot_epoch_id),
+        }
     }
 }
 
@@ -149,6 +196,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         mut in_progress_snapshot_info: SnapshotInfo,
     ) -> Result<SnapshotInfo>
     {
+        let old_snapshot_merkle_root = self
+            .get_snapshot_merkle_root(old_snapshot_epoch_id)?
+            .unwrap_or(MERKLE_NULL_NODE);
         // FIXME: clean-up when error happens.
         match &delta_mpt.maybe_root_node {
             None => {
@@ -159,13 +209,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 // The merge of Empty snapshot and empty intermediate mpt
                 // resulting into an empty snapshot, falls into this code path,
                 // where we do nothing.
-                Ok(self
-                    .get_snapshot_by_epoch_id(
-                        &in_progress_snapshot_info.parent_snapshot_epoch_id,
-                    )?
-                    .unwrap()
-                    .get_snapshot_info()
-                    .clone())
+                Ok(SnapshotInfo::genesis_snapshot_info())
             }
             Some(_) => {
                 // Unwrap here is safe because the delta MPT is guaranteed not
@@ -182,7 +226,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH
                 {
                     // direct merge the first snapshot
-                    snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
+                    snapshot_db = Self::SnapshotDb::create(
+                        &temp_db_path,
+                        old_snapshot_merkle_root,
+                    )?;
                     let dumped = snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge()?
                 } else {
@@ -191,8 +238,11 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         &temp_db_path,
                     )? {
                         // open the copied database.
-                        snapshot_db =
-                            Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+                        snapshot_db = Self::SnapshotDb::open(
+                            &temp_db_path,
+                            old_snapshot_merkle_root,
+                        )?
+                        .unwrap();
 
                         // Drop copied old snapshot delta mpt dump
                         snapshot_db.drop_delta_mpt_dump()?;
@@ -201,19 +251,26 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         let dumped = snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         snapshot_db.direct_merge()?
                     } else {
-                        snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
+                        snapshot_db = Self::SnapshotDb::create(
+                            &temp_db_path,
+                            old_snapshot_merkle_root,
+                        )?;
                         let dumped = snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
                             &mut snapshot_db,
                             old_snapshot_epoch_id,
+                            &old_snapshot_merkle_root,
                         )?
                     }
                 };
-
+                // TODO Check the order of all the operations to ensure
+                // consistency
+                self.insert_snapshot_merkle_root(
+                    snapshot_epoch_id,
+                    new_snapshot_root,
+                )?;
                 in_progress_snapshot_info.merkle_root =
                     new_snapshot_root.clone();
-                snapshot_db
-                    .set_snapshot_info(in_progress_snapshot_info.clone());
                 drop(snapshot_db);
                 Self::rename_snapshot_db(
                     &temp_db_path,
@@ -231,8 +288,12 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         if snapshot_epoch_id.eq(&NULL_EPOCH) {
             return Ok(Some(Self::SnapshotDb::get_null_snapshot()));
         } else {
+            let merkle_root = self
+                .get_snapshot_merkle_root(snapshot_epoch_id)?
+                .unwrap_or(MERKLE_NULL_NODE);
             Self::SnapshotDb::open(
                 &self.get_snapshot_db_path(snapshot_epoch_id),
+                merkle_root,
             )
         }
     }
@@ -250,7 +311,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             snapshot_epoch_id,
             merkle_root,
         );
-        Self::SnapshotDb::create(&temp_db_path)
+        Self::SnapshotDb::create(&temp_db_path, *merkle_root)
     }
 }
 
@@ -266,7 +327,7 @@ impl DumpedDeltaMptIterator {
         let mut sorted_kv = self.kv.clone();
         sorted_kv.sort();
         for kv_item in sorted_kv {
-            dumper.push(kv_item);
+            dumper.push(kv_item)?;
         }
         Ok(())
     }
@@ -295,8 +356,11 @@ use super::{
     },
     snapshot_db_sqlite::*,
 };
-use parity_bytes::ToPretty;
-use primitives::{EpochId, MerkleHash, NULL_EPOCH, StorageKey};
-use std::{fs, process::Command};
-use crate::storage::KVInserter;
+use crate::storage::{KVInserter, KeyValueDbTrait};
 use cfx_types::Address;
+use parity_bytes::ToPretty;
+use parking_lot::RwLock;
+use primitives::{
+    EpochId, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
+};
+use std::{collections::HashMap, fs, process::Command};

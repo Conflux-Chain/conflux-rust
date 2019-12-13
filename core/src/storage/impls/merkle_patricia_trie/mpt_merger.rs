@@ -41,7 +41,9 @@ impl<'a> MptMerger<'a> {
     }
 
     // This is test only.
-    #[allow(unused)]
+    pub fn merge(
+        &mut self, inserter: &DumpedDeltaMptIterator,
+    ) -> Result<MerkleHash> {
         self.rw_cursor.load_root()?;
 
         struct Merger<'x, 'a: 'x> {
@@ -55,7 +57,6 @@ impl<'a> MptMerger<'a> {
         impl<'x, 'a: 'x> KVInserter<(Vec<u8>, Box<[u8]>)> for Merger<'x, 'a> {
             fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
                 let (key, value) = v;
-                println!("push key={:?}", key);
                 if value.len() > 0 {
                     self.merger_mut().rw_cursor.insert(&key, value)?;
                 } else {
@@ -176,13 +177,10 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
 }
 
 use super::{
-    super::{
-        super::storage_db::snapshot_mpt::*, errors::*,
-        storage_manager::DeltaMptIterator,
-    },
+    super::{super::storage_db::snapshot_mpt::*, errors::*},
     mpt_cursor::*,
     KVInserter,
 };
 use fallible_iterator::FallibleIterator;
-use primitives::MerkleHash;
 use crate::storage::impls::storage_db::snapshot_db_manager_sqlite::DumpedDeltaMptIterator;
+use primitives::MerkleHash;

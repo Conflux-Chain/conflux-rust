@@ -8,6 +8,7 @@ pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
 
 pub struct StateTrees {
     pub snapshot_db: SnapshotDb,
+    pub snapshot_epoch_id: EpochId,
     /// None means that the intermediate_trie is empty, or in a special
     /// situation that we use the snapshot at intermediate epoch directly,
     /// so we don't need to look up intermediate trie.
@@ -129,7 +130,7 @@ impl StateManager {
     /// it's calculated for the state_trees.
     #[inline]
     pub fn get_state_trees_internal(
-        snapshot_db: SnapshotDb,
+        snapshot_db: SnapshotDb, snapshot_epoch_id: &EpochId,
         maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         maybe_intermediate_trie_key_padding: Option<&DeltaMptKeyPadding>,
         delta_mpt: Arc<DeltaMpt>,
@@ -165,7 +166,7 @@ impl StateManager {
                 // TODO: maybe we can move the calculation to a central place
                 // and cache the result?
                 StorageKey::delta_mpt_padding(
-                    &snapshot_db.get_snapshot_info().merkle_root,
+                    &snapshot_db.merkle_root,
                     &intermediate_trie_root_merkle,
                 )
             }
@@ -173,6 +174,7 @@ impl StateManager {
 
         Ok(Some(StateTrees {
             snapshot_db,
+            snapshot_epoch_id: *snapshot_epoch_id,
             maybe_intermediate_trie,
             intermediate_trie_root,
             intermediate_trie_root_merkle,
@@ -216,6 +218,7 @@ impl StateManager {
 
                 Self::get_state_trees_internal(
                     snapshot,
+                    state_index.snapshot_epoch_id,
                     maybe_intermediate_mpt,
                     state_index.maybe_intermediate_mpt_key_padding,
                     delta_mpt,
@@ -256,6 +259,7 @@ impl StateManager {
 
             Self::get_state_trees_internal(
                 new_snapshot,
+                parent_state_index.snapshot_epoch_id,
                 // Delta MPT is moved to intermediate trie.
                 Some(
                     self.storage_manager
@@ -294,6 +298,7 @@ impl StateManager {
                 .get_root_node_ref_by_epoch(parent_state_index.epoch_id)?;
             Self::get_state_trees_internal(
                 maybe_snapshot.unwrap(),
+                parent_state_index.snapshot_epoch_id,
                 self.storage_manager.get_intermediate_mpt(
                     &parent_state_index.snapshot_epoch_id,
                 )?,
@@ -349,6 +354,7 @@ impl StateManagerTrait for StateManager {
                     .get_snapshot_by_epoch_id(&NULL_EPOCH)
                     .unwrap()
                     .unwrap(),
+                snapshot_epoch_id: NULL_EPOCH,
                 maybe_intermediate_trie: None,
                 intermediate_trie_root: None,
                 intermediate_trie_root_merkle: MERKLE_NULL_NODE,

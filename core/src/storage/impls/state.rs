@@ -9,6 +9,7 @@ pub type ChildrenMerkleMap =
 pub struct State<'a> {
     manager: &'a StateManager,
     snapshot_db: SnapshotDb,
+    snapshot_epoch_id: EpochId,
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     intermediate_trie_root_merkle: MerkleHash,
@@ -36,6 +37,7 @@ impl<'a> State<'a> {
         Self {
             manager,
             snapshot_db: state_trees.snapshot_db,
+            snapshot_epoch_id: state_trees.snapshot_epoch_id,
             maybe_intermediate_trie: state_trees.maybe_intermediate_trie,
             intermediate_trie_root: state_trees.intermediate_trie_root,
             intermediate_trie_root_merkle: state_trees
@@ -273,20 +275,12 @@ impl<'a> StateTrait for State<'a> {
 
         Ok(StateRootWithAuxInfo {
             state_root: StateRoot {
-                snapshot_root: self
-                    .snapshot_db
-                    .get_snapshot_info()
-                    .merkle_root
-                    .clone(),
+                snapshot_root: self.snapshot_db.merkle_root.clone(),
                 intermediate_delta_root: self.intermediate_trie_root_merkle,
                 delta_root: merkle_root,
             },
             aux_info: StateRootAuxInfo {
-                snapshot_epoch_id: self
-                    .snapshot_db
-                    .get_snapshot_info()
-                    .get_snapshot_epoch_id()
-                    .clone(),
+                snapshot_epoch_id: self.snapshot_epoch_id.clone(),
                 intermediate_epoch_id: self.intermediate_epoch_id.clone(),
                 maybe_intermediate_mpt_key_padding: self
                     .maybe_intermediate_trie_key_padding
@@ -300,20 +294,12 @@ impl<'a> StateTrait for State<'a> {
         let merkle_root = self.get_merkle_root()?;
         Ok(merkle_root.map(|merkle_hash| StateRootWithAuxInfo {
             state_root: StateRoot {
-                snapshot_root: self
-                    .snapshot_db
-                    .get_snapshot_info()
-                    .merkle_root
-                    .clone(),
+                snapshot_root: self.snapshot_db.merkle_root.clone(),
                 intermediate_delta_root: self.intermediate_trie_root_merkle,
                 delta_root: merkle_hash,
             },
             aux_info: StateRootAuxInfo {
-                snapshot_epoch_id: self
-                    .snapshot_db
-                    .get_snapshot_info()
-                    .get_snapshot_epoch_id()
-                    .clone(),
+                snapshot_epoch_id: self.snapshot_epoch_id.clone(),
                 intermediate_epoch_id: self.intermediate_epoch_id.clone(),
                 maybe_intermediate_mpt_key_padding: self
                     .maybe_intermediate_trie_key_padding

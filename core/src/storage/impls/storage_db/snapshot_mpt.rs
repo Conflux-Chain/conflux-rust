@@ -132,7 +132,6 @@ where DbType:
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
     ) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
-        println!("write key={:?}", key);
         self.db
             .borrow_mut()
             .put(&key, &trie_node.rlp_bytes().into_boxed_slice())?;
