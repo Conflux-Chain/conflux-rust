@@ -796,18 +796,6 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 &CompressedPathRaw::default(),
             )?
         };
-        //        let root_trie_node = cursor
-        //            .load_node_wrapper(
-        //                mpt.as_mut_assumed_owner(),
-        //                &CompressedPathRaw::default(),
-        //            )
-        //            .unwrap_or(SnapshotMptNode(VanillaTrieNode::new(
-        //                MERKLE_NULL_NODE,
-        //                Default::default(),
-        //                None,
-        //                CompressedPathRaw::default(),
-        //            )));
-
         assert_eq!(
             root_trie_node.get_merkle(),
             &supposed_merkle_root,
@@ -1343,14 +1331,6 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         self.delta_subtree_size += child_node.delta_subtree_size;
 
         if !child_node.is_node_empty() {
-            if self
-                .basic_node
-                .trie_node
-                .get_child(self.basic_node.next_child_index)
-                .is_none()
-            {
-                println!("");
-            }
             let subtree_size = (self
                 .basic_node
                 .trie_node

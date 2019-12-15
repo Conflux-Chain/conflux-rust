@@ -208,7 +208,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 // The merge of Empty snapshot and empty intermediate mpt
                 // resulting into an empty snapshot, falls into this code path,
                 // where we do nothing.
-                Ok(SnapshotInfo::genesis_snapshot_info())
+                in_progress_snapshot_info.merkle_root = MERKLE_NULL_NODE;
+                Ok(in_progress_snapshot_info)
             }
             Some(_) => {
                 // Unwrap here is safe because the delta MPT is guaranteed not
