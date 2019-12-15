@@ -133,8 +133,7 @@ impl SnapshotDbManagerSqlite {
 
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotDbSqlite,
-        old_snapshot_epoch_id: &EpochId,
-        delta_mpt: &DumpedDeltaMptIterator,
+        old_snapshot_epoch_id: &EpochId, old_snapshot_merkle_root: &MerkleHash,
     ) -> Result<MerkleHash>
     {
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
@@ -230,7 +229,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         &temp_db_path,
                         old_snapshot_merkle_root,
                     )?;
-                    let dumped = snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                    snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge()?
                 } else {
                     if self.try_make_snapshot_cow_copy(
@@ -248,14 +247,14 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         snapshot_db.drop_delta_mpt_dump()?;
 
                         // iterate and insert into temp table.
-                        let dumped = snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         snapshot_db.direct_merge()?
                     } else {
                         snapshot_db = Self::SnapshotDb::create(
                             &temp_db_path,
                             old_snapshot_merkle_root,
                         )?;
-                        let dumped = snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
                             &mut snapshot_db,
                             old_snapshot_epoch_id,

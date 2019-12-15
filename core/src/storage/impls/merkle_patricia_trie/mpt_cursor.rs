@@ -341,12 +341,6 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 parent_node
                     .get_read_write_path_node()
                     .skip_till_child_index(child_index)?;
-                println!(
-                    "next={} child_index={} path={:?}",
-                    parent_node.get_basic_path_node().next_child_index,
-                    child_index,
-                    parent_node.get_basic_path_node().full_path_to_node
-                );
                 parent_node.get_read_write_path_node().next_child_index =
                     child_index;
                 let new_node = PathNode::new(

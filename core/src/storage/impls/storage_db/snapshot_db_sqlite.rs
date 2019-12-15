@@ -439,7 +439,7 @@ impl SnapshotDbSqlite {
     // FIXME: how to handle row_id, this should go to the merkle tree?
     pub fn dump_delta_mpt(
         &mut self, delta_mpt: &DeltaMptIterator,
-    ) -> Result<DumpedDeltaMptIterator> {
+    ) -> Result<()> {
         let sqlite = self.maybe_db.as_mut().unwrap();
         sqlite
             .execute(
@@ -461,10 +461,7 @@ impl SnapshotDbSqlite {
             .finish_ignore_rows()?;
 
         // Dump code.
-        delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))?;
-        let mut dumped = DumpedDeltaMptIterator::default();
-        delta_mpt.iterate(&mut dumped)?;
-        Ok(dumped)
+        delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))
     }
 
     /// Dropping is optional, because these tables are necessary to provide
@@ -602,10 +599,7 @@ use super::{
     sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
 use crate::storage::{
-    impls::storage_db::{
-        snapshot_db_manager_sqlite::DumpedDeltaMptIterator,
-        sqlite::SQLITE_NO_PARAM,
-    },
+    impls::storage_db::sqlite::SQLITE_NO_PARAM,
     storage_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},
 };
 use cfx_types::Address;

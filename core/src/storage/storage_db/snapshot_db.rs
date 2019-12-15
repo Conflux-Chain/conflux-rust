@@ -68,7 +68,6 @@ pub trait SnapshotDbTrait:
 
     fn copy_and_merge(
         &mut self, old_snapshot_db: &mut Self,
-        delta_mpt: &DumpedDeltaMptIterator,
     ) -> Result<MerkleHash>;
 }
 
@@ -79,5 +78,4 @@ use super::{
         KeyValueDbTraitSingleWriter,
     },
 };
-use crate::storage::impls::storage_db::snapshot_db_manager_sqlite::DumpedDeltaMptIterator;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
