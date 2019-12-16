@@ -58,11 +58,6 @@ impl StorageManager {
         storage_conf: StorageConfiguration,
     ) -> Self
     {
-        // TODO create this from outside with configurable db options
-        let snapshot_metadata_db = KvdbRocksdb {
-            kvdb: delta_db_manager.system_db.key_value().clone(),
-            col: COL_SNAPSHOT,
-        };
         let storage_manager = Self {
             delta_db_manager,
             snapshot_manager: Box::new(StorageManagerFullNode::<
@@ -71,8 +66,6 @@ impl StorageManager {
                 // FIXME: path from param.
                 snapshot_db_manager: SnapshotDbManager::new(
                     "./storage_db/snapshot/".to_string(),
-                    Box::new(snapshot_metadata_db)
-                        as Box<dyn KeyValueDbTrait<ValueType = Box<[u8]>>>,
                 ),
             }),
             maybe_db_errors: MaybeDbErrors {
@@ -590,6 +583,15 @@ impl StorageManager {
         Ok(())
     }
 
+    pub fn get_snapshot_info_at_epoch(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<SnapshotInfo> {
+        self.snapshot_info_map_by_epoch
+            .read()
+            .get(snapshot_epoch_id)
+            .map(Clone::clone)
+    }
+
     /// FIXME Enable later.
     pub fn log_usage(&self) {
         // FIXME: log usage for all delta mpt.
@@ -662,10 +664,6 @@ use super::{
         state_manager::*,
     },
     *,
-};
-use crate::{
-    db::COL_SNAPSHOT,
-    storage::{KeyValueDbTrait, KvdbRocksdb},
 };
 use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use primitives::{EpochId, NULL_EPOCH};

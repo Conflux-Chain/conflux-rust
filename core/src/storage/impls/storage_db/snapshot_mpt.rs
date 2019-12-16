@@ -6,7 +6,6 @@ pub struct SnapshotMpt<
     DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
     BorrowType: BorrowMut<DbType>,
 > {
-    pub merkle_root: MerkleHash,
     pub db: BorrowType,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
 }
@@ -77,7 +76,7 @@ impl<
 where DbType:
         for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
 {
-    fn get_merkle_root(&self) -> &MerkleHash { &self.merkle_root }
+    fn get_merkle_root(&self) -> &MerkleHash { unimplemented!() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
@@ -123,7 +122,6 @@ where DbType:
 
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
-        println!("delete key={:?}", key);
         self.db.borrow_mut().delete(&key)?;
         Ok(())
     }
