@@ -159,13 +159,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 // The merge of Empty snapshot and empty intermediate mpt
                 // resulting into an empty snapshot, falls into this code path,
                 // where we do nothing.
-                Ok(self
-                    .get_snapshot_by_epoch_id(
-                        &in_progress_snapshot_info.parent_snapshot_epoch_id,
-                    )?
-                    .unwrap()
-                    .get_snapshot_info()
-                    .clone())
+                in_progress_snapshot_info.merkle_root = MERKLE_NULL_NODE;
+                Ok(in_progress_snapshot_info)
             }
             Some(_) => {
                 // Unwrap here is safe because the delta MPT is guaranteed not
@@ -209,11 +204,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         )?
                     }
                 };
-
                 in_progress_snapshot_info.merkle_root =
                     new_snapshot_root.clone();
-                snapshot_db
-                    .set_snapshot_info(in_progress_snapshot_info.clone());
                 drop(snapshot_db);
                 Self::rename_snapshot_db(
                     &temp_db_path,
@@ -254,6 +246,37 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 }
 
+#[derive(Default)]
+pub struct DumpedDeltaMptIterator {
+    kv: Vec<(Vec<u8>, Box<[u8]>)>,
+}
+
+impl DumpedDeltaMptIterator {
+    pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
+        &self, dumper: &mut DeltaMptDumper,
+    ) -> Result<()> {
+        let mut sorted_kv = self.kv.clone();
+        sorted_kv.sort();
+        for kv_item in sorted_kv {
+            dumper.push(kv_item)?;
+        }
+        Ok(())
+    }
+}
+
+impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedDeltaMptIterator {
+    fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
+        let (mpt_key, value) = v;
+        let mut addr = Address::default();
+        let snapshot_key =
+            StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
+                .to_key_bytes();
+
+        self.kv.push((snapshot_key, value));
+        Ok(())
+    }
+}
+
 use super::{
     super::{
         super::storage_db::{
@@ -264,6 +287,10 @@ use super::{
     },
     snapshot_db_sqlite::*,
 };
+use crate::storage::KVInserter;
+use cfx_types::Address;
 use parity_bytes::ToPretty;
-use primitives::{EpochId, MerkleHash, NULL_EPOCH};
+use primitives::{
+    EpochId, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
+};
 use std::{fs, process::Command};

@@ -59,12 +59,6 @@ pub trait SnapshotDbTrait:
     // FIXME: upon opening we should load something..
     fn open(snapshot_path: &str) -> Result<Option<Self>>;
 
-    // FIXME: we store the snapshot info once in the snapshot and also
-    // FIXME: aggregated info in another db. At startup we do a maintenance.
-    // FIXME: we may need console input to ask for operations.
-    fn get_snapshot_info(&self) -> &SnapshotInfo;
-    fn set_snapshot_info(&mut self, snapshot_info: SnapshotInfo);
-
     // FIXME: what should be stored after a snapshot is created?
     fn create(snapshot_path: &str) -> Result<Self>;
 

@@ -170,13 +170,25 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         let original_compressed_path_ref =
                             last_trie_node.compressed_path_ref();
                         let actual_unmatched_path_remaining =
-                            CompressedPathRaw::new(
-                                &unmatched_path_remaining.path_slice()[0
-                                    ..(original_compressed_path_ref.path_size()
-                                        - actual_matched_path.path_size())
-                                        as usize],
-                                original_compressed_path_ref.end_mask(),
-                            );
+                            if original_compressed_path_ref.end_mask() != 0 {
+                                CompressedPathRaw::new_and_apply_mask(
+                                    &unmatched_path_remaining.path_slice()[0
+                                        ..(original_compressed_path_ref
+                                            .path_size()
+                                            - actual_matched_path.path_size())
+                                            as usize],
+                                    original_compressed_path_ref.end_mask(),
+                                )
+                            } else {
+                                CompressedPathRaw::new(
+                                    &unmatched_path_remaining.path_slice()[0
+                                        ..(original_compressed_path_ref
+                                            .path_size()
+                                            - actual_matched_path.path_size())
+                                            as usize],
+                                    original_compressed_path_ref.end_mask(),
+                                )
+                            };
 
                         Ok(CursorPopNodesTerminal::PathDiverted(
                             WalkStop::PathDiverted {
@@ -767,31 +779,27 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         cursor: &mut Cursor,
     ) -> Result<Self> {
         let mut mpt = cursor.take_mpt();
-        let supposed_merkle_root = mpt.as_ref_assumed_owner().get_merkle_root();
         // Special case for Genesis snapshot, where the mpt is an non-existence
         // db, to which the load_node_wrapper fails.
-        let root_trie_node = if MERKLE_NULL_NODE.eq(supposed_merkle_root) {
-            SnapshotMptNode(VanillaTrieNode::new(
+        let root_trie_node = cursor
+            .load_node_wrapper(
+                mpt.as_mut_assumed_owner(),
+                &CompressedPathRaw::default(),
+            )
+            .unwrap_or(SnapshotMptNode(VanillaTrieNode::new(
                 MERKLE_NULL_NODE,
                 Default::default(),
                 None,
                 CompressedPathRaw::default(),
-            ))
-        } else {
-            cursor.load_node_wrapper(
-                mpt.as_mut_assumed_owner(),
-                &CompressedPathRaw::default(),
-            )?
-        };
-
-        let supposed_merkle_root = mpt.as_ref_assumed_owner().get_merkle_root();
-        assert_eq!(
-            root_trie_node.get_merkle(),
-            supposed_merkle_root,
-            "loaded root trie node merkle hash {:?} != supposed merkle hash {:?}",
-            root_trie_node.get_merkle(),
-            supposed_merkle_root,
-        );
+            )));
+        //        assert_eq!(
+        //            root_trie_node.get_merkle(),
+        //            &supposed_merkle_root,
+        //            "loaded root trie node merkle hash {:?} != supposed merkle
+        //         hash {:?}",
+        //            root_trie_node.get_merkle(),
+        //            supposed_merkle_root,
+        //        );
 
         Ok(cursor.new_root(BasicPathNode {
             mpt,
@@ -1011,6 +1019,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             child_index,
         )? {
             Some(mut node) => {
+                self.next_child_index = child_index;
                 node.mpt = self.take_mpt();
 
                 Ok(Some(*node))
@@ -1072,6 +1081,9 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             mem::swap(&mut child_node.trie_node, &mut self.trie_node);
             child_node.mpt = self.write_out()?;
         } else {
+            self.get_basic_path_node_mut().path_start_steps =
+                new_path_db_key.path_steps();
+            self.get_basic_path_node_mut().path_db_key = new_path_db_key;
             child_node = self;
         };
 
@@ -1120,8 +1132,7 @@ impl<Mpt> ReadWritePathNode<Mpt> {
     fn get_has_io_error(&self) -> bool { self.io_error().get() }
 
     fn is_node_empty(&self) -> bool {
-        !self.trie_node.has_value()
-            && self.maybe_first_realized_child_index == Self::NULL_CHILD_INDEX
+        !self.trie_node.has_value() && self.trie_node.get_children_count() == 0
     }
 
     fn compute_merkle(&mut self) -> MerkleHash {
@@ -1222,6 +1233,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                             )? {
                                 Some(mut child_node) => {
                                     child_node.mpt = mpt_taken;
+                                    child_node.compute_merkle();
 
                                     child_node
                                 }
@@ -1242,8 +1254,14 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                                 &mut child_node,
                             )?;
                         }
-                        self.basic_node.mpt = child_node.mpt.take();
-                        self.the_first_child_if_pending = Some(child_node);
+                        unsafe {
+                            let ptr_const = self as *const Self;
+                            let mut_self = &mut *(ptr_const as *mut Self);
+                            mut_self.next_child_index = this_child_index;
+                            let mpt_taken =
+                                mut_self.set_concluded_child(*child_node)?;
+                            self.basic_node.mpt = mpt_taken;
+                        }
                     } else {
                         // There are more than one child concluded. Path
                         // compression is unnecessary.
@@ -1251,24 +1269,20 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                             &mut self.basic_node.mpt,
                             &mut self.the_first_child_if_pending,
                         )?;
-                        // Save-as mode.
-                        if self
-                            .basic_node
-                            .mpt
-                            .as_mut_assumed_owner()
-                            .is_save_as_write()
-                        {
-                            let mpt_taken = self.basic_node.mpt.take();
-                            let mut child_node = match Self::open_maybe_split_compressed_path_node(
-                                    self.maybe_compressed_path_split_child_index,
-                                    &mut self.maybe_compressed_path_split_child_node,
-                                    this_child_index,
-                                )? {
+                        let mpt_taken = self.basic_node.mpt.take();
+                        let mut child_node =
+                            match Self::open_maybe_split_compressed_path_node(
+                                self.maybe_compressed_path_split_child_index,
+                                &mut self
+                                    .maybe_compressed_path_split_child_node,
+                                this_child_index,
+                            )? {
                                 Some(mut child_node) => {
                                     child_node.mpt = mpt_taken;
+                                    child_node.compute_merkle();
 
                                     child_node
-                                },
+                                }
                                 None => Box::new(ReadWritePathNode::load_into(
                                     self,
                                     mpt_taken,
@@ -1276,11 +1290,23 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                                     this_child_node_merkle_ref,
                                 )?),
                             };
+                        // Save-as mode.
+                        if child_node
+                            .mpt
+                            .as_mut_assumed_owner()
+                            .is_save_as_write()
+                        {
                             MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
                                 &mut child_node,
                             )?;
-                            let mpt_taken = child_node.write_out()?;
-                            self.basic_node.mpt = mpt_taken;
+                            unsafe {
+                                let ptr_const = self as *const Self;
+                                let mut_self = &mut *(ptr_const as *mut Self);
+                                mut_self.next_child_index = this_child_index;
+                                let mpt_taken = mut_self
+                                    .set_concluded_child(*child_node)?;
+                                self.basic_node.mpt = mpt_taken;
+                            }
                         }
                     }
                 }

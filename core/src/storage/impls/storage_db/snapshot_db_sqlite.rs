@@ -5,8 +5,6 @@
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db: Option<SqliteConnection>,
-    // FIXME: load / save on open / set.
-    snapshot_info: SnapshotInfo,
 }
 
 pub struct SnapshotDbStatements {
@@ -135,18 +133,7 @@ impl KeyValueDbToOwnedReadTrait for SnapshotDbSqlite {
 }
 
 impl SnapshotDbTrait for SnapshotDbSqlite {
-    fn get_null_snapshot() -> Self {
-        Self {
-            maybe_db: None,
-            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
-        }
-    }
-
-    fn get_snapshot_info(&self) -> &SnapshotInfo { &self.snapshot_info }
-
-    fn set_snapshot_info(&mut self, snapshot_info: SnapshotInfo) {
-        self.snapshot_info = snapshot_info;
-    }
+    fn get_null_snapshot() -> Self { Self { maybe_db: None } }
 
     fn open(snapshot_path: &str) -> Result<Option<SnapshotDbSqlite>> {
         let file_exists = Path::new(&snapshot_path).exists();
@@ -158,8 +145,6 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         if file_exists {
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db: Some(sqlite_open_result?),
-                // FIXME: load snapshot info from db.
-                snapshot_info: SnapshotInfo::genesis_snapshot_info(),
             }));
         } else {
             return Ok(None);
@@ -183,8 +168,6 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             Ok(db_conn) => {
                 ok_result = Ok(SnapshotDbSqlite {
                     maybe_db: Some(db_conn),
-                    // FIXME: set snapshot info at creation or ..?
-                    snapshot_info: SnapshotInfo::genesis_snapshot_info(),
                 });
             }
         }
@@ -279,7 +262,6 @@ impl SnapshotDbSqlite {
                 None => None,
                 Some(conn) => Some(conn.try_clone()?),
             },
-            snapshot_info: self.snapshot_info.clone(),
         })
     }
 
@@ -330,7 +312,6 @@ impl SnapshotDbSqlite {
         >,
     > {
         Ok(SnapshotMpt {
-            merkle_root: self.snapshot_info.merkle_root.clone(),
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
@@ -357,7 +338,6 @@ impl SnapshotDbSqlite {
         >,
     > {
         Ok(SnapshotMpt {
-            merkle_root: self.snapshot_info.merkle_root.clone(),
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMutReadOnly::new((
                     self.maybe_db.as_mut(),
@@ -535,7 +515,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = x;
         let mut addr = Address::default();
-        let snapshot_kvdb_key =
+        let snapshot_key =
             StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
                 .to_key_bytes();
 
@@ -549,7 +529,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                         .delta_mpt_set_keys_statements
                         .stmts_main_table
                         .put,
-                    &[&&snapshot_kvdb_key as SqlBindableRef, &&value],
+                    &[&&snapshot_key as SqlBindableRef, &&value],
                 )?
                 .finish_ignore_rows()?;
         } else {
@@ -562,7 +542,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
                         .delta_mpt_delete_keys_statements
                         .stmts_main_table
                         .put,
-                    &[&&snapshot_kvdb_key as SqlBindableRef],
+                    &[&&snapshot_key as SqlBindableRef],
                 )?
                 .finish_ignore_rows()?;
         }
@@ -585,9 +565,9 @@ use super::{
         super::storage_db::{
             KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
             KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
-            SingleWriterImplFamily, SnapshotDbTrait, SnapshotInfo,
-            SnapshotMptDbValue, SnapshotMptTraitReadOnly,
-            SnapshotMptTraitSingleWriter, SnapshotMptValue,
+            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+            SnapshotMptValue,
         },
         errors::*,
         merkle_patricia_trie::{KVInserter, MptMerger},

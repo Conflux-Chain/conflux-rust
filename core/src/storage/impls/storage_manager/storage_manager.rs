@@ -583,6 +583,15 @@ impl StorageManager {
         Ok(())
     }
 
+    pub fn get_snapshot_info_at_epoch(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<SnapshotInfo> {
+        self.snapshot_info_map_by_epoch
+            .read()
+            .get(snapshot_epoch_id)
+            .map(Clone::clone)
+    }
+
     /// FIXME Enable later.
     pub fn log_usage(&self) {
         // FIXME: log usage for all delta mpt.

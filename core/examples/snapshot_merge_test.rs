@@ -165,7 +165,7 @@ fn main() -> Result<(), Error> {
         height,
         parent_snapshot_height: snapshot_info1.height,
         // This is unknown for now, and we don't care.
-        merkle_root: Default::default(),
+        merkle_root: snapshot_info1.merkle_root,
         parent_snapshot_epoch_id: snapshot1_epoch,
         pivot_chain_parts: vec![snapshot2_epoch],
         serve_one_step_sync: false,
@@ -193,6 +193,53 @@ fn main() -> Result<(), Error> {
         assert_eq!(account_bytes.as_slice(), get_bytes.as_ref());
     }
     // TODO Make snapshot3 to compare the snapshot merkle_root
+    let aux_info3 = StateRootAuxInfo {
+        snapshot_epoch_id: NULL_EPOCH,
+        intermediate_epoch_id: NULL_EPOCH,
+        maybe_intermediate_mpt_key_padding: None,
+        delta_mpt_key_padding: StorageKey::delta_mpt_padding(
+            &MERKLE_NULL_NODE,
+            &MERKLE_NULL_NODE,
+        ),
+    };
+    height = 0;
+    let (snapshot3_epoch, snapshot3_delta_root) = add_accounts(
+        &state_manager,
+        genesis_hash,
+        &mut height,
+        accounts_per_epoch,
+        &accounts_map,
+        &aux_info3,
+        &aux_info3,
+    )?;
+    let delta_mpt = storage_manager
+        .get_delta_mpt(&NULL_EPOCH)
+        .expect("state exists");
+    let delta_mpt_root = delta_mpt
+        .get_root_node_ref(&snapshot3_delta_root)?
+        .expect("root exists");
+    let delta_mpt_iterator = DeltaMptIterator {
+        mpt: delta_mpt,
+        maybe_root_node: Some(delta_mpt_root),
+    };
+
+    let info = SnapshotInfo {
+        height,
+        parent_snapshot_height: 0,
+        // This is unknown for now, and we don't care.
+        merkle_root: Default::default(),
+        parent_snapshot_epoch_id: NULL_EPOCH,
+        pivot_chain_parts: vec![snapshot3_epoch],
+        serve_one_step_sync: false,
+    };
+    let snapshot_info3 = snapshot_db_manager.new_snapshot_by_merging(
+        &NULL_EPOCH,
+        snapshot3_epoch,
+        delta_mpt_iterator,
+        info,
+    )?;
+    storage_manager.register_new_snapshot(snapshot_info3.clone());
+    assert_eq!(snapshot_info3.merkle_root, snapshot_info2.merkle_root);
     Ok(())
 }
 
@@ -299,6 +346,26 @@ fn prepare_state(
             Account::new_empty_with_balance(&addr, &i.into(), &0.into());
         new_account_map.insert(addr, account);
     }
+    let r = add_accounts(
+        manager,
+        parent,
+        height,
+        accounts_per_epoch,
+        &new_account_map,
+        old_aux_info,
+        aux_info,
+    );
+    account_map.extend(new_account_map.into_iter());
+    r
+}
+
+fn add_accounts(
+    manager: &StateManager, parent: H256, height: &mut u64,
+    accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
+    old_aux_info: &StateRootAuxInfo, aux_info: &StateRootAuxInfo,
+) -> Result<(H256, MerkleHash), Error>
+{
+    let accounts = new_account_map.len();
     println!("begin to add {} accounts for snapshot...", accounts);
     let start = Instant::now();
     let mut epoch_id = parent;
@@ -338,8 +405,6 @@ fn prepare_state(
         .state_root
         .delta_root;
     println!("checkpoint: epoch_id={:?}, root: {:?}", epoch_id, root);
-    account_map.extend(new_account_map.into_iter());
-
     Ok((epoch_id, root))
 }
 

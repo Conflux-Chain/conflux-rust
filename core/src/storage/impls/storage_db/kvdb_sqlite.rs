@@ -113,32 +113,35 @@ impl KvdbSqliteStatementsPerTable {
         table_name: &str, create_table_sql: &str,
     ) -> Result<Self>
     {
-        let value_columns_def = value_column_names
+        let comma_value_columns_def = value_column_names
             .iter()
             .zip(value_column_types.iter())
-            .map(|(n, t)| format!("{} {}", n, t))
+            .map(|(n, t)| format!(", {} {}", n, t))
             .collect::<Vec<String>>()
-            .join(", ");
+            .concat();
         let value_columns = value_column_names.join(", ");
-        let value_columns_to_bind = value_column_names
+        let comma_value_columns = if value_columns.len() == 0 {
+            value_columns.clone()
+        } else {
+            ", ".to_string() + &value_columns
+        };
+        let comma_value_columns_to_bind = value_column_names
             .iter()
-            .map(|n| ":".to_string() + n)
+            .map(|n| ", :".to_string() + n)
             .collect::<Vec<String>>()
-            .join(", ");
+            .concat();
 
         let mut strfmt_vars = HashMap::new();
         strfmt_vars.insert(
             "comma_value_columns_def".to_string(),
-            ", ".to_string() + &value_columns_def,
+            comma_value_columns_def,
         );
-        strfmt_vars.insert("value_columns".to_string(), value_columns.clone());
-        strfmt_vars.insert(
-            "comma_value_columns".to_string(),
-            ", ".to_string() + &value_columns,
-        );
+        strfmt_vars.insert("value_columns".to_string(), value_columns);
+        strfmt_vars
+            .insert("comma_value_columns".to_string(), comma_value_columns);
         strfmt_vars.insert(
             "comma_value_columns_to_bind".to_string(),
-            ", ".to_string() + &value_columns_to_bind,
+            comma_value_columns_to_bind,
         );
         strfmt_vars.insert("table_name".to_string(), table_name.to_string());
 
