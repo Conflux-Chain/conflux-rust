@@ -118,7 +118,7 @@ impl KvdbSqliteStatementsPerTable {
             .zip(value_column_types.iter())
             .map(|(n, t)| format!(", {} {}", n, t))
             .collect::<Vec<String>>()
-            .join(" ");
+            .concat();
         let value_columns = value_column_names.join(", ");
         let comma_value_columns = if value_columns.len() == 0 {
             value_columns.clone()
@@ -129,7 +129,7 @@ impl KvdbSqliteStatementsPerTable {
             .iter()
             .map(|n| ", :".to_string() + n)
             .collect::<Vec<String>>()
-            .join(" ");
+            .concat();
 
         let mut strfmt_vars = HashMap::new();
         strfmt_vars.insert(
