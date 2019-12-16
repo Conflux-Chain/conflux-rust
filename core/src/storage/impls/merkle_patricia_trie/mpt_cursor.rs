@@ -614,13 +614,17 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
 }
 
 pub trait CursorToRootNode<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> {
-    fn new_root(&self, basic_node: BasicPathNode<Mpt>) -> PathNode;
+    fn new_root(
+        &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
+    ) -> PathNode;
 }
 
 impl<Mpt: GetReadMpt, Cursor: CursorLoadNodeWrapper<Mpt>>
     CursorToRootNode<Mpt, BasicPathNode<Mpt>> for Cursor
 {
-    fn new_root(&self, basic_node: BasicPathNode<Mpt>) -> BasicPathNode<Mpt> {
+    fn new_root(
+        &self, basic_node: BasicPathNode<Mpt>, _mpt_is_empty: bool,
+    ) -> BasicPathNode<Mpt> {
         basic_node
     }
 }
@@ -629,11 +633,11 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
     CursorToRootNode<Mpt, ReadWritePathNode<Mpt>> for Cursor
 {
     fn new_root(
-        &self, basic_node: BasicPathNode<Mpt>,
+        &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
     ) -> ReadWritePathNode<Mpt> {
         ReadWritePathNode {
             basic_node,
-            is_loaded: true,
+            is_loaded: !mpt_is_empty,
             maybe_first_realized_child_index:
                 ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
             the_first_child_if_pending: None,
@@ -780,35 +784,45 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
     ) -> Result<Self> {
         let mut mpt = cursor.take_mpt();
         // Special case for Genesis snapshot, where the mpt is an non-existence
-        // db, to which the load_node_wrapper fails.
-        let root_trie_node = cursor
-            .load_node_wrapper(
-                mpt.as_mut_assumed_owner(),
-                &CompressedPathRaw::default(),
-            )
-            .unwrap_or(SnapshotMptNode(VanillaTrieNode::new(
-                MERKLE_NULL_NODE,
-                Default::default(),
-                None,
-                CompressedPathRaw::default(),
-            )));
-        //        assert_eq!(
-        //            root_trie_node.get_merkle(),
-        //            &supposed_merkle_root,
-        //            "loaded root trie node merkle hash {:?} != supposed merkle
-        //         hash {:?}",
-        //            root_trie_node.get_merkle(),
-        //            supposed_merkle_root,
-        //        );
+        // db, to which the load_node_wrapper call fails.
+        let mpt_is_empty;
+        let root_trie_node = match cursor.load_node_wrapper(
+            mpt.as_mut_assumed_owner(),
+            &CompressedPathRaw::default(),
+        ) {
+            Ok(node) => {
+                mpt_is_empty = false;
 
-        Ok(cursor.new_root(BasicPathNode {
-            mpt,
-            trie_node: root_trie_node,
-            path_start_steps: 0,
-            full_path_to_node: Default::default(),
-            path_db_key: Default::default(),
-            next_child_index: 0,
-        }))
+                node
+            }
+            Err(e) => match e.kind() {
+                ErrorKind::SnapshotMPTTrieNodeNotFound => {
+                    mpt_is_empty = true;
+
+                    SnapshotMptNode(VanillaTrieNode::new(
+                        MERKLE_NULL_NODE,
+                        Default::default(),
+                        None,
+                        CompressedPathRaw::default(),
+                    ))
+                }
+                _ => {
+                    bail!(e);
+                }
+            },
+        };
+
+        Ok(cursor.new_root(
+            BasicPathNode {
+                mpt,
+                trie_node: root_trie_node,
+                path_start_steps: 0,
+                full_path_to_node: Default::default(),
+                path_db_key: Default::default(),
+                next_child_index: 0,
+            },
+            mpt_is_empty,
+        ))
     }
 
     fn load_into(
@@ -997,17 +1011,18 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
 
     fn commit_root(mut self) -> Result<MerkleHash> {
         self.skip_till_child_index(CHILDREN_COUNT as u8)?;
-        if !self.is_node_empty() {
-            // modification
+        if self.is_node_empty() {
+            self.write_out()?;
+            Ok(MERKLE_NULL_NODE)
+        } else {
             Self::write_out_pending_child(
                 &mut self.basic_node.mpt,
                 &mut self.the_first_child_if_pending,
             )?;
+            let merkle = self.compute_merkle();
+            self.write_out()?;
+            Ok(merkle)
         }
-
-        let merkle = self.compute_merkle();
-        self.write_out()?;
-        Ok(merkle)
     }
 
     fn open_child_index(&mut self, child_index: u8) -> Result<Option<Self>> {
@@ -1107,7 +1122,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                 unreachable!()
             }
             MptValue::Some(old_value) => {
-                size_delta += rlp_key_value_len(key_len, old_value.len()) as i64
+                size_delta -= rlp_key_value_len(key_len, old_value.len()) as i64
             }
         }
 

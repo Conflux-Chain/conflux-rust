@@ -8,13 +8,17 @@ pub type SnapshotMptDbValue = Box<[u8]>;
 /// We use VanillaTrieNode<(MerkleHash, i64)> instead of
 /// (VanillaTrieNode<MerkleHash>, i64) to make seeking by rlp size position
 /// faster.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct SnapshotMptNode(pub VanillaTrieNode<SubtreeMerkleWithSize>);
 
 #[derive(Copy, Clone, PartialEq, Debug, Default)]
 pub struct SubtreeMerkleWithSize {
     pub merkle: MerkleHash,
     pub subtree_size: u64,
+    // FIXME: delta_subtree_size should be cleared for skipped subtree during
+    // FIXME: merge. It's non trivial for in-place update mode, for which we
+    // FIXME: need a special subtree mark to be also taken into consideration
+    // FIXME: while seeking.
     pub delta_subtree_size: u64,
 }
 

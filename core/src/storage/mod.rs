@@ -40,5 +40,7 @@ pub use self::{
     },
     state_root_with_aux_info::*,
     storage_db::KeyValueDbTrait,
-    tests::new_state_manager_for_testing as new_storage_manager_for_testing,
 };
+
+#[cfg(test)]
+pub use self::tests::new_state_manager_for_testing as new_storage_manager_for_testing;
