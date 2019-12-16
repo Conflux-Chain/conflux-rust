@@ -207,7 +207,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     }
 
     fn create(snapshot_path: &str) -> Result<SnapshotDbSqlite> {
-        fs::create_dir(snapshot_path).ok();
+        fs::create_dir_all(snapshot_path).ok();
 
         let create_result = SqliteConnection::create_and_open(
             &Self::db_file_paths(snapshot_path)[0],

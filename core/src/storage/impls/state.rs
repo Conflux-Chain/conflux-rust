@@ -321,21 +321,29 @@ impl<'a> StateTrait for State<'a> {
         if commit_result.is_err() {
             self.revert();
         }
+        debug!(
+            "commit: delta_trie_height={:?} has_intermediate={}, height={:?}",
+            self.delta_trie_height,
+            self.maybe_intermediate_trie.is_some(),
+            self.height,
+        );
         // TODO: use a better criteria and put it in consensus maybe.
+        // At height SNAPSHOT_EPOCHS_CAPACITY, we will make snapshot to move the
+        // delta_mpt of NULL_EPOCH to intermediate_mpt
         if self.delta_trie_height.unwrap() as u64
-            >= SNAPSHOT_EPOCHS_CAPACITY / 2
-            && self.maybe_intermediate_trie.is_some()
+            >= SNAPSHOT_EPOCHS_CAPACITY / 3
+            && self.height.unwrap() >= SNAPSHOT_EPOCHS_CAPACITY
         {
+            let snapshot_height = self.height.clone().unwrap()
+                - self.delta_trie_height.unwrap() as u64;
             // maybe_intermediate_trie is None if this happens before the first
             // snapshot after genesis/FullSync-snapshot
-            if let Some(intermediate_trie) = &self.maybe_intermediate_trie {
-                self.manager.check_make_snapshot(
-                    intermediate_trie.clone(),
-                    self.intermediate_trie_root.clone(),
-                    &self.intermediate_epoch_id,
-                    self.height.clone().unwrap(),
-                )?;
-            }
+            self.manager.check_make_snapshot(
+                self.maybe_intermediate_trie.clone(),
+                self.intermediate_trie_root.clone(),
+                &self.intermediate_epoch_id,
+                snapshot_height,
+            )?;
         }
 
         commit_result

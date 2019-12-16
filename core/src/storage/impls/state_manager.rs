@@ -53,7 +53,10 @@ impl StateManager {
             None => {}
             Some(node) => {
                 // Debugging log.
-                debug!("State root committed for epoch {:?}", epoch_id);
+                debug!(
+                    "State root committed for epoch {:?} parent={:?}",
+                    epoch_id, parent_epoch_id
+                );
                 delta_trie.set_parent_epoch(parent_epoch_id, epoch_id.clone());
                 delta_trie.set_epoch_root(epoch_id, node.clone());
                 delta_trie.set_root_node_ref(merkle_root.clone(), node.clone());
@@ -257,6 +260,10 @@ impl StateManager {
             .unwrap_or_default() as u64
             == SNAPSHOT_EPOCHS_CAPACITY
         {
+            debug!(
+                "get_state_trees_for_next_epoch: shift for epoch {:?}",
+                parent_state_index.epoch_id
+            );
             let maybe_snapshot = self
                 .storage_manager
                 .get_snapshot_manager()
@@ -322,13 +329,22 @@ impl StateManager {
                 .get_delta_mpt(parent_state_index.snapshot_epoch_id)?;
             let maybe_delta_root = delta_mpt
                 .get_root_node_ref_by_epoch(parent_state_index.epoch_id)?;
+            let maybe_intermediate_trie = if parent_state_index
+                .maybe_height
+                .expect("height is not None for next_epoch")
+                < SNAPSHOT_EPOCHS_CAPACITY
+            {
+                None
+            } else {
+                self.storage_manager.get_intermediate_mpt(
+                    &parent_state_index.snapshot_epoch_id,
+                )?
+            };
             Self::get_state_trees_internal(
                 maybe_snapshot.unwrap(),
                 parent_state_index.snapshot_epoch_id,
                 snapshot_merkle_root,
-                self.storage_manager.get_intermediate_mpt(
-                    &parent_state_index.snapshot_epoch_id,
-                )?,
+                maybe_intermediate_trie,
                 parent_state_index.maybe_intermediate_mpt_key_padding,
                 delta_mpt,
                 Some(parent_state_index.delta_mpt_key_padding),
@@ -343,7 +359,7 @@ impl StateManager {
 
     /// Check if we can make a new snapshot, and if so, make it in background.
     pub(super) fn check_make_snapshot(
-        &self, intermediate_trie: Arc<DeltaMpt>,
+        &self, maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
         intermediate_epoch_id: &EpochId, new_height: u64,
     ) -> Result<()>
@@ -352,10 +368,10 @@ impl StateManager {
             self.storage_manager.clone(),
             intermediate_epoch_id.clone(),
             new_height,
-            DeltaMptIterator {
+            maybe_intermediate_trie.map(|intermediate_trie| DeltaMptIterator {
                 mpt: intermediate_trie,
                 maybe_root_node: intermediate_trie_root,
-            },
+            }),
         )
     }
 }

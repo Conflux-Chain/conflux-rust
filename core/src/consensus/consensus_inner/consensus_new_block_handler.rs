@@ -17,7 +17,6 @@ use crate::{
     rlp::Encodable,
     statistics::SharedStatistics,
     storage::StateRootWithAuxInfo,
-    sync::delta::CHECKPOINT_DUMP_MANAGER,
     SharedTransactionPool,
 };
 use cfx_types::H256;
@@ -295,8 +294,6 @@ impl ConsensusNewBlockHandler {
         inner
             .data_man
             .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
-
-        CHECKPOINT_DUMP_MANAGER.read().dump_async(next_era_hash);
     }
 
     pub fn compute_anticone_bruteforce(
@@ -1305,33 +1302,32 @@ impl ConsensusNewBlockHandler {
         // but we can assume that the deferred block are executed.
         // FIXME: shouldn't unwrap but the function doesn't return error...
 
-        let confirmed_epoch_hash = inner
-            .get_hash_from_epoch_number(
-                // FIXME: we need a function to compute the deferred epoch
-                // FIXME: number. the current codebase may not be
-                // FIXME: consistent at all places.
-                confirmed_height - DEFERRED_STATE_EPOCH_COUNT,
-            )
-            .unwrap();
-        // FIXME: we also need more helper function to get the execution result
-        // FIXME: for block deferred or not.
-        if let Some(confirmed_epoch) = &*self
-            .data_man
-            .get_epoch_execution_commitment(&confirmed_epoch_hash)
-        {
-            // FIXME: convert the epoch hash to the most recent snapshottable
-            // hash.
-            self.data_man
-                .storage_manager
-                .get_storage_manager()
-                .maintain_snapshots_pivot_chain_confirmed(
-                    confirmed_height,
-                    &confirmed_epoch_hash,
-                    &confirmed_epoch.state_root_with_aux_info,
-                )
-                // FIXME: handle error.
-                .ok();
-        }
+        // FIXME Handle snapshot maintain
+        //        let confirmed_epoch_hash = inner
+        //            .get_hash_from_epoch_number(
+        //                // FIXME: we need a function to compute the deferred
+        // epoch                // FIXME: number. the current codebase
+        // may not be                // FIXME: consistent at all places.
+        //                confirmed_height - DEFERRED_STATE_EPOCH_COUNT,
+        //            )
+        //            .unwrap();
+        //        // FIXME: we also need more helper function to get the
+        // execution result        // FIXME: for block deferred or not.
+        //        if let Some(confirmed_epoch) = &*self
+        //            .data_man
+        //            .get_epoch_execution_commitment(&confirmed_epoch_hash)
+        //        {
+        //            self.data_man
+        //                .storage_manager
+        //                .get_storage_manager()
+        //                .maintain_snapshots_pivot_chain_confirmed(
+        //                    confirmed_height,
+        //                    &confirmed_epoch_hash,
+        //                    &confirmed_epoch.state_root_with_aux_info,
+        //                )
+        //                // FIXME: handle error.
+        //                .ok();
+        //        }
 
         // FIXME: this is header only.
         // If we are inserting header only, we will skip execution and
