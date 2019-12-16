@@ -12,8 +12,8 @@ use crate::{
         message::{Context, DynamicCapability, Handleable, KeyContainer},
         request_manager::Request,
         state::{
-            delta::{ChunkKey, RangedManifest},
             snapshot_manifest_response::SnapshotManifestResponse,
+            storage::{ChunkKey, RangedManifest},
         },
         Error, ProtocolConfiguration,
     },
@@ -26,7 +26,7 @@ use std::time::Duration;
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
-    pub checkpoint: H256,
+    pub snapshot_epoch_id: H256,
     pub start_chunk: Option<ChunkKey>,
     pub trusted_blame_block: Option<H256>,
 }
@@ -34,7 +34,7 @@ pub struct SnapshotManifestRequest {
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let manifest = match RangedManifest::load(
-            &self.checkpoint,
+            &self.snapshot_epoch_id,
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
         ) {
@@ -47,7 +47,7 @@ impl Handleable for SnapshotManifestRequest {
         let block_receipts = self.get_block_receipts(ctx).unwrap_or_default();
         ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
-            checkpoint: self.checkpoint.clone(),
+            checkpoint: self.snapshot_epoch_id.clone(),
             manifest,
             state_root_vec,
             receipt_blame_vec,
@@ -61,7 +61,7 @@ impl SnapshotManifestRequest {
     pub fn new(checkpoint: H256, trusted_blame_block: H256) -> Self {
         SnapshotManifestRequest {
             request_id: 0,
-            checkpoint,
+            snapshot_epoch_id: checkpoint,
             start_chunk: None,
             trusted_blame_block: Some(trusted_blame_block),
         }
@@ -72,7 +72,7 @@ impl SnapshotManifestRequest {
     ) -> Self {
         SnapshotManifestRequest {
             request_id: 0,
-            checkpoint,
+            snapshot_epoch_id: checkpoint,
             start_chunk: Some(start_chunk),
             trusted_blame_block: None,
         }
@@ -86,7 +86,7 @@ impl SnapshotManifestRequest {
         &self, ctx: &Context,
     ) -> Option<Vec<BlockExecutionResult>> {
         let mut epoch_receipts = Vec::new();
-        let mut epoch_hash = self.checkpoint;
+        let mut epoch_hash = self.snapshot_epoch_id;
         for _ in 0..REWARD_EPOCH_COUNT {
             if let Some(block) =
                 ctx.manager.graph.data_man.block_header_by_hash(&epoch_hash)
@@ -154,7 +154,7 @@ impl SnapshotManifestRequest {
             .manager
             .graph
             .data_man
-            .block_header_by_hash(&self.checkpoint)?;
+            .block_header_by_hash(&self.snapshot_epoch_id)?;
         if trusted_block.height() < checkpoint_block.height() {
             warn!(
                 "receive invalid snapshot manifest request from peer={}",
@@ -267,7 +267,7 @@ impl Request for SnapshotManifestRequest {
 
     fn required_capability(&self) -> Option<DynamicCapability> {
         Some(DynamicCapability::ServeCheckpoint(Some(
-            self.checkpoint.clone(),
+            self.snapshot_epoch_id.clone(),
         )))
     }
 }

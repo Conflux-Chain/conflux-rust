@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// The MptSliceVerifier can be used in restoration of Snapshot MPT and
-// Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be applied
-// to MptMerger to create the updated snapshot MPT.
+/// The MptSliceVerifier can be used in restoration of Snapshot MPT and
+/// Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be
+/// applied to MptMerger to create the updated snapshot MPT.
 pub struct MptSliceVerifier {
     key_value_inserter: MptCursorRw<
         SliceMptRebuilder,

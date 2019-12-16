@@ -16,11 +16,11 @@ use crate::{
     sync::{
         message::{msgid, Context},
         state::{
-            delta::{Chunk, ChunkKey},
             restore::Restorer,
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
             snapshot_manifest_response::SnapshotManifestResponse,
+            storage::{Chunk, ChunkKey},
         },
         synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
@@ -138,7 +138,7 @@ impl Inner {
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
-        self.restorer = Restorer::new_with_default_root_dir(checkpoint);
+        self.restorer = Restorer::new_with_default_root_dir(checkpoint, None);
     }
 }
 
@@ -302,6 +302,7 @@ impl SnapshotChunkSync {
             }
         }
 
+        inner.restorer.manifest = Some(response.manifest.clone());
         let next_chunk = response.manifest.next_chunk();
         inner.pending_chunks.extend(response.manifest.into_chunks());
 
@@ -420,6 +421,7 @@ impl SnapshotChunkSync {
             // start to restore and update status
             inner.restorer.start_to_restore(
                 ctx.manager.graph.data_man.storage_manager.clone(),
+                ctx.manager.graph.data_man.as_ref(),
             );
             inner.status = Status::Restoring(Instant::now());
         }

@@ -18,7 +18,6 @@ pub struct FullSyncVerifier<SnapshotDbManager: SnapshotDbManagerTrait> {
     temp_snapshot_db: SnapshotDbManager::SnapshotDb,
 }
 
-#[allow(unused)]
 impl<SnapshotDbManager: SnapshotDbManagerTrait>
     FullSyncVerifier<SnapshotDbManager>
 {
@@ -87,10 +86,9 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         let maybe_left_proof;
         let maybe_right_proof;
         if chunk_index == 0 {
-            key_range_left = vec![];
             maybe_left_proof = None;
         } else {
-            key_range_left = self.chunk_boundaries[chunk_index - 1].clone();
+            let key_range_left = self.chunk_boundaries[chunk_index - 1].clone();
             maybe_left_proof = self.chunk_boundary_proofs.get(chunk_index - 1);
 
             // Check key boundary.
@@ -128,7 +126,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             self.merkle_root.clone(),
         );
 
-        let mut chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
+        let chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
         if chunk_rebuilder.is_valid {
             self.chunk_verified[chunk_index] = true;
             self.number_incomplete_chunk -= 1;
@@ -142,7 +140,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             let mut snapshot_mpt =
                 self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
             for (path, node) in chunk_rebuilder.inner_nodes_to_write {
-                snapshot_mpt.write_node(&path, &node);
+                snapshot_mpt.write_node(&path, &node)?;
             }
 
             // Combine changes around boundary nodes.

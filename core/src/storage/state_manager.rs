@@ -16,7 +16,7 @@ pub type SharedStateManager = Arc<StateManager>;
 //
 // Only if we see problem dealing with attacks, consider rules like the
 // size of delta trie.
-pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 1_000_000_000_000_000;
+pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 10;
 pub fn height_to_delta_height(height: u64) -> u32 {
     if height == 0 {
         0

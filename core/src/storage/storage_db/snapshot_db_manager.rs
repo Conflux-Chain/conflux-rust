@@ -18,6 +18,10 @@ pub trait SnapshotDbManagerTrait {
     fn new_temp_snapshot_for_full_sync(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
     ) -> Result<Self::SnapshotDb>;
+
+    fn finalize_full_sync_snapshot(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> Result<()>;
 }
 
 use super::{
