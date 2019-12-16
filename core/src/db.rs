@@ -37,10 +37,8 @@ pub const COL_BLOCKS: Option<u32> = Some(2);
 pub const COL_TX_ADDRESS: Option<u32> = Some(3);
 /// Column for Transaction Index
 pub const COL_EPOCH_NUMBER: Option<u32> = Some(4);
-/// Column for Snapshot Metadata
-pub const COL_SNAPSHOT: Option<u32> = Some(5);
 /// Number of columns in DB
-pub const NUM_COLUMNS: Option<u32> = Some(6);
+pub const NUM_COLUMNS: Option<u32> = Some(5);
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]
