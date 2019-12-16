@@ -182,6 +182,6 @@ use super::{
     mpt_cursor::*,
     KVInserter,
 };
-use crate::storage::impls::storage_db::snapshot_db_manager_sqlite::DumpedDeltaMptIterator;
+use crate::storage::tests::DumpedDeltaMptIterator;
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;

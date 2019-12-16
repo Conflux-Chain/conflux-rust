@@ -246,37 +246,6 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 }
 
-#[derive(Default)]
-pub struct DumpedDeltaMptIterator {
-    kv: Vec<(Vec<u8>, Box<[u8]>)>,
-}
-
-impl DumpedDeltaMptIterator {
-    pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
-        &self, dumper: &mut DeltaMptDumper,
-    ) -> Result<()> {
-        let mut sorted_kv = self.kv.clone();
-        sorted_kv.sort();
-        for kv_item in sorted_kv {
-            dumper.push(kv_item)?;
-        }
-        Ok(())
-    }
-}
-
-impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedDeltaMptIterator {
-    fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
-        let (mpt_key, value) = v;
-        let mut addr = Address::default();
-        let snapshot_key =
-            StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
-                .to_key_bytes();
-
-        self.kv.push((snapshot_key, value));
-        Ok(())
-    }
-}
-
 use super::{
     super::{
         super::storage_db::{
@@ -287,10 +256,6 @@ use super::{
     },
     snapshot_db_sqlite::*,
 };
-use crate::storage::KVInserter;
-use cfx_types::Address;
 use parity_bytes::ToPretty;
-use primitives::{
-    EpochId, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
-};
+use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{fs, process::Command};
