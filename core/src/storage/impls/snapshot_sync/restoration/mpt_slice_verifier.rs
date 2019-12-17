@@ -6,8 +6,10 @@
 // Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be applied
 // to MptMerger to create the updated snapshot MPT.
 pub struct MptSliceVerifier {
-    key_value_inserter:
-        MptCursorRw<SliceMptRebuilder, ReadWritePathNode<SliceMptRebuilder>>,
+    key_value_inserter: MptCursorRw<
+        SliceMptRebuilder,
+        IncompleteReadWritePathNode<SliceMptRebuilder>,
+    >,
 }
 
 pub struct SliceMptRebuilder {
@@ -78,10 +80,12 @@ impl MptSliceVerifier {
     pub fn restore<Key: Borrow<[u8]>>(
         mut self, keys: &Vec<Key>, values: &Vec<Box<[u8]>>,
     ) -> Result<SliceMptRebuilder> {
+        self.key_value_inserter.load_root()?;
         for (key, value) in keys.iter().zip(values.into_iter()) {
             self.key_value_inserter
                 .insert(key.borrow(), value.clone())?;
         }
+        self.key_value_inserter.finish()?;
 
         Ok(self.key_value_inserter.take_mpt().unwrap())
     }
@@ -208,7 +212,10 @@ use super::super::super::{
     errors::*,
     merkle_patricia_trie::{mpt_cursor::*, *},
 };
-use crate::storage::impls::merkle_patricia_trie::walk::GetChildTrait;
+use crate::storage::impls::merkle_patricia_trie::{
+    mpt_cursor::incomplete_read_write_path_node::IncompleteReadWritePathNode,
+    walk::GetChildTrait,
+};
 use cfx_types::H256;
 use primitives::MerkleHash;
 use std::{borrow::Borrow, collections::HashMap, hint::unreachable_unchecked};

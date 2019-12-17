@@ -93,10 +93,10 @@ impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedDeltaMptIterator {
 }
 
 #[cfg(test)]
-fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
+fn generate_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
     let mut rng = get_rng_for_test();
 
-    let mut keys_num: Vec<u32> = Default::default();
+    let mut keys_num: Vec<u64> = Default::default();
 
     for _i in 0..number_of_keys {
         keys_num.push(rng.gen());
@@ -104,11 +104,13 @@ fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
 
     keys_num.sort();
 
-    let mut keys: Vec<[u8; 4]> = Default::default();
+    let mut keys = vec![];
     let mut last_key = keys_num[0];
     for key in &keys_num[1..number_of_keys] {
         if *key != last_key {
-            keys.push(unsafe { mem::transmute::<u32, [u8; 4]>(key.clone()) });
+            keys.push(Vec::from(
+                &unsafe { mem::transmute::<u64, [u8; 8]>(key.clone()) }[..],
+            ));
         }
         last_key = *key;
     }

@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod slicer;
+mod verifier;
 
 #[derive(Default)]
 struct FakeSnapshotMptDb {
@@ -188,7 +189,7 @@ fn test_merkle_root() {
     // Merkle root of random set of keys.
     let mut rng = get_rng_for_test();
     for _i in 0..5 {
-        let keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
+        let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
             .iter()
             .filter(|_| rng.gen_bool(0.1))
             .cloned()
@@ -203,7 +204,7 @@ fn test_merkle_root() {
 #[test]
 fn test_delete_all() {
     let mut rng = get_rng_for_test();
-    let keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
+    let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -248,7 +249,7 @@ fn test_delete_all() {
 
 #[test]
 fn test_inserts_deletes_and_subtree_size() {
-    let keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let set_size = TEST_NUMBER_OF_KEYS / 10;
     let (keys_unchanged, keys_overwritten, keys_delete, keys_new) = (
         &keys[0..set_size],
@@ -393,7 +394,7 @@ fn test_inserts_deletes_and_subtree_size() {
 
 #[test]
 fn test_two_way_merge() {
-    let keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let set_size = TEST_NUMBER_OF_KEYS / 10;
     let (keys_unchanged, keys_overwritten, keys_delete, keys_new) = (
         &keys[0..set_size],

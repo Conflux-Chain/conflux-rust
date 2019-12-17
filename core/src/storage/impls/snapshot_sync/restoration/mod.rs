@@ -3,4 +3,5 @@
 // See http://www.gnu.org/licenses/
 
 pub mod full_sync_verifier;
-pub(self) mod mpt_slice_verifier;
+// FIXME: restore to private.
+pub(in super::super::super) mod mpt_slice_verifier;
