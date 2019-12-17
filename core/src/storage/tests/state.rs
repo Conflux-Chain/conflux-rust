@@ -2,34 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-const DEFAULT_NUMBER_OF_KEYS: usize = 100000;
-
-fn generate_keys(number_of_keys: usize) -> Vec<[u8; 4]> {
-    let mut rng = get_rng_for_test();
-
-    let mut keys_num: Vec<u32> = Default::default();
-
-    for _i in 0..number_of_keys {
-        keys_num.push(rng.gen());
-    }
-
-    keys_num.sort();
-
-    let mut keys: Vec<[u8; 4]> = Default::default();
-    let mut last_key = keys_num[0];
-    for key in &keys_num[1..number_of_keys] {
-        if *key != last_key {
-            keys.push(unsafe { mem::transmute::<u32, [u8; 4]>(key.clone()) });
-        }
-        last_key = *key;
-    }
-
-    keys.shuffle(&mut rng);
-    keys
-}
-
-fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
-
 #[test]
 fn test_empty_genesis_block() {
     let state_manager = new_state_manager_for_testing();
@@ -55,7 +27,7 @@ fn test_set_get() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
     let mut state = state_manager.get_state_for_genesis_write();
-    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -89,8 +61,8 @@ fn test_set_get() {
 #[test]
 fn test_get_set_at_second_commit() {
     let state_manager = new_state_manager_for_testing();
-    let keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
-    let set_size = DEFAULT_NUMBER_OF_KEYS / 10;
+    let keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let set_size = TEST_NUMBER_OF_KEYS / 10;
     let (keys_0, keys_1_new, keys_remain, keys_1_overwritten) = (
         &keys[0..set_size * 2],
         &keys[set_size * 2..set_size * 3],
@@ -184,10 +156,10 @@ fn test_set_delete() {
     let mut state = state_manager.get_state_for_genesis_write();
     let empty_state_root = state.compute_state_root().unwrap();
 
-    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
+    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
     let (keys_0, keys_1) = (
-        &keys[0..DEFAULT_NUMBER_OF_KEYS / 2],
-        &keys[DEFAULT_NUMBER_OF_KEYS / 2..],
+        &keys[0..TEST_NUMBER_OF_KEYS / 2],
+        &keys[TEST_NUMBER_OF_KEYS / 2..],
     );
 
     println!("Testing with {} set operations.", keys.len());
@@ -244,10 +216,10 @@ fn test_set_delete_all() {
     let mut state = state_manager.get_state_for_genesis_write();
     let empty_state_root = state.compute_state_root().unwrap();
 
-    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS);
+    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
     let (keys_0, keys_1) = (
-        &keys[0..DEFAULT_NUMBER_OF_KEYS / 2],
-        &keys[DEFAULT_NUMBER_OF_KEYS / 2..],
+        &keys[0..TEST_NUMBER_OF_KEYS / 2],
+        &keys[TEST_NUMBER_OF_KEYS / 2..],
     );
 
     println!("Testing with {} set operations.", keys.len());
@@ -324,20 +296,6 @@ fn test_set_delete_all() {
     assert_eq!(state_root, empty_state_root);
 }
 
-// Kept for debugging.
-#[allow(dead_code)]
-pub fn print_mpt_key(key: &[u8]) {
-    print!("key = (");
-    for char in key {
-        print!(
-            "{}, {}, ",
-            CompressedPathRaw::first_nibble(*char),
-            CompressedPathRaw::second_nibble(*char)
-        );
-    }
-    println!(")");
-}
-
 #[test]
 fn test_set_order() {
     let mut rng = get_rng_for_test();
@@ -399,7 +357,7 @@ fn test_set_order_concurrent() {
     let mut rng = get_rng_for_test();
     let state_manager = Arc::new(new_state_manager_for_testing());
     let keys = Arc::new(
-        generate_keys(10000)
+        generate_keys(TEST_NUMBER_OF_KEYS / 10)
             .iter()
             .filter(|_| rng.gen_bool(0.5))
             .cloned()
@@ -498,12 +456,13 @@ fn test_set_order_concurrent() {
     }
 }
 
+// FIXME: Redesign the test for proof.
 #[test]
 fn test_proofs() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
     let mut state = state_manager.get_state_for_genesis_write();
-    let mut keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -557,7 +516,7 @@ fn test_proofs() {
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
     }
 
-    let nonexistent_keys: Vec<[u8; 4]> = generate_keys(DEFAULT_NUMBER_OF_KEYS)
+    let nonexistent_keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -580,14 +539,11 @@ fn test_proofs() {
 }
 
 use super::{
-    super::{
-        impls::merkle_patricia_trie::CompressedPathRaw, state::*,
-        state_manager::*,
-    },
-    new_state_manager_for_testing,
+    super::{state::*, state_manager::*},
+    generate_keys, get_rng_for_test, new_state_manager_for_testing,
 };
+use crate::storage::tests::TEST_NUMBER_OF_KEYS;
 use cfx_types::H256;
 use primitives::{StateRoot, StorageKey};
-use rand::{prelude::SliceRandom, Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
-use std::{mem, sync::Arc, thread};
+use rand::{seq::SliceRandom, Rng};
+use std::{sync::Arc, thread};

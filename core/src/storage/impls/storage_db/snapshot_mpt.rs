@@ -10,7 +10,7 @@ pub struct SnapshotMpt<
     pub _marker_db_type: std::marker::PhantomData<DbType>,
 }
 
-fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
+pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
     let path_slice = path.path_slice();
     let end_mask = path.end_mask();
 
@@ -37,7 +37,7 @@ fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
     result
 }
 
-fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
+pub fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     // The 'p' letter.
     let mut offset = 1;
 
