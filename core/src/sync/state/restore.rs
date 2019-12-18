@@ -4,19 +4,16 @@
 
 use crate::{
     storage::{
-        state::StateTrait,
-        state_manager::{
-            StateManager, StateManagerTrait, SNAPSHOT_EPOCHS_CAPACITY,
-        },
+        state_manager::{StateManager, SNAPSHOT_EPOCHS_CAPACITY},
         storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        FullSyncVerifier, StateIndex,
+        FullSyncVerifier,
     },
     sync::state::storage::{Chunk, ChunkKey, ChunkReader, RangedManifest},
     BlockDataManager,
 };
 use cfx_types::H256;
 use parking_lot::RwLock;
-use primitives::{EpochId, MerkleHash, StateRoot, NULL_EPOCH};
+use primitives::{EpochId, MerkleHash, NULL_EPOCH};
 use rlp::Rlp;
 use std::{
     collections::{HashMap, VecDeque},
@@ -185,14 +182,14 @@ impl Restorer {
                     // We will not sync true genesis, so height should not be 0
                     parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
                     height,
-                    // This is fake and should not be used
+                    // Set intermediate_mpt to None
                     parent_snapshot_epoch_id: NULL_EPOCH,
                     // FIXME Check if we need to fill them all
                     pivot_chain_parts: vec![snapshot_epoch_id],
                 };
                 state_manager
                     .get_storage_manager()
-                    .register_new_snapshot(snapshot_info);
+                    .register_new_snapshot(snapshot_info, true);
 
                 debug!(
                     "complete to restore snapshot chunks, total = {}",

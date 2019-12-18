@@ -1294,10 +1294,10 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_genesis_height
             );
         }
-        let mut confirmed_height = meter.get_confirmed_epoch_num();
-        if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
-            confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
-        }
+        //        let mut confirmed_height = meter.get_confirmed_epoch_num();
+        //        if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
+        //            confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
+        //        }
         // We can not assume that confirmed epoch are already executed,
         // but we can assume that the deferred block are executed.
         // FIXME: shouldn't unwrap but the function doesn't return error...

@@ -82,7 +82,6 @@ impl<'a> StateDb<'a> {
 
     pub fn set<T>(&mut self, key: StorageKey, value: &T) -> Result<()>
     where T: ::rlp::Encodable {
-        trace!("set key={:?} value={:?}", key, ::rlp::encode(value));
         self.set_raw(key, ::rlp::encode(value).into_boxed_slice())
     }
 

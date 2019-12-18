@@ -126,7 +126,7 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info1.clone());
+    storage_manager.register_new_snapshot(snapshot_info1.clone(), false);
     println!("After merging: {:?}", snapshot_info1);
     let aux_info2 = StateRootAuxInfo {
         snapshot_epoch_id: NULL_EPOCH,
@@ -181,7 +181,7 @@ fn main() -> Result<(), Error> {
         snapshot_info2,
         accounts_map.len()
     );
-    storage_manager.register_new_snapshot(snapshot_info2.clone());
+    storage_manager.register_new_snapshot(snapshot_info2.clone(), false);
     let snapshot2 = snapshot_db_manager
         .get_snapshot_by_epoch_id(&snapshot2_epoch)?
         .expect("exists");
@@ -238,7 +238,7 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info3.clone());
+    storage_manager.register_new_snapshot(snapshot_info3.clone(), false);
     assert_eq!(snapshot_info3.merkle_root, snapshot_info2.merkle_root);
     Ok(())
 }

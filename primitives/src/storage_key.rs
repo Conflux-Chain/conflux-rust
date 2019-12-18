@@ -89,11 +89,21 @@ impl<'a> StorageKey<'a> {
             StorageKey::StorageKey {
                 address_bytes,
                 storage_key,
-            } => delta_mpt_storage_key::new_storage_key(
-                address_bytes,
-                storage_key,
-                padding,
-            ),
+            } => {
+                let bytes = delta_mpt_storage_key::new_storage_key(
+                    address_bytes,
+                    storage_key,
+                    padding,
+                );
+                assert_eq!(
+                    bytes.len(),
+                    64 + storage_key.len(),
+                    "bytes:{:?} self:{:?}",
+                    bytes,
+                    self
+                );
+                bytes
+            }
             StorageKey::CodeRootKey(address_bytes) => {
                 delta_mpt_storage_key::new_code_root_key(address_bytes, padding)
             }
@@ -434,8 +444,8 @@ mod delta_mpt_storage_key {
                     }
                 } else {
                     unreachable!(
-                        "Invalid key format. Unrecognized: {:?}, account: {:?}",
-                        remaining_bytes, address_bytes
+                        "Invalid key format. Unrecognized: {:?}, account: {:?} delta_mpt_key: {:?}",
+                        remaining_bytes, address_bytes, delta_mpt_key,
                     );
                 }
             }
