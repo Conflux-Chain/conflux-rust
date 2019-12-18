@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod slicer;
+
 #[derive(Default)]
 struct FakeSnapshotMptDb {
     db: BTreeMap<Vec<u8>, SnapshotMptNode>,
