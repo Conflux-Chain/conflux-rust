@@ -32,6 +32,8 @@ pub struct SnapshotManifestResponse {
     pub receipt_blame_vec: Vec<H256>,
     pub bloom_blame_vec: Vec<H256>,
     pub block_receipts: Vec<BlockExecutionResult>,
+
+    pub snapshot_state_root: StateRoot,
 }
 
 impl Handleable for SnapshotManifestResponse {

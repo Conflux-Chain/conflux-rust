@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SnapshotInfo {
     pub serve_one_step_sync: bool,
 

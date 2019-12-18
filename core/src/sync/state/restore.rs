@@ -16,7 +16,7 @@ use crate::{
 };
 use cfx_types::H256;
 use parking_lot::RwLock;
-use primitives::{StateRoot, NULL_EPOCH};
+use primitives::{EpochId, MerkleHash, StateRoot, NULL_EPOCH};
 use rlp::Rlp;
 use std::{
     collections::{HashMap, VecDeque},
@@ -54,7 +54,8 @@ pub struct Restorer {
     state: Arc<RwLock<State>>,
     progress: Arc<RestoreProgress>,
     dir: PathBuf,
-    snapshot_epoch_id: H256,
+    snapshot_epoch_id: EpochId,
+    pub snapshot_merkle_root: MerkleHash,
     pub manifest: Option<RangedManifest>,
 }
 
@@ -84,6 +85,7 @@ impl Restorer {
             progress: Default::default(),
             dir: Chunk::epoch_dir(root_dir, &checkpoint),
             snapshot_epoch_id: checkpoint,
+            snapshot_merkle_root: Default::default(),
             manifest,
         }
     }
@@ -109,12 +111,7 @@ impl Restorer {
         let chunk_reader = ChunkReader::new_with_epoch_dir(self.dir.clone())
             .expect("cannot find the chunk store for restoration");
         let snapshot_epoch_id = self.snapshot_epoch_id.clone();
-        let snapshot_merkle_root = data_man
-            .get_epoch_execution_commitment_with_db(&snapshot_epoch_id)
-            .expect("state being synced should have available commitment")
-            .state_root_with_aux_info
-            .state_root
-            .snapshot_root;
+        let snapshot_merkle_root = self.snapshot_merkle_root;
         let height = data_man
             .block_header_by_hash(&snapshot_epoch_id)
             .expect("state being synced should have block header")
@@ -209,19 +206,12 @@ impl Restorer {
 
     pub fn restored_state_root(
         &self, state_manager: Arc<StateManager>,
-    ) -> StateRoot {
-        // TODO: think about snapshot.
-        let epoch_id =
-            StateIndex::new_for_test_only_delta_mpt(&self.snapshot_epoch_id);
-        let state = state_manager
-            .get_state_no_commit(epoch_id)
-            .expect("failed to get checkpoint state")
-            .expect("cannot find the checkpoint state");
-        state
-            .get_state_root()
-            .expect("failed to get state root")
-            .expect("restored checkpoint state root not found")
-            .state_root
+    ) -> MerkleHash {
+        state_manager
+            .get_storage_manager()
+            .get_snapshot_info_at_epoch(&self.snapshot_epoch_id)
+            .unwrap()
+            .merkle_root
     }
 }
 

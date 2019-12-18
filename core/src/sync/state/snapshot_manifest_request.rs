@@ -33,6 +33,7 @@ pub struct SnapshotManifestRequest {
 
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        // TODO Handle the case where we cannot serve the snapshot
         let manifest = match RangedManifest::load(
             &self.snapshot_epoch_id,
             self.start_chunk.clone(),
@@ -45,6 +46,42 @@ impl Handleable for SnapshotManifestRequest {
         let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
             self.get_blame_states(ctx).unwrap_or_default();
         let block_receipts = self.get_block_receipts(ctx).unwrap_or_default();
+        let trusted_snapshot_blame_block = ctx
+            .manager
+            .graph
+            .consensus
+            .get_trusted_blame_block_for_snapshot(&self.snapshot_epoch_id)
+            .unwrap();
+        // TODO Ensure the state_root is pointed to snapshot_epoch_id
+        let block_with_trusted_state_root = ctx
+            .manager
+            .graph
+            .data_man
+            .get_parent_epochs_for(
+                trusted_snapshot_blame_block,
+                DEFERRED_STATE_EPOCH_COUNT,
+            )
+            .0;
+        let snapshot_state_root = ctx
+            .manager
+            .graph
+            .data_man
+            .get_epoch_execution_commitment_with_db(
+                &block_with_trusted_state_root,
+            )
+            .unwrap()
+            .state_root_with_aux_info
+            .state_root;
+        assert_eq!(
+            snapshot_state_root.compute_state_root_hash(),
+            *ctx.manager
+                .graph
+                .data_man
+                .block_header_by_hash(&trusted_snapshot_blame_block)
+                .unwrap()
+                .deferred_state_root()
+        );
+        debug!("handle SnapshotManifestRequest: return snapshot_state_root={:?} in block {:?}", snapshot_state_root, trusted_snapshot_blame_block);
         ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
             checkpoint: self.snapshot_epoch_id.clone(),
@@ -53,6 +90,7 @@ impl Handleable for SnapshotManifestRequest {
             receipt_blame_vec,
             bloom_blame_vec,
             block_receipts,
+            snapshot_state_root,
         })
     }
 }
