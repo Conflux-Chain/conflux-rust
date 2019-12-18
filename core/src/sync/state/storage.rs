@@ -111,6 +111,11 @@ impl RangedManifest {
         // validate the trie proof for all chunks
         for chunk in self.chunks.iter() {
             if chunk.proof.get_merkle_root() != snapshot_root {
+                warn!(
+                    "Manifest merkle root should be {:?}, get {:?}",
+                    snapshot_root,
+                    chunk.proof.get_merkle_root()
+                );
                 return Err(ErrorKind::InvalidSnapshotManifest(
                     "invalid proof merkle root".into(),
                 )
@@ -245,14 +250,14 @@ impl Chunk {
         }
 
         // keccak(value) == key
-        for item in self.items.iter() {
-            if keccak(&item.value).as_ref() != item.key.as_slice() {
-                return Err(ErrorKind::InvalidSnapshotChunk(
-                    "value hash mismatch with key".into(),
-                )
-                .into());
-            }
-        }
+        //        for item in self.items.iter() {
+        //            if keccak(&item.value).as_ref() != item.key.as_slice() {
+        //                return Err(ErrorKind::InvalidSnapshotChunk(
+        //                    "value hash mismatch with key".into(),
+        //                )
+        //                .into());
+        //            }
+        //        }
 
         Ok(())
     }

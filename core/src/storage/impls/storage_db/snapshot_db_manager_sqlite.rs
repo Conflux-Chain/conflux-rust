@@ -12,7 +12,9 @@ pub struct SnapshotDbManagerSqlite {
 // TODO: used to sync checkpoint state
 // Note, the sync state context only has instance of type StateManager.
 impl Default for SnapshotDbManagerSqlite {
-    fn default() -> Self { unimplemented!() }
+    fn default() -> Self {
+        SnapshotDbManagerSqlite::new("./storage_db/snapshot/".to_string())
+    }
 }
 
 impl SnapshotDbManagerSqlite {
