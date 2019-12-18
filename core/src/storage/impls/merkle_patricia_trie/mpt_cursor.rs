@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod slice_restore_read_write_path_node;
+
 /// Cursor to access Snapshot Mpt.
 pub struct MptCursor<Mpt, PathNode> {
     mpt: Option<Mpt>,
@@ -85,7 +87,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
     }
 
     fn pop_root(&mut self) -> Result<MerkleHash> {
-        self.path_nodes.pop().unwrap().commit_root()
+        self.path_nodes.pop().unwrap().commit_root(&mut self.mpt)
     }
 
     pub fn finish(&mut self) -> Result<MerkleHash> {
@@ -769,7 +771,10 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
     /// A default no-op implementation to suppress compiler warnings
     /// about "patterns aren't allowed in methods without bodies"
     /// https://github.com/rust-lang/rust/issues/35203
-    fn commit_root(self) -> Result<MerkleHash> {
+    fn commit_root(
+        mut self, mpt_taken: &mut Option<Mpt>,
+    ) -> Result<MerkleHash> {
+        *mpt_taken = self.take_mpt();
         Ok(self.get_basic_path_node().trie_node.get_merkle().clone())
     }
 
@@ -826,7 +831,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
     }
 
     fn load_into(
-        parent_node: &Self, mut mpt: Option<Mpt>, node_child_index: u8,
+        parent_node: &Self, mpt: &mut Option<Mpt>, node_child_index: u8,
         supposed_merkle_root: &MerkleHash,
     ) -> Result<Self>
     {
@@ -854,7 +859,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
         Ok(Self::new_loaded(
             BasicPathNode {
-                mpt,
+                mpt: mpt.take(),
                 trie_node,
                 path_start_steps: path_db_key.path_steps(),
                 full_path_to_node,
@@ -932,10 +937,10 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
                 merkle: ref supposed_merkle_hash,
                 ..
             }) => {
-                let mpt_taken = self.mpt.take();
+                let mut mpt_taken = self.mpt.take();
                 Ok(Some(Self::load_into(
                     self,
-                    mpt_taken,
+                    &mut mpt_taken,
                     child_index,
                     supposed_merkle_hash,
                 )?))
@@ -1009,10 +1014,12 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
         parent.set_concluded_child(self)
     }
 
-    fn commit_root(mut self) -> Result<MerkleHash> {
+    fn commit_root(
+        mut self, mpt_taken: &mut Option<Mpt>,
+    ) -> Result<MerkleHash> {
         self.skip_till_child_index(CHILDREN_COUNT as u8)?;
         if self.is_node_empty() {
-            self.write_out()?;
+            *mpt_taken = self.write_out()?;
             Ok(MERKLE_NULL_NODE)
         } else {
             Self::write_out_pending_child(
@@ -1020,7 +1027,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                 &mut self.the_first_child_if_pending,
             )?;
             let merkle = self.compute_merkle();
-            self.write_out()?;
+            *mpt_taken = self.write_out()?;
             Ok(merkle)
         }
     }
@@ -1212,6 +1219,8 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
     }
 
     fn skip_till_child_index(&mut self, child_index: u8) -> Result<()> {
+        let is_save_as_mode =
+            self.mpt.as_ref_assumed_owner().is_save_as_write();
         for (
             this_child_index,
             &SubtreeMerkleWithSize {
@@ -1226,104 +1235,91 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
             .set_start_index(self.next_child_index)
         {
             if this_child_index < child_index {
+                let mut child_node;
                 // Handle compressed path logics for concluded subtrees.
                 // The value of the root node is guaranteed to be settled before
                 // changes in the subtree.
-                if !self.trie_node.has_value() {
-                    if self.maybe_first_realized_child_index
+                if !self.trie_node.has_value()
+                    && self.maybe_first_realized_child_index
                         == Self::NULL_CHILD_INDEX
-                    {
-                        // Even though this child isn't modified, path
-                        // compression may happen if all
-                        // later children are deleted.
-                        self.maybe_first_realized_child_index =
-                            this_child_index;
-                        let mpt_taken = self.basic_node.mpt.take();
-                        let mut child_node =
-                            match Self::open_maybe_split_compressed_path_node(
-                                self.maybe_compressed_path_split_child_index,
-                                &mut self
-                                    .maybe_compressed_path_split_child_node,
-                                this_child_index,
-                            )? {
-                                Some(mut child_node) => {
-                                    child_node.mpt = mpt_taken;
-                                    child_node.compute_merkle();
+                {
+                    // Even though this child isn't modified, path
+                    // compression may happen if all
+                    // later children are deleted.
+                    self.maybe_first_realized_child_index = this_child_index;
+                    let mut mpt_taken = self.basic_node.mpt.take();
+                    child_node =
+                        match Self::open_maybe_split_compressed_path_node(
+                            self.maybe_compressed_path_split_child_index,
+                            &mut self.maybe_compressed_path_split_child_node,
+                            this_child_index,
+                        )? {
+                            Some(mut child_node) => {
+                                child_node.mpt = mpt_taken;
+                                child_node.compute_merkle();
 
-                                    child_node
-                                }
-                                None => Box::new(ReadWritePathNode::load_into(
-                                    self,
-                                    mpt_taken,
-                                    this_child_index,
-                                    this_child_node_merkle_ref,
-                                )?),
-                            };
-                        // Save-as mode.
-                        if child_node
-                            .mpt
-                            .as_mut_assumed_owner()
-                            .is_save_as_write()
-                        {
-                            MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
-                                &mut child_node,
-                            )?;
-                        }
-                        unsafe {
-                            let ptr_const = self as *const Self;
-                            let mut_self = &mut *(ptr_const as *mut Self);
-                            mut_self.next_child_index = this_child_index;
-                            let mpt_taken =
-                                mut_self.set_concluded_child(*child_node)?;
-                            self.basic_node.mpt = mpt_taken;
-                        }
-                    } else {
-                        // There are more than one child concluded. Path
-                        // compression is unnecessary.
-                        Self::write_out_pending_child(
-                            &mut self.basic_node.mpt,
-                            &mut self.the_first_child_if_pending,
-                        )?;
-                        let mpt_taken = self.basic_node.mpt.take();
-                        let mut child_node =
-                            match Self::open_maybe_split_compressed_path_node(
-                                self.maybe_compressed_path_split_child_index,
-                                &mut self
-                                    .maybe_compressed_path_split_child_node,
-                                this_child_index,
-                            )? {
-                                Some(mut child_node) => {
-                                    child_node.mpt = mpt_taken;
-                                    child_node.compute_merkle();
-
-                                    child_node
-                                }
-                                None => Box::new(ReadWritePathNode::load_into(
-                                    self,
-                                    mpt_taken,
-                                    this_child_index,
-                                    this_child_node_merkle_ref,
-                                )?),
-                            };
-                        // Save-as mode.
-                        if child_node
-                            .mpt
-                            .as_mut_assumed_owner()
-                            .is_save_as_write()
-                        {
-                            MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
-                                &mut child_node,
-                            )?;
-                            unsafe {
-                                let ptr_const = self as *const Self;
-                                let mut_self = &mut *(ptr_const as *mut Self);
-                                mut_self.next_child_index = this_child_index;
-                                let mpt_taken = mut_self
-                                    .set_concluded_child(*child_node)?;
-                                self.basic_node.mpt = mpt_taken;
+                                child_node
                             }
-                        }
+                            None => Box::new(ReadWritePathNode::load_into(
+                                self,
+                                &mut mpt_taken,
+                                this_child_index,
+                                this_child_node_merkle_ref,
+                            )?),
+                        };
+                    // Save-as mode.
+                    if is_save_as_mode {
+                        MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
+                            &mut child_node,
+                        )?;
                     }
+                } else {
+                    //  Path compression is unnecessary.
+                    Self::write_out_pending_child(
+                        &mut self.basic_node.mpt,
+                        &mut self.the_first_child_if_pending,
+                    )?;
+                    child_node =
+                        match Self::open_maybe_split_compressed_path_node(
+                            self.maybe_compressed_path_split_child_index,
+                            &mut self.maybe_compressed_path_split_child_node,
+                            this_child_index,
+                        )? {
+                            Some(mut child_node) => {
+                                child_node.mpt = self.basic_node.mpt.take();
+                                child_node.compute_merkle();
+
+                                child_node
+                            }
+                            None => {
+                                if is_save_as_mode {
+                                    let mut mpt_taken =
+                                        self.basic_node.mpt.take();
+                                    let mut child_node =
+                                        ReadWritePathNode::load_into(
+                                            self,
+                                            &mut mpt_taken,
+                                            this_child_index,
+                                            this_child_node_merkle_ref,
+                                        )?;
+
+                                    MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
+                                        &mut child_node,
+                                    )?;
+
+                                    Box::new(child_node)
+                                } else {
+                                    continue;
+                                }
+                            }
+                        };
+                }
+                unsafe {
+                    let mut_self = &mut *(self as *const Self as *mut Self);
+                    mut_self.next_child_index = this_child_index;
+                    let mpt_taken =
+                        mut_self.set_concluded_child(*child_node)?;
+                    self.basic_node.mpt = mpt_taken;
                 }
             } else {
                 break;

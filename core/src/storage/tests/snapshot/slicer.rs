@@ -26,7 +26,7 @@ fn test_slicing_position() {
 
     // Slice non-empty mpt.
     let mut rng = get_rng_for_test();
-    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()

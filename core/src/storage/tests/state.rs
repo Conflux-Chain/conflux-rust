@@ -27,7 +27,7 @@ fn test_set_get() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
     let mut state = state_manager.get_state_for_genesis_write();
-    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -48,7 +48,7 @@ fn test_set_get() {
             .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
-        let equal = key.eq(value.as_ref());
+        let equal = (&**key).eq(value.as_ref());
         assert_eq!(equal, true);
     }
 
@@ -61,7 +61,7 @@ fn test_set_get() {
 #[test]
 fn test_get_set_at_second_commit() {
     let state_manager = new_state_manager_for_testing();
-    let keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let set_size = TEST_NUMBER_OF_KEYS / 10;
     let (keys_0, keys_1_new, keys_remain, keys_1_overwritten) = (
         &keys[0..set_size * 2],
@@ -107,7 +107,7 @@ fn test_get_set_at_second_commit() {
             .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
-        let equal = key.eq(old_value.as_ref());
+        let equal = (&**key).eq(old_value.as_ref());
         assert_eq!(equal, true);
         let value = vec![&key[..], &key[..]].concat();
         state_1
@@ -124,7 +124,7 @@ fn test_get_set_at_second_commit() {
             .get(StorageKey::AccountKey(key))
             .expect("Failed to get key.")
             .expect("Failed to get key");
-        let equal = key.eq(value.as_ref());
+        let equal = (&**key).eq(value.as_ref());
         assert_eq!(equal, true);
     }
 
@@ -156,7 +156,7 @@ fn test_set_delete() {
     let mut state = state_manager.get_state_for_genesis_write();
     let empty_state_root = state.compute_state_root().unwrap();
 
-    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let (keys_0, keys_1) = (
         &keys[0..TEST_NUMBER_OF_KEYS / 2],
         &keys[TEST_NUMBER_OF_KEYS / 2..],
@@ -196,7 +196,7 @@ fn test_set_delete() {
             .delete(StorageKey::AccountKey(key))
             .expect("Failed to delete key.")
             .expect("Failed to get key");
-        let equal = key.eq(value.as_ref());
+        let equal = (&**key).eq(value.as_ref());
         assert_eq!(equal, true);
     }
 
@@ -216,7 +216,7 @@ fn test_set_delete_all() {
     let mut state = state_manager.get_state_for_genesis_write();
     let empty_state_root = state.compute_state_root().unwrap();
 
-    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let (keys_0, keys_1) = (
         &keys[0..TEST_NUMBER_OF_KEYS / 2],
         &keys[TEST_NUMBER_OF_KEYS / 2..],
@@ -300,7 +300,7 @@ fn test_set_delete_all() {
 fn test_set_order() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
-    let keys: Vec<[u8; 4]> = generate_keys(500000)
+    let keys: Vec<Vec<u8>> = generate_keys(500000)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -462,7 +462,7 @@ fn test_proofs() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_testing();
     let mut state = state_manager.get_state_for_genesis_write();
-    let mut keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
@@ -516,7 +516,7 @@ fn test_proofs() {
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
     }
 
-    let nonexistent_keys: Vec<[u8; 4]> = generate_keys(TEST_NUMBER_OF_KEYS)
+    let nonexistent_keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
         .cloned()
