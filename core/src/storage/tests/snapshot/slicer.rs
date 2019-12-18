@@ -77,8 +77,8 @@ fn test_slicing_position() {
         chunk_sizes.push(size_sum.last().unwrap() - start_size);
 
         println!(
-            "chunk_size = {}, split at indices {:?}, chunk_size {:?}, chunk_right_bound {:?}",
-            chunk_size, right_bounds, chunk_sizes, chunk_right_bounds
+            "chunk_size = {}, split at indices {:?}, chunk_size {:?}",
+            chunk_size, right_bounds, chunk_sizes
         );
 
         // Slice by MptSlicer.
