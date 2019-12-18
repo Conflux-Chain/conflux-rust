@@ -62,12 +62,10 @@ fn test_slicing_position() {
         let chunk_size = size_sum.last().unwrap() / expected_chunks;
         let mut right_bound = 0;
         let mut start_size = 0;
-        let mut right_bounds = vec![];
         let mut chunk_sizes = vec![];
         let mut chunk_right_bounds = vec![];
         while right_bound < keys.len() {
             if size_sum[right_bound] > chunk_size + start_size {
-                right_bounds.push(right_bound - 1);
                 chunk_sizes.push(size_sum[right_bound - 1] - start_size);
                 start_size = size_sum[right_bound - 1];
                 chunk_right_bounds.push(mpt_kv_iter.kv[right_bound].0.clone());
@@ -77,8 +75,8 @@ fn test_slicing_position() {
         chunk_sizes.push(size_sum.last().unwrap() - start_size);
 
         println!(
-            "chunk_size = {}, split at indices {:?}, chunk_size {:?}",
-            chunk_size, right_bounds, chunk_sizes
+            "chunk_size_limit = {}, chunk_size {:?}",
+            chunk_size, chunk_sizes
         );
 
         // Slice by MptSlicer.

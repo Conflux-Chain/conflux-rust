@@ -13,7 +13,7 @@ pub struct TrieProof {
     parent_node_index: Vec<usize>,
     // Root node doesn't have parent, so we leave child_index[0]
     // default-initialized to 0.
-    child_index: Vec<u8>,
+    pub child_index: Vec<u8>,
     number_leaf_nodes: u32,
 }
 
@@ -211,9 +211,9 @@ impl TrieProof {
 
     pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
 
-    pub fn compute_snapshot_mpt_key_for_all_nodes(
+    pub fn compute_snapshot_mpt_key_and_full_paths_for_all_nodes(
         &self,
-    ) -> Vec<CompressedPathRaw> {
+    ) -> (Vec<CompressedPathRaw>, Vec<CompressedPathRaw>) {
         let mut full_paths = Vec::with_capacity(self.nodes.len());
         let mut keys = Vec::with_capacity(self.nodes.len());
         // At the time of coding, The root node is guaranteed to have empty
@@ -236,7 +236,13 @@ impl TrieProof {
             ));
         }
 
-        keys
+        println!(
+            "compute_snapshot_mpt_key_and_full_paths_for_all_nodes: keys \n{:?},\n\
+            full_paths\n{:?}",
+            keys, full_paths,
+        );
+
+        (keys, full_paths)
     }
 }
 

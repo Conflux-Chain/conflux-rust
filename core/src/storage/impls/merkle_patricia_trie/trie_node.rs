@@ -64,7 +64,7 @@ pub trait TrieNodeTrait: Default {
 #[derive(Clone, Debug, PartialEq)]
 pub struct VanillaTrieNode<NodeRefT: NodeRefTrait> {
     compressed_path: CompressedPathRaw,
-    maybe_value: Option<Box<[u8]>>,
+    mpt_value: MptValue<Box<[u8]>>,
     children_table: VanillaChildrenTable<NodeRefT>,
     merkle_hash: MerkleHash,
 }
@@ -75,7 +75,7 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     fn default() -> Self {
         Self {
             compressed_path: Default::default(),
-            maybe_value: None,
+            mpt_value: MptValue::None,
             children_table: Default::default(),
             merkle_hash: MERKLE_NULL_NODE,
         }
@@ -110,22 +110,17 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
         self.compressed_path.as_ref()
     }
 
-    fn has_value(&self) -> bool { self.maybe_value.is_some() }
+    fn has_value(&self) -> bool { self.mpt_value.is_some() }
 
     fn get_children_count(&self) -> u8 {
         self.children_table.get_children_count()
     }
 
     fn value_as_slice(&self) -> MptValue<&[u8]> {
-        match &self.maybe_value {
-            None => MptValue::None,
-            Some(v) => {
-                if v.len() == 0 {
-                    MptValue::TombStone
-                } else {
-                    MptValue::Some(v.as_ref())
-                }
-            }
+        match &self.mpt_value {
+            MptValue::None => MptValue::None,
+            MptValue::TombStone => MptValue::TombStone,
+            MptValue::Some(v) => MptValue::Some(v.as_ref()),
         }
     }
 
@@ -165,24 +160,19 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 
     unsafe fn delete_value_unchecked(&mut self) -> Box<[u8]> {
-        self.maybe_value.take().unwrap()
+        self.mpt_value.take().unwrap()
     }
 
     fn replace_value_valid(
         &mut self, valid_value: Box<[u8]>,
     ) -> MptValue<Box<[u8]>> {
-        let old_value = self.maybe_value.replace(valid_value);
+        let new_mpt_value = if valid_value.len() == 0 {
+            MptValue::TombStone
+        } else {
+            MptValue::Some(valid_value)
+        };
 
-        match old_value {
-            None => MptValue::None,
-            Some(v) => {
-                if v.len() == 0 {
-                    MptValue::TombStone
-                } else {
-                    MptValue::Some(v)
-                }
-            }
-        }
+        std::mem::replace(&mut self.mpt_value, new_mpt_value)
     }
 
     fn get_children_table_ref(&self) -> &VanillaChildrenTable<NodeRefT> {
@@ -196,9 +186,20 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
     ) -> Self
     {
+        let mpt_value = match maybe_value {
+            None => MptValue::None,
+            Some(v) => {
+                if v.len() == 0 {
+                    MptValue::TombStone
+                } else {
+                    MptValue::Some(v)
+                }
+            }
+        };
+
         Self {
             compressed_path,
-            maybe_value,
+            mpt_value,
             children_table,
             merkle_hash: merkle.clone(),
         }
