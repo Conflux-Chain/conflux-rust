@@ -112,6 +112,36 @@ fn test_slice_verifier() {
             .unwrap()
             .is_valid
         );
+        /*
+        // Check incomplete chunk.
+        for j_omit in [
+            (chunk_start_offset..chunk_start_offset + 5)
+                .collect::<Vec<usize>>(),
+            (chunk_bound - 5..chunk_bound).collect::<Vec<usize>>(),
+        ]
+        .concat()
+        {
+            let mut keys = Vec::with_capacity(chunk_bound - chunk_start_offset);
+            let mut values =
+                Vec::with_capacity(chunk_bound - chunk_start_offset);
+            for index in chunk_start_offset..chunk_bound {
+                if index != j_omit {
+                    keys.push(&*mpt_kv_iter.kv[index].0);
+                    values.push(mpt_kv_iter.kv[index].1.clone());
+                }
+            }
+            assert!(
+                !MptSliceVerifier::new(
+                    last_proof,
+                    slicer_chunk_proofs[i].as_ref(),
+                    merkle_root
+                )
+                .restore(&keys, &values)
+                .unwrap()
+                .is_valid
+            )
+        }
+        */
         last_proof = slicer_chunk_proofs[i].as_ref();
         chunk_start_offset = chunk_bound;
     }

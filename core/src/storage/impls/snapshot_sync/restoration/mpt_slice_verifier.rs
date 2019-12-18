@@ -8,12 +8,15 @@
 pub struct MptSliceVerifier {
     key_value_inserter: MptCursorRw<
         SliceMptRebuilder,
-        IncompleteReadWritePathNode<SliceMptRebuilder>,
+        SliceVerifyReadWritePathNode<SliceMptRebuilder>,
     >,
 }
 
 pub struct SliceMptRebuilder {
     merkle_root: MerkleHash,
+    // FIXME: add boundary node values,
+    // FIXME: add left and right bounds to filter which boundary node values to
+    // FIXME: include in chunks and to verify.
     pub boundary_nodes: HashMap<CompressedPathRaw, VanillaTrieNode<MerkleHash>>,
     pub inner_nodes_to_write: Vec<(CompressedPathRaw, SnapshotMptNode)>,
     pub boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
@@ -213,7 +216,7 @@ use super::super::super::{
     merkle_patricia_trie::{mpt_cursor::*, *},
 };
 use crate::storage::impls::merkle_patricia_trie::{
-    mpt_cursor::incomplete_read_write_path_node::IncompleteReadWritePathNode,
+    mpt_cursor::slice_restore_read_write_path_node::SliceVerifyReadWritePathNode,
     walk::GetChildTrait,
 };
 use cfx_types::H256;

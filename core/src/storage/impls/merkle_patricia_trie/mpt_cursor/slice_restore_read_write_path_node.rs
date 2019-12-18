@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub struct IncompleteReadWritePathNode<Mpt>(Option<ReadWritePathNode<Mpt>>);
+pub struct SliceVerifyReadWritePathNode<Mpt>(Option<ReadWritePathNode<Mpt>>);
 
-impl<Mpt> IncompleteReadWritePathNode<Mpt> {
+impl<Mpt> SliceVerifyReadWritePathNode<Mpt> {
     fn take(mut self) -> ReadWritePathNode<Mpt> { self.0.take().unwrap() }
 
     fn as_ref(&self) -> &ReadWritePathNode<Mpt> { self.0.as_ref().unwrap() }
@@ -14,16 +14,16 @@ impl<Mpt> IncompleteReadWritePathNode<Mpt> {
     }
 }
 
-impl<Mpt> Drop for IncompleteReadWritePathNode<Mpt> {
+impl<Mpt> Drop for SliceVerifyReadWritePathNode<Mpt> {
     fn drop(&mut self) {}
 }
 
-impl<Mpt> TakeMpt<Mpt> for IncompleteReadWritePathNode<Mpt> {
+impl<Mpt> TakeMpt<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
     fn take_mpt(&mut self) -> Option<Mpt> { self.as_mut().take_mpt() }
 }
 
 impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt>
-    for IncompleteReadWritePathNode<Mpt>
+    for SliceVerifyReadWritePathNode<Mpt>
 {
     fn load_node_wrapper<'a>(
         &self, mpt: &mut Mpt, path: &CompressedPathRaw,
@@ -32,7 +32,7 @@ impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt>
     }
 }
 
-impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for IncompleteReadWritePathNode<Mpt> {
+impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
     fn new_loaded(basic_node: BasicPathNode<Mpt>, parent_node: &Self) -> Self {
         let mut rw_path_node = ReadWritePathNode::<Mpt>::new_loaded(
             basic_node,
@@ -40,7 +40,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for IncompleteReadWritePathNode<Mpt> {
         );
         // Disable path compression for boundary nodes of MptSliceVerifier.
         rw_path_node.maybe_first_realized_child_index = 0;
-        IncompleteReadWritePathNode(Some(rw_path_node))
+        SliceVerifyReadWritePathNode(Some(rw_path_node))
     }
 
     fn commit(self, parent_node: &mut Self) -> Result<Option<Mpt>> {
@@ -99,7 +99,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for IncompleteReadWritePathNode<Mpt> {
     }
 }
 
-impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for IncompleteReadWritePathNode<Mpt> {
+impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
     fn get_read_write_path_node(&mut self) -> &mut ReadWritePathNode<Mpt> {
         self.as_mut()
     }
@@ -129,12 +129,12 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for IncompleteReadWritePathNode<Mpt> {
 }
 
 impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
-    CursorToRootNode<Mpt, IncompleteReadWritePathNode<Mpt>> for Cursor
+    CursorToRootNode<Mpt, SliceVerifyReadWritePathNode<Mpt>> for Cursor
 {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
-    ) -> IncompleteReadWritePathNode<Mpt> {
-        IncompleteReadWritePathNode(Some(ReadWritePathNode {
+    ) -> SliceVerifyReadWritePathNode<Mpt> {
+        SliceVerifyReadWritePathNode(Some(ReadWritePathNode {
             basic_node,
             is_loaded: !mpt_is_empty,
             maybe_first_realized_child_index:

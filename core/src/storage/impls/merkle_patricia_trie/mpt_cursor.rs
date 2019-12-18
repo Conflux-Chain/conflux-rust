@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod incomplete_read_write_path_node;
+pub mod slice_restore_read_write_path_node;
 
 /// Cursor to access Snapshot Mpt.
 pub struct MptCursor<Mpt, PathNode> {
