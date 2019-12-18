@@ -204,6 +204,7 @@ impl StateManager {
             .storage_manager
             .get_snapshot_manager()
             .get_snapshot_by_epoch_id(&state_index.snapshot_epoch_id)?;
+        debug!("get_state_trees: state_index={:?}", state_index);
 
         match maybe_snapshot {
             None => {
@@ -252,109 +253,87 @@ impl StateManager {
     ) -> Result<Option<StateTrees>> {
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
-        // Should shift to a new snapshot
-        // When the delta_height is set to None (e.g. in tests), we assume that
-        // the snapshot shift check is disabled.
-        if parent_state_index
+        let (
+            snapshot_epoch_id,
+            maybe_delta_trie_height,
+            maybe_intermediate_trie_key_padding,
+            maybe_delta_mpt_key_padding,
+            intermediate_epoch_id,
+            new_delta_root,
+        ) = if parent_state_index
             .maybe_delta_trie_height
             .unwrap_or_default() as u64
             == SNAPSHOT_EPOCHS_CAPACITY
         {
-            debug!(
-                "get_state_trees_for_next_epoch: shift for epoch {:?}",
-                parent_state_index.epoch_id
-            );
-            let maybe_snapshot = self
-                .storage_manager
-                .get_snapshot_manager()
-                .get_snapshot_by_epoch_id(
-                    parent_state_index.intermediate_epoch_id,
-                )?;
-            if maybe_snapshot.is_none() {
-                return Ok(None);
-            }
-            let new_snapshot = maybe_snapshot.unwrap();
-            let new_snapshot_merkle_root =
-                match self.storage_manager.get_snapshot_info_at_epoch(
-                    parent_state_index.intermediate_epoch_id,
-                ) {
-                    None => return Ok(None),
-                    Some(info) => info.merkle_root,
-                };
+            // Should shift to a new snapshot
+            // When the delta_height is set to None (e.g. in tests), we
+            // assume that the snapshot shift check is
+            // disabled.
 
-            Self::get_state_trees_internal(
-                new_snapshot,
-                parent_state_index.snapshot_epoch_id,
-                new_snapshot_merkle_root,
-                // Delta MPT is moved to intermediate trie.
-                Some(
-                    self.storage_manager
-                        .get_delta_mpt(&parent_state_index.snapshot_epoch_id)?,
-                ),
-                Some(parent_state_index.delta_mpt_key_padding),
-                self.storage_manager
-                    .get_delta_mpt(parent_state_index.intermediate_epoch_id)?,
-                None,
-                parent_state_index.epoch_id,
-                parent_state_index.epoch_id,
-                None,
-                maybe_height,
+            (
+                parent_state_index.intermediate_epoch_id,
                 Some(1),
+                // This is only used for the case of genesis
+                Some(parent_state_index.delta_mpt_key_padding),
+                None,
+                parent_state_index.epoch_id,
+                true,
             )
         } else {
-            let maybe_delta_trie_height =
-                parent_state_index.maybe_delta_trie_height.map(|x| x + 1);
-            let maybe_snapshot = self
-                .storage_manager
-                .get_snapshot_manager()
-                .get_snapshot_by_epoch_id(
-                    &parent_state_index.snapshot_epoch_id,
-                )?;
-            if maybe_snapshot.is_none() {
-                return Ok(None);
-                // TODO: there is a special case when the snapshot_root isn't
-                // TODO: available but the snapshot at the intermediate epoch
-                // TODO: exists.
-            };
-            let snapshot_merkle_root =
-                match self.storage_manager.get_snapshot_info_at_epoch(
-                    parent_state_index.snapshot_epoch_id,
-                ) {
-                    None => return Ok(None),
-                    Some(info) => info.merkle_root,
-                };
-
-            let delta_mpt = self
-                .storage_manager
-                .get_delta_mpt(parent_state_index.snapshot_epoch_id)?;
-            let maybe_delta_root = delta_mpt
-                .get_root_node_ref_by_epoch(parent_state_index.epoch_id)?;
-            let maybe_intermediate_trie = if parent_state_index
-                .maybe_height
-                .expect("height is not None for next_epoch")
-                < SNAPSHOT_EPOCHS_CAPACITY
-            {
-                None
-            } else {
-                self.storage_manager.get_intermediate_mpt(
-                    &parent_state_index.snapshot_epoch_id,
-                )?
-            };
-            Self::get_state_trees_internal(
-                maybe_snapshot.unwrap(),
+            // The special case for the epochs in the snapshot (except the first
+            // one) after a full sync will also fall into this case,
+            // because parent_state_index.snapshot_epoch_id is from
+            // ExecutionCommitment and set to the same as the
+            // previous snapshot_epoch_id
+            (
                 parent_state_index.snapshot_epoch_id,
-                snapshot_merkle_root,
-                maybe_intermediate_trie,
+                parent_state_index.maybe_delta_trie_height.map(|x| x + 1),
                 parent_state_index.maybe_intermediate_mpt_key_padding,
-                delta_mpt,
                 Some(parent_state_index.delta_mpt_key_padding),
                 parent_state_index.intermediate_epoch_id,
-                parent_state_index.epoch_id,
-                maybe_delta_root,
-                maybe_height,
-                maybe_delta_trie_height,
+                false,
             )
-        }
+        };
+
+        let maybe_snapshot = self
+            .storage_manager
+            .get_snapshot_manager()
+            .get_snapshot_by_epoch_id(snapshot_epoch_id)?;
+        if maybe_snapshot.is_none() {
+            return Ok(None);
+            // TODO: there is a special case when the snapshot_root isn't
+            // TODO: available but the snapshot at the intermediate epoch
+            // TODO: exists.
+        };
+        let snapshot_merkle_root = match self
+            .storage_manager
+            .get_snapshot_info_at_epoch(snapshot_epoch_id)
+        {
+            None => return Ok(None),
+            Some(info) => info.merkle_root,
+        };
+        let delta_mpt =
+            self.storage_manager.get_delta_mpt(snapshot_epoch_id)?;
+        let maybe_delta_root = if new_delta_root {
+            None
+        } else {
+            delta_mpt.get_root_node_ref_by_epoch(parent_state_index.epoch_id)?
+        };
+        Self::get_state_trees_internal(
+            maybe_snapshot.unwrap(),
+            parent_state_index.snapshot_epoch_id,
+            snapshot_merkle_root,
+            self.storage_manager
+                .get_intermediate_mpt(snapshot_epoch_id)?,
+            maybe_intermediate_trie_key_padding,
+            delta_mpt,
+            maybe_delta_mpt_key_padding,
+            intermediate_epoch_id,
+            parent_state_index.epoch_id,
+            maybe_delta_root,
+            maybe_height,
+            maybe_delta_trie_height,
+        )
     }
 
     /// Check if we can make a new snapshot, and if so, make it in background.

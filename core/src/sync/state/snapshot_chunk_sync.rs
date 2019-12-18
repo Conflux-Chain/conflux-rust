@@ -488,6 +488,22 @@ impl SnapshotChunkSync {
                 .expect("All headers exist")
                 .parent_hash();
         }
+        let delta_height = sync_handler
+            .graph
+            .data_man
+            .block_header_by_hash(&deferred_block_hash)
+            .unwrap()
+            .height()
+            % SNAPSHOT_EPOCHS_CAPACITY;
+        let snapshot_epoch_id = sync_handler
+            .graph
+            .data_man
+            .get_parent_epochs_for(deferred_block_hash, delta_height)
+            .0;
+        let mut fake_state_root =
+            StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
+        fake_state_root.aux_info.snapshot_epoch_id = snapshot_epoch_id;
+        fake_state_root.aux_info.intermediate_epoch_id = snapshot_epoch_id;
         // FIXME: Because state_root_aux_info can't be computed for state block
         // FIXME: before snapshot, for the reward epoch count, maybe
         // FIXME: save it to a dedicated place for reward computation.
@@ -506,7 +522,7 @@ impl SnapshotChunkSync {
                     // FIXME: the state root is wrong for epochs before sync
                     // point. FIXME: but these information
                     // won't be used.
-                    StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE),
+                    fake_state_root.clone(),
                     inner.receipt_blame_vec[i],
                     inner.bloom_blame_vec[i],
                 );
@@ -525,12 +541,6 @@ impl SnapshotChunkSync {
                 true, /* persistent */
             );
         }
-        sync_handler
-            .graph
-            .data_man
-            .storage_manager
-            .get_storage_manager()
-            .register_new_snapshot(inner.snapshot_info.clone());
     }
 
     pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {

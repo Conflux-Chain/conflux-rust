@@ -58,13 +58,6 @@ impl StorageManager {
         storage_conf: StorageConfiguration,
     ) -> Self
     {
-        // Create and register the initial empty snapshot for genesis block
-        // and blocks before the second snapshot.
-        let mut snapshot_associated_mpts_by_epoch = HashMap::new();
-        let mut snapshot_info_map = HashMap::new();
-        snapshot_associated_mpts_by_epoch.insert(NULL_EPOCH, (None, None));
-        snapshot_info_map
-            .insert(NULL_EPOCH, SnapshotInfo::genesis_snapshot_info());
         let storage_manager = Self {
             delta_db_manager,
             snapshot_manager: Box::new(StorageManagerFullNode::<
@@ -80,15 +73,15 @@ impl StorageManager {
                 delta_trie_destroy_error_2: Cell::new(None),
                 snapshot_error: Cell::new(None),
             },
-            snapshot_associated_mpts_by_epoch: RwLock::new(
-                snapshot_associated_mpts_by_epoch,
-            ),
+            snapshot_associated_mpts_by_epoch: Default::default(),
             in_progress_snapshoting_tasks: Default::default(),
             current_snapshots: Default::default(),
-            snapshot_info_map_by_epoch: RwLock::new(snapshot_info_map),
+            snapshot_info_map_by_epoch: Default::default(),
             last_confirmed_snapshot_id: Default::default(),
             storage_conf,
         };
+        storage_manager
+            .register_new_snapshot(SnapshotInfo::genesis_snapshot_info(), true);
 
         storage_manager
     }
@@ -347,7 +340,7 @@ impl StorageManager {
                 };
                 match maybe_new_snapshot_info {
                     Ok(snapshot_info) => {
-                        this.register_new_snapshot(snapshot_info);
+                        this.register_new_snapshot(snapshot_info, false);
                     }
                     Err(e) => {
                         // FIXME: log the error.
@@ -378,26 +371,53 @@ impl StorageManager {
         Ok(())
     }
 
+    pub fn reregister_genesis_snapshot(
+        &self, genesis_epoch_id: &EpochId,
+    ) -> Result<()> {
+        debug!(
+            "reregister_genesis_snapshot: epoch_id={:?}",
+            genesis_epoch_id
+        );
+        let mut mpts = self.snapshot_associated_mpts_by_epoch.write();
+        let old_genesis_mpts = mpts
+            .get_mut(genesis_epoch_id)
+            .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
+        if old_genesis_mpts.0.is_some() {
+            bail!(ErrorKind::DeltaMPTAlreadyExists);
+        }
+        mem::swap(&mut old_genesis_mpts.0, &mut old_genesis_mpts.1);
+        Ok(())
+    }
+
     /// This function is made public only for testing.
-    pub fn register_new_snapshot(&self, new_snapshot_info: SnapshotInfo) {
+    pub fn register_new_snapshot(
+        &self, new_snapshot_info: SnapshotInfo, is_genesis: bool,
+    ) {
         debug!("register_new_snapshot: info={:?}", new_snapshot_info);
         // FIXME: update db about new current_snapshots.
         let snapshot_epoch_id = new_snapshot_info.get_snapshot_epoch_id();
         // Register intermediate MPT for the new snapshot.
         let mut snapshot_associated_mpts_locked =
             self.snapshot_associated_mpts_by_epoch.write();
-        // Parent's delta mpt becomes intermediate_delta_mpt for the new
-        // snapshot.
-        //
-        // It can't happen when the parent's delta mpt is still empty we
-        // are already making the snapshot.
-        let intermediate_delta_mpt = snapshot_associated_mpts_locked
-            .get(&new_snapshot_info.parent_snapshot_epoch_id)
-            .unwrap()
-            .1
-            .clone();
-        snapshot_associated_mpts_locked
-            .insert(snapshot_epoch_id.clone(), (intermediate_delta_mpt, None));
+        if !is_genesis {
+            // Parent's delta mpt becomes intermediate_delta_mpt for the new
+            // snapshot.
+            //
+            // It can't happen when the parent's delta mpt is still empty we
+            // are already making the snapshot.
+            let intermediate_delta_mpt = snapshot_associated_mpts_locked
+                .get(&new_snapshot_info.parent_snapshot_epoch_id)
+                .unwrap()
+                .1
+                .clone();
+            snapshot_associated_mpts_locked.insert(
+                snapshot_epoch_id.clone(),
+                (intermediate_delta_mpt, None),
+            );
+        } else {
+            snapshot_associated_mpts_locked
+                .insert(snapshot_epoch_id.clone(), (None, None));
+        }
         self.snapshot_info_map_by_epoch
             .write()
             .insert(snapshot_epoch_id.clone(), new_snapshot_info.clone());
@@ -696,6 +716,7 @@ use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
+    mem,
     sync::{Arc, Weak},
     thread,
 };

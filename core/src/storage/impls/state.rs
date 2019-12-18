@@ -155,29 +155,41 @@ impl<'a> State<'a> {
             _ => {}
         }
 
-        if let Some(intermediate_trie) = self.maybe_intermediate_trie.as_ref() {
-            let (maybe_value, maybe_proof) = self.get_from_delta(
-                intermediate_trie,
-                self.intermediate_trie_root.clone(),
-                &access_key.to_delta_mpt_key_bytes(
-                    &self.maybe_intermediate_trie_key_padding.as_ref().unwrap(),
-                ),
-                with_proof,
-            )?;
+        // FIXME This is for the case of read-only access of the first snapshot
+        // state where intermediate_mpt is some This hack only works
+        // when mpt databases are the same A correct way might be using
+        // genesis_hash for the snapshot_epoch_id of genesis, and
+        // use NULL_EPOCH only for the parent of genesis
+        if self.maybe_intermediate_trie_key_padding.is_some() {
+            if let Some(intermediate_trie) =
+                self.maybe_intermediate_trie.as_ref()
+            {
+                let (maybe_value, maybe_proof) = self.get_from_delta(
+                    intermediate_trie,
+                    self.intermediate_trie_root.clone(),
+                    &access_key.to_delta_mpt_key_bytes(
+                        &self
+                            .maybe_intermediate_trie_key_padding
+                            .as_ref()
+                            .unwrap(),
+                    ),
+                    with_proof,
+                )?;
 
-            proof.with_intermediate(
-                maybe_proof,
-                self.maybe_intermediate_trie_key_padding.clone(),
-            );
+                proof.with_intermediate(
+                    maybe_proof,
+                    self.maybe_intermediate_trie_key_padding.clone(),
+                );
 
-            match maybe_value {
-                MptValue::Some(value) => {
-                    return Ok((Some(value), proof));
+                match maybe_value {
+                    MptValue::Some(value) => {
+                        return Ok((Some(value), proof));
+                    }
+                    MptValue::TombStone => {
+                        return Ok((None, proof));
+                    }
+                    _ => {}
                 }
-                MptValue::TombStone => {
-                    return Ok((None, proof));
-                }
-                _ => {}
             }
         }
 
@@ -199,8 +211,11 @@ impl<'a> Drop for State<'a> {
 
 impl<'a> StateTrait for State<'a> {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
-        self.get_from_all_tries(access_key, false)
-            .map(|(value, _)| value)
+        let r = self
+            .get_from_all_tries(access_key.clone(), false)
+            .map(|(value, _)| value);
+        debug!("State: get key={:?} value={:?}", access_key, r);
+        r
     }
 
     fn get_with_proof(
@@ -210,6 +225,7 @@ impl<'a> StateTrait for State<'a> {
     }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
+        debug!("State: set key={:?} value={:?}", access_key, value);
         self.pre_modification();
 
         let root_node = self.get_or_create_delta_root_node()?;
@@ -327,17 +343,22 @@ impl<'a> StateTrait for State<'a> {
             self.maybe_intermediate_trie.is_some(),
             self.height,
         );
-        // TODO: use a better criteria and put it in consensus maybe.
-        // At height SNAPSHOT_EPOCHS_CAPACITY, we will make snapshot to move the
-        // delta_mpt of NULL_EPOCH to intermediate_mpt
-        if self.delta_trie_height.unwrap() as u64
-            >= SNAPSHOT_EPOCHS_CAPACITY / 3
-            && self.height.unwrap() >= SNAPSHOT_EPOCHS_CAPACITY
+        if self.maybe_intermediate_trie.is_none()
+            && self.delta_trie_height.unwrap() as u64
+                == SNAPSHOT_EPOCHS_CAPACITY
         {
+            // For genesis or full sync, we will make snapshot to move the
+            // delta_mpt to intermediate_mpt
+            self.manager
+                .get_storage_manager()
+                .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
+        } else if self.delta_trie_height.unwrap() as u64
+            >= SNAPSHOT_EPOCHS_CAPACITY / 3
+            && self.maybe_intermediate_trie.is_some()
+        {
+            // TODO: use a better criteria and put it in consensus maybe.
             let snapshot_height = self.height.clone().unwrap()
                 - self.delta_trie_height.unwrap() as u64;
-            // maybe_intermediate_trie is None if this happens before the first
-            // snapshot after genesis/FullSync-snapshot
             self.manager.check_make_snapshot(
                 self.maybe_intermediate_trie.clone(),
                 self.intermediate_trie_root.clone(),
