@@ -251,7 +251,7 @@ impl MultiVersionMerklePatriciaTrie {
     }
 
     pub(super) fn set_parent_epoch(
-        &self, parent_epoch_id: EpochId, epoch_id: EpochId,
+        &self, epoch_id: EpochId, parent_epoch_id: EpochId,
     ) {
         self.parent_epoch_by_epoch
             .write()
