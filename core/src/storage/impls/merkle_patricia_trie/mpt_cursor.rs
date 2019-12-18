@@ -842,6 +842,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
         let trie_node = parent_node
             .load_node_wrapper(mpt.as_mut().unwrap(), &path_db_key)?;
+
         assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,

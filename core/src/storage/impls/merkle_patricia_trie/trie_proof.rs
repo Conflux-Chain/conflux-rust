@@ -13,7 +13,7 @@ pub struct TrieProof {
     parent_node_index: Vec<usize>,
     // Root node doesn't have parent, so we leave child_index[0]
     // default-initialized to 0.
-    child_index: Vec<u8>,
+    pub child_index: Vec<u8>,
     number_leaf_nodes: u32,
 }
 

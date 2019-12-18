@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MptValue<ValueType> {
     None,
     TombStone,
@@ -10,6 +10,13 @@ pub enum MptValue<ValueType> {
 }
 
 impl<ValueType: Default> MptValue<ValueType> {
+    pub fn is_some(&self) -> bool {
+        match self {
+            MptValue::Some(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn into_option(self) -> Option<ValueType> {
         match self {
             MptValue::None => None,
@@ -17,6 +24,8 @@ impl<ValueType: Default> MptValue<ValueType> {
             MptValue::Some(x) => Some(x),
         }
     }
+
+    pub fn take(&mut self) -> Self { std::mem::replace(self, MptValue::None) }
 
     pub fn unwrap(self) -> ValueType {
         match self {
