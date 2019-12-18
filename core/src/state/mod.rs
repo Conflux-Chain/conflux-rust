@@ -7,6 +7,10 @@ use self::account_entry::{
 };
 use crate::{
     bytes::Bytes,
+    executive::{
+        COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, INTERNAL_CONTRACT_CODE,
+        INTERNAL_CONTRACT_CODE_HASH, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
     hash::KECCAK_EMPTY,
     parameters::consensus_internal::RENTAL_PRICE_PER_STORAGE_KEY,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
@@ -239,6 +243,68 @@ impl<'a> State<'a> {
         })
     }
 
+    pub fn commission_balance(
+        &self, contract_address: &Address,
+    ) -> DbResult<U256> {
+        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)
+            .map(|x| x.commission_balance(&self.db, contract_address))
+    }
+
+    pub fn set_commission_balance(
+        &mut self, contract_address: &Address, contract_owner: &Address,
+        val: &U256,
+    ) -> DbResult<()>
+    {
+        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)
+            .map(|mut x| {
+                x.set_commission_balance(contract_address, contract_owner, val)
+            })
+    }
+
+    pub fn sub_commission_balance(
+        &mut self, contract_address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)
+            .map(|mut x| {
+                x.sub_commission_balance(&self.db, contract_address, by)
+            })
+    }
+
+    pub fn check_commission_privilege(
+        &self, contract_address: &Address, user: &Address,
+    ) -> DbResult<bool> {
+        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)?
+            .check_commission_privilege(&self.db, contract_address, user)
+    }
+
+    pub fn add_commission_privilege(
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
+    ) -> DbResult<()>
+    {
+        let mut account = self
+            .require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)?;
+        Ok(account.add_commission_privilege(
+            contract_address,
+            contract_owner,
+            user,
+        ))
+    }
+
+    pub fn remove_commission_privilege(
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
+    ) -> DbResult<()>
+    {
+        let mut account = self
+            .require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)?;
+        Ok(account.remove_commission_privilege(
+            contract_address,
+            contract_owner,
+            user,
+        ))
+    }
+
     pub fn nonce(&self, address: &Address) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, true, |acc| {
             acc.map_or(U256::zero(), |account| *account.nonce())
@@ -246,21 +312,39 @@ impl<'a> State<'a> {
     }
 
     pub fn code_hash(&self, address: &Address) -> DbResult<Option<H256>> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
-            acc.and_then(|acc| Some(acc.code_hash()))
-        })
+        if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
+            || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
+        {
+            Ok(Some(*INTERNAL_CONTRACT_CODE_HASH))
+        } else {
+            self.ensure_cached(address, RequireCache::None, true, |acc| {
+                acc.and_then(|acc| Some(acc.code_hash()))
+            })
+        }
     }
 
     pub fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
-        self.ensure_cached(address, RequireCache::CodeSize, true, |acc| {
-            acc.and_then(|acc| acc.code_size())
-        })
+        if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
+            || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
+        {
+            Ok(Some(INTERNAL_CONTRACT_CODE.len()))
+        } else {
+            self.ensure_cached(address, RequireCache::CodeSize, true, |acc| {
+                acc.and_then(|acc| acc.code_size())
+            })
+        }
     }
 
     pub fn code(&self, address: &Address) -> DbResult<Option<Arc<Bytes>>> {
-        self.ensure_cached(address, RequireCache::Code, true, |acc| {
-            acc.as_ref().map_or(None, |acc| acc.code())
-        })
+        if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
+            || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
+        {
+            Ok(Some(Arc::new(INTERNAL_CONTRACT_CODE.to_vec())))
+        } else {
+            self.ensure_cached(address, RequireCache::Code, true, |acc| {
+                acc.as_ref().map_or(None, |acc| acc.code())
+            })
+        }
     }
 
     pub fn bank_balance(&self, address: &Address) -> DbResult<U256> {

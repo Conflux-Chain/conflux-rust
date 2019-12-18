@@ -13,7 +13,6 @@ use crate::{
 };
 use cfx_types::{Address, H256, U256};
 use primitives::{Account, EpochId, StorageKey};
-use std::str::FromStr;
 
 mod error;
 
@@ -126,22 +125,18 @@ impl<'a> StateDb<'a> {
     }
 
     pub fn get_interest_rate(&self) -> Result<U256> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
-        let interest_rate_key =
-            StorageKey::new_storage_key(&address, Self::INTEREST_RATE_KEY);
+        let interest_rate_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            Self::INTEREST_RATE_KEY,
+        );
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
         // This number is 0.04 * INTEREST_RATE_SCALE
         Ok(interest_rate_opt.unwrap_or(U256::from(INITIAL_INTEREST_RATE)))
     }
 
     pub fn get_accumulate_interest_rate(&self) -> Result<U256> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
         let acc_interest_rate_key = StorageKey::new_storage_key(
-            &address,
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::ACCUMULATE_INTEREST_RATE_KEY,
         );
         let acc_interest_rate_opt = self.get::<U256>(acc_interest_rate_key)?;
@@ -149,31 +144,26 @@ impl<'a> StateDb<'a> {
     }
 
     pub fn get_total_tokens(&self) -> Result<U256> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
-        let total_tokens_key =
-            StorageKey::new_storage_key(&address, Self::TOTAL_TOKENS_KEY);
+        let total_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            Self::TOTAL_TOKENS_KEY,
+        );
         let total_tokens_opt = self.get::<U256>(total_tokens_key)?;
         Ok(total_tokens_opt.unwrap_or(U256::zero()))
     }
 
     pub fn get_total_bank_tokens(&self) -> Result<U256> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
-        let total_bank_tokens_key =
-            StorageKey::new_storage_key(&address, Self::TOTAL_BANK_TOKENS_KEY);
+        let total_bank_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            Self::TOTAL_BANK_TOKENS_KEY,
+        );
         let total_bank_tokens_opt = self.get::<U256>(total_bank_tokens_key)?;
         Ok(total_bank_tokens_opt.unwrap_or(U256::zero()))
     }
 
     pub fn get_total_storage_tokens(&self) -> Result<U256> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
         let total_storage_tokens_key = StorageKey::new_storage_key(
-            &address,
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::TOTAL_STORAGE_TOKENS_KEY,
         );
         let total_storage_tokens_opt =
@@ -182,55 +172,46 @@ impl<'a> StateDb<'a> {
     }
 
     pub fn set_interest_rate(&mut self, interest_rate: &U256) -> Result<()> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
-        let interest_rate_key =
-            StorageKey::new_storage_key(&address, Self::INTEREST_RATE_KEY);
+        let interest_rate_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            Self::INTEREST_RATE_KEY,
+        );
         self.set::<U256>(interest_rate_key, interest_rate)
     }
 
     pub fn set_accumulate_interest_rate(
         &mut self, accumulate_interest_rate: &U256,
     ) -> Result<()> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
         let acc_interest_rate_key = StorageKey::new_storage_key(
-            &address,
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::ACCUMULATE_INTEREST_RATE_KEY,
         );
         self.set::<U256>(acc_interest_rate_key, accumulate_interest_rate)
     }
 
     pub fn set_total_tokens(&mut self, total_tokens: &U256) -> Result<()> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
-        let total_tokens_key =
-            StorageKey::new_storage_key(&address, Self::TOTAL_TOKENS_KEY);
+        let total_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            Self::TOTAL_TOKENS_KEY,
+        );
         self.set::<U256>(total_tokens_key, total_tokens)
     }
 
     pub fn set_total_bank_tokens(
         &mut self, total_bank_tokens: &U256,
     ) -> Result<()> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
-        let total_bank_tokens_key =
-            StorageKey::new_storage_key(&address, Self::TOTAL_BANK_TOKENS_KEY);
+        let total_bank_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            Self::TOTAL_BANK_TOKENS_KEY,
+        );
         self.set::<U256>(total_bank_tokens_key, total_bank_tokens)
     }
 
     pub fn set_total_storage_tokens(
         &mut self, total_storage_tokens: &U256,
     ) -> Result<()> {
-        let address =
-            Address::from_str(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS)
-                .unwrap();
         let total_storage_tokens_key = StorageKey::new_storage_key(
-            &address,
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::TOTAL_STORAGE_TOKENS_KEY,
         );
         self.set::<U256>(total_storage_tokens_key, total_storage_tokens)

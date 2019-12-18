@@ -9,6 +9,8 @@ mod executive;
 pub use self::{
     executed::{Executed, ExecutionError, ExecutionResult},
     executive::{
-        contract_address, Executive, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+        contract_address, Executive,
+        COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, INTERNAL_CONTRACT_CODE,
+        INTERNAL_CONTRACT_CODE_HASH, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },
 };
