@@ -10,8 +10,18 @@ use crate::{
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use primitives::{Account, DepositInfo, StorageKey};
+use rlp::RlpStream;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
+
+lazy_static! {
+    static ref COMMISSION_BALANCE_STORAGE_KEY: H256 =
+        keccak("commission_balance");
+    static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: H256 =
+        H256::from_low_u64_le(1);
+    /// If we set this key, it means every account has commission privilege.
+    static ref COMMISSION_PRIVILEGE_SPECIAL_KEY: Address = Address::zero();
+}
 
 #[derive(Default, Clone, Debug, RlpDecodable, RlpEncodable)]
 pub struct StorageValue {
@@ -150,6 +160,116 @@ impl OverlayAccount {
     pub fn address(&self) -> &Address { &self.address }
 
     pub fn balance(&self) -> &U256 { &self.balance }
+
+    pub fn commission_balance<'a>(
+        &self, db: &StateDb<'a>, contract_address: &Address,
+    ) -> U256 {
+        let mut rlp_stream = RlpStream::new_list(2);
+        rlp_stream.append_list(contract_address.as_ref());
+        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
+        let key = keccak(rlp_stream.out());
+        BigEndianHash::into_uint(
+            &self.storage_at(db, &key).unwrap_or(H256::zero()),
+        )
+    }
+
+    /// Subtract `by` from current commission balance.
+    /// The caller will make sure the minimum value of current commission
+    /// balance and current balance will be greater than or equal to `by`.
+    pub fn sub_commission_balance<'a>(
+        &mut self, db: &StateDb<'a>, contract_address: &Address, by: &U256,
+    ) {
+        let mut rlp_stream = RlpStream::new_list(2);
+        rlp_stream.append_list(contract_address.as_ref());
+        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
+        let key = keccak(rlp_stream.out());
+        let balance = BigEndianHash::into_uint(
+            &self.storage_at(db, &key).unwrap_or(H256::zero()),
+        ) - by;
+        let contract_owner = if self.ownership_changes.contains_key(&key) {
+            *self.ownership_changes.get(&key).expect("key exists")
+        } else {
+            self.ownership_cache
+                .borrow()
+                .get(&key)
+                .expect("key exists")
+                .expect("value not none")
+                .clone()
+        };
+        self.set_storage(
+            key,
+            BigEndianHash::from_uint(&balance),
+            contract_owner,
+        );
+    }
+
+    pub fn set_commission_balance(
+        &mut self, contract_address: &Address, contract_owner: &Address,
+        val: &U256,
+    )
+    {
+        let mut rlp_stream = RlpStream::new_list(2);
+        rlp_stream.append_list(contract_address.as_ref());
+        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
+        let key = keccak(rlp_stream.out());
+        self.set_storage(key, BigEndianHash::from_uint(val), *contract_owner);
+    }
+
+    pub fn check_commission_privilege<'a>(
+        &self, db: &StateDb<'a>, contract_address: &Address, user: &Address,
+    ) -> DbResult<bool> {
+        let special_key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_ref());
+            keccak(rlp_stream.out())
+        };
+        let key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(user.as_ref());
+            keccak(rlp_stream.out())
+        };
+        let special_value = self.storage_at(db, &special_key)?;
+        if !special_value.is_zero() {
+            Ok(true)
+        } else {
+            self.storage_at(db, &key).map(|x| !x.is_zero())
+        }
+    }
+
+    /// Add commission privilege of `contract_address` to `user`.
+    /// We set the value to some nonzero value which will be persisted in db.
+    pub fn add_commission_privilege(
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
+    )
+    {
+        let mut rlp_stream = RlpStream::new_list(2);
+        rlp_stream.append_list(contract_address.as_ref());
+        rlp_stream.append_list(user.as_ref());
+        let key = keccak(rlp_stream.out());
+        self.set_storage(
+            key,
+            COMMISSION_PRIVILEGE_STORAGE_VALUE.clone(),
+            contract_owner,
+        );
+    }
+
+    /// Remove commission privilege of `contract_address` from `user`.
+    /// We set the value to zero, and the key/value will be released at commit
+    /// phase.
+    pub fn remove_commission_privilege(
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
+    )
+    {
+        let mut rlp_stream = RlpStream::new_list(2);
+        rlp_stream.append_list(contract_address.as_ref());
+        rlp_stream.append_list(user.as_ref());
+        let key = keccak(rlp_stream.out());
+        self.set_storage(key, H256::zero(), contract_owner);
+    }
 
     pub fn bank_balance(&self) -> &U256 { &self.bank_balance }
 
