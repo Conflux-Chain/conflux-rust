@@ -173,6 +173,9 @@ impl OverlayAccount {
         )
     }
 
+    /// Subtract `by` from current commission balance.
+    /// The caller will make sure the minimum value of current commission
+    /// balance and current balance will be greater than or equal to `by`.
     pub fn sub_commission_balance<'a>(
         &mut self, db: &StateDb<'a>, contract_address: &Address, by: &U256,
     ) {
@@ -235,6 +238,8 @@ impl OverlayAccount {
         }
     }
 
+    /// Add commission privilege of `contract_address` to `user`.
+    /// We set the value to some nonzero value which will be persisted in db.
     pub fn add_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
@@ -251,6 +256,9 @@ impl OverlayAccount {
         );
     }
 
+    /// Remove commission privilege of `contract_address` from `user`.
+    /// We set the value to zero, and the key/value will be released at commit
+    /// phase.
     pub fn remove_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,

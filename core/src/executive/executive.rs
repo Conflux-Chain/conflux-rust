@@ -365,6 +365,7 @@ impl<'a> CallCreateExecutive<'a> {
                     state.discard_checkpoint();
                     substate.accrue(unconfirmed_substate);
                 } else {
+                    // FIXME: return error details.
                     state.revert_to_checkpoint();
                 }
             }
@@ -437,7 +438,7 @@ impl<'a> CallCreateExecutive<'a> {
     fn exec_commission_privilege_control_contract<'b: 'a>(
         params: &ActionParams, state: &mut State<'b>, gas_cost: &U256,
     ) -> vm::Result<()> {
-        // FIXME: params.address should be address of a contract.
+        // FIXME: params.sender should be address of a contract.
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -450,7 +451,7 @@ impl<'a> CallCreateExecutive<'a> {
         if data[0..4] == [219, 203, 249, 80] {
             // The first 4 bytes of keccak('commission_balance(uint256)')
             // is `0xdbcbf950`.
-            // 4 bytes `Method ID` + 32 bytes + `balance`.
+            // 4 bytes `Method ID` + 32 bytes `balance`.
             if data.len() != 36 {
                 Err(vm::Error::InternalContract("invalid data"))
             } else {
@@ -1211,6 +1212,7 @@ impl<'a, 'b> Executive<'a, 'b> {
         );
         match call_exec.kind {
             CallCreateExecutiveKind::ExecCall(ref params, ref mut substate) => {
+                // This is the acutal gas_cost for the caller.
                 let gas = match &params.data {
                     Some(ref data) => {
                         params.gas
@@ -1235,6 +1237,8 @@ impl<'a, 'b> Executive<'a, 'b> {
                         self.state.commission_balance(&params.code_address)?;
                     if gas_cost <= commission_balance && gas_cost <= balance {
                         self.state.checkpoint();
+                        // FIXME: If there are some db errors, should we panic
+                        // here?
                         self.state.sub_commission_balance(
                             &params.code_address,
                             &gas_cost,
@@ -2109,7 +2113,14 @@ mod tests {
         let mut substate = Substate::new();
 
         state
-            .add_balance(&sender, &U256::from(1000000), CleanupMode::NoEmpty)
+            .add_balance(
+                &sender,
+                &U256::from(2_000_000_000_000_000_000u64),
+                CleanupMode::NoEmpty,
+            )
+            .unwrap();
+        state
+            .deposit(&sender, &U256::from(1_000_000_000_000_000_000u64), 100)
             .unwrap();
         let FinalizationResult { gas_left, .. } = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
@@ -2118,7 +2129,7 @@ mod tests {
 
         assert_eq!(gas_left, U256::from(62_976));
         assert_eq!(substate.contracts_created.len(), 0);
-        assert_eq!(state.balance(&address).unwrap(), U256::from(1000000));
+        assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
 
         state
             .add_balance(&caller1, &U256::from(100_000), CleanupMode::NoEmpty)
