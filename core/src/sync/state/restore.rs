@@ -207,11 +207,10 @@ impl Restorer {
     pub fn restored_state_root(
         &self, state_manager: Arc<StateManager>,
     ) -> MerkleHash {
-        state_manager
-            .get_storage_manager()
-            .get_snapshot_info_at_epoch(&self.snapshot_epoch_id)
-            .unwrap()
-            .merkle_root
+        // TODO Double check the restored snapshot merkle root
+        // But if all chunks pass the verification, it should be the same as
+        // the this snapshot_merkle_root
+        self.snapshot_merkle_root
     }
 }
 

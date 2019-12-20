@@ -89,21 +89,11 @@ impl<'a> StorageKey<'a> {
             StorageKey::StorageKey {
                 address_bytes,
                 storage_key,
-            } => {
-                let bytes = delta_mpt_storage_key::new_storage_key(
-                    address_bytes,
-                    storage_key,
-                    padding,
-                );
-                assert_eq!(
-                    bytes.len(),
-                    64 + storage_key.len(),
-                    "bytes:{:?} self:{:?}",
-                    bytes,
-                    self
-                );
-                bytes
-            }
+            } => delta_mpt_storage_key::new_storage_key(
+                address_bytes,
+                storage_key,
+                padding,
+            ),
             StorageKey::CodeRootKey(address_bytes) => {
                 delta_mpt_storage_key::new_code_root_key(address_bytes, padding)
             }

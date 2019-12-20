@@ -25,7 +25,7 @@ class P2PTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def run_test(self):
-        block_number = 1000
+        block_number = 4000
 
         # Setup balance for each node
         client = RpcClient(self.nodes[0])
