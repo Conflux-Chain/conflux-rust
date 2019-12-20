@@ -211,11 +211,8 @@ impl<'a> Drop for State<'a> {
 
 impl<'a> StateTrait for State<'a> {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
-        let r = self
-            .get_from_all_tries(access_key.clone(), false)
-            .map(|(value, _)| value);
-        debug!("State: get key={:?} value={:?}", access_key, r);
-        r
+        self.get_from_all_tries(access_key.clone(), false)
+            .map(|(value, _)| value)
     }
 
     fn get_with_proof(
@@ -225,7 +222,6 @@ impl<'a> StateTrait for State<'a> {
     }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
-        debug!("State: set key={:?} value={:?}", access_key, value);
         self.pre_modification();
 
         let root_node = self.get_or_create_delta_root_node()?;
@@ -345,7 +341,10 @@ impl<'a> StateTrait for State<'a> {
         );
         if self.maybe_intermediate_trie.is_none()
             && self.delta_trie_height.unwrap() as u64
-                == SNAPSHOT_EPOCHS_CAPACITY
+                == self
+                    .manager
+                    .get_storage_manager()
+                    .get_snapshot_epoch_count()
         {
             // For genesis or full sync, we will make snapshot to move the
             // delta_mpt to intermediate_mpt
@@ -353,7 +352,11 @@ impl<'a> StateTrait for State<'a> {
                 .get_storage_manager()
                 .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
         } else if self.delta_trie_height.unwrap() as u64
-            >= SNAPSHOT_EPOCHS_CAPACITY / 3
+            >= self
+                .manager
+                .get_storage_manager()
+                .get_snapshot_epoch_count()
+                / 3
             && self.maybe_intermediate_trie.is_some()
         {
             // TODO: use a better criteria and put it in consensus maybe.
@@ -613,7 +616,6 @@ use crate::storage::{
         storage_manager::DeltaMptIterator,
     },
     state::*,
-    state_manager::*,
     storage_db::*,
     StateRootAuxInfo, StateRootWithAuxInfo,
 };

@@ -9,8 +9,7 @@ use crate::{
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
-        state_manager::{StateManager, SNAPSHOT_EPOCHS_CAPACITY},
-        storage_db::SnapshotInfo,
+        state_manager::StateManager, storage_db::SnapshotInfo,
         StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
@@ -494,7 +493,7 @@ impl SnapshotChunkSync {
             .block_header_by_hash(&deferred_block_hash)
             .unwrap()
             .height()
-            % SNAPSHOT_EPOCHS_CAPACITY;
+            % sync_handler.graph.data_man.get_snapshot_epoch_count();
         let snapshot_epoch_id = sync_handler
             .graph
             .data_man
@@ -678,7 +677,7 @@ impl SnapshotChunkSync {
         let (mut parent_snapshot_epoch, pivot_chain_parts) =
             ctx.manager.graph.data_man.get_parent_epochs_for(
                 snapshot_epoch_id.clone(),
-                SNAPSHOT_EPOCHS_CAPACITY,
+                ctx.manager.graph.data_man.get_snapshot_epoch_count(),
             );
         // FIXME: This is temporary hack because we haven't enabled snapshot
         // yet.

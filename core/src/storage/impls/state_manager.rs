@@ -65,11 +65,18 @@ impl StateManager {
     }
 
     // FIXME: change the parameter.
-    pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
+    pub fn new(
+        db: Arc<SystemDB>, conf: StorageConfiguration,
+        snapshot_conf: SnapshotConfiguration,
+    ) -> Self
+    {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager =
-            Arc::new(StorageManager::new(DeltaDbManager::new(db), conf));
+        let storage_manager = Arc::new(StorageManager::new(
+            DeltaDbManager::new(db),
+            conf,
+            snapshot_conf,
+        ));
 
         // FIXME: move the commit_lock into delta_mpt, along with the row_number
         // FIXME: reading into the new_or_delta_mpt method.
@@ -251,6 +258,10 @@ impl StateManager {
     pub fn get_state_trees_for_next_epoch(
         &self, parent_state_index: &StateIndex,
     ) -> Result<Option<StateTrees>> {
+        debug!(
+            "get_state_trees_for_next_epoch: parent= {:?}",
+            parent_state_index
+        );
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
         let (
@@ -263,7 +274,7 @@ impl StateManager {
         ) = if parent_state_index
             .maybe_delta_trie_height
             .unwrap_or_default() as u64
-            == SNAPSHOT_EPOCHS_CAPACITY
+            == self.storage_manager.get_snapshot_epoch_count()
         {
             // Should shift to a new snapshot
             // When the delta_height is set to None (e.g. in tests), we
@@ -321,7 +332,7 @@ impl StateManager {
         };
         Self::get_state_trees_internal(
             maybe_snapshot.unwrap(),
-            parent_state_index.snapshot_epoch_id,
+            snapshot_epoch_id,
             snapshot_merkle_root,
             self.storage_manager
                 .get_intermediate_mpt(snapshot_epoch_id)?,

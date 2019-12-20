@@ -47,6 +47,7 @@ pub struct ChunkKeyWithProof {
     pub proof: TrieProof,
 }
 
+/// FIXME Handle the case `next.is_some()`
 #[derive(Default, Clone, RlpEncodable, RlpDecodable)]
 pub struct RangedManifest {
     pub chunks: Vec<ChunkKeyWithProof>,
@@ -248,16 +249,6 @@ impl Chunk {
                 .into());
             }
         }
-
-        // keccak(value) == key
-        //        for item in self.items.iter() {
-        //            if keccak(&item.value).as_ref() != item.key.as_slice() {
-        //                return Err(ErrorKind::InvalidSnapshotChunk(
-        //                    "value hash mismatch with key".into(),
-        //                )
-        //                .into());
-        //            }
-        //        }
 
         Ok(())
     }

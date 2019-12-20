@@ -15,7 +15,6 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
-    storage::state_manager::SNAPSHOT_EPOCHS_CAPACITY,
 };
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
@@ -687,7 +686,7 @@ impl ConsensusGraphInner {
         if for_full_sync {
             // We need the extra +1 to get a state root that points to the
             // snapshot we want
-            from += SNAPSHOT_EPOCHS_CAPACITY as usize + 1;
+            from += self.data_man.get_snapshot_epoch_count() as usize + 1;
         }
 
         self.find_first_trusted_starting_from(from, blame_bound)

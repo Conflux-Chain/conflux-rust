@@ -110,6 +110,7 @@ impl FullClient {
         let storage_manager = Arc::new(StorageManager::new(
             ledger_db.clone(),
             conf.storage_config(),
+            conf.snapshot_config(),
         ));
         {
             let storage_manager_log_weak_ptr = Arc::downgrade(&storage_manager);
