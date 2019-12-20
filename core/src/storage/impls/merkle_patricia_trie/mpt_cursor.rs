@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod slice_restore_read_write_path_node;
-
 /// Cursor to access Snapshot Mpt.
 pub struct MptCursor<Mpt, PathNode> {
     mpt: Option<Mpt>,
@@ -1159,6 +1157,10 @@ impl<Mpt> ReadWritePathNode<Mpt> {
     /// Initial value for `self.first_realized_child_index`, meaning these is no
     /// child concluded in cursor iteration.
     const NULL_CHILD_INDEX: u8 = 16;
+
+    pub fn disable_path_compression(&mut self) {
+        self.maybe_first_realized_child_index = 0;
+    }
 
     fn get_has_io_error(&self) -> bool { self.io_error().get() }
 
