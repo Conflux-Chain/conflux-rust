@@ -40,17 +40,11 @@ impl MptSliceVerifier {
     {
         let mut boundary_nodes = HashMap::default();
 
-        match maybe_left_proof {
-            None => {}
-            Some(left_proof) => {
-                Self::add_boundary_nodes(&mut boundary_nodes, left_proof);
-            }
+        if let Some(left_proof) = maybe_left_proof {
+            Self::add_boundary_nodes(&mut boundary_nodes, left_proof);
         }
-        match maybe_right_proof {
-            None => {}
-            Some(right_proof) => {
-                Self::add_boundary_nodes(&mut boundary_nodes, right_proof);
-            }
+        if let Some(right_proof) = maybe_right_proof {
+            Self::add_boundary_nodes(&mut boundary_nodes, right_proof);
         }
 
         let boundary_nodes_to_load = Self::calculate_boundary_nodes_to_load(
@@ -86,6 +80,16 @@ impl MptSliceVerifier {
         for (key, value) in keys.iter().zip(values.into_iter()) {
             self.key_value_inserter
                 .insert(key.borrow(), value.clone())?;
+            if !self
+                .key_value_inserter
+                .current_node_mut()
+                .as_ref()
+                .mpt
+                .as_ref_assumed_owner()
+                .is_valid
+            {
+                break;
+            }
         }
         // We must open the path of the right bound, in order to re-calculate
         // merkle root, since some subtree may have been omitted thus
@@ -119,7 +123,7 @@ impl MptSliceVerifier {
     {
         let mut index_open_left_bounds =
             HashMap::<CompressedPathRaw, u8, RandomState>::default();
-        let mut index_open_right_bounds_incl =
+        let mut index_open_right_bounds_excl =
             HashMap::<CompressedPathRaw, u8, RandomState>::default();
         let mut remove_value =
             HashMap::<CompressedPathRaw, bool, RandomState>::default();
@@ -130,7 +134,7 @@ impl MptSliceVerifier {
 
             index_open_left_bounds
                 .insert(snapshot_mpt_keys.last().unwrap().clone(), 0);
-            index_open_right_bounds_incl.insert(
+            index_open_right_bounds_excl.insert(
                 snapshot_mpt_keys.last().unwrap().clone(),
                 CHILDREN_COUNT as u8,
             );
@@ -142,7 +146,7 @@ impl MptSliceVerifier {
                     snapshot_mpt_keys[i].clone(),
                     left_proof.child_index[i + 1] + 1,
                 );
-                index_open_right_bounds_incl
+                index_open_right_bounds_excl
                     .insert(snapshot_mpt_keys[i].clone(), CHILDREN_COUNT as u8);
                 remove_value.insert(snapshot_mpt_keys[i].clone(), false);
             }
@@ -152,72 +156,37 @@ impl MptSliceVerifier {
             let snapshot_mpt_keys =
                 right_proof.compute_snapshot_mpt_key_for_all_nodes();
 
-            // See FIXME above. More than one right boundary nodes may be
-            // useless.
-            let mut right_unused_boundary_node_index =
-                snapshot_mpt_keys.len() - 1;
-            while right_unused_boundary_node_index >= 1 {
-                let parent_node = boundary_nodes
-                    .get(
-                        &snapshot_mpt_keys
-                            [right_unused_boundary_node_index - 1],
-                    )
-                    .unwrap();
-                if parent_node.has_value() {
-                    break;
-                }
-                let parent_first_child = parent_node
-                    .get_children_table_ref()
-                    .iter()
-                    .next()
-                    .unwrap()
-                    .0;
-                let self_child_index =
-                    right_proof.child_index[right_unused_boundary_node_index];
-                if self_child_index != parent_first_child {
-                    break;
-                }
-
-                right_unused_boundary_node_index -= 1;
-            }
-
             for i in 0..snapshot_mpt_keys.len() - 1 {
+                index_open_left_bounds
+                    .entry(snapshot_mpt_keys[i].clone())
+                    .or_insert(0);
+                index_open_right_bounds_excl.insert(
+                    snapshot_mpt_keys[i].clone(),
+                    right_proof.child_index[i + 1],
+                );
                 remove_value
                     .entry(snapshot_mpt_keys[i].clone())
                     .or_insert(true);
             }
+            index_open_right_bounds_excl
+                .insert(snapshot_mpt_keys.last().unwrap().clone(), 0);
+            index_open_left_bounds
+                .insert(snapshot_mpt_keys.last().unwrap().clone(), 0);
             remove_value
                 .insert(snapshot_mpt_keys.last().unwrap().clone(), false);
-
-            for i in 0..snapshot_mpt_keys.len() {
-                index_open_left_bounds
-                    .entry(snapshot_mpt_keys[i].clone())
-                    .or_insert(0);
-            }
-
-            for i in 0..right_unused_boundary_node_index {
-                index_open_right_bounds_incl.insert(
-                    snapshot_mpt_keys[i].clone(),
-                    right_proof.child_index[i + 1],
-                );
-            }
-            for i in right_unused_boundary_node_index..snapshot_mpt_keys.len() {
-                index_open_right_bounds_incl
-                    .insert(snapshot_mpt_keys[i].clone(), 0);
-            }
         }
 
         let mut boundary_nodes_to_load = HashMap::default();
         for (snapshot_mpt_key, node) in boundary_nodes {
             let index_open_left_bound =
                 *index_open_left_bounds.get(snapshot_mpt_key).unwrap();
-            let index_open_right_bound_incl =
-                *index_open_right_bounds_incl.get(snapshot_mpt_key).unwrap();
+            let index_open_right_bound_excl =
+                *index_open_right_bounds_excl.get(snapshot_mpt_key).unwrap();
 
             let mut children_table = VanillaChildrenTable::default();
             for (child_index, merkle) in node.get_children_table_ref().iter() {
                 if child_index < index_open_left_bound
-                    || child_index >= index_open_right_bound_incl
+                    || child_index >= index_open_right_bound_excl
                 {
                     unsafe {
                         *children_table.get_child_mut_unchecked(child_index) =
@@ -377,15 +346,15 @@ impl GetRwMpt for SliceMptRebuilder {
     fn is_in_place_update(&self) -> bool { true }
 }
 
-use super::super::super::{
-    super::storage_db::snapshot_mpt::*,
-    errors::*,
-    merkle_patricia_trie::{mpt_cursor::*, *},
+use super::{
+    super::super::{
+        super::storage_db::snapshot_mpt::*,
+        errors::*,
+        merkle_patricia_trie::{mpt_cursor::*, *},
+    },
+    slice_restore_read_write_path_node::SliceVerifyReadWritePathNode,
 };
-use crate::storage::impls::merkle_patricia_trie::{
-    mpt_cursor::slice_restore_read_write_path_node::SliceVerifyReadWritePathNode,
-    walk::GetChildTrait,
-};
+use crate::storage::impls::merkle_patricia_trie::walk::GetChildTrait;
 use cfx_types::H256;
 use primitives::MerkleHash;
 use std::{
