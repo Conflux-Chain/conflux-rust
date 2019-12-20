@@ -607,11 +607,19 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
     fn load_node_wrapper(
         &self, mpt: &mut Mpt, path: &CompressedPathRaw,
     ) -> Result<SnapshotMptNode> {
-        let result = mpt.get_read_mpt().load_node(path);
-        if result.is_err() {
-            self.set_has_io_error();
+        match mpt.get_read_mpt().load_node(path) {
+            Err(e) => {
+                self.set_has_io_error();
+
+                Err(e)
+            }
+            Ok(Some(node)) => Ok(node),
+            Ok(None) => {
+                self.set_has_io_error();
+
+                Err(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            }
         }
-        result?.ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
     }
 }
 

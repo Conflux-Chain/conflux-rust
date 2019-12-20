@@ -137,8 +137,7 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
         SliceVerifyReadWritePathNode(Some(ReadWritePathNode {
             basic_node,
             is_loaded: !mpt_is_empty,
-            maybe_first_realized_child_index:
-                ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
+            maybe_first_realized_child_index: 0,
             the_first_child_if_pending: None,
             maybe_compressed_path_split_child_index:
                 ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
