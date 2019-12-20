@@ -58,6 +58,9 @@ pub fn new_state_manager_for_testing() -> StateManager {
             node_map_size: 20_000_000,
             recent_lfu_factor: 4.0,
         },
+        SnapshotConfiguration {
+            snapshot_epoch_count: 100000000000,
+        },
     )
 }
 
@@ -144,6 +147,7 @@ use crate::storage::{
 use crate::{
     ext_db::SystemDB,
     storage::state_manager::{StateManager, StorageConfiguration},
+    storage_db::SnapshotConfiguration,
 };
 use cfx_types::Address;
 use elastic_array::ElasticArray128;

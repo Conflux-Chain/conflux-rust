@@ -27,8 +27,7 @@ use primitives::{
 };
 
 use cfxcore::storage::{
-    state_manager::{height_to_delta_height, SNAPSHOT_EPOCHS_CAPACITY},
-    storage_db::KeyValueDbTraitRead,
+    storage_db::{KeyValueDbTraitRead, SnapshotConfiguration},
     StateRootAuxInfo,
 };
 use std::{
@@ -304,6 +303,9 @@ fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
     Ok(Arc::new(StateManager::new(
         db,
         StorageConfiguration::default(),
+        SnapshotConfiguration {
+            snapshot_epoch_count: 100000000000,
+        },
     )))
 }
 
@@ -374,13 +376,23 @@ fn add_accounts(
     while pending > 0 {
         let n = min(accounts_per_epoch, pending);
         let start2 = Instant::now();
-        let aux_info_tmp = if height_to_delta_height(*height) == 0 {
+        let aux_info_tmp = if manager
+            .get_storage_manager()
+            .height_to_delta_height(*height)
+            == 0
+        {
             old_aux_info
         } else {
             aux_info
         };
-        let state_index =
-            StateIndex::new_for_next_epoch(&epoch_id, aux_info_tmp, *height);
+        let state_index = StateIndex::new_for_next_epoch(
+            &epoch_id,
+            aux_info_tmp,
+            *height,
+            manager
+                .get_storage_manager()
+                .height_to_delta_height(*height),
+        );
         epoch_id =
             add_accounts_and_commit(manager, n, &mut account_iter, state_index);
         *height += 1;

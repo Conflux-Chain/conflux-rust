@@ -4,7 +4,7 @@
 
 use crate::{
     storage::{
-        state_manager::{StateManager, SNAPSHOT_EPOCHS_CAPACITY},
+        state_manager::StateManager,
         storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
         FullSyncVerifier,
     },
@@ -180,7 +180,10 @@ impl Restorer {
                     serve_one_step_sync: false,
                     merkle_root: snapshot_merkle_root,
                     // We will not sync true genesis, so height should not be 0
-                    parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
+                    parent_snapshot_height: height
+                        - state_manager
+                            .get_storage_manager()
+                            .get_snapshot_epoch_count(),
                     height,
                     // Set intermediate_mpt to None
                     parent_snapshot_epoch_id: NULL_EPOCH,

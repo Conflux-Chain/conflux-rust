@@ -30,6 +30,7 @@ pub struct StorageManager {
     last_confirmed_snapshot_id: Mutex<Option<EpochId>>,
 
     storage_conf: StorageConfiguration,
+    snapshot_conf: SnapshotConfiguration,
 }
 
 // FIXME: the thread variable is used. But it's subject to refinements for sure.
@@ -56,6 +57,7 @@ impl StorageManager {
         delta_db_manager: DeltaDbManager, /* , node type, full node or
                                            * archive node */
         storage_conf: StorageConfiguration,
+        snapshot_conf: SnapshotConfiguration,
     ) -> Self
     {
         let storage_manager = Self {
@@ -79,6 +81,7 @@ impl StorageManager {
             snapshot_info_map_by_epoch: Default::default(),
             last_confirmed_snapshot_id: Default::default(),
             storage_conf,
+            snapshot_conf,
         };
         storage_manager
             .register_new_snapshot(SnapshotInfo::genesis_snapshot_info(), true);
@@ -266,15 +269,24 @@ impl StorageManager {
             snapshot_epoch_id, height
         );
         let this_cloned = this.clone();
-        let upgradable_read_locked =
-            this_cloned.in_progress_snapshoting_tasks.upgradable_read();
+        let mut in_progress_snapshoting_tasks =
+            this_cloned.in_progress_snapshoting_tasks.write();
 
-        if !upgradable_read_locked.contains_key(&snapshot_epoch_id) {
-            let mut pivot_chain_parts =
-                vec![Default::default(); SNAPSHOT_EPOCHS_CAPACITY as usize];
+        if !in_progress_snapshoting_tasks.contains_key(&snapshot_epoch_id)
+            && !this
+                .snapshot_info_map_by_epoch
+                .read()
+                .contains_key(&snapshot_epoch_id)
+        {
+            let mut pivot_chain_parts = vec![
+                Default::default();
+                this.snapshot_conf.snapshot_epoch_count
+                    as usize
+            ];
             // Calculate pivot chain parts.
             let mut epoch_id = snapshot_epoch_id.clone();
-            let mut delta_height = SNAPSHOT_EPOCHS_CAPACITY as usize - 1;
+            let mut delta_height =
+                this.snapshot_conf.snapshot_epoch_count as usize - 1;
             pivot_chain_parts[delta_height] = epoch_id.clone();
             // TODO Handle the special cases better
             let parent_snapshot_epoch_id = if maybe_delta_db.is_none() {
@@ -295,7 +307,7 @@ impl StorageManager {
                     pivot_chain_parts[delta_height] = epoch_id.clone();
                     trace!("check_make_register_snapshot_background: parent epoch_id={:?}", epoch_id);
                 }
-                if height == SNAPSHOT_EPOCHS_CAPACITY {
+                if height == this.snapshot_conf.snapshot_epoch_count {
                     // We need the case height == SNAPSHOT_EPOCHS_CAPACITY
                     // because the snapshot_info for genesis is
                     // stored in NULL_EPOCH. If we do not use the special case,
@@ -309,15 +321,14 @@ impl StorageManager {
             let in_progress_snapshot_info = SnapshotInfo {
                 serve_one_step_sync: true,
                 height: height as u64,
-                parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
+                parent_snapshot_height: height
+                    - this.snapshot_conf.snapshot_epoch_count,
                 // This is unknown for now, and we don't care.
                 merkle_root: Default::default(),
                 parent_snapshot_epoch_id,
                 pivot_chain_parts,
             };
 
-            let mut write_locked =
-                RwLockUpgradableReadGuard::upgrade(upgradable_read_locked);
             let parent_snapshot_epoch_id_cloned =
                 in_progress_snapshot_info.parent_snapshot_epoch_id.clone();
             let mut in_progress_snapshot_info_cloned =
@@ -359,7 +370,7 @@ impl StorageManager {
                 }
             })?;
 
-            write_locked.insert(
+            in_progress_snapshoting_tasks.insert(
                 snapshot_epoch_id,
                 InProgressSnapshotInfo {
                     snapshot_info: in_progress_snapshot_info,
@@ -447,16 +458,18 @@ impl StorageManager {
         let mut old_pivot_snapshots_to_remove = vec![];
         let mut in_progress_snapshot_to_cancel = vec![];
 
-        let confirmed_intermediate_height =
-            confirmed_height - height_to_delta_height(confirmed_height) as u64;
+        let confirmed_intermediate_height = confirmed_height
+            - self.snapshot_conf.height_to_delta_height(confirmed_height)
+                as u64;
 
         {
             let current_snapshots = self.current_snapshots.read();
 
             let confirmed_snapshot_height = if confirmed_intermediate_height
-                > SNAPSHOT_EPOCHS_CAPACITY
+                > self.snapshot_conf.snapshot_epoch_count
             {
-                confirmed_intermediate_height - SNAPSHOT_EPOCHS_CAPACITY as u64
+                confirmed_intermediate_height
+                    - self.snapshot_conf.snapshot_epoch_count as u64
             } else {
                 0
             };
@@ -653,6 +666,14 @@ impl StorageManager {
         //            .unwrap()
         //            .log_usage();
     }
+
+    pub fn get_snapshot_epoch_count(&self) -> u64 {
+        self.snapshot_conf.snapshot_epoch_count
+    }
+
+    pub fn height_to_delta_height(&self, height: u64) -> u32 {
+        self.snapshot_conf.height_to_delta_height(height)
+    }
 }
 
 #[derive(Clone)]
@@ -711,7 +732,7 @@ use super::{
     },
     *,
 };
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
+use parking_lot::{Mutex, RwLock};
 use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{
     cell::Cell,

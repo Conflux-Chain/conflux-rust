@@ -966,6 +966,18 @@ impl BlockDataManager {
         epochs_reverse_order.reverse();
         (block, epochs_reverse_order)
     }
+
+    pub fn get_snapshot_epoch_count(&self) -> u64 {
+        self.storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count()
+    }
+
+    pub fn height_to_delta_height(&self, height: u64) -> u32 {
+        self.storage_manager
+            .get_storage_manager()
+            .height_to_delta_height(height)
+    }
 }
 
 #[derive(Copy, Clone)]
