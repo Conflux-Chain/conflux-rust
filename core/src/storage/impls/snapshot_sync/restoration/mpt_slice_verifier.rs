@@ -245,7 +245,7 @@ impl MptSliceVerifier {
 }
 
 impl SnapshotMptTraitReadOnly for SliceMptRebuilder {
-    fn get_merkle_root(&self) -> &H256 { &self.merkle_root }
+    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
@@ -322,7 +322,7 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
 }
 
 impl GetReadMpt for SliceMptRebuilder {
-    fn get_merkle_root(&self) -> &MerkleHash { &self.merkle_root }
+    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
 
     fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
 }
@@ -355,7 +355,6 @@ use super::{
     slice_restore_read_write_path_node::SliceVerifyReadWritePathNode,
 };
 use crate::storage::impls::merkle_patricia_trie::walk::GetChildTrait;
-use cfx_types::H256;
 use primitives::MerkleHash;
 use std::{
     borrow::Borrow,

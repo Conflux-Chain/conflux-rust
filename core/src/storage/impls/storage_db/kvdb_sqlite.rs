@@ -289,21 +289,20 @@ impl<ValueType: ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>>
     }
 }
 
-impl<ValueType: PutType> KeyValueDbTypes for KvdbSqlite<ValueType> {
+impl<ValueType: DbValueType> KeyValueDbTypes for KvdbSqlite<ValueType> {
     type ValueType = ValueType;
 }
 
 // 'static because Any is static.
 impl<
         ValueType: 'static
-            + PutType
+            + DbValueType
             + ValueRead
             + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitTransactional for KvdbSqlite<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type TransactionType = KvdbSqliteTransaction<ValueType>;
 
@@ -319,7 +318,7 @@ where ValueType::PutType: SqlBindableValue
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbToOwnedReadTrait for KvdbSqlite<ValueType>
 {
     fn to_owned_read<'a>(
@@ -333,23 +332,21 @@ impl<
 impl DeltaDbTrait for KvdbSqlite<Box<[u8]>> {}
 
 pub struct KvdbSqliteTransaction<
-    ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-> where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+    ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+> where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     db: KvdbSqlite<ValueType>,
     committed: bool,
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn new(
         mut db: KvdbSqlite<ValueType>, immediate_write: bool,
@@ -379,12 +376,11 @@ where ValueType::PutType: SqlBindableValue
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > Drop for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn drop(&mut self) {
         if !self.committed {
@@ -394,23 +390,21 @@ where ValueType::PutType: SqlBindableValue
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTypes for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type ValueType = ValueType;
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTransactionTrait for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn commit(&mut self, _db: &dyn Any) -> Result<()> {
         self.committed = true;
@@ -446,12 +440,11 @@ where ValueType::PutType: SqlBindableValue
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > Deref for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type Target = KvdbSqlite<ValueType>;
 
@@ -459,23 +452,22 @@ where ValueType::PutType: SqlBindableValue
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > DerefMut for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.db }
 }
 
-impl<ValueType: PutType> KeyValueDbTypes
+impl<ValueType: DbValueType> KeyValueDbTypes
     for KvdbSqliteBorrowMut<'_, ValueType>
 {
     type ValueType = ValueType;
 }
 
-impl<ValueType: PutType> KeyValueDbTypes
+impl<ValueType: DbValueType> KeyValueDbTypes
     for KvdbSqliteBorrowMutReadOnly<'_, ValueType>
 {
     type ValueType = ValueType;
@@ -541,7 +533,7 @@ impl<
 
 /// TODO: Check if these are correct
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KeyValueDbTraitMultiReader for KvdbSqlite<ValueType>
 {
 }
@@ -550,7 +542,7 @@ impl<
         T: ReadImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
             + KvdbSqliteDestructureTrait
             + KeyValueDbTypes<ValueType = ValueType>,
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > ReadImplByFamily<KvdbSqlite<ValueType>> for T
 {
     fn get_impl(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
@@ -607,7 +599,7 @@ impl<
         T: OwnedReadImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
             + KvdbSqliteDestructureTrait
             + KeyValueDbTypes<ValueType = ValueType>,
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > OwnedReadImplByFamily<KvdbSqlite<ValueType>> for T
 {
     fn get_mut_impl(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {
@@ -647,12 +639,11 @@ impl<
         T: SingleWriterImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
             + KvdbSqliteDestructureTrait
             + KeyValueDbTypes<ValueType = ValueType>,
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > SingleWriterImplByFamily<KvdbSqlite<ValueType>> for T
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn delete_impl(
         &mut self, key: &[u8],
@@ -689,7 +680,7 @@ where ValueType::PutType: SqlBindableValue
     }
 
     fn put_impl(
-        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure_mut();
         match connection {
@@ -711,7 +702,7 @@ where ValueType::PutType: SqlBindableValue
     }
 
     fn put_with_number_key_impl(
-        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure_mut();
         match connection {
@@ -734,12 +725,11 @@ impl<
         T: DbImplFamily<FamilyRepresentative = KvdbSqlite<ValueType>>
             + KvdbSqliteDestructureTrait
             + KeyValueDbTypes<ValueType = ValueType>,
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > DbImplByFamily<KvdbSqlite<ValueType>> for T
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn delete_impl(
         &self, key: &[u8],
@@ -792,7 +782,7 @@ where ValueType::PutType: SqlBindableValue
     }
 
     fn put_impl(
-        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure();
         match connection {
@@ -821,7 +811,7 @@ where ValueType::PutType: SqlBindableValue
 
     fn put_with_number_key_impl(
         &self, key: i64,
-        value: &<<Self as KeyValueDbTypes>::ValueType as PutType>::PutType,
+        value: &<<Self as KeyValueDbTypes>::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>
     {
         let (connection, statements) = self.destructure();
@@ -856,12 +846,11 @@ impl<ValueType> OwnedReadImplFamily for KvdbSqlite<ValueType> {
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > OwnedReadImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -878,7 +867,7 @@ impl<ValueType> OwnedReadImplFamily
 
 impl<
         'any,
-        ValueType: PutType,
+        ValueType: DbValueType,
         T: KeyValueDbTypes<ValueType = ValueType>
             + ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
@@ -889,7 +878,7 @@ impl<
 
 impl<
         'any,
-        ValueType: PutType,
+        ValueType: DbValueType,
         T: KeyValueDbTypes<ValueType = ValueType>
             + ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
@@ -903,12 +892,11 @@ impl<ValueType> SingleWriterImplFamily for KvdbSqlite<ValueType> {
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > SingleWriterImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -919,7 +907,7 @@ impl<ValueType> SingleWriterImplFamily for KvdbSqliteBorrowMut<'_, ValueType> {
 
 impl<
         'any,
-        ValueType: PutType,
+        ValueType: DbValueType,
         T: KeyValueDbTypes<ValueType = ValueType>
             + ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
@@ -933,12 +921,11 @@ impl<ValueType> ReadImplFamily for KvdbSqlite<ValueType> {
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > ReadImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -953,7 +940,7 @@ impl<ValueType> ReadImplFamily for KvdbSqliteBorrowMutReadOnly<'_, ValueType> {
 
 impl<
         'any,
-        ValueType: PutType,
+        ValueType: DbValueType,
         T: KeyValueDbTypes<ValueType = ValueType>
             + ImplOrBorrowMutSelf<dyn 'any + KvdbSqliteDestructureTrait>,
         F,
@@ -967,12 +954,11 @@ impl<ValueType> DbImplFamily for KvdbSqlite<ValueType> {
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > DbImplFamily for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -1007,12 +993,11 @@ impl<ValueType> KvdbSqliteDestructureTrait for KvdbSqlite<ValueType> {
 }
 
 impl<
-        ValueType: PutType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
     > KvdbSqliteDestructureTrait for KvdbSqliteTransaction<ValueType>
-where ValueType::PutType: SqlBindableValue
-        + BindValueAppendImpl<
-            <ValueType::PutType as SqlBindableValue>::Kind,
-        >
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
 {
     fn destructure(
         &self,

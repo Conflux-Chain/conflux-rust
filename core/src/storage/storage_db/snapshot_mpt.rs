@@ -26,7 +26,7 @@ pub struct SubtreeMerkleWithSize {
 // TODO: we'd like to use a multi-version snapshot db to manage multiple
 // TODO: snapshots.
 pub trait SnapshotMptTraitReadOnly {
-    fn get_merkle_root(&self) -> &MerkleHash;
+    fn get_merkle_root(&self) -> MerkleHash;
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Option<SnapshotMptNode>>;

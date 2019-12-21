@@ -48,10 +48,24 @@ impl SnapshotInfo {
     }
 }
 
+pub trait OpenSnapshotMptTrait<'db> {
+    type SnapshotMptReadType: 'db + SnapshotMptTraitReadOnly;
+    type SnapshotMptWriteType: 'db + SnapshotMptTraitSingleWriter;
+
+    fn open_snapshot_mpt_for_write(
+        &'db mut self,
+    ) -> Result<Self::SnapshotMptWriteType>;
+
+    fn open_snapshot_mpt_read_only(
+        &'db mut self,
+    ) -> Result<Self::SnapshotMptReadType>;
+}
+
 pub trait SnapshotDbTrait:
     KeyValueDbTraitOwnedRead
     + KeyValueDbToOwnedReadTrait
     + KeyValueDbTraitSingleWriter
+    + for<'db> OpenSnapshotMptTrait<'db>
     + Sized
 {
     fn get_null_snapshot() -> Self;
@@ -75,5 +89,8 @@ use super::{
         KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitSingleWriter,
     },
+};
+use crate::storage::storage_db::{
+    SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
 };
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};

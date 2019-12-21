@@ -76,7 +76,7 @@ impl<
 where DbType:
         for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
 {
-    fn get_merkle_root(&self) -> &MerkleHash { unimplemented!() }
+    fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
