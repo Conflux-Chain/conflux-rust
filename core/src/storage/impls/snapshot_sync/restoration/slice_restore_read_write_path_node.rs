@@ -7,7 +7,7 @@ pub struct SliceVerifyReadWritePathNode<Mpt>(Option<ReadWritePathNode<Mpt>>);
 impl<Mpt> SliceVerifyReadWritePathNode<Mpt> {
     fn take(mut self) -> ReadWritePathNode<Mpt> { self.0.take().unwrap() }
 
-    fn as_ref(&self) -> &ReadWritePathNode<Mpt> { self.0.as_ref().unwrap() }
+    pub fn as_ref(&self) -> &ReadWritePathNode<Mpt> { self.0.as_ref().unwrap() }
 
     fn as_mut(&mut self) -> &mut ReadWritePathNode<Mpt> {
         self.0.as_mut().unwrap()
@@ -39,7 +39,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
             parent_node.as_ref(),
         );
         // Disable path compression for boundary nodes of MptSliceVerifier.
-        rw_path_node.maybe_first_realized_child_index = 0;
+        rw_path_node.disable_path_compression();
         SliceVerifyReadWritePathNode(Some(rw_path_node))
     }
 
@@ -60,46 +60,32 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
     }
 
     fn open_child_index(&mut self, child_index: u8) -> Result<Option<Self>> {
-        self.as_mut().next_child_index = child_index;
-        let mut mpt_taken = self.as_mut().mpt.take();
+        match self.as_mut().open_child_index(child_index) {
+            Err(e) => Err(e),
+            Ok(Some(mut node)) => {
+                // Disable path compression for boundary nodes of
+                // MptSliceVerifier.
+                node.disable_path_compression();
 
-        match self
-            .as_ref()
-            .trie_node
-            .get_children_table_ref()
-            .get_child(child_index)
-        {
-            None => {
-                self.as_mut().mpt = mpt_taken;
-
-                Ok(None)
+                Ok(Some(SliceVerifyReadWritePathNode(Some(node))))
             }
-            Some(&SubtreeMerkleWithSize {
-                merkle: ref supposed_merkle_hash,
-                ..
-            }) => {
-                match Self::load_into(
-                    self,
-                    &mut mpt_taken,
-                    child_index,
-                    supposed_merkle_hash,
-                ) {
-                    Err(e) => match e.kind() {
-                        ErrorKind::SnapshotMPTTrieNodeNotFound => {
-                            self.as_mut().mpt = mpt_taken;
-
-                            Ok(None)
-                        }
-                        _ => Err(e),
-                    },
-                    Ok(node) => Ok(Some(node)),
-                }
-            }
+            Ok(None) => Ok(None),
         }
     }
 }
 
 impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
+    fn new(
+        basic_node: BasicPathNode<Mpt>, parent_node: &Self, value_size: usize,
+    ) -> Self {
+        // Do not disable path compression for non-boundary nodes.
+        SliceVerifyReadWritePathNode(Some(ReadWritePathNode::new(
+            basic_node,
+            parent_node.as_ref(),
+            value_size,
+        )))
+    }
+
     fn get_read_write_path_node(&mut self) -> &mut ReadWritePathNode<Mpt> {
         self.as_mut()
     }
@@ -134,20 +120,12 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
     ) -> SliceVerifyReadWritePathNode<Mpt> {
-        SliceVerifyReadWritePathNode(Some(ReadWritePathNode {
-            basic_node,
-            is_loaded: !mpt_is_empty,
-            maybe_first_realized_child_index:
-                ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
-            the_first_child_if_pending: None,
-            maybe_compressed_path_split_child_index:
-                ReadWritePathNode::<Mpt>::NULL_CHILD_INDEX,
-            maybe_compressed_path_split_child_node: None,
-            subtree_size_delta: 0,
-            delta_subtree_size: 0,
-            has_io_error: self.io_error(),
-            db_committed: false,
-        }))
+        let mut root_node = <Self as CursorToRootNode<
+            Mpt,
+            ReadWritePathNode<Mpt>,
+        >>::new_root(self, basic_node, mpt_is_empty);
+        root_node.disable_path_compression();
+        SliceVerifyReadWritePathNode(Some(root_node))
     }
 }
 
@@ -160,9 +138,9 @@ use crate::storage::{
                 CursorToRootNode, GetReadMpt, GetRwMpt, PathNodeTrait,
                 ReadWritePathNode, RwPathNodeTrait, TakeMpt,
             },
-            CompressedPathRaw, TrieNodeTrait,
+            CompressedPathRaw,
         },
     },
-    storage_db::{SnapshotMptNode, SubtreeMerkleWithSize},
+    storage_db::SnapshotMptNode,
 };
 use primitives::MerkleHash;

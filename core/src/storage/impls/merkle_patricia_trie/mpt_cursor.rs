@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod slice_restore_read_write_path_node;
-
 /// Cursor to access Snapshot Mpt.
 pub struct MptCursor<Mpt, PathNode> {
     mpt: Option<Mpt>,
@@ -607,11 +605,19 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
     fn load_node_wrapper(
         &self, mpt: &mut Mpt, path: &CompressedPathRaw,
     ) -> Result<SnapshotMptNode> {
-        let result = mpt.get_read_mpt().load_node(path);
-        if result.is_err() {
-            self.set_has_io_error();
+        match mpt.get_read_mpt().load_node(path) {
+            Err(e) => {
+                self.set_has_io_error();
+
+                Err(e)
+            }
+            Ok(Some(node)) => Ok(node),
+            Ok(None) => {
+                self.set_has_io_error();
+
+                Err(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            }
         }
-        result?.ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -842,6 +848,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
         let trie_node = parent_node
             .load_node_wrapper(mpt.as_mut().unwrap(), &path_db_key)?;
+
         assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,
@@ -1150,6 +1157,10 @@ impl<Mpt> ReadWritePathNode<Mpt> {
     /// Initial value for `self.first_realized_child_index`, meaning these is no
     /// child concluded in cursor iteration.
     const NULL_CHILD_INDEX: u8 = 16;
+
+    pub fn disable_path_compression(&mut self) {
+        self.maybe_first_realized_child_index = 0;
+    }
 
     fn get_has_io_error(&self) -> bool { self.io_error().get() }
 

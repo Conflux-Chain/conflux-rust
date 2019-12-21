@@ -81,7 +81,7 @@ impl FullSyncVerifier {
         }
 
         let key_range_left;
-        let key_range_right_excl;
+        let maybe_key_range_right_excl;
         let maybe_left_proof;
         let maybe_right_proof;
         if chunk_index == 0 {
@@ -99,10 +99,11 @@ impl FullSyncVerifier {
             }
         };
         if chunk_index == self.number_chunks - 1 {
-            key_range_right_excl = vec![];
+            maybe_key_range_right_excl = None;
             maybe_right_proof = None;
         } else {
-            key_range_right_excl = self.chunk_boundaries[chunk_index].clone();
+            let key_range_right_excl =
+                self.chunk_boundaries[chunk_index].clone();
             maybe_right_proof = self.chunk_boundary_proofs.get(chunk_index);
 
             // Check key boundary.
@@ -111,13 +112,17 @@ impl FullSyncVerifier {
                     return Ok(false);
                 }
             }
+
+            maybe_key_range_right_excl = Some(key_range_right_excl);
         }
 
         // FIXME: multi-threading.
         // Restore.
         let chunk_verifier = MptSliceVerifier::new(
             maybe_left_proof,
+            &*key_range_left,
             maybe_right_proof,
+            maybe_key_range_right_excl.as_ref().map(|v| &**v),
             self.merkle_root.clone(),
         );
 
@@ -180,9 +185,8 @@ impl FullSyncVerifier {
             self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
 
         for (path, mut node) in self.pending_boundary_nodes.drain() {
-            let merkle = node.get_merkle().clone();
             let mut subtree_index = BoundarySubtreeIndex {
-                parent_node: merkle,
+                parent_node: node.get_merkle().clone(),
                 child_index: 0,
             };
             for child_index in 0..CHILDREN_COUNT as u8 {

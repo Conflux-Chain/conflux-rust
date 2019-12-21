@@ -63,14 +63,17 @@ fn test_slice_verifier() {
     let mut right_bound = 0;
     let mut start_size = 0;
     let mut right_bounds = vec![];
+    let mut chunk_key_bounds = vec![Some(vec![])];
     while right_bound < keys.len() {
         if size_sum[right_bound] > chunk_size + start_size {
-            right_bounds.push(right_bound - 1);
+            right_bounds.push(right_bound);
             start_size = size_sum[right_bound - 1];
+            chunk_key_bounds.push(Some(mpt_kv_iter.kv[right_bound].0.clone()));
         }
         right_bound += 1;
     }
     right_bounds.push(right_bound);
+    chunk_key_bounds.push(None);
 
     // Slice by MptSlicer to get proofs.
     let mut slicer = MptSlicer::new(&mut snapshot_mpt).unwrap();
@@ -93,34 +96,48 @@ fn test_slice_verifier() {
     let mut chunk_start_offset = 0;
     for i in 0..slicer_chunk_proofs.len() {
         let chunk_bound = right_bounds[i];
-        assert!(
-            MptSliceVerifier::new(
-                last_proof,
-                slicer_chunk_proofs[i].as_ref(),
-                merkle_root
-            )
-            .restore(
-                &mpt_kv_iter.kv[chunk_start_offset..chunk_bound]
-                    .iter()
-                    .map(|kv| &*kv.0)
-                    .collect(),
-                &mpt_kv_iter.kv[chunk_start_offset..chunk_bound]
-                    .iter()
-                    .map(|kv| kv.1.clone())
-                    .collect(),
-            )
-            .unwrap()
-            .is_valid
+        println!(
+            "test chunk {}, chunk range {}..{}, chunk_last_kvs {:?}",
+            i,
+            chunk_start_offset,
+            chunk_bound,
+            &mpt_kv_iter.kv[chunk_bound - 3..chunk_bound],
         );
-        /*
+        assert!(MptSliceVerifier::new(
+            last_proof,
+            &**chunk_key_bounds[i].as_ref().unwrap(),
+            slicer_chunk_proofs[i].as_ref(),
+            chunk_key_bounds[i + 1].as_ref().map(|v| &**v),
+            merkle_root
+        )
+        .restore(
+            &mpt_kv_iter.kv[chunk_start_offset..chunk_bound]
+                .iter()
+                .map(|kv| &*kv.0)
+                .collect(),
+            &mpt_kv_iter.kv[chunk_start_offset..chunk_bound]
+                .iter()
+                .map(|kv| kv.1.clone())
+                .collect(),
+        )
+        .map(|result| result.is_valid)
+        .unwrap_or(false));
         // Check incomplete chunk.
         for j_omit in [
-            (chunk_start_offset..chunk_start_offset + 5)
+            (chunk_start_offset..min(chunk_start_offset + 5, chunk_bound))
                 .collect::<Vec<usize>>(),
-            (chunk_bound - 5..chunk_bound).collect::<Vec<usize>>(),
+            vec![(chunk_start_offset + chunk_bound) / 2],
+            (max(chunk_start_offset, chunk_bound - 5)..chunk_bound)
+                .collect::<Vec<usize>>(),
         ]
         .concat()
         {
+            println!(
+                "test key omit, chunk {}, chunk range {}..{}, omit index {}, kv: {:?},\
+                chunk_last_kvs {:?}",
+                i, chunk_start_offset, chunk_bound, j_omit, mpt_kv_iter.kv[j_omit],
+                &mpt_kv_iter.kv[chunk_bound - 3..chunk_bound],
+            );
             let mut keys = Vec::with_capacity(chunk_bound - chunk_start_offset);
             let mut values =
                 Vec::with_capacity(chunk_bound - chunk_start_offset);
@@ -130,18 +147,17 @@ fn test_slice_verifier() {
                     values.push(mpt_kv_iter.kv[index].1.clone());
                 }
             }
-            assert!(
-                !MptSliceVerifier::new(
-                    last_proof,
-                    slicer_chunk_proofs[i].as_ref(),
-                    merkle_root
-                )
-                .restore(&keys, &values)
-                .unwrap()
-                .is_valid
+            assert!(!MptSliceVerifier::new(
+                last_proof,
+                &**chunk_key_bounds[i].as_ref().unwrap(),
+                slicer_chunk_proofs[i].as_ref(),
+                chunk_key_bounds[i + 1].as_ref().map(|v| &**v),
+                merkle_root,
             )
+            .restore(&keys, &values)
+            .map(|result| result.is_valid)
+            .unwrap_or(false));
         }
-        */
         last_proof = slicer_chunk_proofs[i].as_ref();
         chunk_start_offset = chunk_bound;
     }
@@ -159,3 +175,4 @@ use crate::storage::{
     MptSlicer,
 };
 use rand::Rng;
+use std::cmp::{max, min};
