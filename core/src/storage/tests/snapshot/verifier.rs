@@ -3,28 +3,84 @@
 // See http://www.gnu.org/licenses/
 
 #[test]
-fn test_slice_verifier() {
+fn test_slice_verifier_zero_or_one_chunk() {
     // Slice empty mpt.
-    //    let mut snapshot_mpt = FakeSnapshotMptDb::default();
-    //    let chunk_size = 1000;
-    //
-    //    let mut slicer = MptSlicer::new(&mut snapshot_mpt).unwrap();
-    //    let mut slicer_chunk_bounds = vec![];
-    //    loop {
-    //        slicer.advance(chunk_size).unwrap();
-    //        match slicer.get_range_end_key() {
-    //            Some(key) => {
-    //                slicer_chunk_bounds.push(Vec::from(key));
-    //                println!("{:?}", key);
-    //            }
-    //            None => {
-    //                break;
-    //            }
-    //        }
-    //    }
-    //    assert_eq!(0, slicer_chunk_bounds.len());
+    let mut snapshot_mpt = FakeSnapshotMptDb::default();
+    let chunk_size = 1000;
 
-    // Slice non-empty mpt.
+    let mut slicer = MptSlicer::new(&mut snapshot_mpt).unwrap();
+    let mut slicer_chunk_bounds = vec![];
+    loop {
+        slicer.advance(chunk_size).unwrap();
+        match slicer.get_range_end_key() {
+            Some(key) => {
+                slicer_chunk_bounds.push(Vec::from(key));
+                println!("{:?}", key);
+            }
+            None => {
+                break;
+            }
+        }
+    }
+    assert_eq!(0, slicer_chunk_bounds.len());
+    assert!(
+        MptSliceVerifier::new(None, &[], None, None, MERKLE_NULL_NODE)
+            .restore(&Vec::<Vec<u8>>::new(), &vec![],)
+            .map(|result| result.is_valid)
+            .unwrap_or(false)
+    );
+
+    // Slice mpt with a few key-values
+    let number_keys = 20;
+    let mut rng = get_rng_for_test();
+    let mut keys: Vec<Vec<u8>> = generate_keys(number_keys);
+    keys.sort();
+    let mpt_kv_iter = DumpedDeltaMptIterator {
+        kv: keys
+            .iter()
+            .map(|k| {
+                (
+                    k[..].into(),
+                    [&k[..], &k[..], &k[..], &k[..]].concat()
+                        [0..(6 + rng.gen::<usize>() % 10)]
+                        .into(),
+                )
+            })
+            .collect(),
+    };
+
+    let mut snapshot_mpt = FakeSnapshotMptDb::default();
+    let merkle_root = MptMerger::new(None, &mut snapshot_mpt)
+        .merge(&mpt_kv_iter)
+        .unwrap();
+
+    let mut slicer = MptSlicer::new(&mut snapshot_mpt).unwrap();
+    let mut slicer_chunk_bounds = vec![];
+    loop {
+        slicer.advance(chunk_size).unwrap();
+        match slicer.get_range_end_key() {
+            Some(key) => {
+                slicer_chunk_bounds.push(Vec::from(key));
+                println!("{:?}", key);
+            }
+            None => {
+                break;
+            }
+        }
+    }
+    assert_eq!(0, slicer_chunk_bounds.len());
+    assert!(MptSliceVerifier::new(None, &[], None, None, merkle_root)
+        .restore(
+            &mpt_kv_iter.kv.iter().map(|kv| &*kv.0).collect(),
+            &mpt_kv_iter.kv.iter().map(|kv| kv.1.clone()).collect(),
+        )
+        .map(|result| result.is_valid)
+        .unwrap_or(false));
+}
+
+#[test]
+fn test_slice_verifier() {
+    // Slice big MPT.
     let mut rng = get_rng_for_test();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
@@ -302,8 +358,64 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 }
 
 #[test]
+fn test_full_sync_verifier_one_chunk() {
+    let mut rng = get_rng_for_test();
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
+    keys.sort();
+    let mpt_kv_iter = DumpedDeltaMptIterator {
+        kv: keys
+            .iter()
+            .map(|k| {
+                (
+                    k[..].into(),
+                    [&k[..], &k[..], &k[..], &k[..]].concat()
+                        [0..(6 + rng.gen::<usize>() % 10)]
+                        .into(),
+                )
+            })
+            .collect(),
+    };
+
+    let mut snapshot_mpt = FakeSnapshotMptDb::default();
+    let merkle_root = MptMerger::new(None, &mut snapshot_mpt)
+        .merge(&mpt_kv_iter)
+        .unwrap();
+
+    let snapshot_db_manager = FakeSnapshotDbManager::default();
+
+    let mut full_sync_verifier = FullSyncVerifier::new(
+        1,
+        vec![],
+        vec![],
+        merkle_root,
+        &snapshot_db_manager,
+        &NULL_EPOCH,
+    )
+    .unwrap();
+
+    let chunk_restored = full_sync_verifier
+        .restore_chunk(
+            0,
+            &mpt_kv_iter.kv.iter().map(|kv| kv.0.clone()).collect(),
+            mpt_kv_iter.kv.iter().map(|kv| kv.1.clone()).collect(),
+        )
+        .unwrap();
+    assert!(chunk_restored);
+
+    // Check key-values.
+    let temp_snapshot = &*snapshot_db_manager.temp_snapshot.lock();
+    assert_eq!(temp_snapshot.kv.len(), mpt_kv_iter.kv.len());
+    for (key, value) in &mpt_kv_iter.kv {
+        assert_eq!(temp_snapshot.kv.get(key), Some(value));
+    }
+
+    // Check MPT key-values and subtree size.
+    temp_snapshot.mpt_db.lock().assert_eq(&snapshot_mpt);
+}
+
+#[test]
 fn test_full_sync_verifier() {
-    // Slice non-empty mpt.
+    // Slice big mpt.
     let mut rng = get_rng_for_test();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
@@ -437,7 +549,7 @@ use crate::storage::{
 };
 use cfx_types::H256;
 use parking_lot::Mutex;
-use primitives::{EpochId, MerkleHash, NULL_EPOCH};
+use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rand::Rng;
 use std::{
     cmp::{max, min},
