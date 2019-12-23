@@ -48,6 +48,53 @@ lazy_static! {
 
 pub const NULLU64: u64 = !0;
 
+/// FIXME: move it to another module.
+#[derive(Default, Debug, Clone)]
+pub struct StateAvailabilityBoundary {
+    /// This is the lower boundary height of available state.
+    pub lower_bound: u64,
+    /// This is the upper boundary height of available state.
+    pub upper_bound: u64,
+}
+
+impl StateAvailabilityBoundary {
+    pub fn new(lower_bound: u64, upper_bound: u64) -> Self {
+        Self {
+            lower_bound,
+            upper_bound,
+        }
+    }
+
+    pub fn check_availability(&self, epoch_height: u64) -> bool {
+        self.lower_bound <= epoch_height && epoch_height <= self.upper_bound
+    }
+
+    /// This function will set a new upper boundary height of available state.
+    /// Caller should make sure the new upper boundary height should be greater
+    /// than or equal to currrent lower boundary height.
+    pub fn adjust_upper_bound(&mut self, new_upper_bound: u64) {
+        assert!(new_upper_bound >= self.lower_bound);
+        self.upper_bound = new_upper_bound;
+    }
+
+    /// This function will set a new lower boundary height of available state.
+    /// Caller should make sure the new lower boundary height should be greater
+    /// than or equal to currrent lower boundary height.
+    /// Caller should also make sure the new lower boundary height should be
+    /// less than or equal to currrent upper boundary height.
+    pub fn adjust_lower_bound(&mut self, new_lower_bound: u64) {
+        // If we are going to call this function, `upper_bound` will not be 0
+        // unless it is a full node and is in header phase. And we should do
+        // nothing in this case.
+        if self.upper_bound == 0 {
+            return;
+        }
+        assert!(self.lower_bound <= new_lower_bound);
+        assert!(new_lower_bound <= self.upper_bound);
+        self.lower_bound = new_lower_bound;
+    }
+}
+
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
@@ -85,6 +132,29 @@ pub struct BlockDataManager {
     pub storage_manager: Arc<StorageManager>,
     cache_man: Arc<Mutex<CacheManager<CacheId>>>,
     pub target_difficulty_manager: TargetDifficultyManager,
+
+    /// This maintains the boundary height of available state and commitments
+    /// (executed but not deleted or in `ExecutionTaskQueue`).
+    /// The upper bound always equal to latest executed or going to be executed
+    /// epoch height.
+    /// As for the lower bound:
+    ///   1. For archive node, it always equals `cur_era_stable_height`.
+    ///   2. For full node, it equals the height of remotely synchronized
+    ///      state at start, and equals `cur_era_stable_height` after making a
+    ///      new checkpoint.
+    ///
+    /// The left boundary height will be updated when:
+    ///   1. New checkpoint
+    ///   2. Full Node snapshot syncing
+    ///   3. New Snapshot
+    ///
+    /// The right boundary height will be updated when:
+    ///   1. Pivot chain switch
+    ///   2. Execution of new epoch
+    ///
+    /// The state of an epoch is valid if and only if the height of the epoch
+    /// is inside the boundary.
+    pub state_availability_boundary: RwLock<StateAvailabilityBoundary>,
 }
 
 impl BlockDataManager {
@@ -132,6 +202,7 @@ impl BlockDataManager {
             cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
             db_manager,
+            state_availability_boundary: RwLock::new(Default::default()),
         };
 
         data_man.initialize_instance_id();

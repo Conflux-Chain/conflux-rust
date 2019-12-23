@@ -285,7 +285,12 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
         inner.cur_era_stable_height = new_era_stable_height;
-        inner.state_boundary_height = new_era_stable_height;
+        // TODO: maybe archive node has other logic.
+        inner
+            .data_man
+            .state_availability_boundary
+            .write()
+            .adjust_lower_bound(new_era_height);
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
         let next_era_arena_index =
@@ -1363,11 +1368,6 @@ impl ConsensusNewBlockHandler {
                     - DEFERRED_STATE_EPOCH_COUNT
                     + 1
             };
-            inner.optimistic_executed_height = if to_state_pos > 0 {
-                Some(to_state_pos)
-            } else {
-                None
-            };
             let mut state_at = fork_at;
             if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
                 if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
@@ -1377,10 +1377,20 @@ impl ConsensusNewBlockHandler {
                     state_at = 1;
                 }
             }
-            // For full node, we don't execute blocks before available states
-            // This skip should only happen in `SyncBlockPhase` for full nodes
-            if state_at < inner.state_boundary_height + 1 {
-                state_at = inner.state_boundary_height + 1;
+            {
+                let mut state_availability_boundary =
+                    inner.data_man.state_availability_boundary.write();
+
+                if to_state_pos > state_availability_boundary.lower_bound + 1 {
+                    state_availability_boundary
+                        .adjust_upper_bound(to_state_pos - 1);
+                }
+                // For full node, we don't execute blocks before available
+                // states This skip should only happen in
+                // `SyncBlockPhase` for full nodes
+                if state_at < state_availability_boundary.lower_bound + 1 {
+                    state_at = state_availability_boundary.lower_bound + 1;
+                }
             }
 
             // Apply transactions in the determined total order
@@ -1439,9 +1449,9 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        let start_pivot_index = (inner.state_boundary_height
-            - inner.cur_era_genesis_height)
-            as usize;
+        let start_pivot_index =
+            (self.data_man.state_availability_boundary.read().lower_bound
+                - inner.cur_era_genesis_height) as usize;
         let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory. Since, in some rare cases, the number of

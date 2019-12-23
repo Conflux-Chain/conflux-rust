@@ -287,8 +287,30 @@ impl ConsensusExecutor {
             return None;
         }
 
-        let opt_height = inner.optimistic_executed_height?;
-        let epoch_arena_index = inner.get_pivot_block_arena_index(opt_height);
+        let epoch_arena_index = {
+            let mut state_availability_boundary =
+                inner.data_man.state_availability_boundary.write();
+            let opt_height = state_availability_boundary.upper_bound + 1;
+            // 1. `upper_bound = 0` means that
+            //    + For full node, it is still in header phase.
+            //    + For archive/full node, it just starts executing from true
+            //      genesis block.
+            // 2. `opt_height < inner.cur_era_genesis_height` means the pivot
+            //    chain has not reach stable genesis.
+            // 3. `opt_height >= inner.cur_era_genesis_height +
+            //    inner.pivot_chain.len()` means we have executed to the end of
+            //    pivot chain.
+            if state_availability_boundary.upper_bound == 0
+                || opt_height < inner.cur_era_genesis_height
+                || opt_height
+                    >= inner.cur_era_genesis_height
+                        + inner.pivot_chain.len() as u64
+            {
+                return None;
+            }
+            state_availability_boundary.adjust_upper_bound(opt_height);
+            inner.get_pivot_block_arena_index(opt_height)
+        };
 
         // `on_local_pivot` is set to `true` because when we later skip its
         // execution on pivot chain, we will not notify tx pool, so we
@@ -301,14 +323,6 @@ impl ConsensusExecutor {
             true,
             false,
         );
-        let next_opt_height = opt_height + 1;
-        if next_opt_height
-            >= inner.pivot_index_to_height(inner.pivot_chain.len())
-        {
-            inner.optimistic_executed_height = None;
-        } else {
-            inner.optimistic_executed_height = Some(next_opt_height);
-        }
         Some(execution_task)
     }
 
@@ -1268,6 +1282,8 @@ impl ConsensusExecutionHandler {
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let block_hash = block.hash();
             // TODO: better redesign to avoid recomputation.
+            // FIXME: check state availability boundary here. Actually, it seems
+            // FIXME: we should never recompute states here.
             let receipts = match self
                 .data_man
                 .block_execution_result_by_hash_with_epoch(
