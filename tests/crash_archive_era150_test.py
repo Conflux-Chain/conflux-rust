@@ -81,7 +81,10 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         receiver_addr = eth_utils.encode_hex(privtoaddr(receiver_sk))
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
-        self.nodes[0].generate(2000, 0)
+        for _ in range(2000):
+            self.nodes[0].generate(1, 0)
+            # FIXME This waiting is just used to ensure that there is enough time for making snapshot
+            time.sleep(0.002)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
         time.sleep(1)

@@ -43,7 +43,7 @@ impl MaybeNodeRefDeltaMptCompact {
 
 // Manages access to a TrieNode. Converted from MaybeNodeRef. NodeRef is not
 // copy because it controls access to TrieNode.
-#[derive(Clone, Eq, PartialOrd, PartialEq, Ord)]
+#[derive(Clone, Eq, PartialOrd, PartialEq, Ord, Debug)]
 pub enum NodeRefDeltaMpt {
     Committed { db_key: DeltaMptDbKey },
     Dirty { index: ActualSlabIndex },

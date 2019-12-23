@@ -17,7 +17,7 @@ pub struct StorageManager {
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
 
-    in_progress_snapshoting_tasks:
+    pub in_progress_snapshoting_tasks:
         RwLock<HashMap<EpochId, InProgressSnapshotInfo>>,
     // FIXME: persistent in db.
     // The order doesn't matter as long as parent snapshot comes before
@@ -34,12 +34,11 @@ pub struct StorageManager {
 }
 
 // FIXME: the thread variable is used. But it's subject to refinements for sure.
-#[allow(dead_code)]
-struct InProgressSnapshotInfo {
+pub struct InProgressSnapshotInfo {
     snapshot_info: SnapshotInfo,
     // TODO: change to something that can control the progress or cancel the
     // snapshotting.
-    thread: thread::JoinHandle<()>,
+    pub thread: thread::JoinHandle<()>,
 }
 
 struct MaybeDbErrors {
@@ -686,6 +685,7 @@ impl DeltaMptIterator {
     pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
+        debug!("DeltaMptIterator: root_node={:?}", self.maybe_root_node);
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {

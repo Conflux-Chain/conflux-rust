@@ -7,6 +7,7 @@ pub struct SnapshotMpt<
     BorrowType: BorrowMut<DbType>,
 > {
     pub db: BorrowType,
+    pub merkle: MerkleHash,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
 }
 
@@ -76,7 +77,7 @@ impl<
 where DbType:
         for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
 {
-    fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
+    fn get_merkle_root(&self) -> MerkleHash { self.merkle }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
