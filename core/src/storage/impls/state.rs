@@ -16,7 +16,7 @@ pub struct State<'a> {
     intermediate_trie_root_merkle: MerkleHash,
     maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
     delta_trie: Arc<DeltaMpt>,
-    delta_trie_root: Option<NodeRefDeltaMpt>,
+    pub delta_trie_root: Option<NodeRefDeltaMpt>,
     delta_trie_key_padding: DeltaMptKeyPadding,
     intermediate_epoch_id: EpochId,
     delta_trie_height: Option<u32>,

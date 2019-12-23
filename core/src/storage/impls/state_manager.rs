@@ -220,14 +220,9 @@ impl StateManager {
                 // TODO: exists.
                 Ok(None)
             }
-            Some(snapshot) => {
-                let snapshot_merkle_root = match self
-                    .storage_manager
-                    .get_snapshot_info_at_epoch(state_index.snapshot_epoch_id)
-                {
-                    None => return Ok(None),
-                    Some(info) => info.merkle_root,
-                };
+            Some(mut snapshot) => {
+                let snapshot_merkle_root =
+                    *snapshot.open_snapshot_mpt_read_only()?.get_merkle_root();
                 let maybe_intermediate_mpt = self
                     .storage_manager
                     .get_intermediate_mpt(&state_index.snapshot_epoch_id)?;
@@ -306,22 +301,17 @@ impl StateManager {
             )
         };
 
-        let maybe_snapshot = self
+        let mut maybe_snapshot = self
             .storage_manager
             .get_snapshot_manager()
             .get_snapshot_by_epoch_id(snapshot_epoch_id)?;
-        if maybe_snapshot.is_none() {
-            return Ok(None);
-            // TODO: there is a special case when the snapshot_root isn't
-            // TODO: available but the snapshot at the intermediate epoch
-            // TODO: exists.
-        };
-        let snapshot_merkle_root = match self
-            .storage_manager
-            .get_snapshot_info_at_epoch(snapshot_epoch_id)
-        {
-            None => return Ok(None),
-            Some(info) => info.merkle_root,
+        let snapshot_merkle_root = match maybe_snapshot.as_mut() {
+            None => {
+                return Ok(None);
+            }
+            Some(snapshot) => {
+                *snapshot.open_snapshot_mpt_read_only()?.get_merkle_root()
+            }
         };
         let delta_mpt =
             self.storage_manager.get_delta_mpt(snapshot_epoch_id)?;
@@ -348,7 +338,7 @@ impl StateManager {
     }
 
     /// Check if we can make a new snapshot, and if so, make it in background.
-    pub(super) fn check_make_snapshot(
+    pub fn check_make_snapshot(
         &self, maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
         intermediate_epoch_id: &EpochId, new_height: u64,

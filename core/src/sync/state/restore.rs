@@ -205,7 +205,7 @@ impl Restorer {
     pub fn progress(&self) -> &RestoreProgress { self.progress.as_ref() }
 
     pub fn restored_state_root(
-        &self, state_manager: Arc<StateManager>,
+        &self, _state_manager: Arc<StateManager>,
     ) -> MerkleHash {
         // TODO Double check the restored snapshot merkle root
         // But if all chunks pass the verification, it should be the same as

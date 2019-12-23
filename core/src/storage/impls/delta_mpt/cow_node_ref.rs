@@ -577,6 +577,9 @@ impl CowNodeRef {
         for (i, node_ref) in children_table.iter() {
             let mut cow_child_node =
                 Self::new((*node_ref).into(), owned_node_set);
+            assert!(
+                owned_node_set.dirty.is_empty() && !cow_child_node.is_owned()
+            );
             let child_node = cow_child_node.get_trie_node(
                 node_memory_manager,
                 &allocator,

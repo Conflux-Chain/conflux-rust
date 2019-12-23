@@ -5,8 +5,8 @@
 /// A container to store information about owned nodes.
 #[derive(Default, Debug)]
 pub struct OwnedNodeSet {
-    dirty: BTreeMap<ActualSlabIndex, Option<DeltaMptDbKey>>,
-    committed: BTreeSet<DeltaMptDbKey>,
+    pub dirty: BTreeMap<ActualSlabIndex, Option<DeltaMptDbKey>>,
+    pub committed: BTreeSet<DeltaMptDbKey>,
 }
 
 impl OwnedNodeSet {
