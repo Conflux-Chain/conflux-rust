@@ -144,11 +144,11 @@ use crate::storage::{
     KVInserter,
 };
 #[cfg(test)]
-use crate::{
-    ext_db::SystemDB,
-    storage::state_manager::{StateManager, StorageConfiguration},
-    storage_db::SnapshotConfiguration,
+use crate::storage::{
+    state_manager::StorageConfiguration, storage_db::SnapshotConfiguration,
 };
+#[cfg(test)]
+use crate::{ext_db::SystemDB, storage::state_manager::StateManager};
 use cfx_types::Address;
 use elastic_array::ElasticArray128;
 use kvdb::{DBTransaction, KeyValueDB};

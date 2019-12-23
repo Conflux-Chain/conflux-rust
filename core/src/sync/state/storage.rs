@@ -6,7 +6,8 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         storage_db::{
-            key_value_db::KeyValueDbIterableTrait, SnapshotDbManagerTrait,
+            key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait,
+            SnapshotDbManagerTrait,
         },
         MptSlicer, SnapshotDbManagerSqlite, StateRootWithAuxInfo,
         StorageManager, TrieProof,

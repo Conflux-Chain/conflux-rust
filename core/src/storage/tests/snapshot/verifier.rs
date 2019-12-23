@@ -355,6 +355,12 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     ) -> Result<Self::SnapshotDb> {
         Ok(self.temp_snapshot.clone())
     }
+
+    fn finalize_full_sync_snapshot(
+        &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
+    ) -> Result<()> {
+        unimplemented!()
+    }
 }
 
 #[test]

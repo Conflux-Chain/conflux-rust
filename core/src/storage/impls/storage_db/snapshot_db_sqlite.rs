@@ -155,35 +155,49 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
     >;
 
     fn open_snapshot_mpt_for_write(
-        &mut self,
+        &'db mut self,
     ) -> Result<Self::SnapshotMptWriteType> {
-        Ok(SnapshotMpt {
-            db: ConnectionWithRowParser(
-                KvdbSqliteBorrowMut::new((
-                    self.maybe_db.as_mut(),
-                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
-                )),
-                Box::new(|x| Self::snapshot_mpt_row_parser(x)),
-            ),
-            _marker_db_type: Default::default(),
-        })
+        // Can't omit template types because compiler crashes if omitted.
+        Ok(SnapshotMpt::<
+            ConnectionWithRowParser<
+                KvdbSqliteBorrowMut<'db, SnapshotMptDbValue>,
+                SnapshotMptValueParserSqlite,
+            >,
+            ConnectionWithRowParser<
+                KvdbSqliteBorrowMut<'db, SnapshotMptDbValue>,
+                SnapshotMptValueParserSqlite,
+            >,
+        >::new(ConnectionWithRowParser(
+            KvdbSqliteBorrowMut::new((
+                self.maybe_db.as_mut(),
+                &SNAPSHOT_DB_STATEMENTS.mpt_statements,
+            )),
+            Box::new(|x| Self::snapshot_mpt_row_parser(x)),
+        ))?)
     }
 
     fn open_snapshot_mpt_read_only(
-        &mut self,
+        &'db mut self,
     ) -> Result<Self::SnapshotMptReadType> {
-        Ok(SnapshotMpt {
-            db: ConnectionWithRowParser(
-                KvdbSqliteBorrowMutReadOnly::new((
-                    self.maybe_db.as_mut(),
-                    Self::SNAPSHOT_MPT_TABLE_NAME,
-                    Self::SNAPSHOT_MPT_TABLE_NAME,
-                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
-                )),
-                Box::new(|x| Self::snapshot_mpt_row_parser(x)),
-            ),
-            _marker_db_type: Default::default(),
-        })
+        // Can't omit template types because compiler crashes if omitted.
+        Ok(SnapshotMpt::<
+            ConnectionWithRowParser<
+                KvdbSqliteBorrowMutReadOnly<'db, SnapshotMptDbValue>,
+                SnapshotMptValueParserSqlite,
+            >,
+            ConnectionWithRowParser<
+                KvdbSqliteBorrowMutReadOnly<'db, SnapshotMptDbValue>,
+                SnapshotMptValueParserSqlite,
+            >,
+        >::new(ConnectionWithRowParser(
+            KvdbSqliteBorrowMutReadOnly::new((
+                self.maybe_db.as_mut(),
+                Self::SNAPSHOT_MPT_TABLE_NAME,
+                Self::SNAPSHOT_MPT_TABLE_NAME,
+                &SNAPSHOT_DB_STATEMENTS.mpt_statements,
+            )),
+            Box::new(|x| Self::snapshot_mpt_row_parser(x)),
+        ))?)
     }
 }
 
@@ -582,10 +596,7 @@ use super::{
     sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
 };
 use crate::storage::{
-    impls::{
-        merkle_patricia_trie::CompressedPathRaw,
-        storage_db::sqlite::SQLITE_NO_PARAM,
-    },
+    impls::storage_db::sqlite::SQLITE_NO_PARAM,
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter,
         OpenSnapshotMptTrait,
@@ -593,6 +604,6 @@ use crate::storage::{
 };
 use cfx_types::Address;
 use fallible_iterator::FallibleIterator;
-use primitives::{MerkleHash, StorageKey, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, StorageKey};
 use sqlite::Statement;
 use std::{fs, path::Path, sync::Arc};

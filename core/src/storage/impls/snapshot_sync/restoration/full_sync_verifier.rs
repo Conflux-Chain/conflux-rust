@@ -87,8 +87,9 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         let maybe_right_proof;
         if chunk_index == 0 {
             maybe_left_proof = None;
+            key_range_left = vec![];
         } else {
-            let key_range_left = self.chunk_boundaries[chunk_index - 1].clone();
+            key_range_left = self.chunk_boundaries[chunk_index - 1].clone();
             maybe_left_proof = self.chunk_boundary_proofs.get(chunk_index - 1);
 
             // Check key boundary.

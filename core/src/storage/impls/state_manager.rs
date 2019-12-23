@@ -222,7 +222,7 @@ impl StateManager {
             }
             Some(mut snapshot) => {
                 let snapshot_merkle_root =
-                    *snapshot.open_snapshot_mpt_read_only()?.get_merkle_root();
+                    snapshot.open_snapshot_mpt_read_only()?.get_merkle_root();
                 let maybe_intermediate_mpt = self
                     .storage_manager
                     .get_intermediate_mpt(&state_index.snapshot_epoch_id)?;
@@ -310,7 +310,7 @@ impl StateManager {
                 return Ok(None);
             }
             Some(snapshot) => {
-                *snapshot.open_snapshot_mpt_read_only()?.get_merkle_root()
+                snapshot.open_snapshot_mpt_read_only()?.get_merkle_root()
             }
         };
         let delta_mpt =
