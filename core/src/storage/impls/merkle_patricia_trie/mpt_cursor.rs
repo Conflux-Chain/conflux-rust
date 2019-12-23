@@ -1448,7 +1448,7 @@ impl<Mpt> Drop for ReadWritePathNode<Mpt> {
 }
 
 pub trait GetReadMpt {
-    fn get_merkle_root(&self) -> &MerkleHash;
+    fn get_merkle_root(&self) -> MerkleHash;
 
     fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly;
 }
@@ -1468,7 +1468,7 @@ pub trait GetRwMpt: GetReadMpt {
 }
 
 impl GetReadMpt for &mut dyn SnapshotMptTraitReadOnly {
-    fn get_merkle_root(&self) -> &MerkleHash {
+    fn get_merkle_root(&self) -> MerkleHash {
         SnapshotMptTraitReadOnly::get_merkle_root(*self)
     }
 

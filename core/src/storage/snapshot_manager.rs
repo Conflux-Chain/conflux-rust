@@ -23,7 +23,7 @@ pub trait SnapshotManagerTrait: GetSnapshotDbManager {
 }
 
 pub trait GetSnapshotDbManager {
-    type SnapshotDb: SnapshotDbTrait;
+    type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
     type SnapshotDbManager: SnapshotDbManagerTrait<
         SnapshotDb = Self::SnapshotDb,
     >;

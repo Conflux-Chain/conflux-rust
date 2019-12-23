@@ -4,7 +4,7 @@
 
 /// The trait for database manager of Snapshot.
 pub trait SnapshotDbManagerTrait {
-    type SnapshotDb: SnapshotDbTrait;
+    type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
