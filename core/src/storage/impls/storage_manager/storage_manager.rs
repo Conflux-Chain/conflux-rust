@@ -97,6 +97,10 @@ impl StorageManager {
                    + Sync) {
         &*self.snapshot_manager
     }
+
+    pub fn get_snapshot_configuration(&self) -> &SnapshotConfiguration {
+        &self.snapshot_conf
+    }
 }
 
 /// Struct which makes sure that the delta mpt is properly ref-counted and
