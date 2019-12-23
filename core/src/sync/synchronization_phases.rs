@@ -132,10 +132,7 @@ impl SynchronizationPhaseManager {
         sync_manager
             .register_phase(Arc::new(CatchUpCheckpointPhase::new(state_sync)));
         sync_manager.register_phase(Arc::new(
-            CatchUpRecoverBlockFromDbPhase::new(
-                sync_state.clone(),
-                sync_graph.clone(),
-            ),
+            CatchUpRecoverBlockFromDbPhase::new(sync_graph.clone()),
         ));
         sync_manager.register_phase(Arc::new(CatchUpSyncBlockPhase::new(
             sync_state.clone(),
@@ -408,17 +405,13 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
 }
 
 pub struct CatchUpRecoverBlockFromDbPhase {
-    pub syn: Arc<SynchronizationState>,
     pub graph: SharedSynchronizationGraph,
     pub recovered: Arc<AtomicBool>,
 }
 
 impl CatchUpRecoverBlockFromDbPhase {
-    pub fn new(
-        syn: Arc<SynchronizationState>, graph: SharedSynchronizationGraph,
-    ) -> Self {
+    pub fn new(graph: SharedSynchronizationGraph) -> Self {
         CatchUpRecoverBlockFromDbPhase {
-            syn,
             graph,
             recovered: Arc::new(AtomicBool::new(false)),
         }
@@ -480,6 +473,10 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 &cur_era_genesis_hash,
             );
             // For archive node, this will be `None`.
+            // For full node, this is `None` when the state of checkpoint is
+            // already in disk and we didn't sync it from peer.
+            // In both cases, we should set `state_availability_boundary` to
+            // `[cur_era_stable_height, cur_era_stable_height]`.
             if let Some((epoch_synced, trusted_blame_block)) =
                 &*self.graph.consensus.synced_epoch_id_and_blame_block.lock()
             {
@@ -525,7 +522,6 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     }
                 }
             } else {
-                assert!(!self.syn.is_full_node());
                 let cur_era_stable_height = if cur_era_genesis_height == 0 {
                     0
                 } else {
