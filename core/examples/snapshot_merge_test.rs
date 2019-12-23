@@ -98,7 +98,9 @@ fn main() -> Result<(), Error> {
         &aux_info1,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = SNAPSHOT_EPOCHS_CAPACITY;
+    height = storage_manager
+        .get_snapshot_configuration()
+        .snapshot_epoch_count;
     let delta_mpt = storage_manager
         .get_delta_mpt(&NULL_EPOCH)
         .expect("state exists");
@@ -149,7 +151,9 @@ fn main() -> Result<(), Error> {
         &aux_info2,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = 2 * SNAPSHOT_EPOCHS_CAPACITY;
+    height = 2 * storage_manager
+        .get_snapshot_configuration()
+        .snapshot_epoch_count;
     let delta_mpt = storage_manager
         .get_delta_mpt(&snapshot1_epoch)
         .expect("state exists");
