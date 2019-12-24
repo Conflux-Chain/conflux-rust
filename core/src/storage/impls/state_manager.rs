@@ -211,7 +211,6 @@ impl StateManager {
             .storage_manager
             .get_snapshot_manager()
             .get_snapshot_by_epoch_id(&state_index.snapshot_epoch_id)?;
-        debug!("get_state_trees: state_index={:?}", state_index);
 
         match maybe_snapshot {
             None => {
@@ -315,6 +314,7 @@ impl StateManager {
         };
         let delta_mpt =
             self.storage_manager.get_delta_mpt(snapshot_epoch_id)?;
+        delta_mpt.update_row_number()?;
         let maybe_delta_root = if new_delta_root {
             None
         } else {

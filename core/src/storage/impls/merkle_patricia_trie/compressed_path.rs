@@ -284,11 +284,6 @@ impl CompressedPathRaw {
             }
             slice[x_slice_len..].copy_from_slice(y_slice);
         }
-        debug!(
-            "join_connected_paths: x:{:?} child:{:?} y:{:?}",
-            x, child_index, y
-        );
-
         Self {
             path_size: size as u16,
             path,
