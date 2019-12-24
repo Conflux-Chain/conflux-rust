@@ -67,6 +67,8 @@ pub struct OverlayAccount {
     code_cache: Arc<Bytes>,
 
     pub reset_storage: bool,
+    // Whether it is a contract address.
+    pub is_contract: bool,
 }
 
 impl OverlayAccount {
@@ -87,6 +89,7 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(vec![]),
             reset_storage: false,
+            is_contract: account.code_hash != KECCAK_EMPTY,
         };
         overlay_account.bank_balance_settlement(ar);
         overlay_account
@@ -109,6 +112,7 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(vec![]),
             reset_storage: false,
+            is_contract: false,
         }
     }
 
@@ -131,6 +135,7 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(vec![]),
             reset_storage,
+            is_contract: true,
         }
     }
 
@@ -156,6 +161,8 @@ impl OverlayAccount {
             capital * (ar - self.bank_ar) / U256::from(INTEREST_RATE_SCALE);
         self.bank_ar = ar;
     }
+
+    pub fn is_contract(&self) -> bool { self.is_contract }
 
     pub fn address(&self) -> &Address { &self.address }
 
@@ -342,13 +349,30 @@ impl OverlayAccount {
         }
     }
 
+    /// Increase the `storage_balance`. Caller should make sure the assertions
+    /// will not fail.
+    /// For contract account, we will automatically maintains
+    /// `balance` and `bank_balance`.
     pub fn add_storage_balance(&mut self, by: &U256) {
+        if self.is_contract() {
+            assert!(self.balance >= *by);
+            self.bank_balance += *by;
+            self.balance -= *by;
+        }
         self.storage_balance += *by;
         assert!(self.storage_balance <= self.bank_balance);
     }
 
+    /// Decrease the `storage_balance`. Caller should make sure the assertions
+    /// will not fail.
+    /// For contract account, we will automatically maintains
+    /// `balance` and `bank_balance`.
     pub fn sub_storage_balance(&mut self, by: &U256) {
         assert!(self.storage_balance >= *by);
+        if self.is_contract() {
+            self.bank_balance -= *by;
+            self.balance += *by;
+        }
         self.storage_balance -= *by;
     }
 
@@ -391,6 +415,7 @@ impl OverlayAccount {
             code_size: self.code_size,
             code_cache: self.code_cache.clone(),
             reset_storage: self.reset_storage,
+            is_contract: self.is_contract,
         }
     }
 
@@ -481,6 +506,7 @@ impl OverlayAccount {
         self.code_hash = keccak(&code);
         self.code_cache = Arc::new(code);
         self.code_size = Some(self.code_cache.len());
+        self.is_contract = true;
     }
 
     pub fn overwrite_with(&mut self, other: OverlayAccount) {
@@ -497,6 +523,7 @@ impl OverlayAccount {
         self.storage_balance = other.storage_balance;
         self.bank_ar = other.bank_ar;
         self.reset_storage = other.reset_storage;
+        self.is_contract = other.is_contract;
     }
 
     /// Return the owner of `key` before this execution. If it is `None`, it
@@ -573,6 +600,7 @@ impl OverlayAccount {
                 self.ownership_cache.borrow_mut().insert(k, Some(v));
             }
         }
+        assert!(self.ownership_changes.is_empty());
         storage_delta
     }
 
