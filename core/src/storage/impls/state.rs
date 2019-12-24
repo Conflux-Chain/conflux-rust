@@ -506,6 +506,10 @@ impl<'a> State<'a> {
                         cow_root.into_child().map(|r| r.into());
                     result?;
 
+                    debug!(
+                        "MPT commit last_row_number {}",
+                        commit_transaction.info.row_number.value
+                    );
                     // TODO: check the guarantee of underlying db on transaction
                     // TODO: failure. may have to commit last_row_number
                     // TODO: separately in worst case.

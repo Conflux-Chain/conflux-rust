@@ -100,6 +100,7 @@ impl MultiVersionMerklePatriciaTrie {
                 // unwrap() on new is fine.
                 .unwrap()
                 .unwrap_or_default();
+        debug!("MPT last_row_number: {:?}", row_number);
 
         Self {
             root_node_by_epoch: Default::default(),
