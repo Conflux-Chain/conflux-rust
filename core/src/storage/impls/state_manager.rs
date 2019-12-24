@@ -52,11 +52,6 @@ impl StateManager {
         match root_node {
             None => {}
             Some(node) => {
-                // Debugging log.
-                debug!(
-                    "State root committed for epoch {:?} parent={:?}",
-                    epoch_id, parent_epoch_id
-                );
                 delta_trie.set_parent_epoch(epoch_id, parent_epoch_id.clone());
                 delta_trie.set_epoch_root(epoch_id, node.clone());
                 delta_trie.set_root_node_ref(merkle_root.clone(), node.clone());
@@ -221,7 +216,7 @@ impl StateManager {
             }
             Some(mut snapshot) => {
                 let snapshot_merkle_root =
-                    *snapshot.open_snapshot_mpt_read_only()?.get_merkle_root();
+                    snapshot.open_snapshot_mpt_read_only()?.get_merkle_root();
                 let maybe_intermediate_mpt = self
                     .storage_manager
                     .get_intermediate_mpt(&state_index.snapshot_epoch_id)?;
@@ -309,7 +304,7 @@ impl StateManager {
                 return Ok(None);
             }
             Some(snapshot) => {
-                *snapshot.open_snapshot_mpt_read_only()?.get_merkle_root()
+                snapshot.open_snapshot_mpt_read_only()?.get_merkle_root()
             }
         };
         let delta_mpt =

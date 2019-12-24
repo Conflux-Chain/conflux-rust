@@ -157,22 +157,29 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
     fn open_snapshot_mpt_for_write(
         &mut self,
     ) -> Result<Self::SnapshotMptWriteType> {
-        Ok(SnapshotMpt {
+        let parser: SnapshotMptValueParserSqlite =
+            Box::new(|x| Self::snapshot_mpt_row_parser(x));
+        let mut mpt = SnapshotMpt {
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMut::new((
                     self.maybe_db.as_mut(),
                     &SNAPSHOT_DB_STATEMENTS.mpt_statements,
                 )),
-                Box::new(|x| Self::snapshot_mpt_row_parser(x)),
+                parser,
             ),
+            merkle_root: MERKLE_NULL_NODE,
             _marker_db_type: Default::default(),
-        })
+        };
+        mpt.load_merkle_root()?;
+        Ok(mpt)
     }
 
     fn open_snapshot_mpt_read_only(
         &mut self,
     ) -> Result<Self::SnapshotMptReadType> {
-        Ok(SnapshotMpt {
+        let parser: SnapshotMptValueParserSqlite =
+            Box::new(|x| Self::snapshot_mpt_row_parser(x));
+        let mut mpt = SnapshotMpt {
             db: ConnectionWithRowParser(
                 KvdbSqliteBorrowMutReadOnly::new((
                     self.maybe_db.as_mut(),
@@ -180,10 +187,13 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
                     Self::SNAPSHOT_MPT_TABLE_NAME,
                     &SNAPSHOT_DB_STATEMENTS.mpt_statements,
                 )),
-                Box::new(|x| Self::snapshot_mpt_row_parser(x)),
+                parser,
             ),
+            merkle_root: MERKLE_NULL_NODE,
             _marker_db_type: Default::default(),
-        })
+        };
+        mpt.load_merkle_root()?;
+        Ok(mpt)
     }
 }
 

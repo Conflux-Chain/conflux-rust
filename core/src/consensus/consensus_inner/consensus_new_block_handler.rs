@@ -17,7 +17,9 @@ use crate::{
     rlp::Encodable,
     statistics::SharedStatistics,
     storage::{
-        storage_db::{SnapshotInfo, SnapshotMptTraitReadOnly},
+        storage_db::{
+            OpenSnapshotMptTrait, SnapshotInfo, SnapshotMptTraitReadOnly,
+        },
         StateIndex, StateRootWithAuxInfo,
     },
     SharedTransactionPool,
@@ -1536,7 +1538,7 @@ impl ConsensusNewBlockHandler {
                     .expect("No db error")
                 {
                     Some(mut snapshot) => {
-                        snapshot_info.merkle_root = *snapshot
+                        snapshot_info.merkle_root = snapshot
                             .open_snapshot_mpt_read_only()
                             .expect("No db error")
                             .get_merkle_root();

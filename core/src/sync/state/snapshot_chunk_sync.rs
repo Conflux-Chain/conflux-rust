@@ -459,7 +459,7 @@ impl SnapshotChunkSync {
             start_time.elapsed()
         );
 
-        //         verify the blame state
+        // verify the blame state
         let root = inner.restorer.restored_state_root(state_manager);
         if root == inner.true_state_root_by_blame_info {
             info!("Snapshot chunks restored successfully");

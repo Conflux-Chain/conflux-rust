@@ -16,7 +16,7 @@ pub struct State<'a> {
     intermediate_trie_root_merkle: MerkleHash,
     maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
     delta_trie: Arc<DeltaMpt>,
-    pub delta_trie_root: Option<NodeRefDeltaMpt>,
+    delta_trie_root: Option<NodeRefDeltaMpt>,
     delta_trie_key_padding: DeltaMptKeyPadding,
     intermediate_epoch_id: EpochId,
     delta_trie_height: Option<u32>,
@@ -156,10 +156,7 @@ impl<'a> State<'a> {
         }
 
         // FIXME This is for the case of read-only access of the first snapshot
-        // state where intermediate_mpt is some This hack only works
-        // when mpt databases are the same A correct way might be using
-        // genesis_hash for the snapshot_epoch_id of genesis, and
-        // use NULL_EPOCH only for the parent of genesis
+        // state where intermediate_mpt is some.
         if self.maybe_intermediate_trie_key_padding.is_some() {
             if let Some(intermediate_trie) =
                 self.maybe_intermediate_trie.as_ref()
