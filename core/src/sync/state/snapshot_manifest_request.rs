@@ -13,7 +13,7 @@ use crate::{
         request_manager::Request,
         state::{
             snapshot_manifest_response::SnapshotManifestResponse,
-            storage::{ChunkKey, RangedManifest},
+            storage::RangedManifest,
         },
         Error, ProtocolConfiguration,
     },
@@ -27,7 +27,7 @@ use std::time::Duration;
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
     pub snapshot_epoch_id: H256,
-    pub start_chunk: Option<ChunkKey>,
+    pub start_chunk: Option<Vec<u8>>,
     pub trusted_blame_block: Option<H256>,
 }
 
@@ -102,17 +102,6 @@ impl SnapshotManifestRequest {
             snapshot_epoch_id: checkpoint,
             start_chunk: None,
             trusted_blame_block: Some(trusted_blame_block),
-        }
-    }
-
-    pub fn new_with_start_chunk(
-        checkpoint: H256, start_chunk: ChunkKey,
-    ) -> Self {
-        SnapshotManifestRequest {
-            request_id: 0,
-            snapshot_epoch_id: checkpoint,
-            start_chunk: Some(start_chunk),
-            trusted_blame_block: None,
         }
     }
 
