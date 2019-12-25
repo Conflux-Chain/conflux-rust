@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SnapshotInfo {
     pub serve_one_step_sync: bool,
 
@@ -44,6 +44,20 @@ impl SnapshotInfo {
                     (height - self.parent_snapshot_height - 1) as usize,
                 ))
             }
+        }
+    }
+}
+
+pub struct SnapshotConfiguration {
+    pub snapshot_epoch_count: u64,
+}
+
+impl SnapshotConfiguration {
+    pub fn height_to_delta_height(&self, height: u64) -> u32 {
+        if height == 0 {
+            0
+        } else {
+            ((height - 1) % self.snapshot_epoch_count) as u32 + 1
         }
     }
 }

@@ -18,7 +18,7 @@ use crate::{
             GetBlockHeadersResponse, NewBlockHashes, Status,
             TransactionDigests,
         },
-        state::{delta::CHECKPOINT_DUMP_MANAGER, SnapshotChunkSync},
+        state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
     },
@@ -31,7 +31,7 @@ use network::{
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, SignedTransaction};
+use primitives::{Block, BlockHeader, SignedTransaction, NULL_EPOCH};
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::{
@@ -1357,11 +1357,8 @@ impl SynchronizationProtocolHandler {
     }
 
     fn notify_checkpoint_capability(&self, io: &dyn NetworkContext) {
-        let checkpoint = match CHECKPOINT_DUMP_MANAGER.read().dumped() {
-            Some(cp) => cp,
-            None => return,
-        };
-
+        // FIXME get actual checkpoint
+        let checkpoint = NULL_EPOCH;
         let cap = DynamicCapability::ServeCheckpoint(Some(checkpoint));
         let mut peers = Vec::new();
 

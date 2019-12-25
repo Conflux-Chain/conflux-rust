@@ -12,7 +12,9 @@ pub struct SnapshotDbManagerSqlite {
 // TODO: used to sync checkpoint state
 // Note, the sync state context only has instance of type StateManager.
 impl Default for SnapshotDbManagerSqlite {
-    fn default() -> Self { unimplemented!() }
+    fn default() -> Self {
+        SnapshotDbManagerSqlite::new("./storage_db/snapshot/".to_string())
+    }
 }
 
 impl SnapshotDbManagerSqlite {
@@ -149,6 +151,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         mut in_progress_snapshot_info: SnapshotInfo,
     ) -> Result<SnapshotInfo>
     {
+        debug!(
+            "new_snapshot_by_merging: old={:?} new={:?}",
+            old_snapshot_epoch_id, snapshot_epoch_id
+        );
         // FIXME: clean-up when error happens.
         match &delta_mpt.maybe_root_node {
             None => {
@@ -243,6 +249,17 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             merkle_root,
         );
         Self::SnapshotDb::create(&temp_db_path)
+    }
+
+    fn finalize_full_sync_snapshot(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> Result<()> {
+        let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
+            snapshot_epoch_id,
+            merkle_root,
+        );
+        let final_db_path = self.get_snapshot_db_path(snapshot_epoch_id);
+        Self::rename_snapshot_db(&temp_db_path, &final_db_path)
     }
 }
 

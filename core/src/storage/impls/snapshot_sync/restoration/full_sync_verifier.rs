@@ -128,7 +128,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             self.merkle_root.clone(),
         );
 
-        let mut chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
+        let chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
         if chunk_rebuilder.is_valid {
             self.chunk_verified[chunk_index] = true;
             self.number_incomplete_chunk -= 1;
@@ -142,7 +142,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             let mut snapshot_mpt =
                 self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
             for (path, node) in chunk_rebuilder.inner_nodes_to_write {
-                snapshot_mpt.write_node(&path, &node);
+                snapshot_mpt.write_node(&path, &node)?;
             }
 
             // Combine changes around boundary nodes.

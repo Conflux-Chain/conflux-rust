@@ -6,7 +6,7 @@ use crate::{
     block_data_manager::BlockExecutionResult,
     sync::{
         message::{Context, Handleable},
-        state::{delta::RangedManifest, SnapshotManifestRequest},
+        state::{storage::RangedManifest, SnapshotManifestRequest},
         Error, ErrorKind,
     },
 };
@@ -32,6 +32,8 @@ pub struct SnapshotManifestResponse {
     pub receipt_blame_vec: Vec<H256>,
     pub bloom_blame_vec: Vec<H256>,
     pub block_receipts: Vec<BlockExecutionResult>,
+
+    pub snapshot_state_root: StateRoot,
 }
 
 impl Handleable for SnapshotManifestResponse {
@@ -63,10 +65,10 @@ impl SnapshotManifestResponse {
     fn validate(
         &self, _: &Context, request: &SnapshotManifestRequest,
     ) -> Result<(), Error> {
-        if self.checkpoint != request.checkpoint {
+        if self.checkpoint != request.snapshot_epoch_id {
             debug!(
                 "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
-                request.checkpoint,
+                request.snapshot_epoch_id,
                 self.checkpoint,
             );
             bail!(ErrorKind::Invalid);

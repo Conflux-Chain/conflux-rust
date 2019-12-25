@@ -434,8 +434,8 @@ mod delta_mpt_storage_key {
                     }
                 } else {
                     unreachable!(
-                        "Invalid key format. Unrecognized: {:?}, account: {:?}",
-                        remaining_bytes, address_bytes
+                        "Invalid key format. Unrecognized: {:?}, account: {:?} delta_mpt_key: {:?}",
+                        remaining_bytes, address_bytes, delta_mpt_key,
                     );
                 }
             }

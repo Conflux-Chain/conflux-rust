@@ -7,7 +7,27 @@ pub struct SnapshotMpt<
     BorrowType: BorrowMut<DbType>,
 > {
     pub db: BorrowType,
+    pub merkle_root: MerkleHash,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
+}
+
+impl<
+        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
+        BorrowType: BorrowMut<DbType>,
+    > SnapshotMpt<DbType, BorrowType>
+{
+    pub fn load_merkle_root(&mut self) -> Result<()> {
+        let root_key = mpt_node_path_to_db_key(&CompressedPathRaw::default());
+        self.merkle_root = match self.db.borrow_mut().get_mut(&root_key)? {
+            None => MERKLE_NULL_NODE,
+            Some(rlp) => {
+                let root: SnapshotMptNode = rlp::decode(&rlp)
+                    .expect("Snapshot mpt root node format invalid!");
+                *root.get_merkle()
+            }
+        };
+        Ok(())
+    }
 }
 
 pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
@@ -76,7 +96,7 @@ impl<
 where DbType:
         for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
 {
-    fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
+    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
@@ -149,6 +169,6 @@ use super::super::{
     merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
 };
 use fallible_iterator::FallibleIterator;
-use primitives::MerkleHash;
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{borrow::BorrowMut, convert::TryInto};

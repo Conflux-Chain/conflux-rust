@@ -17,6 +17,8 @@ pub mod consensus {
     // FIXME: We should use finality to determine the checkpoint moment instead.
     pub const ERA_DEFAULT_CHECKPOINT_GAP: u64 = 50000;
 
+    pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 10000;
+
     pub const NULL: usize = !0;
     pub const NULLU64: u64 = !0;
 }

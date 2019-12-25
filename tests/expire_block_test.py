@@ -14,6 +14,7 @@ class ExpireBlockTest(ConfluxTestFramework):
         self.conf_parameters["log_level"] = '"debug"'
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["era_checkpoint_gap"] = "100"
+        self.conf_parameters["snapshot_epoch_count"] = "50"
         self.num_nodes = 2
 
     def setup_network(self):
@@ -39,6 +40,8 @@ class ExpireBlockTest(ConfluxTestFramework):
             new_hash = node.generatefixedblock(blocks[-1], [], 0, False)
             blocks.append(new_hash)
             self.log.info("generate block={}".format(new_hash))
+            # FIXME Give enough time for snapshot
+            time.sleep(0.002)
         wait_until(lambda: node.best_block_hash() == new_hash)
         out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
         self.send_msg(node, NewBlock(block=out_block))

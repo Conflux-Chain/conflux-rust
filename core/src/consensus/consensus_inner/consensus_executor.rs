@@ -926,6 +926,9 @@ impl ConsensusExecutionHandler {
                             .state_root_with_aux_info
                             .aux_info,
                         pivot_block.block_header.height() - 1,
+                        self.data_man.height_to_delta_height(
+                            pivot_block.block_header.height() - 1,
+                        ),
                     ))
                     .expect("No db error")
                     // Unwrapping is safe because the state exists.
@@ -1433,6 +1436,9 @@ impl ConsensusExecutionHandler {
                             .state_root_with_aux_info
                             .aux_info,
                         pivot_block.block_header.height() - 1,
+                        self.data_man.height_to_delta_height(
+                            pivot_block.block_header.height() - 1,
+                        ),
                     ))
                     .unwrap()
                     // Unwrapping is safe because the state exists.

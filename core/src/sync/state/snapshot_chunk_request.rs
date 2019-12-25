@@ -6,8 +6,8 @@ use crate::sync::{
     message::{Context, DynamicCapability, Handleable, KeyContainer},
     request_manager::Request,
     state::{
-        delta::{Chunk, ChunkKey},
         snapshot_chunk_response::SnapshotChunkResponse,
+        storage::{Chunk, ChunkKey},
     },
     Error, ProtocolConfiguration,
 };

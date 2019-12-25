@@ -983,7 +983,18 @@ impl ConsensusGraph {
 
     /// Find a trusted blame block for checkpoint
     pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
-        self.inner.read().get_trusted_blame_block(stable_hash)
+        self.inner
+            .read()
+            .get_trusted_blame_block(stable_hash, false)
+    }
+
+    /// Find a trusted blame block for snapshot full sync
+    pub fn get_trusted_blame_block_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<H256> {
+        self.inner
+            .read()
+            .get_trusted_blame_block(snapshot_epoch_id, true)
     }
 
     /// Return the epoch that we are going to sync the state
