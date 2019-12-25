@@ -8,7 +8,10 @@ use crate::{
     },
     pow::ProofOfWorkConfig,
     statistics::Statistics,
-    storage::{state_manager::StorageConfiguration, StorageManager},
+    storage::{
+        state_manager::StorageConfiguration, storage_db::SnapshotConfiguration,
+        StorageManager,
+    },
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_BLOCK_GAS_LIMIT},
     verification::VerificationConfig,
@@ -97,6 +100,9 @@ pub fn initialize_synchronization_graph(
     let storage_manager = Arc::new(StorageManager::new(
         ledger_db.clone(),
         StorageConfiguration::default(),
+        SnapshotConfiguration {
+            snapshot_epoch_count: 10000000000,
+        },
     ));
 
     let mut genesis_accounts = HashMap::new();

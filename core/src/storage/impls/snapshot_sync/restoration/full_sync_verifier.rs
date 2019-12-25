@@ -4,7 +4,7 @@
 
 use crate::storage::impls::merkle_patricia_trie::VanillaChildrenTable;
 
-pub struct FullSyncVerifier {
+pub struct FullSyncVerifier<SnapshotDbManager: SnapshotDbManagerTrait> {
     number_chunks: usize,
     merkle_root: MerkleHash,
     chunk_boundaries: Vec<Vec<u8>>,
@@ -15,15 +15,17 @@ pub struct FullSyncVerifier {
     pending_boundary_nodes: HashMap<CompressedPathRaw, SnapshotMptNode>,
     boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
 
-    temp_snapshot_db: SnapshotDb,
+    temp_snapshot_db: SnapshotDbManager::SnapshotDb,
 }
 
 #[allow(unused)]
-impl FullSyncVerifier {
+impl<SnapshotDbManager: SnapshotDbManagerTrait>
+    FullSyncVerifier<SnapshotDbManager>
+{
     pub fn new(
         number_chunks: usize, chunk_boundaries: Vec<Vec<u8>>,
         chunk_boundary_proofs: Vec<TrieProof>, merkle_root: MerkleHash,
-        snapshot_db_manager: SnapshotDbManager, epoch_id: &EpochId,
+        snapshot_db_manager: &SnapshotDbManager, epoch_id: &EpochId,
     ) -> Result<Self>
     {
         if number_chunks != chunk_boundaries.len() + 1 {
@@ -81,7 +83,7 @@ impl FullSyncVerifier {
         }
 
         let key_range_left;
-        let key_range_right_excl;
+        let maybe_key_range_right_excl;
         let maybe_left_proof;
         let maybe_right_proof;
         if chunk_index == 0 {
@@ -99,10 +101,11 @@ impl FullSyncVerifier {
             }
         };
         if chunk_index == self.number_chunks - 1 {
-            key_range_right_excl = vec![];
+            maybe_key_range_right_excl = None;
             maybe_right_proof = None;
         } else {
-            key_range_right_excl = self.chunk_boundaries[chunk_index].clone();
+            let key_range_right_excl =
+                self.chunk_boundaries[chunk_index].clone();
             maybe_right_proof = self.chunk_boundary_proofs.get(chunk_index);
 
             // Check key boundary.
@@ -111,37 +114,51 @@ impl FullSyncVerifier {
                     return Ok(false);
                 }
             }
+
+            maybe_key_range_right_excl = Some(key_range_right_excl);
         }
 
         // FIXME: multi-threading.
         // Restore.
         let chunk_verifier = MptSliceVerifier::new(
             maybe_left_proof,
+            &*key_range_left,
             maybe_right_proof,
+            maybe_key_range_right_excl.as_ref().map(|v| &**v),
             self.merkle_root.clone(),
         );
 
-        let mut chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
+        let chunk_rebuilder = chunk_verifier.restore(keys, &values)?;
         if chunk_rebuilder.is_valid {
             self.chunk_verified[chunk_index] = true;
+            self.number_incomplete_chunk -= 1;
 
             // Commit key-values.
             for (key, value) in keys.into_iter().zip(values.into_iter()) {
-                self.temp_snapshot_db.put(key.borrow(), &value)?;
+                self.temp_snapshot_db.put(key.borrow(), &*value)?;
             }
 
             // Commit inner nodes.
             let mut snapshot_mpt =
                 self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
             for (path, node) in chunk_rebuilder.inner_nodes_to_write {
-                snapshot_mpt.write_node(&path, &node);
+                snapshot_mpt.write_node(&path, &node)?;
             }
 
             // Combine changes around boundary nodes.
-            // TODO: this loop can be moved to constructor.
             for (path, node) in chunk_rebuilder.boundary_nodes {
                 let mut children_table = VanillaChildrenTable::default();
                 unsafe {
+                    for (child_index, merkle_ref) in
+                        node.get_children_table_ref().iter()
+                    {
+                        *children_table.get_child_mut_unchecked(child_index) =
+                            SubtreeMerkleWithSize {
+                                merkle: *merkle_ref,
+                                subtree_size: 0,
+                                delta_subtree_size: 0,
+                            }
+                    }
                     *children_table.get_children_count_mut() =
                         node.get_children_count();
                 }
@@ -160,8 +177,10 @@ impl FullSyncVerifier {
             for (subtree_index, subtree_size) in
                 chunk_rebuilder.boundary_subtree_total_size
             {
-                self.boundary_subtree_total_size
-                    .insert(subtree_index, subtree_size);
+                *self
+                    .boundary_subtree_total_size
+                    .entry(subtree_index)
+                    .or_default() += subtree_size;
             }
         }
 
@@ -180,9 +199,8 @@ impl FullSyncVerifier {
             self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
 
         for (path, mut node) in self.pending_boundary_nodes.drain() {
-            let merkle = node.get_merkle().clone();
             let mut subtree_index = BoundarySubtreeIndex {
-                parent_node: merkle,
+                parent_node: node.get_merkle().clone(),
                 child_index: 0,
             };
             for child_index in 0..CHILDREN_COUNT as u8 {
@@ -215,11 +233,11 @@ use crate::storage::{
         snapshot_sync::restoration::mpt_slice_verifier::{
             BoundarySubtreeIndex, MptSliceVerifier,
         },
-        state_manager::{SnapshotDb, SnapshotDbManager},
     },
     storage_db::{
-        key_value_db::KeyValueDbTraitSingleWriter, SnapshotDbManagerTrait,
-        SnapshotMptNode, SnapshotMptTraitSingleWriter,
+        key_value_db::KeyValueDbTraitSingleWriter, OpenSnapshotMptTrait,
+        SnapshotDbManagerTrait, SnapshotMptNode, SnapshotMptTraitSingleWriter,
+        SubtreeMerkleWithSize,
     },
     TrieProof,
 };

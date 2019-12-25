@@ -8,7 +8,10 @@ use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
-    storage::{self, state_manager::StorageConfiguration},
+    storage::{
+        self, state_manager::StorageConfiguration,
+        storage_db::SnapshotConfiguration,
+    },
     sync::{ProtocolConfiguration, SyncGraphConfig},
     transaction_pool::TxPoolConfig,
 };
@@ -128,6 +131,7 @@ build_config! {
         (enable_state_expose, (bool), false)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (throttling_conf, (Option<String>), None)
+        (snapshot_epoch_count, (u64), SNAPSHOT_EPOCHS_CAPACITY)
 
         // Some preset configurations.
         //
@@ -458,6 +462,12 @@ impl Configuration {
         config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
 
         config
+    }
+
+    pub fn snapshot_config(&self) -> SnapshotConfiguration {
+        SnapshotConfiguration {
+            snapshot_epoch_count: self.raw_conf.snapshot_epoch_count,
+        }
     }
 
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {

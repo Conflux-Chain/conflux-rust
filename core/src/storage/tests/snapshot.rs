@@ -22,20 +22,20 @@ impl FakeSnapshotMptDb {
         assert_eq!(self.db.len(), expected.db.len());
 
         // Check subtree size.
-        for (k, v) in &expected.db {
-            let maybe_got_v = self.db.get(k);
-            match maybe_got_v {
+        for (k, node) in &expected.db {
+            let maybe_got_node = self.db.get(k);
+            match maybe_got_node {
                 None => panic!("key {:?} not found in resulting mpt."),
-                Some(got_v) => {
+                Some(got_node) => {
                     for (child_index, child_ref) in
-                        v.get_children_table_ref().iter()
+                        node.get_children_table_ref().iter()
                     {
-                        match got_v.get_children_table_ref().get_child(child_index) {
+                        match got_node.get_children_table_ref().get_child(child_index) {
                             None => {
                                 panic!(
                                     "Child {} not found. Expected\n\t{:?}\n\
                                     got\n\t{:?}\nkey {:?}",
-                                    child_index, v, got_v, k,
+                                    child_index, node, got_node, k,
                                 )
                             }
                             Some(got_child_ref) => {
@@ -43,7 +43,7 @@ impl FakeSnapshotMptDb {
                                     child_ref.subtree_size, got_child_ref.subtree_size,
                                     "Subtree size of child {} mismatch. Expected\n\t{:?}\n\
                                     got\n\t{:?}\nkey {:?}",
-                                    child_index, v, got_v, k,
+                                    child_index, node, got_node, k,
                                 )
                             }
                         }
@@ -59,7 +59,7 @@ struct FakeSnapshotMptDbIter<'a>(
 );
 
 impl SnapshotMptTraitReadOnly for FakeSnapshotMptDb {
-    fn get_merkle_root(&self) -> &MerkleHash { unimplemented!() }
+    fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,

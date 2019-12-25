@@ -58,6 +58,9 @@ pub fn new_state_manager_for_testing() -> StateManager {
             node_map_size: 20_000_000,
             recent_lfu_factor: 4.0,
         },
+        SnapshotConfiguration {
+            snapshot_epoch_count: 100000000000,
+        },
     )
 }
 
@@ -136,6 +139,8 @@ pub fn print_mpt_key(key: &[u8]) {
     println!(")");
 }
 
+#[cfg(test)]
+use crate::storage::storage_db::SnapshotConfiguration;
 use crate::storage::{
     impls::{errors::Result, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,

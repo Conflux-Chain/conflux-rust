@@ -4,7 +4,7 @@
 
 use crate::sync::{
     message::{Context, Handleable},
-    state::{delta::Chunk, SnapshotChunkRequest},
+    state::{storage::Chunk, SnapshotChunkRequest},
     Error, ErrorKind,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};

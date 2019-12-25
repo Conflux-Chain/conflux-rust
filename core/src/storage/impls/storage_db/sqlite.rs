@@ -555,9 +555,9 @@ impl<
 
 impl<
         ValueType: Default + TupleIndexExt + TupleIterate<dyn SqlReadableIntoSelf>,
-    > PutType for ValueType
+    > DbValueType for ValueType
 {
-    type PutType = ValueType;
+    type Type = ValueType;
 }
 
 /// This trait should be implemented for all types implement SqlBindableValue.
@@ -643,7 +643,7 @@ impl<
 }
 
 use super::super::{
-    super::{storage_db::key_value_db::PutType, utils::tuple::*},
+    super::{storage_db::key_value_db::DbValueType, utils::tuple::*},
     errors::*,
 };
 use fallible_iterator::FallibleIterator;

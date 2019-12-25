@@ -1016,18 +1016,13 @@ impl BlockDataManager {
         self.tx_data_manager.build_partial(compact_block)
     }
 
+    /// Caller should make sure the state exists.
     pub fn get_state_readonly_index<'a>(
         &'a self, block_hash: &'a EpochId,
     ) -> GuardedValue<
         RwLockReadGuard<'a, HashMap<H256, EpochExecutionCommitment>>,
         Option<StateIndex<'a>>,
     > {
-        let block_header =
-            self.block_header_by_hash(block_hash).expect("must exist");
-        assert!(self
-            .state_availability_boundary
-            .read()
-            .check_availability(block_header.height(), block_hash));
         let (guard, maybe_commitment) =
             self.get_epoch_execution_commitment(block_hash).into();
         let maybe_state_index = match &*maybe_commitment {
@@ -1061,6 +1056,18 @@ impl BlockDataManager {
         info!("get_parent_epochs stopped at block {:?}", block);
         epochs_reverse_order.reverse();
         (block, epochs_reverse_order)
+    }
+
+    pub fn get_snapshot_epoch_count(&self) -> u64 {
+        self.storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count()
+    }
+
+    pub fn height_to_delta_height(&self, height: u64) -> u32 {
+        self.storage_manager
+            .get_storage_manager()
+            .height_to_delta_height(height)
     }
 }
 

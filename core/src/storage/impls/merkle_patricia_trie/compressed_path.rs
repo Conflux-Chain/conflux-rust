@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub trait CompressedPathTrait {
+pub trait CompressedPathTrait: Debug {
     fn path_slice(&self) -> &[u8];
     fn end_mask(&self) -> u8;
 
@@ -284,7 +284,6 @@ impl CompressedPathRaw {
             }
             slice[x_slice_len..].copy_from_slice(y_slice);
         }
-
         Self {
             path_size: size as u16,
             path,

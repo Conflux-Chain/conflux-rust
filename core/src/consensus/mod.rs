@@ -366,6 +366,18 @@ impl ConsensusGraph {
         let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
         let hash =
             self.inner.read().get_hash_from_epoch_number(epoch_number)?;
+        if !self
+            .data_man
+            .state_availability_boundary
+            .read()
+            .check_availability(epoch_number, &hash)
+        {
+            return Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist",
+                epoch_number, hash
+            )
+            .into());
+        }
         let (_state_index_guard, maybe_state_readonly_index) =
             self.data_man.get_state_readonly_index(&hash).into();
         let maybe_state = match maybe_state_readonly_index {
@@ -983,7 +995,18 @@ impl ConsensusGraph {
 
     /// Find a trusted blame block for checkpoint
     pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
-        self.inner.read().get_trusted_blame_block(stable_hash)
+        self.inner
+            .read()
+            .get_trusted_blame_block(stable_hash, false)
+    }
+
+    /// Find a trusted blame block for snapshot full sync
+    pub fn get_trusted_blame_block_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<H256> {
+        self.inner
+            .read()
+            .get_trusted_blame_block(snapshot_epoch_id, true)
     }
 
     /// Return the epoch that we are going to sync the state

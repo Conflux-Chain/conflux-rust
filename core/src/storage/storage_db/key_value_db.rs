@@ -2,14 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// FIXME: Rename to DbPutValue
-pub trait PutType {
-    // FIXME: Rename to type.
-    type PutType: ?Sized;
+/// One of the elementary value type supported by db.
+pub trait DbValueType {
+    type Type: ?Sized;
 }
 
 pub trait KeyValueDbTypes {
-    type ValueType: PutType;
+    type ValueType: DbValueType;
 }
 
 pub trait KeyValueDbTraitRead: KeyValueDbTypes {
@@ -71,10 +70,10 @@ pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitOwnedRead {
         self.delete(key.to_string().as_bytes())
     }
     fn put(
-        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>;
     fn put_with_number_key(
-        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put(key.to_string().as_bytes(), value)
     }
@@ -95,10 +94,10 @@ pub trait KeyValueDbTrait: KeyValueDbTraitMultiReader + Send + Sync {
         self.delete(key.to_string().as_bytes())
     }
     fn put(
-        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>;
     fn put_with_number_key(
-        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put(key.to_string().as_bytes(), value)
     }
@@ -239,13 +238,13 @@ impl<
     }
 
     fn put(
-        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_impl(key, value)
     }
 
     fn put_with_number_key(
-        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_with_number_key_impl(key, value)
     }
@@ -267,11 +266,11 @@ pub trait SingleWriterImplByFamily<FamilyRepresentative: ?Sized>:
     ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_impl(
-        &mut self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_with_number_key_impl(
-        &mut self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &mut self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>;
 }
 
@@ -322,13 +321,13 @@ impl<
     }
 
     fn put(
-        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_impl(key, value)
     }
 
     fn put_with_number_key(
-        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
         self.put_with_number_key_impl(key, value)
     }
@@ -350,15 +349,15 @@ pub trait DbImplByFamily<FamilyRepresentative: ?Sized>:
     ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_impl(
-        &self, key: &[u8], value: &<Self::ValueType as PutType>::PutType,
+        &self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>;
 
     fn put_with_number_key_impl(
-        &self, key: i64, value: &<Self::ValueType as PutType>::PutType,
+        &self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>>;
 }
 
-impl<ValueType: PutType> OwnedReadImplFamily
+impl<ValueType: DbValueType> OwnedReadImplFamily
     for dyn KeyValueDbTraitMultiReader<ValueType = ValueType>
 {
     type FamilyRepresentative =
@@ -369,7 +368,7 @@ impl<ValueType: PutType> OwnedReadImplFamily
 /// satisfies KeyValueDbTraitMultiReader.
 impl<
         T: KeyValueDbTraitMultiReader<ValueType = ValueType>,
-        ValueType: PutType,
+        ValueType: DbValueType,
     > KeyValueDbTypes for &T
 {
     type ValueType = T::ValueType;
@@ -377,7 +376,7 @@ impl<
 
 impl<
         T: KeyValueDbTraitMultiReader<ValueType = ValueType>,
-        ValueType: PutType,
+        ValueType: DbValueType,
     >
     OwnedReadImplByFamily<dyn KeyValueDbTraitMultiReader<ValueType = ValueType>>
     for &T
@@ -405,12 +404,12 @@ macro_rules! mark_kvdb_multi_reader {
     };
 }
 
-impl PutType for Box<[u8]> {
-    type PutType = [u8];
+impl DbValueType for Box<[u8]> {
+    type Type = [u8];
 }
 
-impl PutType for i64 {
-    type PutType = i64;
+impl DbValueType for i64 {
+    type Type = i64;
 }
 
 use super::super::impls::errors::*;

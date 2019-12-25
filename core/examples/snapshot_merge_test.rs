@@ -27,8 +27,7 @@ use primitives::{
 };
 
 use cfxcore::storage::{
-    state_manager::{height_to_delta_height, SNAPSHOT_EPOCHS_CAPACITY},
-    storage_db::KeyValueDbTraitRead,
+    storage_db::{KeyValueDbTraitRead, SnapshotConfiguration},
     StateRootAuxInfo,
 };
 use std::{
@@ -99,7 +98,9 @@ fn main() -> Result<(), Error> {
         &aux_info1,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = SNAPSHOT_EPOCHS_CAPACITY;
+    height = storage_manager
+        .get_snapshot_configuration()
+        .snapshot_epoch_count;
     let delta_mpt = storage_manager
         .get_delta_mpt(&NULL_EPOCH)
         .expect("state exists");
@@ -126,7 +127,7 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info1.clone());
+    storage_manager.register_new_snapshot(snapshot_info1.clone(), false);
     println!("After merging: {:?}", snapshot_info1);
     let aux_info2 = StateRootAuxInfo {
         snapshot_epoch_id: NULL_EPOCH,
@@ -150,7 +151,9 @@ fn main() -> Result<(), Error> {
         &aux_info2,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = 2 * SNAPSHOT_EPOCHS_CAPACITY;
+    height = 2 * storage_manager
+        .get_snapshot_configuration()
+        .snapshot_epoch_count;
     let delta_mpt = storage_manager
         .get_delta_mpt(&snapshot1_epoch)
         .expect("state exists");
@@ -181,7 +184,7 @@ fn main() -> Result<(), Error> {
         snapshot_info2,
         accounts_map.len()
     );
-    storage_manager.register_new_snapshot(snapshot_info2.clone());
+    storage_manager.register_new_snapshot(snapshot_info2.clone(), false);
     let snapshot2 = snapshot_db_manager
         .get_snapshot_by_epoch_id(&snapshot2_epoch)?
         .expect("exists");
@@ -238,7 +241,7 @@ fn main() -> Result<(), Error> {
         delta_mpt_iterator,
         info,
     )?;
-    storage_manager.register_new_snapshot(snapshot_info3.clone());
+    storage_manager.register_new_snapshot(snapshot_info3.clone(), false);
     assert_eq!(snapshot_info3.merkle_root, snapshot_info2.merkle_root);
     Ok(())
 }
@@ -304,6 +307,9 @@ fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
     Ok(Arc::new(StateManager::new(
         db,
         StorageConfiguration::default(),
+        SnapshotConfiguration {
+            snapshot_epoch_count: 100000000000,
+        },
     )))
 }
 
@@ -374,13 +380,23 @@ fn add_accounts(
     while pending > 0 {
         let n = min(accounts_per_epoch, pending);
         let start2 = Instant::now();
-        let aux_info_tmp = if height_to_delta_height(*height) == 0 {
+        let aux_info_tmp = if manager
+            .get_storage_manager()
+            .height_to_delta_height(*height)
+            == 0
+        {
             old_aux_info
         } else {
             aux_info
         };
-        let state_index =
-            StateIndex::new_for_next_epoch(&epoch_id, aux_info_tmp, *height);
+        let state_index = StateIndex::new_for_next_epoch(
+            &epoch_id,
+            aux_info_tmp,
+            *height,
+            manager
+                .get_storage_manager()
+                .height_to_delta_height(*height),
+        );
         epoch_id =
             add_accounts_and_commit(manager, n, &mut account_iter, state_index);
         *height += 1;

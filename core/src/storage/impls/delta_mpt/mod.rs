@@ -123,6 +123,19 @@ impl MultiVersionMerklePatriciaTrie {
         }
     }
 
+    /// FIXME This is just used to handle the case of snapshot forking where row
+    /// number might be reused if not updated according to db status
+    pub fn update_row_number(&self) -> Result<()> {
+        let db_row_number =
+            Self::parse_row_number(self.db.get("last_row_number".as_bytes()))?
+                .unwrap_or_default();
+        let my_row_number = self.commit_lock.lock().row_number.value;
+        if db_row_number > my_row_number {
+            self.commit_lock.lock().row_number.value = db_row_number;
+        }
+        Ok(())
+    }
+
     fn load_root_node_ref_from_db(
         &self, merkle_root: &MerkleHash,
     ) -> Result<Option<NodeRefDeltaMpt>> {
@@ -251,7 +264,7 @@ impl MultiVersionMerklePatriciaTrie {
     }
 
     pub(super) fn set_parent_epoch(
-        &self, parent_epoch_id: EpochId, epoch_id: EpochId,
+        &self, epoch_id: EpochId, parent_epoch_id: EpochId,
     ) {
         self.parent_epoch_by_epoch
             .write()

@@ -24,7 +24,7 @@ pub use self::{
         delta_mpt::*,
         errors::{Error, ErrorKind, Result},
         merkle_patricia_trie::{KVInserter, TrieProof},
-        snapshot_sync::MptSlicer,
+        snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{
             kvdb_rocksdb::KvdbRocksdb, kvdb_sqlite::KvdbSqlite,
