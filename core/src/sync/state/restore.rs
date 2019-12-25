@@ -11,7 +11,7 @@ use crate::{
     sync::state::storage::{Chunk, ChunkKey},
 };
 use cfx_types::H256;
-use primitives::{EpochId, MerkleHash, NULL_EPOCH};
+use primitives::{EpochId, MerkleHash};
 use std::sync::{
     atomic::{AtomicUsize, Ordering::Relaxed},
     Arc,
@@ -69,13 +69,8 @@ impl Restorer {
 
     /// Start to restore chunks asynchronously.
     pub fn finalize_restoration(
-        &self, state_manager: Arc<StateManager>,
-        mut snapshot_info: SnapshotInfo,
-    )
-    {
-        // FIXME Use actual parent after fixing the maintenance of
-        // snapshot_mpts.
-        snapshot_info.parent_snapshot_epoch_id = NULL_EPOCH;
+        &self, state_manager: Arc<StateManager>, snapshot_info: SnapshotInfo,
+    ) {
         state_manager
             .get_storage_manager()
             .get_snapshot_manager()
