@@ -2,5 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod consensus;
-pub mod hsb_sync_protocol;
+use crate::message::MsgId;
+
+build_msgid! {
+    PROPOSAL = 0x00
+    VOTE = 0x01
+}

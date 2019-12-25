@@ -122,6 +122,8 @@ impl Session {
     /// Get id of the remote peer
     pub fn id(&self) -> Option<&NodeId> { self.metadata.id.as_ref() }
 
+    pub fn originated(&self) -> bool { self.metadata.originated }
+
     pub fn is_ready(&self) -> bool { self.had_hello.is_some() }
 
     pub fn expired(&self) -> bool { self.expired.is_some() }
