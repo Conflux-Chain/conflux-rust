@@ -187,7 +187,6 @@ impl Restorer {
                     height,
                     // Set intermediate_mpt to None
                     parent_snapshot_epoch_id: NULL_EPOCH,
-                    // FIXME Check if we need to fill them all
                     pivot_chain_parts: vec![snapshot_epoch_id],
                 };
                 state_manager
