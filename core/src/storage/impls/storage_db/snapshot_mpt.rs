@@ -11,25 +11,6 @@ pub struct SnapshotMpt<
     pub _marker_db_type: std::marker::PhantomData<DbType>,
 }
 
-impl<
-        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
-        BorrowType: BorrowMut<DbType>,
-    > SnapshotMpt<DbType, BorrowType>
-{
-    pub fn load_merkle_root(&mut self) -> Result<()> {
-        let root_key = mpt_node_path_to_db_key(&CompressedPathRaw::default());
-        self.merkle_root = match self.db.borrow_mut().get_mut(&root_key)? {
-            None => MERKLE_NULL_NODE,
-            Some(rlp) => {
-                let root: SnapshotMptNode = rlp::decode(&rlp)
-                    .expect("Snapshot mpt root node format invalid!");
-                *root.get_merkle()
-            }
-        };
-        Ok(())
-    }
-}
-
 pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
     let path_slice = path.path_slice();
     let end_mask = path.end_mask();
@@ -87,6 +68,26 @@ pub fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     }
 
     Ok(path)
+}
+
+impl<
+        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
+        BorrowType: BorrowMut<DbType>,
+    > SnapshotMpt<DbType, BorrowType>
+where DbType:
+        for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+{
+    pub fn new(db: BorrowType) -> Result<Self> {
+        let mut mpt = Self {
+            db,
+            merkle_root: MERKLE_NULL_NODE,
+            _marker_db_type: Default::default(),
+        };
+        if let Some(root_node) = mpt.load_node(&CompressedPathRaw::default())? {
+            mpt.merkle_root = *root_node.get_merkle();
+        }
+        Ok(mpt)
+    }
 }
 
 impl<

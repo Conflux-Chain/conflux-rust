@@ -139,8 +139,6 @@ pub fn print_mpt_key(key: &[u8]) {
     println!(")");
 }
 
-#[cfg(test)]
-use crate::storage::storage_db::SnapshotConfiguration;
 use crate::storage::{
     impls::{errors::Result, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,
@@ -148,7 +146,10 @@ use crate::storage::{
 #[cfg(test)]
 use crate::{
     ext_db::SystemDB,
-    storage::state_manager::{StateManager, StorageConfiguration},
+    storage::{
+        state_manager::{StateManager, StorageConfiguration},
+        storage_db::SnapshotConfiguration,
+    },
 };
 use cfx_types::Address;
 use elastic_array::ElasticArray128;
