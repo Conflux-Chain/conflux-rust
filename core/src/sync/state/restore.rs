@@ -9,7 +9,6 @@ use crate::{
         FullSyncVerifier, SnapshotDbManagerSqlite,
     },
     sync::state::storage::{Chunk, ChunkKey},
-    BlockDataManager,
 };
 use cfx_types::H256;
 use primitives::{EpochId, MerkleHash, NULL_EPOCH};
@@ -70,37 +69,22 @@ impl Restorer {
 
     /// Start to restore chunks asynchronously.
     pub fn finalize_restoration(
-        &self, state_manager: Arc<StateManager>, data_man: &BlockDataManager,
-    ) {
-        let snapshot_epoch_id = self.snapshot_epoch_id.clone();
-        let snapshot_merkle_root = self.snapshot_merkle_root;
-        let height = data_man
-            .block_header_by_hash(&snapshot_epoch_id)
-            .expect("state being synced should have block header")
-            .height();
-        let snapshot_db_manager = state_manager
+        &self, state_manager: Arc<StateManager>,
+        mut snapshot_info: SnapshotInfo,
+    )
+    {
+        // FIXME Use actual parent after fixing the maintenance of
+        // snapshot_mpts.
+        snapshot_info.parent_snapshot_epoch_id = NULL_EPOCH;
+        state_manager
             .get_storage_manager()
             .get_snapshot_manager()
-            .get_snapshot_db_manager();
-        snapshot_db_manager
+            .get_snapshot_db_manager()
             .finalize_full_sync_snapshot(
-                &snapshot_epoch_id,
-                &snapshot_merkle_root,
+                &self.snapshot_epoch_id,
+                &self.snapshot_merkle_root,
             )
-            .expect("finalize");
-        let snapshot_info = SnapshotInfo {
-            serve_one_step_sync: false,
-            merkle_root: snapshot_merkle_root,
-            // We will not sync true genesis, so height should not be 0
-            parent_snapshot_height: height
-                - state_manager
-                    .get_storage_manager()
-                    .get_snapshot_epoch_count(),
-            height,
-            // Set intermediate_mpt to None
-            parent_snapshot_epoch_id: NULL_EPOCH,
-            pivot_chain_parts: vec![snapshot_epoch_id],
-        };
+            .expect("Fail to finalize full sync");
         state_manager
             .get_storage_manager()
             .register_new_snapshot(snapshot_info, true);

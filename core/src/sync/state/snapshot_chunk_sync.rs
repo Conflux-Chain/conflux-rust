@@ -451,7 +451,7 @@ impl SnapshotChunkSync {
             // start to restore and update status
             inner.restorer.finalize_restoration(
                 ctx.manager.graph.data_man.storage_manager.clone(),
-                ctx.manager.graph.data_man.as_ref(),
+                inner.snapshot_info.clone(),
             );
             inner.status = Status::Completed;
         }

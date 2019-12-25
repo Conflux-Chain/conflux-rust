@@ -72,7 +72,7 @@ fn test_slice_verifier_zero_or_one_chunk() {
     assert!(MptSliceVerifier::new(None, &[], None, None, merkle_root)
         .restore(
             &mpt_kv_iter.kv.iter().map(|kv| &*kv.0).collect(),
-            &mpt_kv_iter.kv.iter().map(|kv| kv.1.clone()).collect(),
+            &mpt_kv_iter.kv.iter().map(|kv| kv.1.to_vec()).collect(),
         )
         .map(|result| result.is_valid)
         .unwrap_or(false));
@@ -173,7 +173,7 @@ fn test_slice_verifier() {
                 .collect(),
             &mpt_kv_iter.kv[chunk_start_offset..chunk_bound]
                 .iter()
-                .map(|kv| kv.1.clone())
+                .map(|kv| kv.1.to_vec())
                 .collect(),
         )
         .map(|result| result.is_valid)
@@ -200,7 +200,7 @@ fn test_slice_verifier() {
             for index in chunk_start_offset..chunk_bound {
                 if index != j_omit {
                     keys.push(&*mpt_kv_iter.kv[index].0);
-                    values.push(mpt_kv_iter.kv[index].1.clone());
+                    values.push(mpt_kv_iter.kv[index].1.to_vec());
                 }
             }
             assert!(!MptSliceVerifier::new(
@@ -403,7 +403,7 @@ fn test_full_sync_verifier_one_chunk() {
         .restore_chunk(
             &None,
             &mpt_kv_iter.kv.iter().map(|kv| kv.0.clone()).collect(),
-            mpt_kv_iter.kv.iter().map(|kv| kv.1.clone()).collect(),
+            mpt_kv_iter.kv.iter().map(|kv| kv.1.to_vec()).collect(),
         )
         .unwrap();
     assert!(chunk_restored);
@@ -515,7 +515,7 @@ fn test_full_sync_verifier() {
                     .collect(),
                 mpt_kv_iter.kv[chunk_start_offset..right_bounds[i]]
                     .iter()
-                    .map(|kv| kv.1.clone())
+                    .map(|kv| kv.1.to_vec())
                     .collect(),
             )
             .unwrap();
