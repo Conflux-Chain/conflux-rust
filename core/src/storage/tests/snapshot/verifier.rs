@@ -401,7 +401,7 @@ fn test_full_sync_verifier_one_chunk() {
 
     let chunk_restored = full_sync_verifier
         .restore_chunk(
-            0,
+            &None,
             &mpt_kv_iter.kv.iter().map(|kv| kv.0.clone()).collect(),
             mpt_kv_iter.kv.iter().map(|kv| kv.1.clone()).collect(),
         )
@@ -491,7 +491,7 @@ fn test_full_sync_verifier() {
 
     let mut full_sync_verifier = FullSyncVerifier::new(
         right_bounds.len(),
-        slicer_chunk_bounds,
+        slicer_chunk_bounds.clone(),
         slicer_chunk_proofs,
         merkle_root,
         &snapshot_db_manager,
@@ -501,9 +501,14 @@ fn test_full_sync_verifier() {
 
     let mut chunk_start_offset = 0;
     for i in 0..right_bounds.len() {
+        let upper_key = if i < right_bounds.len() - 1 {
+            Some(slicer_chunk_bounds[i].clone())
+        } else {
+            None
+        };
         let chunk_restored = full_sync_verifier
             .restore_chunk(
-                i,
+                &upper_key,
                 &mpt_kv_iter.kv[chunk_start_offset..right_bounds[i]]
                     .iter()
                     .map(|kv| kv.0.clone())
