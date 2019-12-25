@@ -290,25 +290,17 @@ impl ConsensusExecutor {
         let epoch_arena_index = {
             let mut state_availability_boundary =
                 inner.data_man.state_availability_boundary.write();
-            let opt_height = state_availability_boundary.upper_bound + 1;
-            // 1. `upper_bound = 0` means that
-            //    + For full node, it is still in header phase.
-            //    + For archive/full node, it just starts executing from true
-            //      genesis block.
-            // 2. `opt_height < inner.cur_era_genesis_height` means the pivot
-            //    chain has not reach stable genesis.
-            // 3. `opt_height >= inner.cur_era_genesis_height +
-            //    inner.pivot_chain.len()` means we have executed to the end of
-            //    pivot chain.
-            if state_availability_boundary.upper_bound == 0
-                || opt_height < inner.cur_era_genesis_height
-                || opt_height
-                    >= inner.cur_era_genesis_height
-                        + inner.pivot_chain.len() as u64
+            let opt_height =
+                state_availability_boundary.optimistic_executed_height?;
+            let next_opt_height = opt_height + 1;
+            if next_opt_height
+                >= inner.pivot_index_to_height(inner.pivot_chain.len())
             {
-                return None;
+                state_availability_boundary.optimistic_executed_height = None;
+            } else {
+                state_availability_boundary.optimistic_executed_height =
+                    Some(next_opt_height);
             }
-            state_availability_boundary.adjust_upper_bound(opt_height);
             inner.get_pivot_block_arena_index(opt_height)
         };
 
@@ -890,6 +882,10 @@ impl ConsensusExecutionHandler {
                 on_local_pivot,
             )
         {
+            let pivot_block_header = self
+                .data_man
+                .block_header_by_hash(epoch_hash)
+                .expect("must exists");
             if on_local_pivot {
                 // Unwrap is safe here because it's guaranteed by outer if.
                 let state_root = &self
@@ -904,6 +900,10 @@ impl ConsensusExecutionHandler {
                     ),
                 );
             }
+            self.data_man
+                .state_availability_boundary
+                .write()
+                .adjust_upper_bound(pivot_block_header.as_ref());
             debug!("Skip execution in prefix {:?}", epoch_hash);
             return;
         }
@@ -993,6 +993,11 @@ impl ConsensusExecutionHandler {
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
             on_local_pivot, epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
         );
+
+        self.data_man
+            .state_availability_boundary
+            .write()
+            .adjust_upper_bound(&pivot_block.block_header);
     }
 
     fn process_epoch_transactions(
@@ -1472,14 +1477,23 @@ impl ConsensusExecutionHandler {
     ) -> Result<(Vec<u8>, U256), String> {
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
+        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
+        if best_block_header.is_none() {
+            return Err("invalid epoch id".to_string());
+        }
+        let best_block_header = best_block_header.unwrap();
+        if !self
+            .data_man
+            .state_availability_boundary
+            .read()
+            .check_availability(best_block_header.height(), epoch_id)
+        {
+            return Err("state is not ready".to_string());
+        }
         let (_state_index_guard, state_index) =
             self.data_man.get_state_readonly_index(epoch_id).into();
-        let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         trace!("best_block_header: {:?}", best_block_header);
-        let time_stamp = match best_block_header {
-            Some(header) => header.timestamp(),
-            None => Default::default(),
-        };
+        let time_stamp = best_block_header.timestamp();
         let mut state = State::new(
             StateDb::new(
                 self.data_man

@@ -49,32 +49,47 @@ lazy_static! {
 pub const NULLU64: u64 = !0;
 
 /// FIXME: move it to another module.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct StateAvailabilityBoundary {
+    /// This is the hash of blocks in pivot chain based on current graph.
+    pub pivot_chain: Vec<H256>,
     /// This is the lower boundary height of available state.
     pub lower_bound: u64,
     /// This is the upper boundary height of available state.
     pub upper_bound: u64,
+    // Optimistic execution is the feature to execute ahead of the deferred
+    // execution boundary. The goal is to pipeline the transaction
+    // execution and the block packaging and verification.
+    // optimistic_executed_height is the number of step to go ahead
+    pub optimistic_executed_height: Option<u64>,
 }
 
 impl StateAvailabilityBoundary {
-    pub fn new(lower_bound: u64, upper_bound: u64) -> Self {
+    pub fn new(epoch_hash: H256, epoch_height: u64) -> Self {
         Self {
-            lower_bound,
-            upper_bound,
+            pivot_chain: vec![epoch_hash],
+            lower_bound: epoch_height,
+            upper_bound: epoch_height,
+            optimistic_executed_height: None,
         }
     }
 
-    pub fn check_availability(&self, epoch_height: u64) -> bool {
-        self.lower_bound <= epoch_height && epoch_height <= self.upper_bound
+    pub fn check_availability(&self, height: u64, block_hash: &H256) -> bool {
+        self.lower_bound <= height
+            && height <= self.upper_bound
+            && self.pivot_chain[(height - self.lower_bound) as usize]
+                == *block_hash
     }
 
-    /// This function will set a new upper boundary height of available state.
-    /// Caller should make sure the new upper boundary height should be greater
-    /// than or equal to currrent lower boundary height.
-    pub fn adjust_upper_bound(&mut self, new_upper_bound: u64) {
-        assert!(new_upper_bound >= self.lower_bound);
-        self.upper_bound = new_upper_bound;
+    /// Try to update `upper_bound` according to a new executed block.
+    pub fn adjust_upper_bound(&mut self, executed_block: &BlockHeader) {
+        let next_index = (self.upper_bound - self.lower_bound + 1) as usize;
+        if next_index < self.pivot_chain.len()
+            && executed_block.height() == self.upper_bound + 1
+            && executed_block.hash() == self.pivot_chain[next_index]
+        {
+            self.upper_bound += 1;
+        }
     }
 
     /// This function will set a new lower boundary height of available state.
@@ -91,6 +106,9 @@ impl StateAvailabilityBoundary {
         }
         assert!(self.lower_bound <= new_lower_bound);
         assert!(new_lower_bound <= self.upper_bound);
+        self.pivot_chain = self
+            .pivot_chain
+            .split_off((new_lower_bound - self.lower_bound) as usize);
         self.lower_bound = new_lower_bound;
     }
 }
@@ -135,20 +153,19 @@ pub struct BlockDataManager {
 
     /// This maintains the boundary height of available state and commitments
     /// (executed but not deleted or in `ExecutionTaskQueue`).
-    /// The upper bound always equal to latest executed or going to be executed
-    /// epoch height.
+    /// The upper bound always equal to latest executed epoch height.
     /// As for the lower bound:
     ///   1. For archive node, it always equals `cur_era_stable_height`.
     ///   2. For full node, it equals the height of remotely synchronized
     ///      state at start, and equals `cur_era_stable_height` after making a
     ///      new checkpoint.
     ///
-    /// The left boundary height will be updated when:
+    /// The lower boundary height will be updated when:
     ///   1. New checkpoint
     ///   2. Full Node snapshot syncing
     ///   3. New Snapshot
     ///
-    /// The right boundary height will be updated when:
+    /// The upper boundary height will be updated when:
     ///   1. Pivot chain switch
     ///   2. Execution of new epoch
     ///
@@ -202,7 +219,9 @@ impl BlockDataManager {
             cur_consensus_era_stable_hash: RwLock::new(true_genesis.hash()),
             tx_data_manager,
             db_manager,
-            state_availability_boundary: RwLock::new(Default::default()),
+            state_availability_boundary: RwLock::new(
+                StateAvailabilityBoundary::new(true_genesis.hash(), 0),
+            ),
         };
 
         data_man.initialize_instance_id();
@@ -1003,6 +1022,12 @@ impl BlockDataManager {
         RwLockReadGuard<'a, HashMap<H256, EpochExecutionCommitment>>,
         Option<StateIndex<'a>>,
     > {
+        let block_header =
+            self.block_header_by_hash(block_hash).expect("must exist");
+        assert!(self
+            .state_availability_boundary
+            .read()
+            .check_availability(block_header.height(), block_hash));
         let (guard, maybe_commitment) =
             self.get_epoch_execution_commitment(block_hash).into();
         let maybe_state_index = match &*maybe_commitment {

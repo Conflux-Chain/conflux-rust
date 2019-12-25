@@ -1380,13 +1380,37 @@ impl ConsensusNewBlockHandler {
             {
                 let mut state_availability_boundary =
                     inner.data_man.state_availability_boundary.write();
-
-                if to_state_pos > state_availability_boundary.lower_bound + 1 {
-                    state_availability_boundary
-                        .adjust_upper_bound(to_state_pos - 1);
+                assert!(fork_at > state_availability_boundary.lower_bound);
+                if pivot_changed {
+                    if extend_pivot {
+                        state_availability_boundary.pivot_chain.push(*hash);
+                    } else {
+                        let split_off_index =
+                            fork_at - state_availability_boundary.lower_bound;
+                        state_availability_boundary
+                            .pivot_chain
+                            .split_off(split_off_index as usize);
+                        for i in inner.height_to_pivot_index(fork_at)
+                            ..inner.pivot_chain.len()
+                        {
+                            state_availability_boundary
+                                .pivot_chain
+                                .push(inner.arena[inner.pivot_chain[i]].hash);
+                        }
+                        if state_availability_boundary.upper_bound >= fork_at {
+                            state_availability_boundary.upper_bound =
+                                fork_at - 1;
+                        }
+                    }
+                    state_availability_boundary.optimistic_executed_height =
+                        if to_state_pos > 0 {
+                            Some(to_state_pos)
+                        } else {
+                            None
+                        };
                 }
                 // For full node, we don't execute blocks before available
-                // states This skip should only happen in
+                // states. This skip should only happen in
                 // `SyncBlockPhase` for full nodes
                 if state_at < state_availability_boundary.lower_bound + 1 {
                     state_at = state_availability_boundary.lower_bound + 1;
@@ -1449,9 +1473,15 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        let start_pivot_index =
-            (self.data_man.state_availability_boundary.read().lower_bound
-                - inner.cur_era_genesis_height) as usize;
+        let mut state_availability_boundary =
+            self.data_man.state_availability_boundary.write();
+        assert!(
+            state_availability_boundary.lower_bound
+                == state_availability_boundary.upper_bound
+        );
+        let start_pivot_index = (state_availability_boundary.lower_bound
+            - inner.cur_era_genesis_height)
+            as usize;
         let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory. Since, in some rare cases, the number of
@@ -1466,6 +1496,11 @@ impl ConsensusNewBlockHandler {
         {
             self.data_man.load_epoch_execution_commitment_from_db(&start_hash)
                 .expect("epoch_execution_commitment for stable hash must exist in disk");
+        }
+        for pivot_index in start_pivot_index + 1..inner.pivot_chain.len() {
+            state_availability_boundary
+                .pivot_chain
+                .push(inner.arena[inner.pivot_chain[pivot_index]].hash);
         }
         for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
@@ -1497,6 +1532,8 @@ impl ConsensusNewBlockHandler {
                     true,
                     false,
                 ));
+            } else {
+                state_availability_boundary.upper_bound += 1;
             }
         }
     }

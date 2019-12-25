@@ -488,7 +488,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     .height();
                 *self.graph.data_man.state_availability_boundary.write() =
                     StateAvailabilityBoundary::new(
-                        epoch_synced_height,
+                        *epoch_synced,
                         epoch_synced_height,
                     );
                 // This map will be used to recover `state_valid` info for each
@@ -528,9 +528,16 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     cur_era_genesis_height
                         + new_consensus_inner.inner_conf.era_epoch_count
                 };
+                let stable_epoch_set = self
+                    .graph
+                    .data_man
+                    .epoch_set_hashes_from_db(cur_era_stable_height)
+                    .expect("epoch set for stable must exist");
+                let cur_era_stable_hash =
+                    *stable_epoch_set.last().expect("nonempty");
                 *self.graph.data_man.state_availability_boundary.write() =
                     StateAvailabilityBoundary::new(
-                        cur_era_stable_height,
+                        cur_era_stable_hash,
                         cur_era_stable_height,
                     );
             }
