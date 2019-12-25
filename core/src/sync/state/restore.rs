@@ -56,11 +56,10 @@ impl Restorer {
             // Not waiting for chunks
             None => false,
             Some(verifier) => {
-                let (keys, values) = chunk.into_kv();
                 match verifier.restore_chunk(
                     &key.upper_bound_excl,
-                    &keys,
-                    values,
+                    &chunk.keys,
+                    chunk.values,
                 ) {
                     Ok(true) => true,
                     _ => false,

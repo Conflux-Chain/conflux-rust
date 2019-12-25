@@ -76,7 +76,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
     // FIXME: multi-threading, where &mut can be dropped.
     pub fn restore_chunk<Key: Borrow<[u8]>>(
         &mut self, chunk_upper_key: &Option<Vec<u8>>, keys: &Vec<Key>,
-        values: Vec<Box<[u8]>>,
+        values: Vec<Vec<u8>>,
     ) -> Result<bool>
     {
         let chunk_index = match chunk_upper_key {

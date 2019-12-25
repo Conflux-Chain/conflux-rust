@@ -166,7 +166,7 @@ impl RangedManifest {
         let mut has_next = true;
 
         // todo determine the maximum chunks in a ranged manifest
-        let max_chunks = 100;
+        let max_chunks = i32::max_value();
         for i in 0..max_chunks {
             trace!("cut chunks for manifest, loop = {}", i);
             slicer.advance(DEFAULT_CHUNK_SIZE)?;
@@ -202,30 +202,47 @@ impl RangedManifest {
     }
 }
 
-#[derive(RlpEncodable, RlpDecodable)]
-pub struct ChunkItem {
-    key: Vec<u8>,
-    value: Vec<u8>,
+#[derive(Default)]
+pub struct Chunk {
+    pub keys: Vec<Vec<u8>>,
+    pub values: Vec<Vec<u8>>,
 }
 
-#[derive(Default, RlpEncodable, RlpDecodable)]
-pub struct Chunk {
-    items: Vec<ChunkItem>,
+impl Encodable for Chunk {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(2)
+            .append_list::<Vec<u8>, Vec<u8>>(&self.keys)
+            .append_list::<Vec<u8>, Vec<u8>>(&self.values);
+    }
+}
+
+impl Decodable for Chunk {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Chunk {
+            keys: rlp.list_at(0)?,
+            values: rlp.list_at(1)?,
+        })
+    }
 }
 
 impl Chunk {
     /// Validate the chunk with specified key.
     pub fn validate(&self, key: &ChunkKey) -> Result<(), Error> {
         // chunk should not be empty
-        if self.items.is_empty() {
+        if self.keys.is_empty() {
             return Err(
                 ErrorKind::InvalidSnapshotChunk("empty chunk".into()).into()
             );
         }
-
+        if self.keys.len() != self.values.len() {
+            return Err(ErrorKind::InvalidSnapshotChunk(
+                "keys and values do not match".into(),
+            )
+            .into());
+        }
         // the key of first item in chunk should match with the requested key
         if let Some(ref start_key) = key.lower_bound_incl {
-            if start_key != &self.items[0].key {
+            if start_key != &self.keys[0] {
                 return Err(ErrorKind::InvalidSnapshotChunk(
                     "key mismatch".into(),
                 )
@@ -234,16 +251,6 @@ impl Chunk {
         }
 
         Ok(())
-    }
-
-    pub fn into_kv(self) -> (Vec<Vec<u8>>, Vec<Box<[u8]>>) {
-        let mut keys = Vec::with_capacity(self.items.len());
-        let mut values = Vec::with_capacity(self.items.len());
-        for item in self.items {
-            keys.push(item.key);
-            values.push(item.value.into_boxed_slice());
-        }
-        (keys, values)
     }
 
     pub fn load(
@@ -274,18 +281,20 @@ impl Chunk {
         let mut kvs = kv_iterator
             .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
 
-        let mut items = Vec::new();
+        let mut keys = Vec::new();
+        let mut values = Vec::new();
         while let Some((key, value)) = kvs.next()? {
-            items.push(ChunkItem { key, value });
+            keys.push(key);
+            values.push(value);
         }
 
         debug!(
             "complete to load chunk, items = {}, chunk_key = {:?}",
-            items.len(),
+            keys.len(),
             chunk_key
         );
 
-        Ok(Some(Chunk { items }))
+        Ok(Some(Chunk { keys, values }))
     }
 }
 

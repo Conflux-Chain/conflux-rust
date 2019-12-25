@@ -69,7 +69,7 @@ impl MptSliceVerifier {
     }
 
     pub fn restore<Key: Borrow<[u8]>>(
-        mut self, keys: &Vec<Key>, values: &Vec<Box<[u8]>>,
+        mut self, keys: &Vec<Key>, values: &Vec<Vec<u8>>,
     ) -> Result<SliceMptRebuilder> {
         self.key_value_inserter.load_root()?;
         // We must open the path of the left bound, in order to check the merkle
@@ -79,7 +79,7 @@ impl MptSliceVerifier {
             .open_path_for_key::<access_mode::Read>(&*self.left_key_bound)?;
         for (key, value) in keys.iter().zip(values.into_iter()) {
             self.key_value_inserter
-                .insert(key.borrow(), value.clone())?;
+                .insert(key.borrow(), value.clone().into_boxed_slice())?;
             if !self
                 .key_value_inserter
                 .current_node_mut()
