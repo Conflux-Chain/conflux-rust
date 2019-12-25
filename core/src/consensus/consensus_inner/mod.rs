@@ -345,11 +345,6 @@ pub struct ConsensusGraphInner {
     pub current_difficulty: U256,
     // data_man is the handle to access raw block data
     data_man: Arc<BlockDataManager>,
-    // Optimistic execution is the feature to execute ahead of the deferred
-    // execution boundary. The goal is to pipeline the transaction
-    // execution and the block packaging and verification.
-    // optimistic_executed_height is the number of step to go ahead
-    optimistic_executed_height: Option<u64>,
     pub inner_conf: ConsensusInnerConfig,
     // The cache to store Anticone information of each node. This could be very
     // large so we periodically remove old ones in the cache.
@@ -359,13 +354,6 @@ pub struct ConsensusGraphInner {
     last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph
     pub old_era_block_set: Mutex<VecDeque<H256>>,
-
-    /// The lowest height of the epochs that have available states and
-    /// commitments. For archive node, it equals `cur_era_stable_height`.
-    /// For light node, it equals the height of remotely synchronized state at
-    /// start, and equals `cur_era_stable_height` after making a new
-    /// checkpoint.
-    pub state_boundary_height: u64,
 }
 
 pub struct ConsensusGraphNode {
@@ -428,7 +416,6 @@ impl ConsensusGraphInner {
             hash_to_arena_indices: HashMap::new(),
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
-            optimistic_executed_height: None,
             terminal_hashes: Default::default(),
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
@@ -449,7 +436,6 @@ impl ConsensusGraphInner {
             // TODO handle checkpoint in recovery
             last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
-            state_boundary_height: cur_era_stable_height,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -2667,6 +2653,8 @@ impl ConsensusGraphInner {
             "collect_blocks_missing_execution_commitments: me={}, height={}",
             me, self.arena[me].height
         );
+        let state_boundary_height =
+            self.data_man.state_availability_boundary.read().lower_bound;
         loop {
             let deferred_block_hash = self.arena[cur].hash;
 
@@ -2674,7 +2662,7 @@ impl ConsensusGraphInner {
                 .data_man
                 .get_epoch_execution_commitment(&deferred_block_hash)
                 .is_some()
-                || self.arena[cur].height <= self.state_boundary_height
+                || self.arena[cur].height <= state_boundary_height
             {
                 // This block and the blocks before have been executed or will
                 // not be executed
@@ -2693,13 +2681,15 @@ impl ConsensusGraphInner {
         // in order
         let mut blocks_to_compute = Vec::new();
         let mut cur = me;
+        let state_boundary_height =
+            self.data_man.state_availability_boundary.read().lower_bound;
         loop {
             if self.arena[cur].data.state_valid.is_some() {
                 break;
             }
             // See comments on compute_blame_and_state_with_execution_result()
             // for explanation of this assumption.
-            assert!(self.arena[cur].height >= self.state_boundary_height);
+            assert!(self.arena[cur].height >= state_boundary_height);
             blocks_to_compute.push(cur);
             cur = self.arena[cur].parent;
         }
@@ -2778,7 +2768,8 @@ impl ConsensusGraphInner {
     /// blocks. This block is found according to blame_ratio.
     pub fn recover_state_valid(&mut self) {
         let start_pivot_index =
-            (self.state_boundary_height - self.cur_era_genesis_height) as usize;
+            (self.data_man.state_availability_boundary.read().lower_bound
+                - self.cur_era_genesis_height) as usize;
         let start_epoch_hash =
             self.arena[self.pivot_chain[start_pivot_index]].hash;
         // We will get the first

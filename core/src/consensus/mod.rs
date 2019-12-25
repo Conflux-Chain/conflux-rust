@@ -366,6 +366,18 @@ impl ConsensusGraph {
         let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
         let hash =
             self.inner.read().get_hash_from_epoch_number(epoch_number)?;
+        if !self
+            .data_man
+            .state_availability_boundary
+            .read()
+            .check_availability(epoch_number, &hash)
+        {
+            return Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist",
+                epoch_number, hash
+            )
+            .into());
+        }
         let (_state_index_guard, maybe_state_readonly_index) =
             self.data_man.get_state_readonly_index(&hash).into();
         let maybe_state = match maybe_state_readonly_index {

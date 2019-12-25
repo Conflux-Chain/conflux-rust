@@ -289,7 +289,12 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
         inner.cur_era_stable_height = new_era_stable_height;
-        inner.state_boundary_height = new_era_stable_height;
+        // TODO: maybe archive node has other logic.
+        inner
+            .data_man
+            .state_availability_boundary
+            .write()
+            .adjust_lower_bound(new_era_height);
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
         let next_era_arena_index =
@@ -1364,11 +1369,6 @@ impl ConsensusNewBlockHandler {
                     - DEFERRED_STATE_EPOCH_COUNT
                     + 1
             };
-            inner.optimistic_executed_height = if to_state_pos > 0 {
-                Some(to_state_pos)
-            } else {
-                None
-            };
             let mut state_at = fork_at;
             if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
                 if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
@@ -1378,10 +1378,44 @@ impl ConsensusNewBlockHandler {
                     state_at = 1;
                 }
             }
-            // For full node, we don't execute blocks before available states
-            // This skip should only happen in `SyncBlockPhase` for full nodes
-            if state_at < inner.state_boundary_height + 1 {
-                state_at = inner.state_boundary_height + 1;
+            {
+                let mut state_availability_boundary =
+                    inner.data_man.state_availability_boundary.write();
+                assert!(fork_at > state_availability_boundary.lower_bound);
+                if pivot_changed {
+                    if extend_pivot {
+                        state_availability_boundary.pivot_chain.push(*hash);
+                    } else {
+                        let split_off_index =
+                            fork_at - state_availability_boundary.lower_bound;
+                        state_availability_boundary
+                            .pivot_chain
+                            .split_off(split_off_index as usize);
+                        for i in inner.height_to_pivot_index(fork_at)
+                            ..inner.pivot_chain.len()
+                        {
+                            state_availability_boundary
+                                .pivot_chain
+                                .push(inner.arena[inner.pivot_chain[i]].hash);
+                        }
+                        if state_availability_boundary.upper_bound >= fork_at {
+                            state_availability_boundary.upper_bound =
+                                fork_at - 1;
+                        }
+                    }
+                    state_availability_boundary.optimistic_executed_height =
+                        if to_state_pos > 0 {
+                            Some(to_state_pos)
+                        } else {
+                            None
+                        };
+                }
+                // For full node, we don't execute blocks before available
+                // states. This skip should only happen in
+                // `SyncBlockPhase` for full nodes
+                if state_at < state_availability_boundary.lower_bound + 1 {
+                    state_at = state_availability_boundary.lower_bound + 1;
+                }
             }
 
             // Apply transactions in the determined total order
@@ -1441,9 +1475,10 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        let start_pivot_index = (inner.state_boundary_height
-            - inner.cur_era_genesis_height)
-            as usize;
+        let state_boundary_height =
+            self.data_man.state_availability_boundary.read().lower_bound;
+        let start_pivot_index =
+            (state_boundary_height - inner.cur_era_genesis_height) as usize;
         let mut start_hash =
             inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
@@ -1460,7 +1495,20 @@ impl ConsensusNewBlockHandler {
             self.data_man.load_epoch_execution_commitment_from_db(&start_hash)
                 .expect("epoch_execution_commitment for stable hash must exist in disk");
         }
-        if inner.state_boundary_height == 0 {
+        {
+            let mut state_availability_boundary =
+                self.data_man.state_availability_boundary.write();
+            assert!(
+                state_availability_boundary.lower_bound
+                    == state_availability_boundary.upper_bound
+            );
+            for pivot_index in start_pivot_index + 1..inner.pivot_chain.len() {
+                state_availability_boundary
+                    .pivot_chain
+                    .push(inner.arena[inner.pivot_chain[pivot_index]].hash);
+            }
+        }
+        if state_boundary_height == 0 {
             start_hash = NULL_EPOCH;
         }
         let storage_manager =
@@ -1471,9 +1519,9 @@ impl ConsensusNewBlockHandler {
         let snapshot_info = SnapshotInfo {
             serve_one_step_sync: false,
             merkle_root: Default::default(),
-            parent_snapshot_height: inner.state_boundary_height
+            parent_snapshot_height: state_boundary_height
                 - storage_manager.get_snapshot_epoch_count(),
-            height: inner.state_boundary_height,
+            height: state_boundary_height,
             parent_snapshot_epoch_id: Default::default(),
             pivot_chain_parts: vec![start_hash],
         };
@@ -1518,6 +1566,11 @@ impl ConsensusNewBlockHandler {
                     true,
                     false,
                 ));
+            } else {
+                self.data_man
+                    .state_availability_boundary
+                    .write()
+                    .upper_bound += 1;
             }
             if pivot_index as u64 % storage_manager.get_snapshot_epoch_count()
                 == 0

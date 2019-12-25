@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    block_data_manager::StateAvailabilityBoundary,
     consensus::ConsensusGraphInner,
     parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
     sync::{
@@ -458,29 +459,38 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // consensus graph.
             old_sync_inner.data_man.initialize_instance_id();
 
-            let (cur_era_genesis_hash, _) =
+            let (cur_era_genesis_hash, cur_era_genesis_height) =
                 old_sync_inner.get_genesis_hash_and_height_in_current_era();
 
             // TODO: Make sure that the checkpoint will not change between the
             // end of CatchUpCheckpointPhase and the start of
             // CatchUpRecoverBlockFromDbPhase.
 
-            let mut new_consensus_inner = ConsensusGraphInner::with_era_genesis(
+            let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
                 old_consensus_inner.pow_config.clone(),
                 self.graph.data_man.clone(),
                 old_consensus_inner.inner_conf.clone(),
                 &cur_era_genesis_hash,
             );
             // For archive node, this will be `None`.
+            // For full node, this is `None` when the state of checkpoint is
+            // already in disk and we didn't sync it from peer.
+            // In both cases, we should set `state_availability_boundary` to
+            // `[cur_era_stable_height, cur_era_stable_height]`.
             if let Some((epoch_synced, trusted_blame_block)) =
                 &*self.graph.consensus.synced_epoch_id_and_blame_block.lock()
             {
-                new_consensus_inner.state_boundary_height = self
+                let epoch_synced_height = self
                     .graph
                     .data_man
                     .block_header_by_hash(epoch_synced)
                     .expect("Header for checkpoint exists")
                     .height();
+                *self.graph.data_man.state_availability_boundary.write() =
+                    StateAvailabilityBoundary::new(
+                        *epoch_synced,
+                        epoch_synced_height,
+                    );
                 // This map will be used to recover `state_valid` info for each
                 // pivot block before `trusted_blame_block`.
                 let mut pivot_block_state_valid_map =
@@ -511,6 +521,25 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         }
                     }
                 }
+            } else {
+                let cur_era_stable_height = if cur_era_genesis_height == 0 {
+                    0
+                } else {
+                    cur_era_genesis_height
+                        + new_consensus_inner.inner_conf.era_epoch_count
+                };
+                let stable_epoch_set = self
+                    .graph
+                    .data_man
+                    .epoch_set_hashes_from_db(cur_era_stable_height)
+                    .expect("epoch set for stable must exist");
+                let cur_era_stable_hash =
+                    *stable_epoch_set.last().expect("nonempty");
+                *self.graph.data_man.state_availability_boundary.write() =
+                    StateAvailabilityBoundary::new(
+                        cur_era_stable_hash,
+                        cur_era_stable_height,
+                    );
             }
             self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
