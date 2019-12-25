@@ -139,21 +139,23 @@ pub fn print_mpt_key(key: &[u8]) {
     println!(")");
 }
 
-#[cfg(test)]
-use crate::storage::storage_db::SnapshotConfiguration;
 use crate::storage::{
     impls::{errors::Result, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,
-};
-#[cfg(test)]
-use crate::{
-    ext_db::SystemDB,
-    storage::state_manager::{StateManager, StorageConfiguration},
 };
 use cfx_types::Address;
 use elastic_array::ElasticArray128;
 use kvdb::{DBTransaction, KeyValueDB};
 use primitives::StorageKey;
+
+#[cfg(test)]
+use crate::{
+    ext_db::SystemDB,
+    storage::{
+        state_manager::{StateManager, StorageConfiguration},
+        storage_db::SnapshotConfiguration,
+    },
+};
 #[cfg(test)]
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 #[cfg(test)]
