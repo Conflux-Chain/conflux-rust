@@ -9,6 +9,15 @@ from .utils import TT256, mk_contract_address, zpad, int_to_32bytearray, \
     big_endian_to_int, ecsign, ecrecover_to_pub, normalize_key, str_to_bytes, \
     encode_hex, address
 
+class UnsignedTransaction(rlp.Serializable):
+    fields = [
+        ('nonce', big_endian_int),
+        ('gas_price', big_endian_int),
+        ('gas', big_endian_int),
+        ('action', address),
+        ('value', big_endian_int),
+        ('data', binary),
+    ]
 
 class Transaction(rlp.Serializable):
     """
@@ -30,12 +39,7 @@ class Transaction(rlp.Serializable):
     """
 
     fields = [
-        ('nonce', big_endian_int),
-        ('gas_price', big_endian_int),
-        ('gas', big_endian_int),
-        ('action', address),
-        ('value', big_endian_int),
-        ('data', binary),
+        ('transaction', UnsignedTransaction),
         ('v', big_endian_int),
         ('r', big_endian_int),
         ('s', big_endian_int),
@@ -46,11 +50,20 @@ class Transaction(rlp.Serializable):
     def __init__(self, nonce, gas_price, gas, action, value, data, v=0, r=0,
                  s=0):
 
-        super(Transaction, self).__init__(
-            nonce, gas_price, gas, action, value, data, v, r, s
+        transaction = UnsignedTransaction(
+            nonce=nonce,
+            gas_price=gas_price,
+            gas=gas,
+            value=value,
+            action=action,
+            data=data
         )
-        if self.gas_price >= TT256 or \
-                self.value >= TT256 or self.nonce >= TT256:
+
+        super(Transaction, self).__init__(
+            transaction, v, r, s
+        )
+        if self.transaction.gas_price >= TT256 or \
+                self.transaction.value >= TT256 or self.transaction.nonce >= TT256:
             raise InvalidTransaction("Values way too high!")
 
     @property
@@ -105,14 +118,6 @@ class Transaction(rlp.Serializable):
 
     def __repr__(self):
         return '<Transaction(%s)>' % encode_hex(self.hash)[:4]
-
-
-class UnsignedTransaction(rlp.Serializable):
-    fields = [
-        (field, sedes) for field, sedes in Transaction._meta.fields if
-        field not in "vrs"
-    ]
-
 
 def unsigned_tx_from_tx(tx):
     return UnsignedTransaction(
