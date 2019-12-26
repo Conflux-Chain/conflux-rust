@@ -1617,12 +1617,13 @@ impl<'a, 'b> Executive<'a, 'b> {
 
         // perform suicides
         for address in &substate.suicides {
-            // TODO: add comments
+            // If the `bank_balance` of the address is not zero, it means it
+            // owns some storages. We should not kill this account, unless all
+            // the storages are released.
+            //
             // FIXME: some db errors should be handled here.
             assert!(self.state.exists(address)?);
-            if self.state.balance(address)?.is_zero()
-                && self.state.bank_balance(address)?.is_zero()
-            {
+            if self.state.bank_balance(address)?.is_zero() {
                 self.state.kill_account(address);
             }
         }

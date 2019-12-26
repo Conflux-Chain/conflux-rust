@@ -351,8 +351,17 @@ impl OverlayAccount {
 
     /// Increase the `storage_balance`. Caller should make sure the assertions
     /// will not fail.
-    /// For contract account, we will automatically maintains
-    /// `balance` and `bank_balance`.
+    ///
+    /// For normal account, the value of `balance` and `bank_balance` will
+    /// remain the same. The automatic deposit will call `deposit` explicitly
+    /// first.
+    ///
+    /// For contract account, the value of `balance` will decrease and the value
+    /// of `bank_balance` will increase. Since contract accounts don't have the
+    /// privilege to call `deposit` explicitly, we have to move that part of
+    /// tokens from `balance` to `bank_balance` and `storage_balance` directly.
+    ///
+    /// See the comments in `State::check_storage_balance` for more details.
     pub fn add_storage_balance(&mut self, by: &U256) {
         if self.is_contract() {
             assert!(self.balance >= *by);
@@ -365,8 +374,18 @@ impl OverlayAccount {
 
     /// Decrease the `storage_balance`. Caller should make sure the assertions
     /// will not fail.
-    /// For contract account, we will automatically maintains
-    /// `balance` and `bank_balance`.
+    ///
+    /// For normal account, the value of `balance` and `bank_balance` will
+    /// remain the same. The automatic deposit will be treat as normal deposit,
+    /// the account should call `withdraw` explicitly to move that part of
+    /// tokens from `bank_balance` to `balance`.
+    ///
+    /// For contract account, the value of `balance` will increase and the value
+    /// of `bank_balance` will decrease. Since contract accounts don't have the
+    /// privilege to call `withdraw` explicitly, we have to move that part of
+    /// tokens to `balance` directly.
+    ///
+    /// See the comments in `State::check_storage_balance` for more details.
     pub fn sub_storage_balance(&mut self, by: &U256) {
         assert!(self.storage_balance >= *by);
         if self.is_contract() {

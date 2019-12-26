@@ -103,6 +103,23 @@ impl<'a> State<'a> {
 
     /// return true if all affected accounts have enough storage balance.
     ///
+    /// Some assumptions must hold if this function returns `true`:
+    /// + The `storage_balance` is not greater than `bank_balance` for all
+    ///   accounts.
+    /// + The `storage_balance` and `bank_balance` for all contract accounts
+    ///   are always the same.
+    /// + The value of `self.total_bank_tokens` must equal to the summation of
+    ///   `bank_balance` of all accounts.
+    /// + The value of `self.total_storage_tokens` must equal to the summation
+    ///   of `storage_balance` of all accounts.
+    ///
+    /// If the function returns `true`, we should call `discard_checkpoint()`
+    /// right after it. If the function returns `false`, we should call
+    /// `revert_to_checkpoint()` right after it.
+    ///
+    /// Based on above assumptions, some actions must be done if the owner of
+    /// storage changed.
+    ///
     /// If some storage is released:
     /// + For normal account, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY`
     ///   from `storage_balance` for each released storage. The value of
@@ -123,20 +140,6 @@ impl<'a> State<'a> {
     ///   to both `storage_balance` and `bank_balance` for each new storage.
     ///   Also, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY` from `balance`
     ///   for each new storage.
-    ///
-    /// Some assumptions must hold if this function returns `true`:
-    /// + The `storage_balance` is not greater than `bank_balance` for all
-    ///   accounts.
-    /// + The `storage_balance` and `bank_balance` for all contract accounts
-    ///   are always the same.
-    /// + The value of `self.total_bank_tokens` must equal to the summation of
-    ///   `bank_balance` of all accounts.
-    /// + The value of `self.total_storage_tokens` must equal to the summation
-    ///   of `storage_balance` of all accounts.
-    ///
-    /// If the function returns `true`, we should call `discard_checkpoint()`
-    /// right after it. If the function returns `false`, we should call
-    /// `revert_to_checkpoint()` right after it.
     pub fn check_storage_balance(&mut self, timestamp: u64) -> bool {
         let mut storage_balance_sub = HashMap::new();
         let mut storage_balance_inc = HashMap::new();
