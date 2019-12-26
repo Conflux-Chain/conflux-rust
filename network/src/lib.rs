@@ -250,6 +250,8 @@ pub enum UpdateNodeOperation {
 pub trait NetworkContext {
     fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
 
+    fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool>;
+
     fn send(
         &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error>;

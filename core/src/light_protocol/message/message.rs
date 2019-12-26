@@ -4,6 +4,7 @@
 
 use super::protocol::*;
 use crate::message::{Message, MsgId};
+use rlp::Encodable;
 
 // generate `pub mod msgid`
 // TODO(thegaram): reorder message ids

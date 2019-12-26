@@ -7,7 +7,7 @@ pub type MsgId = u8;
 
 pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
-use rlp::{Encodable, Rlp};
+use rlp::Rlp;
 
 pub use crate::network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
@@ -25,7 +25,7 @@ macro_rules! build_msgid {
     }
 }
 
-pub trait Message: Send + Sync + Encodable {
+pub trait Message: Send + Sync {
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
     fn msg_id(&self) -> MsgId;
@@ -34,6 +34,8 @@ pub trait Message: Send + Sync + Encodable {
 
     fn get_request_id(&self) -> Option<RequestId> { None }
     fn set_request_id(&mut self, _id: RequestId) {}
+
+    fn encode(&self) -> Vec<u8>;
 
     fn send(
         &self, io: &dyn NetworkContext, peer: PeerId,
@@ -69,12 +71,6 @@ pub trait Message: Send + Sync + Encodable {
 
         Ok(())
     }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 pub fn decode_msg(msg: &[u8]) -> Option<(MsgId, Rlp)> {
@@ -95,6 +91,12 @@ macro_rules! build_msg_impl {
             fn msg_id(&self) -> MsgId { $msg }
 
             fn msg_name(&self) -> &'static str { $name_str }
+
+            fn encode(&self) -> Vec<u8> {
+                let mut encoded = self.rlp_bytes();
+                encoded.push(self.msg_id());
+                encoded
+            }
         }
     };
 }
@@ -112,6 +114,12 @@ macro_rules! build_msg_with_request_id_impl {
 
             fn set_request_id(&mut self, id: RequestId) {
                 self.request_id = id;
+            }
+
+            fn encode(&self) -> Vec<u8> {
+                let mut encoded = self.rlp_bytes();
+                encoded.push(self.msg_id());
+                encoded
             }
         }
     };

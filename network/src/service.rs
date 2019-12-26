@@ -886,6 +886,16 @@ impl NetworkServiceInner {
         }
     }
 
+    pub fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool> {
+        match self.sessions.get(peer) {
+            Some(session) => {
+                let sess = session.read();
+                Some(sess.originated())
+            }
+            None => None,
+        }
+    }
+
     fn start(&self, io: &IoContext<NetworkIoMessage>) -> Result<(), Error> {
         self.initialize_udp_protocols(io)?;
         io.register_stream(UDP_MESSAGE)?;
@@ -1651,6 +1661,10 @@ impl<'a> NetworkContext<'a> {
 impl<'a> NetworkContextTrait for NetworkContext<'a> {
     fn get_peer_node_id(&self, peer: PeerId) -> NodeId {
         self.network_service.get_peer_node_id(peer)
+    }
+
+    fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool> {
+        self.network_service.get_peer_connection_origin(peer)
     }
 
     fn send(

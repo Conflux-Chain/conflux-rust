@@ -15,7 +15,7 @@ use crate::{
     },
 };
 pub use priority_send_queue::SendQueuePriority;
-use rlp::{Decodable, Rlp};
+use rlp::{Decodable, Encodable, Rlp};
 // generate `pub mod msgid`
 build_msgid! {
     STATUS = 0x00
@@ -84,6 +84,12 @@ impl Message for Transactions {
     fn msg_name(&self) -> &'static str { "Transactions" }
 
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetBlocksResponse {
@@ -92,6 +98,12 @@ impl Message for GetBlocksResponse {
     fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetBlocksWithPublicResponse {
@@ -100,6 +112,12 @@ impl Message for GetBlocksWithPublicResponse {
     fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetBlockTxnResponse {
@@ -108,6 +126,12 @@ impl Message for GetBlockTxnResponse {
     fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
 
     fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for TransactionDigests {
@@ -118,6 +142,12 @@ impl Message for TransactionDigests {
     fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetTransactions {
@@ -130,6 +160,12 @@ impl Message for GetTransactions {
     fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
 
     fn set_request_id(&mut self, id: RequestId) { self.request_id = id; }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetTransactionsFromTxHashes {
@@ -142,6 +178,12 @@ impl Message for GetTransactionsFromTxHashes {
     fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
 
     fn set_request_id(&mut self, id: RequestId) { self.request_id = id; }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetTransactionsResponse {
@@ -152,6 +194,12 @@ impl Message for GetTransactionsResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 
 impl Message for GetTransactionsFromTxHashesResponse {
@@ -164,6 +212,12 @@ impl Message for GetTransactionsFromTxHashesResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        encoded.push(self.msg_id());
+        encoded
+    }
 }
 /// handle the RLP encoded message with given context `ctx`.
 /// If the message not handled, return `Ok(false)`.
