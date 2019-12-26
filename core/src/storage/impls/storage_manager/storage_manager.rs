@@ -310,7 +310,7 @@ impl StorageManager {
                     pivot_chain_parts[delta_height] = epoch_id.clone();
                     trace!("check_make_register_snapshot_background: parent epoch_id={:?}", epoch_id);
                 }
-                if height == this.snapshot_conf.snapshot_epoch_count {
+                if height == this.snapshot_conf.snapshot_epoch_count as u64 {
                     // We need the case height == SNAPSHOT_EPOCHS_CAPACITY
                     // because the snapshot_info for genesis is
                     // stored in NULL_EPOCH. If we do not use the special case,
@@ -325,7 +325,7 @@ impl StorageManager {
                 serve_one_step_sync: true,
                 height: height as u64,
                 parent_snapshot_height: height
-                    - this.snapshot_conf.snapshot_epoch_count,
+                    - this.snapshot_conf.snapshot_epoch_count as u64,
                 // This is unknown for now, and we don't care.
                 merkle_root: Default::default(),
                 parent_snapshot_epoch_id,
@@ -462,14 +462,16 @@ impl StorageManager {
         let mut in_progress_snapshot_to_cancel = vec![];
 
         let confirmed_intermediate_height = confirmed_height
-            - self.snapshot_conf.height_to_delta_height(confirmed_height)
-                as u64;
+            - StateIndex::height_to_delta_height(
+                confirmed_height,
+                self.get_snapshot_epoch_count(),
+            ) as u64;
 
         {
             let current_snapshots = self.current_snapshots.read();
 
             let confirmed_snapshot_height = if confirmed_intermediate_height
-                > self.snapshot_conf.snapshot_epoch_count
+                > self.snapshot_conf.snapshot_epoch_count as u64
             {
                 confirmed_intermediate_height
                     - self.snapshot_conf.snapshot_epoch_count as u64
@@ -670,12 +672,8 @@ impl StorageManager {
         //            .log_usage();
     }
 
-    pub fn get_snapshot_epoch_count(&self) -> u64 {
+    pub fn get_snapshot_epoch_count(&self) -> u32 {
         self.snapshot_conf.snapshot_epoch_count
-    }
-
-    pub fn height_to_delta_height(&self, height: u64) -> u32 {
-        self.snapshot_conf.height_to_delta_height(height)
     }
 }
 

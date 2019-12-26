@@ -262,7 +262,7 @@ impl StateManager {
             new_delta_root,
         ) = if parent_state_index
             .maybe_delta_trie_height
-            .unwrap_or_default() as u64
+            .unwrap_or_default()
             == self.storage_manager.get_snapshot_epoch_count()
         {
             // Should shift to a new snapshot

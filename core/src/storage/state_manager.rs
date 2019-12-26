@@ -80,6 +80,16 @@ pub trait StateManagerTrait {
 }
 
 impl<'a> StateIndex<'a> {
+    pub fn height_to_delta_height(
+        height: u64, snapshot_epoch_count: u32,
+    ) -> u32 {
+        if height == 0 {
+            0
+        } else {
+            ((height - 1) % (snapshot_epoch_count as u64)) as u32 + 1
+        }
+    }
+
     pub fn new_for_test_only_delta_mpt(epoch_id: &'a EpochId) -> Self {
         Self {
             snapshot_epoch_id: &MERKLE_NULL_NODE,
@@ -96,7 +106,7 @@ impl<'a> StateIndex<'a> {
     /// The state root and height information should be provided from consensus.
     pub fn new_for_next_epoch(
         base_epoch_id: &'a EpochId, aux_info: &'a StateRootAuxInfo,
-        height: u64, delta_height: u32,
+        height: u64, snapshot_epoch_count: u32,
     ) -> Self
     {
         Self {
@@ -107,7 +117,10 @@ impl<'a> StateIndex<'a> {
                 .as_ref(),
             epoch_id: base_epoch_id,
             delta_mpt_key_padding: &aux_info.delta_mpt_key_padding,
-            maybe_delta_trie_height: Some(delta_height),
+            maybe_delta_trie_height: Some(Self::height_to_delta_height(
+                height,
+                snapshot_epoch_count,
+            )),
             maybe_height: Some(height),
         }
     }

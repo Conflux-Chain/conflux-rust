@@ -337,7 +337,7 @@ impl<'a> StateTrait for State<'a> {
             self.height,
         );
         if self.maybe_intermediate_trie.is_none()
-            && self.delta_trie_height.unwrap() as u64
+            && self.delta_trie_height.unwrap()
                 == self
                     .manager
                     .get_storage_manager()
@@ -348,7 +348,7 @@ impl<'a> StateTrait for State<'a> {
             self.manager
                 .get_storage_manager()
                 .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
-        } else if self.delta_trie_height.unwrap() as u64
+        } else if self.delta_trie_height.unwrap()
             >= self
                 .manager
                 .get_storage_manager()

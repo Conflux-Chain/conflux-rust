@@ -49,17 +49,7 @@ impl SnapshotInfo {
 }
 
 pub struct SnapshotConfiguration {
-    pub snapshot_epoch_count: u64,
-}
-
-impl SnapshotConfiguration {
-    pub fn height_to_delta_height(&self, height: u64) -> u32 {
-        if height == 0 {
-            0
-        } else {
-            ((height - 1) % self.snapshot_epoch_count) as u32 + 1
-        }
-    }
+    pub snapshot_epoch_count: u32,
 }
 
 pub trait OpenSnapshotMptTrait<'db> {

@@ -59,7 +59,7 @@ pub fn new_state_manager_for_testing() -> StateManager {
             recent_lfu_factor: 4.0,
         },
         SnapshotConfiguration {
-            snapshot_epoch_count: 100000000000,
+            snapshot_epoch_count: 10000000,
         },
     )
 }

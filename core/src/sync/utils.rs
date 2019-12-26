@@ -4,7 +4,8 @@ use crate::{
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
     parameters::{
-        consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
+        consensus::{ERA_DEFAULT_CHECKPOINT_GAP, SNAPSHOT_EPOCHS_CAPACITY},
+        WORKER_COMPUTATION_PARALLELISM,
     },
     pow::ProofOfWorkConfig,
     statistics::Statistics,
@@ -74,6 +75,7 @@ pub fn create_simple_block(
     )
 }
 
+/// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
     db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
     era_epoch_count: u64,
@@ -101,7 +103,7 @@ pub fn initialize_synchronization_graph(
         ledger_db.clone(),
         StorageConfiguration::default(),
         SnapshotConfiguration {
-            snapshot_epoch_count: 10000000000,
+            snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
         },
     ));
 
