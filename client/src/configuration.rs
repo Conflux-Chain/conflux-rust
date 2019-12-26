@@ -68,9 +68,6 @@ build_config! {
         // Controls block generation speed.
         // Only effective in `dev` mode and `start_mining` is false
         (dev_block_interval_ms, (u64), 250)
-        // Snapshot Epoch Count is a consensus parameter. This flag overrides
-        // the parameter, which only take effect in `dev` mode.
-        (dev_snapshot_epoch_count, (u64), SNAPSHOT_EPOCHS_CAPACITY)
         (enable_state_expose, (bool), false)
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
@@ -91,6 +88,9 @@ build_config! {
         (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
         (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
+        // Snapshot Epoch Count is a consensus parameter. This flag overrides
+        // the parameter, which only take effect in `dev` mode.
+        (dev_snapshot_epoch_count, (u64), SNAPSHOT_EPOCHS_CAPACITY)
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -107,9 +107,6 @@ build_config! {
         (use_stratum, (bool), false)
 
         // Network section.
-        (data_propagate_enabled, (bool), false)
-        (data_propagate_interval_ms, (u64), 1000)
-        (data_propagate_size, (usize), 1000)
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
@@ -122,6 +119,9 @@ build_config! {
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 30_000)
         (check_request_period_ms, (u64), 1000)
+        (data_propagate_enabled, (bool), false)
+        (data_propagate_interval_ms, (u64), 1000)
+        (data_propagate_size, (usize), 1000)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -484,7 +484,7 @@ impl Configuration {
 
     pub fn snapshot_config(&self) -> SnapshotConfiguration {
         SnapshotConfiguration {
-            snapshot_epoch_count: if self.is_dev_mode() {
+            snapshot_epoch_count: if self.is_test_mode() {
                 self.raw_conf.dev_snapshot_epoch_count
             } else {
                 SNAPSHOT_EPOCHS_CAPACITY
