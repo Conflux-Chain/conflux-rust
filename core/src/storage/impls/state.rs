@@ -155,29 +155,38 @@ impl<'a> State<'a> {
             _ => {}
         }
 
-        if let Some(intermediate_trie) = self.maybe_intermediate_trie.as_ref() {
-            let (maybe_value, maybe_proof) = self.get_from_delta(
-                intermediate_trie,
-                self.intermediate_trie_root.clone(),
-                &access_key.to_delta_mpt_key_bytes(
-                    &self.maybe_intermediate_trie_key_padding.as_ref().unwrap(),
-                ),
-                with_proof,
-            )?;
+        // FIXME This is for the case of read-only access of the first snapshot
+        // state where intermediate_mpt is some.
+        if self.maybe_intermediate_trie_key_padding.is_some() {
+            if let Some(intermediate_trie) =
+                self.maybe_intermediate_trie.as_ref()
+            {
+                let (maybe_value, maybe_proof) = self.get_from_delta(
+                    intermediate_trie,
+                    self.intermediate_trie_root.clone(),
+                    &access_key.to_delta_mpt_key_bytes(
+                        &self
+                            .maybe_intermediate_trie_key_padding
+                            .as_ref()
+                            .unwrap(),
+                    ),
+                    with_proof,
+                )?;
 
-            proof.with_intermediate(
-                maybe_proof,
-                self.maybe_intermediate_trie_key_padding.clone(),
-            );
+                proof.with_intermediate(
+                    maybe_proof,
+                    self.maybe_intermediate_trie_key_padding.clone(),
+                );
 
-            match maybe_value {
-                MptValue::Some(value) => {
-                    return Ok((Some(value), proof));
+                match maybe_value {
+                    MptValue::Some(value) => {
+                        return Ok((Some(value), proof));
+                    }
+                    MptValue::TombStone => {
+                        return Ok((None, proof));
+                    }
+                    _ => {}
                 }
-                MptValue::TombStone => {
-                    return Ok((None, proof));
-                }
-                _ => {}
             }
         }
 
@@ -199,7 +208,7 @@ impl<'a> Drop for State<'a> {
 
 impl<'a> StateTrait for State<'a> {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
-        self.get_from_all_tries(access_key, false)
+        self.get_from_all_tries(access_key.clone(), false)
             .map(|(value, _)| value)
     }
 
@@ -321,21 +330,41 @@ impl<'a> StateTrait for State<'a> {
         if commit_result.is_err() {
             self.revert();
         }
-        // TODO: use a better criteria and put it in consensus maybe.
-        if self.delta_trie_height.unwrap() as u64
-            >= SNAPSHOT_EPOCHS_CAPACITY / 2
+        debug!(
+            "commit: delta_trie_height={:?} has_intermediate={}, height={:?}",
+            self.delta_trie_height,
+            self.maybe_intermediate_trie.is_some(),
+            self.height,
+        );
+        if self.maybe_intermediate_trie.is_none()
+            && self.delta_trie_height.unwrap() as u64
+                == self
+                    .manager
+                    .get_storage_manager()
+                    .get_snapshot_epoch_count()
+        {
+            // For genesis or full sync, we will make snapshot to move the
+            // delta_mpt to intermediate_mpt
+            self.manager
+                .get_storage_manager()
+                .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
+        } else if self.delta_trie_height.unwrap() as u64
+            >= self
+                .manager
+                .get_storage_manager()
+                .get_snapshot_epoch_count()
+                / 3
             && self.maybe_intermediate_trie.is_some()
         {
-            // maybe_intermediate_trie is None if this happens before the first
-            // snapshot after genesis/FullSync-snapshot
-            if let Some(intermediate_trie) = &self.maybe_intermediate_trie {
-                self.manager.check_make_snapshot(
-                    intermediate_trie.clone(),
-                    self.intermediate_trie_root.clone(),
-                    &self.intermediate_epoch_id,
-                    self.height.clone().unwrap(),
-                )?;
-            }
+            // TODO: use a better criteria and put it in consensus maybe.
+            let snapshot_height = self.height.clone().unwrap()
+                - self.delta_trie_height.unwrap() as u64;
+            self.manager.check_make_snapshot(
+                self.maybe_intermediate_trie.clone(),
+                self.intermediate_trie_root.clone(),
+                &self.intermediate_epoch_id,
+                snapshot_height,
+            )?;
         }
 
         commit_result
@@ -474,6 +503,10 @@ impl<'a> State<'a> {
                         cow_root.into_child().map(|r| r.into());
                     result?;
 
+                    debug!(
+                        "MPT commit last_row_number {}",
+                        commit_transaction.info.row_number.value
+                    );
                     // TODO: check the guarantee of underlying db on transaction
                     // TODO: failure. may have to commit last_row_number
                     // TODO: separately in worst case.
@@ -584,7 +617,6 @@ use crate::storage::{
         storage_manager::DeltaMptIterator,
     },
     state::*,
-    state_manager::*,
     storage_db::*,
     StateRootAuxInfo, StateRootWithAuxInfo,
 };

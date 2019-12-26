@@ -4,53 +4,26 @@
 
 use crate::{
     storage::{
-        state::StateTrait,
-        state_manager::{StateManager, StateManagerTrait},
-        StateIndex,
+        state_manager::StateManager,
+        storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
+        FullSyncVerifier, SnapshotDbManagerSqlite,
     },
-    sync::state::delta::{Chunk, ChunkKey, ChunkReader, StateDumper},
+    sync::state::storage::{Chunk, ChunkKey},
 };
 use cfx_types::H256;
-use parking_lot::RwLock;
-use primitives::StateRoot;
-use rlp::Rlp;
-use std::{
-    collections::VecDeque,
-    env::current_dir,
-    fs::remove_dir_all,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering::Relaxed},
-        Arc,
-    },
-    thread,
+use primitives::{EpochId, MerkleHash};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering::Relaxed},
+    Arc,
 };
 
-#[derive(Default)]
-struct State {
-    pending: VecDeque<ChunkKey>,
-    restoring: Option<ChunkKey>,
-    restored: Vec<ChunkKey>,
-}
-
-impl State {
-    fn next(&mut self) -> Option<&ChunkKey> {
-        if let Some(chunk) = self.restoring.take() {
-            self.restored.push(chunk);
-        }
-
-        let chunk = self.pending.pop_front()?;
-        self.restoring = Some(chunk);
-
-        self.restoring.as_ref()
-    }
-}
-
 pub struct Restorer {
-    state: Arc<RwLock<State>>,
-    progress: Arc<RestoreProgress>,
-    dir: PathBuf,
-    checkpoint: H256,
+    pub snapshot_epoch_id: EpochId,
+    pub snapshot_merkle_root: MerkleHash,
+
+    /// The verifier for chunks.
+    /// Initialized after receiving a valid manifest.
+    verifier: Option<FullSyncVerifier<SnapshotDbManagerSqlite>>,
 }
 
 impl Default for Restorer {
@@ -59,112 +32,68 @@ impl Default for Restorer {
 
 impl Restorer {
     pub fn new_with_default_root_dir(checkpoint: H256) -> Self {
-        let root_dir = current_dir()
-            .unwrap_or(PathBuf::from("./"))
-            .join("state_checkpoints_restoration")
-            .to_str()
-            .expect("state chunk restoration directory should not be empty")
-            .to_string();
-
-        Self::new(root_dir, checkpoint)
+        Self::new(checkpoint)
     }
 
-    pub fn new(root_dir: String, checkpoint: H256) -> Self {
+    pub fn new(checkpoint: H256) -> Self {
         Restorer {
-            state: Default::default(),
-            progress: Default::default(),
-            dir: StateDumper::epoch_dir(root_dir, &checkpoint),
-            checkpoint,
+            snapshot_epoch_id: checkpoint,
+            snapshot_merkle_root: Default::default(),
+            verifier: None,
         }
+    }
+
+    pub fn initialize_verifier(
+        &mut self, verifier: FullSyncVerifier<SnapshotDbManagerSqlite>,
+    ) {
+        self.verifier = Some(verifier);
     }
 
     /// Append a chunk for restoration.
-    pub fn append(&self, key: ChunkKey, chunk: Chunk) {
-        chunk
-            .dump(self.dir.as_path())
-            .expect("failed to dump chunk to file");
-
-        self.progress.total.fetch_add(1, Relaxed);
-
-        let mut state = self.state.write();
-        state.pending.push_back(key);
+    pub fn append(&mut self, key: ChunkKey, chunk: Chunk) -> bool {
+        match &mut self.verifier {
+            // Not waiting for chunks
+            None => false,
+            Some(verifier) => {
+                match verifier.restore_chunk(
+                    &key.upper_bound_excl,
+                    &chunk.keys,
+                    chunk.values,
+                ) {
+                    Ok(true) => true,
+                    _ => false,
+                }
+            }
+        }
     }
 
     /// Start to restore chunks asynchronously.
-    pub fn start_to_restore(&self, state_manager: Arc<StateManager>) {
-        let state_cloned = self.state.clone();
-        let progress_cloned = self.progress.clone();
-        let chunk_reader = ChunkReader::new_with_epoch_dir(self.dir.clone())
-            .expect("cannot find the chunk store for restoration");
-        let checkpoint = self.checkpoint.clone();
+    pub fn finalize_restoration(
+        &self, state_manager: Arc<StateManager>, snapshot_info: SnapshotInfo,
+    ) {
+        state_manager
+            .get_storage_manager()
+            .get_snapshot_manager()
+            .get_snapshot_db_manager()
+            .finalize_full_sync_snapshot(
+                &self.snapshot_epoch_id,
+                &self.snapshot_merkle_root,
+            )
+            .expect("Fail to finalize full sync");
+        state_manager
+            .get_storage_manager()
+            .register_new_snapshot(snapshot_info, true);
 
-        thread::Builder::new()
-            .name("SyncCheckpoint".into())
-            .spawn(move || {
-                let total = progress_cloned.total.load(Relaxed);
-                debug!("start to restore snapshot chunks, total = {}", total);
-
-                while let Some(key) = state_cloned.write().next() {
-                    let chunk = chunk_reader
-                        .chunk_raw(key)
-                        .expect("failed to read chunk from restoration store")
-                        .expect("cannot find chunk for restoration");
-                    let chunk = Rlp::new(&chunk)
-                        .as_val::<Chunk>()
-                        .expect("failed to decode chunk for restoration");
-
-                    let epoch_id =
-                    // TODO: think about snapshot.
-                        StateIndex::new_for_test_only_delta_mpt(&checkpoint);
-                    let mut state = state_manager
-                        .get_state_for_next_epoch(epoch_id)
-                        .expect("failed to get checkpoint state")
-                        .unwrap_or_else(|| {
-                            state_manager.get_state_for_genesis_write()
-                        });
-
-                    chunk
-                        .restore(&mut state, Some(checkpoint))
-                        .expect("failed to restore chunk");
-
-                    progress_cloned.completed.fetch_add(1, Relaxed);
-                }
-
-                debug!(
-                    "complete to restore snapshot chunks, total = {}",
-                    total
-                );
-            })
-            .expect("failed to create thread to synchronize checkpoint state");
+        debug!("complete to restore snapshot chunks");
     }
-
-    pub fn progress(&self) -> &RestoreProgress { self.progress.as_ref() }
 
     pub fn restored_state_root(
-        &self, state_manager: Arc<StateManager>,
-    ) -> StateRoot {
-        // TODO: think about snapshot.
-        let epoch_id =
-            StateIndex::new_for_test_only_delta_mpt(&self.checkpoint);
-        let state = state_manager
-            .get_state_no_commit(epoch_id)
-            .expect("failed to get checkpoint state")
-            .expect("cannot find the checkpoint state");
-        state
-            .get_state_root()
-            .expect("failed to get state root")
-            .expect("restored checkpoint state root not found")
-            .state_root
-    }
-}
-
-impl Drop for Restorer {
-    fn drop(&mut self) {
-        if !self.checkpoint.is_zero() {
-            if let Err(e) = remove_dir_all(&self.dir) {
-                error!("failed to cleanup checkpoint chunk store: {:?}", e);
-            }
-        }
+        &self, _state_manager: Arc<StateManager>,
+    ) -> MerkleHash {
+        // TODO Double check the restored snapshot merkle root
+        // But if all chunks pass the verification, it should be the same as
+        // the this snapshot_merkle_root
+        self.snapshot_merkle_root
     }
 }
 

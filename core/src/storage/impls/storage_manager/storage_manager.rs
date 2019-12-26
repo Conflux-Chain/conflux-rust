@@ -17,7 +17,7 @@ pub struct StorageManager {
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
 
-    in_progress_snapshoting_tasks:
+    pub in_progress_snapshoting_tasks:
         RwLock<HashMap<EpochId, InProgressSnapshotInfo>>,
     // FIXME: persistent in db.
     // The order doesn't matter as long as parent snapshot comes before
@@ -30,15 +30,15 @@ pub struct StorageManager {
     last_confirmed_snapshot_id: Mutex<Option<EpochId>>,
 
     storage_conf: StorageConfiguration,
+    snapshot_conf: SnapshotConfiguration,
 }
 
 // FIXME: the thread variable is used. But it's subject to refinements for sure.
-#[allow(dead_code)]
-struct InProgressSnapshotInfo {
+pub struct InProgressSnapshotInfo {
     snapshot_info: SnapshotInfo,
     // TODO: change to something that can control the progress or cancel the
     // snapshotting.
-    thread: thread::JoinHandle<()>,
+    pub thread: thread::JoinHandle<()>,
 }
 
 struct MaybeDbErrors {
@@ -56,6 +56,7 @@ impl StorageManager {
         delta_db_manager: DeltaDbManager, /* , node type, full node or
                                            * archive node */
         storage_conf: StorageConfiguration,
+        snapshot_conf: SnapshotConfiguration,
     ) -> Self
     {
         let storage_manager = Self {
@@ -79,12 +80,10 @@ impl StorageManager {
             snapshot_info_map_by_epoch: Default::default(),
             last_confirmed_snapshot_id: Default::default(),
             storage_conf,
+            snapshot_conf,
         };
-
-        // Create and register the initial empty snapshot for genesis block
-        // and blocks before the second snapshot.
-        let genesis_snapshot_info = SnapshotInfo::genesis_snapshot_info();
-        storage_manager.register_new_snapshot(genesis_snapshot_info);
+        storage_manager
+            .register_new_snapshot(SnapshotInfo::genesis_snapshot_info(), true);
 
         storage_manager
     }
@@ -97,6 +96,10 @@ impl StorageManager {
     > + Send
                    + Sync) {
         &*self.snapshot_manager
+    }
+
+    pub fn get_snapshot_configuration(&self) -> &SnapshotConfiguration {
+        &self.snapshot_conf
     }
 }
 
@@ -261,75 +264,116 @@ impl StorageManager {
 
     pub fn check_make_register_snapshot_background(
         this: Arc<Self>, snapshot_epoch_id: EpochId, height: u64,
-        delta_db: DeltaMptIterator,
+        maybe_delta_db: Option<DeltaMptIterator>,
     ) -> Result<()>
     {
+        debug!(
+            "check_make_register_snapshot_background: epoch={:?} height={:?}",
+            snapshot_epoch_id, height
+        );
         let this_cloned = this.clone();
-        let upgradable_read_locked =
-            this_cloned.in_progress_snapshoting_tasks.upgradable_read();
+        let mut in_progress_snapshoting_tasks =
+            this_cloned.in_progress_snapshoting_tasks.write();
 
-        let mut pivot_chain_parts =
-            vec![Default::default(); SNAPSHOT_EPOCHS_CAPACITY as usize];
-        // Calculate pivot chain parts.
-        let mut epoch_id = snapshot_epoch_id.clone();
-        let mut delta_height = SNAPSHOT_EPOCHS_CAPACITY as usize - 1;
-        pivot_chain_parts[delta_height] = epoch_id.clone();
-        while delta_height > 0 {
-            // FIXME: maybe not unwrap, but throw an error about db
-            // corruption.
-            epoch_id = delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
-            delta_height -= 1;
+        if !in_progress_snapshoting_tasks.contains_key(&snapshot_epoch_id)
+            && !this
+                .snapshot_info_map_by_epoch
+                .read()
+                .contains_key(&snapshot_epoch_id)
+        {
+            let mut pivot_chain_parts = vec![
+                Default::default();
+                this.snapshot_conf.snapshot_epoch_count
+                    as usize
+            ];
+            // Calculate pivot chain parts.
+            let mut epoch_id = snapshot_epoch_id.clone();
+            let mut delta_height =
+                this.snapshot_conf.snapshot_epoch_count as usize - 1;
             pivot_chain_parts[delta_height] = epoch_id.clone();
-        }
-        let parent_snapshot_epoch_id =
-            delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
+            // TODO Handle the special cases better
+            let parent_snapshot_epoch_id = if maybe_delta_db.is_none() {
+                // The case maybe_delta_db.is_none() means we are at height 0.
+                // We set parent_snapshot of NULL to NULL, so that in
+                // register_new_snapshot we will move the initial
+                // delta_mpt to intermediate_mpt for NULL_EPOCH
+                //
+                NULL_EPOCH
+            } else {
+                let delta_db = maybe_delta_db.as_ref().unwrap();
+                while delta_height > 0 {
+                    // FIXME: maybe not unwrap, but throw an error about db
+                    // corruption.
+                    epoch_id =
+                        delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
+                    delta_height -= 1;
+                    pivot_chain_parts[delta_height] = epoch_id.clone();
+                    trace!("check_make_register_snapshot_background: parent epoch_id={:?}", epoch_id);
+                }
+                if height == this.snapshot_conf.snapshot_epoch_count {
+                    // We need the case height == SNAPSHOT_EPOCHS_CAPACITY
+                    // because the snapshot_info for genesis is
+                    // stored in NULL_EPOCH. If we do not use the special case,
+                    // it will be the epoch_id of genesis.
+                    NULL_EPOCH
+                } else {
+                    delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap()
+                }
+            };
 
-        let in_progress_snapshot_info = SnapshotInfo {
-            serve_one_step_sync: true,
-            height: height as u64,
-            parent_snapshot_height: height - SNAPSHOT_EPOCHS_CAPACITY,
-            // This is unknown for now, and we don't care.
-            merkle_root: Default::default(),
-            parent_snapshot_epoch_id,
-            pivot_chain_parts,
-        };
+            let in_progress_snapshot_info = SnapshotInfo {
+                serve_one_step_sync: true,
+                height: height as u64,
+                parent_snapshot_height: height
+                    - this.snapshot_conf.snapshot_epoch_count,
+                // This is unknown for now, and we don't care.
+                merkle_root: Default::default(),
+                parent_snapshot_epoch_id,
+                pivot_chain_parts,
+            };
 
-        if !upgradable_read_locked.contains_key(&snapshot_epoch_id) {
-            let mut write_locked =
-                RwLockUpgradableReadGuard::upgrade(upgradable_read_locked);
             let parent_snapshot_epoch_id_cloned =
                 in_progress_snapshot_info.parent_snapshot_epoch_id.clone();
-            let in_progress_snapshot_info_cloned =
+            let mut in_progress_snapshot_info_cloned =
                 in_progress_snapshot_info.clone();
             let task = thread::Builder::new()
                 .name("Background Snapshotting".into()).spawn(move || {
-                let result =
-                    this.snapshot_manager
-                        .get_snapshot_db_manager()
-                        .new_snapshot_by_merging(
-                            &parent_snapshot_epoch_id_cloned,
-                            snapshot_epoch_id, delta_db,
-                            in_progress_snapshot_info_cloned);
-
-                if result.is_ok() {
-                    this.register_new_snapshot(result.unwrap());
-                } else {
-                    // FIXME: log the error.
-                    warn!(
-                        "Failed to create snapshot for epoch_id {:?} with error {:?}",
-                        snapshot_epoch_id, result.as_ref().err());
-                    // TODO: improve the cancellation in a better way.
-                    // Check for cancellation.
-                    if this.in_progress_snapshoting_tasks.
-                        read().contains_key(&snapshot_epoch_id) {
-                        // FIXME: maybe add more details...
-                        this.maybe_db_errors
-                            .snapshot_error.replace(Some(result.map(|_| ())));
+                let maybe_new_snapshot_info = match maybe_delta_db {
+                    None => {
+                        in_progress_snapshot_info_cloned.merkle_root = MERKLE_NULL_NODE;
+                        Ok(in_progress_snapshot_info_cloned)
+                    }
+                    Some(delta_db) => {
+                        this.snapshot_manager
+                            .get_snapshot_db_manager()
+                            .new_snapshot_by_merging(
+                                &parent_snapshot_epoch_id_cloned,
+                                snapshot_epoch_id, delta_db,
+                                in_progress_snapshot_info_cloned)
+                    }
+                };
+                match maybe_new_snapshot_info {
+                    Ok(snapshot_info) => {
+                        this.register_new_snapshot(snapshot_info, false);
+                    }
+                    Err(e) => {
+                        // FIXME: log the error.
+                        warn!(
+                            "Failed to create snapshot for epoch_id {:?} with error {:?}",
+                            snapshot_epoch_id, e);
+                        // TODO: improve the cancellation in a better way.
+                        // Check for cancellation.
+                        if this.in_progress_snapshoting_tasks.
+                            read().contains_key(&snapshot_epoch_id) {
+                            // FIXME: maybe add more details...
+                            this.maybe_db_errors
+                                .snapshot_error.replace(Some(Err(e)));
+                        }
                     }
                 }
             })?;
 
-            write_locked.insert(
+            in_progress_snapshoting_tasks.insert(
                 snapshot_epoch_id,
                 InProgressSnapshotInfo {
                     snapshot_info: in_progress_snapshot_info,
@@ -341,21 +385,35 @@ impl StorageManager {
         Ok(())
     }
 
-    /// This function is made public only for testing.
-    pub fn register_new_snapshot(&self, new_snapshot_info: SnapshotInfo) {
-        // FIXME: update db about new current_snapshots.
+    pub fn reregister_genesis_snapshot(
+        &self, genesis_epoch_id: &EpochId,
+    ) -> Result<()> {
+        debug!(
+            "reregister_genesis_snapshot: epoch_id={:?}",
+            genesis_epoch_id
+        );
+        let mut mpts = self.snapshot_associated_mpts_by_epoch.write();
+        let old_genesis_mpts = mpts
+            .get_mut(genesis_epoch_id)
+            .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
+        if old_genesis_mpts.0.is_some() {
+            bail!(ErrorKind::DeltaMPTAlreadyExists);
+        }
+        mem::swap(&mut old_genesis_mpts.0, &mut old_genesis_mpts.1);
+        Ok(())
+    }
 
+    /// This function is made public only for testing.
+    pub fn register_new_snapshot(
+        &self, new_snapshot_info: SnapshotInfo, is_genesis: bool,
+    ) {
+        debug!("register_new_snapshot: info={:?}", new_snapshot_info);
+        // FIXME: update db about new current_snapshots.
         let snapshot_epoch_id = new_snapshot_info.get_snapshot_epoch_id();
-        if snapshot_epoch_id.eq(&NULL_EPOCH) {
-            // Special case for the very first empty snapshot.
-            let mut snapshot_associated_mpts_locked =
-                self.snapshot_associated_mpts_by_epoch.write();
-            snapshot_associated_mpts_locked
-                .insert(snapshot_epoch_id.clone(), (None, None));
-        } else {
-            // Register intermediate MPT for the new snapshot.
-            let mut snapshot_associated_mpts_locked =
-                self.snapshot_associated_mpts_by_epoch.write();
+        // Register intermediate MPT for the new snapshot.
+        let mut snapshot_associated_mpts_locked =
+            self.snapshot_associated_mpts_by_epoch.write();
+        if !is_genesis {
             // Parent's delta mpt becomes intermediate_delta_mpt for the new
             // snapshot.
             //
@@ -370,10 +428,12 @@ impl StorageManager {
                 snapshot_epoch_id.clone(),
                 (intermediate_delta_mpt, None),
             );
+        } else {
+            snapshot_associated_mpts_locked
+                .insert(snapshot_epoch_id.clone(), (None, None));
         }
-
-        let mut snapshot_info_map = self.snapshot_info_map_by_epoch.write();
-        snapshot_info_map
+        self.snapshot_info_map_by_epoch
+            .write()
             .insert(snapshot_epoch_id.clone(), new_snapshot_info.clone());
         let mut current_snapshots = self.current_snapshots.write();
         current_snapshots.push(new_snapshot_info);
@@ -401,16 +461,18 @@ impl StorageManager {
         let mut old_pivot_snapshots_to_remove = vec![];
         let mut in_progress_snapshot_to_cancel = vec![];
 
-        let confirmed_intermediate_height =
-            confirmed_height - height_to_delta_height(confirmed_height) as u64;
+        let confirmed_intermediate_height = confirmed_height
+            - self.snapshot_conf.height_to_delta_height(confirmed_height)
+                as u64;
 
         {
             let current_snapshots = self.current_snapshots.read();
 
             let confirmed_snapshot_height = if confirmed_intermediate_height
-                > SNAPSHOT_EPOCHS_CAPACITY
+                > self.snapshot_conf.snapshot_epoch_count
             {
-                confirmed_intermediate_height - SNAPSHOT_EPOCHS_CAPACITY as u64
+                confirmed_intermediate_height
+                    - self.snapshot_conf.snapshot_epoch_count as u64
             } else {
                 0
             };
@@ -607,6 +669,14 @@ impl StorageManager {
         //            .unwrap()
         //            .log_usage();
     }
+
+    pub fn get_snapshot_epoch_count(&self) -> u64 {
+        self.snapshot_conf.snapshot_epoch_count
+    }
+
+    pub fn height_to_delta_height(&self, height: u64) -> u32 {
+        self.snapshot_conf.height_to_delta_height(height)
+    }
 }
 
 #[derive(Clone)]
@@ -619,6 +689,7 @@ impl DeltaMptIterator {
     pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
+        debug!("DeltaMptIterator: root_node={:?}", self.maybe_root_node);
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {
@@ -665,11 +736,12 @@ use super::{
     },
     *,
 };
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use primitives::{EpochId, NULL_EPOCH};
+use parking_lot::{Mutex, RwLock};
+use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
+    mem,
     sync::{Arc, Weak},
     thread,
 };

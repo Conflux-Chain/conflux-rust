@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// The MptSliceVerifier can be used in restoration of Snapshot MPT and
-// Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be applied
-// to MptMerger to create the updated snapshot MPT.
+/// The MptSliceVerifier can be used in restoration of Snapshot MPT and
+/// Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be
+/// applied to MptMerger to create the updated snapshot MPT.
 pub struct MptSliceVerifier {
     key_value_inserter: MptCursorRw<
         SliceMptRebuilder,
@@ -69,7 +69,7 @@ impl MptSliceVerifier {
     }
 
     pub fn restore<Key: Borrow<[u8]>>(
-        mut self, keys: &Vec<Key>, values: &Vec<Box<[u8]>>,
+        mut self, keys: &Vec<Key>, values: &Vec<Vec<u8>>,
     ) -> Result<SliceMptRebuilder> {
         self.key_value_inserter.load_root()?;
         // We must open the path of the left bound, in order to check the merkle
@@ -79,7 +79,7 @@ impl MptSliceVerifier {
             .open_path_for_key::<access_mode::Read>(&*self.left_key_bound)?;
         for (key, value) in keys.iter().zip(values.into_iter()) {
             self.key_value_inserter
-                .insert(key.borrow(), value.clone())?;
+                .insert(key.borrow(), value.clone().into_boxed_slice())?;
             if !self
                 .key_value_inserter
                 .current_node_mut()
@@ -245,7 +245,7 @@ impl MptSliceVerifier {
 }
 
 impl SnapshotMptTraitReadOnly for SliceMptRebuilder {
-    fn get_merkle_root(&self) -> &H256 { &self.merkle_root }
+    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
@@ -322,7 +322,7 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
 }
 
 impl GetReadMpt for SliceMptRebuilder {
-    fn get_merkle_root(&self) -> &MerkleHash { &self.merkle_root }
+    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
 
     fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
 }
@@ -355,7 +355,6 @@ use super::{
     slice_restore_read_write_path_node::SliceVerifyReadWritePathNode,
 };
 use crate::storage::impls::merkle_patricia_trie::walk::GetChildTrait;
-use cfx_types::H256;
 use primitives::MerkleHash;
 use std::{
     borrow::Borrow,

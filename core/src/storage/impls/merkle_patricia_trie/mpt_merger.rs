@@ -134,7 +134,7 @@ struct MergeMptsInRequest<'a> {
 }
 
 impl GetReadMpt for MergeMptsInRequest<'_> {
-    fn get_merkle_root(&self) -> &MerkleHash {
+    fn get_merkle_root(&self) -> MerkleHash {
         if self.maybe_readonly_mpt.is_some() {
             self.maybe_readonly_mpt.as_ref().unwrap().get_merkle_root()
         } else {

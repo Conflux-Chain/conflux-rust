@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SnapshotInfo {
     pub serve_one_step_sync: bool,
 
@@ -48,10 +48,38 @@ impl SnapshotInfo {
     }
 }
 
+pub struct SnapshotConfiguration {
+    pub snapshot_epoch_count: u64,
+}
+
+impl SnapshotConfiguration {
+    pub fn height_to_delta_height(&self, height: u64) -> u32 {
+        if height == 0 {
+            0
+        } else {
+            ((height - 1) % self.snapshot_epoch_count) as u32 + 1
+        }
+    }
+}
+
+pub trait OpenSnapshotMptTrait<'db> {
+    type SnapshotMptReadType: 'db + SnapshotMptTraitReadOnly;
+    type SnapshotMptWriteType: 'db + SnapshotMptTraitSingleWriter;
+
+    fn open_snapshot_mpt_for_write(
+        &'db mut self,
+    ) -> Result<Self::SnapshotMptWriteType>;
+
+    fn open_snapshot_mpt_read_only(
+        &'db mut self,
+    ) -> Result<Self::SnapshotMptReadType>;
+}
+
 pub trait SnapshotDbTrait:
     KeyValueDbTraitOwnedRead
     + KeyValueDbToOwnedReadTrait
     + KeyValueDbTraitSingleWriter
+    + for<'db> OpenSnapshotMptTrait<'db>
     + Sized
 {
     fn get_null_snapshot() -> Self;
@@ -75,5 +103,8 @@ use super::{
         KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitSingleWriter,
     },
+};
+use crate::storage::storage_db::{
+    SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
 };
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};

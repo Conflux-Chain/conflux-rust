@@ -9,18 +9,17 @@ use crate::{
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
-        state_manager::{StateManager, SNAPSHOT_EPOCHS_CAPACITY},
-        storage_db::SnapshotInfo,
-        StateRootAuxInfo, StateRootWithAuxInfo,
+        storage_db::SnapshotInfo, FullSyncVerifier, StateRootAuxInfo,
+        StateRootWithAuxInfo,
     },
     sync::{
         message::{msgid, Context},
         state::{
-            delta::{Chunk, ChunkKey},
             restore::Restorer,
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
             snapshot_manifest_response::SnapshotManifestResponse,
+            storage::{Chunk, ChunkKey},
         },
         synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
@@ -30,7 +29,8 @@ use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use primitives::{
-    BlockHeaderBuilder, Receipt, StateRoot, StorageKey, NULL_EPOCH,
+    BlockHeaderBuilder, MerkleHash, Receipt, StateRoot, StorageKey,
+    MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
     collections::{HashSet, VecDeque},
@@ -44,7 +44,6 @@ pub enum Status {
     Inactive,
     DownloadingManifest(Instant),
     DownloadingChunks(Instant),
-    Restoring(Instant),
     Completed,
     Invalid,
 }
@@ -63,9 +62,6 @@ impl Debug for Status {
             Status::DownloadingChunks(t) => {
                 format!("downloading chunks ({:?})", t.elapsed())
             }
-            Status::Restoring(t) => {
-                format!("restoring chunks ({:?})", t.elapsed())
-            }
             Status::Completed => "completed".into(),
             Status::Invalid => "invalid".into(),
         };
@@ -74,13 +70,14 @@ impl Debug for Status {
     }
 }
 
+#[derive(Default)]
 struct Inner {
     checkpoint: H256,
     trusted_blame_block: H256,
     status: Status,
 
     /// State root verified by blame.
-    true_state_root_by_blame_info: StateRootWithAuxInfo,
+    true_state_root_by_blame_info: MerkleHash,
     /// Point to the corresponding entry to the snapshot in the blame vectors.
     blame_vec_offset: usize,
     receipt_blame_vec: Vec<H256>,
@@ -97,41 +94,12 @@ struct Inner {
     restorer: Restorer,
 }
 
-impl Default for Inner {
-    fn default() -> Self {
-        Self {
-            checkpoint: Default::default(),
-            trusted_blame_block: Default::default(),
-            status: Default::default(),
-
-            true_state_root_by_blame_info: StateRootWithAuxInfo {
-                state_root: Default::default(),
-                aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
-            },
-            blame_vec_offset: Default::default(),
-            receipt_blame_vec: Default::default(),
-            bloom_blame_vec: Default::default(),
-            epoch_receipts: Default::default(),
-            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
-
-            pending_chunks: Default::default(),
-            downloading_chunks: Default::default(),
-            num_downloaded: Default::default(),
-
-            restorer: Default::default(),
-        }
-    }
-}
-
 impl Inner {
     fn reset(&mut self, checkpoint: H256, trusted_blame_block: H256) {
         self.checkpoint = checkpoint.clone();
         self.trusted_blame_block = trusted_blame_block;
         self.status = Status::DownloadingManifest(Instant::now());
-        self.true_state_root_by_blame_info = StateRootWithAuxInfo {
-            state_root: Default::default(),
-            aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
-        };
+        self.true_state_root_by_blame_info = MERKLE_NULL_NODE;
         self.snapshot_info = SnapshotInfo::genesis_snapshot_info();
         self.receipt_blame_vec.clear();
         self.bloom_blame_vec.clear();
@@ -146,12 +114,11 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter) -> Result {
         write!(
             f,
-            "(status = {:?}, download = {}/{}/{}, restore progress = {:?})",
+            "(status = {:?}, download = {}/{}/{})",
             self.status,
             self.pending_chunks.len(),
             self.downloading_chunks.len(),
             self.num_downloaded,
-            self.restorer.progress(),
         )
     }
 }
@@ -265,8 +232,46 @@ impl SnapshotChunkSync {
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
             ) {
-                Some((blame_vec_offset, state, snapshot_info)) => {
-                    inner.true_state_root_by_blame_info = state;
+                Some((blame_vec_offset, _state, snapshot_info)) => {
+                    let maybe_trusted_snapshot_blame_block = ctx
+                        .manager
+                        .graph
+                        .consensus
+                        .get_trusted_blame_block_for_snapshot(
+                            &inner.checkpoint,
+                        );
+                    let snapshot_state_root =
+                        match maybe_trusted_snapshot_blame_block {
+                            Some(block) => {
+                                let deferred_state_root = *ctx
+                                    .manager
+                                    .graph
+                                    .data_man
+                                    .block_header_by_hash(&block)
+                                    .expect("trusted blame block should exist")
+                                    .deferred_state_root();
+                                if response
+                                    .snapshot_state_root
+                                    .compute_state_root_hash()
+                                    != deferred_state_root
+                                {
+                                    warn!("ManifestResponse has invalid snapshot_root: should be {:?} in block {:?}", deferred_state_root, block);
+                                    self.resync_manifest(ctx, &mut inner);
+                                    return;
+                                } else {
+                                    response
+                                        .snapshot_state_root
+                                        .snapshot_root
+                                        .clone()
+                                }
+                            }
+                            None => {
+                                // FIXME Ensure this does not happen
+                                panic!("No blame block for synced snapshot!");
+                            }
+                        };
+                    inner.true_state_root_by_blame_info = snapshot_state_root;
+                    inner.restorer.snapshot_merkle_root = snapshot_state_root;
                     inner.blame_vec_offset = blame_vec_offset;
                     inner.snapshot_info = snapshot_info;
                 }
@@ -294,7 +299,7 @@ impl SnapshotChunkSync {
 
             // Check proofs for keys.
             if let Err(e) = response.manifest.validate(
-                &inner.true_state_root_by_blame_info.state_root.snapshot_root,
+                &inner.true_state_root_by_blame_info,
                 &request.start_chunk,
             ) {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
@@ -302,23 +307,49 @@ impl SnapshotChunkSync {
             }
         }
 
-        let next_chunk = response.manifest.next_chunk();
+        let verifier = match FullSyncVerifier::new(
+            response.manifest.chunk_boundaries.len() + 1,
+            response.manifest.chunk_boundaries.clone(),
+            response.manifest.chunk_boundary_proofs.clone(),
+            inner.restorer.snapshot_merkle_root,
+            ctx.manager
+                .graph
+                .data_man
+                .storage_manager
+                .get_storage_manager()
+                .get_snapshot_manager()
+                .get_snapshot_db_manager(),
+            &inner.restorer.snapshot_epoch_id,
+        ) {
+            Ok(verifier) => verifier,
+            Err(e) => {
+                warn!(
+                    "Fail to create FullSyncVerifier from Manifest, err={:?}",
+                    e
+                );
+                return;
+            }
+        };
+        inner.restorer.initialize_verifier(verifier);
         inner.pending_chunks.extend(response.manifest.into_chunks());
 
-        // continue to request remaining manifest if any
-        if let Some(next_chunk) = next_chunk {
-            let request = SnapshotManifestRequest::new_with_start_chunk(
-                inner.checkpoint.clone(),
-                next_chunk,
-            );
-            ctx.manager.request_manager.request_with_delay(
-                ctx.io,
-                Box::new(request),
-                Some(ctx.peer),
-                None,
-            );
-            return;
-        }
+        // FIXME Handle next_chunk
+
+        //        let next_chunk = response.manifest.next_chunk();
+        //        // continue to request remaining manifest if any
+        //        if let Some(next_chunk) = next_chunk {
+        //            let request =
+        // SnapshotManifestRequest::new_with_start_chunk(
+        // inner.checkpoint.clone(),                next_chunk,
+        //            );
+        //            ctx.manager.request_manager.request_with_delay(
+        //                ctx.io,
+        //                Box::new(request),
+        //                Some(ctx.peer),
+        //                None,
+        //            );
+        //            return;
+        //        }
 
         // todo validate the integrity of manifest, and re-sync it if failed
 
@@ -418,48 +449,13 @@ impl SnapshotChunkSync {
             );
 
             // start to restore and update status
-            inner.restorer.start_to_restore(
+            inner.restorer.finalize_restoration(
                 ctx.manager.graph.data_man.storage_manager.clone(),
+                inner.snapshot_info.clone(),
             );
-            inner.status = Status::Restoring(Instant::now());
-        }
-
-        debug!("sync state progress: {:?}", *inner);
-    }
-
-    /// Update the progress of snapshot restoration.
-    pub fn update_restore_progress(&self, state_manager: Arc<StateManager>) {
-        let mut inner = self.inner.write();
-
-        let start_time = match inner.status {
-            Status::Restoring(t) => t,
-            _ => return,
-        };
-
-        let progress = inner.restorer.progress();
-        trace!("Snapshot chunk restoration progress: {:?}", progress);
-        if !progress.is_completed() {
-            return;
-        }
-
-        info!(
-            "Snapshot chunks restoration completed in {:?}",
-            start_time.elapsed()
-        );
-
-        // verify the blame state
-        let root = inner.restorer.restored_state_root(state_manager);
-        if root == inner.true_state_root_by_blame_info.state_root {
-            info!("Snapshot chunks restored successfully");
             inner.status = Status::Completed;
-        } else {
-            warn!(
-                "Failed to restore snapshot chunks, blame state mismatch,\
-                 restored = {:?}, expected = {:?}",
-                root, inner.true_state_root_by_blame_info
-            );
-            inner.status = Status::Invalid;
         }
+        debug!("sync state progress: {:?}", *inner);
     }
 
     pub fn restore_execution_state(
@@ -475,6 +471,22 @@ impl SnapshotChunkSync {
                 .expect("All headers exist")
                 .parent_hash();
         }
+        let delta_height = sync_handler
+            .graph
+            .data_man
+            .block_header_by_hash(&deferred_block_hash)
+            .unwrap()
+            .height()
+            % sync_handler.graph.data_man.get_snapshot_epoch_count();
+        let snapshot_epoch_id = sync_handler
+            .graph
+            .data_man
+            .get_parent_epochs_for(deferred_block_hash, delta_height)
+            .0;
+        let mut fake_state_root =
+            StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
+        fake_state_root.aux_info.snapshot_epoch_id = snapshot_epoch_id;
+        fake_state_root.aux_info.intermediate_epoch_id = snapshot_epoch_id;
         // FIXME: Because state_root_aux_info can't be computed for state block
         // FIXME: before snapshot, for the reward epoch count, maybe
         // FIXME: save it to a dedicated place for reward computation.
@@ -493,7 +505,7 @@ impl SnapshotChunkSync {
                     // FIXME: the state root is wrong for epochs before sync
                     // point. FIXME: but these information
                     // won't be used.
-                    inner.true_state_root_by_blame_info.clone(),
+                    fake_state_root.clone(),
                     inner.receipt_blame_vec[i],
                     inner.bloom_blame_vec[i],
                 );
@@ -512,12 +524,6 @@ impl SnapshotChunkSync {
                 true, /* persistent */
             );
         }
-        sync_handler
-            .graph
-            .data_man
-            .storage_manager
-            .get_storage_manager()
-            .register_new_snapshot(inner.snapshot_info.clone());
     }
 
     pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {
@@ -655,7 +661,7 @@ impl SnapshotChunkSync {
         let (mut parent_snapshot_epoch, pivot_chain_parts) =
             ctx.manager.graph.data_man.get_parent_epochs_for(
                 snapshot_epoch_id.clone(),
-                SNAPSHOT_EPOCHS_CAPACITY,
+                ctx.manager.graph.data_man.get_snapshot_epoch_count(),
             );
         // FIXME: This is temporary hack because we haven't enabled snapshot
         // yet.

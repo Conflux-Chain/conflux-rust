@@ -16,14 +16,18 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
     statistics::SharedStatistics,
-    storage::StateRootWithAuxInfo,
-    sync::delta::CHECKPOINT_DUMP_MANAGER,
+    storage::{
+        storage_db::{
+            OpenSnapshotMptTrait, SnapshotInfo, SnapshotMptTraitReadOnly,
+        },
+        StateIndex, StateRootWithAuxInfo,
+    },
     SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parity_bytes::ToPretty;
-use primitives::{BlockHeader, SignedTransaction};
+use primitives::{BlockHeader, SignedTransaction, NULL_EPOCH};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -285,7 +289,12 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
         inner.cur_era_stable_height = new_era_stable_height;
-        inner.state_boundary_height = new_era_stable_height;
+        // TODO: maybe archive node has other logic.
+        inner
+            .data_man
+            .state_availability_boundary
+            .write()
+            .adjust_lower_bound(new_era_height);
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
         let next_era_arena_index =
@@ -295,8 +304,6 @@ impl ConsensusNewBlockHandler {
         inner
             .data_man
             .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
-
-        CHECKPOINT_DUMP_MANAGER.read().dump_async(next_era_hash);
     }
 
     pub fn compute_anticone_bruteforce(
@@ -1297,41 +1304,40 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_genesis_height
             );
         }
-        let mut confirmed_height = meter.get_confirmed_epoch_num();
-        if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
-            confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
-        }
+        //        let mut confirmed_height = meter.get_confirmed_epoch_num();
+        //        if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
+        //            confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
+        //        }
         // We can not assume that confirmed epoch are already executed,
         // but we can assume that the deferred block are executed.
         // FIXME: shouldn't unwrap but the function doesn't return error...
 
-        let confirmed_epoch_hash = inner
-            .get_hash_from_epoch_number(
-                // FIXME: we need a function to compute the deferred epoch
-                // FIXME: number. the current codebase may not be
-                // FIXME: consistent at all places.
-                confirmed_height - DEFERRED_STATE_EPOCH_COUNT,
-            )
-            .unwrap();
-        // FIXME: we also need more helper function to get the execution result
-        // FIXME: for block deferred or not.
-        if let Some(confirmed_epoch) = &*self
-            .data_man
-            .get_epoch_execution_commitment(&confirmed_epoch_hash)
-        {
-            // FIXME: convert the epoch hash to the most recent snapshottable
-            // hash.
-            self.data_man
-                .storage_manager
-                .get_storage_manager()
-                .maintain_snapshots_pivot_chain_confirmed(
-                    confirmed_height,
-                    &confirmed_epoch_hash,
-                    &confirmed_epoch.state_root_with_aux_info,
-                )
-                // FIXME: handle error.
-                .ok();
-        }
+        // FIXME Handle snapshot maintain
+        //        let confirmed_epoch_hash = inner
+        //            .get_hash_from_epoch_number(
+        //                // FIXME: we need a function to compute the deferred
+        // epoch                // FIXME: number. the current codebase
+        // may not be                // FIXME: consistent at all places.
+        //                confirmed_height - DEFERRED_STATE_EPOCH_COUNT,
+        //            )
+        //            .unwrap();
+        //        // FIXME: we also need more helper function to get the
+        // execution result        // FIXME: for block deferred or not.
+        //        if let Some(confirmed_epoch) = &*self
+        //            .data_man
+        //            .get_epoch_execution_commitment(&confirmed_epoch_hash)
+        //        {
+        //            self.data_man
+        //                .storage_manager
+        //                .get_storage_manager()
+        //                .maintain_snapshots_pivot_chain_confirmed(
+        //                    confirmed_height,
+        //                    &confirmed_epoch_hash,
+        //                    &confirmed_epoch.state_root_with_aux_info,
+        //                )
+        //                // FIXME: handle error.
+        //                .ok();
+        //        }
 
         // FIXME: this is header only.
         // If we are inserting header only, we will skip execution and
@@ -1363,11 +1369,6 @@ impl ConsensusNewBlockHandler {
                     - DEFERRED_STATE_EPOCH_COUNT
                     + 1
             };
-            inner.optimistic_executed_height = if to_state_pos > 0 {
-                Some(to_state_pos)
-            } else {
-                None
-            };
             let mut state_at = fork_at;
             if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
                 if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
@@ -1377,10 +1378,44 @@ impl ConsensusNewBlockHandler {
                     state_at = 1;
                 }
             }
-            // For full node, we don't execute blocks before available states
-            // This skip should only happen in `SyncBlockPhase` for full nodes
-            if state_at < inner.state_boundary_height + 1 {
-                state_at = inner.state_boundary_height + 1;
+            {
+                let mut state_availability_boundary =
+                    inner.data_man.state_availability_boundary.write();
+                assert!(fork_at > state_availability_boundary.lower_bound);
+                if pivot_changed {
+                    if extend_pivot {
+                        state_availability_boundary.pivot_chain.push(*hash);
+                    } else {
+                        let split_off_index =
+                            fork_at - state_availability_boundary.lower_bound;
+                        state_availability_boundary
+                            .pivot_chain
+                            .split_off(split_off_index as usize);
+                        for i in inner.height_to_pivot_index(fork_at)
+                            ..inner.pivot_chain.len()
+                        {
+                            state_availability_boundary
+                                .pivot_chain
+                                .push(inner.arena[inner.pivot_chain[i]].hash);
+                        }
+                        if state_availability_boundary.upper_bound >= fork_at {
+                            state_availability_boundary.upper_bound =
+                                fork_at - 1;
+                        }
+                    }
+                    state_availability_boundary.optimistic_executed_height =
+                        if to_state_pos > 0 {
+                            Some(to_state_pos)
+                        } else {
+                            None
+                        };
+                }
+                // For full node, we don't execute blocks before available
+                // states. This skip should only happen in
+                // `SyncBlockPhase` for full nodes
+                if state_at < state_availability_boundary.lower_bound + 1 {
+                    state_at = state_availability_boundary.lower_bound + 1;
+                }
             }
 
             // Apply transactions in the determined total order
@@ -1435,14 +1470,17 @@ impl ConsensusNewBlockHandler {
     /// It also recovers receipts_root and logs_bloom_hash in pivot chain.
     /// This function is only invoked from recover_graph_from_db with
     /// header_only being false.
+    /// FIXME Ensure we have snapshot at state_boundary_height
     pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        let start_pivot_index = (inner.state_boundary_height
-            - inner.cur_era_genesis_height)
-            as usize;
-        let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
+        let state_boundary_height =
+            self.data_man.state_availability_boundary.read().lower_bound;
+        let start_pivot_index =
+            (state_boundary_height - inner.cur_era_genesis_height) as usize;
+        let mut start_hash =
+            inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory. Since, in some rare cases, the number of
         // blocks between stable and best_epoch is less than
@@ -1457,6 +1495,47 @@ impl ConsensusNewBlockHandler {
             self.data_man.load_epoch_execution_commitment_from_db(&start_hash)
                 .expect("epoch_execution_commitment for stable hash must exist in disk");
         }
+        {
+            let mut state_availability_boundary =
+                self.data_man.state_availability_boundary.write();
+            assert!(
+                state_availability_boundary.lower_bound
+                    == state_availability_boundary.upper_bound
+            );
+            for pivot_index in start_pivot_index + 1..inner.pivot_chain.len() {
+                state_availability_boundary
+                    .pivot_chain
+                    .push(inner.arena[inner.pivot_chain[pivot_index]].hash);
+            }
+        }
+        if state_boundary_height == 0 {
+            start_hash = NULL_EPOCH;
+        }
+        let storage_manager =
+            self.data_man.storage_manager.get_storage_manager();
+        // FIXME Most are fake because not used now
+        // And it's also not correct to unconditionally set delta_mpt and
+        // intermediate_mpt as Some
+        let snapshot_info = SnapshotInfo {
+            serve_one_step_sync: false,
+            merkle_root: Default::default(),
+            parent_snapshot_height: state_boundary_height
+                - storage_manager.get_snapshot_epoch_count(),
+            height: state_boundary_height,
+            parent_snapshot_epoch_id: Default::default(),
+            pivot_chain_parts: vec![start_hash],
+        };
+        storage_manager.register_new_snapshot(snapshot_info.clone(), true);
+        storage_manager
+            .get_delta_mpt(&start_hash)
+            .expect("No db error");
+        storage_manager
+            .reregister_genesis_snapshot(&start_hash)
+            .expect("No db error");
+        storage_manager
+            .get_delta_mpt(&start_hash)
+            .expect("No db error");
+        let mut parent_snapshot_id = start_hash;
         for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
         {
@@ -1487,6 +1566,95 @@ impl ConsensusNewBlockHandler {
                     true,
                     false,
                 ));
+            } else {
+                self.data_man
+                    .state_availability_boundary
+                    .write()
+                    .upper_bound += 1;
+            }
+            if pivot_index as u64 % storage_manager.get_snapshot_epoch_count()
+                == 0
+            {
+                // FIXME Most are fake because not used now
+                let mut snapshot_info = SnapshotInfo {
+                    serve_one_step_sync: false,
+                    merkle_root: Default::default(),
+                    parent_snapshot_height: inner.arena[arena_index].height
+                        - storage_manager.get_snapshot_epoch_count() as u64,
+                    height: inner.arena[arena_index].height,
+                    parent_snapshot_epoch_id: parent_snapshot_id,
+                    pivot_chain_parts: vec![pivot_hash],
+                };
+                match storage_manager
+                    .get_snapshot_manager()
+                    .get_snapshot_by_epoch_id(&pivot_hash)
+                    .expect("No db error")
+                {
+                    Some(mut snapshot) => {
+                        snapshot_info.merkle_root = snapshot
+                            .open_snapshot_mpt_read_only()
+                            .expect("No db error")
+                            .get_merkle_root();
+                        storage_manager
+                            .register_new_snapshot(snapshot_info, false);
+                        // Setup delta_mpt
+                        storage_manager
+                            .get_delta_mpt(&pivot_hash)
+                            .expect("No db error");
+                    }
+                    None => {
+                        // TODO Resume the unfinished snapshot making. Maybe
+                        // better handling?
+                        let (_guard, maybe_commitment) = self
+                            .data_man
+                            .get_epoch_execution_commitment(&pivot_hash)
+                            .into();
+                        let height = self
+                            .data_man
+                            .block_header_by_hash(&pivot_hash)
+                            .expect("header exist")
+                            .height();
+                        let state_index = StateIndex::new_for_next_epoch(
+                            &pivot_hash,
+                            &maybe_commitment
+                                .unwrap()
+                                .state_root_with_aux_info
+                                .aux_info,
+                            height,
+                            self.data_man.height_to_delta_height(height),
+                        );
+                        let state = self
+                            .data_man
+                            .storage_manager
+                            .get_state_trees_for_next_epoch(&state_index)
+                            .unwrap()
+                            .unwrap();
+                        let intermediate_root = state.intermediate_trie_root;
+                        let maybe_intermediate_trie =
+                            state.maybe_intermediate_trie;
+                        self.data_man
+                            .storage_manager
+                            .check_make_snapshot(
+                                maybe_intermediate_trie,
+                                intermediate_root,
+                                &pivot_hash,
+                                inner.arena[arena_index].height,
+                            )
+                            .expect("No db error");
+                        storage_manager
+                            .in_progress_snapshoting_tasks
+                            .write()
+                            .remove(&pivot_hash)
+                            .expect("Just inserted")
+                            .thread
+                            .join()
+                            .unwrap();
+                        storage_manager
+                            .get_delta_mpt(&pivot_hash)
+                            .expect("No db error");
+                    }
+                }
+                parent_snapshot_id = pivot_hash;
             }
         }
     }

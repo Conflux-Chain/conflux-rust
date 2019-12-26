@@ -101,8 +101,46 @@ impl<'a> State<'a> {
         index
     }
 
-    /// return true if all accounts has enough storage balance.
-    pub fn check_storage_balance(&mut self) -> bool {
+    /// return true if all affected accounts have enough storage balance.
+    ///
+    /// Some assumptions must hold if this function returns `true`:
+    /// + The `storage_balance` is not greater than `bank_balance` for all
+    ///   accounts.
+    /// + The `storage_balance` and `bank_balance` for all contract accounts
+    ///   are always the same.
+    /// + The value of `self.total_bank_tokens` must equal to the summation of
+    ///   `bank_balance` of all accounts.
+    /// + The value of `self.total_storage_tokens` must equal to the summation
+    ///   of `storage_balance` of all accounts.
+    ///
+    /// If the function returns `true`, we should call `discard_checkpoint()`
+    /// right after it. If the function returns `false`, we should call
+    /// `revert_to_checkpoint()` right after it.
+    ///
+    /// Based on above assumptions, some actions must be done if the owner of
+    /// storage changed.
+    ///
+    /// If some storage is released:
+    /// + For normal account, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY`
+    ///   from `storage_balance` for each released storage. The value of
+    ///   `balance` and `bank_balance` remain untouched.
+    /// + For contract account, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY`
+    ///   from both `storage_balance` and `bank_balance` for each released
+    ///   storage. And we will increase `RENTAL_PRICE_PER_STORAGE_KEY` to
+    ///   `balance` for each released storage.
+    ///
+    /// If new storage is occupied:
+    /// + For normal account, we will increase `RENTAL_PRICE_PER_STORAGE_KEY`
+    ///   to `storage_balance` for each new storage. If the `bank_balance` is
+    ///   not sufficient to cover `storage_balance`, the automatic deposit
+    ///   feature will apply. we will deposit sufficient tokens from `balance`
+    ///   first. This will be treated as normal deposit, and the deposit history
+    ///   will be kept in account.
+    /// + For contract account, we will increase `RENTAL_PRICE_PER_STORAGE_KEY`
+    ///   to both `storage_balance` and `bank_balance` for each new storage.
+    ///   Also, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY` from `balance`
+    ///   for each new storage.
+    pub fn check_storage_balance(&mut self, timestamp: u64) -> bool {
         let mut storage_balance_sub = HashMap::new();
         let mut storage_balance_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.borrow().last() {
@@ -135,17 +173,42 @@ impl<'a> State<'a> {
         for (addr, sub) in storage_balance_sub {
             let delta =
                 U256::from(sub) * U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
+            assert!(self.exists(&addr).expect("no db error"));
+            if self.is_contract(&addr) {
+                self.total_bank_tokens -= delta;
+            }
             self.sub_storage_balance(&addr, &delta)
                 .expect("no db error");
         }
         for (addr, inc) in storage_balance_inc {
             let delta =
                 U256::from(inc) * U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
+            let balance = self.balance(&addr).expect("no db error");
             let bank_balance = self.bank_balance(&addr).expect("no db error");
             let storage_balance =
                 self.storage_balance(&addr).expect("no db error");
-            if storage_balance + delta > bank_balance {
-                return false;
+            assert!(self.exists(&addr).expect("no db error"));
+            if self.is_contract(&addr) {
+                // For contract account, we only need to check the `balance`.
+                if delta > balance {
+                    return false;
+                }
+                self.total_bank_tokens += delta;
+            } else {
+                // For normal account, we should take both `bank_balance` and
+                // `balance` into consideration.
+                if storage_balance + delta > bank_balance + balance {
+                    return false;
+                }
+                if storage_balance + delta > bank_balance {
+                    // `bank_balance` is not enough, enable automatic deposit.
+                    self.deposit(
+                        &addr,
+                        &(storage_balance + delta - bank_balance),
+                        timestamp,
+                    )
+                    .expect("no db error");
+                }
             }
             self.add_storage_balance(&addr, &delta)
                 .expect("no db error");
@@ -154,6 +217,8 @@ impl<'a> State<'a> {
     }
 
     /// Merge last checkpoint with previous.
+    /// Caller should make sure the function `check_storage_balance(timestamp)`
+    /// was called before calling this function.
     pub fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
@@ -238,9 +303,15 @@ impl<'a> State<'a> {
     }
 
     pub fn balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.balance())
         })
+    }
+
+    pub fn is_contract(&self, address: &Address) -> bool {
+        self.require(address, false)
+            .map(|x| x.is_contract())
+            .unwrap_or(false)
     }
 
     pub fn commission_balance(
@@ -271,19 +342,20 @@ impl<'a> State<'a> {
     }
 
     pub fn check_commission_privilege(
-        &self, contract_address: &Address, user: &Address,
-    ) -> DbResult<bool> {
-        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)?
+        &self, privilege_control_address: &Address, contract_address: &Address,
+        user: &Address,
+    ) -> DbResult<bool>
+    {
+        self.require(privilege_control_address, false)?
             .check_commission_privilege(&self.db, contract_address, user)
     }
 
     pub fn add_commission_privilege(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
+        &mut self, privilege_control_address: &Address,
+        contract_address: Address, contract_owner: Address, user: Address,
     ) -> DbResult<()>
     {
-        let mut account = self
-            .require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)?;
+        let mut account = self.require(privilege_control_address, false)?;
         Ok(account.add_commission_privilege(
             contract_address,
             contract_owner,
@@ -292,12 +364,11 @@ impl<'a> State<'a> {
     }
 
     pub fn remove_commission_privilege(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
+        &mut self, privilege_control_address: &Address,
+        contract_address: Address, contract_owner: Address, user: Address,
     ) -> DbResult<()>
     {
-        let mut account = self
-            .require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)?;
+        let mut account = self.require(privilege_control_address, false)?;
         Ok(account.remove_commission_privilege(
             contract_address,
             contract_owner,
@@ -306,7 +377,7 @@ impl<'a> State<'a> {
     }
 
     pub fn nonce(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.nonce())
         })
     }
@@ -317,7 +388,7 @@ impl<'a> State<'a> {
         {
             Ok(Some(*INTERNAL_CONTRACT_CODE_HASH))
         } else {
-            self.ensure_cached(address, RequireCache::None, true, |acc| {
+            self.ensure_cached(address, RequireCache::None, |acc| {
                 acc.and_then(|acc| Some(acc.code_hash()))
             })
         }
@@ -329,7 +400,7 @@ impl<'a> State<'a> {
         {
             Ok(Some(INTERNAL_CONTRACT_CODE.len()))
         } else {
-            self.ensure_cached(address, RequireCache::CodeSize, true, |acc| {
+            self.ensure_cached(address, RequireCache::CodeSize, |acc| {
                 acc.and_then(|acc| acc.code_size())
             })
         }
@@ -341,20 +412,20 @@ impl<'a> State<'a> {
         {
             Ok(Some(Arc::new(INTERNAL_CONTRACT_CODE.to_vec())))
         } else {
-            self.ensure_cached(address, RequireCache::Code, true, |acc| {
+            self.ensure_cached(address, RequireCache::Code, |acc| {
                 acc.as_ref().map_or(None, |acc| acc.code())
             })
         }
     }
 
     pub fn bank_balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.bank_balance())
         })
     }
 
     pub fn storage_balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.storage_balance())
         })
     }
@@ -498,6 +569,8 @@ impl<'a> State<'a> {
         Ok(())
     }
 
+    /// Assume that only contract with zero `balance` or zero `bank_balance`
+    /// will be killed.
     fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
     ) -> DbResult<()> {
@@ -512,6 +585,13 @@ impl<'a> State<'a> {
                 for (_, value) in storage_key_value {
                     let storage_value =
                         rlp::decode::<StorageValue>(value.as_ref())?;
+                    assert!(self
+                        .exists(&storage_value.owner)
+                        .expect("no db error"));
+                    if self.is_contract(&storage_value.owner) {
+                        self.total_bank_tokens -=
+                            U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
+                    }
                     self.sub_storage_balance(
                         &storage_value.owner,
                         &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
@@ -649,13 +729,11 @@ impl<'a> State<'a> {
     }
 
     pub fn exists(&self, address: &Address) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::None, false, |acc| {
-            acc.is_some()
-        })
+        self.ensure_cached(address, RequireCache::None, |acc| acc.is_some())
     }
 
     pub fn exists_and_not_null(&self, address: &Address) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::None, false, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| !acc.is_null())
         })
     }
@@ -663,7 +741,7 @@ impl<'a> State<'a> {
     pub fn exists_and_has_code_or_nonce(
         &self, address: &Address,
     ) -> DbResult<bool> {
-        self.ensure_cached(address, RequireCache::CodeSize, false, |acc| {
+        self.ensure_cached(address, RequireCache::CodeSize, |acc| {
             acc.map_or(false, |acc| {
                 acc.code_hash() != KECCAK_EMPTY
                     || *acc.nonce() != self.account_start_nonce
@@ -713,7 +791,7 @@ impl<'a> State<'a> {
     }
 
     pub fn storage_at(&self, address: &Address, key: &H256) -> DbResult<H256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(H256::zero(), |account| {
                 account.storage_at(&self.db, key).unwrap_or(H256::zero())
             })
@@ -724,7 +802,7 @@ impl<'a> State<'a> {
     pub fn original_storage_at(
         &self, address: &Address, key: &H256,
     ) -> DbResult<H256> {
-        self.ensure_cached(address, RequireCache::None, true, |acc| {
+        self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(H256::zero(), |account| {
                 account
                     .original_storage_at(&self.db, key)
@@ -785,8 +863,6 @@ impl<'a> State<'a> {
             kind.expect("start_checkpoint_index is checked to be below checkpoints_len; for loop above must have been executed at least once; it will either early return, or set the kind value to Some; qed")
         };
 
-        println!("kind={:?}", kind);
-
         match kind {
             ReturnKind::SameAsNext => Ok(Some(self.storage_at(address, key)?)),
             ReturnKind::OriginalAt => {
@@ -805,12 +881,9 @@ impl<'a> State<'a> {
     }
 
     fn ensure_cached<F, U>(
-        &self, address: &Address, require: RequireCache, _check_null: bool,
-        f: F,
+        &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
-    where
-        F: Fn(Option<&OverlayAccount>) -> U,
-    {
+    where F: Fn(Option<&OverlayAccount>) -> U {
         if let Some(ref mut maybe_acc) =
             self.cache.borrow_mut().get_mut(address)
         {
@@ -1037,7 +1110,13 @@ mod tests {
         state.clear();
 
         let c0 = state.checkpoint();
-        state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
+        state
+            .new_contract(
+                &a,
+                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::zero(),
+            )
+            .unwrap();
         let c1 = state.checkpoint();
         state
             .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
@@ -1081,7 +1160,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(4)))
         );
 
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c5.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1122,7 +1201,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(1)))
         );
 
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c3.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1147,7 +1226,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(0)))
         );
 
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c1.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1165,6 +1244,13 @@ mod tests {
 
         state.checkpoint();
         state
+            .add_balance(
+                &a,
+                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                CleanupMode::NoEmpty,
+            )
+            .unwrap();
+        state
             .set_storage(
                 &a,
                 k,
@@ -1172,7 +1258,7 @@ mod tests {
                 a,
             )
             .unwrap();
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1u64)))
@@ -1191,7 +1277,13 @@ mod tests {
 
         let cm1 = state.checkpoint();
         let c0 = state.checkpoint();
-        state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
+        state
+            .new_contract(
+                &a,
+                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::zero(),
+            )
+            .unwrap();
         let c1 = state.checkpoint();
         state
             .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
@@ -1239,7 +1331,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(4)))
         );
 
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c5.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1288,7 +1380,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(1)))
         );
 
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c3.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1321,7 +1413,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(0)))
         );
 
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c1.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1372,7 +1464,7 @@ mod tests {
         state
             .add_balance(&a, &U256::from(1), CleanupMode::ForceCreate)
             .unwrap();
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint(); // discard c2
         state.revert_to_checkpoint(); // revert to c1
         assert_eq!(state.exists(&a).unwrap(), false);
@@ -1391,6 +1483,13 @@ mod tests {
 
         state.checkpoint();
         state
+            .add_balance(
+                &a,
+                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
+                CleanupMode::NoEmpty,
+            )
+            .unwrap();
+        state
             .set_storage(
                 &a,
                 k,
@@ -1398,7 +1497,7 @@ mod tests {
                 a,
             )
             .unwrap();
-        state.check_storage_balance();
+        assert!(state.check_storage_balance(0 /* timestamp */));
         state.discard_checkpoint();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1)))
@@ -1435,5 +1534,387 @@ mod tests {
         state
             .commit(BigEndianHash::from_uint(&U256::from(2)))
             .unwrap();
+    }
+
+    #[test]
+    fn test_automatic_staking_normal_account() {
+        let storage_manager = new_state_manager_for_testing();
+        let mut state = get_state_for_genesis_write(&storage_manager);
+        let normal_account = Address::from_low_u64_be(0);
+        let contract_account = Address::from_low_u64_be(1);
+        let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
+        let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
+        let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
+
+        state
+            .add_balance(
+                &normal_account,
+                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                CleanupMode::NoEmpty,
+            )
+            .unwrap();
+        state
+            .new_contract(
+                &contract_account,
+                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::zero(),
+            )
+            .unwrap();
+
+        // simple set one key with zero value for normal account
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k1,
+                BigEndianHash::from_uint(&U256::from(0)),
+                normal_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+
+        assert_eq!(
+            state.balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+
+        // simple set one key with nonzero value for normal account
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k1,
+                BigEndianHash::from_uint(&U256::from(1)),
+                normal_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(
+            state.balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.bank_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.storage_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+
+        // test not sufficient balance
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k2,
+                BigEndianHash::from_uint(&U256::from(1)),
+                normal_account,
+            )
+            .unwrap();
+        state
+            .set_storage(
+                &contract_account,
+                k3,
+                BigEndianHash::from_uint(&U256::from(1)),
+                normal_account,
+            )
+            .unwrap();
+        assert!(!state.check_storage_balance(0 /* timestamp */));
+        state.revert_to_checkpoint();
+        assert_eq!(
+            state.balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.bank_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.storage_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+
+        // use all balance
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k2,
+                BigEndianHash::from_uint(&U256::from(1)),
+                normal_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(state.balance(&normal_account).unwrap(), U256::from(0));
+        assert_eq!(
+            state.bank_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.storage_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+
+        // set one key to zero
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k2,
+                BigEndianHash::from_uint(&U256::from(0)),
+                normal_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(state.balance(&normal_account).unwrap(), U256::from(0));
+        assert_eq!(
+            state.bank_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.storage_balance(&normal_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+    }
+
+    #[test]
+    fn test_automatic_staking_contract_account() {
+        let storage_manager = new_state_manager_for_testing();
+        let mut state = get_state_for_genesis_write(&storage_manager);
+        let contract_account = Address::from_low_u64_be(1);
+        let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
+        let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
+        let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
+
+        state
+            .new_contract(
+                &contract_account,
+                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::zero(),
+            )
+            .unwrap();
+
+        // simple set one key with zero value for normal account
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k1,
+                BigEndianHash::from_uint(&U256::from(0)),
+                contract_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+
+        assert_eq!(
+            state.balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+
+        // simple set one key with nonzero value for normal account
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k1,
+                BigEndianHash::from_uint(&U256::from(1)),
+                contract_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(
+            state.balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.bank_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.storage_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+
+        // test not sufficient balance
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k2,
+                BigEndianHash::from_uint(&U256::from(1)),
+                contract_account,
+            )
+            .unwrap();
+        state
+            .set_storage(
+                &contract_account,
+                k3,
+                BigEndianHash::from_uint(&U256::from(1)),
+                contract_account,
+            )
+            .unwrap();
+        assert!(!state.check_storage_balance(0 /* timestamp */));
+        state.revert_to_checkpoint();
+        assert_eq!(
+            state.balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.bank_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.storage_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+
+        // use all balance
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k2,
+                BigEndianHash::from_uint(&U256::from(1)),
+                contract_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
+        assert_eq!(
+            state.bank_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.storage_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+
+        // set one key to zero
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k2,
+                BigEndianHash::from_uint(&U256::from(0)),
+                contract_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(
+            state.balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.bank_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.storage_balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_bank_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+        assert_eq!(
+            state.total_storage_tokens,
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+        );
+
+        // set another key to zero
+        state.checkpoint();
+        state
+            .set_storage(
+                &contract_account,
+                k1,
+                BigEndianHash::from_uint(&U256::from(0)),
+                contract_account,
+            )
+            .unwrap();
+        assert!(state.check_storage_balance(0 /* timestamp */));
+        state.discard_checkpoint();
+        assert_eq!(
+            state.balance(&contract_account).unwrap(),
+            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+        );
+        assert_eq!(
+            state.bank_balance(&contract_account).unwrap(),
+            U256::from(0)
+        );
+        assert_eq!(
+            state.storage_balance(&contract_account).unwrap(),
+            U256::from(0)
+        );
+        assert_eq!(state.total_bank_tokens, U256::from(0));
+        assert_eq!(state.total_storage_tokens, U256::from(0));
     }
 }

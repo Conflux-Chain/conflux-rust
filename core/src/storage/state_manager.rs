@@ -16,14 +16,6 @@ pub type SharedStateManager = Arc<StateManager>;
 //
 // Only if we see problem dealing with attacks, consider rules like the
 // size of delta trie.
-pub const SNAPSHOT_EPOCHS_CAPACITY: u64 = 1_000_000_000_000_000;
-pub fn height_to_delta_height(height: u64) -> u32 {
-    if height == 0 {
-        0
-    } else {
-        ((height - 1) % SNAPSHOT_EPOCHS_CAPACITY) as u32 + 1
-    }
-}
 
 pub struct StateReadonlyIndex {
     pub snapshot_epoch_id: EpochId,
@@ -103,8 +95,10 @@ impl<'a> StateIndex<'a> {
     /// Height is used to check for shifting snapshot.
     /// The state root and height information should be provided from consensus.
     pub fn new_for_next_epoch(
-        base_epoch_id: &'a EpochId, aux_info: &'a StateRootAuxInfo, height: u64,
-    ) -> Self {
+        base_epoch_id: &'a EpochId, aux_info: &'a StateRootAuxInfo,
+        height: u64, delta_height: u32,
+    ) -> Self
+    {
         Self {
             snapshot_epoch_id: &aux_info.snapshot_epoch_id,
             intermediate_epoch_id: &aux_info.intermediate_epoch_id,
@@ -113,7 +107,7 @@ impl<'a> StateIndex<'a> {
                 .as_ref(),
             epoch_id: base_epoch_id,
             delta_mpt_key_padding: &aux_info.delta_mpt_key_padding,
-            maybe_delta_trie_height: Some(height_to_delta_height(height)),
+            maybe_delta_trie_height: Some(delta_height),
             maybe_height: Some(height),
         }
     }

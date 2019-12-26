@@ -118,8 +118,11 @@ struct InterpreterParams {
     pub address: Address,
     /// Sender of current part of the transaction.
     pub sender: Address,
-    /// Transaction initiator.
-    pub origin: Address,
+    /// This is the address of original sender of the transaction.
+    pub original_sender: Address,
+    /// This is the address of original receiver of the transaction.
+    /// If it is a contract call, it is the address of the contract.
+    pub original_receiver: Address,
     /// Gas paid up front for transaction execution
     pub gas: U256,
     /// Gas price.
@@ -141,7 +144,8 @@ impl From<ActionParams> for InterpreterParams {
             code_hash: params.code_hash,
             address: params.address,
             sender: params.sender,
-            origin: params.origin,
+            original_sender: params.original_sender,
+            original_receiver: params.original_receiver,
             gas: params.gas,
             gas_price: params.gas_price,
             value: params.value,
@@ -979,23 +983,17 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.push(word);
             }
             instructions::SSTORE => {
-                let address = BigEndianHash::from_uint(&self.stack.pop_back());
+                let key = BigEndianHash::from_uint(&self.stack.pop_back());
                 let val = self.stack.pop_back();
 
-                let current_val = context.storage_at(&address)?.into_uint();
+                let current_val = context.storage_at(&key)?.into_uint();
                 if !current_val.is_zero() && val.is_zero() {
                     let sstore_clears_schedule =
                         context.spec().sstore_refund_gas;
                     context.add_sstore_refund(sstore_clears_schedule);
                 }
 
-                // `self.params.sender` may change during execution,
-                // `self.params.origin` is the actual sender of the transaction.
-                context.set_storage(
-                    address,
-                    BigEndianHash::from_uint(&val),
-                    self.params.origin,
-                )?;
+                context.set_storage(key, BigEndianHash::from_uint(&val))?;
             }
             instructions::PC => {
                 self.stack.push(U256::from(self.reader.position - 1));
@@ -1008,7 +1006,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .push(address_to_u256(self.params.address.clone()));
             }
             instructions::ORIGIN => {
-                self.stack.push(address_to_u256(self.params.origin.clone()));
+                self.stack
+                    .push(address_to_u256(self.params.original_sender.clone()));
             }
             instructions::BALANCE => {
                 let address = u256_to_address(&self.stack.pop_back());
