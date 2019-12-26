@@ -14,11 +14,11 @@ pub struct FullSyncVerifier<SnapshotDbManager: SnapshotDbManagerTrait> {
 
     pending_boundary_nodes: HashMap<CompressedPathRaw, SnapshotMptNode>,
     boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
+    chunk_index_by_upper_key: HashMap<Vec<u8>, usize>,
 
     temp_snapshot_db: SnapshotDbManager::SnapshotDb,
 }
 
-#[allow(unused)]
 impl<SnapshotDbManager: SnapshotDbManagerTrait>
     FullSyncVerifier<SnapshotDbManager>
 {
@@ -34,8 +34,11 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         if number_chunks != chunk_boundary_proofs.len() + 1 {
             bail!(ErrorKind::InvalidSnapshotSyncProof)
         }
-        for (chunk_boundary, proof) in
-            chunk_boundaries.iter().zip(chunk_boundary_proofs.iter())
+        let mut chunk_index_by_upper_key = HashMap::new();
+        for (chunk_index, (chunk_boundary, proof)) in chunk_boundaries
+            .iter()
+            .zip(chunk_boundary_proofs.iter())
+            .enumerate()
         {
             if merkle_root.ne(proof.get_merkle_root()) {
                 bail!(ErrorKind::InvalidSnapshotSyncProof)
@@ -49,6 +52,8 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             {
                 bail!(ErrorKind::InvalidSnapshotSyncProof)
             }
+            chunk_index_by_upper_key
+                .insert(chunk_boundary.clone(), chunk_index);
         }
 
         Ok(Self {
@@ -60,6 +65,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             number_incomplete_chunk: number_chunks,
             pending_boundary_nodes: Default::default(),
             boundary_subtree_total_size: Default::default(),
+            chunk_index_by_upper_key,
             temp_snapshot_db: snapshot_db_manager
                 .new_temp_snapshot_for_full_sync(epoch_id, &merkle_root)?,
         })
@@ -69,8 +75,20 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
 
     // FIXME: multi-threading, where &mut can be dropped.
     pub fn restore_chunk<Key: Borrow<[u8]>>(
-        &mut self, chunk_index: usize, keys: &Vec<Key>, values: Vec<Box<[u8]>>,
-    ) -> Result<bool> {
+        &mut self, chunk_upper_key: &Option<Vec<u8>>, keys: &Vec<Key>,
+        values: Vec<Vec<u8>>,
+    ) -> Result<bool>
+    {
+        let chunk_index = match chunk_upper_key {
+            None => self.number_chunks - 1,
+            Some(upper_key) => {
+                match self.chunk_index_by_upper_key.get(upper_key) {
+                    Some(index) => *index,
+                    // Chunk key does not match boundaries in manifest
+                    None => return Ok(false),
+                }
+            }
+        };
         // Check key monotone.
         if !keys.is_empty() {
             let mut previous = keys.first().unwrap();

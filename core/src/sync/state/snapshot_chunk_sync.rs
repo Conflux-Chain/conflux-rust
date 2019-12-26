@@ -9,8 +9,8 @@ use crate::{
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
-        state_manager::StateManager, storage_db::SnapshotInfo,
-        StateRootAuxInfo, StateRootWithAuxInfo,
+        storage_db::SnapshotInfo, FullSyncVerifier, StateRootAuxInfo,
+        StateRootWithAuxInfo,
     },
     sync::{
         message::{msgid, Context},
@@ -44,7 +44,6 @@ pub enum Status {
     Inactive,
     DownloadingManifest(Instant),
     DownloadingChunks(Instant),
-    Restoring(Instant),
     Completed,
     Invalid,
 }
@@ -62,9 +61,6 @@ impl Debug for Status {
             }
             Status::DownloadingChunks(t) => {
                 format!("downloading chunks ({:?})", t.elapsed())
-            }
-            Status::Restoring(t) => {
-                format!("restoring chunks ({:?})", t.elapsed())
             }
             Status::Completed => "completed".into(),
             Status::Invalid => "invalid".into(),
@@ -110,7 +106,7 @@ impl Inner {
         self.pending_chunks.clear();
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
-        self.restorer = Restorer::new_with_default_root_dir(checkpoint, None);
+        self.restorer = Restorer::new_with_default_root_dir(checkpoint);
     }
 }
 
@@ -118,12 +114,11 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter) -> Result {
         write!(
             f,
-            "(status = {:?}, download = {}/{}/{}, restore progress = {:?})",
+            "(status = {:?}, download = {}/{}/{})",
             self.status,
             self.pending_chunks.len(),
             self.downloading_chunks.len(),
             self.num_downloaded,
-            self.restorer.progress(),
         )
     }
 }
@@ -312,24 +307,49 @@ impl SnapshotChunkSync {
             }
         }
 
-        inner.restorer.manifest = Some(response.manifest.clone());
-        let next_chunk = response.manifest.next_chunk();
+        let verifier = match FullSyncVerifier::new(
+            response.manifest.chunk_boundaries.len() + 1,
+            response.manifest.chunk_boundaries.clone(),
+            response.manifest.chunk_boundary_proofs.clone(),
+            inner.restorer.snapshot_merkle_root,
+            ctx.manager
+                .graph
+                .data_man
+                .storage_manager
+                .get_storage_manager()
+                .get_snapshot_manager()
+                .get_snapshot_db_manager(),
+            &inner.restorer.snapshot_epoch_id,
+        ) {
+            Ok(verifier) => verifier,
+            Err(e) => {
+                warn!(
+                    "Fail to create FullSyncVerifier from Manifest, err={:?}",
+                    e
+                );
+                return;
+            }
+        };
+        inner.restorer.initialize_verifier(verifier);
         inner.pending_chunks.extend(response.manifest.into_chunks());
 
-        // continue to request remaining manifest if any
-        if let Some(next_chunk) = next_chunk {
-            let request = SnapshotManifestRequest::new_with_start_chunk(
-                inner.checkpoint.clone(),
-                next_chunk,
-            );
-            ctx.manager.request_manager.request_with_delay(
-                ctx.io,
-                Box::new(request),
-                Some(ctx.peer),
-                None,
-            );
-            return;
-        }
+        // FIXME Handle next_chunk
+
+        //        let next_chunk = response.manifest.next_chunk();
+        //        // continue to request remaining manifest if any
+        //        if let Some(next_chunk) = next_chunk {
+        //            let request =
+        // SnapshotManifestRequest::new_with_start_chunk(
+        // inner.checkpoint.clone(),                next_chunk,
+        //            );
+        //            ctx.manager.request_manager.request_with_delay(
+        //                ctx.io,
+        //                Box::new(request),
+        //                Some(ctx.peer),
+        //                None,
+        //            );
+        //            return;
+        //        }
 
         // todo validate the integrity of manifest, and re-sync it if failed
 
@@ -429,49 +449,13 @@ impl SnapshotChunkSync {
             );
 
             // start to restore and update status
-            inner.restorer.start_to_restore(
+            inner.restorer.finalize_restoration(
                 ctx.manager.graph.data_man.storage_manager.clone(),
-                ctx.manager.graph.data_man.as_ref(),
+                inner.snapshot_info.clone(),
             );
-            inner.status = Status::Restoring(Instant::now());
-        }
-
-        debug!("sync state progress: {:?}", *inner);
-    }
-
-    /// Update the progress of snapshot restoration.
-    pub fn update_restore_progress(&self, state_manager: Arc<StateManager>) {
-        let mut inner = self.inner.write();
-
-        let start_time = match inner.status {
-            Status::Restoring(t) => t,
-            _ => return,
-        };
-
-        let progress = inner.restorer.progress();
-        trace!("Snapshot chunk restoration progress: {:?}", progress);
-        if !progress.is_completed() {
-            return;
-        }
-
-        info!(
-            "Snapshot chunks restoration completed in {:?}",
-            start_time.elapsed()
-        );
-
-        // verify the blame state
-        let root = inner.restorer.restored_state_root(state_manager);
-        if root == inner.true_state_root_by_blame_info {
-            info!("Snapshot chunks restored successfully");
             inner.status = Status::Completed;
-        } else {
-            warn!(
-                "Failed to restore snapshot chunks, blame state
-         mismatch, restored = {:?}, expected = {:?}",
-                root, inner.true_state_root_by_blame_info
-            );
-            inner.status = Status::Invalid;
         }
+        debug!("sync state progress: {:?}", *inner);
     }
 
     pub fn restore_execution_state(

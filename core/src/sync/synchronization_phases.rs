@@ -325,12 +325,6 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         {
             Some(trusted_blame_block) => {
                 if self.state_sync.checkpoint() == epoch_to_sync {
-                    if let Status::Restoring(_) = self.state_sync.status() {
-                        self.state_sync.update_restore_progress(
-                            sync_handler.graph.data_man.storage_manager.clone(),
-                        );
-                    }
-
                     if self.state_sync.status() == Status::Completed {
                         DynamicCapability::ServeCheckpoint(Some(epoch_to_sync))
                             .broadcast(io, &sync_handler.syn);
