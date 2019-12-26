@@ -31,7 +31,11 @@ pub enum OutputPolicy {
 #[derive(Debug)]
 pub struct OriginInfo {
     address: Address,
-    origin: Address,
+    /// This is the address of original sender of the transaction.
+    original_sender: Address,
+    /// This is the address of original receiver of the transaction.
+    /// If it is a contract call, it is the address of the contract.
+    original_receiver: Address,
     gas_price: U256,
     value: U256,
 }
@@ -41,7 +45,8 @@ impl OriginInfo {
     pub fn from(params: &ActionParams) -> Self {
         OriginInfo {
             address: params.address.clone(),
-            origin: params.origin.clone(),
+            original_sender: params.original_sender.clone(),
+            original_receiver: params.original_receiver.clone(),
             gas_price: params.gas_price,
             value: match params.value {
                 ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
@@ -95,12 +100,23 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
             .map_err(Into::into)
     }
 
-    fn set_storage(
-        &mut self, key: H256, value: H256, owner: Address,
-    ) -> vm::Result<()> {
+    fn set_storage(&mut self, key: H256, value: H256) -> vm::Result<()> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
+            let owner = if self
+                .state
+                .check_commission_privilege(
+                    &STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS,
+                    &self.origin.original_receiver,
+                    &self.origin.original_sender,
+                )
+                .expect("no db error")
+            {
+                self.origin.original_receiver
+            } else {
+                self.origin.original_sender
+            };
             self.state
                 .set_storage(&self.origin.address, key, value, owner)
                 .map_err(Into::into)
@@ -155,7 +171,8 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
             code_address: address.clone(),
             address: address.clone(),
             sender: self.origin.address.clone(),
-            origin: self.origin.origin.clone(),
+            original_sender: self.origin.original_sender,
+            original_receiver: self.origin.original_receiver,
             gas: *gas,
             gas_price: self.origin.gas_price,
             value: ActionValue::Transfer(*value),
@@ -217,11 +234,12 @@ impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
         };
 
         let mut params = ActionParams {
-            sender: sender_address.clone(),
-            address: receive_address.clone(),
+            sender: *sender_address,
+            address: *receive_address,
             value: ActionValue::Apparent(self.origin.value),
-            code_address: code_address.clone(),
-            origin: self.origin.origin.clone(),
+            code_address: *code_address,
+            original_sender: self.origin.original_sender,
+            original_receiver: self.origin.original_receiver,
             gas: *gas,
             gas_price: self.origin.gas_price,
             code,
@@ -378,7 +396,8 @@ mod tests {
     fn get_test_origin() -> OriginInfo {
         OriginInfo {
             address: Address::zero(),
-            origin: Address::zero(),
+            original_sender: Address::zero(),
+            original_receiver: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
         }

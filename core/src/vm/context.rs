@@ -77,9 +77,7 @@ pub trait Context {
     fn storage_at(&self, key: &H256) -> Result<H256>;
 
     /// Stores a value for given key.
-    fn set_storage(
-        &mut self, key: H256, value: H256, owner: Address,
-    ) -> Result<()>;
+    fn set_storage(&mut self, key: H256, value: H256) -> Result<()>;
 
     /// Determine whether an account exists.
     fn exists(&self, address: &Address) -> Result<bool>;

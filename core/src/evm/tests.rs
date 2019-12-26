@@ -118,8 +118,9 @@ fn test_origin(factory: super::Factory) {
     let code = "32600055".from_hex().unwrap();
 
     let mut params = ActionParams::default();
-    params.address = address.clone();
-    params.origin = origin.clone();
+    params.address = address;
+    params.original_sender = origin;
+    params.original_receiver = address;
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut context = MockContext::new();

@@ -111,9 +111,7 @@ impl Context for MockContext {
         Ok(self.store.get(key).unwrap_or(&H256::zero()).clone())
     }
 
-    fn set_storage(
-        &mut self, key: H256, value: H256, _owner: Address,
-    ) -> Result<()> {
+    fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
         self.store.insert(key, value);
         Ok(())
     }
