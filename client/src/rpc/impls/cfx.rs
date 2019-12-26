@@ -438,7 +438,7 @@ impl RpcImpl {
                 Ok(public) => {
                     let mut signed_tx = SignedTransaction::new(public, tx);
                     if tx_data_len > 0 {
-                        signed_tx.transaction.unsigned.data =
+                        signed_tx.transaction.transaction.unsigned.data =
                             vec![0; tx_data_len];
                     }
                     transactions.push(Arc::new(signed_tx));
