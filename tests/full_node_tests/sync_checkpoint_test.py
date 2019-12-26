@@ -15,9 +15,9 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 2
         self.conf_parameters = {
+            "dev_snapshot_epoch_count": "25",
             "era_epoch_count": "50",
             "era_checkpoint_gap": "50",
-            "snapshot_epoch_count": "25",
         }
 
     def setup_network(self):

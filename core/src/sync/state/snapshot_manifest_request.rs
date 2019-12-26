@@ -40,7 +40,10 @@ impl Handleable for SnapshotManifestRequest {
             &ctx.manager.graph.data_man.storage_manager,
         ) {
             Ok(Some(m)) => m,
-            _ => RangedManifest::default(),
+            _ => {
+                // FIXME: Unable to offer. Define Response and reply.
+                return Ok(());
+            }
         };
 
         let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
