@@ -1,3 +1,5 @@
+import copy
+
 import eth_utils
 import rlp
 # import sender as sender
@@ -9,6 +11,7 @@ from .utils import TT256, mk_contract_address, zpad, int_to_32bytearray, \
     big_endian_to_int, ecsign, ecrecover_to_pub, normalize_key, str_to_bytes, \
     encode_hex, address
 
+
 class UnsignedTransaction(rlp.Serializable):
     fields = [
         ('nonce', big_endian_int),
@@ -18,6 +21,33 @@ class UnsignedTransaction(rlp.Serializable):
         ('value', big_endian_int),
         ('data', binary),
     ]
+
+    def __init__(self, nonce, gas_price, gas, action, value, data):
+        if gas_price >= TT256 or \
+                value >= TT256 or nonce >= TT256:
+            raise InvalidTransaction("Values way too high!")
+
+        super(UnsignedTransaction, self).__init__(
+            nonce=nonce,
+            gas_price=gas_price,
+            gas=gas,
+            value=value,
+            action=action,
+            data=data
+        )
+
+    def sign(self, key):
+        rawhash = utils.sha3(
+            rlp.encode(self, UnsignedTransaction))
+
+        key = normalize_key(key)
+
+        v, r, s = ecsign(rawhash, key)
+        v = v - 27
+        ret = Transaction(transaction=copy.deepcopy(self), v=v, r=r, s=s)
+        ret._sender = utils.privtoaddr(key)
+        return ret
+
 
 class Transaction(rlp.Serializable):
     """
@@ -47,25 +77,6 @@ class Transaction(rlp.Serializable):
 
     _sender = None
 
-    def __init__(self, nonce, gas_price, gas, action, value, data, v=0, r=0,
-                 s=0):
-
-        transaction = UnsignedTransaction(
-            nonce=nonce,
-            gas_price=gas_price,
-            gas=gas,
-            value=value,
-            action=action,
-            data=data
-        )
-
-        super(Transaction, self).__init__(
-            transaction, v, r, s
-        )
-        if self.transaction.gas_price >= TT256 or \
-                self.transaction.value >= TT256 or self.transaction.nonce >= TT256:
-            raise InvalidTransaction("Values way too high!")
-
     @property
     def sender(self):
         return self._sender
@@ -73,21 +84,6 @@ class Transaction(rlp.Serializable):
     @sender.setter
     def sender(self, value):
         self._sender = value
-
-    def sign(self, key):
-        rawhash = utils.sha3(
-            rlp.encode(self.transaction, UnsignedTransaction))
-
-        key = normalize_key(key)
-
-        v, r, s = ecsign(rawhash, key)
-        v = v - 27
-
-        ret = self.copy(
-            v=v, r=r, s=s
-        )
-        ret._sender = utils.privtoaddr(key)
-        return ret
 
     @property
     def hash(self):
