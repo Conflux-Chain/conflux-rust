@@ -16,6 +16,7 @@ use crate::{
 };
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, Encodable, Rlp};
+
 // generate `pub mod msgid`
 build_msgid! {
     STATUS = 0x00

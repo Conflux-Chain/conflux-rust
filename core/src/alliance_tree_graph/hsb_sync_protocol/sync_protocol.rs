@@ -13,7 +13,8 @@ use crate::{
         UpdateNodeOperation,
     },
     sync::{
-        message::Handleable, msg_sender::NULL, request_manager::RequestManager,
+        msg_sender::NULL,
+        request_manager::{RequestManager, RequestMessage},
         Error, ErrorKind,
     },
 };
@@ -23,7 +24,7 @@ use io::TimerToken;
 use keccak_hash::keccak;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
-//use serde::Deserialize;
+use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 
 #[derive(Default)]
@@ -91,6 +92,21 @@ pub struct Context<'a> {
     pub peer: PeerId,
     pub peer_hash: H256,
     pub manager: &'a HotStuffSynchronizationProtocol,
+}
+
+impl<'a> Context<'a> {
+    pub fn match_request(
+        &self, request_id: u64,
+    ) -> Result<RequestMessage, Error> {
+        self.manager
+            .request_manager
+            .match_request(self.io, self.peer, request_id)
+    }
+
+    pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {
+        response.send(self.io, self.peer)?;
+        Ok(())
+    }
 }
 
 pub struct HotStuffSynchronizationProtocol {
@@ -209,10 +225,8 @@ pub fn handle_serialized_message(
     Ok(true)
 }
 
-fn handle_message<T: Handleable + Message>(
-    _ctx: &Context, _msg: &[u8],
-) -> Result<(), Error> {
-    /*
+fn handle_message<'a, T>(ctx: &Context, msg: &'a [u8]) -> Result<(), Error>
+where T: Deserialize<'a> + Handleable + Message {
     let msg: T = lcs::from_bytes(msg)?;
 
     let msg_id = msg.msg_id();
@@ -223,9 +237,17 @@ fn handle_message<T: Handleable + Message>(
         "handle sync protocol message, peer = {:?}, id = {}, name = {}, request_id = {:?}",
         ctx.peer_hash, msg_id, msg_name, req_id,
     );
-    */
 
     // FIXME: add throttling.
+
+    if let Err(e) = msg.handle(ctx) {
+        info!(
+            "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
+            ctx.peer, msg_id, msg_name, req_id, e.0,
+        );
+
+        return Err(e);
+    }
 
     Ok(())
 }
@@ -318,4 +340,12 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
     }
 
     fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {}
+}
+
+pub trait Handleable {
+    fn handle(self, ctx: &Context) -> Result<(), Error>;
+}
+
+impl std::convert::From<lcs::Error> for Error {
+    fn from(_: lcs::Error) -> Self { ErrorKind::InvalidMessageFormat.into() }
 }

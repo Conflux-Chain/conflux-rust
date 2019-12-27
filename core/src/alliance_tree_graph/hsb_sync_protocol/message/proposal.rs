@@ -2,13 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::super::sync_protocol::{Context, Handleable};
 use crate::{
     hotstuff_types::proposal_msg::ProposalMsg,
-    primitives::TransactionWithSignature,
-    sync::{
-        message::{Context, Handleable},
-        Error,
-    },
+    primitives::TransactionWithSignature, sync::Error,
 };
 
 pub type ProposalMsgWithTransactions = ProposalMsg<TransactionWithSignature>;
