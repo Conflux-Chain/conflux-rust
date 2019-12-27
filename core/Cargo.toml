@@ -58,7 +58,7 @@ strfmt = "0.1"
 rustc-hex = "1.0"
 parity-bytes = "0.1"
 siphasher = "0.3"
-zip = "0.5.3"
+zip = "*"
 clap = "2"
 throttling = { path = "../util/throttling" }
 serde = "1.0"

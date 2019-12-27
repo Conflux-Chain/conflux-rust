@@ -73,3 +73,10 @@ path = "accounts/ethkey/cli/src/main.rs"
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
+
+#[replace]
+#"bzip2-sys:0.1.6"={git = "https://github.com/alexcrichton/bzip2-rs.git"}
+
+[patch.crates-io]
+bzip2-sys = {git = "https://github.com/alexcrichton/bzip2-rs.git"}
+
