@@ -357,7 +357,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     }
 
     fn finalize_full_sync_snapshot(
-        &self, _snapshot_epoch_id: &H256, _merkle_root: &H256,
+        &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
     ) -> Result<()> {
         unimplemented!()
     }

@@ -14,7 +14,7 @@ use crate::{
 };
 use cfx_types::H256;
 use fallible_iterator::FallibleIterator;
-use primitives::MerkleHash;
+use primitives::{EpochId, MerkleHash};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -135,24 +135,27 @@ impl RangedManifest {
     }
 
     pub fn load(
-        checkpoint: &H256, start_key: Option<Vec<u8>>,
+        snapshot_epoch_id: &EpochId, start_key: Option<Vec<u8>>,
         storage_manager: &StorageManager,
     ) -> Result<Option<RangedManifest>, Error>
     {
         debug!(
             "begin to load manifest, checkpoint = {:?}, start_key = {:?}",
-            checkpoint, start_key
+            snapshot_epoch_id, start_key
         );
 
         let snapshot_db_manager =
             storage_manager.get_storage_manager().get_snapshot_manager();
 
         let mut snapshot_db = match snapshot_db_manager
-            .get_snapshot_by_epoch_id(checkpoint)?
+            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
         {
             Some(db) => db,
             None => {
-                debug!("failed to load manifest, cannot find snapshot by checkpoint");
+                debug!(
+                    "failed to load manifest, cannot find snapshot {:?}",
+                    snapshot_epoch_id
+                );
                 return Ok(None);
             }
         };

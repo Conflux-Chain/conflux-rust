@@ -38,101 +38,9 @@ use txgen::TransactionGeneratorConfig;
 // override the configuration file if the parameter is given in both.
 build_config! {
     {
-        (port, (Option<u16>), Some(32323))
-        (udp_port, (Option<u16>), Some(32323))
-        (jsonrpc_local_tcp_port, (Option<u16>), None)
-        (jsonrpc_local_http_port, (Option<u16>), None)
-        (jsonrpc_tcp_port, (Option<u16>), None)
-        (jsonrpc_http_port, (Option<u16>), None)
-        (jsonrpc_cors, (Option<String>), None)
-        (jsonrpc_http_keep_alive, (bool), false)
-        (genesis_accounts, (Option<String>), None)
-        (genesis_secrets, (Option<String>), None)
-        (log_conf, (Option<String>), None)
-        (log_file, (Option<String>), None)
-        (network_id, (u64), 1)
-        (bootnodes, (Option<String>), None)
-        (netconf_dir, (Option<String>), Some("./net_config".to_string()))
-        (net_key, (Option<String>), None)
-        (public_address, (Option<String>), None)
-        (ledger_cache_size, (Option<usize>), Some(2048))
-        (enable_discovery, (bool), true)
-        (discovery_fast_refresh_timeout_ms, (u64), 10000)
-        (discovery_round_timeout_ms, (u64), 500)
-        (discovery_housekeeping_timeout_ms, (u64), 1000)
-        (node_table_timeout, (Option<u64>), Some(300))
-        (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
-        (db_cache_size, (Option<usize>), Some(128))
-        (db_compaction_profile, (Option<String>), None)
-        (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
-        (generate_tx, (bool), false)
-        (generate_tx_period_us, (Option<u64>), Some(100_000))
-        (storage_db_path, (String), "./storage_db".to_string())
-        (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
-        (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
-        (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
-        (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
-        (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
-        (send_tx_period_ms, (u64), 1300)
-        (check_request_period_ms, (u64), 1000)
-        (block_cache_gc_period_ms, (u64), 5000)
-        (headers_request_timeout_ms, (u64), 10_000)
-        (blocks_request_timeout_ms, (u64), 30_000)
-        (transaction_request_timeout_ms, (u64), 30_000)
-        (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
-        (max_inflight_request_count, (u64), 64)
-        (received_tx_index_maintain_timeout_ms, (u64), 300_000)
-        (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
-        (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
-        (max_trans_count_received_in_catch_up, (u64), 60_000)
-        (request_block_with_public, (bool), false)
-        (start_mining, (bool), false)
-        (initial_difficulty, (Option<u64>), None)
-        (tx_pool_size, (usize), 500_000)
-        (tx_pool_min_tx_gas_price, (u64), 1)
-        (mining_author, (Option<String>), None)
-        (use_stratum, (bool), false)
-        (stratum_port, (u16), 32525)
-        (stratum_secret, (Option<String>), None)
-        (egress_queue_capacity, (usize), 256)
-        (egress_min_throttle, (usize), 10)
-        (egress_max_throttle, (usize), 64)
-        (subnet_quota, (usize), 32)
-        (session_ip_limits, (String), "1,8,4,2".into())
-        (data_propagate_enabled, (bool), false)
-        (data_propagate_interval_ms, (u64), 1000)
-        (data_propagate_size, (usize), 1000)
-        (record_tx_address, (bool), true)
-        // TODO Set default to true when we have new tx pool implementation
-        (enable_optimistic_execution, (bool), true)
-        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
-        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
-        (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
-        (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
-        (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
-        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
-        // FIXME: break into two options: one for enable, one for path.
-        (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
-        (metrics_enabled, (bool), false)
-        (metrics_report_interval_ms, (u64), 3000)
-        (metrics_output_file, (Option<String>), None)
-        (metrics_influxdb_host, (Option<String>), None)
-        (metrics_influxdb_db, (String), "conflux".into())
-        (metrics_influxdb_username, (Option<String>), None)
-        (metrics_influxdb_password, (Option<String>), None)
-        (metrics_influxdb_node, (Option<String>), None)
-        (min_peers_propagation, (usize), 8)
-        (max_peers_propagation, (usize), 128)
-        (future_block_buffer_capacity, (usize), 32768)
-        (txgen_account_count, (usize), 10)
-        (max_download_state_peers, (usize), 8)
-        (block_db_type, (String), "rocksdb".to_string())
-        (rocksdb_disable_wal, (bool), false)
-        (enable_state_expose, (bool), false)
-        (get_logs_filter_max_limit, (Option<usize>), None)
-        (throttling_conf, (Option<String>), None)
-        (snapshot_epoch_count, (u64), SNAPSHOT_EPOCHS_CAPACITY)
-
+        // Configs are grouped by section. Within one section configs should
+        // be kept in alphabetical order for the sake of indexing and maintenance.
+        //
         // Some preset configurations.
         //
         // For both `test` and `dev` modes, we will
@@ -155,11 +63,121 @@ build_config! {
         //     * Skip catch-up mode even there is no peer
         //
         (mode, (Option<String>), None)
-
+        // Development related section.
+        (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
         // Only effective in `dev` mode and `start_mining` is false
         (dev_block_interval_ms, (u64), 250)
+        (enable_state_expose, (bool), false)
+        (log_conf, (Option<String>), None)
+        (log_file, (Option<String>), None)
+        (metrics_enabled, (bool), false)
+        (metrics_influxdb_host, (Option<String>), None)
+        (metrics_influxdb_db, (String), "conflux".into())
+        (metrics_influxdb_username, (Option<String>), None)
+        (metrics_influxdb_password, (Option<String>), None)
+        (metrics_influxdb_node, (Option<String>), None)
+        (metrics_output_file, (Option<String>), None)
+        (metrics_report_interval_ms, (u64), 3000)
+        (generate_tx, (bool), false)
+        (generate_tx_period_us, (Option<u64>), Some(100_000))
+        (txgen_account_count, (usize), 10)
+        (rocksdb_disable_wal, (bool), false)
+
+        // Genesis section.
+        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
+        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
+        (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
+        // Snapshot Epoch Count is a consensus parameter. This flag overrides
+        // the parameter, which only take effect in `dev` mode.
+        (dev_snapshot_epoch_count, (u64), SNAPSHOT_EPOCHS_CAPACITY)
+        (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
+        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
+        (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (genesis_accounts, (Option<String>), None)
+        (genesis_secrets, (Option<String>), None)
+        (initial_difficulty, (Option<u64>), None)
+        (network_id, (u64), 1)
+
+        // Mining section.
+        (mining_author, (Option<String>), None)
+        (start_mining, (bool), false)
+        (stratum_port, (u16), 32525)
+        (stratum_secret, (Option<String>), None)
+        (use_stratum, (bool), false)
+
+        // Network section.
+        (jsonrpc_local_tcp_port, (Option<u16>), None)
+        (jsonrpc_local_http_port, (Option<u16>), None)
+        (jsonrpc_tcp_port, (Option<u16>), None)
+        (jsonrpc_http_port, (Option<u16>), None)
+        (jsonrpc_cors, (Option<String>), None)
+        (jsonrpc_http_keep_alive, (bool), false)
+        (udp_port, (Option<u16>), Some(32323))
+        (port, (Option<u16>), Some(32323))
+
+        // Network parameters section.
+        (blocks_request_timeout_ms, (u64), 30_000)
+        (check_request_period_ms, (u64), 1000)
+        (data_propagate_enabled, (bool), false)
+        (data_propagate_interval_ms, (u64), 1000)
+        (data_propagate_size, (usize), 1000)
+        (egress_queue_capacity, (usize), 256)
+        (egress_min_throttle, (usize), 10)
+        (egress_max_throttle, (usize), 64)
+        (headers_request_timeout_ms, (u64), 10_000)
+        (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
+        (min_peers_propagation, (usize), 8)
+        (max_inflight_request_count, (u64), 64)
+        (max_peers_propagation, (usize), 128)
+        (received_tx_index_maintain_timeout_ms, (u64), 300_000)
+        (request_block_with_public, (bool), false)
+        (send_tx_period_ms, (u64), 1300)
+        (throttling_conf, (Option<String>), None)
+        (transaction_request_timeout_ms, (u64), 30_000)
+        (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
+
+        // Peer management section.
+        (bootnodes, (Option<String>), None)
+        (discovery_fast_refresh_timeout_ms, (u64), 10000)
+        (discovery_housekeeping_timeout_ms, (u64), 1000)
+        (discovery_round_timeout_ms, (u64), 500)
+        (enable_discovery, (bool), true)
+        (netconf_dir, (Option<String>), Some("./net_config".to_string()))
+        (net_key, (Option<String>), None)
+        (node_table_timeout, (Option<u64>), Some(300))
+        (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
+        (public_address, (Option<String>), None)
+        (session_ip_limits, (String), "1,8,4,2".into())
+        (subnet_quota, (usize), 32)
+
+        // Transaction cache/transaction pool section.
+        (record_tx_address, (bool), true)
+        (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
+        (tx_pool_size, (usize), 500_000)
+        (tx_pool_min_tx_gas_price, (u64), 1)
+
+        // Storage Section.
+        (storage_db_path, (String), "./storage_db".to_string())
+        (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
+        (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
+        (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
+        (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
+        (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
+
+        // General/Unclassified section.
+        (block_cache_gc_period_ms, (u64), 5000)
+        (block_db_type, (String), "rocksdb".to_string())
+        (db_cache_size, (Option<usize>), Some(128))
+        (db_compaction_profile, (Option<String>), None)
+        (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
+        (enable_optimistic_execution, (bool), true)
+        (future_block_buffer_capacity, (usize), 32768)
+        (get_logs_filter_max_limit, (Option<usize>), None)
         (is_consortium, (bool), false)
+        (ledger_cache_size, (Option<usize>), Some(2048))
+        (max_trans_count_received_in_catch_up, (u64), 60_000)
+        (max_download_state_peers, (usize), 8)
     }
     {
         (
@@ -466,7 +484,11 @@ impl Configuration {
 
     pub fn snapshot_config(&self) -> SnapshotConfiguration {
         SnapshotConfiguration {
-            snapshot_epoch_count: self.raw_conf.snapshot_epoch_count,
+            snapshot_epoch_count: if self.is_test_mode() {
+                self.raw_conf.dev_snapshot_epoch_count
+            } else {
+                SNAPSHOT_EPOCHS_CAPACITY
+            },
         }
     }
 
