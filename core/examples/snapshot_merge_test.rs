@@ -8,11 +8,11 @@ use cfxcore::{
     statedb::StateDb,
     storage::{
         state::StateTrait,
-        state_manager::{
-            StateManager, StateManagerTrait, StorageConfiguration,
+        state_manager::{StateManager, StateManagerTrait},
+        storage_db::{
+            KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
         },
-        storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        DeltaMptIterator, StateIndex,
+        DeltaMptIterator, StateIndex, StateRootAuxInfo, StorageConfiguration,
     },
     sync::Error,
 };
@@ -24,11 +24,6 @@ use log4rs::{
 };
 use primitives::{
     Account, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
-};
-
-use cfxcore::storage::{
-    storage_db::{KeyValueDbTraitRead, SnapshotConfiguration},
-    StateRootAuxInfo,
 };
 use std::{
     cmp::min,
@@ -98,9 +93,7 @@ fn main() -> Result<(), Error> {
         &aux_info1,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = storage_manager
-        .get_snapshot_configuration()
-        .snapshot_epoch_count as u64;
+    height = storage_manager.get_snapshot_epoch_count() as u64;
     let delta_mpt = storage_manager
         .get_delta_mpt(&NULL_EPOCH)
         .expect("state exists");
@@ -151,10 +144,7 @@ fn main() -> Result<(), Error> {
         &aux_info2,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = 2 as u64
-        * storage_manager
-            .get_snapshot_configuration()
-            .snapshot_epoch_count as u64;
+    height = 2 as u64 * storage_manager.get_snapshot_epoch_count() as u64;
     let delta_mpt = storage_manager
         .get_delta_mpt(&snapshot1_epoch)
         .expect("state exists");
@@ -305,13 +295,9 @@ fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
     );
     let db = db::open_database(db_dir, &db_config)?;
 
-    Ok(Arc::new(StateManager::new(
-        db,
-        StorageConfiguration::default(),
-        SnapshotConfiguration {
-            snapshot_epoch_count: 10000000,
-        },
-    )))
+    let mut storage_conf = StorageConfiguration::default();
+    storage_conf.consensus_param.snapshot_epoch_count = 10000000;
+    Ok(Arc::new(StateManager::new(db, storage_conf)))
 }
 
 fn initialize_genesis(

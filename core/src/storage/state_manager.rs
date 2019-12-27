@@ -8,15 +8,6 @@ pub use super::impls::state_manager::StateManager;
 
 pub type SharedStateManager = Arc<StateManager>;
 
-// TODO: Set the parameter to a normal value after we have tested all snapshot
-// related implementations.
-// FIXME: u32.
-// The current delta switching rule is simply split by height at
-// multiple of SNAPSHOT_EPOCHS_CAPACITY.
-//
-// Only if we see problem dealing with attacks, consider rules like the
-// size of delta trie.
-
 pub struct StateReadonlyIndex {
     pub snapshot_epoch_id: EpochId,
     pub intermediate_epoch_id: EpochId,
@@ -142,32 +133,7 @@ impl<'a> StateIndex<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct StorageConfiguration {
-    pub cache_start_size: u32,
-    pub cache_size: u32,
-    pub idle_size: u32,
-    pub node_map_size: u32,
-    pub recent_lfu_factor: f64,
-}
-
-impl Default for StorageConfiguration {
-    fn default() -> Self {
-        StorageConfiguration {
-            cache_start_size: defaults::DEFAULT_CACHE_START_SIZE,
-            cache_size: defaults::DEFAULT_CACHE_SIZE,
-            idle_size: defaults::DEFAULT_IDLE_SIZE,
-            node_map_size: defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
-            recent_lfu_factor: defaults::DEFAULT_RECENT_LFU_FACTOR,
-        }
-    }
-}
-
-use crate::storage::{
-    impls::{defaults, errors::*},
-    state::State,
-    StateRootAuxInfo,
-};
+use crate::storage::{impls::errors::*, state::State, StateRootAuxInfo};
 use primitives::{
     DeltaMptKeyPadding, EpochId, GENESIS_DELTA_MPT_KEY_PADDING,
     MERKLE_NULL_NODE,

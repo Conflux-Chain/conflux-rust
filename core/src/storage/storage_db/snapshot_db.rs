@@ -48,10 +48,6 @@ impl SnapshotInfo {
     }
 }
 
-pub struct SnapshotConfiguration {
-    pub snapshot_epoch_count: u32,
-}
-
 pub trait OpenSnapshotMptTrait<'db> {
     type SnapshotMptReadType: 'db + SnapshotMptTraitReadOnly;
     type SnapshotMptWriteType: 'db + SnapshotMptTraitSingleWriter;

@@ -8,10 +8,7 @@ use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
-    storage::{
-        self, state_manager::StorageConfiguration,
-        storage_db::SnapshotConfiguration,
-    },
+    storage::{self, ConsensusParam, StorageConfiguration},
     sync::{ProtocolConfiguration, SyncGraphConfig},
     transaction_pool::TxPoolConfig,
 };
@@ -379,6 +376,13 @@ impl Configuration {
             idle_size: self.raw_conf.storage_idle_size,
             node_map_size: self.raw_conf.storage_node_map_size,
             recent_lfu_factor: self.raw_conf.storage_recent_lfu_factor,
+            consensus_param: ConsensusParam {
+                snapshot_epoch_count: if self.is_test_mode() {
+                    self.raw_conf.dev_snapshot_epoch_count
+                } else {
+                    SNAPSHOT_EPOCHS_CAPACITY
+                },
+            },
         }
     }
 
@@ -480,16 +484,6 @@ impl Configuration {
         config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
 
         config
-    }
-
-    pub fn snapshot_config(&self) -> SnapshotConfiguration {
-        SnapshotConfiguration {
-            snapshot_epoch_count: if self.is_test_mode() {
-                self.raw_conf.dev_snapshot_epoch_count
-            } else {
-                SNAPSHOT_EPOCHS_CAPACITY
-            },
-        }
     }
 
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {

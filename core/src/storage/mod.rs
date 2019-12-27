@@ -18,6 +18,44 @@ pub mod tests;
 
 mod impls;
 
+/// Consensus parameter is only configurable in test mode.
+#[derive(Debug, Clone)]
+pub struct ConsensusParam {
+    // The current delta switching rule is simply split by height at
+    // multiple of SNAPSHOT_EPOCHS_CAPACITY.
+    //
+    // Only if we see problem dealing with attacks, consider rules like the
+    // size of delta trie.
+    pub snapshot_epoch_count: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct StorageConfiguration {
+    // FIXME: prefix with delta.
+    pub cache_start_size: u32,
+    pub cache_size: u32,
+    pub idle_size: u32,
+    pub node_map_size: u32,
+    pub recent_lfu_factor: f64,
+    // FIXME: add paths here.
+    pub consensus_param: ConsensusParam,
+}
+
+impl Default for StorageConfiguration {
+    fn default() -> Self {
+        StorageConfiguration {
+            cache_start_size: defaults::DEFAULT_CACHE_START_SIZE,
+            cache_size: defaults::DEFAULT_CACHE_SIZE,
+            idle_size: defaults::DEFAULT_IDLE_SIZE,
+            node_map_size: defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
+            recent_lfu_factor: defaults::DEFAULT_RECENT_LFU_FACTOR,
+            consensus_param: ConsensusParam {
+                snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
+            },
+        }
+    }
+}
+
 pub use self::{
     impls::{
         defaults,
@@ -44,3 +82,4 @@ pub use self::{
 
 #[cfg(test)]
 pub use self::tests::new_state_manager_for_testing as new_storage_manager_for_testing;
+use crate::parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY;

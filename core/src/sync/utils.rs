@@ -4,15 +4,11 @@ use crate::{
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
     parameters::{
-        consensus::{ERA_DEFAULT_CHECKPOINT_GAP, SNAPSHOT_EPOCHS_CAPACITY},
-        WORKER_COMPUTATION_PARALLELISM,
+        consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
     },
     pow::ProofOfWorkConfig,
     statistics::Statistics,
-    storage::{
-        state_manager::StorageConfiguration, storage_db::SnapshotConfiguration,
-        StorageManager,
-    },
+    storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_BLOCK_GAS_LIMIT},
     verification::VerificationConfig,
@@ -102,9 +98,6 @@ pub fn initialize_synchronization_graph(
     let storage_manager = Arc::new(StorageManager::new(
         ledger_db.clone(),
         StorageConfiguration::default(),
-        SnapshotConfiguration {
-            snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
-        },
     ));
 
     let mut genesis_accounts = HashMap::new();

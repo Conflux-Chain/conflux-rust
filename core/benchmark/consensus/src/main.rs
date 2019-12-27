@@ -13,7 +13,7 @@ use cfxcore::{
     db::NUM_COLUMNS,
     pow::ProofOfWorkConfig,
     statistics::Statistics,
-    storage::{state_manager::StorageConfiguration, StorageManager},
+    storage::{StorageConfiguration, StorageManager},
     sync::{
         request_manager::tx_handler::ReceivedTransactionContainer,
         utils::{
