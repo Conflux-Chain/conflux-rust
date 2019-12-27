@@ -286,14 +286,11 @@ impl Deref for TransactionWithSignature {
 
 impl Decodable for TransactionWithSignature {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
-        if d.item_count()? != 1 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
-
+        let transaction = d.as_val()?;
         Ok(TransactionWithSignature {
-            transaction: d.val_at(0)?,
+            transaction,
             hash,
             rlp_size,
         })
@@ -301,10 +298,7 @@ impl Decodable for TransactionWithSignature {
 }
 
 impl Encodable for TransactionWithSignature {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(1);
-        s.append(&self.transaction);
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { s.append(&self.transaction); }
 }
 
 impl TransactionWithSignature {
