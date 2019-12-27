@@ -1513,7 +1513,9 @@ impl ConsensusNewBlockHandler {
         }
         let storage_manager =
             self.data_man.storage_manager.get_storage_manager();
-        let parent_snapshot_height = if state_boundary_height == 0 {
+        let parent_snapshot_height = if state_boundary_height
+            <= storage_manager.get_snapshot_epoch_count() as u64
+        {
             0
         } else {
             state_boundary_height
