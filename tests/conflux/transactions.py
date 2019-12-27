@@ -76,7 +76,7 @@ class Transaction(rlp.Serializable):
 
     def sign(self, key):
         rawhash = utils.sha3(
-            rlp.encode(unsigned_tx_from_tx(self), UnsignedTransaction))
+            rlp.encode(self.transaction, UnsignedTransaction))
 
         key = normalize_key(key)
 
@@ -118,13 +118,3 @@ class Transaction(rlp.Serializable):
 
     def __repr__(self):
         return '<Transaction(%s)>' % encode_hex(self.hash)[:4]
-
-def unsigned_tx_from_tx(tx):
-    return UnsignedTransaction(
-        nonce=tx.nonce,
-        gas_price=tx.gas_price,
-        gas=tx.gas,
-        value=tx.value,
-        action=tx.action,
-        data=tx.data
-    )
