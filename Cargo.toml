@@ -90,3 +90,4 @@ path = "accounts/ethkey/cli/src/main.rs"
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
+fuzzing = ["consensus-types/fuzzing", "libra-crypto/fuzzing", "libra-types/fuzzing"]

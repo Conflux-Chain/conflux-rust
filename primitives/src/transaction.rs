@@ -288,6 +288,10 @@ impl Decodable for TransactionWithSignature {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
+        // Check item count of TransactionWithSignatureSerializePart
+        if d.item_count()? != 4 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
         let transaction = d.as_val()?;
         Ok(TransactionWithSignature {
             transaction,
