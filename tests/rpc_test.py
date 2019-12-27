@@ -64,7 +64,6 @@ class RpcTest(ConfluxTestFramework):
         self.stop_nodes()
         self.add_nodes(1)
         node_index = len(self.nodes) - 1
-        self.log.info("Start node %d for testing", node_index)
         initialize_datadir(self.options.tmpdir, node_index, self.conf_parameters)
         self.start_node(node_index)
         obj = class_type(self.nodes[node_index])

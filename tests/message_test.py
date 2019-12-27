@@ -29,7 +29,6 @@ class MessageTest(ConfluxTestFramework):
         blocks = [default_node.genesis.block_header.hash]
         new_block = create_block(blocks[0], 1)
         new_transaction = create_transaction(gas_price = 1000)
-        print(new_transaction.nonce)
 
         # This message is not used in current Conflux sync protocol
         # self.log.info("Send GetBlockHashes message")

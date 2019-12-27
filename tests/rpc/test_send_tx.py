@@ -19,7 +19,6 @@ class TestSendTx(RpcClient):
     def test_encode_invalid_rlp(self):
         tx = self.new_tx()
         encoded = eth_utils.encode_hex(rlp.encode(tx))
-        print(encoded)
 
         assert_raises_rpc_error(None, None, self.send_raw_tx, encoded + "12") # 1 more byte
         assert_raises_rpc_error(None, None, self.send_raw_tx, encoded[0:-2])  # 1 less byte
