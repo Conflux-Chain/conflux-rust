@@ -440,9 +440,9 @@ class ConfluxTracing(ConfluxTestFramework):
             "generate_tx": "true",
             "generate_tx_period_us": "100000",
             "enable_state_expose": "true",
-            "era_epoch_count": 50,
-            "snapshot_epoch_count": 25,
-            "era_checkpoint_gap": 50
+            "era_epoch_count": 100,
+            "snapshot_epoch_count": 50,
+            "era_checkpoint_gap": 100
         }
 
     def setup_nodes(self):

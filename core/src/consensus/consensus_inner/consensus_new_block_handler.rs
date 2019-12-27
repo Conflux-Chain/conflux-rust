@@ -1513,14 +1513,18 @@ impl ConsensusNewBlockHandler {
         }
         let storage_manager =
             self.data_man.storage_manager.get_storage_manager();
+        let parent_snapshot_height = if state_boundary_height == 0 {
+            0
+        } else {
+            state_boundary_height - storage_manager.get_snapshot_epoch_count()
+        };
         // FIXME Most are fake because not used now
         // And it's also not correct to unconditionally set delta_mpt and
         // intermediate_mpt as Some
         let snapshot_info = SnapshotInfo {
             serve_one_step_sync: false,
             merkle_root: Default::default(),
-            parent_snapshot_height: state_boundary_height
-                - storage_manager.get_snapshot_epoch_count(),
+            parent_snapshot_height,
             height: state_boundary_height,
             parent_snapshot_epoch_id: Default::default(),
             pivot_chain_parts: vec![start_hash],
