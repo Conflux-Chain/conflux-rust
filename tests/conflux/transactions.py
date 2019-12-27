@@ -114,3 +114,6 @@ class Transaction(rlp.Serializable):
 
     def __repr__(self):
         return '<Transaction(%s)>' % encode_hex(self.hash)[:4]
+
+    def __getattr__(self, item):
+        return getattr(self.transaction, item)
