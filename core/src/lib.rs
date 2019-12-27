@@ -35,6 +35,8 @@ extern crate num;
 extern crate parity_crypto;
 extern crate serde_derive;
 
+extern crate consensus_types as hotstuff_types;
+extern crate libra_canonical_serialization as lcs;
 #[cfg(test)]
 extern crate rustc_hex;
 extern crate unexpected;

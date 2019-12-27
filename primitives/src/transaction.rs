@@ -271,8 +271,10 @@ pub struct TransactionWithSignature {
     /// Serialize part.
     pub transaction: TransactionWithSignatureSerializePart,
     /// Hash of the transaction
+    #[serde(skip)]
     pub hash: H256,
     /// The transaction size when serialized in rlp
+    #[serde(skip)]
     pub rlp_size: Option<usize>,
 }
 

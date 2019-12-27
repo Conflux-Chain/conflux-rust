@@ -4,16 +4,26 @@
 
 use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 use crate::{
+    alliance_tree_graph::hsb_sync_protocol::message::{
+        msgid, proposal::ProposalMsgWithTransactions,
+    },
+    message::{Message, MsgId},
     network::{
         NetworkContext, NetworkProtocolHandler, NetworkService, PeerId,
         UpdateNodeOperation,
     },
-    sync::request_manager::RequestManager,
+    sync::{
+        message::Handleable, msg_sender::NULL, request_manager::RequestManager,
+        Error, ErrorKind,
+    },
 };
+
 use cfx_types::H256;
 use io::TimerToken;
 use keccak_hash::keccak;
+use network::node_table::NodeId;
 use parking_lot::RwLock;
+//use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 
 #[derive(Default)]
@@ -76,6 +86,13 @@ where
     }
 }
 
+pub struct Context<'a> {
+    pub io: &'a dyn NetworkContext,
+    pub peer: PeerId,
+    pub peer_hash: H256,
+    pub manager: &'a HotStuffSynchronizationProtocol,
+}
+
 pub struct HotStuffSynchronizationProtocol {
     pub own_node_hash: H256,
     pub peers: Arc<Peers<PeerState, H256>>,
@@ -135,12 +152,104 @@ impl HotStuffSynchronizationProtocol {
             (true /* out-bound */, true /* out-bound */) => false,
         }
     }
+
+    fn handle_error(
+        &self, _io: &dyn NetworkContext, _peer: PeerId, _msg_id: MsgId,
+        _e: Error,
+    )
+    {
+
+    }
+
+    fn dispatch_message(
+        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, msg: &[u8],
+    ) -> Result<(), Error> {
+        trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
+        let peer_hash = if peer != NULL {
+            let node_id = io.get_peer_node_id(peer);
+            if node_id == NodeId::default() {
+                return Err(ErrorKind::UnknownPeer.into());
+            }
+            keccak(&node_id)
+        } else {
+            self.own_node_hash.clone()
+        };
+
+        let ctx = Context {
+            peer_hash,
+            peer,
+            io,
+            manager: self,
+        };
+
+        if !handle_serialized_message(msg_id, &ctx, msg)? {
+            warn!("Unknown message: peer={:?} msgid={:?}", peer, msg_id);
+            let reason =
+                format!("unknown sync protocol message id {:?}", msg_id);
+            io.disconnect_peer(
+                peer,
+                Some(UpdateNodeOperation::Remove),
+                reason.as_str(),
+            );
+        }
+
+        Ok(())
+    }
+}
+
+pub fn handle_serialized_message(
+    id: MsgId, ctx: &Context, msg: &[u8],
+) -> Result<bool, Error> {
+    match id {
+        msgid::PROPOSAL => {
+            handle_message::<ProposalMsgWithTransactions>(ctx, msg)?
+        }
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn handle_message<T: Handleable + Message>(
+    _ctx: &Context, _msg: &[u8],
+) -> Result<(), Error> {
+    /*
+    let msg: T = lcs::from_bytes(msg)?;
+
+    let msg_id = msg.msg_id();
+    let msg_name = msg.msg_name();
+    let req_id = msg.get_request_id();
+
+    trace!(
+        "handle sync protocol message, peer = {:?}, id = {}, name = {}, request_id = {:?}",
+        ctx.peer_hash, msg_id, msg_name, req_id,
+    );
+    */
+
+    // FIXME: add throttling.
+
+    Ok(())
 }
 
 impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
     fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, _io: &dyn NetworkContext, _peer: PeerId, _raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
+        let len = raw.len();
+        if len < 2 {
+            // Empty message.
+            return self.handle_error(
+                io,
+                peer,
+                msgid::INVALID,
+                ErrorKind::InvalidMessageFormat.into(),
+            );
+        }
+
+        let msg_id = raw[len - 1];
+        debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
+
+        self.dispatch_message(io, peer, msg_id.into(), raw)
+            .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
 
     fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
