@@ -18,7 +18,7 @@ function check_build {
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run`
+    result=`cargo build --release && cargo test --release --all --no-run --features fuzzing && cargo bench --all --no-run`
     local exit_code=$?
 
     popd > /dev/null
@@ -57,7 +57,7 @@ function check_unit_tests {
 
     pushd $ROOT_DIR > /dev/null
     local result
-    result=`cargo test --release --all`
+    result=`cargo test --release --all --features fuzzing`
     local exit_code=$?
     popd > /dev/null
 
