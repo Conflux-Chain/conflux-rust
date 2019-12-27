@@ -219,7 +219,7 @@ class RpcClient:
 
         action = eth_utils.decode_hex(receiver)
         data = eth_utils.decode_hex(data_hex)
-        tx = Transaction(nonce, gas_price, gas, action, value, data)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data)
 
         return tx.sign(priv_key)
 

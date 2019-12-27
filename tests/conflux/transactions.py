@@ -3,6 +3,7 @@ import copy
 import eth_utils
 import rlp
 # import sender as sender
+from eth_utils import to_dict
 from rlp.sedes import big_endian_int, binary
 
 from .exceptions import InvalidTransaction
@@ -114,3 +115,6 @@ class Transaction(rlp.Serializable):
 
     def __repr__(self):
         return '<Transaction(%s)>' % encode_hex(self.hash)[:4]
+
+    def __getattr__(self, item):
+        return getattr(self.transaction, item)

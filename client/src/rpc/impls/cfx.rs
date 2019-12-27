@@ -169,6 +169,7 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
 
         let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
+            debug!("Invalid tx format: err={:?}", err);
             RpcError::invalid_params(format!("Error: {:?}", err))
         })?;
 
