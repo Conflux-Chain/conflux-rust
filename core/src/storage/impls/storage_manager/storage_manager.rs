@@ -30,7 +30,6 @@ pub struct StorageManager {
     last_confirmed_snapshot_id: Mutex<Option<EpochId>>,
 
     storage_conf: StorageConfiguration,
-    snapshot_conf: SnapshotConfiguration,
 }
 
 // FIXME: the thread variable is used. But it's subject to refinements for sure.
@@ -56,7 +55,6 @@ impl StorageManager {
         delta_db_manager: DeltaDbManager, /* , node type, full node or
                                            * archive node */
         storage_conf: StorageConfiguration,
-        snapshot_conf: SnapshotConfiguration,
     ) -> Self
     {
         let storage_manager = Self {
@@ -80,7 +78,6 @@ impl StorageManager {
             snapshot_info_map_by_epoch: Default::default(),
             last_confirmed_snapshot_id: Default::default(),
             storage_conf,
-            snapshot_conf,
         };
         storage_manager
             .register_new_snapshot(SnapshotInfo::genesis_snapshot_info(), true);
@@ -98,8 +95,8 @@ impl StorageManager {
         &*self.snapshot_manager
     }
 
-    pub fn get_snapshot_configuration(&self) -> &SnapshotConfiguration {
-        &self.snapshot_conf
+    pub fn get_snapshot_epoch_count(&self) -> u32 {
+        self.storage_conf.consensus_param.snapshot_epoch_count
     }
 }
 
@@ -283,13 +280,14 @@ impl StorageManager {
         {
             let mut pivot_chain_parts = vec![
                 Default::default();
-                this.snapshot_conf.snapshot_epoch_count
+                this.storage_conf.consensus_param.snapshot_epoch_count
                     as usize
             ];
             // Calculate pivot chain parts.
             let mut epoch_id = snapshot_epoch_id.clone();
             let mut delta_height =
-                this.snapshot_conf.snapshot_epoch_count as usize - 1;
+                this.storage_conf.consensus_param.snapshot_epoch_count as usize
+                    - 1;
             pivot_chain_parts[delta_height] = epoch_id.clone();
             // TODO Handle the special cases better
             let parent_snapshot_epoch_id = if maybe_delta_db.is_none() {
@@ -310,7 +308,10 @@ impl StorageManager {
                     pivot_chain_parts[delta_height] = epoch_id.clone();
                     trace!("check_make_register_snapshot_background: parent epoch_id={:?}", epoch_id);
                 }
-                if height == this.snapshot_conf.snapshot_epoch_count {
+                if height
+                    == this.storage_conf.consensus_param.snapshot_epoch_count
+                        as u64
+                {
                     // We need the case height == SNAPSHOT_EPOCHS_CAPACITY
                     // because the snapshot_info for genesis is
                     // stored in NULL_EPOCH. If we do not use the special case,
@@ -325,7 +326,8 @@ impl StorageManager {
                 serve_one_step_sync: true,
                 height: height as u64,
                 parent_snapshot_height: height
-                    - this.snapshot_conf.snapshot_epoch_count,
+                    - this.storage_conf.consensus_param.snapshot_epoch_count
+                        as u64,
                 // This is unknown for now, and we don't care.
                 merkle_root: Default::default(),
                 parent_snapshot_epoch_id,
@@ -462,17 +464,20 @@ impl StorageManager {
         let mut in_progress_snapshot_to_cancel = vec![];
 
         let confirmed_intermediate_height = confirmed_height
-            - self.snapshot_conf.height_to_delta_height(confirmed_height)
-                as u64;
+            - StateIndex::height_to_delta_height(
+                confirmed_height,
+                self.get_snapshot_epoch_count(),
+            ) as u64;
 
         {
             let current_snapshots = self.current_snapshots.read();
 
             let confirmed_snapshot_height = if confirmed_intermediate_height
-                > self.snapshot_conf.snapshot_epoch_count
+                > self.storage_conf.consensus_param.snapshot_epoch_count as u64
             {
                 confirmed_intermediate_height
-                    - self.snapshot_conf.snapshot_epoch_count as u64
+                    - self.storage_conf.consensus_param.snapshot_epoch_count
+                        as u64
             } else {
                 0
             };
@@ -669,14 +674,6 @@ impl StorageManager {
         //            .unwrap()
         //            .log_usage();
     }
-
-    pub fn get_snapshot_epoch_count(&self) -> u64 {
-        self.snapshot_conf.snapshot_epoch_count
-    }
-
-    pub fn height_to_delta_height(&self, height: u64) -> u32 {
-        self.snapshot_conf.height_to_delta_height(height)
-    }
 }
 
 #[derive(Clone)]
@@ -689,7 +686,6 @@ impl DeltaMptIterator {
     pub fn iterate<'a, DeltaMptDumper: KVInserter<(Vec<u8>, Box<[u8]>)>>(
         &self, dumper: &mut DeltaMptDumper,
     ) -> Result<()> {
-        debug!("DeltaMptIterator: root_node={:?}", self.maybe_root_node);
         match &self.maybe_root_node {
             None => {}
             Some(root_node) => {
@@ -736,6 +732,7 @@ use super::{
     },
     *,
 };
+use crate::storage::StorageConfiguration;
 use parking_lot::{Mutex, RwLock};
 use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{

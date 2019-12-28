@@ -8,15 +8,6 @@ pub use super::impls::state_manager::StateManager;
 
 pub type SharedStateManager = Arc<StateManager>;
 
-// TODO: Set the parameter to a normal value after we have tested all snapshot
-// related implementations.
-// FIXME: u32.
-// The current delta switching rule is simply split by height at
-// multiple of SNAPSHOT_EPOCHS_CAPACITY.
-//
-// Only if we see problem dealing with attacks, consider rules like the
-// size of delta trie.
-
 pub struct StateReadonlyIndex {
     pub snapshot_epoch_id: EpochId,
     pub intermediate_epoch_id: EpochId,
@@ -80,6 +71,16 @@ pub trait StateManagerTrait {
 }
 
 impl<'a> StateIndex<'a> {
+    pub fn height_to_delta_height(
+        height: u64, snapshot_epoch_count: u32,
+    ) -> u32 {
+        if height == 0 {
+            0
+        } else {
+            ((height - 1) % (snapshot_epoch_count as u64)) as u32 + 1
+        }
+    }
+
     pub fn new_for_test_only_delta_mpt(epoch_id: &'a EpochId) -> Self {
         Self {
             snapshot_epoch_id: &MERKLE_NULL_NODE,
@@ -96,7 +97,7 @@ impl<'a> StateIndex<'a> {
     /// The state root and height information should be provided from consensus.
     pub fn new_for_next_epoch(
         base_epoch_id: &'a EpochId, aux_info: &'a StateRootAuxInfo,
-        height: u64, delta_height: u32,
+        height: u64, snapshot_epoch_count: u32,
     ) -> Self
     {
         Self {
@@ -107,7 +108,10 @@ impl<'a> StateIndex<'a> {
                 .as_ref(),
             epoch_id: base_epoch_id,
             delta_mpt_key_padding: &aux_info.delta_mpt_key_padding,
-            maybe_delta_trie_height: Some(delta_height),
+            maybe_delta_trie_height: Some(Self::height_to_delta_height(
+                height,
+                snapshot_epoch_count,
+            )),
             maybe_height: Some(height),
         }
     }
@@ -129,32 +133,7 @@ impl<'a> StateIndex<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct StorageConfiguration {
-    pub cache_start_size: u32,
-    pub cache_size: u32,
-    pub idle_size: u32,
-    pub node_map_size: u32,
-    pub recent_lfu_factor: f64,
-}
-
-impl Default for StorageConfiguration {
-    fn default() -> Self {
-        StorageConfiguration {
-            cache_start_size: defaults::DEFAULT_CACHE_START_SIZE,
-            cache_size: defaults::DEFAULT_CACHE_SIZE,
-            idle_size: defaults::DEFAULT_IDLE_SIZE,
-            node_map_size: defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
-            recent_lfu_factor: defaults::DEFAULT_RECENT_LFU_FACTOR,
-        }
-    }
-}
-
-use crate::storage::{
-    impls::{defaults, errors::*},
-    state::State,
-    StateRootAuxInfo,
-};
+use crate::storage::{impls::errors::*, state::State, StateRootAuxInfo};
 use primitives::{
     DeltaMptKeyPadding, EpochId, GENESIS_DELTA_MPT_KEY_PADDING,
     MERKLE_NULL_NODE,

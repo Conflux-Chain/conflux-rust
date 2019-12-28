@@ -284,6 +284,7 @@ impl CompressedPathRaw {
             }
             slice[x_slice_len..].copy_from_slice(y_slice);
         }
+
         Self {
             path_size: size as u16,
             path,
