@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use consensus_types::block::Block;
-use consensus_types::executed_block::ExecutedBlock;
-use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
-use libra_types::crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof};
-use std::sync::Arc;
+//use consensus_types::block::Block;
+//use consensus_types::executed_block::ExecutedBlock;
+//use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
+//use libra_types::crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof};
+//use std::sync::Arc;
 
 /// Retrieves and updates the status of transactions on demand (e.g., via talking with Mempool)
 #[async_trait::async_trait]
@@ -27,7 +27,7 @@ pub trait TxnManager: Send + Sync + Clone + 'static {
     async fn commit_txns(
         &mut self,
         txns: &Self::Payload,
-        compute_result: &StateComputeResult,
+        //compute_result: &StateComputeResult,
         // Monotonic timestamp_usecs of committed blocks is used to GC expired transactions.
         timestamp_usecs: u64,
     ) -> Result<()>;
@@ -36,6 +36,7 @@ pub trait TxnManager: Send + Sync + Clone + 'static {
 /// While Consensus is managing proposed blocks, `StateComputer` is managing the results of the
 /// (speculative) execution of their payload.
 /// StateComputer is using proposed block ids for identifying the transactions.
+/*
 #[async_trait::async_trait]
 pub trait StateComputer: Send + Sync {
     type Payload;
@@ -58,7 +59,7 @@ pub trait StateComputer: Send + Sync {
         &self,
         blocks: Vec<&ExecutedBlock<Self::Payload>>,
         finality_proof: LedgerInfoWithSignatures,
-        synced_trees: &ExecutedTrees,
+        //synced_trees: &ExecutedTrees,
     ) -> Result<()>;
 
     /// Best effort state synchronization to the given target LedgerInfo.
@@ -74,15 +75,16 @@ pub trait StateComputer: Send + Sync {
         end_epoch: u64,
     ) -> Result<ValidatorChangeProof>;
 }
+*/
 
 pub trait StateMachineReplication {
     type Payload;
     /// The function is synchronous: it returns when the state is initialized / recovered from
     /// persisted storage and all the threads have been started.
-    fn start<TM: TxnManager<Payload = Self::Payload>>(
+    fn start/*<TM: TxnManager<Payload = Self::Payload>>*/(
         &mut self,
-        txn_manager: TM,
-        state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
+        //txn_manager: TM,
+        //state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
     ) -> Result<()>;
 
     /// Stop is synchronous: returns when all the threads are shutdown and the state is persisted.

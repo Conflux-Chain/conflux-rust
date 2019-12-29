@@ -14,7 +14,7 @@ use consensus_types::{
 use libra_crypto::HashValue;
 use libra_logger::prelude::*;
 use libra_types::crypto_proxies::ValidatorVerifier;
-use mirai_annotations::{checked_verify_eq, precondition};
+use mirai_annotations::{/*checked_verify_eq,*/ precondition};
 use serde::Serialize;
 use std::{
     collections::{vec_deque::VecDeque, HashMap, HashSet},
@@ -212,7 +212,7 @@ where
                        existing_block,
                        block_id,
                        block);
-            checked_verify_eq!(existing_block.compute_result(), block.compute_result());
+            //checked_verify_eq!(existing_block.compute_result(), block.compute_result());
             Ok(existing_block)
         } else {
             match self.get_linkable_block_mut(&block.parent_id()) {

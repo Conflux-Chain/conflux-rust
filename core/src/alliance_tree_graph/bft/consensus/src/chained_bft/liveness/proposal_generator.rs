@@ -4,10 +4,10 @@
 use crate::{
     chained_bft::block_storage::BlockReader,
     counters,
-    state_replication::TxnManager,
+    //state_replication::TxnManager,
     util::time_service::{wait_if_possible, TimeService, WaitingError, WaitingSuccess},
 };
-use anyhow::{bail, ensure, format_err, Context};
+use anyhow::{bail, ensure, format_err};
 use consensus_types::{
     block::Block,
     block_data::BlockData,
@@ -33,14 +33,14 @@ mod proposal_generator_test;
 ///
 /// TxnManager should be aware of the pending transactions in the branch that it is extending,
 /// such that it will filter them out to avoid transaction duplication.
-pub struct ProposalGenerator<TM, T> {
+pub struct ProposalGenerator</*TM,*/ T> {
     // The account address of this validator
     author: Author,
     // Block store is queried both for finding the branch to extend and for generating the
     // proposed block.
     block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
     // Transaction manager is delivering the transactions.
-    txn_manager: TM,
+    //txn_manager: TM,
     // Time service to generate block timestamps
     time_service: Arc<dyn TimeService>,
     // Max number of transactions to be added to a proposed block.
@@ -49,22 +49,22 @@ pub struct ProposalGenerator<TM, T> {
     last_round_generated: Mutex<Round>,
 }
 
-impl<TM, T> ProposalGenerator<TM, T>
+impl</*TM,*/ T> ProposalGenerator</*TM,*/ T>
 where
-    TM: TxnManager<Payload = T>,
+    //TM: TxnManager<Payload = T>,
     T: Payload,
 {
     pub fn new(
         author: Author,
         block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
-        txn_manager: TM,
+        //txn_manager: TM,
         time_service: Arc<dyn TimeService>,
         max_block_size: u64,
     ) -> Self {
         Self {
             author,
             block_store,
-            txn_manager,
+            //txn_manager,
             time_service,
             max_block_size,
             last_round_generated: Mutex::new(0),
@@ -134,7 +134,7 @@ where
 
         // Exclude all the pending transactions: these are all the ancestors of
         // parent (including) up to the root (excluding).
-        let exclude_payload = pending_blocks
+        let exclude_payload: Vec<&T> = pending_blocks
             .iter()
             .flat_map(|block| block.payload())
             .collect();
@@ -207,14 +207,16 @@ where
             }
         };
 
+        /*
         let txns = self
             .txn_manager
             .pull_txns(self.max_block_size, exclude_payload)
             .await
             .context("Fail to retrieve txn")?;
+            */
 
         Ok(BlockData::new_proposal(
-            txns,
+            T::default() /*txns*/,
             self.author,
             round,
             block_timestamp.as_micros() as u64,

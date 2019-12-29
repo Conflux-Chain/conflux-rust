@@ -9,11 +9,11 @@ use crate::{
             proposal_generator::ProposalGenerator,
             proposer_election::ProposerElection,
         },
-        network::NetworkSender,
+        //network::NetworkSender,
         persistent_storage::PersistentStorage,
     },
     counters,
-    state_replication::TxnManager,
+    //state_replication::TxnManager,
     util::time_service::{
         duration_since_epoch, wait_if_possible, TimeService, WaitingError, WaitingSuccess,
     },
@@ -33,22 +33,22 @@ use consensus_types::{
 };
 use libra_crypto::hash::TransactionAccumulatorHasher;
 use libra_logger::prelude::*;
-use libra_prost_ext::MessageExt;
+//use libra_prost_ext::MessageExt;
 use libra_types::crypto_proxies::{
-    LedgerInfoWithSignatures, ValidatorChangeProof, ValidatorVerifier,
+    LedgerInfoWithSignatures, /*ValidatorChangeProof,*/ ValidatorVerifier,
 };
 use mirai_annotations::{
     debug_checked_precondition, debug_checked_precondition_eq, debug_checked_verify,
     debug_checked_verify_eq,
 };
-use network::proto::{ConsensusMsg, ConsensusMsg_oneof};
+//use network::proto::{ConsensusMsg, ConsensusMsg_oneof};
 
 use crate::chained_bft::network::IncomingBlockRetrievalRequest;
-use consensus_types::block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus};
+use consensus_types::block_retrieval::{/*BlockRetrievalResponse,*/ BlockRetrievalStatus};
 #[cfg(test)]
 use safety_rules::ConsensusState;
 use safety_rules::TSafetyRules;
-use std::convert::TryInto;
+//use std::convert::TryInto;
 use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use termion::color::*;
@@ -66,14 +66,14 @@ pub mod event_processor_fuzzing;
 /// etc.). It is exposing the async processing functions for each event type.
 /// The caller is responsible for running the event loops and driving the execution via some
 /// executors.
-pub struct EventProcessor<TM, T> {
+pub struct EventProcessor</*TM,*/ T> {
     block_store: Arc<BlockStore<T>>,
     pacemaker: Pacemaker,
     proposer_election: Box<dyn ProposerElection<T> + Send + Sync>,
-    proposal_generator: ProposalGenerator<TM, T>,
+    proposal_generator: ProposalGenerator</*TM,*/ T>,
     safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
-    txn_manager: TM,
-    network: NetworkSender,
+    //txn_manager: TM,
+    //network: NetworkSender,
     storage: Arc<dyn PersistentStorage<T>>,
     time_service: Arc<dyn TimeService>,
     // Cache of the last sent vote message.
@@ -81,9 +81,9 @@ pub struct EventProcessor<TM, T> {
     validators: Arc<ValidatorVerifier>,
 }
 
-impl<TM, T> EventProcessor<TM, T>
+impl</*TM,*/ T> EventProcessor</*TM,*/ T>
 where
-    TM: TxnManager<Payload = T>,
+    //TM: TxnManager<Payload = T>,
     T: Payload,
 {
     pub fn new(
@@ -91,10 +91,10 @@ where
         last_vote: Option<Vote>,
         pacemaker: Pacemaker,
         proposer_election: Box<dyn ProposerElection<T> + Send + Sync>,
-        proposal_generator: ProposalGenerator<TM, T>,
+        proposal_generator: ProposalGenerator</*TM,*/ T>,
         safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
-        txn_manager: TM,
-        network: NetworkSender,
+        //txn_manager: TM,
+        //network: NetworkSender,
         storage: Arc<dyn PersistentStorage<T>>,
         time_service: Arc<dyn TimeService>,
         validators: Arc<ValidatorVerifier>,
@@ -112,8 +112,8 @@ where
             proposer_election,
             proposal_generator,
             safety_rules,
-            txn_manager,
-            network,
+            //txn_manager,
+            //network,
             storage,
             time_service,
             last_vote_sent,
@@ -122,7 +122,7 @@ where
     }
 
     fn create_block_retriever(&self, deadline: Instant, author: Author) -> BlockRetriever {
-        BlockRetriever::new(self.network.clone(), deadline, author)
+        BlockRetriever::new(/*self.network.clone(),*/ deadline, author)
     }
 
     /// Leader:
@@ -163,8 +163,8 @@ where
                 return;
             }
         };
-        let mut network = self.network.clone();
-        network.broadcast_proposal(proposal_msg).await;
+        //let mut network = self.network.clone();
+        //network.broadcast_proposal(proposal_msg).await;
         counters::PROPOSALS_COUNT.inc();
     }
 
@@ -270,7 +270,7 @@ where
                 sync_info,
             );
             counters::SYNC_INFO_MSGS_SENT_COUNT.inc();
-            self.network.send_sync_info(sync_info, peer).await;
+            //self.network.send_sync_info(sync_info, peer).await;
         }
     }
 
@@ -413,7 +413,7 @@ where
         }
 
         let timeout_vote_msg = VoteMsg::new(timeout_vote, self.gen_sync_info());
-        self.network.broadcast_vote(timeout_vote_msg).await
+        //self.network.broadcast_vote(timeout_vote_msg).await
     }
 
     async fn gen_backup_vote(&mut self, round: Round) -> anyhow::Result<Vote> {
@@ -543,7 +543,7 @@ where
             .get_block(proposal_parent_id)
             .map_or(false, |parent_block| parent_block.round() < proposal_round));
         let vote_msg = VoteMsg::new(vote, self.gen_sync_info());
-        self.network.send_vote(vote_msg, recipients).await;
+        //self.network.send_vote(vote_msg, recipients).await;
     }
 
     async fn wait_before_vote_if_needed(
@@ -659,20 +659,20 @@ where
 
         let vote_proposal = VoteProposal::new(
             AccumulatorExtensionProof::<TransactionAccumulatorHasher>::new(
-                parent_block
+                Vec::new() /*parent_block
                     .executed_trees()
                     .txn_accumulator()
                     .frozen_subtree_roots()
-                    .clone(),
-                parent_block.executed_trees().txn_accumulator().num_leaves(),
-                executed_block.transaction_info_hashes(),
+                    .clone()*/,
+                0 /*parent_block.executed_trees().txn_accumulator().num_leaves()*/,
+                Vec::new() /*executed_block.transaction_info_hashes()*/,
             ),
             block.clone(),
-            executed_block
+            None /* executed_block
                 .compute_result()
                 .executed_state
                 .validators
-                .clone(),
+                .clone() */,
         );
 
         let vote = self
@@ -803,6 +803,7 @@ where
                 counters::CREATION_TO_COMMIT_S.observe_duration(time_to_commit);
             }
             if let Some(payload) = committed.payload() {
+                /*
                 let compute_result = committed.compute_result();
                 if let Err(e) = self
                     .txn_manager
@@ -811,15 +812,18 @@ where
                 {
                     error!("Failed to notify mempool: {:?}", e);
                 }
+                */
             }
         }
         if finality_proof.ledger_info().next_validator_set().is_some() {
+            /*
             self.network
                 .broadcast_epoch_change(ValidatorChangeProof::new(
                     vec![finality_proof],
                     /* more = */ false,
                 ))
                 .await
+                */
         }
     }
 
@@ -847,6 +851,7 @@ where
             status = BlockRetrievalStatus::IdNotFound;
         }
 
+        /*
         let response = BlockRetrievalResponse::new(status, blocks);
         if let Err(e) = response
             .try_into()
@@ -866,6 +871,7 @@ where
         {
             error!("Failed to return the requested block: {:?}", e);
         }
+        */
     }
 
     /// To jump start new round with the current certificates we have.

@@ -39,20 +39,20 @@ libra-config = { path = "../config", version = "0.1.0" }
 consensus-types = { path = "consensus-types", version = "0.1.0", default-features = false }
 libra-crypto = { path = "../crypto/crypto", version = "0.1.0" }
 debug-interface = { path = "../common/debug-interface", version = "0.1.0" }
-executor = { path = "../executor", version = "0.1.0" }
+#executor = { path = "../executor", version = "0.1.0" }
 lcs = { path = "../common/lcs", version = "0.1.0", package = "libra-canonical-serialization" }
 libra-logger = { path = "../common/logger", version = "0.1.0" }
-libra-mempool = { path = "../mempool", version = "0.1.0" }
+#libra-mempool = { path = "../mempool", version = "0.1.0" }
 libra-metrics = { path = "../common/metrics", version = "0.1.0" }
-network = { path = "../network", version = "0.1.0" }
+#network = { path = "../network", version = "0.1.0" }
 libra-prost-ext = { path = "../common/prost-ext", version = "0.1.0" }
 safety-rules = { path = "safety-rules", version = "0.1.0" }
-state-synchronizer = { path = "../state-synchronizer", version = "0.1.0" }
+#state-synchronizer = { path = "../state-synchronizer", version = "0.1.0" }
 schemadb = { path = "../storage/schemadb", version = "0.1.0" }
 storage-client = { path = "../storage/storage-client", version = "0.1.0" }
 libra-tools = { path = "../common/tools", version = "0.1.0" }
 libra-types = { path = "../types", version = "0.1.0" }
-vm-runtime = { path = "../language/vm/vm-runtime", version = "0.1.0" }
+#vm-runtime = { path = "../language/vm/vm-runtime", version = "0.1.0" }
 
 [dev-dependencies]
 cached = "0.9.0"
@@ -61,8 +61,8 @@ proptest = "0.9.4"
 rusty-fork = "0.2.2"
 tempfile = "3.1.0"
 
-vm-genesis = { path = "../language/vm/vm-genesis", version = "0.1.0" }
-vm-validator = { path = "../vm-validator", version = "0.1.0" }
+#vm-genesis = { path = "../language/vm/vm-genesis", version = "0.1.0" }
+#vm-validator = { path = "../vm-validator", version = "0.1.0" }
 
 [features]
 default = []

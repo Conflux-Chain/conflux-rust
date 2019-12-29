@@ -9,55 +9,53 @@ use crate::chained_bft::liveness::pacemaker::{ExponentialTimeInterval, Pacemaker
 use crate::chained_bft::liveness::proposal_generator::ProposalGenerator;
 use crate::chained_bft::liveness::proposer_election::ProposerElection;
 use crate::chained_bft::liveness::rotating_proposer_election::{choose_leader, RotatingProposer};
-use crate::chained_bft::network::NetworkSender;
 use crate::chained_bft::persistent_storage::{PersistentStorage, RecoveryData};
 use crate::counters;
-use crate::state_replication::{StateComputer, TxnManager};
+//use crate::state_replication::{StateComputer, TxnManager};
 use crate::util::time_service::{ClockTimeService, TimeService};
 use consensus_types::common::{Payload, Round};
 use consensus_types::epoch_retrieval::EpochRetrievalRequest;
-use futures::executor::block_on;
+//use futures::executor::block_on;
 use libra_config::config::ConsensusProposerType;
 use libra_logger::prelude::*;
 use libra_types::account_address::AccountAddress;
 use libra_types::crypto_proxies::{EpochInfo, LedgerInfoWithSignatures, ValidatorVerifier};
-use network::proto::ConsensusMsg;
-use network::proto::ConsensusMsg_oneof;
-use network::validator_network::{ConsensusNetworkSender, Event};
+//use network::proto::ConsensusMsg;
+//use network::proto::ConsensusMsg_oneof;
+//use network::validator_network::{ConsensusNetworkSender, Event};
 use safety_rules::SafetyRulesManager;
 use std::cmp::Ordering;
-use std::convert::TryInto;
 use std::sync::{Arc, RwLock};
 
 // Manager the components that shared across epoch and spawn per-epoch EventProcessor with
 // epoch-specific input.
-pub struct EpochManager<TM, T> {
+pub struct EpochManager</*TM,*/ T> {
     epoch_info: Arc<RwLock<EpochInfo>>,
     config: ChainedBftSMRConfig,
     time_service: Arc<ClockTimeService>,
-    self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
-    network_sender: ConsensusNetworkSender,
+    //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
+    //network_sender: ConsensusNetworkSender,
     timeout_sender: channel::Sender<Round>,
-    txn_manager: TM,
-    state_computer: Arc<dyn StateComputer<Payload = T>>,
+    //txn_manager: TM,
+    //state_computer: Arc<dyn StateComputer<Payload = T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     safety_rules_manager: SafetyRulesManager<T>,
 }
 
-impl<TM, T> EpochManager<TM, T>
+impl</*TM,*/ T> EpochManager</*TM,*/ T>
 where
-    TM: TxnManager<Payload = T>,
+    //TM: TxnManager<Payload = T>,
     T: Payload,
 {
     pub fn new(
         epoch_info: Arc<RwLock<EpochInfo>>,
         config: ChainedBftSMRConfig,
         time_service: Arc<ClockTimeService>,
-        self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
-        network_sender: ConsensusNetworkSender,
+        //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
+        //network_sender: ConsensusNetworkSender,
         timeout_sender: channel::Sender<Round>,
-        txn_manager: TM,
-        state_computer: Arc<dyn StateComputer<Payload = T>>,
+        //txn_manager: TM,
+        //state_computer: Arc<dyn StateComputer<Payload = T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         safety_rules_manager: SafetyRulesManager<T>,
     ) -> Self {
@@ -65,11 +63,11 @@ where
             epoch_info,
             config,
             time_service,
-            self_sender,
-            network_sender,
+            //self_sender,
+            //network_sender,
             timeout_sender,
-            txn_manager,
-            state_computer,
+            //txn_manager,
+            //state_computer,
             storage,
             safety_rules_manager,
         }
@@ -124,9 +122,10 @@ where
 
     pub async fn process_epoch_retrieval(
         &mut self,
-        request: EpochRetrievalRequest,
-        peer_id: AccountAddress,
+        _request: EpochRetrievalRequest,
+        _peer_id: AccountAddress,
     ) {
+        /*
         let proof = match self
             .state_computer
             .get_epoch_proof(request.start_epoch, request.end_epoch)
@@ -147,6 +146,7 @@ where
                 peer_id, e
             );
         };
+        */
     }
 
     pub async fn process_different_epoch(&mut self, different_epoch: u64, peer_id: AccountAddress) {
@@ -164,6 +164,7 @@ where
             }
             // We request proof to join higher epoch
             Ordering::Greater => {
+                /*
                 let request = EpochRetrievalRequest {
                     start_epoch: self.epoch(),
                     end_epoch: different_epoch,
@@ -183,6 +184,7 @@ where
                         peer_id, e
                     );
                 }
+                */
             }
             Ordering::Equal => {
                 warn!("Same epoch should not come to process_different_epoch");
@@ -193,11 +195,13 @@ where
     pub fn start_new_epoch(
         &mut self,
         ledger_info: LedgerInfoWithSignatures,
-    ) -> EventProcessor<TM, T> {
+    ) -> EventProcessor</*TM,*/ T> {
         // make sure storage is on this ledger_info too, it should be no-op if it's already committed
+        /*
         if let Err(e) = block_on(self.state_computer.sync_to(ledger_info.clone())) {
             error!("State sync to new epoch {} failed with {:?}, we'll try to start from current libradb", ledger_info, e);
         }
+        */
         let initial_data = self.storage.start();
         *self.epoch_info.write().unwrap() = EpochInfo {
             epoch: initial_data.epoch(),
@@ -206,7 +210,7 @@ where
         self.start_epoch(initial_data)
     }
 
-    pub fn start_epoch(&mut self, initial_data: RecoveryData<T>) -> EventProcessor<TM, T> {
+    pub fn start_epoch(&mut self, initial_data: RecoveryData<T>) -> EventProcessor</*TM,*/ T> {
         let validators = initial_data.validators();
         let epoch = self.epoch();
         counters::EPOCH.set(epoch as i64);
@@ -218,17 +222,19 @@ where
             initial_data.root_block(),
             validators,
         );
+        /*
         block_on(
             self.network_sender
                 .update_eligible_nodes(initial_data.validator_keys()),
         )
         .expect("Unable to update network's eligible peers");
+        */
         let last_vote = initial_data.last_vote();
 
         let block_store = Arc::new(BlockStore::new(
             Arc::clone(&self.storage),
             initial_data,
-            Arc::clone(&self.state_computer),
+            //Arc::clone(&self.state_computer),
             self.config.max_pruned_blocks_in_mem,
         ));
 
@@ -242,7 +248,7 @@ where
         let proposal_generator = ProposalGenerator::new(
             self.config.author,
             block_store.clone(),
-            self.txn_manager.clone(),
+            //self.txn_manager.clone(),
             self.time_service.clone(),
             self.config.max_block_size,
         );
@@ -251,12 +257,15 @@ where
             self.create_pacemaker(self.time_service.clone(), self.timeout_sender.clone());
 
         let proposer_election = self.create_proposer_election(epoch, &validators);
+
+        /*
         let network_sender = NetworkSender::new(
             self.config.author,
             self.network_sender.clone(),
             self.self_sender.clone(),
             validators.clone(),
         );
+        */
 
         EventProcessor::new(
             block_store,
@@ -265,8 +274,8 @@ where
             proposer_election,
             proposal_generator,
             safety_rules,
-            self.txn_manager.clone(),
-            network_sender,
+            //self.txn_manager.clone(),
+            //network_sender,
             self.storage.clone(),
             self.time_service.clone(),
             validators,

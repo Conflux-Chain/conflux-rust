@@ -4,12 +4,12 @@
 use crate::{
     chained_bft::{
         block_storage::{BlockReader, BlockStore},
-        network::NetworkSender,
+        //network::NetworkSender,
     },
     counters,
 };
 use anyhow::{bail, format_err};
-use consensus_types::block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus};
+//use consensus_types::block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus};
 use consensus_types::{
     block::Block,
     common::{Author, Payload},
@@ -18,7 +18,7 @@ use consensus_types::{
 };
 use libra_logger::prelude::*;
 use libra_types::account_address::AccountAddress;
-use libra_types::validator_change::ValidatorChangeProof;
+//use libra_types::validator_change::ValidatorChangeProof;
 use mirai_annotations::checked_precondition;
 use rand::{prelude::*, Rng};
 use std::{
@@ -162,16 +162,19 @@ impl<T: Payload> BlockStore<T> {
         self.storage
             .save_tree(blocks.clone(), quorum_certs.clone())?;
         let pre_sync_instance = Instant::now();
+        /*
         self.state_computer
             .sync_to(highest_commit_cert.ledger_info().clone())
             .await?;
+            */
         counters::STATE_SYNC_DURATION_S.observe_duration(pre_sync_instance.elapsed());
-        let (root, root_executed_trees, blocks, quorum_certs) = self.storage.start().take();
+        let (root, /*root_executed_trees,*/ blocks, quorum_certs) = self.storage.start().take();
         debug!("{}Sync to{} {}", Fg(Blue), Fg(Reset), root.0);
-        self.rebuild(root, root_executed_trees, blocks, quorum_certs)
+        self.rebuild(root, /*root_executed_trees,*/ blocks, quorum_certs)
             .await;
 
         if highest_commit_cert.ends_epoch() {
+            /*
             retriever
                 .network
                 .notify_epoch_change(ValidatorChangeProof::new(
@@ -179,6 +182,7 @@ impl<T: Payload> BlockStore<T> {
                     /* more = */ false,
                 ))
                 .await;
+                */
         }
         Ok(())
     }
@@ -186,15 +190,15 @@ impl<T: Payload> BlockStore<T> {
 
 /// BlockRetriever is used internally to retrieve blocks
 pub struct BlockRetriever {
-    network: NetworkSender,
+    //network: NetworkSender,
     deadline: Instant,
     preferred_peer: Author,
 }
 
 impl BlockRetriever {
-    pub fn new(network: NetworkSender, deadline: Instant, preferred_peer: Author) -> Self {
+    pub fn new(/*network: NetworkSender, */deadline: Instant, preferred_peer: Author) -> Self {
         Self {
-            network,
+            //network,
             deadline,
             preferred_peer,
         }
@@ -243,6 +247,7 @@ impl BlockRetriever {
                 peer.short_str(),
                 attempt
             );
+            /*
             let response = self
                 .network
                 .request_block(
@@ -273,6 +278,8 @@ impl BlockRetriever {
                 continue;
             }
             return Ok(response.blocks().clone());
+            */
+            return Ok(Vec::new());
         }
     }
 

@@ -2,23 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::counters;
-use anyhow::ensure;
-use bytes::Bytes;
+//use anyhow::ensure;
+//use bytes::Bytes;
 use channel::{self, libra_channel, message_queues::QueueStyle};
-use consensus_types::block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse};
+use consensus_types::block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus};
 use consensus_types::epoch_retrieval::EpochRetrievalRequest;
 use consensus_types::{
     common::{Author, Payload},
-    proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
+    proposal_msg::{ProposalMsg/*, ProposalUncheckedSignatures*/},
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
-use futures::{channel::oneshot, stream::select, SinkExt, Stream, StreamExt, TryStreamExt};
+//use futures::{channel::oneshot};
 use libra_logger::prelude::*;
 use libra_types::account_address::AccountAddress;
 use libra_types::crypto_proxies::{EpochInfo, ValidatorChangeProof};
 use libra_types::crypto_proxies::{LedgerInfoWithSignatures, ValidatorVerifier};
 use libra_types::proto::types::ValidatorChangeProof as ValidatorChangeProofProto;
+/*
 use network::{
     proto::{
         ConsensusMsg, ConsensusMsg_oneof, Proposal, RequestBlock, RequestEpoch,
@@ -26,12 +27,13 @@ use network::{
     },
     validator_network::{ConsensusNetworkEvents, ConsensusNetworkSender, Event, RpcError},
 };
+*/
 use std::cmp::Ordering;
 use std::sync::RwLock;
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::{TryFrom/*, TryInto*/},
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration/*, Instant*/},
 };
 
 /// The block retrieval request is used internally for implementing RPC: the callback is executed
@@ -39,7 +41,7 @@ use std::{
 #[derive(Debug)]
 pub struct IncomingBlockRetrievalRequest {
     pub req: BlockRetrievalRequest,
-    pub response_sender: oneshot::Sender<Result<Bytes, RpcError>>,
+    //pub response_sender: oneshot::Sender<Result<Bytes, RpcError>>,
 }
 
 /// Just a convenience struct to keep all the network proxy receiving queues in one place.
@@ -69,25 +71,25 @@ impl<T> NetworkReceivers<T> {
 #[derive(Clone)]
 pub struct NetworkSender {
     author: Author,
-    network_sender: ConsensusNetworkSender,
+    //network_sender: ConsensusNetworkSender,
     // Self sender and self receivers provide a shortcut for sending the messages to itself.
     // (self sending is not supported by the networking API).
     // Note that we do not support self rpc requests as it might cause infinite recursive calls.
-    self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
+    //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
     validators: Arc<ValidatorVerifier>,
 }
 
 impl NetworkSender {
     pub fn new(
         author: Author,
-        network_sender: ConsensusNetworkSender,
-        self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
+        //network_sender: ConsensusNetworkSender,
+        //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
         validators: Arc<ValidatorVerifier>,
     ) -> Self {
         NetworkSender {
             author,
-            network_sender,
-            self_sender,
+            //network_sender,
+            //self_sender,
             validators,
         }
     }
@@ -100,6 +102,7 @@ impl NetworkSender {
         from: Author,
         timeout: Duration,
     ) -> anyhow::Result<BlockRetrievalResponse<T>> {
+        /*
         ensure!(from != self.author, "Retrieve block from self");
         counters::BLOCK_RETRIEVAL_COUNT.inc_by(retrieval_request.num_blocks() as i64);
         let pre_retrieval_instant = Instant::now();
@@ -125,6 +128,8 @@ impl NetworkSender {
             })?;
 
         Ok(response)
+        */
+        Ok(BlockRetrievalResponse::new(BlockRetrievalStatus::Succeeded, Vec::new()))
     }
 
     /// Tries to send the given proposal (block and proposer metadata) to all the participants.
@@ -136,6 +141,7 @@ impl NetworkSender {
     /// out. It does not give indication about when the message is delivered to the recipients,
     /// as well as there is no indication about the network failures.
     pub async fn broadcast_proposal<T: Payload>(&mut self, proposal: ProposalMsg<T>) {
+        /*
         let proposal = match proposal.try_into() {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -147,9 +153,11 @@ impl NetworkSender {
             message: Some(ConsensusMsg_oneof::Proposal(proposal)),
         };
         self.broadcast(msg).await
+        */
     }
 
-    async fn broadcast(&mut self, msg: ConsensusMsg) {
+    async fn broadcast(&mut self, /*msg: ConsensusMsg*/) {
+        /*
         // Directly send the message to ourself without going through network.
         let self_msg = Event::Message((self.author, msg.clone()));
         if let Err(err) = self.self_sender.send(Ok(self_msg)).await {
@@ -172,6 +180,7 @@ impl NetworkSender {
         {
             error!("Error broadcasting message: {:?}", err);
         }
+        */
     }
 
     /// Sends the vote to the chosen recipients (typically that would be the recipients that
@@ -183,6 +192,7 @@ impl NetworkSender {
     /// out. It does not give indication about when the message is delivered to the recipients,
     /// as well as there is no indication about the network failures.
     pub async fn send_vote(&self, vote_msg: VoteMsg, recipients: Vec<Author>) {
+        /*
         let mut network_sender = self.network_sender.clone();
         let mut self_sender = self.self_sender.clone();
         let vote_msg = match vote_msg.try_into() {
@@ -207,10 +217,12 @@ impl NetworkSender {
                 error!("Failed to send a vote to peer {:?}: {:?}", peer, e);
             }
         }
+        */
     }
 
     /// Broadcasts vote message to all validators
     pub async fn broadcast_vote(&mut self, vote_msg: VoteMsg) {
+        /*
         let vote_msg = match vote_msg.try_into() {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -218,16 +230,19 @@ impl NetworkSender {
                 return;
             }
         };
+
         let msg = ConsensusMsg {
             message: Some(ConsensusMsg_oneof::VoteMsg(vote_msg)),
         };
         self.broadcast(msg).await
+        */
     }
 
     /// Sends the given sync info to the given author.
     /// The future is fulfilled as soon as the message is added to the internal network channel
     /// (does not indicate whether the message is delivered or sent out).
     pub async fn send_sync_info(&self, sync_info: SyncInfo, recipient: Author) {
+        /*
         if recipient == self.author {
             error!("An attempt to deliver sync info msg to itself: ignore.");
             return;
@@ -249,18 +264,22 @@ impl NetworkSender {
                 recipient, e
             );
         }
+        */
     }
 
     /// Broadcast about epoch changes with proof to the current validator set (including self)
     /// when we commit the reconfiguration block
-    pub async fn broadcast_epoch_change(&mut self, proof: ValidatorChangeProof) {
+    pub async fn broadcast_epoch_change(&mut self, _proof: ValidatorChangeProof) {
+        /*
         let msg = ConsensusMsg {
             message: Some(ConsensusMsg_oneof::EpochChange(proof.into())),
         };
         self.broadcast(msg).await
+        */
     }
 
-    pub async fn notify_epoch_change(&mut self, proof: ValidatorChangeProof) {
+    pub async fn notify_epoch_change(&mut self, _proof: ValidatorChangeProof) {
+        /*
         let msg = ConsensusMsg {
             message: Some(ConsensusMsg_oneof::EpochChange(proof.into())),
         };
@@ -268,6 +287,7 @@ impl NetworkSender {
         if let Err(e) = self.self_sender.send(Ok(self_msg)).await {
             warn!("Failed to notify to self an epoch change {:?}", e);
         }
+        */
     }
 }
 
@@ -281,15 +301,15 @@ pub struct NetworkTask<T> {
     different_epoch_tx: libra_channel::Sender<AccountAddress, (u64, AccountAddress)>,
     epoch_retrieval_tx:
         libra_channel::Sender<AccountAddress, (EpochRetrievalRequest, AccountAddress)>,
-    all_events: Box<dyn Stream<Item = anyhow::Result<Event<ConsensusMsg>>> + Send + Unpin>,
+    //all_events: Box<dyn Stream<Item = anyhow::Result<Event<ConsensusMsg>>> + Send + Unpin>,
 }
 
 impl<T: Payload> NetworkTask<T> {
     /// Establishes the initial connections with the peers and returns the receivers.
     pub fn new(
         epoch_info: Arc<RwLock<EpochInfo>>,
-        network_events: ConsensusNetworkEvents,
-        self_receiver: channel::Receiver<anyhow::Result<Event<ConsensusMsg>>>,
+        //network_events: ConsensusNetworkEvents,
+        //self_receiver: channel::Receiver<anyhow::Result<Event<ConsensusMsg>>>,
     ) -> (NetworkTask<T>, NetworkReceivers<T>) {
         let (proposal_tx, proposal_rx) =
             libra_channel::new(QueueStyle::LIFO, 1, Some(&counters::PROPOSAL_CHANNEL_MSGS));
@@ -311,8 +331,9 @@ impl<T: Payload> NetworkTask<T> {
             libra_channel::new(QueueStyle::LIFO, 1, None);
         let (epoch_retrieval_tx, epoch_retrieval_rx) =
             libra_channel::new(QueueStyle::LIFO, 1, None);
-        let network_events = network_events.map_err(Into::<anyhow::Error>::into);
-        let all_events = Box::new(select(network_events, self_receiver));
+        //let network_events = network_events.map_err(Into::<anyhow::Error>::into);
+        //let all_events = Box::new(select(network_events, self_receiver));
+
         (
             NetworkTask {
                 epoch_info,
@@ -323,7 +344,7 @@ impl<T: Payload> NetworkTask<T> {
                 epoch_change_tx,
                 different_epoch_tx,
                 epoch_retrieval_tx,
-                all_events,
+                //all_events,
             },
             NetworkReceivers {
                 proposals: proposal_rx,
@@ -342,6 +363,7 @@ impl<T: Payload> NetworkTask<T> {
     }
 
     pub async fn start(mut self) {
+        /*
         use ConsensusMsg_oneof::*;
         while let Some(Ok(message)) = self.all_events.next().await {
             match message {
@@ -399,13 +421,15 @@ impl<T: Payload> NetworkTask<T> {
                 }
             }
         }
+        */
     }
 
     async fn process_proposal(
         &mut self,
-        peer_id: AccountAddress,
-        proposal: Proposal,
+        _peer_id: AccountAddress,
+        //proposal: Proposal,
     ) -> anyhow::Result<()> {
+        /*
         let proposal = ProposalUncheckedSignatures::<T>::try_from(proposal)?;
         if proposal.epoch() != self.epoch() {
             return self
@@ -422,13 +446,16 @@ impl<T: Payload> NetworkTask<T> {
         );
         debug!("Received proposal {}", proposal);
         self.proposal_tx.push(peer_id, proposal)
+        */
+        Ok(())
     }
 
     async fn process_vote(
         &mut self,
-        peer_id: AccountAddress,
-        vote_msg: VoteMsgProto,
+        _peer_id: AccountAddress,
+        //vote_msg: VoteMsgProto,
     ) -> anyhow::Result<()> {
+        /*
         let vote_msg = VoteMsg::try_from(vote_msg)?;
 
         ensure!(
@@ -453,13 +480,16 @@ impl<T: Payload> NetworkTask<T> {
                 e
             })?;
         self.vote_tx.push(peer_id, vote_msg)
+        */
+        Ok(())
     }
 
     async fn process_sync_info(
         &mut self,
-        sync_info: SyncInfoProto,
-        peer_id: AccountAddress,
+        //sync_info: SyncInfoProto,
+        _peer_id: AccountAddress,
     ) -> anyhow::Result<()> {
+        /*
         let sync_info = SyncInfo::try_from(sync_info)?;
         match sync_info.epoch().cmp(&self.epoch()) {
             Ordering::Equal => {
@@ -470,14 +500,17 @@ impl<T: Payload> NetworkTask<T> {
                 .different_epoch_tx
                 .push(peer_id, (sync_info.epoch(), peer_id)),
         }
+        */
+        Ok(())
     }
 
     async fn process_request_block(
         &mut self,
-        peer_id: AccountAddress,
-        request_msg: RequestBlock,
-        callback: oneshot::Sender<Result<Bytes, RpcError>>,
+        _peer_id: AccountAddress,
+        //request_msg: RequestBlock,
+        //callback: oneshot::Sender<Result<Bytes, RpcError>>,
     ) -> anyhow::Result<()> {
+        /*
         let req = BlockRetrievalRequest::try_from(request_msg)?;
         debug!("Received block retrieval request {}", req);
         let req_with_callback = IncomingBlockRetrievalRequest {
@@ -485,6 +518,8 @@ impl<T: Payload> NetworkTask<T> {
             response_sender: callback,
         };
         self.block_request_tx.push(peer_id, req_with_callback)
+        */
+        Ok(())
     }
 
     async fn process_epoch_change(
@@ -512,9 +547,10 @@ impl<T: Payload> NetworkTask<T> {
 
     async fn process_epoch_request(
         &mut self,
-        peer_id: AccountAddress,
-        request: RequestEpoch,
+        _peer_id: AccountAddress,
+        //request: RequestEpoch,
     ) -> anyhow::Result<()> {
+        /*
         let request = EpochRetrievalRequest::try_from(request)?;
         debug!(
             "Received epoch retrieval from peer {}, start epoch {}, end epoch {}",
@@ -529,5 +565,7 @@ impl<T: Payload> NetworkTask<T> {
                 Ok(())
             }
         }
+        */
+        Ok(())
     }
 }

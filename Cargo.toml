@@ -69,6 +69,12 @@ channel = { path = "core/src/alliance_tree_graph/bft/common/channel" }
 debug-interface = { path = "core/src/alliance_tree_graph/bft/common/debug-interface" }
 futures-semaphore = { path = "core/src/alliance_tree_graph/bft/common/futures-semaphore" }
 libra-prost-ext = { path = "core/src/alliance_tree_graph/bft/common/prost-ext" }
+schemadb = { path = "core/src/alliance_tree_graph/bft/storage/schemadb" }
+scratchpad = { path = "core/src/alliance_tree_graph/bft/storage/scratchpad" }
+libra-state-view = { path="core/src/alliance_tree_graph/bft/storage/state-view" }
+storage-client = { path = "core/src/alliance_tree_graph/bft/storage/storage-client" }
+storage-proto = { path = "core/src/alliance_tree_graph/bft/storage/storage-proto" }
+consensus = { path = "core/src/alliance_tree_graph/bft/consensus" }
 
 [[bin]]
 name = "consensus_bench"
@@ -91,3 +97,9 @@ path = "accounts/ethkey/cli/src/main.rs"
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
 fuzzing = ["consensus-types/fuzzing", "libra-crypto/fuzzing", "libra-types/fuzzing"]
+
+#[replace]
+#"bzip2-sys:0.1.6"={git = "https://github.com/alexcrichton/bzip2-rs.git"}
+
+[patch.crates-io]
+bzip2-sys = {git = "https://github.com/alexcrichton/bzip2-rs.git"}

@@ -373,8 +373,8 @@ impl ConsensusGraph {
             .check_availability(epoch_number, &hash)
         {
             return Err(format!(
-                "State for epoch (number={:?} hash={:?}) does not exist",
-                epoch_number, hash
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                epoch_number, hash, self.data_man.state_availability_boundary.read()
             )
             .into());
         }

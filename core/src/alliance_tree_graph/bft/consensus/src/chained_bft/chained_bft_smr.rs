@@ -11,7 +11,7 @@ use crate::{
         persistent_storage::{PersistentStorage, RecoveryData},
     },
     counters,
-    state_replication::{StateComputer, StateMachineReplication, TxnManager},
+    state_replication::{StateMachineReplication/*, TxnManager*/},
     util::time_service::ClockTimeService,
 };
 use anyhow::Result;
@@ -95,10 +95,10 @@ impl<T: Payload> ChainedBftSMR<T> {
         self.block_store.clone()
     }
 
-    fn start_event_processing<TM: TxnManager<Payload = T>>(
+    fn start_event_processing/*<TM: TxnManager<Payload = T>>*/(
         executor: Handle,
-        mut epoch_manager: EpochManager<TM, T>,
-        mut event_processor: EventProcessor<TM, T>,
+        mut epoch_manager: EpochManager</*TM,*/ T>,
+        mut event_processor: EventProcessor</*TM,*/ T>,
         mut pacemaker_timeout_sender_rx: channel::Receiver<Round>,
         network_task: NetworkTask<T>,
         mut network_receivers: NetworkReceivers<T>,
@@ -162,10 +162,10 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
     /// 1. Construct the EpochManager from the latest libradb state
     /// 2. Construct per-epoch component with the fixed Validators provided by EpochManager including
     /// ProposerElection, Pacemaker, SafetyRules, Network(Populate with known validators), EventProcessor
-    fn start<TM: TxnManager<Payload = Self::Payload>>(
+    fn start/*<TM: TxnManager<Payload = Self::Payload>>*/(
         &mut self,
-        txn_manager: TM,
-        state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
+        //txn_manager: TM,
+        //state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
     ) -> Result<()> {
         let mut initial_setup = self
             .initial_setup
@@ -184,7 +184,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
 
         let (timeout_sender, timeout_receiver) =
             channel::new(1_024, &counters::PENDING_PACEMAKER_TIMEOUTS);
-        let (self_sender, self_receiver) = channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
+        //let (self_sender, self_receiver) = channel::new(1_024, &counters::PENDING_SELF_MESSAGES);
         let epoch_info = Arc::new(RwLock::new(EpochInfo {
             epoch: initial_data.epoch(),
             verifier: initial_data.validators(),
@@ -200,11 +200,11 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             Arc::clone(&epoch_info),
             self.config.take().expect("already started, config is None"),
             time_service,
-            self_sender,
-            initial_setup.network_sender,
+            //self_sender,
+            //initial_setup.network_sender,
             timeout_sender,
-            txn_manager,
-            state_computer,
+            //txn_manager,
+            //state_computer,
             self.storage.clone(),
             safety_rules_manager,
         );
@@ -216,7 +216,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         self.block_store = Some(event_processor.block_store());
 
         let (network_task, network_receiver) =
-            NetworkTask::new(epoch_info, initial_setup.network_events, self_receiver);
+            NetworkTask::new(epoch_info/*, initial_setup.network_events, self_receiver*/);
 
         Self::start_event_processing(
             executor.clone(),
