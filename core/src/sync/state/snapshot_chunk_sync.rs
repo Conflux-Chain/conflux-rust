@@ -9,8 +9,8 @@ use crate::{
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
-        storage_db::SnapshotInfo, FullSyncVerifier, StateRootAuxInfo,
-        StateRootWithAuxInfo,
+        storage_db::SnapshotInfo, FullSyncVerifier, StateIndex,
+        StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
         message::{msgid, Context},
@@ -471,17 +471,26 @@ impl SnapshotChunkSync {
                 .expect("All headers exist")
                 .parent_hash();
         }
-        let delta_height = sync_handler
-            .graph
-            .data_man
-            .block_header_by_hash(&deferred_block_hash)
-            .unwrap()
-            .height()
-            % sync_handler.graph.data_man.get_snapshot_epoch_count();
+        // Delta height starts from 1. At the snapshot point the delta height
+        // equals to the snapshot epoch count. When the delta height of
+        // the next epoch is 1, the current epoch is a snapshot.
+        let steps_to_snapshot = StateIndex::height_to_delta_height(
+            sync_handler
+                .graph
+                .data_man
+                .block_header_by_hash(&deferred_block_hash)
+                .unwrap()
+                .height()
+                + 1,
+            sync_handler.graph.data_man.get_snapshot_epoch_count(),
+        ) - 1;
         let snapshot_epoch_id = sync_handler
             .graph
             .data_man
-            .get_parent_epochs_for(deferred_block_hash, delta_height)
+            .get_parent_epochs_for(
+                deferred_block_hash,
+                steps_to_snapshot as u64,
+            )
             .0;
         let mut fake_state_root =
             StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
@@ -661,7 +670,7 @@ impl SnapshotChunkSync {
         let (mut parent_snapshot_epoch, pivot_chain_parts) =
             ctx.manager.graph.data_man.get_parent_epochs_for(
                 snapshot_epoch_id.clone(),
-                ctx.manager.graph.data_man.get_snapshot_epoch_count(),
+                ctx.manager.graph.data_man.get_snapshot_epoch_count() as u64,
             );
         // FIXME: This is temporary hack because we haven't enabled snapshot
         // yet.

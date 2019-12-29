@@ -8,11 +8,11 @@ use cfxcore::{
     statedb::StateDb,
     storage::{
         state::StateTrait,
-        state_manager::{
-            StateManager, StateManagerTrait, StorageConfiguration,
+        state_manager::{StateManager, StateManagerTrait},
+        storage_db::{
+            KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
         },
-        storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        DeltaMptIterator, StateIndex,
+        DeltaMptIterator, StateIndex, StateRootAuxInfo, StorageConfiguration,
     },
     sync::Error,
 };
@@ -24,11 +24,6 @@ use log4rs::{
 };
 use primitives::{
     Account, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
-};
-
-use cfxcore::storage::{
-    storage_db::{KeyValueDbTraitRead, SnapshotConfiguration},
-    StateRootAuxInfo,
 };
 use std::{
     cmp::min,
@@ -98,9 +93,7 @@ fn main() -> Result<(), Error> {
         &aux_info1,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = storage_manager
-        .get_snapshot_configuration()
-        .snapshot_epoch_count;
+    height = storage_manager.get_snapshot_epoch_count() as u64;
     let delta_mpt = storage_manager
         .get_delta_mpt(&NULL_EPOCH)
         .expect("state exists");
@@ -151,9 +144,7 @@ fn main() -> Result<(), Error> {
         &aux_info2,
     )?;
     // Force other internal snapshot-related logic to be triggered
-    height = 2 * storage_manager
-        .get_snapshot_configuration()
-        .snapshot_epoch_count;
+    height = 2 as u64 * storage_manager.get_snapshot_epoch_count() as u64;
     let delta_mpt = storage_manager
         .get_delta_mpt(&snapshot1_epoch)
         .expect("state exists");
@@ -304,13 +295,9 @@ fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
     );
     let db = db::open_database(db_dir, &db_config)?;
 
-    Ok(Arc::new(StateManager::new(
-        db,
-        StorageConfiguration::default(),
-        SnapshotConfiguration {
-            snapshot_epoch_count: 100000000000,
-        },
-    )))
+    let mut storage_conf = StorageConfiguration::default();
+    storage_conf.consensus_param.snapshot_epoch_count = 10000000;
+    Ok(Arc::new(StateManager::new(db, storage_conf)))
 }
 
 fn initialize_genesis(
@@ -380,22 +367,21 @@ fn add_accounts(
     while pending > 0 {
         let n = min(accounts_per_epoch, pending);
         let start2 = Instant::now();
-        let aux_info_tmp = if manager
-            .get_storage_manager()
-            .height_to_delta_height(*height)
-            == 0
-        {
-            old_aux_info
-        } else {
-            aux_info
-        };
+        let aux_info_tmp =
+            if StateIndex::height_to_delta_height(
+                *height,
+                manager.get_storage_manager().get_snapshot_epoch_count(),
+            ) == manager.get_storage_manager().get_snapshot_epoch_count()
+            {
+                old_aux_info
+            } else {
+                aux_info
+            };
         let state_index = StateIndex::new_for_next_epoch(
             &epoch_id,
             aux_info_tmp,
             *height,
-            manager
-                .get_storage_manager()
-                .height_to_delta_height(*height),
+            manager.get_storage_manager().get_snapshot_epoch_count(),
         );
         epoch_id =
             add_accounts_and_commit(manager, n, &mut account_iter, state_index);

@@ -60,18 +60,11 @@ impl StateManager {
     }
 
     // FIXME: change the parameter.
-    pub fn new(
-        db: Arc<SystemDB>, conf: StorageConfiguration,
-        snapshot_conf: SnapshotConfiguration,
-    ) -> Self
-    {
+    pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager = Arc::new(StorageManager::new(
-            DeltaDbManager::new(db),
-            conf,
-            snapshot_conf,
-        ));
+        let storage_manager =
+            Arc::new(StorageManager::new(DeltaDbManager::new(db), conf));
 
         // FIXME: move the commit_lock into delta_mpt, along with the row_number
         // FIXME: reading into the new_or_delta_mpt method.
@@ -215,6 +208,9 @@ impl StateManager {
                 Ok(None)
             }
             Some(mut snapshot) => {
+                // FIXME: move snapshot_merkle_root into StateIndex.
+                // FIXME: But if the snapshot_merkle_root is only used to
+                // FIXME: compute padding, do it differently.
                 let snapshot_merkle_root =
                     snapshot.open_snapshot_mpt_read_only()?.get_merkle_root();
                 let maybe_intermediate_mpt = self
@@ -247,10 +243,6 @@ impl StateManager {
     pub fn get_state_trees_for_next_epoch(
         &self, parent_state_index: &StateIndex,
     ) -> Result<Option<StateTrees>> {
-        debug!(
-            "get_state_trees_for_next_epoch: parent= {:?}",
-            parent_state_index
-        );
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
         let (
@@ -262,7 +254,7 @@ impl StateManager {
             new_delta_root,
         ) = if parent_state_index
             .maybe_delta_trie_height
-            .unwrap_or_default() as u64
+            .unwrap_or_default()
             == self.storage_manager.get_snapshot_epoch_count()
         {
             // Should shift to a new snapshot
@@ -432,7 +424,9 @@ use super::{
     },
     storage_manager::storage_manager::{DeltaMptIterator, StorageManager},
 };
-use crate::{ext_db::SystemDB, statedb::StateDb};
+use crate::{
+    ext_db::SystemDB, statedb::StateDb, storage::StorageConfiguration,
+};
 use cfx_types::{Address, U256};
 use primitives::{
     Account, Block, BlockHeaderBuilder, DeltaMptKeyPadding, EpochId,

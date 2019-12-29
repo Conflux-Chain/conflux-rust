@@ -86,15 +86,6 @@ impl Restorer {
 
         debug!("complete to restore snapshot chunks");
     }
-
-    pub fn restored_state_root(
-        &self, _state_manager: Arc<StateManager>,
-    ) -> MerkleHash {
-        // TODO Double check the restored snapshot merkle root
-        // But if all chunks pass the verification, it should be the same as
-        // the this snapshot_merkle_root
-        self.snapshot_merkle_root
-    }
 }
 
 #[derive(Default, Debug)]

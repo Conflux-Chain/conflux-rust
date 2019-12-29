@@ -351,16 +351,14 @@ use self::{
     cache::algorithm::lru::LRU, node_memory_manager::*,
     node_ref_map::DeltaMptDbKey, row_number::*,
 };
-use super::{
-    super::{
-        state_manager::StorageConfiguration,
-        storage_db::delta_db_manager::{
-            DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
-        },
+use crate::storage::{
+    impls::{
+        errors::*, merkle_patricia_trie::*, storage_manager::storage_manager::*,
     },
-    errors::*,
-    merkle_patricia_trie::*,
-    storage_manager::storage_manager::*,
+    storage_db::delta_db_manager::{
+        DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
+    },
+    StorageConfiguration,
 };
 use cfx_types::hexstr_to_h256;
 use parking_lot::{Mutex, MutexGuard, RwLock};

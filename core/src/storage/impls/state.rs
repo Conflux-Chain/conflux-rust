@@ -208,7 +208,7 @@ impl<'a> Drop for State<'a> {
 
 impl<'a> StateTrait for State<'a> {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
-        self.get_from_all_tries(access_key.clone(), false)
+        self.get_from_all_tries(access_key, false)
             .map(|(value, _)| value)
     }
 
@@ -337,7 +337,7 @@ impl<'a> StateTrait for State<'a> {
             self.height,
         );
         if self.maybe_intermediate_trie.is_none()
-            && self.delta_trie_height.unwrap() as u64
+            && self.delta_trie_height.unwrap()
                 == self
                     .manager
                     .get_storage_manager()
@@ -348,7 +348,7 @@ impl<'a> StateTrait for State<'a> {
             self.manager
                 .get_storage_manager()
                 .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
-        } else if self.delta_trie_height.unwrap() as u64
+        } else if self.delta_trie_height.unwrap()
             >= self
                 .manager
                 .get_storage_manager()
@@ -503,10 +503,6 @@ impl<'a> State<'a> {
                         cow_root.into_child().map(|r| r.into());
                     result?;
 
-                    debug!(
-                        "MPT commit last_row_number {}",
-                        commit_transaction.info.row_number.value
-                    );
                     // TODO: check the guarantee of underlying db on transaction
                     // TODO: failure. may have to commit last_row_number
                     // TODO: separately in worst case.

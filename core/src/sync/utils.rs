@@ -8,10 +8,7 @@ use crate::{
     },
     pow::ProofOfWorkConfig,
     statistics::Statistics,
-    storage::{
-        state_manager::StorageConfiguration, storage_db::SnapshotConfiguration,
-        StorageManager,
-    },
+    storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_BLOCK_GAS_LIMIT},
     verification::VerificationConfig,
@@ -74,6 +71,7 @@ pub fn create_simple_block(
     )
 }
 
+/// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
     db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
     era_epoch_count: u64,
@@ -100,9 +98,6 @@ pub fn initialize_synchronization_graph(
     let storage_manager = Arc::new(StorageManager::new(
         ledger_db.clone(),
         StorageConfiguration::default(),
-        SnapshotConfiguration {
-            snapshot_epoch_count: 10000000000,
-        },
     ));
 
     let mut genesis_accounts = HashMap::new();
