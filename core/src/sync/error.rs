@@ -74,5 +74,10 @@ error_chain! {
             description("packet throttled"),
             display("packet {:?} throttled: {:?}", msg_name, response),
         }
+
+        UnexpectedMessage(reason: String) {
+            description("Message received in unexpected"),
+            display("UnexpectedMessage: {:?}", reason)
+        }
     }
 }

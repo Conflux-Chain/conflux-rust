@@ -250,6 +250,7 @@ pub struct ProtocolConfiguration {
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
+    pub snapshot_sync_request_timeout: Duration,
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub received_tx_index_maintain_timeout: Duration,
@@ -479,6 +480,9 @@ impl SynchronizationProtocolHandler {
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
+            }
+            ErrorKind::UnexpectedMessage(_) => {
+                op = Some(UpdateNodeOperation::Remove)
             }
         }
 
@@ -1472,6 +1476,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         self.syn.peers.write().remove(&peer);
         self.syn.handshaking_peers.write().remove(&peer);
         self.request_manager.on_peer_disconnected(io, peer);
+        self.state_sync
+            .sync_candidate_manager
+            .on_peer_disconnected(&peer);
     }
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
