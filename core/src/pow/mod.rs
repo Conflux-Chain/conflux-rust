@@ -219,7 +219,7 @@ where
 
     // Collect the total block count and the timespan in the current period
     for _ in 0..pow_config.difficulty_adjustment_epoch_period {
-        block_count += num_blocks_in_epoch(&cur) as u64 + 1;
+        block_count += num_blocks_in_epoch(&cur) as u64;
         cur = cur_header.parent_hash().clone();
         cur_header = data_man.block_header_by_hash(&cur).unwrap();
         if cur_header.timestamp() != 0 {
