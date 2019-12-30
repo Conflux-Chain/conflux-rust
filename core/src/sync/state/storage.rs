@@ -19,6 +19,83 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 
 const DEFAULT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
 
+#[derive(Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug)]
+pub enum SnapshotSyncCandidate {
+    OneStepSync {
+        height: u64,
+        snapshot_epoch_id: EpochId,
+    },
+    FullSync {
+        height: u64,
+        snapshot_epoch_id: EpochId,
+    },
+    IncSync {
+        height: u64,
+        base_snapshot_epoch_id: EpochId,
+        snapshot_epoch_id: EpochId,
+    },
+}
+
+impl Encodable for SnapshotSyncCandidate {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match &self {
+            SnapshotSyncCandidate::OneStepSync {
+                height,
+                snapshot_epoch_id,
+            } => {
+                s.begin_list(3)
+                    .append(&(0 as u8))
+                    .append(height)
+                    .append(snapshot_epoch_id);
+            }
+            SnapshotSyncCandidate::FullSync {
+                height,
+                snapshot_epoch_id,
+            } => {
+                s.begin_list(3)
+                    .append(&(1 as u8))
+                    .append(height)
+                    .append(snapshot_epoch_id);
+            }
+            SnapshotSyncCandidate::IncSync {
+                height,
+                base_snapshot_epoch_id,
+                snapshot_epoch_id,
+            } => {
+                s.begin_list(4)
+                    .append(&(2 as u8))
+                    .append(height)
+                    .append(base_snapshot_epoch_id)
+                    .append(snapshot_epoch_id);
+            }
+        }
+    }
+}
+
+impl Decodable for SnapshotSyncCandidate {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let type_id: u8 = rlp.val_at(0)?;
+        match type_id {
+            0 => Ok(SnapshotSyncCandidate::OneStepSync {
+                height: rlp.val_at(1)?,
+                snapshot_epoch_id: rlp.val_at(2)?,
+            }),
+            1 => Ok(SnapshotSyncCandidate::FullSync {
+                height: rlp.val_at(1)?,
+                snapshot_epoch_id: rlp.val_at(2)?,
+            }),
+            2 => Ok(SnapshotSyncCandidate::IncSync {
+                height: rlp.val_at(1)?,
+                base_snapshot_epoch_id: rlp.val_at(2)?,
+                snapshot_epoch_id: rlp.val_at(3)?,
+            }),
+            _ => Err(DecoderError::Custom(
+                "Unknown SnapshotSyncCandidate type id",
+            )),
+        }
+    }
+}
+
 #[derive(
     Clone,
     RlpEncodable,

@@ -19,7 +19,9 @@ use crate::{
             snapshot_chunk_request::SnapshotChunkRequest,
             snapshot_manifest_request::SnapshotManifestRequest,
             snapshot_manifest_response::SnapshotManifestResponse,
-            storage::{Chunk, ChunkKey},
+            state_sync_candidate_manager::StateSyncCandidateManager,
+            storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
+            StateSyncCandidateRequest,
         },
         synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
@@ -32,6 +34,7 @@ use primitives::{
     BlockHeaderBuilder, MerkleHash, Receipt, StateRoot, StorageKey,
     MERKLE_NULL_NODE, NULL_EPOCH,
 };
+use rand::{seq::SliceRandom, thread_rng};
 use std::{
     collections::{HashSet, VecDeque},
     fmt::{Debug, Formatter, Result},
@@ -72,7 +75,9 @@ impl Debug for Status {
 
 #[derive(Default)]
 struct Inner {
+    /// The checkpoint whose state is being synced
     checkpoint: H256,
+
     trusted_blame_block: H256,
     status: Status,
 
@@ -125,6 +130,7 @@ impl Debug for Inner {
 
 pub struct SnapshotChunkSync {
     inner: Arc<RwLock<Inner>>,
+    pub sync_candidate_manager: StateSyncCandidateManager,
     max_download_peers: usize,
 }
 
@@ -132,6 +138,7 @@ impl SnapshotChunkSync {
     pub fn new(max_download_peers: usize) -> Self {
         SnapshotChunkSync {
             inner: Default::default(),
+            sync_candidate_manager: StateSyncCandidateManager::new(),
             max_download_peers: if max_download_peers == 0 {
                 1
             } else {
@@ -140,7 +147,31 @@ impl SnapshotChunkSync {
         }
     }
 
-    pub fn start(
+    pub fn start_candidate_sync(
+        &self, checkpoint: H256, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
+        let inner = self.inner.write();
+        let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
+            .select_all(&sync_handler.syn);
+        let height = sync_handler
+            .graph
+            .data_man
+            .block_header_by_hash(&checkpoint)
+            .expect("Syncing checkpoint should have available header")
+            .height();
+        let candidates = vec![SnapshotSyncCandidate::FullSync {
+            height,
+            snapshot_epoch_id: checkpoint,
+        }];
+        self.sync_candidate_manager
+            .start(candidates.clone(), peers.clone());
+        self.request_candidates(&*inner, io, sync_handler, candidates, peers);
+    }
+
+    // TODO Handle OneStepSync and IncSync
+    pub fn start_state_sync(
         &self, checkpoint: H256, trusted_blame_block: H256,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
     )
@@ -170,6 +201,31 @@ impl SnapshotChunkSync {
 
     pub fn checkpoint(&self) -> H256 { self.inner.read().checkpoint.clone() }
 
+    pub fn trusted_blame_block(&self) -> H256 {
+        self.inner.read().trusted_blame_block.clone()
+    }
+
+    /// request state candidates from all peers
+    fn request_candidates(
+        &self, _inner: &Inner, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
+    )
+    {
+        let request = StateSyncCandidateRequest {
+            request_id: 0,
+            candidates,
+        };
+        for peer in peers {
+            sync_handler.request_manager.request_with_delay(
+                io,
+                Box::new(request.clone()),
+                Some(peer),
+                None,
+            );
+        }
+    }
+
     /// request manifest from random peer
     fn request_manifest(
         &self, inner: &Inner, io: &dyn NetworkContext,
@@ -183,16 +239,20 @@ impl SnapshotChunkSync {
             inner.trusted_blame_block.clone(),
         );
 
-        let peer = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
-            //            .with_cap(DynamicCapability::ServeCheckpoint(Some(
-            //                inner.checkpoint,
-            //            )))
-            .select(&sync_handler.syn);
+        let peers_filtered: HashSet<PeerId> =
+            PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
+                .select_all(&sync_handler.syn)
+                .into_iter()
+                .collect();
+        let active_peers = self.sync_candidate_manager.active_peers();
+        let available_peers: Vec<&PeerId> =
+            active_peers.intersection(&peers_filtered).collect();
+        let peer = *available_peers.choose(&mut thread_rng()).unwrap();
 
         sync_handler.request_manager.request_with_delay(
             io,
             Box::new(request),
-            peer,
+            Some(*peer),
             None,
         );
     }
