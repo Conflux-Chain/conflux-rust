@@ -75,6 +75,8 @@ impl Debug for Status {
 
 #[derive(Default)]
 struct Inner {
+    sync_candidate_manager: StateSyncCandidateManager,
+
     /// The checkpoint whose state is being synced
     checkpoint: H256,
 
@@ -130,7 +132,6 @@ impl Debug for Inner {
 
 pub struct SnapshotChunkSync {
     inner: Arc<RwLock<Inner>>,
-    pub sync_candidate_manager: StateSyncCandidateManager,
     max_download_peers: usize,
 }
 
@@ -138,7 +139,6 @@ impl SnapshotChunkSync {
     pub fn new(max_download_peers: usize) -> Self {
         SnapshotChunkSync {
             inner: Default::default(),
-            sync_candidate_manager: StateSyncCandidateManager::new(),
             max_download_peers: if max_download_peers == 0 {
                 1
             } else {
@@ -152,7 +152,7 @@ impl SnapshotChunkSync {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
-        let inner = self.inner.write();
+        let mut inner = self.inner.write();
         let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
             .select_all(&sync_handler.syn);
         let height = sync_handler
@@ -165,8 +165,9 @@ impl SnapshotChunkSync {
             height,
             snapshot_epoch_id: checkpoint,
         }];
-        self.sync_candidate_manager
-            .start(candidates.clone(), peers.clone());
+        inner
+            .sync_candidate_manager
+            .reset(candidates.clone(), peers.clone());
         self.request_candidates(&*inner, io, sync_handler, candidates, peers);
     }
 
@@ -244,15 +245,15 @@ impl SnapshotChunkSync {
                 .select_all(&sync_handler.syn)
                 .into_iter()
                 .collect();
-        let active_peers = self.sync_candidate_manager.active_peers();
+        let active_peers = inner.sync_candidate_manager.active_peers();
         let available_peers: Vec<&PeerId> =
             active_peers.intersection(&peers_filtered).collect();
-        let peer = *available_peers.choose(&mut thread_rng()).unwrap();
+        let peer = available_peers.choose(&mut thread_rng()).map(|p| **p);
 
         sync_handler.request_manager.request_with_delay(
             io,
             Box::new(request),
-            Some(*peer),
+            peer,
             None,
         );
     }
@@ -270,6 +271,10 @@ impl SnapshotChunkSync {
                 "Checkpoint changed and ignore the received snapshot manifest, new checkpoint = {:?}, requested checkpoint = {:?}",
                 inner.checkpoint,
                 response.checkpoint);
+            // FIXME handle valid old manifest
+            inner
+                .sync_candidate_manager
+                .note_state_sync_failure(&ctx.peer);
             return;
         }
 
@@ -427,13 +432,13 @@ impl SnapshotChunkSync {
 
         // request snapshot chunks from peers concurrently
         let peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
-            //            .with_cap(DynamicCapability::ServeCheckpoint(Some(
-            //                inner.checkpoint,
-            //            )))
-            .select_n(self.max_download_peers, &ctx.manager.syn);
+            .select_n(self.max_download_peers, &ctx.manager.syn)
+            .into_iter()
+            .collect();
+        let active_peers = inner.sync_candidate_manager.active_peers();
 
-        for peer in peers {
-            if self.request_chunk(ctx, &mut inner, peer).is_none() {
+        for peer in active_peers.intersection(&peers) {
+            if self.request_chunk(ctx, &mut inner, *peer).is_none() {
                 break;
             }
         }
@@ -492,6 +497,10 @@ impl SnapshotChunkSync {
         // maybe received a out-of-date snapshot chunk, e.g. new era started
         if !inner.downloading_chunks.remove(&chunk_key) {
             info!("Snapshot chunk received, but not in downloading queue");
+            // FIXME Handle out-of-date chunks
+            inner
+                .sync_candidate_manager
+                .note_state_sync_failure(&ctx.peer);
             return Ok(());
         }
 
@@ -854,5 +863,26 @@ impl SnapshotChunkSync {
         } else {
             None
         }
+    }
+
+    /// TODO Handling manifest requesting separately
+    /// Return Some if a candidate is ready and we can start requesting
+    /// manifests
+    pub fn handle_snapshot_candidate_response(
+        &self, peer: &PeerId,
+        supported_candidates: &Vec<SnapshotSyncCandidate>,
+        requested_candidates: &Vec<SnapshotSyncCandidate>,
+    ) -> Option<SnapshotSyncCandidate>
+    {
+        self.inner.write().sync_candidate_manager.on_peer_response(
+            peer,
+            supported_candidates,
+            requested_candidates,
+        )
+    }
+
+    pub fn on_peer_disconnected(&self, peer: &PeerId) {
+        let mut inner = self.inner.write();
+        inner.sync_candidate_manager.on_peer_disconnected(peer);
     }
 }

@@ -7,13 +7,13 @@ from jsonrpcclient.exceptions import ReceivedErrorResponseError
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import sync_blocks, connect_nodes
+from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes
 from conflux.rpc import RpcClient
 
 class SyncCheckpointTests(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 2
+        self.num_nodes = 6
         self.conf_parameters = {
             "dev_snapshot_epoch_count": "25",
             "era_epoch_count": "50",
@@ -22,7 +22,9 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
-        self.start_node(0)
+        for i in range(self.num_nodes - 1):
+            self.start_node(i)
+        connect_sample_nodes(self.nodes[:-1], self.log)
     
     def _generate_txs(self, peer, num):
         client = RpcClient(self.nodes[peer])
@@ -46,18 +48,19 @@ class SyncCheckpointTests(ConfluxTestFramework):
             txs = self._generate_txs(0, random.randint(5, 10))
             client.generate_block_with_fake_txs(txs)
 
-        # Start node[1] as full node to sync checkpoint
+        # Start node[full_node_index] as full node to sync checkpoint
         # Change phase from CatchUpSyncBlockHeader to CatchUpCheckpoint
         # only when there is at least one connected peer.
-        self.start_node(1, ["--full"], phase_to_wait=None)
-        connect_nodes(self.nodes, 1, 0)
+        full_node_index = self.num_nodes - 1
+        self.start_node(full_node_index, ["--full"], phase_to_wait=None)
+        for i in range(self.num_nodes - 1):
+            connect_nodes(self.nodes, full_node_index, i)
 
-        # FIXME full node issue that hang at phase CatchUpRecoverBlockFromDbPhase
-        self.nodes[1].wait_for_phase(["NormalSyncPhase"], wait_time=30)
+        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=30)
 
         sync_blocks(self.nodes, sync_count=False)
 
-        client = RpcClient(self.nodes[1])
+        client = RpcClient(self.nodes[full_node_index])
 
         # At epoch 1, block header exists while body not synchronized
         try:

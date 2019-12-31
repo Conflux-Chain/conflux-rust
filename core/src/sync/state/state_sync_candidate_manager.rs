@@ -1,60 +1,7 @@
 use crate::{message::PeerId, sync::state::storage::SnapshotSyncCandidate};
-use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
 
 pub struct StateSyncCandidateManager {
-    inner: RwLock<Inner>,
-}
-
-impl StateSyncCandidateManager {
-    pub fn new() -> Self {
-        Self {
-            inner: RwLock::new(Inner::new()),
-        }
-    }
-
-    pub fn candidates(&self) -> Vec<SnapshotSyncCandidate> {
-        self.inner
-            .read()
-            .candidates
-            .keys()
-            .into_iter()
-            .map(Clone::clone)
-            .collect()
-    }
-
-    pub fn active_peers(&self) -> HashSet<PeerId> {
-        self.inner.read().active_peers.clone()
-    }
-
-    pub fn start(
-        &self, candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
-    ) {
-        self.inner.write().reset(candidates, peers);
-    }
-
-    pub fn on_peer_response(
-        &self, peer: &PeerId, supported_candidates: &Vec<SnapshotSyncCandidate>,
-    ) -> Option<SnapshotSyncCandidate> {
-        self.inner
-            .write()
-            .on_peer_response(peer, supported_candidates)
-    }
-
-    pub fn should_change_candidate(&self) -> bool {
-        self.inner.read().should_change_candidate()
-    }
-
-    pub fn on_peer_disconnected(&self, peer: &PeerId) {
-        let mut inner = self.inner.write();
-        inner.active_peers.remove(peer);
-        for peers in inner.candidates.values_mut() {
-            peers.remove(peer);
-        }
-    }
-}
-
-struct Inner {
     /// The map from state candidates to the set of peers that can support this
     /// state
     candidates: BTreeMap<SnapshotSyncCandidate, HashSet<PeerId>>,
@@ -69,7 +16,7 @@ struct Inner {
     active_peers: HashSet<PeerId>,
 }
 
-impl Inner {
+impl StateSyncCandidateManager {
     fn new() -> Self {
         Self {
             candidates: BTreeMap::new(),
@@ -79,7 +26,7 @@ impl Inner {
         }
     }
 
-    fn reset(
+    pub fn reset(
         &mut self, candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
     ) {
         let mut candidates_map = BTreeMap::new();
@@ -94,15 +41,18 @@ impl Inner {
 
     /// Update the status about candidate choosing.
     /// Return the peer and epoch to retrieve the state manifest
-    fn on_peer_response(
+    pub fn on_peer_response(
         &mut self, peer: &PeerId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
+        requested_candidates: &Vec<SnapshotSyncCandidate>,
     ) -> Option<SnapshotSyncCandidate>
     {
         if !self.pending_peers.remove(peer) {
             debug!("Receive response from unexpected peer {:?}, possibly from old requests", peer);
             return None;
         }
+        let mut requested_candidates_set: HashSet<&SnapshotSyncCandidate> =
+            requested_candidates.iter().collect();
         for candidate in supported_candidates {
             match self.candidates.get_mut(candidate) {
                 Some(peer_set) => {
@@ -112,6 +62,20 @@ impl Inner {
                     debug!(
                         "Receive unexpected candidate {:?} from peer {:?}",
                         candidate, peer
+                    );
+                }
+            }
+            requested_candidates_set.remove(&candidate);
+        }
+        for unsupported_candidate in requested_candidates_set {
+            match self.candidates.get_mut(unsupported_candidate) {
+                Some(peer_set) => {
+                    peer_set.remove(peer);
+                }
+                None => {
+                    debug!(
+                        "requested candidate removed {:?} from peer {:?}",
+                        unsupported_candidate, peer
                     );
                 }
             }
@@ -132,8 +96,32 @@ impl Inner {
         None
     }
 
+    pub fn on_peer_disconnected(&mut self, peer: &PeerId) {
+        self.active_peers.remove(peer);
+        for peers in self.candidates.values_mut() {
+            peers.remove(peer);
+        }
+    }
+
+    #[allow(unused)]
     // TODO Should change candidates if we only have slow active peers
-    fn should_change_candidate(&self) -> bool {
+    pub fn should_change_candidate(&self) -> bool {
         self.active_candidate.is_none() || self.active_peers.is_empty()
     }
+
+    pub fn active_peers(&self) -> HashSet<PeerId> { self.active_peers.clone() }
+
+    /// `peer` cannot support the active candidate now
+    pub fn note_state_sync_failure(&mut self, peer: &PeerId) {
+        self.active_peers.remove(peer);
+        if let Some(active_candidate) = &self.active_candidate {
+            if let Some(peers) = self.candidates.get_mut(active_candidate) {
+                peers.remove(peer);
+            }
+        }
+    }
+}
+
+impl Default for StateSyncCandidateManager {
+    fn default() -> Self { Self::new() }
 }

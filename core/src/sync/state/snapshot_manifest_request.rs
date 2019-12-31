@@ -41,7 +41,12 @@ impl Handleable for SnapshotManifestRequest {
         ) {
             Ok(Some(m)) => m,
             _ => {
-                // FIXME: Unable to offer. Define Response and reply.
+                // Return an empty response to indicate that we cannot serve the
+                // state
+                ctx.send_response(&SnapshotManifestResponse {
+                    request_id: self.request_id,
+                    ..Default::default()
+                })?;
                 return Ok(());
             }
         };
