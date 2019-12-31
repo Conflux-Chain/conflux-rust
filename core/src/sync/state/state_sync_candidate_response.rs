@@ -2,7 +2,7 @@ use crate::{
     message::RequestId,
     sync::{
         message::{Context, Handleable},
-        state::storage::SnapshotSyncCandidate,
+        state::{storage::SnapshotSyncCandidate, StateSyncCandidateRequest},
         Error, ErrorKind,
     },
 };
@@ -16,11 +16,18 @@ pub struct StateSyncCandidateResponse {
 
 impl Handleable for StateSyncCandidateResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        if let Some(candidate) = ctx
-            .manager
-            .state_sync
-            .sync_candidate_manager
-            .on_peer_response(&ctx.peer, &self.supported_candidates)
+        let message = ctx.match_request(self.request_id)?;
+        let request = message.downcast_ref::<StateSyncCandidateRequest>(
+            ctx.io,
+            &ctx.manager.request_manager,
+            true,
+        )?;
+        if let Some(candidate) =
+            ctx.manager.state_sync.handle_snapshot_candidate_response(
+                &ctx.peer,
+                &self.supported_candidates,
+                &request.candidates,
+            )
         {
             // Start retrieving state of candidate
             let epoch_to_sync = match candidate {

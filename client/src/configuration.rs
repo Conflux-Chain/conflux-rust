@@ -130,7 +130,7 @@ build_config! {
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
-        (snapshot_sync_request_timeout_ms, (u64), 60_000)
+        (snapshot_sync_request_timeout_ms, (u64), 10_000)
         (throttling_conf, (Option<String>), None)
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)

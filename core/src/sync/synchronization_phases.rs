@@ -317,6 +317,13 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
 
+        // FIXME Here we should handle both era shift and snapshot shift.
+        // If we moves into the next era, we should force state_sync to change
+        // the candidates to states with in the new stable era. If the
+        // era stays the same and a new snapshot becomes available, we
+        // only change candidates if old candidates cannot to be synced,
+        // so a state can be synced with one era time instead of only
+        // one snapshot time
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
         if self.state_sync.checkpoint() == epoch_to_sync {
@@ -335,18 +342,12 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
                 return SyncPhaseType::CatchUpRecoverBlockFromDB;
             }
         } else {
-            if self
-                .state_sync
-                .sync_candidate_manager
-                .should_change_candidate()
-            {
-                // start to sync new checkpoint if new era started,
-                self.state_sync.start_candidate_sync(
-                    epoch_to_sync,
-                    io,
-                    sync_handler,
-                )
-            }
+            // start to sync new checkpoint if new era started,
+            self.state_sync.start_candidate_sync(
+                epoch_to_sync,
+                io,
+                sync_handler,
+            )
         }
 
         self.phase_type()

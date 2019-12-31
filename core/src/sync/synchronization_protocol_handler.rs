@@ -1476,9 +1476,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         self.syn.peers.write().remove(&peer);
         self.syn.handshaking_peers.write().remove(&peer);
         self.request_manager.on_peer_disconnected(io, peer);
-        self.state_sync
-            .sync_candidate_manager
-            .on_peer_disconnected(&peer);
+        self.state_sync.on_peer_disconnected(&peer);
     }
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
