@@ -434,13 +434,11 @@ impl StorageManager {
         //
         // It can't happen when the parent's delta mpt is still empty we
         // are already making the snapshot.
-        let intermediate_delta_mpt = snapshot_associated_mpts_locked
+        let maybe_intermediate_delta_mpt = snapshot_associated_mpts_locked
             .get(&new_snapshot_info.parent_snapshot_epoch_id)
-            .unwrap()
-            .1
-            .clone();
+            .map(|x| x.1.clone().unwrap());
         snapshot_associated_mpts_locked
-            .insert(snapshot_epoch_id.clone(), (intermediate_delta_mpt, None));
+            .insert(snapshot_epoch_id.clone(), (maybe_intermediate_delta_mpt, None));
 
         self.snapshot_info_map_by_epoch
             .write()
