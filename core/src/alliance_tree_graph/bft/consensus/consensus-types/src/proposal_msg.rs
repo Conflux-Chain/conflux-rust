@@ -22,7 +22,7 @@ pub struct ProposalMsg<T> {
 
 /// A ProposalMsg is only accessible after verifying the signatures of a
 /// ProposalUncheckedSignatures via the `validate_signatures` function.
-pub struct ProposalUncheckedSignatures<T>(ProposalMsg<T>);
+pub struct ProposalUncheckedSignatures<T>(pub ProposalMsg<T>);
 
 #[cfg(any(test, feature = "fuzzing"))]
 impl<T: Payload> From<ProposalUncheckedSignatures<T>> for ProposalMsg<T> {
@@ -51,6 +51,8 @@ impl<T: Payload> ProposalUncheckedSignatures<T> {
     }
 
     pub fn epoch(&self) -> u64 { self.0.proposal.epoch() }
+
+    pub fn author(&self) -> Option<Author> { self.0.proposal.author() }
 }
 
 impl<T: Payload> ProposalMsg<T> {

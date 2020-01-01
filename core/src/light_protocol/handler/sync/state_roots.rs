@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered},
     witnesses::Witnesses,
 };
 
@@ -89,9 +89,9 @@ impl StateRoots {
     }
 
     #[inline]
-    pub fn request_now(
-        &self, io: &dyn NetworkContext, epoch: u64,
-    ) -> impl Future<Item = StateRoot, Error = Error> {
+    pub fn request_now(&self, io: &dyn NetworkContext, epoch: u64)
+    /* -> impl Future<Item = StateRoot, Error = Error> */
+    {
         if !self.verified.read().contains_key(&epoch) {
             let missing = std::iter::once(MissingStateRoot::new(epoch));
 
@@ -100,7 +100,7 @@ impl StateRoots {
             });
         }
 
-        FutureItem::new(epoch, self.verified.clone())
+        //FutureItem::new(epoch, self.verified.clone())
     }
 
     #[inline]

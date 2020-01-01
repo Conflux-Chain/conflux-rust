@@ -480,6 +480,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
             }
+            ErrorKind::InternalError(_) => {}
         }
 
         if disconnect {

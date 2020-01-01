@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, KeyOrdered, SyncManager},
+    common::{KeyOrdered, SyncManager},
     witnesses::Witnesses,
 };
 
@@ -83,9 +83,9 @@ impl Receipts {
     }
 
     #[inline]
-    pub fn request(
-        &self, epoch: u64,
-    ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> {
+    pub fn request(&self, epoch: u64)
+    /* -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> */
+    {
         if epoch == 0 {
             self.verified.write().insert(0, vec![]);
         }
@@ -95,7 +95,7 @@ impl Receipts {
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        FutureItem::new(epoch, self.verified.clone())
+        //FutureItem::new(epoch, self.verified.clone())
     }
 
     #[inline]

@@ -56,7 +56,6 @@ consensus-types = { path = "core/src/alliance_tree_graph/bft/consensus/consensus
 #executor = { path = "core/src/alliance_tree_graph/bft/executor" }
 libra-config = { path = "core/src/alliance_tree_graph/bft/config" }
 libra-canonical-serialization = { path = "core/src/alliance_tree_graph/bft/common/lcs" }
-libra-crypto = { path = "core/src/alliance_tree_graph/bft/crypto/crypto" }
 libra-types = { path = "core/src/alliance_tree_graph/bft/types" }
 libra-crypto-derive = { path = "core/src/alliance_tree_graph/bft/crypto/crypto-derive" }
 libra-nibble = { path = "core/src/alliance_tree_graph/bft/common/nibble" }
@@ -74,7 +73,6 @@ scratchpad = { path = "core/src/alliance_tree_graph/bft/storage/scratchpad" }
 libra-state-view = { path="core/src/alliance_tree_graph/bft/storage/state-view" }
 storage-client = { path = "core/src/alliance_tree_graph/bft/storage/storage-client" }
 storage-proto = { path = "core/src/alliance_tree_graph/bft/storage/storage-proto" }
-consensus = { path = "core/src/alliance_tree_graph/bft/consensus" }
 
 [[bin]]
 name = "consensus_bench"
@@ -96,7 +94,6 @@ path = "accounts/ethkey/cli/src/main.rs"
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
-fuzzing = ["consensus-types/fuzzing", "libra-crypto/fuzzing", "libra-types/fuzzing"]
 
 #[replace]
 #"bzip2-sys:0.1.6"={git = "https://github.com/alexcrichton/bzip2-rs.git"}

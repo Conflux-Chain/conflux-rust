@@ -27,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, KeyOrdered, SyncManager},
+    common::{KeyOrdered, SyncManager},
     witnesses::Witnesses,
 };
 
@@ -84,9 +84,9 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn request(
-        &self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> {
+    pub fn request(&self, epoch: u64)
+    /* -> impl Future<Item = Bloom, Error = Error> */
+    {
         if epoch == 0 {
             self.verified.write().insert(0, Bloom::zero());
         }
@@ -96,7 +96,7 @@ impl Blooms {
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        FutureItem::new(epoch, self.verified.clone())
+        //FutureItem::new(epoch, self.verified.clone())
     }
 
     #[inline]

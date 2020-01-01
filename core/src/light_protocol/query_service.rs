@@ -7,9 +7,7 @@ extern crate futures;
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{
-            poll_future, poll_stream, with_timeout, FullPeerFilter, LedgerInfo,
-        },
+        common::{FullPeerFilter, LedgerInfo},
         message::msgid,
         Error, Handler as LightHandler, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_VERSION,
@@ -92,6 +90,7 @@ impl QueryService {
         res.unwrap()
     }
 
+    /*
     fn retrieve_state_root<'a>(
         &'a self, epoch: u64,
     ) -> impl Future<Item = StateRoot, Error = Error> + 'a {
@@ -166,6 +165,7 @@ impl QueryService {
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
     }
+    */
 
     fn account_key(address: &H160) -> Vec<u8> {
         StorageKey::AccountKey(&address.0).to_key_bytes()
@@ -179,9 +179,9 @@ impl QueryService {
         .to_key_bytes()
     }
 
-    fn retrieve_account<'a>(
-        &'a self, epoch: u64, address: H160,
-    ) -> impl Future<Item = Option<Account>, Error = String> + 'a {
+    fn retrieve_account<'a>(&'a self, epoch: u64, address: H160)
+    /* -> impl Future<Item = Option<Account>, Error = String> + 'a */
+    {
         trace!(
             "retrieve_account epoch = {}, address = {:?}",
             epoch,
@@ -191,6 +191,7 @@ impl QueryService {
         // FIXME: We don't need the state root when we don't verify the
         // retrieved content. FIXME: but can we rule out the need for
         // verification in the context?
+        /*
         self.retrieve_state_root(epoch)
             .map(move |_root| Self::account_key(&address))
             .and_then(move |key| self.retrieve_state_entry(epoch, key))
@@ -199,11 +200,12 @@ impl QueryService {
                 None => Ok(None),
             })
             .map_err(|e| format!("{}", e))
+            */
     }
 
-    fn retrieve_code<'a>(
-        &'a self, epoch: u64, address: H160, code_hash: H256,
-    ) -> impl Future<Item = Option<Vec<u8>>, Error = String> + 'a {
+    fn retrieve_code<'a>(&'a self, epoch: u64, address: H160, code_hash: H256)
+    /* -> impl Future<Item = Option<Vec<u8>>, Error = String> + 'a */
+    {
         trace!(
             "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
             epoch,
@@ -214,10 +216,12 @@ impl QueryService {
         // FIXME: We don't need the state root when we don't verify the
         // retrieved content. FIXME: but can we rule out the need for
         // verification in the context?
+        /*
         self.retrieve_state_root(epoch)
             .map(move |_root| Self::code_key(&address, &code_hash))
             .and_then(move |key| self.retrieve_state_entry(epoch, key))
             .map_err(|e| format!("{}", e))
+            */
     }
 
     pub fn get_account(
@@ -225,6 +229,7 @@ impl QueryService {
     ) -> Result<Option<Account>, String> {
         info!("get_account epoch={:?} address={:?}", epoch, address);
 
+        /*
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
             Err(e) => return Err(format!("{}", e)),
@@ -237,12 +242,16 @@ impl QueryService {
                 Err(format!("{}", e))
             }
         }
+        */
+        return Err(String::from("err"));
     }
 
     pub fn get_code(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Vec<u8>>, String> {
         info!("get_code epoch={:?} address={:?}", epoch, address);
+
+        /*
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
@@ -267,11 +276,14 @@ impl QueryService {
                 Err(e)
             }
         }
+        */
+        return Err(String::from("err"));
     }
 
     pub fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
         info!("get_tx_info hash={:?}", hash);
 
+        /*
         let mut info = self.retrieve_tx_info(hash).map(|info| {
             let (tx, receipt, address) = info;
 
@@ -292,6 +304,8 @@ impl QueryService {
                 Err(format!("{}", e))
             }
         }
+        */
+        return Err(String::from("err"));
     }
 
     /// Relay raw transaction to all peers.
@@ -327,6 +341,7 @@ impl QueryService {
     pub fn get_tx(&self, hash: H256) -> Result<SignedTransaction, String> {
         info!("get_tx hash={:?}", hash);
 
+        /*
         let mut tx = future::ok(hash).and_then(|hash| {
             trace!("hash = {:?}", hash);
 
@@ -346,6 +361,8 @@ impl QueryService {
                 Err(format!("{}", e))
             }
         }
+        */
+        return Err(String::from("err"));
     }
 
     /// Apply filter to all logs within a receipt.
@@ -522,6 +539,7 @@ impl QueryService {
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         debug!("get_logs filter = {:?}", filter);
 
+        /*
         // find epochs and blocks to match against
         let (epochs, block_filter) = self.get_filter_epochs(&filter)?;
         debug!("Executing filter on epochs {:?}", epochs);
@@ -633,5 +651,7 @@ impl QueryService {
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)
+        */
+        return Ok(Vec::new());
     }
 }

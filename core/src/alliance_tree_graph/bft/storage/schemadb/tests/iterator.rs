@@ -6,7 +6,8 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use schemadb::{
     define_schema,
     schema::{KeyCodec, Schema, SeekKeyCodec, ValueCodec},
-    ColumnFamilyOptions, ColumnFamilyOptionsMap, SchemaIterator, DB, DEFAULT_CF_NAME,
+    ColumnFamilyOptions, ColumnFamilyOptionsMap, SchemaIterator, DB,
+    DEFAULT_CF_NAME,
 };
 
 define_schema!(TestSchema, TestKey, TestValue, "TestCF");
@@ -125,9 +126,7 @@ impl TestDB {
 impl std::ops::Deref for TestDB {
     type Target = DB;
 
-    fn deref(&self) -> &Self::Target {
-        &self.db
-    }
+    fn deref(&self) -> &Self::Target { &self.db }
 }
 
 #[test]

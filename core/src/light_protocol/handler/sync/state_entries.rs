@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered},
     state_roots::StateRoots,
 };
 
@@ -99,7 +99,8 @@ impl StateEntries {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Item = StateEntry, Error = Error> {
+    ) /* -> impl Future<Item = StateEntry, Error = Error> */
+    {
         let key = StateKey { epoch, key };
 
         if !self.verified.read().contains_key(&key) {
@@ -110,7 +111,7 @@ impl StateEntries {
             });
         }
 
-        FutureItem::new(key, self.verified.clone())
+        //FutureItem::new(key, self.verified.clone())
     }
 
     #[inline]

@@ -3,14 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 pub mod proposal;
+pub mod sync_info;
+pub mod vote;
 
 use crate::message::{Message, MsgId};
 
+use crate::hotstuff_types::{sync_info::SyncInfo, vote_msg::VoteMsg};
 use proposal::ProposalMsgWithTransactions;
 
 build_msgid! {
     PROPOSAL = 0x00
     VOTE = 0x01
+    SYNC_INFO = 0x02
     INVALID = 0xff
 }
 
@@ -32,3 +36,5 @@ macro_rules! build_msg_impl_with_serde_serialization {
 }
 
 build_msg_impl_with_serde_serialization! {ProposalMsgWithTransactions, msgid::PROPOSAL, "ProposalMessage"}
+build_msg_impl_with_serde_serialization! {VoteMsg, msgid::VOTE, "VoteMessage"}
+build_msg_impl_with_serde_serialization! {SyncInfo, msgid::SYNC_INFO, "SyncInfoMessage"}

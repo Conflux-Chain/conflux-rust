@@ -28,7 +28,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered},
     BlockTxs, Receipts,
 };
 
@@ -97,9 +97,9 @@ impl TxInfos {
     }
 
     #[inline]
-    pub fn request_now(
-        &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Item = TxInfoValidated, Error = Error> {
+    pub fn request_now(&self, io: &dyn NetworkContext, hash: H256)
+    /* -> impl Future<Item = TxInfoValidated, Error = Error> */
+    {
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTxInfo::new(hash));
 
@@ -108,7 +108,7 @@ impl TxInfos {
             });
         }
 
-        FutureItem::new(hash, self.verified.clone())
+        //FutureItem::new(hash, self.verified.clone())
     }
 
     #[inline]

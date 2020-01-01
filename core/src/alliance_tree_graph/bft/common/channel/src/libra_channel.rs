@@ -51,7 +51,7 @@ impl<K: Eq + Hash + Clone, M> Sender<K, M> {
     /// synchronous call.
     /// TODO: We can have this return a boolean if the queue of a key is
     /// capacity
-    pub fn push(&mut self, key: K, message: M) -> Result<()> {
+    pub fn push(&self, key: K, message: M) -> Result<()> {
         let mut shared_state = self.shared_state.lock().unwrap();
         ensure!(!shared_state.receiver_dropped, "Channel is closed");
         shared_state.internal_queue.push(key, message);

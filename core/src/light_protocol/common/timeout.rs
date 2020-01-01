@@ -4,7 +4,7 @@
 
 extern crate futures;
 
-use futures::{Async, Future, Poll};
+use futures::Future;
 use std::{
     marker::PhantomData,
     ops::Add,
@@ -29,6 +29,7 @@ impl<T> Timeout<T> {
     }
 }
 
+/*
 impl<T> Future for Timeout<T> {
     type Error = Error;
     type Item = T;
@@ -40,9 +41,11 @@ impl<T> Future for Timeout<T> {
         }
     }
 }
+*/
 
-/// Consume `future` and return a new one that raises and error with `msg` if
-/// `future` is not ready before the given duration `d`.
+// Consume `future` and return a new one that raises and error with `msg` if
+// `future` is not ready before the given duration `d`.
+/*
 pub fn with_timeout<Item>(
     d: Duration, msg: String, future: impl Future<Item = Item, Error = Error>,
 ) -> impl Future<Item = Item, Error = Error> {
@@ -53,3 +56,4 @@ pub fn with_timeout<Item>(
             Err((a, _)) => Err(a),
         })
 }
+*/

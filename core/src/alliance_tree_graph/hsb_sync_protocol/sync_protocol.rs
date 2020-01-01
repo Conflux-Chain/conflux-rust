@@ -4,8 +4,15 @@
 
 use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::message::{
-        msgid, proposal::ProposalMsgWithTransactions,
+    alliance_tree_graph::{
+        bft::consensus::chained_bft::network::NetworkTask,
+        hsb_sync_protocol::message::{
+            msgid, proposal::ProposalMsgWithTransactions,
+        },
+    },
+    hotstuff_types::{
+        proposal_msg::ProposalUncheckedSignatures, sync_info::SyncInfo,
+        vote_msg::VoteMsg,
     },
     message::{Message, MsgId},
     network::{
@@ -24,6 +31,7 @@ use io::TimerToken;
 use keccak_hash::keccak;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
+use primitives::TransactionWithSignature;
 use serde::Deserialize;
 use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 
@@ -31,6 +39,10 @@ use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
 pub struct PeerState {
     id: PeerId,
     peer_hash: H256,
+}
+
+impl PeerState {
+    pub fn get_id(&self) -> PeerId { self.id }
 }
 
 #[derive(Default)]
@@ -113,16 +125,20 @@ pub struct HotStuffSynchronizationProtocol {
     pub own_node_hash: H256,
     pub peers: Arc<Peers<PeerState, H256>>,
     pub request_manager: Arc<RequestManager>,
+    pub network_task: NetworkTask<Vec<TransactionWithSignature>>,
 }
 
 impl HotStuffSynchronizationProtocol {
     pub fn new(
         own_node_hash: H256, request_manager: Arc<RequestManager>,
-    ) -> Self {
+        network_task: NetworkTask<Vec<TransactionWithSignature>>,
+    ) -> Self
+    {
         HotStuffSynchronizationProtocol {
             own_node_hash,
             peers: Arc::new(Peers::new()),
             request_manager,
+            network_task,
         }
     }
 
@@ -218,8 +234,25 @@ pub fn handle_serialized_message(
 ) -> Result<bool, Error> {
     match id {
         msgid::PROPOSAL => {
-            handle_message::<ProposalMsgWithTransactions>(ctx, msg)?
+            let msg: ProposalMsgWithTransactions = lcs::from_bytes(msg)?;
+            let msg_id = msg.msg_id();
+            let msg_name = msg.msg_name();
+            let req_id = msg.get_request_id();
+
+            let proposal = ProposalUncheckedSignatures(msg);
+
+            // FIXME: add throttling.
+
+            if let Err(e) = proposal.handle(ctx) {
+                info!(
+                    "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
+                    ctx.peer, msg_id, msg_name, req_id, e.0,
+                );
+                return Err(e);
+            }
         }
+        msgid::VOTE => handle_message::<VoteMsg>(ctx, msg)?,
+        msgid::SYNC_INFO => handle_message::<SyncInfo>(ctx, msg)?,
         _ => return Ok(false),
     }
     Ok(true)
@@ -346,6 +379,12 @@ pub trait Handleable {
     fn handle(self, ctx: &Context) -> Result<(), Error>;
 }
 
-impl std::convert::From<lcs::Error> for Error {
+impl From<lcs::Error> for Error {
     fn from(_: lcs::Error) -> Self { ErrorKind::InvalidMessageFormat.into() }
+}
+
+impl From<anyhow::Error> for Error {
+    fn from(error: anyhow::Error) -> Self {
+        ErrorKind::InternalError(format!("{}", error)).into()
+    }
 }

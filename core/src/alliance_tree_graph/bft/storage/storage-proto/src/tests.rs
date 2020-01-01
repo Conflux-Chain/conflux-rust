@@ -5,7 +5,7 @@ use super::*;
 use libra_prost_ext::test_helpers::assert_protobuf_encode_decode;
 
 macro_rules! test_conversion {
-    ($test_name: ident, $rust_type: ident $(,)?) => {
+    ($test_name:ident, $rust_type:ident $(,)?) => {
         proptest! {
             #![proptest_config(ProptestConfig::with_cases(10))]
 

@@ -6,5 +6,5 @@ pub mod message;
 pub mod sync_protocol;
 
 use crate::network::ProtocolId;
-const HSB_PROTOCOL_ID: ProtocolId = *b"hsb"; // HotStuff Synchronization Protocol
-const HSB_PROTOCOL_VERSION: u8 = 1;
+pub const HSB_PROTOCOL_ID: ProtocolId = *b"hsb"; // HotStuff Synchronization Protocol
+pub const HSB_PROTOCOL_VERSION: u8 = 1;

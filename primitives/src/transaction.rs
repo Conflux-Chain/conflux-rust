@@ -163,6 +163,7 @@ impl Encodable for Action {
     Default,
     Debug,
     Clone,
+    Eq,
     PartialEq,
     RlpEncodable,
     RlpDecodable,
@@ -245,7 +246,14 @@ impl MallocSizeOf for Transaction {
 
 /// Signed transaction information without verified signature.
 #[derive(
-    Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
 )]
 pub struct TransactionWithSignatureSerializePart {
     /// Plain Transaction.
@@ -266,7 +274,7 @@ impl Deref for TransactionWithSignatureSerializePart {
 }
 
 /// Signed transaction information without verified signature.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransactionWithSignature {
     /// Serialize part.
     pub transaction: TransactionWithSignatureSerializePart,

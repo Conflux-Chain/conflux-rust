@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-use super::common::{FutureItem, SyncManager, TimeOrdered};
+use super::common::{SyncManager, TimeOrdered};
 
 #[derive(Debug)]
 struct Statistics {
@@ -75,9 +75,9 @@ impl Txs {
     }
 
     #[inline]
-    pub fn request_now(
-        &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Item = SignedTransaction, Error = Error> {
+    pub fn request_now(&self, io: &dyn NetworkContext, hash: H256)
+    /* -> impl Future<Item = SignedTransaction, Error = Error> */
+    {
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTx::new(hash));
 
@@ -86,7 +86,7 @@ impl Txs {
             });
         }
 
-        FutureItem::new(hash, self.verified.clone())
+        //FutureItem::new(hash, self.verified.clone())
     }
 
     #[inline]

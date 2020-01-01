@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // Recursion limit raised for error_chain
-#![recursion_limit = "128"]
+#![recursion_limit = "512"]
 #![allow(deprecated)]
 
 extern crate cfx_bytes as bytes;
@@ -30,15 +30,17 @@ extern crate lazy_static;
 extern crate bit_set;
 extern crate bn;
 extern crate byteorder;
+extern crate consensus_types as hotstuff_types;
+extern crate libra_canonical_serialization as lcs;
 extern crate memory_cache;
 extern crate num;
 extern crate parity_crypto;
-extern crate serde_derive;
-
-extern crate consensus_types as hotstuff_types;
-extern crate libra_canonical_serialization as lcs;
+#[macro_use]
+extern crate prometheus;
 #[cfg(test)]
 extern crate rustc_hex;
+extern crate schemadb;
+extern crate serde_derive;
 extern crate unexpected;
 
 pub mod block_data_manager;

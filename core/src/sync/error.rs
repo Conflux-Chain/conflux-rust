@@ -74,5 +74,10 @@ error_chain! {
             description("packet throttled"),
             display("packet {:?} throttled: {:?}", msg_name, response),
         }
+
+        InternalError(reason: String) {
+            description("Internal error"),
+            display("Internal error: {:?}", reason),
+        }
     }
 }

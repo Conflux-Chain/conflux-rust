@@ -28,7 +28,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered},
     Txs,
 };
 
@@ -91,15 +91,16 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub fn request(
-        &self, hash: H256,
-    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> {
+    pub fn request(&self, hash: H256)
+    /* -> impl Future<Item = Vec<SignedTransaction>, Error =
+     * Error> */
+    {
         if !self.verified.read().contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));
         }
 
-        FutureItem::new(hash, self.verified.clone())
+        //FutureItem::new(hash, self.verified.clone())
     }
 
     #[inline]
