@@ -1521,6 +1521,7 @@ impl ConsensusNewBlockHandler {
             state_boundary_height
                 - storage_manager.get_snapshot_epoch_count() as u64
         };
+        /*
         // FIXME Most are fake because not used now
         // And it's also not correct to unconditionally set delta_mpt and
         // intermediate_mpt as Some
@@ -1545,6 +1546,7 @@ impl ConsensusNewBlockHandler {
         storage_manager
             .get_delta_mpt(&start_hash)
             .expect("No db error");
+            */
         let mut parent_snapshot_id = start_hash;
         for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
