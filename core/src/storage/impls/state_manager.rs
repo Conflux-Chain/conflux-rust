@@ -39,35 +39,11 @@ pub struct StateManager {
 }
 
 impl StateManager {
-    // FIXME: leave this method here or not?
-    // FIXME: fix the TODO.
-    // TODO(ming): Should prevent from committing at existing epoch because
-    // otherwise the overwritten trie nodes can not be reachable from db.
-    // The current codebase overwrites because it didn't check if the state
-    // root is already computed, which should eventually be optimized out.
-    // TODO(ming): Use self.get_state_root_node_ref(epoch_id).
-    pub(super) fn mpt_commit_state_root(
-        delta_trie: &DeltaMpt, epoch_id: EpochId, merkle_root: &MerkleHash,
-        parent_epoch_id: EpochId, root_node: Option<NodeRefDeltaMpt>,
-    )
-    {
-        match root_node {
-            None => {}
-            Some(node) => {
-                delta_trie.set_parent_epoch(epoch_id, parent_epoch_id.clone());
-                delta_trie.set_epoch_root(epoch_id, node.clone());
-                delta_trie.set_root_node_ref(merkle_root.clone(), node.clone());
-            }
-        }
-    }
-
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
 
         let storage_manager = StorageManager::new_arc(conf)?;
 
-        // FIXME: move the commit_lock into delta_mpt, along with the row_number
-        // FIXME: reading into the new_or_delta_mpt method.
         Ok(Self {
             storage_manager,
             number_committed_nodes: Default::default(),
@@ -136,20 +112,27 @@ impl StateManager {
         intermediate_epoch_id: &EpochId,
         intermediate_trie_root_merkle: MerkleHash, delta_mpt: Arc<DeltaMpt>,
         maybe_delta_mpt_key_padding: Option<&DeltaMptKeyPadding>,
-        epoch_id: &EpochId, maybe_delta_root: Option<NodeRefDeltaMpt>,
+        epoch_id: &EpochId, delta_root: Option<NodeRefDeltaMpt>,
         maybe_height: Option<u64>, maybe_delta_trie_height: Option<u32>,
     ) -> Result<Option<StateTrees>>
     {
-        let intermediate_trie_root;
-        if maybe_intermediate_trie.is_none() {
-            intermediate_trie_root = None;
-        } else {
-            intermediate_trie_root =
-                maybe_intermediate_trie
-                    .as_ref()
-                    .unwrap()
-                    .get_root_node_ref_by_epoch(intermediate_epoch_id)?
+        let intermediate_trie_root = match &maybe_intermediate_trie {
+            None => None,
+            Some(mpt) => {
+                match mpt.get_root_node_ref_by_epoch(intermediate_epoch_id)? {
+                    None => {
+                        warn!(
+                            "get_state_trees_internal, intermediate_mpt root not found \
+                             for epoch {:?}.",
+                            intermediate_epoch_id,
+                        );
+                        return Ok(None);
+                    }
+                    Some(root) => root,
+                }
+            }
         };
+
         let delta_trie_key_padding = match maybe_delta_mpt_key_padding {
             Some(x) => x.clone(),
             None => {
@@ -172,7 +155,7 @@ impl StateManager {
             maybe_intermediate_trie_key_padding:
                 maybe_intermediate_trie_key_padding.cloned(),
             delta_trie: delta_mpt,
-            delta_trie_root: maybe_delta_root,
+            delta_trie_root: delta_root,
             delta_trie_key_padding,
             maybe_delta_trie_height,
             maybe_height,
@@ -270,7 +253,7 @@ impl StateManager {
             delta_mpt,
             Some(state_index.delta_mpt_key_padding),
             state_index.epoch_id,
-            Some(delta_root),
+            delta_root,
             state_index.maybe_height,
             state_index.maybe_delta_trie_height,
         )
@@ -474,7 +457,20 @@ impl StateManager {
         let delta_root = if new_delta_root {
             None
         } else {
-            delta_mpt.get_root_node_ref_by_epoch(parent_state_index.epoch_id)?
+            match delta_mpt
+                .get_root_node_ref_by_epoch(parent_state_index.epoch_id)?
+            {
+                None => {
+                    warn!(
+                            "get_state_trees_for_next_epoch, not shifting, \
+                         delta_root not found for epoch {:?}. mpt_id {}, StateIndex: {:?}",
+                            parent_state_index.epoch_id,
+                            delta_mpt.get_mpt_id(), parent_state_index
+                        );
+                    return Ok(None);
+                }
+                Some(root_node) => root_node,
+            }
         };
         Self::get_state_trees_internal(
             snapshot,

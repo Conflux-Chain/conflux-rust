@@ -80,3 +80,9 @@ deadlock_detection = ["parking_lot/deadlock_detection"]
 [patch.crates-io]
 bzip2-sys = {git = "https://github.com/alexcrichton/bzip2-rs.git"}
 
+[profile.test]
+debug-assertions = true
+
+[profile.bench]
+debug-assertions = true
+
