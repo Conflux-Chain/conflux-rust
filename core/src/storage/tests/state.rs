@@ -4,7 +4,7 @@
 
 #[test]
 fn test_empty_genesis_block() {
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
 
     let mut genesis_epoch_id = H256::default();
     genesis_epoch_id.as_bytes_mut()[0] = 1;
@@ -25,7 +25,7 @@ fn test_empty_genesis_block() {
 #[test]
 fn test_set_get() {
     let mut rng = get_rng_for_test();
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
     let mut state = state_manager.get_state_for_genesis_write();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
@@ -60,7 +60,7 @@ fn test_set_get() {
 
 #[test]
 fn test_get_set_at_second_commit() {
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
     let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let set_size = TEST_NUMBER_OF_KEYS / 10;
     let (keys_0, keys_1_new, keys_remain, keys_1_overwritten) = (
@@ -151,7 +151,7 @@ fn test_get_set_at_second_commit() {
 #[test]
 fn test_set_delete() {
     let mut rng = get_rng_for_test();
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
 
     let mut state = state_manager.get_state_for_genesis_write();
     let empty_state_root = state.compute_state_root().unwrap();
@@ -211,7 +211,7 @@ fn test_set_delete() {
 #[test]
 fn test_set_delete_all() {
     let mut rng = get_rng_for_test();
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
 
     let mut state = state_manager.get_state_for_genesis_write();
     let empty_state_root = state.compute_state_root().unwrap();
@@ -299,7 +299,7 @@ fn test_set_delete_all() {
 #[test]
 fn test_set_order() {
     let mut rng = get_rng_for_test();
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
     let keys: Vec<Vec<u8>> = generate_keys(500000)
         .iter()
         .filter(|_| rng.gen_bool(0.5))
@@ -355,7 +355,7 @@ fn test_set_order() {
 #[test]
 fn test_set_order_concurrent() {
     let mut rng = get_rng_for_test();
-    let state_manager = Arc::new(new_state_manager_for_testing());
+    let state_manager = Arc::new(new_state_manager_for_unit_test());
     let keys = Arc::new(
         generate_keys(TEST_NUMBER_OF_KEYS / 10)
             .iter()
@@ -460,7 +460,7 @@ fn test_set_order_concurrent() {
 #[test]
 fn test_proofs() {
     let mut rng = get_rng_for_test();
-    let state_manager = new_state_manager_for_testing();
+    let state_manager = new_state_manager_for_unit_test();
     let mut state = state_manager.get_state_for_genesis_write();
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
         .iter()
@@ -540,7 +540,7 @@ fn test_proofs() {
 
 use super::{
     super::{state::*, state_manager::*},
-    generate_keys, get_rng_for_test, new_state_manager_for_testing,
+    generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
 };
 use crate::storage::tests::TEST_NUMBER_OF_KEYS;
 use cfx_types::H256;

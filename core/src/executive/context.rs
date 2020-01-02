@@ -382,8 +382,8 @@ mod tests {
         machine::{new_machine, new_machine_with_builtin},
         statedb::StateDb,
         storage::{
-            new_storage_manager_for_testing, state::StateTrait, StorageManager,
-            StorageManagerTrait,
+            new_storage_manager_for_testing, state::StateTrait,
+            tests::FakeStateManager, StorageManager, StorageManagerTrait,
         },
         test_helpers::get_state_for_genesis_write,
         vm::Env,
@@ -417,7 +417,7 @@ mod tests {
     }
 
     struct TestSetup {
-        storage_manager: Option<Box<StorageManager>>,
+        storage_manager: Option<Box<FakeStateManager>>,
         state: Option<State<'static>>,
         machine: Machine,
         spec: Spec,
@@ -446,7 +446,7 @@ mod tests {
             };
             setup.storage_manager = Some(storage_manager);
             setup.init_state(unsafe {
-                &*(setup.storage_manager.as_ref().unwrap().as_ref()
+                &*(&**setup.storage_manager.as_ref().unwrap().as_ref()
                     as *const StorageManager)
             });
 

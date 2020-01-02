@@ -3,37 +3,73 @@
 // See http://www.gnu.org/licenses/
 
 pub struct DeltaDbManagerRocksdb {
-    pub system_db: Arc<SystemDB>,
+    pub delta_db_path: String,
+    creation_mutex: Mutex<()>,
 }
 
 #[allow(unused)]
 impl DeltaDbManagerRocksdb {
-    pub fn new(system_db: Arc<SystemDB>) -> DeltaDbManagerRocksdb {
-        Self { system_db }
+    const DELTA_DB_ROCKSDB_DIR_PREFIX: &'static str = "rocksdb_";
+
+    pub fn new(delta_db_path: String) -> Result<DeltaDbManagerRocksdb> {
+        let delta_db_dir = Path::new(delta_db_path.as_str());
+        if !delta_db_dir.exists() {
+            fs::create_dir_all(delta_db_path.clone())?;
+        }
+
+        Ok(Self {
+            delta_db_path,
+            creation_mutex: Default::default(),
+        })
     }
 }
 
 impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
     type DeltaDb = KvdbRocksdb;
 
-    fn new_empty_delta_db(
-        &self, _delta_db_name: &str,
-    ) -> Result<Self::DeltaDb> {
-        Ok(KvdbRocksdb {
-            kvdb: self.system_db.key_value().clone(),
-            col: COL_DELTA_TRIE,
-        })
+    fn get_delta_db_dir(&self) -> String { self.delta_db_path.clone() }
+
+    fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
+        Self::DELTA_DB_ROCKSDB_DIR_PREFIX.to_string()
+            + &snapshot_epoch_id.to_hex()
+    }
+
+    fn get_delta_db_path(&self, delta_db_name: &str) -> String {
+        self.delta_db_path.clone() + delta_db_name
+    }
+
+    fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
+        let _lock = self.creation_mutex.lock();
+
+        let path_str = self.get_delta_db_path(delta_db_name);
+        if Path::new(&path_str).exists() {
+            Err(ErrorKind::DeltaMPTAlreadyExists.into())
+        } else {
+            Ok(KvdbRocksdb {
+                kvdb: Arc::new(Database::open_default(
+                    &self.get_delta_db_path(delta_db_name),
+                )?),
+                col: None,
+            })
+        }
     }
 
     fn get_delta_db(
-        &self, _delta_db_name: &str,
+        &self, delta_db_name: &str,
     ) -> Result<Option<Self::DeltaDb>> {
-        unimplemented!()
+        let path_str = self.get_delta_db_path(delta_db_name);
+        if Path::new(&path_str).exists() {
+            Ok(Some(KvdbRocksdb {
+                kvdb: Arc::new(Database::open_default(&path_str)?),
+                col: None,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn destroy_delta_db(&self, _delta_db_name: &str) -> Result<()> {
-        // No-op
-        Ok(())
+    fn destroy_delta_db(&self, delta_db_name: &str) -> Result<()> {
+        Ok(fs::remove_dir_all(self.get_delta_db_path(delta_db_name))?)
     }
 }
 
@@ -43,5 +79,8 @@ use super::{
     },
     kvdb_rocksdb::KvdbRocksdb,
 };
-use crate::{db::COL_DELTA_TRIE, ext_db::SystemDB};
-use std::sync::Arc;
+use kvdb_rocksdb::Database;
+use parity_bytes::ToPretty;
+use parking_lot::Mutex;
+use primitives::EpochId;
+use std::{fs, path::Path, sync::Arc};

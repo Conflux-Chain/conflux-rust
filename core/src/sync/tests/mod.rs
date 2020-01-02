@@ -19,7 +19,7 @@ use std::{
 fn test_remove_expire_blocks() {
     {
         let (sync, _, _) =
-            initialize_synchronization_graph("./test.db", 1, 1, 1, 1, 50000);
+            initialize_synchronization_graph("./test.db/", 1, 1, 1, 1, 50000);
         // test initialization
         {
             let inner = sync.inner.read();
