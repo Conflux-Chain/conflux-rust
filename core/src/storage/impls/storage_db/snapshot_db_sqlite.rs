@@ -520,6 +520,7 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
         let snapshot_key =
             StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
                 .to_key_bytes();
+        debug!("push key={:?}", snapshot_key);
 
         if value.len() > 0 {
             self.snapshot_db

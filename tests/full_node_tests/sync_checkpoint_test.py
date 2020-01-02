@@ -18,6 +18,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "dev_snapshot_epoch_count": "25",
             "era_epoch_count": "50",
             "era_checkpoint_gap": "50",
+            "chunk_size_byte": "500",
         }
 
     def setup_network(self):
@@ -45,7 +46,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         self.genesis_nonce = client.get_nonce(client.GENESIS_ADDR)
         for _ in range(num_blocks):
-            txs = self._generate_txs(0, random.randint(5, 10))
+            txs = self._generate_txs(0, random.randint(50, 100))
             client.generate_block_with_fake_txs(txs)
 
         # Start node[full_node_index] as full node to sync checkpoint

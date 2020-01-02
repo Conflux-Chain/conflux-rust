@@ -10,6 +10,7 @@ use cfxcore::{
     consensus_parameters::*,
     storage::{self, ConsensusParam, StorageConfiguration},
     sync::{ProtocolConfiguration, SyncGraphConfig},
+    sync_parameters::*,
     transaction_pool::TxPoolConfig,
 };
 use metrics::MetricsConfiguration;
@@ -116,6 +117,7 @@ build_config! {
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 30_000)
         (check_request_period_ms, (u64), 1000)
+        (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
@@ -436,6 +438,7 @@ impl Configuration {
             snapshot_sync_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_sync_request_timeout_ms,
             ),
+            chunk_size_byte: self.raw_conf.chunk_size_byte,
         }
     }
 

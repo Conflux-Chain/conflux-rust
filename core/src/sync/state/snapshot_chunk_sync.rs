@@ -496,6 +496,11 @@ impl SnapshotChunkSync {
         &self, ctx: &Context, chunk_key: ChunkKey, chunk: Chunk,
     ) -> StorageResult<()> {
         let mut inner = self.inner.write();
+        debug!(
+            "handle_snapshot_chunk_response key={:?} chunk_len={}",
+            chunk_key,
+            chunk.keys.len()
+        );
 
         // status mismatch
         let download_start_time = match inner.status {

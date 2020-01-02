@@ -264,6 +264,7 @@ pub struct ProtocolConfiguration {
     pub test_mode: bool,
     pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
+    pub chunk_size_byte: u64,
 }
 
 impl SynchronizationProtocolHandler {

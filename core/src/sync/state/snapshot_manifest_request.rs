@@ -38,6 +38,7 @@ impl Handleable for SnapshotManifestRequest {
             &self.snapshot_epoch_id,
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
+            ctx.manager.protocol_config.chunk_size_byte,
         ) {
             Ok(Some(m)) => m,
             _ => {

@@ -17,8 +17,6 @@ use primitives::{EpochId, MerkleHash};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-const DEFAULT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
-
 #[derive(Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug)]
 pub enum SnapshotSyncCandidate {
     OneStepSync {
@@ -212,7 +210,7 @@ impl RangedManifest {
 
     pub fn load(
         snapshot_epoch_id: &EpochId, start_key: Option<Vec<u8>>,
-        storage_manager: &StorageManager,
+        storage_manager: &StorageManager, chunk_size: u64,
     ) -> Result<Option<RangedManifest>, Error>
     {
         debug!(
@@ -248,7 +246,7 @@ impl RangedManifest {
         let max_chunks = i32::max_value();
         for i in 0..max_chunks {
             trace!("cut chunks for manifest, loop = {}", i);
-            slicer.advance(DEFAULT_CHUNK_SIZE)?;
+            slicer.advance(chunk_size)?;
             match slicer.get_range_end_key() {
                 None => {
                     has_next = false;
