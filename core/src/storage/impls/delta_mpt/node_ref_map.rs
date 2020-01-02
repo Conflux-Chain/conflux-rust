@@ -53,41 +53,101 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait>
 /// relative small compared to memory consumed by Cached TrieNodes, and we don't
 /// need to persist, therefore we could use "row number" as db key.
 pub type DeltaMptDbKey = RowNumberUnderlyingType;
+// Each DeltaMpt is assigned an index. There are not many DeltaMpts to keep at a
+// time.
+pub type DeltaMptId = u16;
+const MPT_ID_RANGE: usize = std::u16::MAX as usize + 1;
 
-pub struct NodeRefMapDeltaMpt<CacheAlgoDataT: CacheAlgoDataTrait> {
-    base_row_number: DeltaMptDbKey,
-    map: Vec<Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>>>,
-    old_nodes_map:
-        BTreeMap<DeltaMptDbKey, CacheableNodeRefDeltaMpt<CacheAlgoDataT>>,
+// TODO(yz): Optimize the access like NodeRefMapDeltaMpt. Keep a number of
+// TODO(yz): chunks, each delta mpt maintains a deque of chunks. Whenever all
+// TODO(yz): chunks are filled, reclaim one chunk from the mpt with the lowest
+// TODO(yz): chunk cached rate.
+/// Maintains the cache slot / cache info for multiple Delta MPTs.
+pub struct NodeRefMapDeltaMpts<CacheAlgoDataT: CacheAlgoDataTrait> {
+    node_ref_maps:
+        Vec<BTreeMap<DeltaMptDbKey, CacheableNodeRefDeltaMpt<CacheAlgoDataT>>>,
+    nodes: usize,
 }
 
-pub const DEFAULT_NODE_MAP_SIZE: DeltaMptDbKey =
-    NodeRefMapDeltaMpt::<CacheAlgoDataDeltaMpt>::MAX_CAPACITY;
-
-impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpt<CacheAlgoDataT> {
-    /// We allow at most 200M (most recent) nodes for cache of delta trie.
-    /// Assuming 2h lifetime for Delta MPT it's around 27k new node per second.
-    ///
-    /// If the delta MPT happens to be larger, we keep the older nodes in an
-    /// ordered map.
-    const MAX_CAPACITY: DeltaMptDbKey = 200_000_000;
-
-    pub fn new(size: DeltaMptDbKey) -> Self {
-        Self {
-            // Explicitly specify one item so that only the fields are default
-            // initialized.
-            map: vec![None; size as usize],
-            old_nodes_map: Default::default(),
-            base_row_number: Default::default(),
+impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpts<CacheAlgoDataT> {
+    pub fn new() -> Self {
+        let mut node_ref_maps = Vec::with_capacity(MPT_ID_RANGE);
+        for _i in 0..MPT_ID_RANGE {
+            node_ref_maps.push(Default::default());
         }
+
+        Self {
+            node_ref_maps,
+            nodes: 0,
+        }
+    }
+
+    /// Insert may crash due to memory allocation issue, although it won't
+    /// return error in current implementation.
+    pub fn insert(
+        &mut self, key: (DeltaMptId, DeltaMptDbKey), slot: ActualSlabIndex,
+    ) -> Result<()> {
+        if self.node_ref_maps[key.0 as usize]
+            .insert(
+                key.1,
+                CacheableNodeRefDeltaMpt {
+                    cached: TrieCacheSlotOrCacheAlgoData::TrieCacheSlot(slot),
+                },
+            )
+            .is_none()
+        {
+            self.nodes += 1;
+        };
+        Ok(())
+    }
+
+    /// The cache_info is only valid when the element still lives in cache.
+    /// Therefore we return the reference to the cache_info to represent the
+    /// lifetime requirement.
+    pub fn get_cache_info(
+        &self, key: (DeltaMptId, DeltaMptDbKey),
+    ) -> Option<&CacheableNodeRefDeltaMpt<CacheAlgoDataT>> {
+        self.node_ref_maps[key.0 as usize].get(&key.1)
+    }
+
+    pub fn set_cache_info(
+        &mut self, key: (DeltaMptId, DeltaMptDbKey),
+        cache_info: CacheableNodeRefDeltaMpt<CacheAlgoDataT>,
+    )
+    {
+        if self.node_ref_maps[key.0 as usize]
+            .insert(key.1, cache_info)
+            .is_none()
+        {
+            self.nodes += 1;
+        }
+    }
+
+    pub fn delete(
+        &mut self, key: (DeltaMptId, DeltaMptDbKey),
+    ) -> Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>> {
+        let maybe_old_value = self.node_ref_maps[key.0 as usize].remove(&key.1);
+        if maybe_old_value.is_some() {
+            self.nodes -= 1;
+        }
+        maybe_old_value
+    }
+
+    pub fn get_all_cache_infos_from_mpt(
+        &self, mpt_id: DeltaMptId,
+    ) -> Vec<(DeltaMptDbKey, CacheableNodeRefDeltaMpt<CacheAlgoDataT>)> {
+        self.node_ref_maps[mpt_id as usize]
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    pub fn log_usage(&self) {
+        debug!("node_ref_map.BTreeMap: #nodes: {}", self.nodes,);
     }
 }
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> Default
-    for NodeRefMapDeltaMpt<CacheAlgoDataT>
-{
-    fn default() -> Self { Self::new(Self::MAX_CAPACITY) }
-}
+pub const DEFAULT_NODE_MAP_SIZE: DeltaMptDbKey = 200_000_000;
 
 // Type alias for clarity.
 pub trait NodeRefMapTrait {
@@ -96,133 +156,8 @@ pub trait NodeRefMapTrait {
     type MaybeCacheSlotIndex;
 }
 
-impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapTrait
-    for NodeRefMapDeltaMpt<CacheAlgoDataT>
-{
-    type MaybeCacheSlotIndex = ActualSlabIndex;
-    type NodeRef = CacheableNodeRefDeltaMpt<CacheAlgoDataT>;
-    type StorageAccessKey = DeltaMptDbKey;
-}
-
-impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpt<CacheAlgoDataT> {
-    unsafe fn get_unchecked(
-        &self, key: DeltaMptDbKey,
-    ) -> &Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>> {
-        self.map.get_unchecked(self.key_to_vec_subscript(key))
-    }
-
-    unsafe fn get_unchecked_mut(
-        &mut self, key: DeltaMptDbKey,
-    ) -> &mut Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>> {
-        let offset = self.key_to_vec_subscript(key);
-        self.map.get_unchecked_mut(offset)
-    }
-
-    fn key_to_vec_subscript(&self, key: DeltaMptDbKey) -> usize {
-        (key as usize) % self.map.len()
-    }
-
-    fn reset(&mut self, key: DeltaMptDbKey) {
-        let maybe_cache_info = self.get(key);
-        if maybe_cache_info.is_none() {
-            return;
-        }
-        let cache_info = maybe_cache_info.unwrap().clone();
-        self.old_nodes_map.insert(key, cache_info);
-
-        unsafe {
-            *self.get_unchecked_mut(key) = None;
-        }
-    }
-
-    /// Insert may fail due to capacity issue, although it won't fail in current
-    /// implementation.
-    pub fn insert(
-        &mut self, key: DeltaMptDbKey, slot: ActualSlabIndex,
-    ) -> Result<()> {
-        let size = self.map.len() as RowNumberUnderlyingType;
-        if key >= self.base_row_number + size {
-            // The final state is that the key is the maximum in the data
-            // structure so that the number of deleted items are minimized.
-            let new_row_number = key + 1 - size;
-            let mut base_row_number = self.base_row_number;
-            loop {
-                self.reset(base_row_number);
-                base_row_number += 1;
-                if base_row_number == new_row_number {
-                    break;
-                }
-            }
-            self.base_row_number = base_row_number;
-        }
-
-        self.set_cache_info(
-            key,
-            Some(CacheableNodeRefDeltaMpt::new(
-                TrieCacheSlotOrCacheAlgoData::TrieCacheSlot(slot),
-            )),
-        );
-        Ok(())
-    }
-
-    /// The cache_info is only valid when the element still lives in cache.
-    /// Therefore we return the reference to the cache_info to represent the
-    /// lifetime requirement.
-    pub fn get(
-        &self, key: DeltaMptDbKey,
-    ) -> Option<&CacheableNodeRefDeltaMpt<CacheAlgoDataT>> {
-        if key < self.base_row_number {
-            self.old_nodes_map.get(&key)
-        } else if key
-            < self.base_row_number + self.map.len() as RowNumberUnderlyingType
-        {
-            unsafe { self.get_unchecked(key).as_ref() }
-        } else {
-            None
-        }
-    }
-
-    pub fn set_cache_info(
-        &mut self, key: DeltaMptDbKey,
-        cache_info: Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>>,
-    ) -> Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>>
-    {
-        if key < self.base_row_number {
-            // Insert into old_nodes_map
-            // FIXME: refactor this method so that it's not used to both set
-            // FIXME: value and to clear entry in the vector.
-            self.old_nodes_map.insert(key, cache_info.unwrap())
-        } else {
-            let node_ref = unsafe { self.get_unchecked_mut(key) };
-            let old_slot = node_ref.clone();
-            *node_ref = cache_info;
-
-            old_slot
-        }
-    }
-
-    pub fn delete(
-        &mut self, key: DeltaMptDbKey,
-    ) -> Option<CacheableNodeRefDeltaMpt<CacheAlgoDataT>> {
-        if key < self.base_row_number {
-            self.old_nodes_map.remove(&key)
-        } else {
-            self.set_cache_info(key, None)
-        }
-    }
-
-    pub fn log_usage(&self) {
-        debug!(
-            "node_ref_map.old_nodes_map: #elements: {}",
-            self.old_nodes_map.len(),
-        );
-    }
-}
-
 use super::{
-    super::errors::*,
-    cache::algorithm::CacheAlgoDataTrait,
-    node_memory_manager::{ActualSlabIndex, CacheAlgoDataDeltaMpt},
-    row_number::RowNumberUnderlyingType,
+    super::errors::*, cache::algorithm::CacheAlgoDataTrait,
+    node_memory_manager::ActualSlabIndex, row_number::RowNumberUnderlyingType,
 };
-use std::{collections::BTreeMap, vec::Vec};
+use std::collections::BTreeMap;
