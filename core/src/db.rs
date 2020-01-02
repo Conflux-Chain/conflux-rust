@@ -29,16 +29,14 @@ use rlp;
 // database columns for rocksdb
 /// Column for miscellaneous items
 pub const COL_MISC: Option<u32> = Some(0);
-/// Column for delta trie.
-pub const COL_DELTA_TRIE: Option<u32> = Some(1);
 /// Column for Blocks.
-pub const COL_BLOCKS: Option<u32> = Some(2);
+pub const COL_BLOCKS: Option<u32> = Some(1);
 /// Column for Transaction Index
-pub const COL_TX_ADDRESS: Option<u32> = Some(3);
+pub const COL_TX_ADDRESS: Option<u32> = Some(2);
 /// Column for Transaction Index
-pub const COL_EPOCH_NUMBER: Option<u32> = Some(4);
+pub const COL_EPOCH_NUMBER: Option<u32> = Some(3);
 /// Number of columns in DB
-pub const NUM_COLUMNS: Option<u32> = Some(5);
+pub const NUM_COLUMNS: Option<u32> = Some(4);
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]
