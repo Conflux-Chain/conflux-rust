@@ -376,9 +376,10 @@ impl<'a> StateTrait for State<'a> {
         // Free all modified nodes.
         let owned_node_set = self.owned_node_set.as_ref().unwrap();
         for owned_node in owned_node_set {
-            self.delta_trie
-                .get_node_memory_manager()
-                .free_owned_node(&mut owned_node.clone());
+            self.delta_trie.get_node_memory_manager().free_owned_node(
+                &mut owned_node.clone(),
+                self.delta_trie.get_mpt_id(),
+            );
         }
     }
 }
@@ -402,6 +403,7 @@ impl<'a> State<'a> {
             let (root_cow, entry) = CowNodeRef::new_uninitialized_node(
                 &allocator,
                 self.owned_node_set.as_mut().unwrap(),
+                self.delta_trie.get_mpt_id(),
             )?;
             // Insert empty node.
             entry.insert(UnsafeCell::new(Default::default()));
@@ -427,6 +429,7 @@ impl<'a> State<'a> {
                 let mut cow_root = CowNodeRef::new(
                     root_node.clone(),
                     self.owned_node_set.as_ref().unwrap(),
+                    self.delta_trie.get_mpt_id(),
                 );
                 let allocator =
                     self.delta_trie.get_node_memory_manager().get_allocator();
@@ -489,6 +492,7 @@ impl<'a> State<'a> {
                 let mut cow_root = CowNodeRef::new(
                     root_node,
                     self.owned_node_set.as_ref().unwrap(),
+                    self.delta_trie.get_mpt_id(),
                 );
 
                 if cow_root.is_owned() {
