@@ -1690,7 +1690,7 @@ mod tests {
         state::{CleanupMode, State, Substate},
         statedb::StateDb,
         storage::{
-            tests::new_state_manager_for_testing, StorageManager,
+            tests::new_state_manager_for_unit_test, StorageManager,
             StorageManagerTrait,
         },
         test_helpers::{
@@ -1753,7 +1753,7 @@ mod tests {
         params.gas = U256::from(100_000);
         params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
         params.value = ActionValue::Transfer(U256::from(0x7));
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -1841,7 +1841,7 @@ mod tests {
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::from(100));
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -1911,7 +1911,7 @@ mod tests {
         params.value = ActionValue::Transfer(U256::from(100));
         params.call_type = CallType::Call;
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
@@ -1943,7 +1943,7 @@ mod tests {
         let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
         let returns = "726576657274206d657373616765".from_hex().unwrap();
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write_with_factory(
             &storage_manager,
             factory.clone(),
@@ -2025,7 +2025,7 @@ mod tests {
         params.value =
             ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -2067,7 +2067,7 @@ mod tests {
         .sign(keypair.secret());
         let sender = t.sender();
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -2099,7 +2099,7 @@ mod tests {
     fn test_deposit_withdraw() {
         let factory = Factory::new(VMType::Interpreter, 1024 * 32);
         let sender = Address::zero();
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         let env = Env::default();
@@ -2245,7 +2245,7 @@ mod tests {
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::from(1000000));
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         let env = Env::default();
@@ -2462,7 +2462,7 @@ mod tests {
         params.value =
             ActionValue::Transfer(U256::from(RENTAL_PRICE_PER_STORAGE_KEY));
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         let env = Env::default();
