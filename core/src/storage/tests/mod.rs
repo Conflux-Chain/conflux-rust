@@ -50,14 +50,14 @@ impl KeyValueDB for FakeDbForStateTest {
 #[cfg(test)]
 pub fn new_state_manager_for_unit_test() -> StateManager {
     StateManager::new(StorageConfiguration {
-        cache_start_size: 1_000_000,
-        cache_size: 20_000_000,
-        idle_size: 200_000,
-        node_map_size: 20_000_000,
-        recent_lfu_factor: 4.0,
         consensus_param: ConsensusParam {
             snapshot_epoch_count: 10_000_000,
         },
+        delta_mpts_cache_recent_lfu_factor: 4.0,
+        delta_mpts_cache_size: 20_000_000,
+        delta_mpts_cache_start_size: 1_000_000,
+        delta_mpts_node_map_vec_size: 20_000_000,
+        delta_mpts_slab_idle_size: 200_000,
         path_delta_mpts_dir: "./conflux_unit_test_storage_dir".to_string()
             + StorageConfiguration::DELTA_MPTS_DIR,
         path_snapshot_dir: "./conflux_unit_test_storage_dir".to_string()
