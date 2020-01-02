@@ -61,12 +61,10 @@ impl StateManager {
         }
     }
 
-    // FIXME: change the parameter.
-    pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Result<Self> {
+    pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager =
-            StorageManager::new_arc(DeltaDbManager::new(db), conf)?;
+        let storage_manager = StorageManager::new_arc(conf)?;
 
         // FIXME: move the commit_lock into delta_mpt, along with the row_number
         // FIXME: reading into the new_or_delta_mpt method.
@@ -205,14 +203,28 @@ impl StateManager {
                     snapshot = snapshot_got;
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
-                    delta_mpt =
-                        match self.storage_manager.get_intermediate_mpt(
+                    delta_mpt = match self
+                        .storage_manager
+                        .get_intermediate_mpt(
                             &state_index.intermediate_epoch_id,
                         )? {
-                            None => return Ok(None),
-                            Some(delta_mpt) => delta_mpt,
-                        };
+                        None => {
+                            warn!(
+                                    "get_state_trees, special case, \
+                                    intermediate_mpt not found for epoch {:?}. StateIndex: {:?}.",
+                                    state_index.intermediate_epoch_id,
+                                    state_index,
+                                );
+                            return Ok(None);
+                        }
+                        Some(delta_mpt) => delta_mpt,
+                    };
                 } else {
+                    warn!(
+                        "get_state_trees, special case, \
+                         snapshot not found for epoch {:?}. StateIndex: {:?}.",
+                        state_index.intermediate_epoch_id, state_index,
+                    );
                     return Ok(None);
                 }
             }
@@ -236,7 +248,14 @@ impl StateManager {
 
         let delta_root =
             match delta_mpt.get_root_node_ref_by_epoch(state_index.epoch_id)? {
-                None => return Ok(None),
+                None => {
+                    warn!(
+                    "get_state_trees, \
+                     delta_root not found for epoch {:?}. StateIndex: {:?}.",
+                    state_index.epoch_id, state_index,
+                );
+                    return Ok(None);
+                }
                 Some(root) => root,
             };
 
@@ -304,7 +323,15 @@ impl StateManager {
                         .storage_manager
                         .wait_for_snapshot(parent_state_index.epoch_id)?
                     {
-                        None => return Ok(None),
+                        None => {
+                            warn!(
+                                "get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                snapshot not found for snapshot {:?}. StateIndex: {:?}.",
+                                parent_state_index.epoch_id,
+                                parent_state_index,
+                            );
+                            return Ok(None);
+                        }
                         Some(snapshot_got) => snapshot = snapshot_got,
                     }
                     maybe_intermediate_mpt = None;
@@ -314,7 +341,15 @@ impl StateManager {
                         .storage_manager
                         .get_intermediate_mpt(parent_state_index.epoch_id)?
                     {
-                        None => return Ok(None),
+                        None => {
+                            warn!(
+                                "get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                intermediate_mpt not found for snapshot {:?}. StateIndex: {:?}.",
+                                parent_state_index.epoch_id,
+                                parent_state_index,
+                            );
+                            return Ok(None);
+                        }
                         Some(mpt) => delta_mpt = mpt,
                     }
                 }
@@ -325,7 +360,15 @@ impl StateManager {
                         .storage_manager
                         .get_snapshot_info_at_epoch(snapshot_epoch_id)
                     {
-                        None => return Ok(None),
+                        None => {
+                            warn!(
+                                "get_state_trees_for_next_epoch, shift snapshot, normal case, \
+                                snapshot info not found for snapshot {:?}. StateIndex: {:?}.",
+                                snapshot_epoch_id,
+                                parent_state_index,
+                            );
+                            return Ok(None);
+                        }
                         Some(snapshot_info) => snapshot_info.merkle_root,
                     };
                     maybe_intermediate_mpt = self
@@ -334,18 +377,25 @@ impl StateManager {
                     delta_mpt = self
                         .storage_manager
                         .get_delta_mpt(&snapshot_epoch_id)?;
-                    intermediate_trie_root_merkle =
-                        match maybe_intermediate_mpt.as_ref() {
-                            None => MERKLE_NULL_NODE,
-                            Some(mpt) => match mpt.get_merkle_root_by_epoch_id(
-                                &parent_state_index.epoch_id,
-                            )? {
-                                Some(merkle_root) => merkle_root,
-                                None => {
-                                    return Ok(None);
-                                }
-                            },
-                        };
+                    intermediate_trie_root_merkle = match maybe_intermediate_mpt
+                        .as_ref()
+                    {
+                        None => MERKLE_NULL_NODE,
+                        Some(mpt) => match mpt.get_merkle_root_by_epoch_id(
+                            &parent_state_index.epoch_id,
+                        )? {
+                            Some(merkle_root) => merkle_root,
+                            None => {
+                                warn!(
+                                        "get_state_trees_for_next_epoch, shift snapshot, normal case, \
+                                        intermediate_trie_root not found for epoch {:?}. StateIndex: {:?}.",
+                                        parent_state_index.epoch_id,
+                                        parent_state_index,
+                                    );
+                                return Ok(None);
+                            }
+                        },
+                    };
                     maybe_intermediate_mpt_key_padding =
                         Some(parent_state_index.delta_mpt_key_padding);
                 }
@@ -375,10 +425,26 @@ impl StateManager {
                             .storage_manager
                             .get_intermediate_mpt(intermediate_epoch_id)?
                         {
-                            None => return Ok(None),
+                            None => {
+                                return {
+                                    warn!(
+                                    "get_state_trees_for_next_epoch, special case, \
+                                    intermediate_mpt not found for epoch {:?}. StateIndex: {:?}.",
+                                    intermediate_epoch_id,
+                                    parent_state_index,
+                                );
+                                    Ok(None)
+                                }
+                            }
                             Some(delta_mpt) => delta_mpt,
                         };
                     } else {
+                        warn!(
+                            "get_state_trees_for_next_epoch, special case, \
+                            snapshot not found for epoch {:?}. StateIndex: {:?}.",
+                            intermediate_epoch_id,
+                            parent_state_index,
+                        );
                         return Ok(None);
                     }
                 }
@@ -517,7 +583,6 @@ impl StateManagerTrait for StateManager {
 }
 
 use crate::{
-    ext_db::SystemDB,
     statedb::StateDb,
     storage::{
         impls::{

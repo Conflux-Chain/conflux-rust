@@ -108,7 +108,7 @@ impl ArchiveClient {
 
         let secret_store = Arc::new(SecretStore::new());
         let storage_manager = Arc::new(
-            StorageManager::new(ledger_db.clone(), conf.storage_config())
+            StorageManager::new(conf.storage_config())
                 .expect("Failed to initialize storage."),
         );
         {

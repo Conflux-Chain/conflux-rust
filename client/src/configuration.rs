@@ -155,7 +155,6 @@ build_config! {
         (tx_pool_min_tx_gas_price, (u64), 1)
 
         // Storage Section.
-        (storage_db_path, (String), "./storage_db".to_string())
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
@@ -165,8 +164,11 @@ build_config! {
         // General/Unclassified section.
         (block_cache_gc_period_ms, (u64), 5000)
         (block_db_type, (String), "rocksdb".to_string())
+        // The conflux data dir, if unspecified, is the workdir where conflux is started.
+        (conflux_data_dir, (String), "./".to_string())
         (db_cache_size, (Option<usize>), Some(128))
         (db_compaction_profile, (Option<String>), None)
+        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
         (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
@@ -383,6 +385,14 @@ impl Configuration {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
             },
+            path_delta_mpts_dir: self.raw_conf.conflux_data_dir.clone()
+                + StorageConfiguration::DELTA_MPTS_DIR,
+            path_snapshot_dir: self.raw_conf.conflux_data_dir.clone()
+                + StorageConfiguration::SNAPSHOT_DIR,
+            path_snapshot_info_db: self.raw_conf.conflux_data_dir.clone()
+                + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
+            path_storage_dir: self.raw_conf.conflux_data_dir.clone()
+                + StorageConfiguration::STORAGE_DIR,
         }
     }
 

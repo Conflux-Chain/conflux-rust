@@ -134,7 +134,7 @@ impl FallibleIterator for FakeSnapshotMptDbIter<'_> {
 fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedDeltaMptIterator) {
     let snapshot_mpt_nodes;
     let delta_mpt_root = {
-        let state_manager = new_state_manager_for_testing();
+        let state_manager = new_state_manager_for_unit_test();
         let mut state = state_manager.get_state_for_genesis_write();
         for (key, value) in &mpt_kv_iter.kv {
             state
@@ -500,7 +500,7 @@ use crate::storage::{
         SnapshotMptTraitSingleWriter,
     },
     tests::{
-        generate_keys, get_rng_for_test, new_state_manager_for_testing,
+        generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         DumpedDeltaMptIterator, TEST_NUMBER_OF_KEYS,
     },
 };
