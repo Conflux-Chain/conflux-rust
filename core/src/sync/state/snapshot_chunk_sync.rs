@@ -9,8 +9,8 @@ use crate::{
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     storage::{
-        storage_db::SnapshotInfo, FullSyncVerifier, StateIndex,
-        StateRootAuxInfo, StateRootWithAuxInfo,
+        storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
+        StateIndex, StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
         message::{msgid, Context},
@@ -411,7 +411,7 @@ impl SnapshotChunkSync {
 
     pub fn handle_snapshot_chunk_response(
         &self, ctx: &Context, chunk_key: ChunkKey, chunk: Chunk,
-    ) {
+    ) -> StorageResult<()> {
         let mut inner = self.inner.write();
 
         // status mismatch
@@ -425,14 +425,14 @@ impl SnapshotChunkSync {
             }
             _ => {
                 debug!("Snapshot chunk received, but mismatch with current status {:?}", inner.status);
-                return;
+                return Ok(());
             }
         };
 
         // maybe received a out-of-date snapshot chunk, e.g. new era started
         if !inner.downloading_chunks.remove(&chunk_key) {
             info!("Snapshot chunk received, but not in downloading queue");
-            return;
+            return Ok(());
         }
 
         inner.num_downloaded += 1;
@@ -452,10 +452,11 @@ impl SnapshotChunkSync {
             inner.restorer.finalize_restoration(
                 ctx.manager.graph.data_man.storage_manager.clone(),
                 inner.snapshot_info.clone(),
-            );
+            )?;
             inner.status = Status::Completed;
         }
         debug!("sync state progress: {:?}", *inner);
+        Ok(())
     }
 
     pub fn restore_execution_state(
@@ -667,19 +668,11 @@ impl SnapshotChunkSync {
             slice_begin = slice_end;
         }
 
-        let (mut parent_snapshot_epoch, pivot_chain_parts) =
+        let (parent_snapshot_epoch, pivot_chain_parts) =
             ctx.manager.graph.data_man.get_parent_epochs_for(
                 snapshot_epoch_id.clone(),
                 ctx.manager.graph.data_man.get_snapshot_epoch_count() as u64,
             );
-        // FIXME: This is temporary hack because we haven't enabled snapshot
-        // yet.
-        debug!(
-            "parent_snapshot_epoch for synced snapshot: {:?}",
-            parent_snapshot_epoch
-        );
-        parent_snapshot_epoch = NULL_EPOCH;
-        // FIXME: END OF HACK.
 
         let parent_snapshot_height = if parent_snapshot_epoch == NULL_EPOCH {
             0

@@ -4,6 +4,7 @@
 
 pub mod cache;
 pub mod cow_node_ref;
+pub mod delta_mpt_iterator;
 mod mem_optimized_trie_node;
 pub(in super::super) mod node_memory_manager;
 mod node_ref;
@@ -21,6 +22,7 @@ mod tests;
 
 pub use self::{
     cow_node_ref::CowNodeRef,
+    delta_mpt_iterator::DeltaMptIterator,
     mem_optimized_trie_node::MemOptimizedTrieNode,
     node_memory_manager::{TrieNodeDeltaMpt, TrieNodeDeltaMptCell},
     node_ref::*,

@@ -205,25 +205,42 @@ impl<ValueType> KvdbSqlite<ValueType> {
         })
     }
 
+    pub fn open<P: AsRef<Path>>(
+        path: P, statements: Arc<KvdbSqliteStatements>,
+    ) -> Result<Self> {
+        Ok(Self {
+            connection: Some(SqliteConnection::open(
+                path,
+                false,
+                SqliteConnection::default_open_flags(),
+            )?),
+            statements,
+            __marker_value: Default::default(),
+        })
+    }
+
+    pub fn open_or_create<P: AsRef<Path>>(
+        path: P, statements: Arc<KvdbSqliteStatements>,
+    ) -> Result<(bool, Self)> {
+        if path.as_ref().exists() {
+            Ok((true, Self::open(path, statements)?))
+        } else {
+            Ok((false, Self::create_and_open(path, statements)?))
+        }
+    }
+
     pub fn create_and_open<P: AsRef<Path>>(
-        path: P, table_name: &str, value_column_names: &[&str],
-        value_column_types: &[&str], with_number_key_table: bool,
-    ) -> Result<Self>
-    {
+        path: P, statements: Arc<KvdbSqliteStatements>,
+    ) -> Result<Self> {
         let mut connection = SqliteConnection::create_and_open(
             path,
             SqliteConnection::default_open_flags(),
         )?;
-        let statements = Arc::new(KvdbSqliteStatements::make_statements(
-            value_column_names,
-            value_column_types,
-            table_name,
-            with_number_key_table,
-        )?);
-
         // Create the extra table for bytes key when the main table has number
         // key.
-        if with_number_key_table {
+        if statements.stmts_main_table.create_table
+            != statements.stmts_bytes_key_table.create_table
+        {
             connection
                 .execute(
                     &statements.stmts_bytes_key_table.create_table,
@@ -285,7 +302,7 @@ impl<ValueType: ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>>
     KvdbSqlite<ValueType>
 {
     pub fn from_row(row: &Statement<'_>) -> Result<ValueType> {
-        ValueType::from_row_impl(row)
+        ValueType::from_row_impl(row, 0)
     }
 }
 
@@ -1094,15 +1111,13 @@ impl<ValueType> KvdbSqliteBorrowMutReadOnly<'_, ValueType> {
     pub fn new(
         destructure: (
             Option<&'_ mut SqliteConnection>,
-            &'_ str,
-            &'_ str,
             &'_ KvdbSqliteStatements,
         ),
     ) -> Self
     {
         Self {
             connection: destructure.0.map(|x| x as *mut SqliteConnection),
-            statements: destructure.3,
+            statements: destructure.1,
             __marker_lifetime: Default::default(),
             __marker_value: Default::default(),
         }

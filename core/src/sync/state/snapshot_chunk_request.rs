@@ -34,7 +34,11 @@ impl SnapshotChunkRequest {
 
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let chunk = match Chunk::load(&self.checkpoint, &self.chunk_key) {
+        let chunk = match Chunk::load(
+            &self.checkpoint,
+            &self.chunk_key,
+            &ctx.manager.graph.data_man.storage_manager,
+        ) {
             Ok(Some(chunk)) => chunk,
             _ => Chunk::default(),
         };

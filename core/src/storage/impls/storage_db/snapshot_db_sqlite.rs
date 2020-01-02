@@ -180,8 +180,6 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
         >(
             KvdbSqliteBorrowMutReadOnly::new((
                 self.maybe_db.as_mut(),
-                Self::SNAPSHOT_MPT_TABLE_NAME,
-                Self::SNAPSHOT_MPT_TABLE_NAME,
                 &SNAPSHOT_DB_STATEMENTS.mpt_statements,
             )),
             Box::new(|x| Self::snapshot_mpt_row_parser(x)),
@@ -322,7 +320,8 @@ impl SnapshotDbSqlite {
         })
     }
 
-    fn snapshot_kv_row_parser<'db>(
+    // FIXME: pub is problematic.
+    pub fn snapshot_kv_row_parser<'db>(
         row: &Statement<'db>,
     ) -> Result<(Vec<u8>, Vec<u8>)> {
         let key = row.read::<Vec<u8>>(0)?;
@@ -554,6 +553,8 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     }
 }
 
+// FIXME: These Parser are all trivial, why not name them by key, value, and put
+// into a central place?
 pub type SnapshotKVParserSqlite =
     Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<(Vec<u8>, Vec<u8>)>>;
 pub type SnapshotMptValueParserSqlite =
@@ -563,31 +564,30 @@ pub type DeltaKVInsertionParserSqlite =
 pub type DeltaKVDeletionParserSqlite =
     Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<Vec<u8>>>;
 
-use super::{
-    super::{
-        super::storage_db::{
-            KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
-            KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
-            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
-            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-            SnapshotMptValue,
-        },
+use crate::storage::{
+    impls::{
+        delta_mpt::DeltaMptIterator,
         errors::*,
         merkle_patricia_trie::{KVInserter, MptMerger},
-        storage_manager::DeltaMptIterator,
+        storage_db::{
+            kvdb_sqlite::{
+                KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
+                KvdbSqliteDestructureTrait, KvdbSqliteStatements,
+            },
+            snapshot_mpt::SnapshotMpt,
+            sqlite::{
+                ConnectionWithRowParser, SqlBindableRef, SqliteConnection,
+                SQLITE_NO_PARAM,
+            },
+        },
     },
-    kvdb_sqlite::{
-        KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
-        KvdbSqliteDestructureTrait, KvdbSqliteStatements,
-    },
-    snapshot_mpt::SnapshotMpt,
-    sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
-};
-use crate::storage::{
-    impls::storage_db::sqlite::SQLITE_NO_PARAM,
     storage_db::{
-        KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter,
-        OpenSnapshotMptTrait,
+        KeyValueDbIterableTrait, KeyValueDbToOwnedReadTrait,
+        KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
+        OpenSnapshotMptTrait, OwnedReadImplFamily, ReadImplFamily,
+        SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+        SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+        SnapshotMptValue,
     },
 };
 use cfx_types::Address;

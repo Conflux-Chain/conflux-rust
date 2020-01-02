@@ -95,10 +95,10 @@ pub fn initialize_synchronization_graph(
         WORKER_COMPUTATION_PARALLELISM,
     )));
 
-    let storage_manager = Arc::new(StorageManager::new(
-        ledger_db.clone(),
-        StorageConfiguration::default(),
-    ));
+    let storage_manager = Arc::new(
+        StorageManager::new(ledger_db.clone(), StorageConfiguration::default())
+            .expect("Failed to initialize storage."),
+    );
 
     let mut genesis_accounts = HashMap::new();
     genesis_accounts.insert(

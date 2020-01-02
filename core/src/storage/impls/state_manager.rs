@@ -60,18 +60,18 @@ impl StateManager {
     }
 
     // FIXME: change the parameter.
-    pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Self {
+    pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
 
         let storage_manager =
-            Arc::new(StorageManager::new(DeltaDbManager::new(db), conf));
+            StorageManager::new_arc(DeltaDbManager::new(db), conf)?;
 
         // FIXME: move the commit_lock into delta_mpt, along with the row_number
         // FIXME: reading into the new_or_delta_mpt method.
-        Self {
+        Ok(Self {
             storage_manager,
             number_committed_nodes: Default::default(),
-        }
+        })
     }
 
     /// ` test_net_version` is used to update the genesis author so that after
@@ -414,18 +414,24 @@ impl StateManagerTrait for StateManager {
     }
 }
 
-use super::{
-    super::{state::*, state_manager::*, storage_db::*},
-    delta_mpt::*,
-    errors::*,
-    storage_db::{
-        delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
-        snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
-    },
-    storage_manager::storage_manager::{DeltaMptIterator, StorageManager},
-};
 use crate::{
-    ext_db::SystemDB, statedb::StateDb, storage::StorageConfiguration,
+    ext_db::SystemDB,
+    statedb::StateDb,
+    storage::{
+        impls::{
+            delta_mpt::*,
+            errors::*,
+            storage_db::{
+                delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
+                snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
+            },
+            storage_manager::storage_manager::StorageManager,
+        },
+        state::*,
+        state_manager::*,
+        storage_db::*,
+        StorageConfiguration,
+    },
 };
 use cfx_types::{Address, U256};
 use primitives::{

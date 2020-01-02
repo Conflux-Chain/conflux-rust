@@ -41,6 +41,16 @@ pub struct StorageConfiguration {
     pub consensus_param: ConsensusParam,
 }
 
+impl StorageConfiguration {
+    pub const SNAPSHOT_DIR: &'static str = "./storage_db/snapshot/";
+    pub const SNAPSHOT_INFO_DB_NAME: &'static str = "snapshot_info";
+    pub const SNAPSHOT_INFO_DB_PATH: &'static str =
+        "./storage_db/snapshot_info_db";
+    /// Relative to Conflux data dir.
+    // FIXME: but where is the data dir?
+    pub const STORAGE_DIR: &'static str = "./storage_db/";
+}
+
 impl Default for StorageConfiguration {
     fn default() -> Self {
         StorageConfiguration {
@@ -65,13 +75,13 @@ pub use self::{
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{
-            kvdb_rocksdb::KvdbRocksdb, kvdb_sqlite::KvdbSqlite,
+            kvdb_rocksdb::KvdbRocksdb,
+            kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
             sqlite::SqliteConnection,
         },
-        storage_manager::DeltaMptIterator,
     },
-    state::{State as Storage, StateTrait as StorageTrait},
+    state::{State as StorageState, StateTrait as StorageStateTrait},
     state_manager::{
         StateIndex, StateManager as StorageManager,
         StateManagerTrait as StorageManagerTrait, StateReadonlyIndex,

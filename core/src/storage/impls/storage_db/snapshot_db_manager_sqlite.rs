@@ -9,18 +9,12 @@ pub struct SnapshotDbManagerSqlite {
     force_cow: bool,
 }
 
-// TODO: used to sync checkpoint state
-// Note, the sync state context only has instance of type StateManager.
-impl Default for SnapshotDbManagerSqlite {
-    fn default() -> Self {
-        SnapshotDbManagerSqlite::new("./storage_db/snapshot/".to_string())
-    }
-}
-
 impl SnapshotDbManagerSqlite {
+    const SNAPSHOT_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
+
     pub fn new(snapshot_path: String) -> Self {
         Self {
-            snapshot_path: snapshot_path + "/sqlite_",
+            snapshot_path: snapshot_path + Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX,
             force_cow: false,
         }
     }
@@ -145,6 +139,50 @@ impl SnapshotDbManagerSqlite {
 impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     type SnapshotDb = SnapshotDbSqlite;
 
+    fn scan_persist_state(
+        &self, snapshot_info_map: &mut HashMap<EpochId, SnapshotInfo>,
+    ) -> Result<Vec<H256>> {
+        let mut missing_snapshots = HashMap::new();
+        for (snapshot_epoch_id, _snapshot_info) in snapshot_info_map.iter() {
+            missing_snapshots.insert(
+                [
+                    StorageConfiguration::SNAPSHOT_DIR.as_bytes(),
+                    Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.as_bytes(),
+                    snapshot_epoch_id.as_ref(),
+                ]
+                .concat(),
+                snapshot_epoch_id.clone(),
+            );
+        }
+
+        // Scan the snapshot dir. Remove extra files, and return the list of
+        // missing snapshots.
+        for entry in fs::read_dir(StorageConfiguration::SNAPSHOT_DIR)? {
+            let entry = entry?;
+            let path = entry.path();
+            let dir_name = path.as_path().file_name().unwrap().to_str();
+            if dir_name.is_none() {
+                error!(
+                    "Unexpected snapshot path {}, deleted.",
+                    entry.path().display()
+                );
+                fs::remove_dir_all(entry.path())?;
+                continue;
+            }
+            let dir_name = dir_name.unwrap();
+            if !missing_snapshots.contains_key(dir_name.as_bytes()) {
+                fs::remove_dir_all(entry.path())?;
+            } else {
+                missing_snapshots.remove(dir_name.as_bytes());
+            }
+        }
+
+        Ok(missing_snapshots
+            .into_iter()
+            .map(|(_path_bytes, snapshot_epoch_id)| snapshot_epoch_id)
+            .collect())
+    }
+
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator,
@@ -263,16 +301,15 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::{
-            SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
-        },
-        errors::*,
-        storage_manager::DeltaMptIterator,
+use crate::storage::{
+    impls::{
+        delta_mpt::DeltaMptIterator, errors::*,
+        storage_db::snapshot_db_sqlite::*,
     },
-    snapshot_db_sqlite::*,
+    storage_db::{SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo},
+    StorageConfiguration,
 };
+use cfx_types::H256;
 use parity_bytes::ToPretty;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
-use std::{fs, process::Command};
+use std::{collections::HashMap, fs, process::Command};

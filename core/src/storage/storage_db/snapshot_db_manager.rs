@@ -6,6 +6,12 @@
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
 
+    // Scan snapshot dir, remove extra files and return the list of missing
+    // snapshots.
+    fn scan_persist_state(
+        &self, snapshot_info_map: &mut HashMap<EpochId, SnapshotInfo>,
+    ) -> Result<Vec<EpochId>>;
+
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
@@ -25,9 +31,8 @@ pub trait SnapshotDbManagerTrait {
 }
 
 use super::{
-    super::impls::{
-        errors::*, storage_manager::storage_manager::DeltaMptIterator,
-    },
+    super::impls::{delta_mpt::DeltaMptIterator, errors::*},
     snapshot_db::*,
 };
 use primitives::{EpochId, MerkleHash};
+use std::collections::HashMap;
