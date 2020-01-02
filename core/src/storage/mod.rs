@@ -31,13 +31,12 @@ pub struct ConsensusParam {
 
 #[derive(Debug, Clone)]
 pub struct StorageConfiguration {
-    // FIXME: prefix with delta.
-    pub cache_start_size: u32,
-    pub cache_size: u32,
-    pub idle_size: u32,
-    pub node_map_size: u32,
-    pub recent_lfu_factor: f64,
     pub consensus_param: ConsensusParam,
+    pub delta_mpts_cache_recent_lfu_factor: f64,
+    pub delta_mpts_cache_start_size: u32,
+    pub delta_mpts_cache_size: u32,
+    pub delta_mpts_node_map_vec_size: u32,
+    pub delta_mpts_slab_idle_size: u32,
     pub path_delta_mpts_dir: String,
     pub path_storage_dir: String,
     pub path_snapshot_dir: String,
@@ -56,14 +55,18 @@ impl StorageConfiguration {
 impl StorageConfiguration {
     pub fn new_default(conflux_data_dir: String) -> Self {
         StorageConfiguration {
-            cache_start_size: defaults::DEFAULT_CACHE_START_SIZE,
-            cache_size: defaults::DEFAULT_CACHE_SIZE,
-            idle_size: defaults::DEFAULT_IDLE_SIZE,
-            node_map_size: defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
-            recent_lfu_factor: defaults::DEFAULT_RECENT_LFU_FACTOR,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
             },
+            delta_mpts_cache_recent_lfu_factor:
+                defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR,
+            delta_mpts_cache_size: defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE,
+            delta_mpts_cache_start_size:
+                defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE,
+            delta_mpts_node_map_vec_size:
+                defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
+            delta_mpts_slab_idle_size:
+                defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
             path_delta_mpts_dir: conflux_data_dir.clone()
                 + StorageConfiguration::DELTA_MPTS_DIR,
             path_snapshot_dir: conflux_data_dir.clone()
