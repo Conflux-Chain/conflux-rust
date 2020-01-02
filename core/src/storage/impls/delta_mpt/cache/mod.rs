@@ -2,4 +2,4 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub(super) mod algorithm;
+pub(in super::super) mod algorithm;

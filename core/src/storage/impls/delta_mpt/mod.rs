@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub mod cache;
+pub mod cache_manager_delta_mpts;
 pub mod cow_node_ref;
 pub mod delta_mpt_iterator;
 mod mem_optimized_trie_node;
@@ -50,6 +51,8 @@ pub struct AtomicCommitTransaction<
 }
 
 pub struct MultiVersionMerklePatriciaTrie {
+    /// Id for cache manager.
+    mpt_id: DeltaMptId,
     /// These map are incomplete as some of other roots live in disk db.
     root_node_by_epoch: RwLock<HashMap<EpochId, Option<NodeRefDeltaMpt>>>,
     /// Find trie root by merkle root is mainly for debugging.
@@ -65,7 +68,7 @@ pub struct MultiVersionMerklePatriciaTrie {
     /// out from memory because persistence isn't necessary.
     /// (So far we don't have write-back implementation. For write-back we
     /// should think more about roots in disk db.)
-    node_memory_manager: NodeMemoryManagerDeltaMpt,
+    node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     /// Underlying database for DeltaMpt.
     db: Arc<dyn DeltaDbTrait + Send + Sync>,
     /// Take care of database clean-ups for DeltaMpt.
@@ -73,6 +76,7 @@ pub struct MultiVersionMerklePatriciaTrie {
     // trigger the compiler warning.
     #[allow(unused)]
     delta_mpts_releaser: DeltaDbReleaser,
+    /// Mutex for row number computation in state commitment.
     commit_lock: Mutex<AtomicCommit>,
 
     // This is a hack to avoid passing pivot chain information from consensus
@@ -81,9 +85,43 @@ pub struct MultiVersionMerklePatriciaTrie {
     parent_epoch_by_epoch: RwLock<HashMap<EpochId, EpochId>>,
 }
 
-unsafe impl Sync for MultiVersionMerklePatriciaTrie {}
-
 impl MultiVersionMerklePatriciaTrie {
+    pub fn new(
+        kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, snapshot_epoch_id: EpochId,
+        storage_manager: Arc<StorageManager>,
+        delta_mpt_id_gen: &mut DeltaMptIdGen,
+        node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
+    ) -> Result<Self>
+    {
+        let row_number =
+            Self::parse_row_number(kvdb.get("last_row_number".as_bytes()))
+                // unwrap() on new is fine.
+                .unwrap()
+                .unwrap_or_default();
+        let mpt_id = delta_mpt_id_gen.allocate()?;
+
+        debug!("Created DeltaMpt with id {}", mpt_id);
+
+        Ok(Self {
+            mpt_id,
+            root_node_by_epoch: Default::default(),
+            root_node_by_merkle_root: Default::default(),
+            node_memory_manager,
+            delta_mpts_releaser: DeltaDbReleaser {
+                snapshot_epoch_id,
+                storage_manager: Arc::downgrade(&storage_manager),
+                mpt_id,
+            },
+            db: kvdb,
+            commit_lock: Mutex::new(AtomicCommit {
+                row_number: RowNumber { value: row_number },
+            }),
+            parent_epoch_by_epoch: Default::default(),
+        })
+    }
+
+    pub fn get_mpt_id(&self) -> DeltaMptId { self.mpt_id }
+
     pub fn start_commit(
         &self,
     ) -> Result<AtomicCommitTransaction<Box<DeltaDbTransactionTraitObj>>> {
@@ -91,39 +129,6 @@ impl MultiVersionMerklePatriciaTrie {
             info: self.commit_lock.lock(),
             transaction: self.db.start_transaction_dyn(true)?,
         })
-    }
-
-    pub fn new(
-        kvdb: Arc<dyn DeltaDbTrait + Send + Sync>, conf: &StorageConfiguration,
-        snapshot_epoch_id: EpochId, storage_manager: Arc<StorageManager>,
-    ) -> Self
-    {
-        let row_number =
-            Self::parse_row_number(kvdb.get("last_row_number".as_bytes()))
-                // unwrap() on new is fine.
-                .unwrap()
-                .unwrap_or_default();
-
-        Self {
-            root_node_by_epoch: Default::default(),
-            root_node_by_merkle_root: Default::default(),
-            node_memory_manager: NodeMemoryManagerDeltaMpt::new(
-                conf.cache_start_size,
-                conf.cache_size,
-                conf.idle_size,
-                conf.node_map_size,
-                LRU::<RLFUPosT, DeltaMptDbKey>::new(conf.cache_size),
-            ),
-            delta_mpts_releaser: DeltaDbReleaser {
-                snapshot_epoch_id,
-                storage_manager: Arc::downgrade(&storage_manager),
-            },
-            db: kvdb,
-            commit_lock: Mutex::new(AtomicCommit {
-                row_number: RowNumber { value: row_number },
-            }),
-            parent_epoch_by_epoch: Default::default(),
-        }
     }
 
     pub(super) fn state_root_committed(
@@ -297,7 +302,7 @@ impl MultiVersionMerklePatriciaTrie {
         root
     }
 
-    pub fn get_node_memory_manager(&self) -> &NodeMemoryManagerDeltaMpt {
+    pub fn get_node_memory_manager(&self) -> &DeltaMptsNodeMemoryManager {
         &self.node_memory_manager
     }
 
@@ -312,6 +317,7 @@ impl MultiVersionMerklePatriciaTrie {
                         node,
                         self.node_memory_manager.get_cache_manager(),
                         &mut *self.db.to_owned_read()?,
+                        self.mpt_id,
                         &mut false,
                     )?
                     .get_merkle()
@@ -360,18 +366,51 @@ impl MultiVersionMerklePatriciaTrie {
     pub fn db_commit(&self) -> &dyn Any { (*self.db).as_any() }
 }
 
+#[derive(Default)]
+pub struct DeltaMptIdGen {
+    id_limit: DeltaMptId,
+    available_ids: Vec<DeltaMptId>,
+}
+
+impl DeltaMptIdGen {
+    pub fn allocate(&mut self) -> Result<DeltaMptId> {
+        let id;
+        match self.available_ids.pop() {
+            None => {
+                if self.id_limit != DeltaMptId::max_value() {
+                    id = Ok(self.id_limit);
+                    self.id_limit += 1;
+                } else {
+                    id = Err(ErrorKind::TooManyDeltaMPT.into())
+                }
+            }
+            Some(x) => id = Ok(x),
+        };
+
+        id
+    }
+
+    pub fn free(&mut self, id: DeltaMptId) {
+        let max_id = self.id_limit - 1;
+        if id == max_id {
+            self.id_limit = max_id
+        } else {
+            self.available_ids.push(id);
+        }
+    }
+}
+
 use self::{
-    cache::algorithm::lru::LRU, node_memory_manager::*,
-    node_ref_map::DeltaMptDbKey, row_number::*,
+    node_memory_manager::*, node_ref_map::DeltaMptDbKey, row_number::*,
 };
 use crate::storage::{
     impls::{
-        errors::*, merkle_patricia_trie::*, storage_manager::storage_manager::*,
+        delta_mpt::node_ref_map::DeltaMptId, errors::*,
+        merkle_patricia_trie::*, storage_manager::storage_manager::*,
     },
     storage_db::delta_db_manager::{
         DeltaDbOwnedReadTraitObj, DeltaDbTrait, DeltaDbTransactionTraitObj,
     },
-    StorageConfiguration,
 };
 use cfx_types::hexstr_to_h256;
 use parking_lot::{Mutex, MutexGuard, RwLock};

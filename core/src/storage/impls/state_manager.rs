@@ -229,18 +229,19 @@ impl StateManager {
             }
         }
 
-        let delta_root =
-            match delta_mpt.get_root_node_ref_by_epoch(state_index.epoch_id)? {
-                None => {
-                    warn!(
+        let delta_root = match delta_mpt
+            .get_root_node_ref_by_epoch(state_index.epoch_id)?
+        {
+            None => {
+                warn!(
                     "get_state_trees, \
-                     delta_root not found for epoch {:?}. StateIndex: {:?}.",
-                    state_index.epoch_id, state_index,
+                    delta_root not found for epoch {:?}. mpt_id {}, StateIndex: {:?}.",
+                    state_index.epoch_id, delta_mpt.get_mpt_id(), state_index,
                 );
-                    return Ok(None);
-                }
-                Some(root) => root,
-            };
+                return Ok(None);
+            }
+            Some(root) => root,
+        };
 
         Self::get_state_trees_internal(
             snapshot,
@@ -462,11 +463,11 @@ impl StateManager {
             {
                 None => {
                     warn!(
-                            "get_state_trees_for_next_epoch, not shifting, \
-                         delta_root not found for epoch {:?}. mpt_id {}, StateIndex: {:?}",
-                            parent_state_index.epoch_id,
-                            delta_mpt.get_mpt_id(), parent_state_index
-                        );
+                        "get_state_trees_for_next_epoch, not shifting, \
+                         delta_root not found for epoch {:?}. mpt_id {}, StateIndex: {:?}.",
+                        parent_state_index.epoch_id,
+                        delta_mpt.get_mpt_id(), parent_state_index
+                    );
                     return Ok(None);
                 }
                 Some(root_node) => root_node,

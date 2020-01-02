@@ -195,11 +195,10 @@ class RemoteSimulate(ConfluxTestFramework):
         # storage
         self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
         self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_start_size"] = str(10000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
-        # self.conf_parameters["storage_cache_size"] = "200000"
-        self.conf_parameters["storage_idle_size"] = str(2000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_node_map_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_delta_mpts_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_delta_mpts_cache_start_size"] = str(10000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_delta_mpts_node_map_vec_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["storage_delta_mpts_slab_idle_size"] = str(2000000 // target_memory * self.options.storage_memory_mb)
 
         # txpool
         self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)

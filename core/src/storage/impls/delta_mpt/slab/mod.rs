@@ -146,6 +146,8 @@ pub struct Slab<T, E: EntryTrait<EntryType = T> = Entry<T>> {
     value_type: PhantomData<T>,
 }
 
+unsafe impl<T, E: EntryTrait<EntryType = T>> Sync for Slab<T, E> {}
+
 #[derive(Default)]
 struct AllocRelatedFields {
     // Number of Filled elements currently in the slab

@@ -12,6 +12,9 @@ pub struct StorageManager {
             > + Send
             + Sync,
     >,
+    delta_mpts_id_gen: Mutex<DeltaMptIdGen>,
+    delta_mpts_node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
+
     maybe_db_errors: MaybeDbErrors,
     snapshot_associated_mpts_by_epoch: RwLock<
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
@@ -40,6 +43,7 @@ pub struct StorageManager {
 pub struct DeltaDbReleaser {
     pub storage_manager: Weak<StorageManager>,
     pub snapshot_epoch_id: EpochId,
+    pub mpt_id: DeltaMptId,
 }
 
 impl Drop for DeltaDbReleaser {
@@ -50,8 +54,10 @@ impl Drop for DeltaDbReleaser {
         // Note that when an error happens in db, the program should fail
         // gracefully, but not in destructor.
         Weak::upgrade(&self.storage_manager).map(|storage_manager| {
-            storage_manager
-                .release_delta_mpt_actions_in_drop(&self.snapshot_epoch_id)
+            storage_manager.release_delta_mpt_actions_in_drop(
+                &self.snapshot_epoch_id,
+                self.mpt_id,
+            )
         });
     }
 }
@@ -91,6 +97,18 @@ impl StorageManager {
                     storage_conf.path_snapshot_dir.clone(),
                 )?,
             }),
+            delta_mpts_id_gen: Default::default(),
+            delta_mpts_node_memory_manager: Arc::new(
+                DeltaMptsNodeMemoryManager::new(
+                    storage_conf.delta_mpts_cache_start_size,
+                    storage_conf.delta_mpts_cache_size,
+                    storage_conf.delta_mpts_slab_idle_size,
+                    storage_conf.delta_mpts_node_map_vec_size,
+                    DeltaMptsCacheAlgorithm::new(
+                        storage_conf.delta_mpts_cache_size,
+                    ),
+                ),
+            ),
             maybe_db_errors: MaybeDbErrors {
                 delta_trie_destroy_error_1: Cell::new(None),
                 delta_trie_destroy_error_2: Cell::new(None),
@@ -227,13 +245,13 @@ impl StorageManager {
         } else {
             let db = Arc::new(db_result?);
 
-            // FIXME: implement delta mpt so that multiple of them coexists.
             let arc_delta_mpt = Arc::new(DeltaMpt::new(
                 db,
-                &storage_manager.storage_conf,
                 snapshot_epoch_id.clone(),
                 storage_manager.clone(),
-            ));
+                &mut *storage_manager.delta_mpts_id_gen.lock(),
+                storage_manager.delta_mpts_node_memory_manager.clone(),
+            )?);
 
             maybe_snapshot_entry.as_mut().unwrap().1 =
                 Some(arc_delta_mpt.clone());
@@ -250,7 +268,12 @@ impl StorageManager {
     /// The methods clean up Delta DB when dropping an Delta MPT.
     /// It silently finishes and in case of error, it keeps the error
     /// and raise it later on.
-    fn release_delta_mpt_actions_in_drop(&self, snapshot_epoch_id: &EpochId) {
+    fn release_delta_mpt_actions_in_drop(
+        &self, snapshot_epoch_id: &EpochId, delta_mpt_id: DeltaMptId,
+    ) {
+        self.delta_mpts_node_memory_manager
+            .delete_mpt_from_cache(delta_mpt_id);
+        self.delta_mpts_id_gen.lock().free(delta_mpt_id);
         let maybe_another_error = self
             .maybe_db_errors
             .delta_trie_destroy_error_1
@@ -827,10 +850,11 @@ impl StorageManager {
                     snapshot_epoch_id.clone(),
                     Arc::new(DeltaMpt::new(
                         Arc::new(delta_db),
-                        &self.storage_conf,
                         snapshot_epoch_id.clone(),
                         unsafe { shared_from_this(self) },
-                    )),
+                        &mut *self.delta_mpts_id_gen.lock(),
+                        self.delta_mpts_node_memory_manager.clone(),
+                    )?),
                 );
             }
 
@@ -920,13 +944,21 @@ use super::{
     *,
 };
 use crate::storage::{
-    impls::storage_db::{
-        kvdb_sqlite::{
-            KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
-            KvdbSqliteStatements,
+    impls::{
+        delta_mpt::{
+            node_memory_manager::{
+                DeltaMptsCacheAlgorithm, DeltaMptsNodeMemoryManager,
+            },
+            node_ref_map::DeltaMptId,
         },
-        snapshot_db_sqlite::SnapshotDbSqlite,
-        sqlite::ConnectionWithRowParser,
+        storage_db::{
+            kvdb_sqlite::{
+                KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
+                KvdbSqliteStatements,
+            },
+            snapshot_db_sqlite::SnapshotDbSqlite,
+            sqlite::ConnectionWithRowParser,
+        },
     },
     storage_db::KeyValueDbIterableTrait,
     KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
