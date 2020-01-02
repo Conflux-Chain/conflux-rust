@@ -96,8 +96,10 @@ pub fn initialize_synchronization_graph(
     )));
 
     let storage_manager = Arc::new(
-        StorageManager::new(ledger_db.clone(), StorageConfiguration::default())
-            .expect("Failed to initialize storage."),
+        StorageManager::new(StorageConfiguration::new_default(
+            db_dir.to_string(),
+        ))
+        .expect("Failed to initialize storage."),
     );
 
     let mut genesis_accounts = HashMap::new();

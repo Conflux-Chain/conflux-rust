@@ -48,17 +48,11 @@ fn main() -> Result<(), Error> {
         remove_dir_all(&test_dir)?;
     }
 
-    let snapshot_dir = Path::new(StorageConfiguration::SNAPSHOT_DIR);
-    if snapshot_dir.exists() {
-        remove_dir_all(snapshot_dir)?;
-    }
-    create_dir_all(snapshot_dir)?;
-
     // setup node 1
     println!("====================================================");
     println!("Setup node 1 ...");
     let state_manager =
-        new_state_manager(test_dir.join("db1").to_str().unwrap())?;
+        new_state_manager(test_dir.as_path().to_str().unwrap().to_string())?;
     let storage_manager = state_manager.get_storage_manager();
     let snapshot_db_manager = state_manager
         .get_storage_manager()
@@ -282,21 +276,13 @@ where
     T::from_str(val).unwrap()
 }
 
-fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
-    create_dir_all(db_dir)?;
-
-    let db_config = db::db_config(
-        Path::new(db_dir),
-        Some(128),
-        db::DatabaseCompactionProfile::default(),
-        NUM_COLUMNS.clone(),
-        false,
-    );
-    let db = db::open_database(db_dir, &db_config)?;
-
-    let mut storage_conf = StorageConfiguration::default();
+fn new_state_manager(
+    conflux_data_dir: &str,
+) -> Result<Arc<StateManager>, Error> {
+    let mut storage_conf =
+        StorageConfiguration::new_default(conflux_data_dir.to_string());
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
-    Ok(Arc::new(StateManager::new(db, storage_conf).unwrap()))
+    Ok(Arc::new(StateManager::new(storage_conf).unwrap()))
 }
 
 fn initialize_genesis(

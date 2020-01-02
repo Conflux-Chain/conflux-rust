@@ -48,20 +48,23 @@ impl KeyValueDB for FakeDbForStateTest {
 }
 
 #[cfg(test)]
-pub fn new_state_manager_for_testing() -> StateManager {
-    StateManager::new(
-        Arc::new(SystemDB::new(Arc::new(FakeDbForStateTest::default()))),
-        StorageConfiguration {
-            cache_start_size: 1_000_000,
-            cache_size: 20_000_000,
-            idle_size: 200_000,
-            node_map_size: 20_000_000,
-            recent_lfu_factor: 4.0,
-            consensus_param: ConsensusParam {
-                snapshot_epoch_count: 10000000,
-            },
+pub fn new_state_manager_for_unit_test() -> StateManager {
+    StateManager::new(StorageConfiguration {
+        cache_start_size: 1_000_000,
+        cache_size: 20_000_000,
+        idle_size: 200_000,
+        node_map_size: 20_000_000,
+        recent_lfu_factor: 4.0,
+        consensus_param: ConsensusParam {
+            snapshot_epoch_count: 10_000_000,
         },
-    )
+        path_delta_mpts_dir: "./conflux_unit_test_storage_dir".to_string()
+            + StorageConfiguration::DELTA_MPTS_DIR,
+        path_snapshot_dir: "./conflux_unit_test_storage_dir".to_string()
+            + StorageConfiguration::SNAPSHOT_DIR,
+        path_snapshot_info_db: "./conflux_unit_test_storage_dir".to_string()
+            + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
+    })
     .unwrap()
 }
 
@@ -150,15 +153,12 @@ use kvdb::{DBTransaction, KeyValueDB};
 use primitives::StorageKey;
 
 #[cfg(test)]
-use crate::{
-    ext_db::SystemDB,
-    storage::{
-        state_manager::StateManager, ConsensusParam, StorageConfiguration,
-    },
+use crate::storage::{
+    state_manager::StateManager, ConsensusParam, StorageConfiguration,
 };
 #[cfg(test)]
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 #[cfg(test)]
 use rand_chacha::ChaChaRng;
 #[cfg(test)]
-use std::{mem, sync::Arc};
+use std::mem;

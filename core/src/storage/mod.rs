@@ -37,22 +37,22 @@ pub struct StorageConfiguration {
     pub idle_size: u32,
     pub node_map_size: u32,
     pub recent_lfu_factor: f64,
-    // FIXME: add paths here.
     pub consensus_param: ConsensusParam,
+    pub path_delta_mpts_dir: String,
+    pub path_snapshot_dir: String,
+    pub path_snapshot_info_db: String,
 }
 
 impl StorageConfiguration {
-    pub const SNAPSHOT_DIR: &'static str = "./storage_db/snapshot/";
+    pub const DELTA_MPTS_DIR: &'static str = "storage_db/delta_mpts/";
+    pub const SNAPSHOT_DIR: &'static str = "storage_db/snapshot/";
     pub const SNAPSHOT_INFO_DB_NAME: &'static str = "snapshot_info";
     pub const SNAPSHOT_INFO_DB_PATH: &'static str =
-        "./storage_db/snapshot_info_db";
-    /// Relative to Conflux data dir.
-    // FIXME: but where is the data dir?
-    pub const STORAGE_DIR: &'static str = "./storage_db/";
+        "storage_db/snapshot_info_db";
 }
 
-impl Default for StorageConfiguration {
-    fn default() -> Self {
+impl StorageConfiguration {
+    pub fn new_default(conflux_data_dir: String) -> Self {
         StorageConfiguration {
             cache_start_size: defaults::DEFAULT_CACHE_START_SIZE,
             cache_size: defaults::DEFAULT_CACHE_SIZE,
@@ -62,6 +62,12 @@ impl Default for StorageConfiguration {
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
             },
+            path_delta_mpts_dir: conflux_data_dir.clone()
+                + StorageConfiguration::DELTA_MPTS_DIR,
+            path_snapshot_dir: conflux_data_dir.clone()
+                + StorageConfiguration::SNAPSHOT_DIR,
+            path_snapshot_info_db: conflux_data_dir.clone()
+                + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
         }
     }
 }
@@ -91,5 +97,5 @@ pub use self::{
 };
 
 #[cfg(test)]
-pub use self::tests::new_state_manager_for_testing as new_storage_manager_for_testing;
+pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
 use crate::parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY;
