@@ -564,31 +564,30 @@ pub type DeltaKVInsertionParserSqlite =
 pub type DeltaKVDeletionParserSqlite =
     Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<Vec<u8>>>;
 
-use super::{
-    super::{
-        super::storage_db::{
-            KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
-            KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
-            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
-            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-            SnapshotMptValue,
-        },
+use crate::storage::{
+    impls::{
+        delta_mpt::DeltaMptIterator,
         errors::*,
         merkle_patricia_trie::{KVInserter, MptMerger},
-        storage_manager::DeltaMptIterator,
+        storage_db::{
+            kvdb_sqlite::{
+                KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
+                KvdbSqliteDestructureTrait, KvdbSqliteStatements,
+            },
+            snapshot_mpt::SnapshotMpt,
+            sqlite::{
+                ConnectionWithRowParser, SqlBindableRef, SqliteConnection,
+                SQLITE_NO_PARAM,
+            },
+        },
     },
-    kvdb_sqlite::{
-        KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
-        KvdbSqliteDestructureTrait, KvdbSqliteStatements,
-    },
-    snapshot_mpt::SnapshotMpt,
-    sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
-};
-use crate::storage::{
-    impls::storage_db::sqlite::SQLITE_NO_PARAM,
     storage_db::{
-        KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter,
-        OpenSnapshotMptTrait,
+        KeyValueDbIterableTrait, KeyValueDbToOwnedReadTrait,
+        KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
+        OpenSnapshotMptTrait, OwnedReadImplFamily, ReadImplFamily,
+        SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+        SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+        SnapshotMptValue,
     },
 };
 use cfx_types::Address;

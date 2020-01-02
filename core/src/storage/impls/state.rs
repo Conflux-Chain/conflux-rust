@@ -610,7 +610,6 @@ use crate::storage::{
         },
         state_manager::*,
         state_proof::StateProof,
-        storage_manager::DeltaMptIterator,
     },
     state::*,
     storage_db::*,

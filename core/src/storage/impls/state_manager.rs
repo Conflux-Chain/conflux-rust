@@ -414,18 +414,24 @@ impl StateManagerTrait for StateManager {
     }
 }
 
-use super::{
-    super::{state::*, state_manager::*, storage_db::*},
-    delta_mpt::*,
-    errors::*,
-    storage_db::{
-        delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
-        snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
-    },
-    storage_manager::storage_manager::{DeltaMptIterator, StorageManager},
-};
 use crate::{
-    ext_db::SystemDB, statedb::StateDb, storage::StorageConfiguration,
+    ext_db::SystemDB,
+    statedb::StateDb,
+    storage::{
+        impls::{
+            delta_mpt::*,
+            errors::*,
+            storage_db::{
+                delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
+                snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
+            },
+            storage_manager::storage_manager::StorageManager,
+        },
+        state::*,
+        state_manager::*,
+        storage_db::*,
+        StorageConfiguration,
+    },
 };
 use cfx_types::{Address, U256};
 use primitives::{

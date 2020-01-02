@@ -301,17 +301,14 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::{
-            SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
-        },
-        errors::*,
-        storage_manager::DeltaMptIterator,
+use crate::storage::{
+    impls::{
+        delta_mpt::DeltaMptIterator, errors::*,
+        storage_db::snapshot_db_sqlite::*,
     },
-    snapshot_db_sqlite::*,
+    storage_db::{SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo},
+    StorageConfiguration,
 };
-use crate::storage::StorageConfiguration;
 use cfx_types::H256;
 use parity_bytes::ToPretty;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};

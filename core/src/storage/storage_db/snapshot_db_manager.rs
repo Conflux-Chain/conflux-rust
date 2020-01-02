@@ -31,9 +31,7 @@ pub trait SnapshotDbManagerTrait {
 }
 
 use super::{
-    super::impls::{
-        errors::*, storage_manager::storage_manager::DeltaMptIterator,
-    },
+    super::impls::{delta_mpt::DeltaMptIterator, errors::*},
     snapshot_db::*,
 };
 use primitives::{EpochId, MerkleHash};
