@@ -51,7 +51,8 @@ pub struct AtomicCommitTransaction<
 
 pub struct MultiVersionMerklePatriciaTrie {
     /// These map are incomplete as some of other roots live in disk db.
-    root_node_by_epoch: RwLock<HashMap<EpochId, NodeRefDeltaMpt>>,
+    root_node_by_epoch: RwLock<HashMap<EpochId, Option<NodeRefDeltaMpt>>>,
+    /// Find trie root by merkle root is mainly for debugging.
     root_node_by_merkle_root: RwLock<HashMap<MerkleHash, NodeRefDeltaMpt>>,
     /// Note that we don't manage ChildrenTable in allocator because it's
     /// variable-length.
@@ -125,17 +126,19 @@ impl MultiVersionMerklePatriciaTrie {
         }
     }
 
-    /// FIXME This is just used to handle the case of snapshot forking where row
-    /// number might be reused if not updated according to db status
-    pub fn update_row_number(&self) -> Result<()> {
-        let db_row_number =
-            Self::parse_row_number(self.db.get("last_row_number".as_bytes()))?
-                .unwrap_or_default();
-        let my_row_number = self.commit_lock.lock().row_number.value;
-        if db_row_number > my_row_number {
-            self.commit_lock.lock().row_number.value = db_row_number;
+    pub(super) fn state_root_committed(
+        &self, epoch_id: EpochId, merkle_root: &MerkleHash,
+        parent_epoch_id: EpochId, root_node: Option<NodeRefDeltaMpt>,
+    )
+    {
+        self.set_parent_epoch(epoch_id, parent_epoch_id.clone());
+        if root_node.is_some() {
+            self.set_root_node_ref(
+                merkle_root.clone(),
+                root_node.clone().unwrap(),
+            );
         }
-        Ok(())
+        self.set_epoch_root(epoch_id, root_node);
     }
 
     fn load_root_node_ref_from_db(
@@ -161,7 +164,7 @@ impl MultiVersionMerklePatriciaTrie {
 
     fn load_root_node_ref_from_db_by_epoch(
         &self, epoch_id: &EpochId,
-    ) -> Result<Option<NodeRefDeltaMpt>> {
+    ) -> Result<Option<Option<NodeRefDeltaMpt>>> {
         let db_key_result = Self::parse_row_number(
             // FIXME: the usage here for sqlite is serialized.
             // FIXME: Think of a way of doing it correctly.
@@ -178,7 +181,13 @@ impl MultiVersionMerklePatriciaTrie {
             Some(db_key) => {
                 Ok(Some(self.loaded_root_at_epoch(epoch_id, db_key)))
             }
-            None => Ok(None),
+            None => {
+                if self.get_parent_epoch(epoch_id)?.is_some() {
+                    Ok(Some(None))
+                } else {
+                    Ok(None)
+                }
+            }
         }
     }
 
@@ -213,7 +222,7 @@ impl MultiVersionMerklePatriciaTrie {
 
     pub fn get_root_node_ref_by_epoch(
         &self, epoch_id: &EpochId,
-    ) -> Result<Option<NodeRefDeltaMpt>> {
+    ) -> Result<Option<Option<NodeRefDeltaMpt>>> {
         let node_ref = self.root_node_by_epoch.read().get(epoch_id).cloned();
         if node_ref.is_none() {
             self.load_root_node_ref_from_db_by_epoch(epoch_id)
@@ -222,6 +231,7 @@ impl MultiVersionMerklePatriciaTrie {
         }
     }
 
+    /// Find trie root by merkle root is mainly for debugging.
     pub fn get_root_node_ref(
         &self, merkle_root: &MerkleHash,
     ) -> Result<Option<NodeRefDeltaMpt>> {
@@ -251,13 +261,11 @@ impl MultiVersionMerklePatriciaTrie {
 
     // These set methods are private to storage mod. Writing to db happens at
     // state commitment.
-    pub(super) fn set_epoch_root(
-        &self, epoch_id: EpochId, root: NodeRefDeltaMpt,
-    ) {
+    fn set_epoch_root(&self, epoch_id: EpochId, root: Option<NodeRefDeltaMpt>) {
         self.root_node_by_epoch.write().insert(epoch_id, root);
     }
 
-    pub(super) fn set_root_node_ref(
+    fn set_root_node_ref(
         &self, merkle_root: MerkleHash, node_ref: NodeRefDeltaMpt,
     ) {
         self.root_node_by_merkle_root
@@ -265,9 +273,7 @@ impl MultiVersionMerklePatriciaTrie {
             .insert(merkle_root, node_ref);
     }
 
-    pub(super) fn set_parent_epoch(
-        &self, epoch_id: EpochId, parent_epoch_id: EpochId,
-    ) {
+    fn set_parent_epoch(&self, epoch_id: EpochId, parent_epoch_id: EpochId) {
         self.parent_epoch_by_epoch
             .write()
             .insert(epoch_id, parent_epoch_id);
@@ -284,8 +290,8 @@ impl MultiVersionMerklePatriciaTrie {
 
     fn loaded_root_at_epoch(
         &self, epoch_id: &EpochId, db_key: DeltaMptDbKey,
-    ) -> NodeRefDeltaMpt {
-        let root = NodeRefDeltaMpt::Committed { db_key };
+    ) -> Option<NodeRefDeltaMpt> {
+        let root = Some(NodeRefDeltaMpt::Committed { db_key });
         self.set_epoch_root(*epoch_id, root.clone());
 
         root
@@ -318,7 +324,12 @@ impl MultiVersionMerklePatriciaTrie {
     pub fn get_merkle_root_by_epoch_id(
         &self, epoch_id: &EpochId,
     ) -> Result<Option<MerkleHash>> {
-        self.get_merkle(self.get_root_node_ref_by_epoch(epoch_id)?)
+        match self.get_root_node_ref_by_epoch(epoch_id)? {
+            None => Ok(None),
+            Some(root_node) => {
+                Ok(self.get_merkle(root_node)?.or(Some(MERKLE_NULL_NODE)))
+            }
+        }
     }
 
     pub fn log_usage(&self) { self.node_memory_manager.log_usage(); }
@@ -364,5 +375,5 @@ use crate::storage::{
 };
 use cfx_types::hexstr_to_h256;
 use parking_lot::{Mutex, MutexGuard, RwLock};
-use primitives::{EpochId, MerkleHash};
+use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE};
 use std::{any::Any, borrow::BorrowMut, collections::HashMap, sync::Arc};
