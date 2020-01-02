@@ -333,10 +333,17 @@ impl<'a> StateTrait for State<'a> {
             self.revert();
         }
         debug!(
-            "commit: delta_trie_height={:?} has_intermediate={}, height={:?}",
+            "commit state for epoch {:?}: delta_trie_height={:?} \
+            has_intermediate={}, height={:?}, snapshot_epoch_id={:?}, \
+            intermediate_epoch_id={:?}, intermediate_mpt_id={:?}, delta_mpt_id={}",
+            epoch_id,
             self.delta_trie_height,
             self.maybe_intermediate_trie.is_some(),
             self.height,
+            self.snapshot_epoch_id,
+            self.intermediate_epoch_id,
+            self.maybe_intermediate_trie.as_ref().map(|mpt| mpt.get_mpt_id()),
+            self.delta_trie.get_mpt_id(),
         );
         if self.delta_trie_height.unwrap()
             >= self
