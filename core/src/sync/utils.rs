@@ -96,7 +96,7 @@ pub fn initialize_synchronization_graph(
     )));
 
     let storage_manager = Arc::new(
-        StorageManager::new(ledger_db.clone(), StorageConfiguration::default())
+        StorageManager::new(StorageConfiguration::default())
             .expect("Failed to initialize storage."),
     );
 

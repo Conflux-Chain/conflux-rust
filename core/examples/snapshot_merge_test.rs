@@ -285,18 +285,9 @@ where
 fn new_state_manager(db_dir: &str) -> Result<Arc<StateManager>, Error> {
     create_dir_all(db_dir)?;
 
-    let db_config = db::db_config(
-        Path::new(db_dir),
-        Some(128),
-        db::DatabaseCompactionProfile::default(),
-        NUM_COLUMNS.clone(),
-        false,
-    );
-    let db = db::open_database(db_dir, &db_config)?;
-
     let mut storage_conf = StorageConfiguration::default();
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
-    Ok(Arc::new(StateManager::new(db, storage_conf).unwrap()))
+    Ok(Arc::new(StateManager::new(storage_conf).unwrap()))
 }
 
 fn initialize_genesis(

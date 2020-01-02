@@ -155,7 +155,6 @@ build_config! {
         (tx_pool_min_tx_gas_price, (u64), 1)
 
         // Storage Section.
-        (storage_db_path, (String), "./storage_db".to_string())
         (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
         (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
         (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
@@ -383,6 +382,9 @@ impl Configuration {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
             },
+            path_delta_mpts_dir: StorageConfiguration::DELTA_MPTS_DIR
+                .to_string(),
+            path_snapshot_dir: StorageConfiguration::STORAGE_DIR.to_string(),
         }
     }
 

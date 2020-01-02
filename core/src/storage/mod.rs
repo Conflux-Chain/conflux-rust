@@ -37,11 +37,13 @@ pub struct StorageConfiguration {
     pub idle_size: u32,
     pub node_map_size: u32,
     pub recent_lfu_factor: f64,
-    // FIXME: add paths here.
     pub consensus_param: ConsensusParam,
+    pub path_delta_mpts_dir: String,
+    pub path_snapshot_dir: String,
 }
 
 impl StorageConfiguration {
+    pub const DELTA_MPTS_DIR: &'static str = "./storage_db/delta_mpts/";
     pub const SNAPSHOT_DIR: &'static str = "./storage_db/snapshot/";
     pub const SNAPSHOT_INFO_DB_NAME: &'static str = "snapshot_info";
     pub const SNAPSHOT_INFO_DB_PATH: &'static str =
@@ -62,6 +64,9 @@ impl Default for StorageConfiguration {
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
             },
+            path_delta_mpts_dir: StorageConfiguration::DELTA_MPTS_DIR
+                .to_string(),
+            path_snapshot_dir: StorageConfiguration::SNAPSHOT_DIR.to_string(),
         }
     }
 }
