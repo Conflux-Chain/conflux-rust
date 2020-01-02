@@ -16,16 +16,16 @@ pub(super) mod storage_manager;
 
 pub mod defaults {
     pub use super::delta_mpt::DEFAULT_NODE_MAP_SIZE;
-    pub const DEFAULT_CACHE_SIZE: u32 =
-        NodeMemoryManagerDeltaMpt::MAX_CACHED_TRIE_NODES_DISK_HYBRID;
-    pub const DEFAULT_CACHE_START_SIZE: u32 =
-        NodeMemoryManagerDeltaMpt::START_CAPACITY;
-    pub const DEFAULT_RECENT_LFU_FACTOR: f64 =
-        NodeMemoryManagerDeltaMpt::R_LFU_FACTOR;
-    pub const DEFAULT_IDLE_SIZE: u32 =
-        NodeMemoryManagerDeltaMpt::MAX_DIRTY_AND_TEMPORARY_TRIE_NODES;
+    pub const DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR: f64 =
+        DeltaMptsNodeMemoryManager::R_LFU_FACTOR;
+    pub const DEFAULT_DELTA_MPTS_CACHE_SIZE: u32 =
+        DeltaMptsNodeMemoryManager::MAX_CACHED_TRIE_NODES_DISK_HYBRID;
+    pub const DEFAULT_DELTA_MPTS_CACHE_START_SIZE: u32 =
+        DeltaMptsNodeMemoryManager::START_CAPACITY;
+    pub const DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE: u32 =
+        DeltaMptsNodeMemoryManager::MAX_DIRTY_AND_TEMPORARY_TRIE_NODES;
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 =
-        NodeMemoryManagerDeltaMpt::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER;
+        DeltaMptsNodeMemoryManager::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER;
 
-    use super::delta_mpt::node_memory_manager::NodeMemoryManagerDeltaMpt;
+    use super::delta_mpt::node_memory_manager::DeltaMptsNodeMemoryManager;
 }
