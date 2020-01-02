@@ -30,6 +30,7 @@ const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 4;
 /// time.
 pub struct CowNodeRef {
     owned: bool,
+    mpt_id: DeltaMptId,
     pub node_ref: NodeRefDeltaMpt,
 }
 
@@ -38,7 +39,7 @@ pub struct MaybeOwnedTrieNode<'a> {
 }
 
 type GuardedMaybeOwnedTrieNodeAsCowCallParam<'c> = GuardedValue<
-    Option<MutexGuard<'c, CacheManagerDeltaMpt>>,
+    Option<MutexGuard<'c, DeltaMptsCacheManager>>,
     MaybeOwnedTrieNodeAsCowCallParam,
 >;
 
@@ -108,16 +109,17 @@ impl<'a> MaybeOwnedTrieNode<'a> {
 impl CowNodeRef {
     pub fn new_uninitialized_node<'a>(
         allocator: AllocatorRefRefDeltaMpt<'a>,
-        owned_node_set: &mut OwnedNodeSet,
+        owned_node_set: &mut OwnedNodeSet, mpt_id: DeltaMptId,
     ) -> Result<(Self, SlabVacantEntryDeltaMpt<'a>)>
     {
         let (node_ref, new_entry) =
-            NodeMemoryManagerDeltaMpt::new_node(allocator)?;
+            DeltaMptsNodeMemoryManager::new_node(allocator)?;
         owned_node_set.insert(node_ref.clone(), None);
 
         Ok((
             Self {
                 owned: true,
+                mpt_id,
                 node_ref,
             },
             new_entry,
@@ -126,9 +128,12 @@ impl CowNodeRef {
 
     pub fn new(
         node_ref: NodeRefDeltaMpt, owned_node_set: &OwnedNodeSet,
-    ) -> Self {
+        mpt_id: DeltaMptId,
+    ) -> Self
+    {
         Self {
             owned: owned_node_set.contains(&node_ref),
+            mpt_id,
             node_ref,
         }
     }
@@ -137,6 +142,7 @@ impl CowNodeRef {
     pub fn take(&mut self) -> Self {
         let ret = Self {
             owned: self.owned,
+            mpt_id: self.mpt_id,
             node_ref: self.node_ref.clone(),
         };
 
@@ -157,7 +163,7 @@ impl CowNodeRef {
 
     // FIXME: refactor node_memory_manager?
     fn convert_to_owned<'a>(
-        &mut self, _node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
+        &mut self, _node_memory_manager: &'a DeltaMptsNodeMemoryManager,
         allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
     ) -> Result<Option<SlabVacantEntryDeltaMpt<'a>>>
@@ -168,7 +174,7 @@ impl CowNodeRef {
             // Similar to Self::new_uninitialized_node(), but considers the
             // original db key.
             let (node_ref, new_entry) =
-                NodeMemoryManagerDeltaMpt::new_node(&allocator)?;
+                DeltaMptsNodeMemoryManager::new_node(&allocator)?;
             let original_db_key = match self.node_ref {
                 NodeRefDeltaMpt::Committed { db_key } => db_key,
                 NodeRefDeltaMpt::Dirty { .. } => unreachable!(),
@@ -189,12 +195,12 @@ impl CowNodeRef {
     /// Lifetime of cache is separated because holding the lock itself shouldn't
     /// prevent any further calls on self.
     pub fn get_trie_node<'a, 'c: 'a>(
-        &'a mut self, node_memory_manager: &'c NodeMemoryManagerDeltaMpt,
+        &'a mut self, node_memory_manager: &'c DeltaMptsNodeMemoryManager,
         allocator: AllocatorRefRefDeltaMpt<'a>,
         db: &mut DeltaDbOwnedReadTraitObj,
     ) -> Result<
         GuardedValue<
-            Option<MutexGuard<'c, CacheManagerDeltaMpt>>,
+            Option<MutexGuard<'c, DeltaMptsCacheManager>>,
             MaybeOwnedTrieNode<'a>,
         >,
     >
@@ -205,6 +211,7 @@ impl CowNodeRef {
                 self.node_ref.clone(),
                 node_memory_manager.get_cache_manager(),
                 db,
+                self.mpt_id,
                 &mut false,
             )?,
         ))
@@ -216,12 +223,13 @@ impl CowNodeRef {
     /// is shorter.
     // FIXME: the comment above seems broken.
     pub fn delete_node(
-        mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
+        mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet,
     )
     {
         if self.owned {
-            node_memory_manager.free_owned_node(&mut self.node_ref);
+            node_memory_manager
+                .free_owned_node(&mut self.node_ref, self.mpt_id);
             owned_node_set.remove(&self.node_ref);
             self.owned = false;
         }
@@ -264,7 +272,7 @@ impl CowNodeRef {
             let allocator = node_memory_manager.get_allocator();
             for (i, node_ref) in children_table.iter() {
                 let mut cow_child_node =
-                    Self::new((*node_ref).into(), owned_node_set);
+                    Self::new((*node_ref).into(), owned_node_set, self.mpt_id);
                 let child_node = cow_child_node.get_trie_node(
                     node_memory_manager,
                     &allocator,
@@ -286,7 +294,8 @@ impl CowNodeRef {
                 )?;
             }
 
-            node_memory_manager.free_owned_node(&mut self.node_ref);
+            node_memory_manager
+                .free_owned_node(&mut self.node_ref, self.mpt_id);
             self.owned = false;
             Ok(())
         } else {
@@ -307,14 +316,15 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         commit_transaction: &mut AtomicCommitTransaction<Transaction>,
-        cache_manager: &mut CacheManagerDeltaMpt,
+        cache_manager: &mut DeltaMptsCacheManager,
         allocator_ref: AllocatorRefRefDeltaMpt,
         children_merkle_map: &mut ChildrenMerkleMap,
     ) -> Result<()>
     {
         for (_i, node_ref_mut) in trie_node.children_table.iter_mut() {
             let node_ref = node_ref_mut.clone();
-            let mut cow_child_node = Self::new(node_ref.into(), owned_node_set);
+            let mut cow_child_node =
+                Self::new(node_ref.into(), owned_node_set, self.mpt_id);
             if cow_child_node.is_owned() {
                 let trie_node = unsafe {
                     trie.get_node_memory_manager().dirty_node_as_mut_unchecked(
@@ -366,7 +376,9 @@ impl CowNodeRef {
             .iter()
             .map(|(_i, node_ref)| match NodeRefDeltaMpt::from(*node_ref) {
                 NodeRefDeltaMpt::Committed { db_key }
-                    if !cache_manager.lock().query(db_key) =>
+                    if !cache_manager
+                        .lock()
+                        .is_cached((self.mpt_id, db_key)) =>
                 {
                     1
                 }
@@ -412,6 +424,7 @@ impl CowNodeRef {
                     self.node_ref.clone(),
                     trie.get_node_memory_manager().get_cache_manager(),
                     db,
+                    self.mpt_id,
                     &mut load_from_db,
                 )?;
             if load_from_db {
@@ -512,8 +525,11 @@ impl CowNodeRef {
                                 known_merkles.get_child(i).unwrap_or_default();
                         }
                         (_, node_ref_mut @ _) => {
-                            let mut cow_child_node =
-                                Self::new(node_ref_mut, owned_node_set);
+                            let mut cow_child_node = Self::new(
+                                node_ref_mut,
+                                owned_node_set,
+                                self.mpt_id,
+                            );
                             let result = cow_child_node.get_or_compute_merkle(
                                 trie,
                                 owned_node_set,
@@ -576,7 +592,7 @@ impl CowNodeRef {
         let allocator = node_memory_manager.get_allocator();
         for (i, node_ref) in children_table.iter() {
             let mut cow_child_node =
-                Self::new((*node_ref).into(), owned_node_set);
+                Self::new((*node_ref).into(), owned_node_set, self.mpt_id);
             let child_node = cow_child_node.get_trie_node(
                 node_memory_manager,
                 &allocator,
@@ -608,7 +624,7 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         trie_node: &mut TrieNodeDeltaMpt,
         commit_transaction: &mut AtomicCommitTransaction<Transaction>,
-        cache_manager: &mut CacheManagerDeltaMpt,
+        cache_manager: &mut DeltaMptsCacheManager,
         allocator_ref: AllocatorRefRefDeltaMpt,
         children_merkle_map: &mut ChildrenMerkleMap,
     ) -> Result<bool>
@@ -658,7 +674,7 @@ impl CowNodeRef {
             // about the current node: we may forget to rollback the insertion
             // into node_ref_map and cache algorithm.
             cache_manager.insert_to_node_ref_map_and_call_cache_access(
-                db_key,
+                (self.mpt_id, db_key),
                 slot,
                 trie.get_node_memory_manager(),
             )?;
@@ -681,7 +697,7 @@ impl CowNodeRef {
         let allocator = node_memory_manager.get_allocator();
 
         let mut child_node_cow =
-            CowNodeRef::new(child_node_ref, owned_node_set);
+            CowNodeRef::new(child_node_ref, owned_node_set, self.mpt_id);
         let compressed_path_ref =
             trie_node.as_ref().as_ref().compressed_path_ref();
         let path_prefix = CompressedPathRaw::new(
@@ -738,7 +754,7 @@ impl CowNodeRef {
     }
 
     pub fn cow_set_compressed_path(
-        &mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
+        &mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet, path: CompressedPathRaw,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
     ) -> Result<()>
@@ -770,7 +786,7 @@ impl CowNodeRef {
     }
 
     pub unsafe fn cow_delete_value_unchecked(
-        &mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
+        &mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
     ) -> Result<Box<[u8]>>
@@ -795,7 +811,7 @@ impl CowNodeRef {
     }
 
     pub fn cow_replace_value_valid(
-        &mut self, node_memory_manager: &NodeMemoryManagerDeltaMpt,
+        &mut self, node_memory_manager: &DeltaMptsNodeMemoryManager,
         owned_node_set: &mut OwnedNodeSet,
         trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam, value: Box<[u8]>,
     ) -> Result<MptValue<Box<[u8]>>>
@@ -835,7 +851,7 @@ impl CowNodeRef {
         FOwned: FnOnce(&'a mut TrieNodeDeltaMpt) -> OutputType,
         FRef: FnOnce(&'a TrieNodeDeltaMpt) -> (TrieNodeDeltaMpt, OutputType),
     >(
-        &mut self, node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
+        &mut self, node_memory_manager: &'a DeltaMptsNodeMemoryManager,
         allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
         mut trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
@@ -862,7 +878,7 @@ impl CowNodeRef {
     }
 
     pub fn cow_modify<'a>(
-        &mut self, node_memory_manager: &'a NodeMemoryManagerDeltaMpt,
+        &mut self, node_memory_manager: &'a DeltaMptsNodeMemoryManager,
         allocator: AllocatorRefRefDeltaMpt<'a>,
         owned_node_set: &mut OwnedNodeSet,
         mut trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
@@ -882,7 +898,7 @@ impl CowNodeRef {
                     .copy_and_replace_fields(None, None, None);
                 let key = new_entry.key();
                 new_entry.insert(&new_trie_node);
-                Ok(NodeMemoryManagerDeltaMpt::get_in_memory_node_mut(
+                Ok(DeltaMptsNodeMemoryManager::get_in_memory_node_mut(
                     allocator, key,
                 ))
             },

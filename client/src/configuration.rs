@@ -155,11 +155,11 @@ build_config! {
         (tx_pool_min_tx_gas_price, (u64), 1)
 
         // Storage Section.
-        (storage_cache_start_size, (u32), storage::defaults::DEFAULT_CACHE_START_SIZE)
-        (storage_cache_size, (u32), storage::defaults::DEFAULT_CACHE_SIZE)
-        (storage_recent_lfu_factor, (f64), storage::defaults::DEFAULT_RECENT_LFU_FACTOR)
-        (storage_idle_size, (u32), storage::defaults::DEFAULT_IDLE_SIZE)
-        (storage_node_map_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
+        (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
+        (storage_delta_mpts_cache_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE)
+        (storage_delta_mpts_cache_start_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
+        (storage_delta_mpts_node_map_vec_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
+        (storage_delta_mpts_slab_idle_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
 
         // General/Unclassified section.
         (block_cache_gc_period_ms, (u64), 5000)
@@ -373,11 +373,6 @@ impl Configuration {
 
     pub fn storage_config(&self) -> StorageConfiguration {
         StorageConfiguration {
-            cache_start_size: self.raw_conf.storage_cache_start_size,
-            cache_size: self.raw_conf.storage_cache_size,
-            idle_size: self.raw_conf.storage_idle_size,
-            node_map_size: self.raw_conf.storage_node_map_size,
-            recent_lfu_factor: self.raw_conf.storage_recent_lfu_factor,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: if self.is_test_mode() {
                     self.raw_conf.dev_snapshot_epoch_count
@@ -385,6 +380,19 @@ impl Configuration {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
             },
+            delta_mpts_cache_recent_lfu_factor: self
+                .raw_conf
+                .storage_delta_mpts_cache_recent_lfu_factor,
+            delta_mpts_cache_size: self.raw_conf.storage_delta_mpts_cache_size,
+            delta_mpts_cache_start_size: self
+                .raw_conf
+                .storage_delta_mpts_cache_start_size,
+            delta_mpts_node_map_vec_size: self
+                .raw_conf
+                .storage_delta_mpts_node_map_vec_size,
+            delta_mpts_slab_idle_size: self
+                .raw_conf
+                .storage_delta_mpts_slab_idle_size,
             path_delta_mpts_dir: self.raw_conf.conflux_data_dir.clone()
                 + StorageConfiguration::DELTA_MPTS_DIR,
             path_snapshot_dir: self.raw_conf.conflux_data_dir.clone()
