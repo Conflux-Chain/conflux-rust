@@ -7,64 +7,65 @@ version = "0.1.1"
 edition = "2018"
 
 [dependencies]
-cfx-stratum = { path = "../blockgen/stratum" }
-keccak-hash = "0.3.0"
-cfx-types = { path = "../cfx_types" }
+bit-set = "0.4"
+bn = { git = "https://github.com/paritytech/bn", default-features = false }
+byteorder = "1.0"
 cfx-bytes = { path = "../cfx_bytes" }
-primitives = { path = "../primitives", optional = true }
-parking_lot = "0.10"
-network = { path = "../network" }
-io = { path = "../util/io" }
-log = "0.4"
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-lazy_static = "1.1.0"
+cfx-stratum = { path = "../blockgen/stratum" }
+cfx-types = { path = "../cfx_types" }
+clap = "2"
+db = { path = "../db" }
+elastic-array = "0.10"
 ethkey = { path = "../accounts/ethkey" }
-secret-store = { path = "../secret_store" }
+error-chain = { version = "0.12", default-features = false }
+fallible-iterator = "0.2"
+fs_extra = "1.1.0"
+futures = "0.1"
+heapsize = "0.4"
+hibitset = { path = "../util/hibitset" }
+io = { path = "../util/io" }
+keccak-hash = "0.3.0"
+kvdb = "0.1.1"
+kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
+lazy_static = "1.1.0"
+link-cut-tree = { path = "../util/link-cut-tree" }
+log = "0.4"
+log-device = { path = "../util/log_device" }
+log4rs = "0.9.0"
+lru = "0.1.11"
+lru_time_cache = "0.9.0"
+malloc_size_of = {path = "../util/malloc_size_of"}
+malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
+memoffset = "0.5.1"
+memory-cache = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+metrics = { path = "../util/metrics" }
+network = { path = "../network" }
+num = "0.2"
+parity-bytes = "0.1"
+parity-crypto = "0.3.0"
+parking_lot = "0.10"
+primitives = { path = "../primitives", optional = true }
+priority-send-queue = { path = "../util/priority-send-queue" }
 rand = "0.7"
 rand_chacha="0.2.1"
 rand_xorshift="0.2.0"
-error-chain = { version = "0.12", default-features = false }
-slab = "0.4"
-kvdb = "0.1.1"
-db = { path = "../db" }
-bit-set = "0.4"
-heapsize = "0.4"
-memory-cache = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-elastic-array = "0.10"
-byteorder = "1.0"
-num = "0.2"
-parity-crypto = "0.3.0"
-bn = { git = "https://github.com/paritytech/bn", default-features = false }
-lru = "0.1.11"
-lru_time_cache = "0.9.0"
-threadpool = "1.0"
 rayon = "1.0"
-sqlite = "0.25"
-sqlite3-sys = "0.12"
-link-cut-tree = { path = "../util/link-cut-tree" }
-log-device = { path = "../util/log_device" }
-priority-send-queue = { path = "../util/priority-send-queue" }
-toml = "0.4"
-metrics = { path = "../util/metrics" }
-hibitset = { path = "../util/hibitset" }
-futures = "0.1"
-memoffset = "0.5.1"
-malloc_size_of = {path = "../util/malloc_size_of"}
-malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
-fallible-iterator = "0.2"
-strfmt = "0.1"
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 rustc-hex = "1.0"
-parity-bytes = "0.1"
-siphasher = "0.3"
-zip = "*"
-clap = "2"
-throttling = { path = "../util/throttling" }
+secret-store = { path = "../secret_store" }
 serde = "1.0"
 serde_derive = "1.0"
-log4rs = "0.9.0"
-fs_extra = "1.1.0"
+siphasher = "0.3"
+slab = "0.4"
+sqlite = "0.25"
+sqlite3-sys = "0.12"
+strfmt = "0.1"
+throttling = { path = "../util/throttling" }
+threadpool = "1.0"
+toml = "0.4"
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+zip = "*"
 
 [dev-dependencies]
 criterion = "0.2"

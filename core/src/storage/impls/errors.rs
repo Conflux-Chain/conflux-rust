@@ -115,5 +115,10 @@ error_chain! {
             description("Snapshot sync proof is invalid"),
             display("Snapshot sync proof is invalid"),
         }
+
+        FailedToCreateUnitTestDataDir {
+            description("Failed to create unit test data dir."),
+            display("Failed to create unit test data dir."),
+        }
     }
 }
