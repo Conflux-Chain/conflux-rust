@@ -31,7 +31,7 @@ use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use primitives::{
-    BlockHeaderBuilder, MerkleHash, Receipt, StateRoot, StorageKey,
+    BlockHeaderBuilder, EpochId, MerkleHash, Receipt, StateRoot, StorageKey,
     MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use rand::{seq::SliceRandom, thread_rng};
@@ -45,6 +45,7 @@ use std::{
 #[derive(Copy, Clone, PartialEq)]
 pub enum Status {
     Inactive,
+    RequestingCandidates,
     DownloadingManifest(Instant),
     DownloadingChunks(Instant),
     Completed,
@@ -59,6 +60,7 @@ impl Debug for Status {
     fn fmt(&self, f: &mut Formatter) -> Result {
         let status = match self {
             Status::Inactive => "inactive".into(),
+            Status::RequestingCandidates => "requesting candidates".into(),
             Status::DownloadingManifest(t) => {
                 format!("downloading manifest ({:?})", t.elapsed())
             }
@@ -155,6 +157,10 @@ impl SnapshotChunkSync {
         let mut inner = self.inner.write();
         let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
             .select_all(&sync_handler.syn);
+        if peers.is_empty() {
+            return;
+        }
+        inner.status = Status::RequestingCandidates;
         let height = sync_handler
             .graph
             .data_man
@@ -201,6 +207,18 @@ impl SnapshotChunkSync {
     pub fn status(&self) -> Status { self.inner.read().status }
 
     pub fn checkpoint(&self) -> H256 { self.inner.read().checkpoint.clone() }
+
+    /// FIXME Return candidate
+    pub fn active_candidate(&self) -> Option<EpochId> {
+        match &self.inner.read().sync_candidate_manager.active_candidate {
+            // Start retrieving state of candidate
+            Some(SnapshotSyncCandidate::FullSync {
+                height: _,
+                snapshot_epoch_id,
+            }) => Some(*snapshot_epoch_id),
+            _ => None,
+        }
+    }
 
     pub fn trusted_blame_block(&self) -> H256 {
         self.inner.read().trusted_blame_block.clone()
@@ -884,5 +902,16 @@ impl SnapshotChunkSync {
     pub fn on_peer_disconnected(&self, peer: &PeerId) {
         let mut inner = self.inner.write();
         inner.sync_candidate_manager.on_peer_disconnected(peer);
+    }
+
+    /// Reset status if we cannot make progress based on current peers and
+    /// candidates
+    pub fn update_status(&self) {
+        let mut inner = self.inner.write();
+        if inner.sync_candidate_manager.is_inactive() {
+            inner.status = Status::Inactive;
+            inner.checkpoint = Default::default();
+            inner.trusted_blame_block = Default::default();
+        }
     }
 }
