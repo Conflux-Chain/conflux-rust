@@ -14,6 +14,7 @@ use crate::{
         SharedSynchronizationGraph, SynchronizationGraphInner,
     },
 };
+use cfx_types::H256;
 use network::NetworkContext;
 use parking_lot::RwLock;
 use std::{
@@ -316,6 +317,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         if self.has_state.load(AtomicOrdering::SeqCst) {
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
+        self.state_sync.update_status();
 
         // FIXME Here we should handle both era shift and snapshot shift.
         // If we moves into the next era, we should force state_sync to change
@@ -327,6 +329,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
         if self.state_sync.checkpoint() == epoch_to_sync {
+            // state sync started, so we only need to check if it's completed
             if self.state_sync.status() == Status::Completed {
                 DynamicCapability::ServeCheckpoint(Some(epoch_to_sync))
                     .broadcast(io, &sync_handler.syn);
@@ -341,8 +344,34 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
                 ));
                 return SyncPhaseType::CatchUpRecoverBlockFromDB;
             }
+        } else if self.state_sync.status() == Status::RequestingCandidates
+            && self.state_sync.checkpoint() == H256::default()
+        {
+            // We are requesting candidates, so check if it's ready
+            if let Some(epoch_to_sync) = self.state_sync.active_candidate() {
+                match sync_handler
+                    .graph
+                    .consensus
+                    .get_trusted_blame_block(&epoch_to_sync)
+                {
+                    Some(trusted_blame_block) => {
+                        info!("start to sync state for checkpoint {:?}, trusted blame block = {:?}", epoch_to_sync, trusted_blame_block);
+                        self.state_sync.start_state_sync(
+                            epoch_to_sync,
+                            trusted_blame_block,
+                            io,
+                            sync_handler,
+                        );
+                    }
+                    None => {
+                        // FIXME should find the trusted blame block
+                        error!("failed to start checkpoint sync, the trusted blame block is unavailable, epoch_to_sync={:?}", epoch_to_sync);
+                    }
+                }
+            }
         } else {
-            // start to sync new checkpoint if new era started,
+            // New era started or all candidates fail, we should restart
+            // candidates sync
             self.state_sync.start_candidate_sync(
                 epoch_to_sync,
                 io,

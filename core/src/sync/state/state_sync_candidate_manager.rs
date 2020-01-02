@@ -11,7 +11,7 @@ pub struct StateSyncCandidateManager {
 
     /// The chosen candidate that we are actually requesting state manifest and
     /// chunks
-    active_candidate: Option<SnapshotSyncCandidate>,
+    pub active_candidate: Option<SnapshotSyncCandidate>,
     /// The peers that can serve `active_candidate`.
     active_peers: HashSet<PeerId>,
 }
@@ -81,17 +81,14 @@ impl StateSyncCandidateManager {
             }
         }
 
-        // TODO Find candidate according to priority
         // TODO We can choose an active candidate before receiving all the
         // response
         if self.pending_peers.is_empty() {
-            for (candidate, peer_set) in &self.candidates {
-                if !peer_set.is_empty() {
-                    self.active_candidate = Some(candidate.clone());
-                    self.active_peers = peer_set.clone();
-                    return Some(self.active_candidate.clone().unwrap());
-                }
-            }
+            self.set_active_candidate();
+            // Here we return None only if all requested peers cannot serve the
+            // candidates TODO ask about new state candidates or new
+            // peers when active_candidate is None
+            return self.active_candidate.clone();
         }
         None
     }
@@ -113,12 +110,32 @@ impl StateSyncCandidateManager {
 
     /// `peer` cannot support the active candidate now
     pub fn note_state_sync_failure(&mut self, peer: &PeerId) {
+        self.pending_peers.remove(peer);
+        if self.pending_peers.is_empty() {
+            // Rely on periodic phase checks to start state sync
+            self.set_active_candidate();
+        }
         self.active_peers.remove(peer);
         if let Some(active_candidate) = &self.active_candidate {
             if let Some(peers) = self.candidates.get_mut(active_candidate) {
                 peers.remove(peer);
             }
         }
+    }
+
+    // TODO Find candidate according to priority
+    fn set_active_candidate(&mut self) {
+        for (candidate, peer_set) in &self.candidates {
+            if !peer_set.is_empty() {
+                self.active_candidate = Some(candidate.clone());
+                self.active_peers = peer_set.clone();
+            }
+        }
+    }
+
+    /// Return `true ` if we are not requesting either candidates or states
+    pub fn is_inactive(&self) -> bool {
+        self.pending_peers.is_empty() && self.active_peers.is_empty()
     }
 }
 
