@@ -61,12 +61,10 @@ impl StateManager {
         }
     }
 
-    // FIXME: change the parameter.
-    pub fn new(db: Arc<SystemDB>, conf: StorageConfiguration) -> Result<Self> {
+    pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager =
-            StorageManager::new_arc(DeltaDbManager::new(db), conf)?;
+        let storage_manager = StorageManager::new_arc(conf)?;
 
         // FIXME: move the commit_lock into delta_mpt, along with the row_number
         // FIXME: reading into the new_or_delta_mpt method.
@@ -481,7 +479,6 @@ impl StateManagerTrait for StateManager {
 }
 
 use crate::{
-    ext_db::SystemDB,
     statedb::StateDb,
     storage::{
         impls::{

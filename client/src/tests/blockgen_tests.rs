@@ -59,6 +59,8 @@ fn test_mining_10_epochs() {
     conf.raw_conf.initial_difficulty = Some(10_000);
 
     let tmp_dir = TempDir::new("conflux-test").unwrap();
+    conf.raw_conf.conflux_data_dir =
+        tmp_dir.path().to_str().unwrap().to_string() + "/";
     conf.raw_conf.db_dir = Some(
         tmp_dir
             .path()
