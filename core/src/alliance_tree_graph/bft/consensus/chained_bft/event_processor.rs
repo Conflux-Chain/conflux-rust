@@ -49,10 +49,12 @@ use mirai_annotations::{
 };
 //use network::proto::{ConsensusMsg, ConsensusMsg_oneof};
 use crate::message::Message;
-use network::NetworkService;
+use network::{NetworkService, PeerId};
 
 use super::super::chained_bft::network::IncomingBlockRetrievalRequest;
-use consensus_types::block_retrieval::BlockRetrievalStatus;
+use consensus_types::block_retrieval::{
+    BlockRetrievalResponse, BlockRetrievalStatus,
+};
 #[cfg(test)]
 use safety_rules::ConsensusState;
 use safety_rules::TSafetyRules;
@@ -62,6 +64,7 @@ use std::{
     time::{Duration, Instant},
 };
 use termion::color::*;
+use crate::alliance_tree_graph::hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse;
 
 #[cfg(test)]
 #[path = "event_processor_test.rs"]
@@ -85,7 +88,7 @@ pub struct EventProcessor</* TM, */ T> {
     //txn_manager: TM,
     //network: NetworkSender,
     network: Arc<NetworkService>,
-    protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+    protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     time_service: Arc<dyn TimeService>,
     // Cache of the last sent vote message.
@@ -107,7 +110,7 @@ where
         //txn_manager: TM,
         //network: NetworkSender,
         network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+        protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         time_service: Arc<dyn TimeService>,
         validators: Arc<ValidatorVerifier>,
@@ -138,14 +141,22 @@ where
 
     pub fn get_network(&self) -> Arc<NetworkService> { self.network.clone() }
 
-    pub fn get_protocol_handler(&self) -> Arc<HotStuffSynchronizationProtocol> {
+    pub fn get_protocol_handler(
+        &self,
+    ) -> Arc<HotStuffSynchronizationProtocol<T>> {
         self.protocol_handler.clone()
     }
 
     fn create_block_retriever(
         &self, deadline: Instant, author: Author,
     ) -> BlockRetriever {
-        BlockRetriever::new(/* self.network.clone(), */ deadline, author)
+        BlockRetriever::new(
+            self.network.clone(),
+            self.protocol_handler.request_manager.clone(),
+            self.protocol_handler.peers.clone(),
+            deadline,
+            author,
+        )
     }
 
     /// Leader:
@@ -614,14 +625,18 @@ where
             let peer_hash = H256::from_slice(peer_address.to_vec().as_slice());
             if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
                 let peer_id = peer.read().get_id();
-                if self
-                    .network
-                    .with_context(HSB_PROTOCOL_ID, |io| msg.send(io, peer_id))
-                    .is_err()
-                {
-                    warn!("Error sending message!");
-                }
+                self.send_message_with_peer_id(peer_id, msg);
             }
+        }
+    }
+
+    fn send_message_with_peer_id(&self, peer_id: PeerId, msg: &dyn Message) {
+        if self
+            .network
+            .with_context(HSB_PROTOCOL_ID, |io| msg.send(io, peer_id))
+            .is_err()
+        {
+            warn!("Error sending message!");
         }
     }
 
@@ -959,27 +974,11 @@ where
             status = BlockRetrievalStatus::IdNotFound;
         }
 
-        /*
-        let response = BlockRetrievalResponse::new(status, blocks);
-        if let Err(e) = response
-            .try_into()
-            .and_then(|proto| {
-                let bytes = ConsensusMsg {
-                    message: Some(ConsensusMsg_oneof::RespondBlock(proto)),
-                }
-                .to_bytes()?;
-                Ok(bytes)
-            })
-            .and_then(|response_data| {
-                request
-                    .response_sender
-                    .send(Ok(response_data))
-                    .map_err(|e| format_err!("{:?}", e))
-            })
-        {
-            error!("Failed to return the requested block: {:?}", e);
-        }
-        */
+        let response = BlockRetrievalRpcResponse {
+            request_id: request.request_id,
+            response: BlockRetrievalResponse::new(status, blocks),
+        };
+        self.send_message_with_peer_id(request.peer_id, &response);
     }
 
     /// To jump start new round with the current certificates we have.

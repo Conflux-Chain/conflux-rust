@@ -3,12 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::sync_protocol::{Context, Handleable};
-use crate::{hotstuff_types::sync_info::SyncInfo, sync::Error};
+use crate::{
+    hotstuff_types::{common::Payload, sync_info::SyncInfo},
+    sync::Error,
+};
 use libra_types::account_address::AccountAddress;
+use primitives::TransactionWithSignature;
 use std::cmp::Ordering;
 
-impl Handleable for SyncInfo {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
+impl<P: Payload> Handleable<P> for SyncInfo {
+    fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
         debug!("on_sync_info, msg={:?}", &self);
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());

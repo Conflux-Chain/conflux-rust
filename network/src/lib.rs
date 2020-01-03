@@ -45,7 +45,7 @@ mod ip;
 mod ip_utils;
 mod node_database;
 pub mod node_table;
-mod service;
+pub mod service;
 mod session;
 mod session_manager;
 pub mod throttling;

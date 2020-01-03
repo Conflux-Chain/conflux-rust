@@ -204,7 +204,7 @@ where
     pub fn start_new_epoch(
         &mut self, ledger_info: LedgerInfoWithSignatures,
         network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+        protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
     ) -> EventProcessor</* TM, */ T>
     {
         // make sure storage is on this ledger_info too, it should be no-op if
@@ -224,7 +224,7 @@ where
 
     pub fn start_epoch(
         &mut self, initial_data: RecoveryData<T>, network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+        protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
     ) -> EventProcessor</* TM, */ T>
     {
         let validators = initial_data.validators();

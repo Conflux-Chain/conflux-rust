@@ -1,4 +1,5 @@
 use crate::{
+    alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     message::Message,
     sync::{
         message::{DynamicCapability, KeyContainer},
@@ -7,6 +8,8 @@ use crate::{
         Error, ErrorKind,
     },
 };
+use bytes::Bytes;
+use futures::channel::oneshot;
 use network::{NetworkContext, PeerId, UpdateNodeOperation};
 use parking_lot::Mutex;
 use std::{
@@ -157,7 +160,7 @@ impl RequestHandler {
         let mut timeout_requests = Vec::new();
         let mut peers_to_disconnect = HashSet::new();
         for sync_req in self.get_timeout_sync_requests() {
-            if let Ok(req) =
+            if let Ok(mut req) =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id)
             {
                 let peer_id = sync_req.peer_id;
@@ -168,6 +171,7 @@ impl RequestHandler {
                         peers_to_disconnect.insert(peer_id);
                     }
                 }
+                req.request.notify_timeout();
                 timeout_requests.push(req);
             } else {
                 debug!("Timeout a removed request {:?}", sync_req);
@@ -365,10 +369,13 @@ pub struct SynchronizationPeerRequest {
 /// Support to downcast trait to concrete request type.
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
-impl<T: 'static + Request> AsAny for T {
+impl<T: 'static> AsAny for T {
     fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Trait of request message
@@ -386,6 +393,8 @@ pub trait Request: Send + Debug + AsAny + Message {
     /// If all requested items are already in flight, then do not send request
     /// to remote peer.
     fn is_empty(&self) -> bool;
+    /// Notify the handler when the request gets cancelled by empty.
+    fn notify_empty(&mut self) {}
     /// When a request failed (send fail, invalid response or timeout), it will
     /// be resend automatically.
     ///
@@ -399,6 +408,15 @@ pub trait Request: Send + Debug + AsAny + Message {
 
     /// Required peer capability to send this request
     fn required_capability(&self) -> Option<DynamicCapability> { None }
+
+    /// Notify the handler when the request gets timeout.
+    fn notify_timeout(&mut self) {}
+
+    /// This is for RPC request. Set the notification handle for the request.
+    fn set_response_notification(
+        &mut self, res_tx: oneshot::Sender<Result<Box<dyn RpcResponse>, Error>>,
+    ) {
+    }
 }
 
 #[derive(Debug)]
@@ -431,6 +449,18 @@ impl RequestMessage {
                 if remove_on_mismatch {
                     request_manager.remove_mismatch_request(io, self);
                 }
+                Err(ErrorKind::UnexpectedResponse.into())
+            }
+        }
+    }
+
+    pub fn downcast_mut<T: Request + Any>(
+        &mut self, io: &dyn NetworkContext, request_manager: &RequestManager,
+    ) -> Result<&mut T, Error> {
+        match self.request.as_any_mut().downcast_mut::<T>() {
+            Some(req) => Ok(req),
+            None => {
+                warn!("failed to downcast general request to concrete request type");
                 Err(ErrorKind::UnexpectedResponse.into())
             }
         }
@@ -472,12 +502,15 @@ impl Ord for TimedSyncRequests {
         other.timeout_time.cmp(&self.timeout_time)
     }
 }
+
 impl PartialOrd for TimedSyncRequests {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         other.timeout_time.partial_cmp(&self.timeout_time)
     }
 }
+
 impl Eq for TimedSyncRequests {}
+
 impl PartialEq for TimedSyncRequests {
     fn eq(&self, other: &Self) -> bool {
         self.timeout_time == other.timeout_time

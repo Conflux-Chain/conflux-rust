@@ -3,6 +3,7 @@ use super::{
     synchronization_state::SynchronizationState,
 };
 use crate::{
+    alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     parameters::sync::REQUEST_START_WAITING_TIME,
     sync::{
         message::{
@@ -15,6 +16,7 @@ use crate::{
     },
 };
 use cfx_types::H256;
+use futures::{channel::oneshot, future::Future};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
 };
@@ -35,7 +37,7 @@ use tx_handler::{
     ReceivedTransactionContainer, SentTransactionContainer,
 };
 
-mod request_handler;
+pub mod request_handler;
 pub mod tx_handler;
 
 lazy_static! {
@@ -152,6 +154,25 @@ impl RequestManager {
             .len() as u64
     }
 
+    /// Send a unary rpc request to remote peer `recipient`.
+    pub async fn unary_rpc<'a>(
+        &'a self, io: &'a dyn NetworkContext, recipient: Option<PeerId>,
+        mut request: Box<dyn Request>,
+    ) -> impl Future<Output = Result<Box<dyn RpcResponse>, Error>> + 'a
+    {
+        async move {
+            // ask network to fulfill rpc request
+            let (res_tx, res_rx) = oneshot::channel();
+            request.set_response_notification(res_tx);
+
+            self.request_with_delay(io, request, recipient, None);
+
+            // wait for response
+            let response = res_rx.await??;
+            Ok(response)
+        }
+    }
+
     /// Send request to remote peer with delay mechanism. If failed,
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(
@@ -163,6 +184,7 @@ impl RequestManager {
         request.with_inflight(&self.inflight_keys);
 
         if request.is_empty() {
+            request.notify_empty();
             return;
         }
 

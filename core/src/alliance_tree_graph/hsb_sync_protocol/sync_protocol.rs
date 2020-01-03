@@ -7,11 +7,13 @@ use crate::{
     alliance_tree_graph::{
         bft::consensus::chained_bft::network::NetworkTask,
         hsb_sync_protocol::message::{
-            msgid, proposal::ProposalMsgWithTransactions,
+            block_retrieval::BlockRetrievalRpcRequest, msgid,
         },
     },
     hotstuff_types::{
-        proposal_msg::ProposalUncheckedSignatures, sync_info::SyncInfo,
+        common::Payload,
+        proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
+        sync_info::SyncInfo,
         vote_msg::VoteMsg,
     },
     message::{Message, MsgId},
@@ -21,7 +23,9 @@ use crate::{
     },
     sync::{
         msg_sender::NULL,
-        request_manager::{RequestManager, RequestMessage},
+        request_manager::{
+            request_handler::AsAny, RequestManager, RequestMessage,
+        },
         Error, ErrorKind,
     },
 };
@@ -33,7 +37,9 @@ use network::node_table::NodeId;
 use parking_lot::RwLock;
 use primitives::TransactionWithSignature;
 use serde::Deserialize;
-use std::{cmp::Eq, collections::HashMap, hash::Hash, sync::Arc};
+use std::{
+    any::Any, cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc,
+};
 
 #[derive(Default)]
 pub struct PeerState {
@@ -99,14 +105,14 @@ where
     }
 }
 
-pub struct Context<'a> {
+pub struct Context<'a, P> {
     pub io: &'a dyn NetworkContext,
     pub peer: PeerId,
     pub peer_hash: H256,
-    pub manager: &'a HotStuffSynchronizationProtocol,
+    pub manager: &'a HotStuffSynchronizationProtocol<P>,
 }
 
-impl<'a> Context<'a> {
+impl<'a, P: Payload> Context<'a, P> {
     pub fn match_request(
         &self, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -121,17 +127,17 @@ impl<'a> Context<'a> {
     }
 }
 
-pub struct HotStuffSynchronizationProtocol {
+pub struct HotStuffSynchronizationProtocol<P> {
     pub own_node_hash: H256,
     pub peers: Arc<Peers<PeerState, H256>>,
     pub request_manager: Arc<RequestManager>,
-    pub network_task: NetworkTask<Vec<TransactionWithSignature>>,
+    pub network_task: NetworkTask<P>,
 }
 
-impl HotStuffSynchronizationProtocol {
+impl<P: Payload> HotStuffSynchronizationProtocol<P> {
     pub fn new(
         own_node_hash: H256, request_manager: Arc<RequestManager>,
-        network_task: NetworkTask<Vec<TransactionWithSignature>>,
+        network_task: NetworkTask<P>,
     ) -> Self
     {
         HotStuffSynchronizationProtocol {
@@ -229,12 +235,13 @@ impl HotStuffSynchronizationProtocol {
     }
 }
 
-pub fn handle_serialized_message(
-    id: MsgId, ctx: &Context, msg: &[u8],
-) -> Result<bool, Error> {
+pub fn handle_serialized_message<P>(
+    id: MsgId, ctx: &Context<P>, msg: &[u8],
+) -> Result<bool, Error>
+where P: Payload {
     match id {
         msgid::PROPOSAL => {
-            let msg: ProposalMsgWithTransactions = lcs::from_bytes(msg)?;
+            let msg: ProposalMsg<P> = lcs::from_bytes(msg)?;
             let msg_id = msg.msg_id();
             let msg_name = msg.msg_name();
             let req_id = msg.get_request_id();
@@ -251,16 +258,21 @@ pub fn handle_serialized_message(
                 return Err(e);
             }
         }
-        msgid::VOTE => handle_message::<VoteMsg>(ctx, msg)?,
-        msgid::SYNC_INFO => handle_message::<SyncInfo>(ctx, msg)?,
+        msgid::VOTE => handle_message::<VoteMsg, P>(ctx, msg)?,
+        msgid::SYNC_INFO => handle_message::<SyncInfo, P>(ctx, msg)?,
+        msgid::BLOCK_RETRIEVAL => {
+            handle_message::<BlockRetrievalRpcRequest, P>(ctx, msg)?
+        }
         _ => return Ok(false),
     }
     Ok(true)
 }
 
-fn handle_message<'a, T>(ctx: &Context, msg: &'a [u8]) -> Result<(), Error>
-where T: Deserialize<'a> + Handleable + Message {
-    let msg: T = lcs::from_bytes(msg)?;
+fn handle_message<'a, M, P>(
+    ctx: &Context<P>, msg: &'a [u8],
+) -> Result<(), Error>
+where M: Deserialize<'a> + Handleable<P> + Message {
+    let msg: M = lcs::from_bytes(msg)?;
 
     let msg_id = msg.msg_id();
     let msg_name = msg.msg_name();
@@ -285,7 +297,7 @@ where T: Deserialize<'a> + Handleable + Message {
     Ok(())
 }
 
-impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
+impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
     fn initialize(&self, _io: &dyn NetworkContext) {}
 
     fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
@@ -375,9 +387,11 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
     fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {}
 }
 
-pub trait Handleable {
-    fn handle(self, ctx: &Context) -> Result<(), Error>;
+pub trait Handleable<P> {
+    fn handle(self, ctx: &Context<P>) -> Result<(), Error>;
 }
+
+pub trait RpcResponse: Send + Sync + Debug + AsAny {}
 
 impl From<lcs::Error> for Error {
     fn from(_: lcs::Error) -> Self { ErrorKind::InvalidMessageFormat.into() }

@@ -3,12 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::sync_protocol::{Context, Handleable};
-use crate::{hotstuff_types::vote_msg::VoteMsg, sync::Error};
+use crate::{
+    hotstuff_types::{common::Payload, vote_msg::VoteMsg},
+    sync::Error,
+};
 use libra_logger::prelude::{security_log, SecurityEvent};
 use libra_types::account_address::AccountAddress;
+use primitives::TransactionWithSignature;
 
-impl Handleable for VoteMsg {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
+impl<P: Payload> Handleable<P> for VoteMsg {
+    fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
         debug!("on_vote, msg={:?}", &self);
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());

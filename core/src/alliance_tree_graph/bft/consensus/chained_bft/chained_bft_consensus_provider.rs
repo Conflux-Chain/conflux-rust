@@ -21,6 +21,7 @@ use libra_types::transaction::SignedTransaction;
 use safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
 use network::NetworkService;
+use primitives::TransactionWithSignature;
 use std::sync::Arc;
 use tokio::runtime;
 //use vm_runtime::LibraVM;
@@ -35,7 +36,7 @@ pub struct InitialSetup {
 
 /// Supports the implementation of ConsensusProvider using LibraBFT.
 pub struct ChainedBftProvider {
-    smr: ChainedBftSMR<Vec<SignedTransaction>>,
+    smr: ChainedBftSMR<Vec<TransactionWithSignature>>,
     /*txn_manager: MempoolProxy,
      *state_computer: Arc<dyn StateComputer<Payload =
      * Vec<SignedTransaction>>>, */
@@ -109,7 +110,9 @@ impl ChainedBftProvider {
 impl ConsensusProvider for ChainedBftProvider {
     fn start(
         &mut self, network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+        protocol_handler: Arc<
+            HotStuffSynchronizationProtocol<Vec<TransactionWithSignature>>,
+        >,
     ) -> Result<()>
     {
         debug!("Starting consensus provider.");

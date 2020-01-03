@@ -3,18 +3,20 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::sync_protocol::{Context, Handleable};
-use crate::{
-    hotstuff_types::proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
-    primitives::TransactionWithSignature,
-    sync::Error,
+use crate::sync::Error;
+use hotstuff_types::{
+    common::Payload,
+    proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
 };
+use primitives::TransactionWithSignature;
+
 use libra_types::account_address::AccountAddress;
 
 pub type ProposalMsgWithTransactions =
     ProposalMsg<Vec<TransactionWithSignature>>;
 
-impl Handleable for ProposalUncheckedSignatures<Vec<TransactionWithSignature>> {
-    fn handle(self, ctx: &Context) -> Result<(), Error> {
+impl<P: Payload> Handleable<P> for ProposalUncheckedSignatures<P> {
+    fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
         debug!("on_proposal, msg={:?}", self.0);
 
         let peer_address = AccountAddress::new(ctx.peer_hash.into());

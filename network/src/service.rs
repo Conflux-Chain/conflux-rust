@@ -133,8 +133,8 @@ impl<'a> UdpIoContext<'a> {
 /// existing peers. Inside NetworkService, it has an IoService event loop with a
 /// thread pool.
 pub struct NetworkService {
-    io_service: Option<IoService<NetworkIoMessage>>,
-    inner: Option<Arc<NetworkServiceInner>>,
+    pub io_service: Option<IoService<NetworkIoMessage>>,
+    pub inner: Option<Arc<NetworkServiceInner>>,
     config: NetworkConfiguration,
 }
 
@@ -1645,7 +1645,7 @@ pub struct NetworkContext<'a> {
 }
 
 impl<'a> NetworkContext<'a> {
-    fn new(
+    pub fn new(
         io: &'a IoContext<NetworkIoMessage>, protocol: ProtocolId,
         network_service: &'a NetworkServiceInner,
     ) -> NetworkContext<'a>

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
-
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{

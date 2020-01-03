@@ -15,6 +15,7 @@ use consensus_types::{
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
+use network::PeerId;
 //use futures::{channel::oneshot};
 //use libra_logger::prelude::*;
 use libra_types::{
@@ -34,6 +35,7 @@ use network::{
     validator_network::{ConsensusNetworkEvents, ConsensusNetworkSender, Event, RpcError},
 };
 */
+use crate::message::RequestId;
 use std::{
     cmp::Ordering,
     convert::TryFrom,
@@ -46,7 +48,8 @@ use std::{
 #[derive(Debug)]
 pub struct IncomingBlockRetrievalRequest {
     pub req: BlockRetrievalRequest,
-    //pub response_sender: oneshot::Sender<Result<Bytes, RpcError>>,
+    pub peer_id: PeerId,
+    pub request_id: RequestId,
 }
 
 /// Just a convenience struct to keep all the network proxy receiving queues in
@@ -465,25 +468,6 @@ impl<T: Payload> NetworkTask<T> {
             }
         }
         */
-    }
-
-    async fn process_request_block(
-        &mut self,
-        _peer_id: AccountAddress,
-        /*request_msg: RequestBlock,
-         *callback: oneshot::Sender<Result<Bytes, RpcError>>, */
-    ) -> anyhow::Result<()>
-    {
-        /*
-        let req = BlockRetrievalRequest::try_from(request_msg)?;
-        debug!("Received block retrieval request {}", req);
-        let req_with_callback = IncomingBlockRetrievalRequest {
-            req,
-            response_sender: callback,
-        };
-        self.block_request_tx.push(peer_id, req_with_callback)
-        */
-        Ok(())
     }
 
     async fn process_epoch_change(

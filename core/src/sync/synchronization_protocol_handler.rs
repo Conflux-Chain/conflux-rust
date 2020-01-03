@@ -481,6 +481,8 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Failure)
             }
             ErrorKind::InternalError(_) => {}
+            ErrorKind::RpcTimeout => {}
+            ErrorKind::RpcCancelledByEmpty => {}
         }
 
         if disconnect {

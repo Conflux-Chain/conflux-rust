@@ -4,6 +4,7 @@
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
 use network::NetworkService;
+use primitives::TransactionWithSignature;
 use std::sync::Arc;
 //use consensus_types::block::Block;
 //use consensus_types::executed_block::ExecutedBlock;
@@ -91,7 +92,7 @@ pub trait StateMachineReplication {
         /*txn_manager: TM,
          *state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>, */
         network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+        protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
     ) -> Result<()>;
 
     /// Stop is synchronous: returns when all the threads are shutdown and the

@@ -180,7 +180,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         /*txn_manager: TM,
          *state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>, */
         network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+        protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
     ) -> Result<()>
     {
         let mut initial_setup = self
