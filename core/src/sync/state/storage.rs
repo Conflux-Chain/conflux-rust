@@ -34,6 +34,26 @@ pub enum SnapshotSyncCandidate {
     },
 }
 
+impl SnapshotSyncCandidate {
+    fn to_type_id(&self) -> u8 {
+        match &self {
+            SnapshotSyncCandidate::OneStepSync {
+                height: _,
+                snapshot_epoch_id: _,
+            } => 0,
+            SnapshotSyncCandidate::FullSync {
+                height: _,
+                snapshot_epoch_id: _,
+            } => 1,
+            SnapshotSyncCandidate::IncSync {
+                height: _,
+                base_snapshot_epoch_id: _,
+                snapshot_epoch_id: _,
+            } => 2,
+        }
+    }
+}
+
 impl Encodable for SnapshotSyncCandidate {
     fn rlp_append(&self, s: &mut RlpStream) {
         match &self {
@@ -42,7 +62,7 @@ impl Encodable for SnapshotSyncCandidate {
                 snapshot_epoch_id,
             } => {
                 s.begin_list(3)
-                    .append(&(0 as u8))
+                    .append(&self.to_type_id())
                     .append(height)
                     .append(snapshot_epoch_id);
             }
@@ -51,7 +71,7 @@ impl Encodable for SnapshotSyncCandidate {
                 snapshot_epoch_id,
             } => {
                 s.begin_list(3)
-                    .append(&(1 as u8))
+                    .append(&self.to_type_id())
                     .append(height)
                     .append(snapshot_epoch_id);
             }
@@ -61,7 +81,7 @@ impl Encodable for SnapshotSyncCandidate {
                 snapshot_epoch_id,
             } => {
                 s.begin_list(4)
-                    .append(&(2 as u8))
+                    .append(&self.to_type_id())
                     .append(height)
                     .append(base_snapshot_epoch_id)
                     .append(snapshot_epoch_id);

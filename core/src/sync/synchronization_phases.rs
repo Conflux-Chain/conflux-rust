@@ -14,7 +14,6 @@ use crate::{
         SharedSynchronizationGraph, SynchronizationGraphInner,
     },
 };
-use cfx_types::H256;
 use network::NetworkContext;
 use parking_lot::RwLock;
 use std::{
@@ -292,15 +291,11 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
 
 pub struct CatchUpCheckpointPhase {
     state_sync: Arc<SnapshotChunkSync>,
-    has_state: AtomicBool,
 }
 
 impl CatchUpCheckpointPhase {
     pub fn new(state_sync: Arc<SnapshotChunkSync>) -> Self {
-        CatchUpCheckpointPhase {
-            state_sync,
-            has_state: AtomicBool::new(false),
-        }
+        CatchUpCheckpointPhase { state_sync }
     }
 }
 
@@ -314,11 +309,6 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        if self.has_state.load(AtomicOrdering::SeqCst) {
-            return SyncPhaseType::CatchUpRecoverBlockFromDB;
-        }
-        self.state_sync.update_status();
-
         // FIXME Here we should handle both era shift and snapshot shift.
         // If we moves into the next era, we should force state_sync to change
         // the candidates to states with in the new stable era. If the
@@ -327,59 +317,20 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         // so a state can be synced with one era time instead of only
         // one snapshot time
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
-
-        if self.state_sync.checkpoint() == epoch_to_sync {
-            // state sync started, so we only need to check if it's completed
-            if self.state_sync.status() == Status::Completed {
-                DynamicCapability::ServeCheckpoint(Some(epoch_to_sync))
-                    .broadcast(io, &sync_handler.syn);
-                self.state_sync.restore_execution_state(sync_handler);
-                *sync_handler
-                    .graph
-                    .consensus
-                    .synced_epoch_id_and_blame_block
-                    .lock() = Some((
-                    epoch_to_sync,
-                    self.state_sync.trusted_blame_block(),
-                ));
-                return SyncPhaseType::CatchUpRecoverBlockFromDB;
-            }
-        } else if self.state_sync.status() == Status::RequestingCandidates
-            && self.state_sync.checkpoint() == H256::default()
-        {
-            // We are requesting candidates, so check if it's ready
-            if let Some(epoch_to_sync) = self.state_sync.active_candidate() {
-                match sync_handler
-                    .graph
-                    .consensus
-                    .get_trusted_blame_block(&epoch_to_sync)
-                {
-                    Some(trusted_blame_block) => {
-                        info!("start to sync state for checkpoint {:?}, trusted blame block = {:?}", epoch_to_sync, trusted_blame_block);
-                        self.state_sync.start_state_sync(
-                            epoch_to_sync,
-                            trusted_blame_block,
-                            io,
-                            sync_handler,
-                        );
-                    }
-                    None => {
-                        // FIXME should find the trusted blame block
-                        error!("failed to start checkpoint sync, the trusted blame block is unavailable, epoch_to_sync={:?}", epoch_to_sync);
-                    }
-                }
-            }
+        self.state_sync
+            .update_status(epoch_to_sync, io, sync_handler);
+        if self.state_sync.status() == Status::Completed {
+            self.state_sync.restore_execution_state(sync_handler);
+            *sync_handler
+                .graph
+                .consensus
+                .synced_epoch_id_and_blame_block
+                .lock() =
+                Some((epoch_to_sync, self.state_sync.trusted_blame_block()));
+            SyncPhaseType::CatchUpRecoverBlockFromDB
         } else {
-            // New era started or all candidates fail, we should restart
-            // candidates sync
-            self.state_sync.start_candidate_sync(
-                epoch_to_sync,
-                io,
-                sync_handler,
-            )
+            self.phase_type()
         }
-
-        self.phase_type()
     }
 
     fn start(
@@ -396,14 +347,13 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .get_epoch_execution_commitment_with_db(&epoch_to_sync)
             .is_some();
         if has_state {
-            self.has_state.store(true, AtomicOrdering::SeqCst);
             return;
         }
 
         info!("start to sync state for checkpoint {:?}", epoch_to_sync);
 
         self.state_sync
-            .start_candidate_sync(epoch_to_sync, io, sync_handler);
+            .update_status(epoch_to_sync, io, sync_handler);
     }
 }
 

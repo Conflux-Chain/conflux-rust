@@ -104,10 +104,11 @@ struct Inner {
 }
 
 impl Inner {
-    fn reset(&mut self, checkpoint: H256, trusted_blame_block: H256) {
+    fn initialize_downloading_manifest(
+        &mut self, checkpoint: H256, trusted_blame_block: H256,
+    ) {
         self.checkpoint = checkpoint.clone();
         self.trusted_blame_block = trusted_blame_block;
-        self.status = Status::DownloadingManifest(Instant::now());
         self.true_state_root_by_blame_info = MERKLE_NULL_NODE;
         self.snapshot_info = SnapshotInfo::genesis_snapshot_info();
         self.receipt_blame_vec.clear();
@@ -116,6 +117,101 @@ impl Inner {
         self.downloading_chunks.clear();
         self.num_downloaded = 0;
         self.restorer = Restorer::new_with_default_root_dir(checkpoint);
+    }
+
+    // TODO Handle OneStepSync and IncSync
+    pub fn start_state_sync(
+        &mut self, checkpoint: H256, trusted_blame_block: H256,
+        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
+        if self.checkpoint == checkpoint
+            && self.trusted_blame_block == trusted_blame_block
+        {
+            return;
+        }
+        info!("start to sync state, checkpoint = {:?}, trusted blame block = {:?}", checkpoint, trusted_blame_block);
+        self.status = Status::DownloadingManifest(Instant::now());
+        self.initialize_downloading_manifest(checkpoint, trusted_blame_block);
+        self.request_manifest(io, sync_handler);
+    }
+
+    pub fn start_candidate_sync(
+        &mut self, checkpoint: H256, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
+        let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
+            .select_all(&sync_handler.syn);
+        if peers.is_empty() {
+            return;
+        }
+        self.status = Status::RequestingCandidates;
+        let height = sync_handler
+            .graph
+            .data_man
+            .block_header_by_hash(&checkpoint)
+            .expect("Syncing checkpoint should have available header")
+            .height();
+        let candidates = vec![SnapshotSyncCandidate::FullSync {
+            height,
+            snapshot_epoch_id: checkpoint,
+        }];
+        self.sync_candidate_manager
+            .reset(candidates.clone(), peers.clone());
+        self.request_candidates(io, sync_handler, candidates, peers);
+    }
+
+    /// request state candidates from all peers
+    fn request_candidates(
+        &self, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
+    )
+    {
+        let request = StateSyncCandidateRequest {
+            request_id: 0,
+            candidates,
+        };
+        for peer in peers {
+            sync_handler.request_manager.request_with_delay(
+                io,
+                Box::new(request.clone()),
+                Some(peer),
+                None,
+            );
+        }
+    }
+
+    /// request manifest from random peer
+    fn request_manifest(
+        &self, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
+        // FIXME: start here.
+        // consensus is available from sync_handler.
+        let request = SnapshotManifestRequest::new(
+            self.checkpoint.clone(),
+            self.trusted_blame_block.clone(),
+        );
+
+        let peers_filtered: HashSet<PeerId> =
+            PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
+                .select_all(&sync_handler.syn)
+                .into_iter()
+                .collect();
+        let active_peers = self.sync_candidate_manager.active_peers();
+        let available_peers: Vec<&PeerId> =
+            active_peers.intersection(&peers_filtered).collect();
+        let peer = available_peers.choose(&mut thread_rng()).map(|p| **p);
+
+        sync_handler.request_manager.request_with_delay(
+            io,
+            Box::new(request),
+            peer,
+            None,
+        );
     }
 }
 
@@ -149,131 +245,10 @@ impl SnapshotChunkSync {
         }
     }
 
-    pub fn start_candidate_sync(
-        &self, checkpoint: H256, io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
-        let mut inner = self.inner.write();
-        let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
-            .select_all(&sync_handler.syn);
-        if peers.is_empty() {
-            return;
-        }
-        inner.status = Status::RequestingCandidates;
-        let height = sync_handler
-            .graph
-            .data_man
-            .block_header_by_hash(&checkpoint)
-            .expect("Syncing checkpoint should have available header")
-            .height();
-        let candidates = vec![SnapshotSyncCandidate::FullSync {
-            height,
-            snapshot_epoch_id: checkpoint,
-        }];
-        inner
-            .sync_candidate_manager
-            .reset(candidates.clone(), peers.clone());
-        self.request_candidates(&*inner, io, sync_handler, candidates, peers);
-    }
-
-    // TODO Handle OneStepSync and IncSync
-    pub fn start_state_sync(
-        &self, checkpoint: H256, trusted_blame_block: H256,
-        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
-        let mut inner = self.inner.write();
-
-        if inner.checkpoint == checkpoint
-            && inner.trusted_blame_block == trusted_blame_block
-        {
-            return;
-        }
-
-        info!("start to sync state, checkpoint = {:?}, trusted blame block = {:?}", checkpoint, trusted_blame_block);
-
-        self.abort();
-
-        inner.reset(checkpoint, trusted_blame_block);
-
-        self.request_manifest(&inner, io, sync_handler);
-    }
-
-    fn abort(&self) {
-        // todo cleanup current syncing with storage APIs
-    }
-
     pub fn status(&self) -> Status { self.inner.read().status }
-
-    pub fn checkpoint(&self) -> H256 { self.inner.read().checkpoint.clone() }
-
-    /// FIXME Return candidate
-    pub fn active_candidate(&self) -> Option<EpochId> {
-        match &self.inner.read().sync_candidate_manager.active_candidate {
-            // Start retrieving state of candidate
-            Some(SnapshotSyncCandidate::FullSync {
-                height: _,
-                snapshot_epoch_id,
-            }) => Some(*snapshot_epoch_id),
-            _ => None,
-        }
-    }
 
     pub fn trusted_blame_block(&self) -> H256 {
         self.inner.read().trusted_blame_block.clone()
-    }
-
-    /// request state candidates from all peers
-    fn request_candidates(
-        &self, _inner: &Inner, io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
-        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
-    )
-    {
-        let request = StateSyncCandidateRequest {
-            request_id: 0,
-            candidates,
-        };
-        for peer in peers {
-            sync_handler.request_manager.request_with_delay(
-                io,
-                Box::new(request.clone()),
-                Some(peer),
-                None,
-            );
-        }
-    }
-
-    /// request manifest from random peer
-    fn request_manifest(
-        &self, inner: &Inner, io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
-        // FIXME: start here.
-        // consensus is available from sync_handler.
-        let request = SnapshotManifestRequest::new(
-            inner.checkpoint.clone(),
-            inner.trusted_blame_block.clone(),
-        );
-
-        let peers_filtered: HashSet<PeerId> =
-            PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
-                .select_all(&sync_handler.syn)
-                .into_iter()
-                .collect();
-        let active_peers = inner.sync_candidate_manager.active_peers();
-        let available_peers: Vec<&PeerId> =
-            active_peers.intersection(&peers_filtered).collect();
-        let peer = available_peers.choose(&mut thread_rng()).map(|p| **p);
-
-        sync_handler.request_manager.request_with_delay(
-            io,
-            Box::new(request),
-            peer,
-            None,
-        );
     }
 
     pub fn handle_snapshot_manifest_response(
@@ -467,8 +442,8 @@ impl SnapshotChunkSync {
     fn resync_manifest(&self, ctx: &Context, inner: &mut Inner) {
         let checkpoint = inner.checkpoint.clone();
         let trusted_blame_block = inner.trusted_blame_block.clone();
-        inner.reset(checkpoint, trusted_blame_block);
-        self.request_manifest(&inner, ctx.io, ctx.manager);
+        inner.initialize_downloading_manifest(checkpoint, trusted_blame_block);
+        inner.request_manifest(ctx.io, ctx.manager);
     }
 
     fn request_chunk(
@@ -625,17 +600,6 @@ impl SnapshotChunkSync {
                 receipts.clone(),
                 true, /* persistent */
             );
-        }
-    }
-
-    pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {
-        let mut inner = self.inner.write();
-
-        if !inner.downloading_chunks.is_empty()
-            && inner.downloading_chunks.len() < self.max_download_peers
-            && checkpoint == &inner.checkpoint
-        {
-            self.request_chunk(ctx, &mut inner, ctx.peer);
         }
     }
 
@@ -911,12 +875,56 @@ impl SnapshotChunkSync {
 
     /// Reset status if we cannot make progress based on current peers and
     /// candidates
-    pub fn update_status(&self) {
+    pub fn update_status(
+        &self, epoch_to_sync: EpochId, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
         let mut inner = self.inner.write();
         if inner.sync_candidate_manager.is_inactive() {
             inner.status = Status::Inactive;
             inner.checkpoint = Default::default();
             inner.trusted_blame_block = Default::default();
+            return;
+        }
+
+        if inner.checkpoint == epoch_to_sync {
+            // state sync started, so we only need to check if it's completed
+            if inner.status == Status::Completed {
+                return;
+            }
+        } else if inner.status == Status::RequestingCandidates
+            && inner.checkpoint == H256::default()
+        {
+            // We are requesting candidates, so check if it's ready
+            if let Some(SnapshotSyncCandidate::FullSync {
+                height: _,
+                snapshot_epoch_id,
+            }) = inner.sync_candidate_manager.active_candidate.clone()
+            {
+                match sync_handler
+                    .graph
+                    .consensus
+                    .get_trusted_blame_block(&snapshot_epoch_id)
+                {
+                    Some(trusted_blame_block) => {
+                        inner.start_state_sync(
+                            snapshot_epoch_id,
+                            trusted_blame_block,
+                            io,
+                            sync_handler,
+                        );
+                    }
+                    None => {
+                        // FIXME should find the trusted blame block
+                        error!("failed to start checkpoint sync, the trusted blame block is unavailable, epoch_to_sync={:?}", epoch_to_sync);
+                    }
+                }
+            }
+        } else {
+            // New era started or all candidates fail, we should restart
+            // candidates sync
+            inner.start_candidate_sync(epoch_to_sync, io, sync_handler)
         }
     }
 }

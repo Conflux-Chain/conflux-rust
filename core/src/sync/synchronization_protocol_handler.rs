@@ -31,7 +31,7 @@ use network::{
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, SignedTransaction, NULL_EPOCH};
+use primitives::{Block, BlockHeader, SignedTransaction};
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::{
@@ -1360,23 +1360,6 @@ impl SynchronizationProtocolHandler {
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
-
-    fn notify_checkpoint_capability(&self, io: &dyn NetworkContext) {
-        // FIXME get actual checkpoint
-        let checkpoint = NULL_EPOCH;
-        let cap = DynamicCapability::ServeCheckpoint(Some(checkpoint));
-        let mut peers = Vec::new();
-
-        for (peer_id, state) in self.syn.peers.read().iter() {
-            let mut state = state.write();
-            if !state.notified_capabilities.contains(cap) {
-                peers.push(*peer_id);
-                state.notified_capabilities.insert(cap);
-            }
-        }
-
-        cap.broadcast_with_peers(io, peers);
-    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -1501,7 +1484,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_sync_phase(io);
-                self.notify_checkpoint_capability(io);
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();

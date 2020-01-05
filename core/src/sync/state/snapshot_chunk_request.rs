@@ -65,9 +65,5 @@ impl Request for SnapshotChunkRequest {
         Some(Box::new(self.clone()))
     }
 
-    fn required_capability(&self) -> Option<DynamicCapability> {
-        Some(DynamicCapability::ServeCheckpoint(Some(
-            self.checkpoint.clone(),
-        )))
-    }
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 }
