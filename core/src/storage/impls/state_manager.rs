@@ -45,13 +45,19 @@ impl StateManager {
         let maybe_existing_merkle_root =
             delta_trie.get_merkle_root_by_epoch_id(&epoch_id)?;
         if maybe_existing_merkle_root.is_some() {
-            panic!(
+            error!(
                 "Overwriting computed state for epoch {:?}, \
                  committed merkle root {:?}, new merkle root {:?}",
                 epoch_id,
                 maybe_existing_merkle_root.unwrap(),
                 merkle_root
             );
+            debug_assert!(false);
+            assert!(
+                maybe_existing_merkle_root,
+                Some(merkle_root),
+                "Overwriting computed state with a different merkle root."
+            )
         } else {
             delta_trie.state_root_committed(
                 epoch_id,
