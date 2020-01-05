@@ -37,19 +37,9 @@ pub enum SnapshotSyncCandidate {
 impl SnapshotSyncCandidate {
     fn to_type_id(&self) -> u8 {
         match &self {
-            SnapshotSyncCandidate::OneStepSync {
-                height: _,
-                snapshot_epoch_id: _,
-            } => 0,
-            SnapshotSyncCandidate::FullSync {
-                height: _,
-                snapshot_epoch_id: _,
-            } => 1,
-            SnapshotSyncCandidate::IncSync {
-                height: _,
-                base_snapshot_epoch_id: _,
-                snapshot_epoch_id: _,
-            } => 2,
+            SnapshotSyncCandidate::OneStepSync { .. } => 0,
+            SnapshotSyncCandidate::FullSync { .. } => 1,
+            SnapshotSyncCandidate::IncSync { .. } => 2,
         }
     }
 }

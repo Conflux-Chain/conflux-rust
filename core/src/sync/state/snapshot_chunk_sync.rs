@@ -189,22 +189,15 @@ impl Inner {
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
-        // FIXME: start here.
-        // consensus is available from sync_handler.
         let request = SnapshotManifestRequest::new(
             self.checkpoint.clone(),
             self.trusted_blame_block.clone(),
         );
 
-        let peers_filtered: HashSet<PeerId> =
-            PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
-                .select_all(&sync_handler.syn)
-                .into_iter()
-                .collect();
-        let active_peers = self.sync_candidate_manager.active_peers();
-        let available_peers: Vec<&PeerId> =
-            active_peers.intersection(&peers_filtered).collect();
-        let peer = available_peers.choose(&mut thread_rng()).map(|p| **p);
+        let available_peers = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
+            .choose_from(self.sync_candidate_manager.active_peers())
+            .select_all(&sync_handler.syn);
+        let peer = available_peers.choose(&mut thread_rng()).map(|p| *p);
 
         sync_handler.request_manager.request_with_delay(
             io,
@@ -424,14 +417,12 @@ impl SnapshotChunkSync {
         inner.bloom_blame_vec = response.bloom_blame_vec;
 
         // request snapshot chunks from peers concurrently
-        let peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
-            .select_n(self.max_download_peers, &ctx.manager.syn)
-            .into_iter()
-            .collect();
-        let active_peers = inner.sync_candidate_manager.active_peers();
+        let chosen_peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
+            .choose_from(inner.sync_candidate_manager.active_peers())
+            .select_n(self.max_download_peers, &ctx.manager.syn);
 
-        for peer in active_peers.intersection(&peers) {
-            if self.request_chunk(ctx, &mut inner, *peer).is_none() {
+        for peer in chosen_peers {
+            if self.request_chunk(ctx, &mut inner, peer).is_none() {
                 break;
             }
         }
