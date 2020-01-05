@@ -137,8 +137,8 @@ impl Inner {
     }
 
     pub fn start_candidate_sync(
-        &mut self, checkpoint: H256, io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
+        &mut self, candidates: Vec<SnapshotSyncCandidate>,
+        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
     )
     {
         let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
@@ -147,16 +147,6 @@ impl Inner {
             return;
         }
         self.status = Status::RequestingCandidates;
-        let height = sync_handler
-            .graph
-            .data_man
-            .block_header_by_hash(&checkpoint)
-            .expect("Syncing checkpoint should have available header")
-            .height();
-        let candidates = vec![SnapshotSyncCandidate::FullSync {
-            height,
-            snapshot_epoch_id: checkpoint,
-        }];
         self.sync_candidate_manager
             .reset(candidates.clone(), peers.clone());
         self.request_candidates(io, sync_handler, candidates, peers);
@@ -921,7 +911,17 @@ impl SnapshotChunkSync {
         } else {
             // New era started or all candidates fail, we should restart
             // candidates sync
-            inner.start_candidate_sync(epoch_to_sync, io, sync_handler)
+            let height = sync_handler
+                .graph
+                .data_man
+                .block_header_by_hash(&epoch_to_sync)
+                .expect("Syncing checkpoint should have available header")
+                .height();
+            let candidates = vec![SnapshotSyncCandidate::FullSync {
+                height,
+                snapshot_epoch_id: epoch_to_sync,
+            }];
+            inner.start_candidate_sync(candidates, io, sync_handler)
         }
     }
 }
