@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::counters;
-//use anyhow::ensure;
+use anyhow::ensure;
 //use bytes::Bytes;
 use channel::{self, libra_channel, message_queues::QueueStyle};
 use consensus_types::{
@@ -15,7 +15,7 @@ use consensus_types::{
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
-use network::PeerId;
+use network::{NetworkService, PeerId};
 //use futures::{channel::oneshot};
 //use libra_logger::prelude::*;
 use libra_types::{
@@ -24,7 +24,6 @@ use libra_types::{
         EpochInfo, LedgerInfoWithSignatures, ValidatorChangeProof,
         ValidatorVerifier,
     },
-    proto::types::ValidatorChangeProof as ValidatorChangeProofProto,
 };
 /*
 use network::{
@@ -35,13 +34,62 @@ use network::{
     validator_network::{ConsensusNetworkEvents, ConsensusNetworkSender, Event, RpcError},
 };
 */
-use crate::message::RequestId;
+use crate::{
+    alliance_tree_graph::hsb_sync_protocol::{
+        sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
+    },
+    message::{Message, RequestId},
+};
+use cfx_types::H256;
+use libra_logger::prelude::{security_log, SecurityEvent};
 use std::{
     cmp::Ordering,
     convert::TryFrom,
     sync::{Arc, RwLock},
     time::Duration,
 };
+
+pub struct NetworkSender<P> {
+    pub network: Arc<NetworkService>,
+    pub protocol_handler: Arc<HotStuffSynchronizationProtocol<P>>,
+}
+
+impl<P: Payload> NetworkSender<P> {
+    pub fn new(
+        network: Arc<NetworkService>,
+        protocol_handler: Arc<HotStuffSynchronizationProtocol<P>>,
+    ) -> Self
+    {
+        NetworkSender {
+            network,
+            protocol_handler,
+        }
+    }
+
+    pub fn send_message(
+        &self, recipients: Vec<AccountAddress>, msg: &dyn Message,
+    ) {
+        for peer_address in recipients {
+            let peer_hash = H256::from_slice(peer_address.to_vec().as_slice());
+            if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
+                let peer_id = peer.read().get_id();
+                self.send_message_with_peer_id(peer_id, msg);
+            }
+        }
+    }
+
+    pub fn send_message_with_peer_id(
+        &self, peer_id: PeerId, msg: &dyn Message,
+    ) {
+        if self
+            .network
+            .with_context(HSB_PROTOCOL_ID, |io| msg.send(io, peer_id))
+            .is_err()
+        {
+            warn!("Error sending message!");
+        }
+    }
+}
 
 /// The block retrieval request is used internally for implementing RPC: the
 /// callback is executed for carrying the response
@@ -79,243 +127,6 @@ impl<T> NetworkReceivers<T> {
         self.votes.clear();
         self.block_retrieval.clear();
         self.sync_info_msgs.clear();
-    }
-}
-
-/// Implements the actual networking support for all consensus messaging.
-#[derive(Clone)]
-pub struct NetworkSender {
-    author: Author,
-    //network_sender: ConsensusNetworkSender,
-    // Self sender and self receivers provide a shortcut for sending the
-    // messages to itself. (self sending is not supported by the networking
-    // API). Note that we do not support self rpc requests as it might
-    // cause infinite recursive calls. self_sender:
-    // channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
-    validators: Arc<ValidatorVerifier>,
-}
-
-impl NetworkSender {
-    pub fn new(
-        author: Author,
-        //network_sender: ConsensusNetworkSender,
-        //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
-        validators: Arc<ValidatorVerifier>,
-    ) -> Self
-    {
-        NetworkSender {
-            author,
-            //network_sender,
-            //self_sender,
-            validators,
-        }
-    }
-
-    /// Tries to retrieve num of blocks backwards starting from id from the
-    /// given peer: the function returns a future that is fulfilled with
-    /// BlockRetrievalResponse.
-    pub async fn request_block<T: Payload>(
-        &mut self, retrieval_request: BlockRetrievalRequest, from: Author,
-        timeout: Duration,
-    ) -> anyhow::Result<BlockRetrievalResponse<T>>
-    {
-        /*
-        ensure!(from != self.author, "Retrieve block from self");
-        counters::BLOCK_RETRIEVAL_COUNT.inc_by(retrieval_request.num_blocks() as i64);
-        let pre_retrieval_instant = Instant::now();
-        let req_msg = RequestBlock::try_from(retrieval_request.clone())?;
-        let response_msg = self
-            .network_sender
-            .request_block(from, req_msg, timeout)
-            .await?;
-        counters::BLOCK_RETRIEVAL_DURATION_S.observe_duration(pre_retrieval_instant.elapsed());
-        let response = BlockRetrievalResponse::<T>::try_from(response_msg)?;
-        response
-            .verify(
-                retrieval_request.block_id(),
-                retrieval_request.num_blocks(),
-                &self.validators,
-            )
-            .map_err(|e| {
-                security_log(SecurityEvent::InvalidRetrievedBlock)
-                    .error(&e)
-                    .data(&response)
-                    .log();
-                e
-            })?;
-
-        Ok(response)
-        */
-        Ok(BlockRetrievalResponse::new(
-            BlockRetrievalStatus::Succeeded,
-            Vec::new(),
-        ))
-    }
-
-    /// Tries to send the given proposal (block and proposer metadata) to all
-    /// the participants. A validator on the receiving end is going to be
-    /// notified about a new proposal in the proposal queue.
-    ///
-    /// The future is fulfilled as soon as the message put into the mpsc channel
-    /// to network internal(to provide back pressure), it does not indicate
-    /// the message is delivered or sent out. It does not give indication
-    /// about when the message is delivered to the recipients, as well as
-    /// there is no indication about the network failures.
-    pub async fn broadcast_proposal<T: Payload>(
-        &mut self, proposal: ProposalMsg<T>,
-    ) {
-        /*
-        let proposal = match proposal.try_into() {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                warn!("Fail to serialize VoteMsg: {:?}", e);
-                return;
-            }
-        };
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::Proposal(proposal)),
-        };
-        self.broadcast(msg).await
-        */
-    }
-
-    async fn broadcast(&mut self /* msg: ConsensusMsg */) {
-        /*
-        // Directly send the message to ourself without going through network.
-        let self_msg = Event::Message((self.author, msg.clone()));
-        if let Err(err) = self.self_sender.send(Ok(self_msg)).await {
-            error!("Error broadcasting to self: {:?}", err);
-        }
-
-        // Get the list of validators excluding our own account address. Note the
-        // ordering is not important in this case.
-        let self_author = self.author;
-        let other_validators = self
-            .validators
-            .get_ordered_account_addresses_iter()
-            .filter(|author| author != &self_author);
-
-        // Broadcast message over direct-send to all other validators.
-        if let Err(err) = self
-            .network_sender
-            .send_to_many(other_validators, msg)
-            .await
-        {
-            error!("Error broadcasting message: {:?}", err);
-        }
-        */
-    }
-
-    /// Sends the vote to the chosen recipients (typically that would be the
-    /// recipients that we believe could serve as proposers in the next
-    /// round). The recipients on the receiving end are going to be notified
-    /// about a new vote in the vote queue.
-    ///
-    /// The future is fulfilled as soon as the message put into the mpsc channel
-    /// to network internal(to provide back pressure), it does not indicate
-    /// the message is delivered or sent out. It does not give indication
-    /// about when the message is delivered to the recipients, as well as
-    /// there is no indication about the network failures.
-    pub async fn send_vote(&self, vote_msg: VoteMsg, recipients: Vec<Author>) {
-        /*
-        let mut network_sender = self.network_sender.clone();
-        let mut self_sender = self.self_sender.clone();
-        let vote_msg = match vote_msg.try_into() {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                warn!("Fail to serialize VoteMsg: {:?}", e);
-                return;
-            }
-        };
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::VoteMsg(vote_msg)),
-        };
-        for peer in recipients {
-            if self.author == peer {
-                let self_msg = Event::Message((self.author, msg.clone()));
-                if let Err(err) = self_sender.send(Ok(self_msg)).await {
-                    error!("Error delivering a self vote: {:?}", err);
-                }
-                continue;
-            }
-            if let Err(e) = network_sender.send_to(peer, msg.clone()).await {
-                error!("Failed to send a vote to peer {:?}: {:?}", peer, e);
-            }
-        }
-        */
-    }
-
-    /// Broadcasts vote message to all validators
-    pub async fn broadcast_vote(&mut self, vote_msg: VoteMsg) {
-        /*
-        let vote_msg = match vote_msg.try_into() {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                warn!("Fail to serialize VoteMsg: {:?}", e);
-                return;
-            }
-        };
-
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::VoteMsg(vote_msg)),
-        };
-        self.broadcast(msg).await
-        */
-    }
-
-    /// Sends the given sync info to the given author.
-    /// The future is fulfilled as soon as the message is added to the internal
-    /// network channel (does not indicate whether the message is delivered
-    /// or sent out).
-    pub async fn send_sync_info(&self, sync_info: SyncInfo, recipient: Author) {
-        /*
-        if recipient == self.author {
-            error!("An attempt to deliver sync info msg to itself: ignore.");
-            return;
-        }
-        let sync_info = match sync_info.try_into() {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                warn!("Fail to serialize SyncInfo: {:?}", e);
-                return;
-            }
-        };
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::SyncInfo(sync_info)),
-        };
-        let mut network_sender = self.network_sender.clone();
-        if let Err(e) = network_sender.send_to(recipient, msg).await {
-            warn!(
-                "Failed to send a sync info msg to peer {:?}: {:?}",
-                recipient, e
-            );
-        }
-        */
-    }
-
-    /// Broadcast about epoch changes with proof to the current validator set
-    /// (including self) when we commit the reconfiguration block
-    pub async fn broadcast_epoch_change(
-        &mut self, _proof: ValidatorChangeProof,
-    ) {
-        /*
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::EpochChange(proof.into())),
-        };
-        self.broadcast(msg).await
-        */
-    }
-
-    pub async fn notify_epoch_change(&mut self, _proof: ValidatorChangeProof) {
-        /*
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::EpochChange(proof.into())),
-        };
-        let self_msg = Event::Message((self.author, msg.clone()));
-        if let Err(e) = self.self_sender.send(Ok(self_msg)).await {
-            warn!("Failed to notify to self an epoch change {:?}", e);
-        }
-        */
     }
 }
 
@@ -470,10 +281,36 @@ impl<T: Payload> NetworkTask<T> {
         */
     }
 
-    async fn process_epoch_change(
-        &mut self, peer_id: AccountAddress, proof: ValidatorChangeProofProto,
+    pub async fn process_vote(
+        &self, peer_id: AccountAddress, vote_msg: VoteMsg,
     ) -> anyhow::Result<()> {
-        let proof = ValidatorChangeProof::try_from(proof)?;
+        ensure!(
+            vote_msg.vote().author() == peer_id,
+            "vote received must be from the sending peer"
+        );
+
+        if vote_msg.epoch() != self.epoch() {
+            return self
+                .different_epoch_tx
+                .push(peer_id, (vote_msg.epoch(), peer_id));
+        }
+
+        debug!("Received {}", vote_msg);
+        vote_msg
+            .verify(&self.epoch_info.read().unwrap().verifier)
+            .map_err(|e| {
+                security_log(SecurityEvent::InvalidConsensusVote)
+                    .error(&e)
+                    .data(&vote_msg)
+                    .log();
+                e
+            })?;
+        self.vote_tx.push(peer_id, vote_msg)
+    }
+
+    pub async fn process_epoch_change(
+        &self, peer_id: AccountAddress, proof: ValidatorChangeProof,
+    ) -> anyhow::Result<()> {
         let msg_epoch = proof.epoch()?;
         match msg_epoch.cmp(&self.epoch()) {
             Ordering::Equal => {

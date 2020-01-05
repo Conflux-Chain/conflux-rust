@@ -4,6 +4,8 @@
 
 pub mod block_retrieval;
 pub mod block_retrieval_response;
+pub mod epoch_change;
+pub mod epoch_retrieval;
 pub mod proposal;
 pub mod sync_info;
 pub mod vote;
@@ -11,11 +13,12 @@ pub mod vote;
 use crate::message::{Message, MsgId};
 
 use crate::hotstuff_types::{
-    common::Payload, proposal_msg::ProposalMsg, sync_info::SyncInfo,
-    vote_msg::VoteMsg,
+    common::Payload, epoch_retrieval::EpochRetrievalRequest,
+    proposal_msg::ProposalMsg, sync_info::SyncInfo, vote_msg::VoteMsg,
 };
 use block_retrieval::BlockRetrievalRpcRequest;
 use block_retrieval_response::BlockRetrievalRpcResponse;
+use libra_types::validator_change::ValidatorChangeProof;
 
 build_msgid! {
     PROPOSAL = 0x00
@@ -23,6 +26,8 @@ build_msgid! {
     SYNC_INFO = 0x02
     BLOCK_RETRIEVAL = 0x03
     BLOCK_RETRIEVAL_RESPONSE = 0x4
+    EPOCH_CHANGE = 0x5
+    EPOCH_RETRIEVAL = 0x6
     INVALID = 0xff
 }
 
@@ -65,3 +70,5 @@ build_msg_impl_with_serde_serialization_generic! {BlockRetrievalRpcResponse, msg
 build_msg_impl_with_serde_serialization! {VoteMsg, msgid::VOTE, "VoteMessage"}
 build_msg_impl_with_serde_serialization! {SyncInfo, msgid::SYNC_INFO, "SyncInfoMessage"}
 build_msg_impl_with_serde_serialization! {BlockRetrievalRpcRequest, msgid::BLOCK_RETRIEVAL, "BlockRetrievalMessage"}
+build_msg_impl_with_serde_serialization! {ValidatorChangeProof, msgid::EPOCH_CHANGE, "EpochChangeMessage"}
+build_msg_impl_with_serde_serialization! {EpochRetrievalRequest, msgid::EPOCH_RETRIEVAL, "EpochRetrievalMessage"}

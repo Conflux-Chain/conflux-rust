@@ -34,6 +34,8 @@ use libra_types::{
 //use network::proto::ConsensusMsg;
 //use network::proto::ConsensusMsg_oneof;
 //use network::validator_network::{ConsensusNetworkSender, Event};
+use crate::alliance_tree_graph::bft::consensus::chained_bft::network::NetworkSender;
+use libra_types::validator_change::ValidatorChangeProof;
 use network::NetworkService;
 use safety_rules::SafetyRulesManager;
 use std::{
@@ -48,7 +50,7 @@ pub struct EpochManager</* TM, */ T> {
     config: ChainedBftSMRConfig,
     time_service: Arc<ClockTimeService>,
     //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
-    //network_sender: ConsensusNetworkSender,
+    network_sender: Arc<NetworkSender<T>>,
     timeout_sender: channel::Sender<Round>,
     //txn_manager: TM,
     //state_computer: Arc<dyn StateComputer<Payload = T>>,
@@ -65,7 +67,7 @@ where
         config: ChainedBftSMRConfig,
         time_service: Arc<ClockTimeService>,
         //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
-        //network_sender: ConsensusNetworkSender,
+        network_sender: Arc<NetworkSender<T>>,
         timeout_sender: channel::Sender<Round>,
         //txn_manager: TM,
         //state_computer: Arc<dyn StateComputer<Payload = T>>,
@@ -78,7 +80,7 @@ where
             config,
             time_service,
             //self_sender,
-            //network_sender,
+            network_sender,
             timeout_sender,
             //txn_manager,
             //state_computer,
@@ -130,7 +132,7 @@ where
     }
 
     pub async fn process_epoch_retrieval(
-        &mut self, _request: EpochRetrievalRequest, _peer_id: AccountAddress,
+        &mut self, _request: EpochRetrievalRequest, peer_id: AccountAddress,
     ) {
         /*
         let proof = match self
@@ -144,16 +146,10 @@ where
                 return;
             }
         };
-        let msg = ConsensusMsg {
-            message: Some(ConsensusMsg_oneof::EpochChange(proof.into())),
-        };
-        if let Err(e) = self.network_sender.send_to(peer_id, msg).await {
-            warn!(
-                "Failed to send a epoch retrieval to peer {}: {:?}",
-                peer_id, e
-            );
-        };
         */
+
+        let proof = ValidatorChangeProof::new(Vec::new(), false);
+        self.network_sender.send_message(vec![peer_id], &proof);
     }
 
     pub async fn process_different_epoch(
@@ -173,27 +169,12 @@ where
             }
             // We request proof to join higher epoch
             Ordering::Greater => {
-                /*
                 let request = EpochRetrievalRequest {
                     start_epoch: self.epoch(),
                     end_epoch: different_epoch,
                 };
-                let msg = match request.try_into() {
-                    Ok(bytes) => ConsensusMsg {
-                        message: Some(ConsensusMsg_oneof::RequestEpoch(bytes)),
-                    },
-                    Err(e) => {
-                        warn!("Fail to serialize EpochRetrievalRequest: {:?}", e);
-                        return;
-                    }
-                };
-                if let Err(e) = self.network_sender.send_to(peer_id, msg).await {
-                    warn!(
-                        "Failed to send a epoch retrieval to peer {}: {:?}",
-                        peer_id, e
-                    );
-                }
-                */
+
+                self.network_sender.send_message(vec![peer_id], &request)
             }
             Ordering::Equal => {
                 warn!("Same epoch should not come to process_different_epoch");
@@ -203,8 +184,7 @@ where
 
     pub fn start_new_epoch(
         &mut self, ledger_info: LedgerInfoWithSignatures,
-        network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
+        network: Arc<NetworkSender<T>>,
     ) -> EventProcessor</* TM, */ T>
     {
         // make sure storage is on this ledger_info too, it should be no-op if
@@ -219,12 +199,12 @@ where
             epoch: initial_data.epoch(),
             verifier: initial_data.validators(),
         };
-        self.start_epoch(initial_data, network, protocol_handler)
+        self.start_epoch(initial_data, network)
     }
 
     pub fn start_epoch(
-        &mut self, initial_data: RecoveryData<T>, network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
+        &mut self, initial_data: RecoveryData<T>,
+        network_sender: Arc<NetworkSender<T>>,
     ) -> EventProcessor</* TM, */ T>
     {
         let validators = initial_data.validators();
@@ -278,15 +258,6 @@ where
         let proposer_election =
             self.create_proposer_election(epoch, &validators);
 
-        /*
-        let network_sender = NetworkSender::new(
-            self.config.author,
-            self.network_sender.clone(),
-            self.self_sender.clone(),
-            validators.clone(),
-        );
-        */
-
         EventProcessor::new(
             block_store,
             last_vote,
@@ -295,9 +266,7 @@ where
             proposal_generator,
             safety_rules,
             //self.txn_manager.clone(),
-            //network_sender,
-            network,
-            protocol_handler,
+            network_sender,
             self.storage.clone(),
             self.time_service.clone(),
             validators,

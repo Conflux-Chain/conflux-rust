@@ -18,10 +18,15 @@ use consensus_types::{
 use libra_types::account_address::AccountAddress;
 //use libra_types::validator_change::ValidatorChangeProof;
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::{
-        message::block_retrieval_response::BlockRetrievalRpcResponse,
-        sync_protocol::{PeerState, Peers, RpcResponse},
-        HSB_PROTOCOL_ID,
+    alliance_tree_graph::{
+        bft::consensus::chained_bft::network::NetworkSender,
+        hsb_sync_protocol::{
+            message::block_retrieval_response::BlockRetrievalRpcResponse,
+            sync_protocol::{
+                HotStuffSynchronizationProtocol, PeerState, Peers, RpcResponse,
+            },
+            HSB_PROTOCOL_ID,
+        },
     },
     sync::{
         request_manager::{Request, RequestManager},
@@ -31,6 +36,7 @@ use crate::{
 use cfx_types::H256;
 use futures::channel::oneshot;
 use io::IoContext;
+use libra_types::validator_change::ValidatorChangeProof;
 use mirai_annotations::checked_precondition;
 use network::{service::NetworkContext, NetworkService, PeerId};
 use rand::{prelude::*, Rng};
@@ -91,7 +97,7 @@ impl<T: Payload> BlockStore<T> {
     /// If gap is large, performs state sync using process_highest_commit_cert
     /// Inserts sync_info.quorum_cert into block store as the last step
     pub async fn sync_to(
-        &self, sync_info: &SyncInfo, mut retriever: BlockRetriever,
+        &self, sync_info: &SyncInfo, mut retriever: BlockRetriever<T>,
     ) -> anyhow::Result<()> {
         self.process_highest_commit_cert(
             sync_info.highest_commit_cert().clone(),
@@ -121,7 +127,7 @@ impl<T: Payload> BlockStore<T> {
     /// retrieved from the given peer. If a given peer fails to provide the
     /// missing ancestors, the qc is not going to be added.
     async fn fetch_quorum_cert(
-        &self, qc: QuorumCert, mut retriever: BlockRetriever,
+        &self, qc: QuorumCert, mut retriever: BlockRetriever<T>,
     ) -> anyhow::Result<()> {
         let mut pending = vec![];
         let mut retrieve_qc = qc.clone();
@@ -156,8 +162,10 @@ impl<T: Payload> BlockStore<T> {
     /// 3. We prune the old tree and replace with a new tree built with the
     /// 3-chain.
     async fn process_highest_commit_cert(
-        &self, highest_commit_cert: QuorumCert, retriever: &mut BlockRetriever,
-    ) -> anyhow::Result<()> {
+        &self, highest_commit_cert: QuorumCert,
+        retriever: &mut BlockRetriever<T>,
+    ) -> anyhow::Result<()>
+    {
         if !self.need_sync_for_quorum_cert(&highest_commit_cert) {
             return Ok(());
         }
@@ -202,34 +210,53 @@ impl<T: Payload> BlockStore<T> {
         .await;
 
         if highest_commit_cert.ends_epoch() {
-            /*
+            let self_node_id = AccountAddress::new(
+                retriever.network.protocol_handler.own_node_hash.into(),
+            );
             retriever
                 .network
-                .notify_epoch_change(ValidatorChangeProof::new(
-                    vec![highest_commit_cert.ledger_info().clone()],
-                    /* more = */ false,
-                ))
-                .await;
-                */
+                .protocol_handler
+                .network_task
+                .process_epoch_change(
+                    self_node_id,
+                    ValidatorChangeProof::new(
+                        vec![highest_commit_cert.ledger_info().clone()],
+                        /* more = */ false,
+                    ),
+                );
         }
         Ok(())
     }
 }
 
-pub struct RequestSender {
-    network: Arc<NetworkService>,
-    request_manager: Arc<RequestManager>,
+/// BlockRetriever is used internally to retrieve blocks
+pub struct BlockRetriever<P> {
+    network: Arc<NetworkSender<P>>,
+    deadline: Instant,
+    preferred_peer: Author,
 }
 
-impl RequestSender {
+impl<P: Payload> BlockRetriever<P> {
+    pub fn new(
+        network: Arc<NetworkSender<P>>, deadline: Instant,
+        preferred_peer: Author,
+    ) -> Self
+    {
+        Self {
+            network,
+            deadline,
+            preferred_peer,
+        }
+    }
+
     pub fn issue_unary_rpc(
         &self, recipient: Option<PeerId>, mut request: Box<dyn Request>,
     ) -> oneshot::Receiver<Result<Box<dyn RpcResponse>, Error>> {
         let io = IoContext::new(
-            self.network.io_service.as_ref().unwrap().channel(),
+            self.network.network.io_service.as_ref().unwrap().channel(),
             0,
         );
-        let io = match self.network.inner {
+        let io = match self.network.network.inner {
             Some(ref inner) => {
                 Some(NetworkContext::new(&io, HSB_PROTOCOL_ID, &*inner))
             }
@@ -240,36 +267,11 @@ impl RequestSender {
         let (res_tx, res_rx) = oneshot::channel();
         request.set_response_notification(res_tx);
 
-        self.request_manager
+        self.network
+            .protocol_handler
+            .request_manager
             .request_with_delay(&io, request, recipient, None);
         res_rx
-    }
-}
-
-/// BlockRetriever is used internally to retrieve blocks
-pub struct BlockRetriever {
-    request_sender: RequestSender,
-    peer_states: Arc<Peers<PeerState, H256>>,
-    deadline: Instant,
-    preferred_peer: Author,
-}
-
-impl BlockRetriever {
-    pub fn new(
-        network: Arc<NetworkService>, request_manager: Arc<RequestManager>,
-        peer_states: Arc<Peers<PeerState, H256>>, deadline: Instant,
-        preferred_peer: Author,
-    ) -> Self
-    {
-        Self {
-            request_sender: RequestSender {
-                network,
-                request_manager,
-            },
-            peer_states,
-            deadline,
-            preferred_peer,
-        }
     }
 
     /// Retrieve chain of n blocks for given QC
@@ -326,7 +328,8 @@ impl BlockRetriever {
             };
 
             let peer_hash = H256::from_slice(peer.to_vec().as_slice());
-            let peer_state = self.peer_states.get(&peer_hash);
+            let peer_state =
+                self.network.protocol_handler.peers.get(&peer_hash);
             if peer_state.is_none() {
                 continue;
             }
@@ -334,9 +337,8 @@ impl BlockRetriever {
             let peer_state = peer_state.unwrap();
             let peer_id = peer_state.read().get_id();
 
-            let response_rx = self
-                .request_sender
-                .issue_unary_rpc(Some(peer_id), Box::new(request));
+            let response_rx =
+                self.issue_unary_rpc(Some(peer_id), Box::new(request));
             let response = response_rx.await;
 
             let res = match response {
@@ -380,61 +382,6 @@ impl BlockRetriever {
                     }
                 },
             }
-
-            /*
-            let response = match response {
-                Err(e) => match e.0 {
-                    ErrorKind::RpcCancelledByEmpty => {
-                        return Ok(Vec::new());
-                    }
-                    _ => {
-                        continue;
-                    }
-                },
-                Ok(response) => {
-                    match response
-                        .as_any()
-                        .downcast_ref::<BlockRetrievalRpcResponse<T>>()
-                    {
-                        Some(response) => response,
-                        None => {
-                            continue;
-                        }
-                    }
-                }
-            };
-
-            let response = self
-                .network
-                .request_block(
-                    BlockRetrievalRequest::new(block_id, num_blocks),
-                    peer,
-                    timeout,
-                )
-                .await;
-            let response = match response {
-                Err(e) => {
-                    warn!(
-                        "Failed to fetch block {} from {}: {:?}, trying another peer",
-                        block_id,
-                        peer.short_str(),
-                        e
-                    );
-                    continue;
-                }
-                Ok(response) => response,
-            };
-            if response.status() != BlockRetrievalStatus::Succeeded {
-                warn!(
-                    "Failed to fetch block {} from {}: {:?}, trying another peer",
-                    block_id,
-                    peer.short_str(),
-                    response.status()
-                );
-                continue;
-            }
-            return Ok(response.blocks().clone());
-            */
         }
     }
 

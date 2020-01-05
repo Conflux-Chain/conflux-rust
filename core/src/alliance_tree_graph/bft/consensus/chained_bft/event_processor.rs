@@ -59,12 +59,16 @@ use consensus_types::block_retrieval::{
 use safety_rules::ConsensusState;
 use safety_rules::TSafetyRules;
 //use std::convert::TryInto;
+use crate::alliance_tree_graph::{
+    bft::consensus::chained_bft::network::NetworkSender,
+    hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+};
+use libra_types::validator_change::ValidatorChangeProof;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 use termion::color::*;
-use crate::alliance_tree_graph::hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse;
 
 #[cfg(test)]
 #[path = "event_processor_test.rs"]
@@ -86,9 +90,7 @@ pub struct EventProcessor</* TM, */ T> {
     proposal_generator: ProposalGenerator</* TM, */ T>,
     safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
     //txn_manager: TM,
-    //network: NetworkSender,
-    network: Arc<NetworkService>,
-    protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
+    network: Arc<NetworkSender<T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     time_service: Arc<dyn TimeService>,
     // Cache of the last sent vote message.
@@ -108,9 +110,7 @@ where
         proposal_generator: ProposalGenerator</* TM, */ T>,
         safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
         //txn_manager: TM,
-        //network: NetworkSender,
-        network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol<T>>,
+        network: Arc<NetworkSender<T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         time_service: Arc<dyn TimeService>,
         validators: Arc<ValidatorVerifier>,
@@ -131,7 +131,6 @@ where
             safety_rules,
             //txn_manager,
             network,
-            protocol_handler,
             storage,
             time_service,
             last_vote_sent,
@@ -139,24 +138,12 @@ where
         }
     }
 
-    pub fn get_network(&self) -> Arc<NetworkService> { self.network.clone() }
-
-    pub fn get_protocol_handler(
-        &self,
-    ) -> Arc<HotStuffSynchronizationProtocol<T>> {
-        self.protocol_handler.clone()
-    }
+    pub fn get_network(&self) -> Arc<NetworkSender<T>> { self.network.clone() }
 
     fn create_block_retriever(
         &self, deadline: Instant, author: Author,
-    ) -> BlockRetriever {
-        BlockRetriever::new(
-            self.network.clone(),
-            self.protocol_handler.request_manager.clone(),
-            self.protocol_handler.peers.clone(),
-            deadline,
-            author,
-        )
+    ) -> BlockRetriever<T> {
+        BlockRetriever::new(self.network.clone(), deadline, author)
     }
 
     /// Leader:
@@ -314,7 +301,7 @@ where
                 sync_info,
             );
             counters::SYNC_INFO_MSGS_SENT_COUNT.inc();
-            self.send_message(vec![peer], &sync_info);
+            self.network.send_message(vec![peer], &sync_info);
             //self.network.send_sync_info(sync_info, peer).await;
         }
     }
@@ -474,6 +461,14 @@ where
         }
 
         let timeout_vote_msg = VoteMsg::new(timeout_vote, self.gen_sync_info());
+        let self_author = AccountAddress::new(
+            self.network.protocol_handler.own_node_hash.into(),
+        );
+        self.broadcast(&timeout_vote_msg, &self_author);
+        self.network
+            .protocol_handler
+            .network_task
+            .process_vote(self_author, timeout_vote_msg);
         //self.network.broadcast_vote(timeout_vote_msg).await
     }
 
@@ -616,28 +611,8 @@ where
             .map_or(false, |parent_block| parent_block.round()
                 < proposal_round));
         let vote_msg = VoteMsg::new(vote, self.gen_sync_info());
-        self.send_message(recipients, &vote_msg);
+        self.network.send_message(recipients, &vote_msg);
         //self.network.send_vote(vote_msg, recipients).await;
-    }
-
-    fn send_message(&self, recipients: Vec<AccountAddress>, msg: &dyn Message) {
-        for peer_address in recipients {
-            let peer_hash = H256::from_slice(peer_address.to_vec().as_slice());
-            if let Some(peer) = self.protocol_handler.peers.get(&peer_hash) {
-                let peer_id = peer.read().get_id();
-                self.send_message_with_peer_id(peer_id, msg);
-            }
-        }
-    }
-
-    fn send_message_with_peer_id(&self, peer_id: PeerId, msg: &dyn Message) {
-        if self
-            .network
-            .with_context(HSB_PROTOCOL_ID, |io| msg.send(io, peer_id))
-            .is_err()
-        {
-            warn!("Error sending message!");
-        }
     }
 
     async fn wait_before_vote_if_needed(
@@ -898,6 +873,18 @@ where
         .await
     }
 
+    // This function does not send message to self.
+    fn broadcast(&mut self, msg: &dyn Message, self_author: &Author) {
+        // Get the list of validators excluding our own account address. Note
+        // the ordering is not important in this case.
+        let other_validators = self
+            .validators
+            .get_ordered_account_addresses_iter()
+            .filter(|author| author != self_author)
+            .collect();
+        self.network.send_message(other_validators, msg);
+    }
+
     /// Upon (potentially) new commit:
     /// 1. Commit the blocks via block store.
     /// 2. After the state is finalized, update the txn manager with the status
@@ -937,14 +924,21 @@ where
             }
         }
         if finality_proof.ledger_info().next_validator_set().is_some() {
-            /*
+            let message = ValidatorChangeProof::new(
+                vec![finality_proof],
+                /* more = */ false,
+            );
+
+            let self_author = AccountAddress::new(
+                self.network.protocol_handler.own_node_hash.into(),
+            );
+            self.broadcast(&message, &self_author);
+
+            // process epoch change by self
             self.network
-                .broadcast_epoch_change(ValidatorChangeProof::new(
-                    vec![finality_proof],
-                    /* more = */ false,
-                ))
-                .await
-                */
+                .protocol_handler
+                .network_task
+                .process_epoch_change(self_author, message);
         }
     }
 
@@ -978,7 +972,8 @@ where
             request_id: request.request_id,
             response: BlockRetrievalResponse::new(status, blocks),
         };
-        self.send_message_with_peer_id(request.peer_id, &response);
+        self.network
+            .send_message_with_peer_id(request.peer_id, &response);
     }
 
     /// To jump start new round with the current certificates we have.

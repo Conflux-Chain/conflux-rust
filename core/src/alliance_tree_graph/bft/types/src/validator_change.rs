@@ -7,9 +7,10 @@ use crate::crypto_proxies::{LedgerInfoWithSignatures, ValidatorVerifier};
 use anyhow::{ensure, format_err, Error, Result};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::{collection::vec, prelude::*};
+use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 /// A vector of LedgerInfo with contiguous increasing epoch numbers to prove a
 /// sequence of validator changes from the first LedgerInfo's epoch.
 pub struct ValidatorChangeProof {

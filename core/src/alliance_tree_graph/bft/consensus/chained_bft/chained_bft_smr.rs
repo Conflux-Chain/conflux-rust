@@ -21,6 +21,7 @@ use consensus_types::common::{Author, Payload, Round};
 use futures::{select, stream::StreamExt};
 use libra_config::config::{ConsensusProposerType, NodeConfig};
 //use libra_logger::prelude::*;
+use crate::alliance_tree_graph::bft::consensus::chained_bft::network::NetworkSender;
 use libra_types::crypto_proxies::EpochInfo;
 use network::NetworkService;
 use safety_rules::SafetyRulesManager;
@@ -105,10 +106,11 @@ impl<T: Payload> ChainedBftSMR<T> {
     }
 
     fn start_event_processing(
-        executor: Handle, mut epoch_manager: EpochManager</* TM, */ T>,
+        executor: Handle,
+        mut epoch_manager: EpochManager</* TM, */ T>,
         mut event_processor: EventProcessor</* TM, */ T>,
         mut pacemaker_timeout_sender_rx: channel::Receiver<Round>,
-        network_task: NetworkTask<T>,
+        //network_task: NetworkTask<T>,
         mut network_receivers: NetworkReceivers<T>,
     )
     {
@@ -140,7 +142,7 @@ impl<T: Payload> ChainedBftSMR<T> {
                     }
                     ledger_info = network_receivers.epoch_change.select_next_some() => {
                         idle_duration = pre_select_instant.elapsed();
-                        event_processor = epoch_manager.start_new_epoch(ledger_info, event_processor.get_network(), event_processor.get_protocol_handler());
+                        event_processor = epoch_manager.start_new_epoch(ledger_info, event_processor.get_network());
                         // clean up all the previous messages from the old epochs
                         network_receivers.clear_prev_epoch_msgs();
                         event_processor.start().await;
@@ -214,12 +216,16 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         let safety_rules_manager =
             SafetyRulesManager::new(safety_rules_manager_config);
 
+        let network_sender =
+            Arc::new(NetworkSender::new(network, protocol_handler));
+
         let mut epoch_mgr = EpochManager::new(
             Arc::clone(&epoch_info),
             self.config.take().expect("already started, config is None"),
             time_service,
             //self_sender,
             //initial_setup.network_sender,
+            network_sender.clone(),
             timeout_sender,
             //txn_manager,
             //state_computer,
@@ -229,7 +235,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
 
         // Step 2
         let event_processor =
-            epoch_mgr.start_epoch(initial_data, network, protocol_handler);
+            epoch_mgr.start_epoch(initial_data, network_sender.clone());
 
         // TODO: this is test only, we should remove this
         self.block_store = Some(event_processor.block_store());
@@ -243,7 +249,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             epoch_mgr,
             event_processor,
             timeout_receiver,
-            network_task,
+            //network_task,
             network_receiver,
         );
         debug!("Chained BFT SMR started.");
