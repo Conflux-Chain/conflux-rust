@@ -587,7 +587,6 @@ impl CowNodeRef {
                 i,
                 &child_node.compressed_path_ref(),
             );
-            debug!("iterate_internal: key_prefix={:?}", key_prefix);
             let child_node = GuardedValue::take(child_node);
             cow_child_node.iterate_internal(
                 owned_node_set,

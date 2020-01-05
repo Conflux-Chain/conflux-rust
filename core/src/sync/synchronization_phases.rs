@@ -309,13 +309,6 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        // FIXME Here we should handle both era shift and snapshot shift.
-        // If we moves into the next era, we should force state_sync to change
-        // the candidates to states with in the new stable era. If the
-        // era stays the same and a new snapshot becomes available, we
-        // only change candidates if old candidates cannot to be synced,
-        // so a state can be synced with one era time instead of only
-        // one snapshot time
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         self.state_sync
             .update_status(epoch_to_sync, io, sync_handler);
