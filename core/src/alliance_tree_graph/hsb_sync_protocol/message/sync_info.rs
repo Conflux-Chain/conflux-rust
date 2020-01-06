@@ -8,7 +8,6 @@ use crate::{
     sync::Error,
 };
 use libra_types::account_address::AccountAddress;
-use primitives::TransactionWithSignature;
 use std::cmp::Ordering;
 
 impl<P: Payload> Handleable<P> for SyncInfo {

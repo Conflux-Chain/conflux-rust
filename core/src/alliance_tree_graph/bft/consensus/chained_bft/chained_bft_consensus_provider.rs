@@ -36,7 +36,7 @@ pub struct InitialSetup {
 
 /// Supports the implementation of ConsensusProvider using LibraBFT.
 pub struct ChainedBftProvider {
-    smr: ChainedBftSMR<Vec<TransactionWithSignature>>,
+    smr: ChainedBftSMR<Vec<SignedTransaction>>,
     /*txn_manager: MempoolProxy,
      *state_computer: Arc<dyn StateComputer<Payload =
      * Vec<SignedTransaction>>>, */
@@ -111,7 +111,7 @@ impl ConsensusProvider for ChainedBftProvider {
     fn start(
         &mut self, network: Arc<NetworkService>,
         protocol_handler: Arc<
-            HotStuffSynchronizationProtocol<Vec<TransactionWithSignature>>,
+            HotStuffSynchronizationProtocol<Vec<SignedTransaction>>,
         >,
     ) -> Result<()>
     {

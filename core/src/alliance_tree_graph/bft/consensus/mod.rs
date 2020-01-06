@@ -18,4 +18,5 @@ pub mod consensus_provider;
 
 mod counters;
 
+mod state_computer;
 mod state_replication;

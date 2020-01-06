@@ -9,7 +9,6 @@ use crate::{
 };
 use libra_logger::prelude::{security_log, SecurityEvent};
 use libra_types::account_address::AccountAddress;
-use primitives::TransactionWithSignature;
 
 impl<P: Payload> Handleable<P> for VoteMsg {
     fn handle(self, ctx: &Context<P>) -> Result<(), Error> {

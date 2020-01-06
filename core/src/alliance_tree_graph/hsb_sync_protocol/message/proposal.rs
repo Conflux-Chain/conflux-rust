@@ -8,12 +8,12 @@ use hotstuff_types::{
     common::Payload,
     proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
 };
-use primitives::TransactionWithSignature;
 
-use libra_types::account_address::AccountAddress;
+use libra_types::{
+    account_address::AccountAddress, transaction::SignedTransaction,
+};
 
-pub type ProposalMsgWithTransactions =
-    ProposalMsg<Vec<TransactionWithSignature>>;
+pub type ProposalMsgWithTransactions = ProposalMsg<Vec<SignedTransaction>>;
 
 impl<P: Payload> Handleable<P> for ProposalUncheckedSignatures<P> {
     fn handle(self, ctx: &Context<P>) -> Result<(), Error> {

@@ -15,6 +15,7 @@ use std::sync::Arc;
 use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
+use libra_types::transaction::SignedTransaction;
 use primitives::TransactionWithSignature;
 
 /// Public interface to a consensus protocol.
@@ -27,7 +28,7 @@ pub trait ConsensusProvider {
     fn start(
         &mut self, network: Arc<NetworkService>,
         protocol_handler: Arc<
-            HotStuffSynchronizationProtocol<Vec<TransactionWithSignature>>,
+            HotStuffSynchronizationProtocol<Vec<SignedTransaction>>,
         >,
     ) -> Result<()>;
 

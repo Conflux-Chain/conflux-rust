@@ -11,7 +11,6 @@ use hotstuff_types::{
     block_retrieval::BlockRetrievalResponse, common::Payload,
 };
 use libra_types::account_address::AccountAddress;
-use primitives::TransactionWithSignature;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
