@@ -20,6 +20,9 @@ use libra_types::transaction::SignedTransaction;
 // ConsensusNetworkSender};
 use safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
+use crate::alliance_tree_graph::bft::consensus::{
+    state_computer::ExecutionProxy, state_replication::StateComputer,
+};
 use network::NetworkService;
 use primitives::TransactionWithSignature;
 use std::sync::Arc;
@@ -37,9 +40,8 @@ pub struct InitialSetup {
 /// Supports the implementation of ConsensusProvider using LibraBFT.
 pub struct ChainedBftProvider {
     smr: ChainedBftSMR<Vec<SignedTransaction>>,
-    /*txn_manager: MempoolProxy,
-     *state_computer: Arc<dyn StateComputer<Payload =
-     * Vec<SignedTransaction>>>, */
+    //txn_manager: MempoolProxy,
+    state_computer: Arc<dyn StateComputer<Payload = Vec<SignedTransaction>>>,
 }
 
 impl ChainedBftProvider {
@@ -72,8 +74,9 @@ impl ChainedBftProvider {
         let txn_manager = MempoolProxy::new(mempool_client);
         */
 
-        //let state_computer = Arc::new(ExecutionProxy::new(executor,
-        // synchronizer_client.clone()));
+        let state_computer = Arc::new(
+            ExecutionProxy::new(/*executor, synchronizer_client.clone())*/),
+        );
         let smr = ChainedBftSMR::new(
             initial_setup,
             runtime,
@@ -83,8 +86,8 @@ impl ChainedBftProvider {
         );
         Self {
             smr,
-            /*txn_manager,
-             *state_computer, */
+            //txn_manager,
+            state_computer,
         }
     }
 
@@ -117,7 +120,8 @@ impl ConsensusProvider for ChainedBftProvider {
     {
         debug!("Starting consensus provider.");
         self.smr.start(
-            /* self.txn_manager.clone(), Arc::clone(&self.state_computer) */
+            //self.txn_manager.clone(),
+            Arc::clone(&self.state_computer),
             network,
             protocol_handler,
         )

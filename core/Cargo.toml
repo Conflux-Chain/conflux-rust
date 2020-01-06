@@ -96,6 +96,7 @@ scratchpad = { path = "src/alliance_tree_graph/bft/storage/scratchpad" }
 libra-state-view = { path="src/alliance_tree_graph/bft/storage/state-view" }
 storage-client = { path = "src/alliance_tree_graph/bft/storage/storage-client" }
 storage-proto = { path = "src/alliance_tree_graph/bft/storage/storage-proto" }
+executor = { path = "src/alliance_tree_graph/bft/executor" }
 
 [dev-dependencies]
 criterion = "0.2"

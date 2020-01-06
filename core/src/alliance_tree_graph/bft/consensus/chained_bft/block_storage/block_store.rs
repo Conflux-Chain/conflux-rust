@@ -21,6 +21,8 @@ use debug_interface::event;
 use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
 
+use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
+use executor::ProcessedVMOutput;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_types::crypto_proxies::ValidatorSet;
 use libra_types::crypto_proxies::{
@@ -57,7 +59,7 @@ pub mod sync_manager;
 ///             ╰--------------> D3
 pub struct BlockStore<T> {
     inner: Arc<RwLock<BlockTree<T>>>,
-    //state_computer: Arc<dyn StateComputer<Payload = T>>,
+    state_computer: Arc<dyn StateComputer<Payload = T>>,
     /// The persistent storage backing up the in-memory data structure, every
     /// write should go through this before in-memory tree.
     storage: Arc<dyn PersistentStorage<T>>,
@@ -65,9 +67,8 @@ pub struct BlockStore<T> {
 
 impl<T: Payload> BlockStore<T> {
     pub fn new(
-        storage: Arc<dyn PersistentStorage<T>>,
-        initial_data: RecoveryData<T>,
-        //state_computer: Arc<dyn StateComputer<Payload = T>>,
+        storage: Arc<dyn PersistentStorage<T>>, initial_data: RecoveryData<T>,
+        state_computer: Arc<dyn StateComputer<Payload = T>>,
         max_pruned_blocks_in_mem: usize,
     ) -> Self
     {
@@ -80,12 +81,12 @@ impl<T: Payload> BlockStore<T> {
             blocks,
             quorum_certs,
             highest_tc,
-            //Arc::clone(&state_computer),
+            Arc::clone(&state_computer),
             max_pruned_blocks_in_mem,
         )));
         BlockStore {
             inner,
-            //state_computer,
+            state_computer,
             storage,
         }
     }
@@ -96,7 +97,7 @@ impl<T: Payload> BlockStore<T> {
         blocks: Vec<Block<T>>,
         quorum_certs: Vec<QuorumCert>,
         highest_timeout_cert: Option<TimeoutCertificate>,
-        //state_computer: Arc<dyn StateComputer<Payload = T>>,
+        state_computer: Arc<dyn StateComputer<Payload = T>>,
         max_pruned_blocks_in_mem: usize,
     ) -> BlockTree<T>
     {
@@ -116,15 +117,14 @@ impl<T: Payload> BlockStore<T> {
             root_qc.certified_block().executed_state_id(),
             root_executed_trees.state_id(),
         );
-
+        */
         let root_output = ProcessedVMOutput::new(
-            vec![], /* not used */
-            root_executed_trees,
+            //vec![], /* not used */
+            //root_executed_trees,
             root_qc.certified_block().next_validator_set().cloned(),
         );
-        */
-        let executed_root_block =
-            ExecutedBlock::new(root_block /* , root_output */);
+
+        let executed_root_block = ExecutedBlock::new(root_block, root_output);
         let mut tree = BlockTree::new(
             executed_root_block,
             root_qc,
@@ -138,17 +138,21 @@ impl<T: Payload> BlockStore<T> {
             .collect::<HashMap<_, _>>();
         for block in blocks {
             assert!(!block.is_genesis_block());
+
             /*
             let parent_trees = tree
                 .get_block(&block.parent_id())
                 .expect("Parent block must exist")
                 .executed_trees()
                 .clone();
+                */
 
             let output = state_computer
-                .compute(&block, &parent_trees, tree.root().executed_trees())
+                .compute(
+                    &block, /* , &parent_trees, tree.root().executed_trees() */
+                )
                 .expect("fail to rebuild scratchpad");
-                */
+
             // if this block is certified, ensure we agree with the certified
             // state.
             /*
@@ -161,7 +165,8 @@ impl<T: Payload> BlockStore<T> {
                 );
             }
             */
-            tree.insert_block(ExecutedBlock::new(block /* , output */))
+
+            tree.insert_block(ExecutedBlock::new(block, output))
                 .expect("Block insertion failed while build the tree");
         }
         quorum_certs.into_iter().for_each(|(_, qc)| {
@@ -192,7 +197,6 @@ impl<T: Payload> BlockStore<T> {
             .path_from_root(block_id_to_commit)
             .unwrap_or_else(Vec::new);
 
-        /*
         self.state_computer
             .commit(
                 blocks_to_commit.iter().map(|b| b.as_ref()).collect(),
@@ -201,7 +205,7 @@ impl<T: Payload> BlockStore<T> {
             )
             .await
             .expect("Failed to persist commit");
-            */
+
         counters::LAST_COMMITTED_ROUND.set(block_to_commit.round() as i64);
         debug!("{}Committed{} {}", Fg(Blue), Fg(Reset), *block_to_commit);
         event!("committed",
@@ -232,7 +236,7 @@ impl<T: Payload> BlockStore<T> {
             blocks,
             quorum_certs,
             prev_htc,
-            //Arc::clone(&self.state_computer),
+            Arc::clone(&self.state_computer),
             max_pruned_blocks_in_mem,
         );
         let to_remove = self.inner.read().unwrap().get_all_block_id();
@@ -300,24 +304,27 @@ impl<T: Payload> BlockStore<T> {
         // Reconfiguration rule - if a block is a child of pending
         // reconfiguration, it needs to be empty So we roll over the
         // executed state until it's committed and we start new epoch.
-        /*
+
         let output = if parent_block.compute_result().has_reconfiguration() {
             ProcessedVMOutput::new(
-                vec![],
-                parent_block.output().executed_trees().clone(),
+                //vec![],
+                //parent_block.output().executed_trees().clone(),
                 parent_block.output().validators().clone(),
             )
         } else {
-
-            let parent_trees = parent_block.executed_trees().clone();
-            // Although NIL blocks don't have payload, we still send a T::default() to compute
-            // because we may inject a block prologue transaction.
+            //let parent_trees = parent_block.executed_trees().clone();
+            // Although NIL blocks don't have payload, we still send a
+            // T::default() to compute because we may inject a block
+            // prologue transaction.
             self.state_computer
-                .compute(&block, &parent_trees, self.root().executed_trees())
-                .with_context(|| format!("Execution failure for block {}", block))?
+                .compute(
+                    &block, /* , &parent_trees, self.root().executed_trees() */
+                )
+                .with_context(|| {
+                    format!("Execution failure for block {}", block)
+                })?
         };
-        */
-        Ok(ExecutedBlock::new(block /* , output */))
+        Ok(ExecutedBlock::new(block, output))
     }
 
     /// Validates quorum certificates and inserts it into block tree assuming

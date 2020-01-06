@@ -34,7 +34,10 @@ use libra_types::{
 //use network::proto::ConsensusMsg;
 //use network::proto::ConsensusMsg_oneof;
 //use network::validator_network::{ConsensusNetworkSender, Event};
-use crate::alliance_tree_graph::bft::consensus::chained_bft::network::NetworkSender;
+use crate::alliance_tree_graph::bft::consensus::{
+    chained_bft::network::NetworkSender, state_replication::StateComputer,
+};
+use futures::executor::block_on;
 use libra_types::validator_change::ValidatorChangeProof;
 use network::NetworkService;
 use safety_rules::SafetyRulesManager;
@@ -53,7 +56,7 @@ pub struct EpochManager</* TM, */ T> {
     network_sender: Arc<NetworkSender<T>>,
     timeout_sender: channel::Sender<Round>,
     //txn_manager: TM,
-    //state_computer: Arc<dyn StateComputer<Payload = T>>,
+    state_computer: Arc<dyn StateComputer<Payload = T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     safety_rules_manager: SafetyRulesManager<T>,
 }
@@ -70,7 +73,7 @@ where
         network_sender: Arc<NetworkSender<T>>,
         timeout_sender: channel::Sender<Round>,
         //txn_manager: TM,
-        //state_computer: Arc<dyn StateComputer<Payload = T>>,
+        state_computer: Arc<dyn StateComputer<Payload = T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         safety_rules_manager: SafetyRulesManager<T>,
     ) -> Self
@@ -83,7 +86,7 @@ where
             network_sender,
             timeout_sender,
             //txn_manager,
-            //state_computer,
+            state_computer,
             storage,
             safety_rules_manager,
         }
@@ -132,9 +135,8 @@ where
     }
 
     pub async fn process_epoch_retrieval(
-        &mut self, _request: EpochRetrievalRequest, peer_id: AccountAddress,
+        &mut self, request: EpochRetrievalRequest, peer_id: AccountAddress,
     ) {
-        /*
         let proof = match self
             .state_computer
             .get_epoch_proof(request.start_epoch, request.end_epoch)
@@ -146,9 +148,6 @@ where
                 return;
             }
         };
-        */
-
-        let proof = ValidatorChangeProof::new(Vec::new(), false);
         self.network_sender.send_message(vec![peer_id], &proof);
     }
 
@@ -189,11 +188,11 @@ where
     {
         // make sure storage is on this ledger_info too, it should be no-op if
         // it's already committed
-        /*
-        if let Err(e) = block_on(self.state_computer.sync_to(ledger_info.clone())) {
+        if let Err(e) =
+            block_on(self.state_computer.sync_to(ledger_info.clone()))
+        {
             error!("State sync to new epoch {} failed with {:?}, we'll try to start from current libradb", ledger_info, e);
         }
-        */
         let initial_data = self.storage.start();
         *self.epoch_info.write().unwrap() = EpochInfo {
             epoch: initial_data.epoch(),
@@ -231,7 +230,7 @@ where
         let block_store = Arc::new(BlockStore::new(
             Arc::clone(&self.storage),
             initial_data,
-            //Arc::clone(&self.state_computer),
+            Arc::clone(&self.state_computer),
             self.config.max_pruned_blocks_in_mem,
         ));
 

@@ -1,10 +1,10 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::state_computer::ProcessedVMOutput;
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
 use consensus_types::{block::Block, executed_block::ExecutedBlock};
+use executor::ProcessedVMOutput;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use libra_types::crypto_proxies::{
     LedgerInfoWithSignatures, ValidatorChangeProof,
@@ -89,8 +89,8 @@ pub trait StateMachineReplication {
     /// started.
     fn start(
         &mut self,
-        /*txn_manager: TM,
-         *state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>, */
+        //txn_manager: TM,
+        state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>,
         protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
     ) -> Result<()>;

@@ -30,6 +30,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::runtime::{Handle, Runtime};
+use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
 
 /// Consensus configuration derived from ConsensusConfig
 pub struct ChainedBftSMRConfig {
@@ -179,8 +180,8 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
     /// Network(Populate with known validators), EventProcessor
     fn start(
         &mut self,
-        /*txn_manager: TM,
-         *state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>, */
+        //txn_manager: TM,
+        state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>,
         protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
     ) -> Result<()>
@@ -228,7 +229,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             network_sender.clone(),
             timeout_sender,
             //txn_manager,
-            //state_computer,
+            state_computer,
             self.storage.clone(),
             safety_rules_manager,
         );
