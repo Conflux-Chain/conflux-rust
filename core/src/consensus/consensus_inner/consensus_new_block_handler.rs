@@ -16,18 +16,13 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
     statistics::SharedStatistics,
-    storage::{
-        storage_db::{
-            OpenSnapshotMptTrait, SnapshotInfo, SnapshotMptTraitReadOnly,
-        },
-        StateIndex, StateRootWithAuxInfo,
-    },
+    storage::StateRootWithAuxInfo,
     SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parity_bytes::ToPretty;
-use primitives::{BlockHeader, SignedTransaction, NULL_EPOCH};
+use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
@@ -1470,7 +1465,6 @@ impl ConsensusNewBlockHandler {
     /// It also recovers receipts_root and logs_bloom_hash in pivot chain.
     /// This function is only invoked from recover_graph_from_db with
     /// header_only being false.
-    /// FIXME Ensure we have snapshot at state_boundary_height
     pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
@@ -1479,8 +1473,7 @@ impl ConsensusNewBlockHandler {
             self.data_man.state_availability_boundary.read().lower_bound;
         let start_pivot_index =
             (state_boundary_height - inner.cur_era_genesis_height) as usize;
-        let mut start_hash =
-            inner.arena[inner.pivot_chain[start_pivot_index]].hash;
+        let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory. Since, in some rare cases, the number of
         // blocks between stable and best_epoch is less than
@@ -1508,12 +1501,6 @@ impl ConsensusNewBlockHandler {
                     .push(inner.arena[inner.pivot_chain[pivot_index]].hash);
             }
         }
-        if state_boundary_height == 0 {
-            start_hash = NULL_EPOCH;
-        }
-        let storage_manager =
-            self.data_man.storage_manager.get_storage_manager();
-        let mut parent_snapshot_id = start_hash;
         for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
         {
@@ -1549,92 +1536,6 @@ impl ConsensusNewBlockHandler {
                     .state_availability_boundary
                     .write()
                     .upper_bound += 1;
-            }
-            if pivot_index as u64
-                % (storage_manager.get_snapshot_epoch_count() as u64)
-                == 0
-            {
-                // FIXME Most are fake because not used now
-                let mut snapshot_info = SnapshotInfo {
-                    serve_one_step_sync: false,
-                    merkle_root: Default::default(),
-                    parent_snapshot_height: inner.arena[arena_index].height
-                        - storage_manager.get_snapshot_epoch_count() as u64,
-                    height: inner.arena[arena_index].height,
-                    parent_snapshot_epoch_id: parent_snapshot_id,
-                    pivot_chain_parts: vec![pivot_hash],
-                };
-                match storage_manager
-                    .get_snapshot_manager()
-                    .get_snapshot_by_epoch_id(&pivot_hash)
-                    .expect("No db error")
-                {
-                    Some(mut snapshot) => {
-                        snapshot_info.merkle_root = snapshot
-                            .open_snapshot_mpt_read_only()
-                            .expect("No db error")
-                            .get_merkle_root();
-                        storage_manager
-                            .register_new_snapshot(snapshot_info)
-                            .expect("No db error");
-                        // Setup delta_mpt
-                        storage_manager
-                            .get_delta_mpt(&pivot_hash)
-                            .expect("No db error");
-                    }
-                    None => {
-                        // TODO Resume the unfinished snapshot making. Maybe
-                        // better handling?
-                        let (_guard, maybe_commitment) = self
-                            .data_man
-                            .get_epoch_execution_commitment(&pivot_hash)
-                            .into();
-                        let height = self
-                            .data_man
-                            .block_header_by_hash(&pivot_hash)
-                            .expect("header exist")
-                            .height();
-                        let state_index = StateIndex::new_for_next_epoch(
-                            &pivot_hash,
-                            &maybe_commitment
-                                .unwrap()
-                                .state_root_with_aux_info
-                                .aux_info,
-                            height,
-                            self.data_man.get_snapshot_epoch_count(),
-                        );
-                        let state = self
-                            .data_man
-                            .storage_manager
-                            .get_state_trees_for_next_epoch(&state_index)
-                            .unwrap()
-                            .unwrap();
-                        let intermediate_root = state.intermediate_trie_root;
-                        let maybe_intermediate_trie =
-                            state.maybe_intermediate_trie;
-                        self.data_man
-                            .storage_manager
-                            .check_make_snapshot(
-                                maybe_intermediate_trie,
-                                intermediate_root,
-                                &pivot_hash,
-                                inner.arena[arena_index].height,
-                            )
-                            .expect("No db error");
-                        storage_manager
-                            .in_progress_snapshoting_tasks
-                            .write()
-                            .remove(&pivot_hash)
-                            .expect("Just inserted")
-                            .thread
-                            .join()
-                            .unwrap();
-                        storage_manager
-                            .get_delta_mpt(&pivot_hash)
-                            .expect("No db error");
-                    }
-                }
-                parent_snapshot_id = pivot_hash;
             }
         }
     }

@@ -136,10 +136,10 @@ impl RangedManifest {
     pub fn load(
         snapshot_epoch_id: &EpochId, start_key: Option<Vec<u8>>,
         storage_manager: &StorageManager,
-    ) -> Result<Option<RangedManifest>, Error>
+    ) -> Result<Option<(RangedManifest, MerkleHash)>, Error>
     {
         debug!(
-            "begin to load manifest, checkpoint = {:?}, start_key = {:?}",
+            "begin to load manifest, snapshot_epoch_id = {:?}, start_key = {:?}",
             snapshot_epoch_id, start_key
         );
 
@@ -159,6 +159,7 @@ impl RangedManifest {
             }
         };
         let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_read_only()?;
+        let merkle_root = snapshot_mpt.merkle_root;
         let mut slicer = match start_key {
             Some(ref key) => MptSlicer::new_from_key(&mut snapshot_mpt, key)?,
             None => MptSlicer::new(&mut snapshot_mpt)?,
@@ -200,7 +201,7 @@ impl RangedManifest {
             manifest.next
         );
 
-        Ok(Some(manifest))
+        Ok(Some((manifest, merkle_root)))
     }
 }
 
@@ -256,28 +257,29 @@ impl Chunk {
     }
 
     pub fn load(
-        checkpoint: &H256, chunk_key: &ChunkKey,
+        snapshot_epoch_id: &H256, chunk_key: &ChunkKey,
         storage_manager: &StorageManager,
     ) -> Result<Option<Chunk>, Error>
     {
         debug!(
-            "begin to load chunk, checkpoint = {:?}, key = {:?}",
-            checkpoint, chunk_key
+            "begin to load chunk, snapshot_epoch_id = {:?}, key = {:?}",
+            snapshot_epoch_id, chunk_key
         );
 
         let snapshot_db_manager =
             storage_manager.get_storage_manager().get_snapshot_manager();
 
-        let mut snapshot_db =
-            match snapshot_db_manager.get_snapshot_by_epoch_id(checkpoint)? {
-                Some(db) => db,
-                None => {
-                    debug!(
+        let mut snapshot_db = match snapshot_db_manager
+            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
+        {
+            Some(db) => db,
+            None => {
+                debug!(
                     "failed to load chunk, cannot find snapshot by checkpoint"
                 );
-                    return Ok(None);
-                }
-            };
+                return Ok(None);
+            }
+        };
 
         let mut kv_iterator = snapshot_db.snapshot_kv_iterator();
         let lower_bound_incl =
