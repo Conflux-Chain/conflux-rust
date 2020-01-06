@@ -81,6 +81,11 @@ error_chain! {
             display("Failed to create new snapshot by COW. Use XFS on linux or APFS on Mac."),
         }
 
+        SnapshotCopyFailure {
+            description("Failed to directly copy a snapshot."),
+            display("Failed to copy a snapshot."),
+        }
+
         SnapshotNotFound {
             description("Snapshot file not found."),
             display("Snapshot file not found."),

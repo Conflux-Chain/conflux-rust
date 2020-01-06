@@ -55,11 +55,12 @@ impl SnapshotDbManagerSqlite {
                 .arg("-R --reflink=always")
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path);
-        } else if cfg!(target_os = "mac") {
+        } else if cfg!(target_os = "macos") {
             // APFS
             command = Command::new("cp");
             command
-                .arg("-R -c")
+                .arg("-R")
+                .arg("-c")
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path);
         } else {
@@ -86,6 +87,28 @@ impl SnapshotDbManagerSqlite {
             }
         } else {
             Ok(true)
+        }
+    }
+
+    fn try_copy_snapshot(
+        &self, old_snapshot_path: &str, new_snapshot_path: &str,
+    ) -> Result<()> {
+        if self
+            .try_make_snapshot_cow_copy(old_snapshot_path, new_snapshot_path)?
+        {
+            Ok(())
+        } else {
+            let mut options = CopyOptions::new();
+            options.copy_inside = true; // copy recursively like `cp -r`
+            fs_extra::dir::copy(old_snapshot_path, new_snapshot_path, &options)
+                .map(|_| ())
+                .map_err(|e| {
+                    warn!(
+                        "Fail to copy snapshot {:?}, err={:?}",
+                        old_snapshot_path, e,
+                    );
+                    ErrorKind::SnapshotCopyFailure.into()
+                })
         }
     }
 
@@ -125,6 +148,7 @@ impl SnapshotDbManagerSqlite {
     {
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
             &self.get_snapshot_db_path(old_snapshot_epoch_id),
+            true,
         )?;
         let mut old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
@@ -225,13 +249,17 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge()?
                 } else {
-                    if self.try_make_snapshot_cow_copy(
-                        &self.get_snapshot_db_path(old_snapshot_epoch_id),
-                        &temp_db_path,
-                    )? {
+                    if self
+                        .try_copy_snapshot(
+                            &self.get_snapshot_db_path(old_snapshot_epoch_id),
+                            &temp_db_path,
+                        )
+                        .is_ok()
+                    {
                         // open the copied database.
                         snapshot_db =
-                            Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+                            Self::SnapshotDb::open(&temp_db_path, false)?
+                                .unwrap();
 
                         // Drop copied old snapshot delta mpt dump
                         snapshot_db.drop_delta_mpt_dump()?;
@@ -269,6 +297,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         } else {
             Self::SnapshotDb::open(
                 &self.get_snapshot_db_path(snapshot_epoch_id),
+                true,
             )
         }
     }
@@ -310,6 +339,7 @@ use crate::storage::{
     StorageConfiguration,
 };
 use cfx_types::H256;
+use fs_extra::dir::CopyOptions;
 use parity_bytes::ToPretty;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{collections::HashMap, fs, process::Command};

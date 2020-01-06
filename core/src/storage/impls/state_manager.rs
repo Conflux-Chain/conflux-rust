@@ -283,7 +283,7 @@ impl StateManager {
             // When the delta_height is set to None (e.g. in tests), we
             // assume that the snapshot shift check is
             // disabled.
-
+            
             snapshot_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_epoch_id = parent_state_index.epoch_id;
             match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
