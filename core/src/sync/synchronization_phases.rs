@@ -291,11 +291,18 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
 
 pub struct CatchUpCheckpointPhase {
     state_sync: Arc<SnapshotChunkSync>,
+
+    /// Is `true` if we have the state locally and do not need to sync
+    /// checkpoints. Only set when the phase starts.
+    has_state: AtomicBool,
 }
 
 impl CatchUpCheckpointPhase {
     pub fn new(state_sync: Arc<SnapshotChunkSync>) -> Self {
-        CatchUpCheckpointPhase { state_sync }
+        CatchUpCheckpointPhase {
+            state_sync,
+            has_state: AtomicBool::new(false),
+        }
     }
 }
 
@@ -309,6 +316,9 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        if self.has_state.load(AtomicOrdering::SeqCst) {
+            return SyncPhaseType::CatchUpRecoverBlockFromDB;
+        }
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         self.state_sync
             .update_status(epoch_to_sync, io, sync_handler);
@@ -340,6 +350,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .get_epoch_execution_commitment_with_db(&epoch_to_sync)
             .is_some();
         if has_state {
+            self.has_state.store(true, AtomicOrdering::SeqCst);
             return;
         }
 
