@@ -570,20 +570,16 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 
         let key_prefix: CompressedPathRaw;
         match trie_node_ref.walk::<Write>(key_remaining) {
-            WalkStop::ChildNotFound {
-                key_remaining: _,
-                child_index: _,
-            } => return Ok(None),
+            WalkStop::ChildNotFound { .. } => return Ok(None),
             WalkStop::Arrived => {
                 // To enumerate the subtree.
                 key_prefix = key.into();
             }
             WalkStop::PathDiverted {
                 key_child_index,
-                key_remaining: _,
-                matched_path: _,
                 unmatched_child_index,
                 unmatched_path_remaining,
+                ..
             } => {
                 if key_child_index.is_some() {
                     return Ok(None);
@@ -598,7 +594,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             WalkStop::Descent {
                 key_remaining,
                 child_node,
-                child_index: _,
+                ..
             } => {
                 let values = self
                     .new_visitor_for_subtree(child_node.clone().into())
