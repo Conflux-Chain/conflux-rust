@@ -261,6 +261,19 @@ impl StateManager {
             // When the delta_height is set to None (e.g. in tests), we
             // assume that the snapshot shift check is
             // disabled.
+            let mut in_progress =
+                self.storage_manager.in_progress_snapshoting_tasks.write();
+            if let Some(snapshot_info) =
+                in_progress.remove(&parent_state_index.intermediate_epoch_id)
+            {
+                // join the thread while locking in_progress_snapshoting_tasks,
+                // so those who lock after this thread can read finished
+                // snapshots directly
+                snapshot_info
+                    .thread
+                    .join()
+                    .expect("snapshot making thread should not panic");
+            }
 
             (
                 parent_state_index.intermediate_epoch_id,
