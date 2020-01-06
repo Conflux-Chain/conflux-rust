@@ -196,7 +196,7 @@ impl StorageManager {
 
         let mut snapshot_associated_mpts_locked =
             storage_manager.snapshot_associated_mpts_by_epoch.write();
-        let maybe_snapshot_entry =
+        let mut maybe_snapshot_entry =
             snapshot_associated_mpts_locked.get_mut(snapshot_epoch_id);
         if maybe_snapshot_entry.is_none() {
             bail!(ErrorKind::SnapshotNotFound);
@@ -220,7 +220,13 @@ impl StorageManager {
                 storage_manager.clone(),
             ));
 
-            maybe_snapshot_entry.unwrap().1 = Some(arc_delta_mpt.clone());
+            maybe_snapshot_entry.as_mut().unwrap().1 =
+                Some(arc_delta_mpt.clone());
+            // For Genesis snapshot, the intermediate MPT is the same as the
+            // delta MPT.
+            if snapshot_epoch_id.eq(&NULL_EPOCH) {
+                maybe_snapshot_entry.unwrap().0 = Some(arc_delta_mpt.clone());
+            }
 
             return Ok(arc_delta_mpt);
         }
@@ -398,24 +404,6 @@ impl StorageManager {
         Ok(())
     }
 
-    pub fn reregister_genesis_snapshot(
-        &self, genesis_epoch_id: &EpochId,
-    ) -> Result<()> {
-        debug!(
-            "reregister_genesis_snapshot: epoch_id={:?}",
-            genesis_epoch_id
-        );
-        let mut mpts = self.snapshot_associated_mpts_by_epoch.write();
-        let old_genesis_mpts = mpts
-            .get_mut(genesis_epoch_id)
-            .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-        if old_genesis_mpts.0.is_some() {
-            bail!(ErrorKind::DeltaMPTAlreadyExists);
-        }
-        mem::swap(&mut old_genesis_mpts.0, &mut old_genesis_mpts.1);
-        Ok(())
-    }
-
     /// This function is made public only for testing.
     pub fn register_new_snapshot(
         &self, new_snapshot_info: SnapshotInfo,
@@ -431,9 +419,37 @@ impl StorageManager {
         //
         // It can't happen when the parent's delta mpt is still empty we
         // are already making the snapshot.
-        let maybe_intermediate_delta_mpt = snapshot_associated_mpts_locked
+        //
+        // But when we synced a new snapshot, the parent snapshot may not be
+        // available at all, so when maybe_intermediate_delta_mpt is empty,
+        // create it.
+        let maybe_intermediate_delta_mpt = match snapshot_associated_mpts_locked
             .get(&new_snapshot_info.parent_snapshot_epoch_id)
-            .map(|x| x.1.clone().unwrap());
+        {
+            None => {
+                // The case when we synced a new snapshot and the parent
+                // snapshot isn't available.
+                snapshot_associated_mpts_locked.insert(
+                    new_snapshot_info.parent_snapshot_epoch_id.clone(),
+                    (None, None),
+                );
+                let parent_delta_mpt =
+                    Some(StorageManager::new_or_get_delta_mpt(
+                        // The StorageManager is maintained in Arc so it's
+                        // fine to call
+                        // this unsafe function.
+                        unsafe { shared_from_this(self) },
+                        &new_snapshot_info.parent_snapshot_epoch_id,
+                    )?);
+                snapshot_associated_mpts_locked
+                    .remove(&new_snapshot_info.parent_snapshot_epoch_id);
+
+                parent_delta_mpt
+            }
+            Some(parent_snapshot_associated_mpts) => {
+                parent_snapshot_associated_mpts.1.clone()
+            }
+        };
         snapshot_associated_mpts_locked.insert(
             snapshot_epoch_id.clone(),
             (maybe_intermediate_delta_mpt, None),
@@ -880,7 +896,7 @@ use sqlite::Statement;
 use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
-    fs, mem,
+    fs,
     path::Path,
     sync::{Arc, Weak},
     thread,
