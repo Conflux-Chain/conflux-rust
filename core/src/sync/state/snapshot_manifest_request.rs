@@ -34,12 +34,16 @@ pub struct SnapshotManifestRequest {
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         // TODO Handle the case where we cannot serve the snapshot
+        let snapshot_merkle_root;
         let manifest = match RangedManifest::load(
             &self.snapshot_epoch_id,
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
         ) {
-            Ok(Some(m)) => m,
+            Ok(Some((m, merkle_root))) => {
+                snapshot_merkle_root = merkle_root;
+                m
+            }
             _ => {
                 // FIXME: Unable to offer. Define Response and reply.
                 return Ok(());
@@ -49,51 +53,17 @@ impl Handleable for SnapshotManifestRequest {
         let (state_root_vec, receipt_blame_vec, bloom_blame_vec) =
             self.get_blame_states(ctx).unwrap_or_default();
         let block_receipts = self.get_block_receipts(ctx).unwrap_or_default();
-        let trusted_snapshot_blame_block = ctx
-            .manager
-            .graph
-            .consensus
-            .get_trusted_blame_block_for_snapshot(&self.snapshot_epoch_id)
-            .unwrap();
-        // TODO Ensure the state_root is pointed to snapshot_epoch_id
-        let block_with_trusted_state_root = ctx
-            .manager
-            .graph
-            .data_man
-            .get_parent_epochs_for(
-                trusted_snapshot_blame_block,
-                DEFERRED_STATE_EPOCH_COUNT,
-            )
-            .0;
-        let snapshot_state_root = ctx
-            .manager
-            .graph
-            .data_man
-            .get_epoch_execution_commitment_with_db(
-                &block_with_trusted_state_root,
-            )
-            .unwrap()
-            .state_root_with_aux_info
-            .state_root;
-        assert_eq!(
-            snapshot_state_root.compute_state_root_hash(),
-            *ctx.manager
-                .graph
-                .data_man
-                .block_header_by_hash(&trusted_snapshot_blame_block)
-                .unwrap()
-                .deferred_state_root()
-        );
-        debug!("handle SnapshotManifestRequest: return snapshot_state_root={:?} in block {:?}", snapshot_state_root, trusted_snapshot_blame_block);
+
+        debug!("handle SnapshotManifestRequest {:?}", self,);
         ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
-            checkpoint: self.snapshot_epoch_id.clone(),
+            snapshot_epoch_id: self.snapshot_epoch_id.clone(),
             manifest,
             state_root_vec,
             receipt_blame_vec,
             bloom_blame_vec,
             block_receipts,
-            snapshot_state_root,
+            snapshot_merkle_root,
         })
     }
 }
@@ -180,12 +150,12 @@ impl SnapshotManifestRequest {
             .graph
             .data_man
             .block_header_by_hash(&self.trusted_blame_block?)?;
-        let checkpoint_block = ctx
+        let snapshot_epoch_block = ctx
             .manager
             .graph
             .data_man
             .block_header_by_hash(&self.snapshot_epoch_id)?;
-        if trusted_block.height() < checkpoint_block.height() {
+        if trusted_block.height() < snapshot_epoch_block.height() {
             warn!(
                 "receive invalid snapshot manifest request from peer={}",
                 ctx.peer
@@ -206,15 +176,15 @@ impl SnapshotManifestRequest {
                 .parent_hash();
         }
 
-        let min_vec_len = if checkpoint_block.height() == 0 {
+        let min_vec_len = if snapshot_epoch_block.height() == 0 {
             trusted_block.height()
                 - DEFERRED_STATE_EPOCH_COUNT
-                - checkpoint_block.height()
+                - snapshot_epoch_block.height()
                 + 1
         } else {
             trusted_block.height()
                 - DEFERRED_STATE_EPOCH_COUNT
-                - checkpoint_block.height()
+                - snapshot_epoch_block.height()
                 + REWARD_EPOCH_COUNT
         };
         let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);

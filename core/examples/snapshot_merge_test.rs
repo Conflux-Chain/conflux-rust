@@ -12,7 +12,8 @@ use cfxcore::{
         storage_db::{
             KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo,
         },
-        DeltaMptIterator, StateIndex, StateRootAuxInfo, StorageConfiguration,
+        DeltaMptIterator, StateIndex, StateRootAuxInfo, StateRootWithAuxInfo,
+        StorageConfiguration,
     },
     sync::Error,
 };
@@ -23,7 +24,7 @@ use log4rs::{
     config::{Appender, Config, Root},
 };
 use primitives::{
-    Account, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
+    Account, MerkleHash, StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
     cmp::min,
@@ -71,15 +72,7 @@ fn main() -> Result<(), Error> {
     let (genesis_hash, _) = initialize_genesis(&state_manager)?;
     let accounts = arg_val(&matches, "accounts");
     let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
-    let aux_info1 = StateRootAuxInfo {
-        snapshot_epoch_id: NULL_EPOCH,
-        intermediate_epoch_id: NULL_EPOCH,
-        maybe_intermediate_mpt_key_padding: None,
-        delta_mpt_key_padding: StorageKey::delta_mpt_padding(
-            &MERKLE_NULL_NODE,
-            &MERKLE_NULL_NODE,
-        ),
-    };
+    let state_root_1 = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
     let mut height = 0;
     let (snapshot1_epoch, snapshot1_delta_root) = prepare_state(
         &state_manager,
@@ -88,8 +81,8 @@ fn main() -> Result<(), Error> {
         accounts,
         accounts_per_epoch,
         &mut accounts_map,
-        &aux_info1,
-        &aux_info1,
+        &state_root_1,
+        &state_root_1,
     )?;
     // Force other internal snapshot-related logic to be triggered
     height = storage_manager.get_snapshot_epoch_count() as u64;
@@ -121,16 +114,26 @@ fn main() -> Result<(), Error> {
     )?;
     storage_manager.register_new_snapshot(snapshot_info1.clone())?;
     println!("After merging: {:?}", snapshot_info1);
-    let aux_info2 = StateRootAuxInfo {
-        snapshot_epoch_id: NULL_EPOCH,
-        intermediate_epoch_id: snapshot1_epoch,
-        maybe_intermediate_mpt_key_padding: Some(
-            StorageKey::delta_mpt_padding(&MERKLE_NULL_NODE, &MERKLE_NULL_NODE),
-        ),
-        delta_mpt_key_padding: StorageKey::delta_mpt_padding(
-            &MERKLE_NULL_NODE,
-            &snapshot1_delta_root,
-        ),
+    let state_root_2 = StateRootWithAuxInfo {
+        state_root: StateRoot {
+            snapshot_root: MERKLE_NULL_NODE,
+            intermediate_delta_root: snapshot1_delta_root,
+            delta_root: MERKLE_NULL_NODE,
+        },
+        aux_info: StateRootAuxInfo {
+            snapshot_epoch_id: NULL_EPOCH,
+            intermediate_epoch_id: snapshot1_epoch,
+            maybe_intermediate_mpt_key_padding: Some(
+                StorageKey::delta_mpt_padding(
+                    &MERKLE_NULL_NODE,
+                    &MERKLE_NULL_NODE,
+                ),
+            ),
+            delta_mpt_key_padding: StorageKey::delta_mpt_padding(
+                &MERKLE_NULL_NODE,
+                &snapshot1_delta_root,
+            ),
+        },
     };
     let (snapshot2_epoch, snapshot2_delta_root) = prepare_state(
         &state_manager,
@@ -139,8 +142,8 @@ fn main() -> Result<(), Error> {
         accounts,
         accounts_per_epoch,
         &mut accounts_map,
-        &aux_info1,
-        &aux_info2,
+        &state_root_1,
+        &state_root_2,
     )?;
     // Force other internal snapshot-related logic to be triggered
     height = 2 as u64 * storage_manager.get_snapshot_epoch_count() as u64;
@@ -186,15 +189,7 @@ fn main() -> Result<(), Error> {
         assert_eq!(account_bytes.as_slice(), get_bytes.as_ref());
     }
     // TODO Make snapshot3 to compare the snapshot merkle_root
-    let aux_info3 = StateRootAuxInfo {
-        snapshot_epoch_id: NULL_EPOCH,
-        intermediate_epoch_id: NULL_EPOCH,
-        maybe_intermediate_mpt_key_padding: None,
-        delta_mpt_key_padding: StorageKey::delta_mpt_padding(
-            &MERKLE_NULL_NODE,
-            &MERKLE_NULL_NODE,
-        ),
-    };
+    let state_root_3 = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
     height = 0;
     let (snapshot3_epoch, snapshot3_delta_root) = add_accounts(
         &state_manager,
@@ -202,8 +197,8 @@ fn main() -> Result<(), Error> {
         &mut height,
         accounts_per_epoch,
         &accounts_map,
-        &aux_info3,
-        &aux_info3,
+        &state_root_3,
+        &state_root_3,
     )?;
     let delta_mpt = storage_manager
         .get_delta_mpt(&NULL_EPOCH)
@@ -328,7 +323,7 @@ fn initialize_genesis(
 fn prepare_state(
     manager: &StateManager, parent: H256, height: &mut u64, accounts: usize,
     accounts_per_epoch: usize, account_map: &mut HashMap<Address, Account>,
-    old_aux_info: &StateRootAuxInfo, aux_info: &StateRootAuxInfo,
+    old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), Error>
 {
     let mut new_account_map = HashMap::new();
@@ -344,8 +339,8 @@ fn prepare_state(
         height,
         accounts_per_epoch,
         &new_account_map,
-        old_aux_info,
-        aux_info,
+        old_state_root,
+        state_root,
     );
     account_map.extend(new_account_map.into_iter());
     r
@@ -354,7 +349,7 @@ fn prepare_state(
 fn add_accounts(
     manager: &StateManager, parent: H256, height: &mut u64,
     accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
-    old_aux_info: &StateRootAuxInfo, aux_info: &StateRootAuxInfo,
+    old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), Error>
 {
     let accounts = new_account_map.len();
@@ -366,19 +361,19 @@ fn add_accounts(
     while pending > 0 {
         let n = min(accounts_per_epoch, pending);
         let start2 = Instant::now();
-        let aux_info_tmp =
+        let state_root =
             if StateIndex::height_to_delta_height(
                 *height,
                 manager.get_storage_manager().get_snapshot_epoch_count(),
             ) == manager.get_storage_manager().get_snapshot_epoch_count()
             {
-                old_aux_info
+                old_state_root
             } else {
-                aux_info
+                state_root
             };
         let state_index = StateIndex::new_for_next_epoch(
             &epoch_id,
-            aux_info_tmp,
+            state_root,
             *height,
             manager.get_storage_manager().get_snapshot_epoch_count(),
         );
@@ -399,7 +394,9 @@ fn add_accounts(
 
     let root = manager
         // TODO consider snapshot.
-        .get_state_no_commit(StateIndex::new_for_readonly(&epoch_id, aux_info))?
+        .get_state_no_commit(StateIndex::new_for_readonly(
+            &epoch_id, state_root,
+        ))?
         .unwrap()
         .get_state_root()?
         .unwrap()
