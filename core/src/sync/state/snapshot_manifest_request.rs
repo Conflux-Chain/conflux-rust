@@ -87,7 +87,7 @@ impl Handleable for SnapshotManifestRequest {
         debug!("handle SnapshotManifestRequest: return snapshot_state_root={:?} in block {:?}", snapshot_state_root, trusted_snapshot_blame_block);
         ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
-            checkpoint: self.snapshot_epoch_id.clone(),
+            snapshot_epoch_id: self.snapshot_epoch_id.clone(),
             manifest,
             state_root_vec,
             receipt_blame_vec,
@@ -180,12 +180,12 @@ impl SnapshotManifestRequest {
             .graph
             .data_man
             .block_header_by_hash(&self.trusted_blame_block?)?;
-        let checkpoint_block = ctx
+        let snapshot_epoch_block = ctx
             .manager
             .graph
             .data_man
             .block_header_by_hash(&self.snapshot_epoch_id)?;
-        if trusted_block.height() < checkpoint_block.height() {
+        if trusted_block.height() < snapshot_epoch_block.height() {
             warn!(
                 "receive invalid snapshot manifest request from peer={}",
                 ctx.peer
@@ -206,15 +206,15 @@ impl SnapshotManifestRequest {
                 .parent_hash();
         }
 
-        let min_vec_len = if checkpoint_block.height() == 0 {
+        let min_vec_len = if snapshot_epoch_block.height() == 0 {
             trusted_block.height()
                 - DEFERRED_STATE_EPOCH_COUNT
-                - checkpoint_block.height()
+                - snapshot_epoch_block.height()
                 + 1
         } else {
             trusted_block.height()
                 - DEFERRED_STATE_EPOCH_COUNT
-                - checkpoint_block.height()
+                - snapshot_epoch_block.height()
                 + REWARD_EPOCH_COUNT
         };
         let mut state_root_vec = Vec::with_capacity(min_vec_len as usize);

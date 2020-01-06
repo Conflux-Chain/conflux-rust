@@ -321,10 +321,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         match sync_handler
             .graph
             .consensus
-            .get_trusted_blame_block(&epoch_to_sync)
+            .get_trusted_blame_block_for_snapshot(&epoch_to_sync)
         {
             Some(trusted_blame_block) => {
-                if self.state_sync.checkpoint() == epoch_to_sync {
+                if self.state_sync.snapshot_epoch_id() == epoch_to_sync {
                     if self.state_sync.status() == Status::Completed {
                         DynamicCapability::ServeCheckpoint(Some(epoch_to_sync))
                             .broadcast(io, &sync_handler.syn);
