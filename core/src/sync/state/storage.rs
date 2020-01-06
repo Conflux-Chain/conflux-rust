@@ -136,7 +136,7 @@ impl RangedManifest {
     pub fn load(
         snapshot_epoch_id: &EpochId, start_key: Option<Vec<u8>>,
         storage_manager: &StorageManager,
-    ) -> Result<Option<RangedManifest>, Error>
+    ) -> Result<Option<(RangedManifest, MerkleHash)>, Error>
     {
         debug!(
             "begin to load manifest, checkpoint = {:?}, start_key = {:?}",
@@ -159,6 +159,7 @@ impl RangedManifest {
             }
         };
         let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_read_only()?;
+        let merkle_root = snapshot_mpt.merkle_root;
         let mut slicer = match start_key {
             Some(ref key) => MptSlicer::new_from_key(&mut snapshot_mpt, key)?,
             None => MptSlicer::new(&mut snapshot_mpt)?,
@@ -200,7 +201,7 @@ impl RangedManifest {
             manifest.next
         );
 
-        Ok(Some(manifest))
+        Ok(Some((manifest, merkle_root)))
     }
 }
 

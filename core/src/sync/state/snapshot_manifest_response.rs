@@ -11,29 +11,31 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use primitives::StateRoot;
+use primitives::{EpochId, MerkleHash, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
-    pub checkpoint: H256,
+    pub snapshot_epoch_id: EpochId,
     pub manifest: RangedManifest,
-    // We have state_root_vec for two reasons: 1) construct
-    // state_root_blame_vec; 2) construct state_root_with_aux_vec.
+    // We actually need state_root_blame_vec for two epochs: snapshot_epoch_id
+    // and its next snapshot + 1 epoch; and the state_root of snapshot_epoch_id
+    // and the state root of its next snapshot + 1 epoch to get
+    // snapshot_merkle_root of snapshot_epoch_id. The
+    // current implementation passes state_blame_vec for the entire range of
+    // snapshot_epoch_id to its next snapshot's trusted blame block,
+    // which should be improved.
     //
-    // We need state_root_with_aux_vec because we mark the state of
-    // a few epochs as executed, but in the local db we also save the
-    // StateRootAuxInfo, which isn't verifiable, and should be computed
-    // from the consensus graph. Lucky enough that the intermediate_epoch_id
-    // for the snapshot block is itself. So is it for a few following
-    // epochs.
+    // TODO: reduce the data to pass over network.
     pub state_root_vec: Vec<StateRoot>,
     pub receipt_blame_vec: Vec<H256>,
     pub bloom_blame_vec: Vec<H256>,
     pub block_receipts: Vec<BlockExecutionResult>,
 
-    pub snapshot_state_root: StateRoot,
+    // Debug only field.
+    // TODO: can be deleted later.
+    pub snapshot_merkle_root: MerkleHash,
 }
 
 impl Handleable for SnapshotManifestResponse {
@@ -65,11 +67,11 @@ impl SnapshotManifestResponse {
     fn validate(
         &self, _: &Context, request: &SnapshotManifestRequest,
     ) -> Result<(), Error> {
-        if self.checkpoint != request.snapshot_epoch_id {
+        if self.snapshot_epoch_id != request.snapshot_epoch_id {
             debug!(
                 "Responded snapshot manifest checkpoint mismatch, requested = {:?}, responded = {:?}",
                 request.snapshot_epoch_id,
-                self.checkpoint,
+                self.snapshot_epoch_id,
             );
             bail!(ErrorKind::Invalid);
         }
