@@ -77,7 +77,7 @@ impl Handleable for StateSyncCandidateRequest {
 
 impl Request for StateSyncCandidateRequest {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
-        conf.snapshot_sync_request_timeout
+        conf.snapshot_candidate_request_timeout_ms
     }
 
     fn on_removed(&self, _inflight_keys: &KeyContainer) {}
@@ -86,9 +86,7 @@ impl Request for StateSyncCandidateRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        Some(Box::new(self.clone()))
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 
     fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

@@ -21,6 +21,7 @@ use crate::{
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
+        StateSyncConfiguration,
     },
 };
 use cfx_types::H256;
@@ -250,7 +251,9 @@ pub struct ProtocolConfiguration {
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
-    pub snapshot_sync_request_timeout: Duration,
+    pub snapshot_candidate_request_timeout_ms: Duration,
+    pub snapshot_manifest_request_timeout_ms: Duration,
+    pub snapshot_chunk_request_timeout_ms: Duration,
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub received_tx_index_maintain_timeout: Duration,
@@ -270,6 +273,7 @@ pub struct ProtocolConfiguration {
 impl SynchronizationProtocolHandler {
     pub fn new(
         is_full_node: bool, protocol_config: ProtocolConfiguration,
+        state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
         light_provider: Arc<LightProvider>,
@@ -285,9 +289,7 @@ impl SynchronizationProtocolHandler {
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
 
-        let state_sync = Arc::new(SnapshotChunkSync::new(
-            protocol_config.max_download_state_peers,
-        ));
+        let state_sync = Arc::new(SnapshotChunkSync::new(state_sync_config));
 
         Self {
             protocol_config,

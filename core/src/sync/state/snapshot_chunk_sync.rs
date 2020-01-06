@@ -36,10 +36,10 @@ use primitives::{
 };
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     fmt::{Debug, Formatter, Result},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 #[derive(Copy, Clone, PartialEq)]
@@ -81,6 +81,7 @@ struct Inner {
 
     /// The checkpoint whose state is being synced
     checkpoint: H256,
+    manifest_request_status: Option<(Instant, PeerId)>,
 
     trusted_blame_block: H256,
     status: Status,
@@ -94,9 +95,9 @@ struct Inner {
     epoch_receipts: Vec<(H256, H256, Arc<Vec<Receipt>>)>,
     snapshot_info: SnapshotInfo,
 
-    // download
     pending_chunks: VecDeque<ChunkKey>,
-    downloading_chunks: HashSet<ChunkKey>,
+    /// status of downloading chunks
+    downloading_chunks: HashMap<ChunkKey, DownloadingChunkStatus>,
     num_downloaded: usize,
 
     // restore
@@ -213,18 +214,14 @@ impl Debug for Inner {
 
 pub struct SnapshotChunkSync {
     inner: Arc<RwLock<Inner>>,
-    max_download_peers: usize,
+    config: StateSyncConfiguration,
 }
 
 impl SnapshotChunkSync {
-    pub fn new(max_download_peers: usize) -> Self {
+    pub fn new(config: StateSyncConfiguration) -> Self {
         SnapshotChunkSync {
             inner: Default::default(),
-            max_download_peers: if max_download_peers == 0 {
-                1
-            } else {
-                max_download_peers
-            },
+            config,
         }
     }
 
@@ -409,7 +406,7 @@ impl SnapshotChunkSync {
         // request snapshot chunks from peers concurrently
         let chosen_peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
             .choose_from(inner.sync_candidate_manager.active_peers())
-            .select_n(self.max_download_peers, &ctx.manager.syn);
+            .select_n(self.config.max_download_peers, &ctx.manager.syn);
 
         for peer in chosen_peers {
             if self.request_chunk(ctx, &mut inner, peer).is_none() {
@@ -431,7 +428,16 @@ impl SnapshotChunkSync {
         &self, ctx: &Context, inner: &mut Inner, peer: PeerId,
     ) -> Option<ChunkKey> {
         let chunk_key = inner.pending_chunks.pop_front()?;
-        assert!(inner.downloading_chunks.insert(chunk_key.clone()));
+        assert!(inner
+            .downloading_chunks
+            .insert(
+                chunk_key.clone(),
+                DownloadingChunkStatus {
+                    peer,
+                    start_time: Instant::now(),
+                }
+            )
+            .is_none());
 
         let request = SnapshotChunkRequest::new(
             inner.checkpoint.clone(),
@@ -474,7 +480,7 @@ impl SnapshotChunkSync {
         };
 
         // maybe received a out-of-date snapshot chunk, e.g. new era started
-        if !inner.downloading_chunks.remove(&chunk_key) {
+        if inner.downloading_chunks.remove(&chunk_key).is_none() {
             info!("Snapshot chunk received, but not in downloading queue");
             // FIXME Handle out-of-date chunks
             inner
@@ -862,6 +868,7 @@ impl SnapshotChunkSync {
     )
     {
         let mut inner = self.inner.write();
+        self.check_timeout(&mut *inner);
         if inner.sync_candidate_manager.is_inactive() {
             inner.status = Status::Inactive;
             inner.checkpoint = Default::default();
@@ -879,6 +886,8 @@ impl SnapshotChunkSync {
             // state sync started, so we only need to check if it's completed
             if inner.status == Status::Completed {
                 return;
+            } else if inner.sync_candidate_manager.active_peers().is_empty() {
+                inner.request_manifest(io, sync_handler);
             }
         } else if inner.status == Status::RequestingCandidates
             && inner.checkpoint == H256::default()
@@ -924,4 +933,44 @@ impl SnapshotChunkSync {
             inner.start_candidate_sync(candidates, io, sync_handler)
         }
     }
+
+    fn check_timeout(&self, inner: &mut Inner) {
+        inner
+            .sync_candidate_manager
+            .check_timeout(&self.config.candidate_request_timeout);
+        if let Some((manifest_start_time, peer)) =
+            &inner.manifest_request_status
+        {
+            if manifest_start_time.elapsed()
+                > self.config.manifest_request_timeout
+            {
+                inner.sync_candidate_manager.note_state_sync_failure(peer)
+            }
+        }
+        let mut timeout_chunks = Vec::new();
+        for (chunk_key, status) in &inner.downloading_chunks {
+            if status.start_time.elapsed() > self.config.chunk_request_timeout {
+                inner
+                    .sync_candidate_manager
+                    .note_state_sync_failure(&status.peer);
+                timeout_chunks.push(chunk_key.clone());
+            }
+        }
+        for timeout_key in timeout_chunks {
+            inner.downloading_chunks.remove(&timeout_key);
+            inner.pending_chunks.push_back(timeout_key);
+        }
+    }
+}
+
+pub struct StateSyncConfiguration {
+    pub max_download_peers: usize,
+    pub candidate_request_timeout: Duration,
+    pub chunk_request_timeout: Duration,
+    pub manifest_request_timeout: Duration,
+}
+
+struct DownloadingChunkStatus {
+    peer: PeerId,
+    start_time: Instant,
 }

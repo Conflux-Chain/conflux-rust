@@ -1,7 +1,35 @@
 use crate::{message::PeerId, sync::state::storage::SnapshotSyncCandidate};
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashSet},
+    time::{Duration, Instant},
+};
 
+/// 1. Send CandidateRequest to all peers and set them to `pending_peers`.
+///     1.1: All peers respond before timeout, we choose one candidate and start
+///         state sync.
+///     1.2: Some peers timeout.
+///         1.2.1: Have available candidates, we choose one and enter step 2.
+///             `pending_peers` is cleared before entering step 2.
+///         1.2.2: No available candidates, reset the status and restart step 1.
+/// 2. Send ManifestRequest to some random peer in `active_peers`.
+///     2.1: Valid manifest received, move on to step 3.
+///     2.2: Timeout/invalid/empty response. Remove from `active_peers`.
+///         2.2.1: Have more available `active_peers`, restart step 2.
+///         2.2.2: `active_peers` is empty, reset and restart step 1.
+/// 3. Send ChunkRequest to multiple peers in `active_peers`.
+///     3.1: Valid chunks received.
+///         3.1.1: All chunks received, set state_sync.status to Completed.
+///         3.1.2: More chunks to request. Request from `active_peers`.
+///     3.2: Timeout/invalid/empty response. Remove from `active_peers`.
+///         3.2.1: Have more available `active_peers`, push this chunk key
+///             back into the `pending_chunks` for later requesting.
+///         3.2.2: `active_peers` is empty, reset and restart step 1.
+///
+/// All step start/restart are triggered by the periodic check of phase change.
 pub struct StateSyncCandidateManager {
+    /// The starting time of the ongoing candidate requesting
+    start_time: Instant,
+
     /// The map from state candidates to the set of peers that can support this
     /// state
     candidates: BTreeMap<SnapshotSyncCandidate, HashSet<PeerId>>,
@@ -19,6 +47,7 @@ pub struct StateSyncCandidateManager {
 impl StateSyncCandidateManager {
     fn new() -> Self {
         Self {
+            start_time: Instant::now(),
             candidates: BTreeMap::new(),
             pending_peers: Default::default(),
             active_candidate: None,
@@ -33,6 +62,7 @@ impl StateSyncCandidateManager {
         for candidate in candidates {
             candidates_map.insert(candidate, HashSet::new());
         }
+        self.start_time = Instant::now();
         self.candidates = candidates_map;
         self.pending_peers = peers.into_iter().collect();
         self.active_candidate = None;
@@ -130,6 +160,15 @@ impl StateSyncCandidateManager {
                 self.active_candidate = Some(candidate.clone());
                 self.active_peers = peer_set.clone();
             }
+        }
+    }
+
+    pub fn check_timeout(&mut self, candidate_timeout: &Duration) {
+        if !self.pending_peers.is_empty()
+            && self.start_time.elapsed() > *candidate_timeout
+        {
+            self.pending_peers.clear();
+            self.set_active_candidate();
         }
     }
 
