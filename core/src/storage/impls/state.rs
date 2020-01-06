@@ -264,9 +264,11 @@ impl<'a> StateTrait for State<'a> {
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
         self.pre_modification();
+        // TODO: add unit tests
 
-        match &self.delta_trie_root {
-            None => Ok(None),
+        // Retrieve and delete key/value pairs from delta trie
+        let delta_trie_kvs = match &self.delta_trie_root {
+            None => None,
             Some(old_root_node) => {
                 let delta_mpt_key_prefix = access_key_prefix
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
@@ -278,9 +280,92 @@ impl<'a> StateTrait for State<'a> {
                 .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
-                Ok(deleted)
+                deleted
+            }
+        };
+
+        // Retrieve key/value pairs from intermediate trie
+        let intermediate_trie_kvs = match &self.intermediate_trie_root {
+            None => None,
+            Some(root_node) => {
+                if self.maybe_intermediate_trie_key_padding.is_some()
+                    && self.maybe_intermediate_trie.is_some()
+                {
+                    let intermediate_trie_key_padding = self
+                        .maybe_intermediate_trie_key_padding
+                        .as_ref()
+                        .unwrap();
+                    let intermediate_mpt_key_prefix = access_key_prefix
+                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                    let values = SubTrieVisitor::new(
+                        self.maybe_intermediate_trie.as_ref().unwrap(),
+                        root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .traversal(
+                        &intermediate_mpt_key_prefix,
+                        &intermediate_mpt_key_prefix,
+                    )?;
+
+                    values
+                } else {
+                    None
+                }
+            }
+        };
+
+        // Retrieve key/value pairs from snapshot
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let mut upper_bound_excl = lower_bound_incl.clone();
+        if *upper_bound_excl.last().unwrap() == 255 {
+            upper_bound_excl.push(0);
+        } else {
+            *upper_bound_excl.last_mut().unwrap() += 1;
+        }
+        let mut kvs = kv_iterator.iter_range(
+            lower_bound_incl.as_slice(),
+            Some(upper_bound_excl.as_slice()),
+        )?;
+
+        let mut snapshot_kvs = Vec::new();
+        while let Some((key, value)) = kvs.next()? {
+            snapshot_kvs.push((key, value.into_boxed_slice()));
+        }
+
+        let mut result = Vec::new();
+        let mut deleted_keys = HashSet::new();
+        if let Some(kvs) = delta_trie_kvs {
+            for (k, v) in kvs {
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
             }
         }
+        if let Some(kvs) = intermediate_trie_kvs {
+            for (k, v) in kvs {
+                self.delete(StorageKey::from_key_bytes(&k))?;
+                if !deleted_keys.contains(&k) {
+                    deleted_keys.insert(k.clone());
+                    if v.len() > 0 {
+                        result.push((k, v));
+                    }
+                }
+            }
+        }
+
+        for (k, v) in snapshot_kvs {
+            self.delete(StorageKey::from_key_bytes(&k))?;
+            if !deleted_keys.contains(&k) {
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+
+        Ok(Some(result))
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
@@ -605,6 +690,7 @@ use crate::storage::{
     storage_db::*,
     StateRootAuxInfo, StateRootWithAuxInfo,
 };
+use fallible_iterator::FallibleIterator;
 use parity_bytes::ToPretty;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,
@@ -612,7 +698,7 @@ use primitives::{
 };
 use std::{
     cell::UnsafeCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };
