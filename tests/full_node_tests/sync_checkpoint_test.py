@@ -30,7 +30,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for _ in range(num):
             addr = client.rand_addr()
             tx_gas = client.DEFAULT_TX_GAS
-            tx = client.new_tx(receiver=addr, nonce=self.genesis_nonce, value=0, gas=tx_gas, data=b'')
+            tx = client.new_tx(receiver=addr, nonce=self.genesis_nonce, value=21000, gas=tx_gas, data=b'')
             self.genesis_nonce += 1
             txs.append(tx)
         return txs
@@ -43,7 +43,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         self.genesis_nonce = client.get_nonce(client.GENESIS_ADDR)
         for _ in range(num_blocks):
-            txs = self._generate_txs(0, random.randint(5, 10))
+            txs = self._generate_txs(0, random.randint(50, 100))
             client.generate_block_with_fake_txs(txs)
 
         # Start node[1] as full node to sync checkpoint
