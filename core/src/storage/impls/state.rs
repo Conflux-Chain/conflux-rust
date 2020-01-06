@@ -238,8 +238,9 @@ impl<'a> StateTrait for State<'a> {
         Ok(())
     }
 
-    fn delete(&mut self, access_key: StorageKey) -> Result<()> {
+    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.pre_modification();
+        let old_value = self.get(access_key)?;
 
         match self.get_delta_root_node() {
             None => {}
@@ -257,7 +258,7 @@ impl<'a> StateTrait for State<'a> {
                 .into();
             }
         }
-        Ok(())
+        Ok(old_value)
     }
 
     /// Delete all key/value pairs with access_key_prefix as prefix. These
@@ -360,6 +361,8 @@ impl<'a> StateTrait for State<'a> {
         let mut deleted_keys = HashSet::new();
         if let Some(kvs) = delta_trie_kvs {
             for (k, v) in kvs {
+                let storage_key = StorageKey::from_key_bytes(&k);
+                let k = storage_key.to_key_bytes();
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
@@ -374,10 +377,7 @@ impl<'a> StateTrait for State<'a> {
                 if v.len() > 0 {
                     self.delete(storage_key)?;
                 }
-                // Convert the key to `delta_mpt_key_bytes` used in Delta Trie
-                // for consistency.
-                let k = storage_key
-                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+                let k = storage_key.to_key_bytes();
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
@@ -393,10 +393,7 @@ impl<'a> StateTrait for State<'a> {
             if v.len() > 0 {
                 self.delete(storage_key)?;
             }
-            // Convert the key to `delta_mpt_key_bytes` used in Delta Trie
-            // for consistency.
-            let k = storage_key
-                .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+            let k = storage_key.to_key_bytes();
             if !deleted_keys.contains(&k) {
                 if v.len() > 0 {
                     result.push((k, v));
