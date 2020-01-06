@@ -24,7 +24,7 @@ pub trait StateTrait {
     // Actions.
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
-    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
+    fn delete(&mut self, access_key: StorageKey) -> Result<()>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.
     fn delete_all(

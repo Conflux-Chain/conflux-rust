@@ -238,28 +238,35 @@ impl<'a> StateTrait for State<'a> {
         Ok(())
     }
 
-    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+    fn delete(&mut self, access_key: StorageKey) -> Result<()> {
         self.pre_modification();
 
         match self.get_delta_root_node() {
-            None => Ok(None),
+            None => {}
             Some(old_root_node) => {
-                let (old_value, _, root_node) = SubTrieVisitor::new(
+                self.delta_trie_root = SubTrieVisitor::new(
                     &self.delta_trie,
                     old_root_node,
                     &mut self.owned_node_set,
                 )?
-                .delete(
+                .set(
                     &access_key
                         .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
-                )?;
-                self.delta_trie_root =
-                    root_node.map(|maybe_node| maybe_node.into());
-                Ok(old_value)
+                    MptValue::<Box<[u8]>>::TombStone.unwrap(),
+                )?
+                .into();
             }
         }
+        Ok(())
     }
 
+    /// Delete all key/value pairs with access_key_prefix as prefix. These
+    /// key/value pairs exist in three places: Delta Trie, Intermediate Trie
+    /// and Snapshot DB.
+    ///
+    /// For key/value pairs in Delta Trie, we can simply delete them. For
+    /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
+    /// enumerate all key/value pairs and set tombstone in Delta Trie.
     fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
@@ -317,16 +324,31 @@ impl<'a> StateTrait for State<'a> {
         // Retrieve key/value pairs from snapshot
         let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator();
         let lower_bound_incl = access_key_prefix.to_key_bytes();
-        let mut upper_bound_excl = lower_bound_incl.clone();
-        if *upper_bound_excl.last().unwrap() == 255 {
-            upper_bound_excl.push(0);
+        let mut upper_bound_excl_value = lower_bound_incl.clone();
+        let upper_bound_excl = if lower_bound_incl.len() == 0 {
+            None
         } else {
-            *upper_bound_excl.last_mut().unwrap() += 1;
-        }
-        let mut kvs = kv_iterator.iter_range(
-            lower_bound_incl.as_slice(),
-            Some(upper_bound_excl.as_slice()),
-        )?;
+            let mut carry = 1;
+            let len = upper_bound_excl_value.len();
+            for i in 0..len {
+                if upper_bound_excl_value[len - 1 - i] == 255 {
+                    upper_bound_excl_value[len - 1 - i] = 0;
+                } else {
+                    upper_bound_excl_value[len - 1 - i] += 1;
+                    carry = 0;
+                    break;
+                }
+            }
+            // all bytes in lower_bound_incl are 255, which means no upper bound
+            // is needed.
+            if carry == 1 {
+                None
+            } else {
+                Some(upper_bound_excl_value.as_slice())
+            }
+        };
+        let mut kvs = kv_iterator
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
 
         let mut snapshot_kvs = Vec::new();
         while let Some((key, value)) = kvs.next()? {
@@ -334,6 +356,7 @@ impl<'a> StateTrait for State<'a> {
         }
 
         let mut result = Vec::new();
+        // This is used to keep track of the deleted keys.
         let mut deleted_keys = HashSet::new();
         if let Some(kvs) = delta_trie_kvs {
             for (k, v) in kvs {
@@ -343,9 +366,18 @@ impl<'a> StateTrait for State<'a> {
                 }
             }
         }
+
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
-                self.delete(StorageKey::from_key_bytes(&k))?;
+                let storage_key = StorageKey::from_key_bytes(&k);
+                // Only delete nonempty keys.
+                if v.len() > 0 {
+                    self.delete(storage_key)?;
+                }
+                // Convert the key to `delta_mpt_key_bytes` used in Delta Trie
+                // for consistency.
+                let k = storage_key
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
@@ -356,9 +388,16 @@ impl<'a> StateTrait for State<'a> {
         }
 
         for (k, v) in snapshot_kvs {
-            self.delete(StorageKey::from_key_bytes(&k))?;
+            let storage_key = StorageKey::from_key_bytes(&k);
+            // Only delete nonempty keys.
+            if v.len() > 0 {
+                self.delete(storage_key)?;
+            }
+            // Convert the key to `delta_mpt_key_bytes` used in Delta Trie
+            // for consistency.
+            let k = storage_key
+                .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
             if !deleted_keys.contains(&k) {
-                deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
                 }
