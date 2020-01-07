@@ -242,7 +242,7 @@ impl StateManager {
 
         Self::get_state_trees_internal(
             snapshot,
-            &state_index.intermediate_epoch_id,
+            state_index.snapshot_epoch_id,
             *state_index.snapshot_merkle_root,
             maybe_intermediate_mpt,
             maybe_intermediate_mpt_key_padding,
@@ -310,9 +310,13 @@ impl StateManager {
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
                     intermediate_trie_root_merkle = MERKLE_NULL_NODE;
-                    delta_mpt = self
+                    match self
                         .storage_manager
-                        .get_delta_mpt(parent_state_index.epoch_id)?;
+                        .get_intermediate_mpt(parent_state_index.epoch_id)?
+                    {
+                        None => return Ok(None),
+                        Some(mpt) => delta_mpt = mpt,
+                    }
                 }
                 Some(snapshot_got) => {
                     snapshot = snapshot_got;
@@ -330,15 +334,18 @@ impl StateManager {
                     delta_mpt = self
                         .storage_manager
                         .get_delta_mpt(&snapshot_epoch_id)?;
-                    intermediate_trie_root_merkle = match delta_mpt
-                        .get_merkle_root_by_epoch_id(
-                            &parent_state_index.epoch_id,
-                        )? {
-                        Some(merkle_root) => merkle_root,
-                        None => {
-                            return Ok(None);
-                        }
-                    };
+                    intermediate_trie_root_merkle =
+                        match maybe_intermediate_mpt.as_ref() {
+                            None => MERKLE_NULL_NODE,
+                            Some(mpt) => match mpt.get_merkle_root_by_epoch_id(
+                                &parent_state_index.epoch_id,
+                            )? {
+                                Some(merkle_root) => merkle_root,
+                                None => {
+                                    return Ok(None);
+                                }
+                            },
+                        };
                     maybe_intermediate_mpt_key_padding =
                         Some(parent_state_index.delta_mpt_key_padding);
                 }
@@ -366,7 +373,7 @@ impl StateManager {
                         maybe_intermediate_mpt_key_padding = None;
                         delta_mpt = match self
                             .storage_manager
-                            .get_intermediate_mpt(&intermediate_epoch_id)?
+                            .get_intermediate_mpt(intermediate_epoch_id)?
                         {
                             None => return Ok(None),
                             Some(delta_mpt) => delta_mpt,
@@ -382,7 +389,7 @@ impl StateManager {
                     maybe_intermediate_mpt =
                         if maybe_intermediate_mpt_key_padding.is_some() {
                             self.storage_manager
-                                .get_intermediate_mpt(&snapshot_epoch_id)?
+                                .get_intermediate_mpt(snapshot_epoch_id)?
                         } else {
                             None
                         };
