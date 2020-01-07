@@ -99,10 +99,17 @@ impl SnapshotDbManagerSqlite {
         {
             Ok(())
         } else {
-            let options = CopyOptions::new();
+            let mut options = CopyOptions::new();
+            options.copy_inside = true; // copy recursively like `cp -r`
             fs_extra::dir::copy(old_snapshot_path, new_snapshot_path, &options)
                 .map(|_| ())
-                .map_err(|_| ErrorKind::SnapshotCopyFailure.into())
+                .map_err(|e| {
+                    warn!(
+                        "Fail to copy snapshot {:?}, err={:?}",
+                        old_snapshot_path, e,
+                    );
+                    ErrorKind::SnapshotCopyFailure.into()
+                })
         }
     }
 
