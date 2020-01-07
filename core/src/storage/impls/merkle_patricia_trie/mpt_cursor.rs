@@ -314,7 +314,6 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
     }
 
     pub fn insert(&mut self, key: &[u8], value: Box<[u8]>) -> Result<()> {
-        debug!("insert key={:?}", key);
         match self.open_path_for_key::<access_mode::Write>(key)? {
             CursorOpenPathTerminal::Arrived => {
                 self.path_nodes
@@ -846,10 +845,6 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
         let path_db_key =
             CompressedPathRaw::extend_path(parent_path, node_child_index);
-        debug!(
-            "load_into parent_path={:?}, index={}, db_key={:?}",
-            parent_path, node_child_index, path_db_key
-        );
 
         let trie_node = parent_node
             .load_node_wrapper(mpt.as_mut().unwrap(), &path_db_key)?;
