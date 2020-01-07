@@ -68,7 +68,6 @@ impl SnapshotDbManagerSqlite {
         };
 
         let command_result = command.output();
-        debug!("COW copy output={:?}", command_result);
         if command_result.is_err() {
             fs::remove_dir_all(new_snapshot_path)?;
         }
@@ -149,6 +148,7 @@ impl SnapshotDbManagerSqlite {
     {
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
             &self.get_snapshot_db_path(old_snapshot_epoch_id),
+            true,
         )?;
         let mut old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
@@ -258,7 +258,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     {
                         // open the copied database.
                         snapshot_db =
-                            Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+                            Self::SnapshotDb::open(&temp_db_path, false)?
+                                .unwrap();
 
                         // Drop copied old snapshot delta mpt dump
                         snapshot_db.drop_delta_mpt_dump()?;
@@ -267,7 +268,6 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         snapshot_db.direct_merge()?
                     } else {
-                        // TODO Remove copy_and_merge related code
                         snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
@@ -297,6 +297,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         } else {
             Self::SnapshotDb::open(
                 &self.get_snapshot_db_path(snapshot_epoch_id),
+                true,
             )
         }
     }
