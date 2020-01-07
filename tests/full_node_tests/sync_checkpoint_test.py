@@ -13,13 +13,13 @@ from conflux.rpc import RpcClient
 class SyncCheckpointTests(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 6
+        self.num_nodes = 3
         self.conf_parameters = {
             "dev_snapshot_epoch_count": "25",
             "era_epoch_count": "50",
             "era_checkpoint_gap": "50",
             "chunk_size_byte": "1000",
-            "log_level": '"debug"',
+            "log_level": '"trace"',
         }
 
     def setup_network(self):
@@ -34,9 +34,6 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for _ in range(num):
             addr = client.rand_addr()
             tx_gas = client.DEFAULT_TX_GAS
-            # FIXME Set none-zero value so the accounts will be actually inserted
-            # This should be fixed after implementing the waiting of snapshot making,
-            # otherwise the making of snapshots cannot catch up with the execution of epochs during recovery
             tx = client.new_tx(receiver=addr, nonce=self.genesis_nonce, value=0, gas=tx_gas, data=b'')
             self.genesis_nonce += 1
             txs.append(tx)
@@ -86,13 +83,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
                 assert "State for epoch" in e.response.message
                 assert "does not exist" in e.response.message
 
-        # State should exist at checkpoint
-        full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(snapshot_epoch))
-        archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(snapshot_epoch))
-        assert_equal(full_balance, archive_balance)
-
         # There should be states after checkpoint
-        for i in range(snapshot_epoch, full_node_client.epoch_number() - 3):
+        for i in range(snapshot_epoch + 1, full_node_client.epoch_number() - 3):
             full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(i))
             archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(i))
             assert_equal(full_balance, archive_balance)
