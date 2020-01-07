@@ -211,7 +211,9 @@ impl<'a> Drop for State<'a> {
 impl<'a> StateTrait for State<'a> {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.get_from_all_tries(access_key, false)
-            .map(|(value, _)| value)
+            .map(|(value, _)| {
+                value.and_then(|x| if x.len() == 0 { None } else { Some(x) })
+            })
     }
 
     fn get_with_proof(
@@ -239,26 +241,9 @@ impl<'a> StateTrait for State<'a> {
     }
 
     fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
-        self.pre_modification();
         let old_value = self.get(access_key)?;
-
-        match self.get_delta_root_node() {
-            None => {}
-            Some(old_root_node) => {
-                self.delta_trie_root = SubTrieVisitor::new(
-                    &self.delta_trie,
-                    old_root_node,
-                    &mut self.owned_node_set,
-                )?
-                .set(
-                    &access_key
-                        .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
-                    MptValue::<Box<[u8]>>::TombStone.unwrap(),
-                )?
-                .into();
-            }
-        }
-        Ok(old_value)
+        self.set(access_key, MptValue::<Box<[u8]>>::TombStone.unwrap())?;
+        Ok(old_value.and_then(|x| if x.len() == 0 { None } else { Some(x) }))
     }
 
     /// Delete all key/value pairs with access_key_prefix as prefix. These

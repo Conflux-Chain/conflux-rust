@@ -201,6 +201,7 @@ fn test_set_delete() {
 
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 2;
+    state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
 }
 
