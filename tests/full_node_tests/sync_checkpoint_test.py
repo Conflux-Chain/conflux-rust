@@ -18,6 +18,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "dev_snapshot_epoch_count": "10",
             "era_epoch_count": "50",
             "era_checkpoint_gap": "50",
+            "log_level": '"debug"',
         }
 
     def setup_network(self):
