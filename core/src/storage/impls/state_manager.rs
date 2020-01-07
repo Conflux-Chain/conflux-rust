@@ -193,18 +193,14 @@ impl StateManager {
 
         match self
             .storage_manager
-            .get_snapshot_manager()
-            .get_snapshot_by_epoch_id(&state_index.snapshot_epoch_id)?
+            .wait_for_snapshot(&state_index.snapshot_epoch_id)?
         {
             None => {
                 // This is the special scenario when the snapshot isn't
                 // available but the snapshot at the intermediate epoch exists.
                 if let Some(snapshot_got) = self
                     .storage_manager
-                    .get_snapshot_manager()
-                    .get_snapshot_by_epoch_id(
-                        &state_index.intermediate_epoch_id,
-                    )?
+                    .wait_for_snapshot(&state_index.intermediate_epoch_id)?
                 {
                     snapshot = snapshot_got;
                     maybe_intermediate_mpt = None;
@@ -290,11 +286,7 @@ impl StateManager {
 
             snapshot_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_epoch_id = parent_state_index.epoch_id;
-            match self
-                .storage_manager
-                .get_snapshot_manager()
-                .get_snapshot_by_epoch_id(snapshot_epoch_id)?
-            {
+            match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
@@ -310,8 +302,7 @@ impl StateManager {
                         *parent_state_index.snapshot_epoch_id;
                     match self
                         .storage_manager
-                        .get_snapshot_manager()
-                        .get_snapshot_by_epoch_id(parent_state_index.epoch_id)?
+                        .wait_for_snapshot(parent_state_index.epoch_id)?
                     {
                         None => return Ok(None),
                         Some(snapshot_got) => snapshot = snapshot_got,
@@ -361,19 +352,14 @@ impl StateManager {
             intermediate_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_trie_root_merkle =
                 *parent_state_index.intermediate_trie_root_merkle;
-            match self
-                .storage_manager
-                .get_snapshot_manager()
-                .get_snapshot_by_epoch_id(snapshot_epoch_id)?
-            {
+            match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
                     // exists.
                     if let Some(snapshot_got) = self
                         .storage_manager
-                        .get_snapshot_manager()
-                        .get_snapshot_by_epoch_id(&intermediate_epoch_id)?
+                        .wait_for_snapshot(&intermediate_epoch_id)?
                     {
                         snapshot = snapshot_got;
                         maybe_intermediate_mpt = None;
@@ -474,8 +460,7 @@ impl StateManagerTrait for StateManager {
             StateTrees {
                 snapshot_db: self
                     .storage_manager
-                    .get_snapshot_manager()
-                    .get_snapshot_by_epoch_id(&NULL_EPOCH)
+                    .wait_for_snapshot(&NULL_EPOCH)
                     .unwrap()
                     .unwrap(),
                 snapshot_epoch_id: NULL_EPOCH,

@@ -112,6 +112,33 @@ impl StorageManager {
         new_storage_manager_result
     }
 
+    pub fn wait_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Result<Option<SnapshotDb>> {
+        match self
+            .snapshot_manager
+            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
+        {
+            Some(snapshot_db) => Ok(Some(snapshot_db)),
+            None => {
+                // Keep the lock while waiting.
+                let mut locked = self.in_progress_snapshoting_tasks.write();
+                // Wait for in progress snapshot.
+                if let Some(in_progress_snapshot_info) =
+                    locked.remove(snapshot_epoch_id)
+                {
+                    in_progress_snapshot_info.thread.join().ok();
+                    // FIXME: improve the wait mechanism and throw out errors
+                    // FIXME: happened in making snapshot.
+                    self.snapshot_manager
+                        .get_snapshot_by_epoch_id(snapshot_epoch_id)
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+    }
+
     pub fn get_snapshot_manager(
         &self,
     ) -> &(dyn SnapshotManagerTrait<
