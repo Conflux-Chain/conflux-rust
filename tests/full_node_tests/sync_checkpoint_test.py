@@ -37,7 +37,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
     def run_test(self):
         num_blocks = 200
-        checkpoint_epoch = 100
+        snapshot_epoch = 100
 
         # Generate checkpoint on node[0]
         client = RpcClient(self.nodes[0])
@@ -65,10 +65,12 @@ class SyncCheckpointTests(ConfluxTestFramework):
         except ReceivedErrorResponseError as e:
             assert 'Internal error' == e.response.message
 
-        # There is no state from epoch 1 to checkpoint_epoch
+        # There is no state from epoch 1 to snapshot_epoch
         # Note, state of genesis epoch always exists
-        assert client.epoch_number() >= checkpoint_epoch
-        for i in range(1, checkpoint_epoch):
+        assert client.epoch_number() >= snapshot_epoch
+        # We have snapshot_epoch for state execution but
+        # don't offer snapshot_epoch for Rpc clients.
+        for i in range(1, snapshot_epoch + 1):
             try:
                 client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(i))
                 raise AssertionError("should not have state for epoch {}".format(i))
@@ -76,11 +78,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
                 assert "State for epoch" in e.response.message
                 assert "does not exist" in e.response.message
 
-        # State should exist at checkpoint
-        client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(checkpoint_epoch))
-
         # There should be states after checkpoint
-        for i in range(checkpoint_epoch, client.epoch_number() - 3):
+        for i in range(snapshot_epoch + 1, client.epoch_number() - 3):
             client.get_balance(client.GENESIS_ADDR, client.EPOCH_NUM(i))
 
 if __name__ == "__main__":

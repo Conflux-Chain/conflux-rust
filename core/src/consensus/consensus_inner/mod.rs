@@ -663,17 +663,10 @@ impl ConsensusGraphInner {
 
     pub fn find_first_index_with_correct_state_of(
         &self, pivot_index: usize, blame_bound: Option<u32>,
-        for_full_sync: bool,
-    ) -> Option<usize>
-    {
+    ) -> Option<usize> {
         // this is the earliest block we need to consider; blocks before `from`
         // cannot have any information about the state root of `pivot_index`
-        let mut from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
-        if for_full_sync {
-            // We need the extra +1 to get a state root that points to the
-            // snapshot we want
-            from += self.data_man.get_snapshot_epoch_count() as usize + 1;
-        }
+        let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
 
         self.find_first_trusted_starting_from(from, blame_bound)
     }
@@ -2605,8 +2598,10 @@ impl ConsensusGraphInner {
         self.sequence_number_of_block_entrance
     }
 
+    // FIXME: review if the check logics still work when snapshot_epoch_id is
+    // passed in checkpoint_hash.
     pub fn get_trusted_blame_block(
-        &self, checkpoint_hash: &H256, for_full_sync: bool,
+        &self, checkpoint_hash: &H256, plus_depth: usize,
     ) -> Option<H256> {
         let arena_index_opt = self.hash_to_arena_indices.get(checkpoint_hash);
         // checkpoint has changed, wait for next checkpoint
@@ -2623,9 +2618,8 @@ impl ConsensusGraphInner {
             return None;
         }
         self.find_first_index_with_correct_state_of(
-            pivot_index,
+            pivot_index + plus_depth,
             None, /* blame_bound */
-            for_full_sync,
         )
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
@@ -2783,7 +2777,7 @@ impl ConsensusGraphInner {
         // pivot block whose `state_valid` is `true` after `start_epoch_hash`
         // (include `start_epoch_hash` itself).
         let maybe_trusted_blame_block =
-            self.get_trusted_blame_block(&start_epoch_hash, false);
+            self.get_trusted_blame_block(&start_epoch_hash, 0);
         debug!("recover_state_valid: checkpoint={:?}, maybe_trusted_blame_block={:?}", start_epoch_hash, maybe_trusted_blame_block);
 
         // Set `state_valid` of `trusted_blame_block` to true,

@@ -10,7 +10,6 @@ use crate::{
     },
     sync::state::storage::{Chunk, ChunkKey},
 };
-use cfx_types::H256;
 use primitives::{EpochId, MerkleHash};
 use std::sync::{
     atomic::{AtomicUsize, Ordering::Relaxed},
@@ -27,17 +26,13 @@ pub struct Restorer {
 }
 
 impl Default for Restorer {
-    fn default() -> Self { Self::new_with_default_root_dir(H256::zero()) }
+    fn default() -> Self { Self::new(EpochId::default()) }
 }
 
 impl Restorer {
-    pub fn new_with_default_root_dir(checkpoint: H256) -> Self {
-        Self::new(checkpoint)
-    }
-
-    pub fn new(checkpoint: H256) -> Self {
+    pub fn new(snapshot_epoch_id: EpochId) -> Self {
         Restorer {
-            snapshot_epoch_id: checkpoint,
+            snapshot_epoch_id,
             snapshot_merkle_root: Default::default(),
             verifier: None,
         }

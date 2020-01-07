@@ -337,7 +337,7 @@ impl BlockDataManager {
         self.storage_manager
             .get_state_no_commit(StateIndex::new_for_readonly(
                 &true_genesis_hash,
-                &StateRootWithAuxInfo::genesis(&true_genesis_hash).aux_info,
+                &StateRootWithAuxInfo::genesis(&true_genesis_hash),
             ))
             .unwrap()
             .unwrap()
@@ -1029,7 +1029,7 @@ impl BlockDataManager {
             None => None,
             Some(execution_commitment) => Some(StateIndex::new_for_readonly(
                 block_hash,
-                &execution_commitment.state_root_with_aux_info.aux_info,
+                &execution_commitment.state_root_with_aux_info,
             )),
         };
 
@@ -1062,6 +1062,15 @@ impl BlockDataManager {
         self.storage_manager
             .get_storage_manager()
             .get_snapshot_epoch_count()
+    }
+
+    pub fn get_snapshot_blame_plus_depth(&self) -> usize {
+        // We need the extra + 1 to get a state root that points to the
+        // snapshot we want.
+        self.storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count() as usize
+            + 1
     }
 }
 

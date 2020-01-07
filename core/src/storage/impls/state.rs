@@ -14,6 +14,8 @@ pub struct State<'a> {
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     intermediate_trie_root_merkle: MerkleHash,
+    /// A None value indicate the special case when snapshot_db is actually the
+    /// snapshot_db from the intermediate_epoch_id.
     maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
@@ -336,19 +338,7 @@ impl<'a> StateTrait for State<'a> {
             self.maybe_intermediate_trie.is_some(),
             self.height,
         );
-        if self.maybe_intermediate_trie.is_none()
-            && self.delta_trie_height.unwrap()
-                == self
-                    .manager
-                    .get_storage_manager()
-                    .get_snapshot_epoch_count()
-        {
-            // For genesis or full sync, we will make snapshot to move the
-            // delta_mpt to intermediate_mpt
-            self.manager
-                .get_storage_manager()
-                .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
-        } else if self.delta_trie_height.unwrap()
+        if self.delta_trie_height.unwrap()
             >= self
                 .manager
                 .get_storage_manager()
