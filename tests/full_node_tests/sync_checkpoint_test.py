@@ -44,7 +44,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
     def run_test(self):
         num_blocks = 200
-        checkpoint_epoch = 100
+        snapshot_epoch = 100
 
         # Generate checkpoint on node[0]
         archive_node_client = RpcClient(self.nodes[0])
@@ -73,10 +73,12 @@ class SyncCheckpointTests(ConfluxTestFramework):
         except ReceivedErrorResponseError as e:
             assert 'Internal error' == e.response.message
 
-        # There is no state from epoch 1 to checkpoint_epoch
+        # There is no state from epoch 1 to snapshot_epoch
         # Note, state of genesis epoch always exists
-        assert full_node_client.epoch_number() >= checkpoint_epoch
-        for i in range(1, checkpoint_epoch):
+        assert full_node_client.epoch_number() >= snapshot_epoch
+        # We have snapshot_epoch for state execution but
+        # don't offer snapshot_epoch for Rpc clients.
+        for i in range(1, snapshot_epoch + 1):
             try:
                 full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(i))
                 raise AssertionError("should not have state for epoch {}".format(i))
@@ -85,12 +87,12 @@ class SyncCheckpointTests(ConfluxTestFramework):
                 assert "does not exist" in e.response.message
 
         # State should exist at checkpoint
-        full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(checkpoint_epoch))
-        archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(checkpoint_epoch))
+        full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(snapshot_epoch))
+        archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(snapshot_epoch))
         assert_equal(full_balance, archive_balance)
 
         # There should be states after checkpoint
-        for i in range(checkpoint_epoch, full_node_client.epoch_number() - 3):
+        for i in range(snapshot_epoch, full_node_client.epoch_number() - 3):
             full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(i))
             archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(i))
             assert_equal(full_balance, archive_balance)

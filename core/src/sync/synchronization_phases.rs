@@ -354,8 +354,6 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return;
         }
 
-        info!("start to sync state for checkpoint {:?}", epoch_to_sync);
-
         self.state_sync
             .update_status(epoch_to_sync, io, sync_handler);
     }

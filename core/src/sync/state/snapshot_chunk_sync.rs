@@ -10,7 +10,7 @@ use crate::{
     },
     storage::{
         storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
-        StateIndex, StateRootAuxInfo, StateRootWithAuxInfo,
+        StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
         message::{msgid, Context},
@@ -75,19 +75,18 @@ impl Debug for Status {
     }
 }
 
-#[derive(Default)]
 struct Inner {
     sync_candidate_manager: StateSyncCandidateManager,
 
     /// The checkpoint whose state is being synced
-    checkpoint: H256,
     manifest_request_status: Option<(Instant, PeerId)>,
 
+    snapshot_epoch_id: EpochId,
     trusted_blame_block: H256,
     status: Status,
 
     /// State root verified by blame.
-    true_state_root_by_blame_info: MerkleHash,
+    true_state_root_by_blame_info: StateRootWithAuxInfo,
     /// Point to the corresponding entry to the snapshot in the blame vectors.
     blame_vec_offset: usize,
     receipt_blame_vec: Vec<H256>,
@@ -105,19 +104,39 @@ struct Inner {
 }
 
 impl Inner {
-    fn initialize_downloading_manifest(
-        &mut self, checkpoint: H256, trusted_blame_block: H256,
-    ) {
-        self.checkpoint = checkpoint.clone();
-        self.trusted_blame_block = trusted_blame_block;
-        self.true_state_root_by_blame_info = MERKLE_NULL_NODE;
-        self.snapshot_info = SnapshotInfo::genesis_snapshot_info();
-        self.receipt_blame_vec.clear();
-        self.bloom_blame_vec.clear();
-        self.pending_chunks.clear();
-        self.downloading_chunks.clear();
-        self.num_downloaded = 0;
-        self.restorer = Restorer::new_with_default_root_dir(checkpoint);
+    fn new(
+        snapshot_epoch_id: EpochId, trusted_blame_block: H256, status: Status,
+    ) -> Self {
+        Self {
+            sync_candidate_manager: Default::default(),
+            manifest_request_status: None,
+            snapshot_epoch_id,
+            trusted_blame_block,
+            status,
+            true_state_root_by_blame_info: StateRootWithAuxInfo::genesis(
+                &Default::default(),
+            ),
+            snapshot_info: SnapshotInfo::genesis_snapshot_info(),
+            receipt_blame_vec: Default::default(),
+            bloom_blame_vec: Default::default(),
+            epoch_receipts: Default::default(),
+            pending_chunks: Default::default(),
+            downloading_chunks: Default::default(),
+            num_downloaded: 0,
+            restorer: Restorer::new(snapshot_epoch_id),
+            blame_vec_offset: 0,
+        }
+    }
+
+    fn initialize_downloading_manifest(&mut self, snapshot_epoch_id: EpochId, trusted_blame_block: H256) {
+        std::mem::replace(
+            self,
+            Self::new(
+                snapshot_epoch_id,
+                trusted_blame_block,
+                Status::DownloadingManifest(Instant::now()),
+            ),
+        );
     }
 
     // TODO Handle OneStepSync and IncSync
@@ -239,11 +258,11 @@ impl SnapshotChunkSync {
         let mut inner = &mut *self.inner.write();
 
         // new era started
-        if response.checkpoint != inner.checkpoint {
+        if response.snapshot_epoch_id != inner.snapshot_epoch_id {
             info!(
                 "Checkpoint changed and ignore the received snapshot manifest, new checkpoint = {:?}, requested checkpoint = {:?}",
-                inner.checkpoint,
-                response.checkpoint);
+                inner.snapshot_epoch_id,
+                response.snapshot_epoch_id);
             // FIXME handle valid old manifest
             inner
                 .sync_candidate_manager
@@ -264,52 +283,32 @@ impl SnapshotChunkSync {
         if request.is_initial_request() {
             match Self::validate_blame_states(
                 ctx,
-                &inner.checkpoint,
+                &inner.snapshot_epoch_id,
                 &inner.trusted_blame_block,
                 &response.state_root_vec,
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
             ) {
-                Some((blame_vec_offset, _state, snapshot_info)) => {
-                    let maybe_trusted_snapshot_blame_block = ctx
-                        .manager
-                        .graph
-                        .consensus
-                        .get_trusted_blame_block_for_snapshot(
-                            &inner.checkpoint,
-                        );
-                    let snapshot_state_root =
-                        match maybe_trusted_snapshot_blame_block {
-                            Some(block) => {
-                                let deferred_state_root = *ctx
-                                    .manager
-                                    .graph
-                                    .data_man
-                                    .block_header_by_hash(&block)
-                                    .expect("trusted blame block should exist")
-                                    .deferred_state_root();
-                                if response
-                                    .snapshot_state_root
-                                    .compute_state_root_hash()
-                                    != deferred_state_root
-                                {
-                                    warn!("ManifestResponse has invalid snapshot_root: should be {:?} in block {:?}", deferred_state_root, block);
-                                    self.resync_manifest(ctx, &mut inner);
-                                    return;
-                                } else {
-                                    response
-                                        .snapshot_state_root
-                                        .snapshot_root
-                                        .clone()
-                                }
-                            }
-                            None => {
-                                // FIXME Ensure this does not happen
-                                panic!("No blame block for synced snapshot!");
-                            }
-                        };
-                    inner.true_state_root_by_blame_info = snapshot_state_root;
-                    inner.restorer.snapshot_merkle_root = snapshot_state_root;
+                Some((
+                    blame_vec_offset,
+                    state_root_with_aux_info,
+                    snapshot_info,
+                )) => {
+                    // TODO: debug only check. can be removed later.
+                    if response.snapshot_merkle_root
+                        != snapshot_info.merkle_root
+                    {
+                        warn!(
+                            "ManifestResponse has invalid snapshot_root: got {:?} should be {:?}",
+                            response.snapshot_merkle_root,
+                            snapshot_info.merkle_root);
+                        self.resync_manifest(ctx, &mut inner);
+                        return;
+                    }
+                    inner.restorer.snapshot_merkle_root =
+                        snapshot_info.merkle_root;
+                    inner.true_state_root_by_blame_info =
+                        state_root_with_aux_info;
                     inner.blame_vec_offset = blame_vec_offset;
                     inner.snapshot_info = snapshot_info;
                 }
@@ -322,7 +321,7 @@ impl SnapshotChunkSync {
             match Self::validate_epoch_receipts(
                 ctx,
                 inner.blame_vec_offset,
-                &inner.checkpoint,
+                &inner.snapshot_epoch_id,
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
                 &response.block_receipts,
@@ -337,7 +336,7 @@ impl SnapshotChunkSync {
 
             // Check proofs for keys.
             if let Err(e) = response.manifest.validate(
-                &inner.true_state_root_by_blame_info,
+                &inner.restorer.snapshot_merkle_root,
                 &request.start_chunk,
             ) {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
@@ -378,7 +377,7 @@ impl SnapshotChunkSync {
         //        if let Some(next_chunk) = next_chunk {
         //            let request =
         // SnapshotManifestRequest::new_with_start_chunk(
-        // inner.checkpoint.clone(),                next_chunk,
+        // inner.snapshot_epoch_id.clone(),                next_chunk,
         //            );
         //            ctx.manager.request_manager.request_with_delay(
         //                ctx.io,
@@ -393,7 +392,7 @@ impl SnapshotChunkSync {
 
         info!(
             "Snapshot manifest received, checkpoint = {:?}, elapsed = {:?}, chunks = {}",
-            inner.checkpoint,
+            inner.snapshot_epoch_id,
             start_time.elapsed(),
             inner.pending_chunks.len(),
         );
@@ -418,7 +417,7 @@ impl SnapshotChunkSync {
     }
 
     fn resync_manifest(&self, ctx: &Context, inner: &mut Inner) {
-        let checkpoint = inner.checkpoint.clone();
+        let checkpoint = inner.snapshot_epoch_id.clone();
         let trusted_blame_block = inner.trusted_blame_block.clone();
         inner.initialize_downloading_manifest(checkpoint, trusted_blame_block);
         inner.request_manifest(ctx.io, ctx.manager);
@@ -440,7 +439,7 @@ impl SnapshotChunkSync {
             .is_none());
 
         let request = SnapshotChunkRequest::new(
-            inner.checkpoint.clone(),
+            inner.snapshot_epoch_id.clone(),
             chunk_key.clone(),
         );
 
@@ -469,7 +468,7 @@ impl SnapshotChunkSync {
             Status::DownloadingChunks(t) => {
                 debug!(
                     "Snapshot chunk received, checkpoint = {:?}, chunk = {:?}",
-                    inner.checkpoint, chunk_key
+                    inner.snapshot_epoch_id, chunk_key
                 );
                 t
             }
@@ -517,40 +516,7 @@ impl SnapshotChunkSync {
         &self, sync_handler: &SynchronizationProtocolHandler,
     ) {
         let inner = self.inner.read();
-        let mut deferred_block_hash = inner.trusted_blame_block;
-        for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
-            deferred_block_hash = *sync_handler
-                .graph
-                .data_man
-                .block_header_by_hash(&deferred_block_hash)
-                .expect("All headers exist")
-                .parent_hash();
-        }
-        // Delta height starts from 1. At the snapshot point the delta height
-        // equals to the snapshot epoch count. When the delta height of
-        // the next epoch is 1, the current epoch is a snapshot.
-        let steps_to_snapshot = StateIndex::height_to_delta_height(
-            sync_handler
-                .graph
-                .data_man
-                .block_header_by_hash(&deferred_block_hash)
-                .unwrap()
-                .height()
-                + 1,
-            sync_handler.graph.data_man.get_snapshot_epoch_count(),
-        ) - 1;
-        let snapshot_epoch_id = sync_handler
-            .graph
-            .data_man
-            .get_parent_epochs_for(
-                deferred_block_hash,
-                steps_to_snapshot as u64,
-            )
-            .0;
-        let mut fake_state_root =
-            StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
-        fake_state_root.aux_info.snapshot_epoch_id = snapshot_epoch_id;
-        fake_state_root.aux_info.intermediate_epoch_id = snapshot_epoch_id;
+        let mut deferred_block_hash = inner.snapshot_epoch_id;
         // FIXME: Because state_root_aux_info can't be computed for state block
         // FIXME: before snapshot, for the reward epoch count, maybe
         // FIXME: save it to a dedicated place for reward computation.
@@ -567,9 +533,8 @@ impl SnapshotChunkSync {
                 .insert_epoch_execution_commitment(
                     deferred_block_hash,
                     // FIXME: the state root is wrong for epochs before sync
-                    // point. FIXME: but these information
-                    // won't be used.
-                    fake_state_root.clone(),
+                    // FIXME: point. but these information won't be used.
+                    inner.true_state_root_by_blame_info.clone(),
                     inner.receipt_blame_vec[i],
                     inner.bloom_blame_vec[i],
                 );
@@ -590,6 +555,17 @@ impl SnapshotChunkSync {
         }
     }
 
+    pub fn on_checkpoint_served(&self, ctx: &Context, checkpoint: &H256) {
+        let mut inner = self.inner.write();
+
+        if !inner.downloading_chunks.is_empty()
+            && inner.downloading_chunks.len() < self.max_download_peers
+            && checkpoint == &inner.snapshot_epoch_id
+        {
+            self.request_chunk(ctx, &mut inner, ctx.peer);
+        }
+    }
+
     fn validate_blame_states(
         ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
         state_root_vec: &Vec<StateRoot>, receipt_blame_vec: &Vec<H256>,
@@ -604,7 +580,7 @@ impl SnapshotChunkSync {
             .graph
             .data_man
             .block_header_by_hash(snapshot_epoch_id)
-            .expect("checkpoint header must exist");
+            .expect("block header must exist for snapshot to sync");
         let trusted_blame_block = ctx
             .manager
             .graph
@@ -612,7 +588,7 @@ impl SnapshotChunkSync {
             .block_header_by_hash(trusted_blame_block)
             .expect("trusted_blame_block header must exist");
 
-        // check checkpoint position in `out_state_blame_vec`
+        // check snapshot position in `out_state_blame_vec`
         let offset = (trusted_blame_block.height()
             - (snapshot_block_header.height() + DEFERRED_STATE_EPOCH_COUNT))
             as usize;
@@ -733,19 +709,33 @@ impl SnapshotChunkSync {
             StateRootWithAuxInfo {
                 state_root: state_root_vec[offset].clone(),
                 aux_info: StateRootAuxInfo {
-                    snapshot_epoch_id: parent_snapshot_epoch,
+                    // FIXME: we should not commit the EpochExecutionCommitment
+                    // FIXME: for the synced snapshot because it's fake.
+                    // Should be parent of parent but we don't necessarily need
+                    // to know. We put the
+                    // parent_snapshot_merkle_root here.
+                    snapshot_epoch_id: state_root_vec[offset - 1].snapshot_root,
                     delta_mpt_key_padding: StorageKey::delta_mpt_padding(
                         &state_root_vec[offset].snapshot_root,
                         &state_root_vec[offset].intermediate_delta_root,
                     ),
-                    intermediate_epoch_id: *snapshot_epoch_id,
-                    // We don't necessarily need to know.
+                    intermediate_epoch_id: parent_snapshot_epoch,
+                    // We don't necessarily need to know because
+                    // the execution of the next epoch shifts delta MPT.
                     maybe_intermediate_mpt_key_padding: None,
                 },
             },
             SnapshotInfo {
                 serve_one_step_sync: false,
-                merkle_root: state_root_vec[offset].snapshot_root,
+                // We need the extra -1 to get a state root that points to the
+                // snapshot we want.
+                merkle_root: state_root_vec[offset
+                    - ctx
+                        .manager
+                        .graph
+                        .data_man
+                        .get_snapshot_blame_plus_depth()]
+                .snapshot_root,
                 height: snapshot_block_header.height(),
                 parent_snapshot_epoch_id: parent_snapshot_epoch,
                 parent_snapshot_height,
