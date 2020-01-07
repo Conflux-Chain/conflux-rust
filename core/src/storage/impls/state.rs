@@ -361,7 +361,7 @@ impl<'a> StateTrait for State<'a> {
         let mut deleted_keys = HashSet::new();
         if let Some(kvs) = delta_trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKey::from_key_bytes(&k);
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
@@ -372,7 +372,7 @@ impl<'a> StateTrait for State<'a> {
 
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKey::from_key_bytes(&k);
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
                 // Only delete nonempty keys.
                 if v.len() > 0 {
                     self.delete(storage_key)?;
@@ -388,7 +388,7 @@ impl<'a> StateTrait for State<'a> {
         }
 
         for (k, v) in snapshot_kvs {
-            let storage_key = StorageKey::from_key_bytes(&k);
+            let storage_key = StorageKey::from_delta_mpt_key(&k);
             // Only delete nonempty keys.
             if v.len() > 0 {
                 self.delete(storage_key)?;
@@ -401,7 +401,11 @@ impl<'a> StateTrait for State<'a> {
             }
         }
 
-        Ok(Some(result))
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
+        }
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
