@@ -54,7 +54,8 @@ impl KvdbSqliteStatements {
         "CREATE TABLE IF NOT EXISTS {table_name} ( key INTEGER PRIMARY KEY {comma_value_columns_def} )";
     pub const DELETE_STATEMENT: &'static str =
         "DELETE FROM {table_name} where key = :key";
-    pub const DROP_TABLE_STATEMENT: &'static str = "DROP TABLE {table_name}";
+    pub const DROP_TABLE_STATEMENT: &'static str =
+        "DROP TABLE IF EXISTS {table_name}";
     pub const GET_STATEMENT_TMPL: &'static str =
         "SELECT {value_columns} FROM {table_name} WHERE key = :key";
     pub const PUT_STATEMENT_TMPL: &'static str =

@@ -194,7 +194,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         let file_exists = Path::new(&snapshot_path).exists();
         let sqlite_open_result = SqliteConnection::open(
             &Self::db_file_paths(snapshot_path)[0],
-            true,
+            false,
             SqliteConnection::default_open_flags(),
         );
         if file_exists {
