@@ -42,3 +42,4 @@ ethkey = { path = "../../../accounts/ethkey" }
 
 [profile.release]
 debug = true
+debug-assertions = true

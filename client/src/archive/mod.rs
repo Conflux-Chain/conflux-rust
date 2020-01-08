@@ -24,7 +24,6 @@ use cfxcore::{
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use ctrlc::CtrlC;
-use db::SystemDB;
 use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
@@ -54,16 +53,16 @@ pub struct ArchiveClientHandle {
     pub txgen_join_handle: Option<thread::JoinHandle<()>>,
     pub blockgen: Arc<BlockGenerator>,
     pub secret_store: Arc<SecretStore>,
-    pub ledger_db: Weak<SystemDB>,
+    pub block_data_manager: Weak<BlockDataManager>,
     pub runtime: Runtime,
 }
 
 impl ArchiveClientHandle {
     pub fn into_be_dropped(
         self,
-    ) -> (Weak<SystemDB>, Arc<BlockGenerator>, Box<dyn Any>) {
+    ) -> (Weak<BlockDataManager>, Arc<BlockGenerator>, Box<dyn Any>) {
         (
-            self.ledger_db,
+            self.block_data_manager,
             self.blockgen,
             Box::new((
                 self.consensus,
@@ -109,7 +108,7 @@ impl ArchiveClient {
 
         let secret_store = Arc::new(SecretStore::new());
         let storage_manager = Arc::new(
-            StorageManager::new(ledger_db.clone(), conf.storage_config())
+            StorageManager::new(conf.storage_config())
                 .expect("Failed to initialize storage."),
         );
         {
@@ -181,7 +180,7 @@ impl ArchiveClient {
             vm,
             txpool.clone(),
             statistics,
-            data_man,
+            data_man.clone(),
             pow_config.clone(),
         ));
 
@@ -409,7 +408,7 @@ impl ArchiveClient {
         )?;
 
         Ok(ArchiveClientHandle {
-            ledger_db: Arc::downgrade(&ledger_db),
+            block_data_manager: Arc::downgrade(&data_man),
             debug_rpc_http_server,
             rpc_http_server,
             rpc_tcp_server,

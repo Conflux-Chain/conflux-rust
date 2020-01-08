@@ -86,14 +86,14 @@ fn test_trie_node_encode_decode() {
     }
 
     // TrieNode without compressed path.
-    let x = MemOptimizedTrieNode::<CacheAlgoDataDeltaMpt>::new(
+    let x = MemOptimizedTrieNode::<DeltaMptsCacheAlgoData>::new(
         Default::default(),
         children_table,
         Some(b"asdf".to_vec().into_boxed_slice()),
         Default::default(),
     );
     let rlp_bytes = x.rlp_bytes();
-    let rlp_parsed = MemOptimizedTrieNode::<CacheAlgoDataDeltaMpt>::decode(
+    let rlp_parsed = MemOptimizedTrieNode::<DeltaMptsCacheAlgoData>::decode(
         &Rlp::new(rlp_bytes.as_slice()),
     )
     .unwrap();
@@ -101,5 +101,5 @@ fn test_trie_node_encode_decode() {
     assert_eq!(rlp_parsed, x);
 }
 
-use super::super::{node_memory_manager::CacheAlgoDataDeltaMpt, *};
+use super::super::{node_memory_manager::DeltaMptsCacheAlgoData, *};
 use rlp::*;

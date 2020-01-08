@@ -333,10 +333,17 @@ impl<'a> StateTrait for State<'a> {
             self.revert();
         }
         debug!(
-            "commit: delta_trie_height={:?} has_intermediate={}, height={:?}",
+            "commit state for epoch {:?}: delta_trie_height={:?} \
+            has_intermediate={}, height={:?}, snapshot_epoch_id={:?}, \
+            intermediate_epoch_id={:?}, intermediate_mpt_id={:?}, delta_mpt_id={}.",
+            epoch_id,
             self.delta_trie_height,
             self.maybe_intermediate_trie.is_some(),
             self.height,
+            self.snapshot_epoch_id,
+            self.intermediate_epoch_id,
+            self.maybe_intermediate_trie.as_ref().map(|mpt| mpt.get_mpt_id()),
+            self.delta_trie.get_mpt_id(),
         );
         if self.delta_trie_height.unwrap()
             >= self
@@ -366,9 +373,10 @@ impl<'a> StateTrait for State<'a> {
         // Free all modified nodes.
         let owned_node_set = self.owned_node_set.as_ref().unwrap();
         for owned_node in owned_node_set {
-            self.delta_trie
-                .get_node_memory_manager()
-                .free_owned_node(&mut owned_node.clone());
+            self.delta_trie.get_node_memory_manager().free_owned_node(
+                &mut owned_node.clone(),
+                self.delta_trie.get_mpt_id(),
+            );
         }
     }
 }
@@ -392,6 +400,7 @@ impl<'a> State<'a> {
             let (root_cow, entry) = CowNodeRef::new_uninitialized_node(
                 &allocator,
                 self.owned_node_set.as_mut().unwrap(),
+                self.delta_trie.get_mpt_id(),
             )?;
             // Insert empty node.
             entry.insert(UnsafeCell::new(Default::default()));
@@ -417,6 +426,7 @@ impl<'a> State<'a> {
                 let mut cow_root = CowNodeRef::new(
                     root_node.clone(),
                     self.owned_node_set.as_ref().unwrap(),
+                    self.delta_trie.get_mpt_id(),
                 );
                 let allocator =
                     self.delta_trie.get_node_memory_manager().get_allocator();
@@ -442,24 +452,44 @@ impl<'a> State<'a> {
     fn do_db_commit(
         &mut self, epoch_id: EpochId, merkle_root: &MerkleHash,
     ) -> Result<()> {
-        // TODO(yz): accumulate to db write counter.
         self.dirty = false;
+
+        let maybe_existing_merkle_root =
+            self.delta_trie.get_merkle_root_by_epoch_id(&epoch_id)?;
+        if maybe_existing_merkle_root.is_some() {
+            error!(
+                "Overwriting computed state for epoch {:?}, \
+                 committed merkle root {:?}, new merkle root {:?}",
+                epoch_id,
+                maybe_existing_merkle_root.unwrap(),
+                merkle_root
+            );
+            debug_assert!(false);
+            assert_eq!(
+                maybe_existing_merkle_root,
+                Some(*merkle_root),
+                "Overwriting computed state with a different merkle root."
+            );
+            return Ok(());
+        }
+
+        // Use coarse lock to prevent row number from interleaving,
+        // which makes it cleaner to restart from db failure. It also
+        // benefits performance because without a coarse lock all
+        // threads may not be able to do anything else when they compete
+        // with each other on slow db writing.
+        let mut commit_transaction = self.delta_trie.start_commit()?;
 
         let maybe_root_node = self.delta_trie_root.clone();
         match maybe_root_node {
             None => {}
             Some(root_node) => {
-                // Use coarse lock to prevent row number from interleaving,
-                // which makes it cleaner to restart from db failure. It also
-                // benefits performance because without a coarse lock all
-                // threads may not be able to do anything else when they compete
-                // with each other on slow db writing.
-                let mut commit_transaction = self.delta_trie.start_commit()?;
                 let start_row_number = commit_transaction.info.row_number.value;
 
                 let mut cow_root = CowNodeRef::new(
                     root_node,
                     self.owned_node_set.as_ref().unwrap(),
+                    self.delta_trie.get_mpt_id(),
                 );
 
                 if cow_root.is_owned() {
@@ -531,17 +561,6 @@ impl<'a> State<'a> {
                     db_key.to_string().as_bytes(),
                 )?;
 
-                commit_transaction.transaction.put(
-                    ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
-                        .concat()
-                        .as_slice(),
-                    self.parent_epoch_id.to_hex().as_bytes(),
-                )?;
-
-                commit_transaction
-                    .transaction
-                    .commit(self.delta_trie.db_commit())?;
-
                 self.manager.number_committed_nodes.fetch_add(
                     (commit_transaction.info.row_number.value
                         - start_row_number) as usize,
@@ -550,11 +569,21 @@ impl<'a> State<'a> {
             }
         }
 
-        StateManager::mpt_commit_state_root(
-            &self.delta_trie,
+        commit_transaction.transaction.put(
+            ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
+                .concat()
+                .as_slice(),
+            self.parent_epoch_id.to_hex().as_bytes(),
+        )?;
+
+        commit_transaction
+            .transaction
+            .commit(self.delta_trie.db_commit())?;
+
+        self.delta_trie.state_root_committed(
             epoch_id,
             merkle_root,
-            self.parent_epoch_id.clone(),
+            self.parent_epoch_id,
             self.delta_trie_root.clone(),
         );
 
