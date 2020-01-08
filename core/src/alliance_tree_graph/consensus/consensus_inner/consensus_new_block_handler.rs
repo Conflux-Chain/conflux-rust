@@ -4,31 +4,24 @@
 
 use super::super::{
     consensus_inner::{
-        confirmation_meter::ConfirmationMeter,
         consensus_executor::{ConsensusExecutor, EpochExecutionTask},
         ConsensusGraphInner, NULL,
     },
-    debug::ComputeEpochDebugRecord,
     ConsensusConfig,
 };
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
-    parameters::{consensus::*, consensus_internal::*},
-    rlp::Encodable,
+    parameters::consensus::*,
     statistics::SharedStatistics,
-    storage::StateRootWithAuxInfo,
     sync::delta::CHECKPOINT_DUMP_MANAGER,
     SharedTransactionPool,
 };
 use cfx_types::H256;
-use hibitset::{BitSet, BitSetLike, DrainableBitSet};
-use parity_bytes::ToPretty;
+use hibitset::BitSetLike;
 use primitives::{BlockHeader, SignedTransaction};
 use std::{
-    cmp::{max, min},
-    collections::{HashMap, HashSet, VecDeque},
-    io::Write,
+    collections::{HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -59,122 +52,14 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    /// recompute past_weight under stable_genesis
-    fn recompute_stable_past_weight(
-        inner: &mut ConsensusGraphInner, stable_genesis: usize,
-    ) {
-        let mut stable_genesis_subtree =
-            BitSet::with_capacity(inner.arena.len() as u32);
-        let mut queue = VecDeque::new();
-        stable_genesis_subtree.add(stable_genesis as u32);
-        queue.push_back(stable_genesis);
-        while let Some(x) = queue.pop_front() {
-            for child in &inner.arena[x].children {
-                queue.push_back(*child);
-                stable_genesis_subtree.add(*child as u32);
-            }
-        }
-
-        let mut stack = Vec::new();
-        let mut visited = BitSet::with_capacity(inner.arena.capacity() as u32);
-        stack.push((0, inner.cur_era_genesis_block_arena_index, Vec::new()));
-        while let Some((state, me, mut blockset)) = stack.pop() {
-            if state == 0 {
-                // compute blockset_in_own_view_of_epoch first
-                if !inner.arena[me].data.blockset_cleared {
-                    for index in
-                        &inner.arena[me].data.blockset_in_own_view_of_epoch
-                    {
-                        if !visited.contains(*index as u32) {
-                            visited.add(*index as u32);
-                            blockset.push(*index);
-                        }
-                    }
-                } else {
-                    let mut queue = VecDeque::new();
-                    for referee in &inner.arena[me].referees {
-                        if !visited.contains(*referee as u32) {
-                            visited.add(*referee as u32);
-                            queue.push_back(*referee);
-                        }
-                    }
-                    while let Some(index) = queue.pop_front() {
-                        blockset.push(index);
-                        let parent = inner.arena[index].parent;
-                        if !visited.contains(parent as u32) {
-                            visited.add(parent as u32);
-                            queue.push_back(parent);
-                        }
-                        for referee in &inner.arena[index].referees {
-                            if !visited.contains(*referee as u32) {
-                                visited.add(*referee as u32);
-                                queue.push_back(*referee);
-                            }
-                        }
-                    }
-                }
-
-                // compute past_weight
-                if stable_genesis_subtree.contains(me as u32) {
-                    let parent = inner.arena[me].parent;
-                    if stable_genesis_subtree.contains(parent as u32) {
-                        inner.arena[me].past_weight = inner.arena[parent]
-                            .past_weight
-                            + inner.block_weight(
-                                parent, false, /* inclusive */
-                            );
-                    } else {
-                        inner.arena[me].past_weight = 0;
-                    }
-
-                    for index in &blockset {
-                        if stable_genesis_subtree.contains(*index as u32) {
-                            inner.arena[me].past_weight += inner.block_weight(
-                                *index, false, /* inclusive */
-                            );
-                        }
-                    }
-                }
-
-                stack.push((1, me, blockset));
-                visited.add(me as u32);
-                for child in &inner.arena[me].children {
-                    if !inner.arena[*child].data.partial_invalid {
-                        stack.push((0, *child, Vec::new()));
-                    }
-                }
-            } else {
-                visited.remove(me as u32);
-                for index in blockset {
-                    visited.remove(index as u32);
-                }
-            }
-        }
-    }
-
     fn make_checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
-        will_execute: bool, executor: &ConsensusExecutor,
+        _will_execute: bool,
     )
     {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
         let new_era_stable_height =
             new_era_height + inner.inner_conf.era_epoch_count;
-        let stable_era_genesis =
-            inner.get_pivot_block_arena_index(new_era_stable_height);
-
-        // In transaction-execution phases (`RecoverBlockFromDb` or `Normal`),
-        // ensure all blocks on the pivot chain before stable_era_genesis
-        // have state_valid computed
-        if will_execute {
-            // Make sure state execution is finished before setting lower_bound
-            // to the new_checkpoint_era_genesis.
-            executor
-                .wait_for_result(inner.arena[new_era_block_arena_index].hash);
-            inner
-                .compute_state_valid(stable_era_genesis)
-                .expect("Old cur_era_stable_height has available state_valid");
-        }
 
         // We first compute the set of blocks inside the new era and we
         // recompute the past_weight inside the stable height.
@@ -183,7 +68,6 @@ impl ConsensusNewBlockHandler {
         queue.push_back(new_era_block_arena_index);
         new_era_block_arena_index_set.insert(new_era_block_arena_index);
         while let Some(x) = queue.pop_front() {
-            inner.arena[x].past_weight = 0;
             for child in &inner.arena[x].children {
                 if !new_era_block_arena_index_set.contains(child) {
                     queue.push_back(*child);
@@ -211,11 +95,6 @@ impl ConsensusNewBlockHandler {
                 .difference(&new_era_genesis_subtree)
                 .collect();
 
-        ConsensusNewBlockHandler::recompute_stable_past_weight(
-            inner,
-            stable_era_genesis,
-        );
-
         // Now we topologically sort the blocks outside the era
         let mut outside_block_arena_indices = HashSet::new();
         for (index, _) in inner.arena.iter() {
@@ -234,33 +113,25 @@ impl ConsensusNewBlockHandler {
             inner.arena[me]
                 .referrers
                 .retain(|v| new_era_block_arena_index_set.contains(v));
-            // We no longer need to consider blocks outside our era when
-            // computing blockset_in_epoch
-            inner.arena[me]
-                .data
-                .blockset_in_own_view_of_epoch
-                .retain(|v| new_era_block_arena_index_set.contains(v));
         }
         // reassign the parent for outside era blocks
         for v in new_era_legacy_block_arena_index_set {
             let me = *v;
-            let mut parent = inner.arena[me].parent;
+            let mut parent =
+                inner.arena[me].parent.expect("parent must exists");
             if inner.arena[me].era_block != NULL {
                 inner.split_root(me);
             }
             if !new_era_block_arena_index_set.contains(&parent) {
                 parent = new_era_block_arena_index;
             }
-            inner.arena[me].parent = parent;
+            inner.arena[me].parent = Some(parent);
             inner.arena[me].era_block = NULL;
             inner.terminal_hashes.remove(&inner.arena[me].hash);
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
             let mut old_era_block_set = inner.old_era_block_set.lock();
-            inner
-                .pastset_cache
-                .intersect_update(&outside_block_arena_indices);
             for index in outside_block_arena_indices {
                 let hash = inner.arena[index].hash;
                 old_era_block_set.push_back(hash);
@@ -277,12 +148,11 @@ impl ConsensusNewBlockHandler {
         inner.pivot_chain_metadata =
             inner.pivot_chain_metadata.split_off(new_era_pivot_index);
         for d in inner.pivot_chain_metadata.iter_mut() {
-            d.last_pivot_in_past_blocks
+            d.blockset_in_own_view_of_epoch
+                .retain(|v| new_era_block_arena_index_set.contains(v));
+            d.ordered_executable_epoch_blocks
                 .retain(|v| new_era_block_arena_index_set.contains(v));
         }
-        inner
-            .anticone_cache
-            .intersect_update(&new_era_genesis_subtree);
 
         // Chop off all link-cut-trees in the inner data structure
         inner.split_root(new_era_block_arena_index);
@@ -304,461 +174,6 @@ impl ConsensusNewBlockHandler {
         CHECKPOINT_DUMP_MANAGER.read().dump_async(next_era_hash);
     }
 
-    pub fn compute_anticone_bruteforce(
-        inner: &ConsensusGraphInner, me: usize,
-    ) -> BitSet {
-        let parent = inner.arena[me].parent;
-        if parent == NULL {
-            // This is genesis, so the anticone should be empty
-            return BitSet::new();
-        }
-        let mut last_in_pivot = inner.arena[parent].last_pivot_in_past;
-        for referee in &inner.arena[me].referees {
-            last_in_pivot =
-                max(last_in_pivot, inner.arena[*referee].last_pivot_in_past);
-        }
-        let mut visited = BitSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(me);
-        visited.add(me as u32);
-        while let Some(index) = queue.pop_front() {
-            let parent = inner.arena[index].parent;
-            if parent != NULL
-                && inner.arena[parent].data.epoch_number > last_in_pivot
-                && !visited.contains(parent as u32)
-            {
-                visited.add(parent as u32);
-                queue.push_back(parent);
-            }
-            for referee in &inner.arena[index].referees {
-                if inner.arena[*referee].data.epoch_number > last_in_pivot
-                    && !visited.contains(*referee as u32)
-                {
-                    visited.add(*referee as u32);
-                    queue.push_back(*referee);
-                }
-            }
-        }
-        // Now we traverse all future of me, when adding new block, this is
-        // empty
-        queue.clear();
-        queue.push_back(me);
-        while let Some(index) = queue.pop_front() {
-            for child in &inner.arena[index].children {
-                if !visited.contains(*child as u32) {
-                    visited.add(*child as u32);
-                    queue.push_back(*child);
-                }
-            }
-            for referrer in &inner.arena[index].referrers {
-                if !visited.contains(*referrer as u32) {
-                    visited.add(*referrer as u32);
-                    queue.push_back(*referrer);
-                }
-            }
-        }
-
-        let mut anticone = BitSet::with_capacity(inner.arena.capacity() as u32);
-        for (i, node) in inner.arena.iter() {
-            if node.data.epoch_number > last_in_pivot
-                && !visited.contains(i as u32)
-            {
-                anticone.add(i as u32);
-            }
-        }
-        anticone
-    }
-
-    fn compute_anticone(inner: &mut ConsensusGraphInner, me: usize) -> BitSet {
-        let parent = inner.arena[me].parent;
-        debug_assert!(parent != NULL);
-        debug_assert!(inner.arena[me].children.is_empty());
-        debug_assert!(inner.arena[me].referrers.is_empty());
-
-        // If we do not have the anticone of its parent, we compute it with
-        // brute force!
-        let parent_anticone_opt = inner.anticone_cache.get(parent);
-        let mut anticone;
-        if parent_anticone_opt.is_none() {
-            anticone = ConsensusNewBlockHandler::compute_anticone_bruteforce(
-                inner, me,
-            );
-        } else {
-            // anticone = parent_anticone + parent_future - my_past
-            // Compute future set of parent
-            anticone = inner.compute_future_bitset(parent);
-            anticone.remove(me as u32);
-
-            for index in parent_anticone_opt.unwrap() {
-                anticone.add(*index as u32);
-            }
-            let mut my_past = BitSet::new();
-            let mut queue: VecDeque<usize> = VecDeque::new();
-            queue.push_back(me);
-            while let Some(index) = queue.pop_front() {
-                if my_past.contains(index as u32) {
-                    continue;
-                }
-
-                debug_assert!(index != parent);
-                if index != me {
-                    my_past.add(index as u32);
-                }
-
-                let idx_parent = inner.arena[index].parent;
-                debug_assert!(idx_parent != NULL);
-                if anticone.contains(idx_parent as u32) {
-                    queue.push_back(idx_parent);
-                }
-
-                for referee in &inner.arena[index].referees {
-                    if anticone.contains(*referee as u32) {
-                        queue.push_back(*referee);
-                    }
-                }
-            }
-            for index in my_past.drain() {
-                anticone.remove(index);
-            }
-        }
-
-        // We only consider non-lagacy blocks when computing anticone.
-        for index in anticone.clone().iter() {
-            if inner.arena[index as usize].era_block == NULL {
-                anticone.remove(index);
-            }
-        }
-
-        inner.anticone_cache.update(me, &anticone);
-
-        let mut anticone_barrier = BitSet::new();
-        for index in anticone.clone().iter() {
-            let parent = inner.arena[index as usize].parent as u32;
-            if !anticone.contains(parent) {
-                anticone_barrier.add(index);
-            }
-        }
-
-        debug!(
-            "Block {} anticone size {}",
-            inner.arena[me].hash,
-            anticone.len()
-        );
-
-        anticone_barrier
-    }
-
-    fn check_correct_parent_brutal(
-        inner: &mut ConsensusGraphInner, me: usize, subtree_weight: &Vec<i128>,
-    ) -> bool {
-        let mut valid = true;
-        let parent = inner.arena[me].parent;
-        let parent_height = inner.arena[parent].height;
-        let era_genesis_height = inner.get_era_genesis_height(parent_height, 0);
-
-        // Check the pivot selection decision.
-        for consensus_arena_index_in_epoch in
-            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
-        {
-            if inner.arena[*consensus_arena_index_in_epoch]
-                .data
-                .partial_invalid
-            {
-                continue;
-            }
-
-            let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
-            assert!(lca != *consensus_arena_index_in_epoch);
-            // If it is outside current era, we will skip!
-            if lca == NULL || inner.arena[lca].height < era_genesis_height {
-                continue;
-            }
-            if lca == parent {
-                valid = false;
-                break;
-            }
-
-            let fork = inner.ancestor_at(
-                *consensus_arena_index_in_epoch,
-                inner.arena[lca].height + 1,
-            );
-            let pivot = inner.ancestor_at(parent, inner.arena[lca].height + 1);
-
-            let fork_subtree_weight = subtree_weight[fork];
-            let pivot_subtree_weight = subtree_weight[pivot];
-
-            if ConsensusGraphInner::is_heavier(
-                (fork_subtree_weight, &inner.arena[fork].hash),
-                (pivot_subtree_weight, &inner.arena[pivot].hash),
-            ) {
-                valid = false;
-                break;
-            }
-        }
-
-        valid
-    }
-
-    fn check_correct_parent(
-        inner: &mut ConsensusGraphInner, me: usize, anticone_barrier: &BitSet,
-        weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
-    ) -> bool
-    {
-        if let Some((subtree_weight, _, _)) = weight_tuple {
-            return ConsensusNewBlockHandler::check_correct_parent_brutal(
-                inner,
-                me,
-                subtree_weight,
-            );
-        }
-        let mut valid = true;
-        let parent = inner.arena[me].parent;
-        let parent_height = inner.arena[parent].height;
-        let era_genesis_height = inner.get_era_genesis_height(parent_height, 0);
-
-        let mut weight_delta = HashMap::new();
-
-        for index in anticone_barrier {
-            weight_delta
-                .insert(index as usize, inner.weight_tree.get(index as usize));
-        }
-
-        // Remove weight contribution of anticone
-        for (index, delta) in &weight_delta {
-            inner.weight_tree.path_apply(*index, -delta);
-        }
-
-        // Check the pivot selection decision.
-        for consensus_arena_index_in_epoch in
-            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
-        {
-            if inner.arena[*consensus_arena_index_in_epoch]
-                .data
-                .partial_invalid
-            {
-                continue;
-            }
-
-            let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
-            assert!(lca != *consensus_arena_index_in_epoch);
-            // If it is outside the era, we will skip!
-            if lca == NULL || inner.arena[lca].height < era_genesis_height {
-                continue;
-            }
-            if lca == parent {
-                valid = false;
-                break;
-            }
-
-            let fork = inner.ancestor_at(
-                *consensus_arena_index_in_epoch,
-                inner.arena[lca].height + 1,
-            );
-            let pivot = inner.ancestor_at(parent, inner.arena[lca].height + 1);
-
-            let fork_subtree_weight = inner.weight_tree.get(fork);
-            let pivot_subtree_weight = inner.weight_tree.get(pivot);
-
-            if ConsensusGraphInner::is_heavier(
-                (fork_subtree_weight, &inner.arena[fork].hash),
-                (pivot_subtree_weight, &inner.arena[pivot].hash),
-            ) {
-                valid = false;
-                break;
-            }
-        }
-
-        for (index, delta) in &weight_delta {
-            inner.weight_tree.path_apply(*index, *delta);
-        }
-
-        valid
-    }
-
-    #[allow(dead_code)]
-    fn log_debug_epoch_computation(
-        &self, epoch_arena_index: usize, inner: &mut ConsensusGraphInner,
-    ) -> ComputeEpochDebugRecord {
-        let epoch_block_hash = inner.arena[epoch_arena_index].hash;
-
-        let epoch_block_hashes =
-            inner.get_epoch_block_hashes(epoch_arena_index);
-
-        // Parent state root.
-        let parent_arena_index = inner.arena[epoch_arena_index].parent;
-        let parent_block_hash = inner.arena[parent_arena_index].hash;
-        let parent_state_root = inner
-            .data_man
-            .get_epoch_execution_commitment(&parent_block_hash)
-            .unwrap()
-            .state_root_with_aux_info
-            .clone();
-
-        let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
-
-        let reward_execution_info = self
-            .executor
-            .get_reward_execution_info_from_index(inner, reward_index);
-        let task = EpochExecutionTask::new(
-            epoch_block_hash,
-            epoch_block_hashes.clone(),
-            inner.get_epoch_start_block_number(epoch_arena_index),
-            reward_execution_info,
-            false,
-            true,
-        );
-        let debug_record_data = task.debug_record.clone();
-        {
-            let mut debug_record_data_locked = debug_record_data.lock();
-            let debug_record = debug_record_data_locked.as_mut().unwrap();
-
-            debug_record.parent_block_hash = parent_block_hash;
-            debug_record.parent_state_root = parent_state_root;
-            debug_record.reward_epoch_hash =
-                if let Some((reward_epoch_block, _)) = reward_index.clone() {
-                    Some(inner.arena[reward_epoch_block].hash)
-                } else {
-                    None
-                };
-            debug_record.anticone_penalty_cutoff_epoch_hash =
-                if let Some((_, anticone_penalty_cutoff_epoch_block)) =
-                    reward_index.clone()
-                {
-                    Some(inner.arena[anticone_penalty_cutoff_epoch_block].hash)
-                } else {
-                    None
-                };
-
-            let blocks = epoch_block_hashes
-                .iter()
-                .map(|hash| {
-                    self.data_man
-                        .block_by_hash(hash, false /* update_cache */)
-                        .unwrap()
-                })
-                .collect::<Vec<_>>();
-
-            debug_record.block_hashes = epoch_block_hashes;
-            debug_record.block_txs = blocks
-                .iter()
-                .map(|block| block.transactions.len())
-                .collect::<Vec<_>>();
-            debug_record.transactions = blocks
-                .iter()
-                .flat_map(|block| block.transactions.clone())
-                .collect::<Vec<_>>();
-
-            debug_record.block_authors = blocks
-                .iter()
-                .map(|block| *block.block_header.author())
-                .collect::<Vec<_>>();
-        }
-        self.executor.enqueue_epoch(task);
-        self.executor.wait_for_result(epoch_block_hash);
-
-        Arc::try_unwrap(debug_record_data)
-            .unwrap()
-            .into_inner()
-            .unwrap()
-    }
-
-    #[allow(dead_code)]
-    fn log_invalid_state_root(
-        &self, expected_state_root: &StateRootWithAuxInfo,
-        got_state_root: &StateRootWithAuxInfo, deferred: usize,
-        inner: &mut ConsensusGraphInner,
-    ) -> std::io::Result<()>
-    {
-        let debug_record = self.log_debug_epoch_computation(deferred, inner);
-        let debug_record_rlp = debug_record.rlp_bytes();
-
-        let deferred_block_hash = inner.arena[deferred].hash;
-
-        warn!(
-            "Invalid state root: should be {:?}, got {:?}, deferred block: {:?}, \
-            reward epoch bock: {:?}, anticone cutoff block: {:?}, \
-            number of blocks in epoch: {:?}, number of transactions in epoch: {:?}, rewards: {:?}",
-            expected_state_root,
-            got_state_root,
-            deferred_block_hash,
-            debug_record.reward_epoch_hash,
-            debug_record.anticone_penalty_cutoff_epoch_hash,
-            debug_record.block_hashes.len(),
-            debug_record.transactions.len(),
-            debug_record.merged_rewards_by_author,
-        );
-
-        let dump_dir = &self.conf.debug_dump_dir_invalid_state_root;
-        let invalid_state_root_path =
-            dump_dir.clone() + &deferred_block_hash.to_hex();
-        std::fs::create_dir_all(dump_dir)?;
-
-        if std::path::Path::new(&invalid_state_root_path).exists() {
-            return Ok(());
-        }
-        let mut file = std::fs::File::create(&invalid_state_root_path)?;
-        file.write_all(&debug_record_rlp)?;
-
-        Ok(())
-    }
-
-    fn check_block_full_validity(
-        &self, new: usize, block_header: &BlockHeader,
-        inner: &mut ConsensusGraphInner, adaptive: bool,
-        anticone_barrier: &BitSet,
-        weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
-    ) -> bool
-    {
-        let parent = inner.arena[new].parent;
-        if inner.arena[parent].data.partial_invalid {
-            warn!(
-                "Partially invalid due to partially invalid parent. {:?}",
-                block_header.clone()
-            );
-            return false;
-        }
-
-        // Check whether the new block select the correct parent block
-        if !ConsensusNewBlockHandler::check_correct_parent(
-            inner,
-            new,
-            anticone_barrier,
-            weight_tuple,
-        ) {
-            warn!(
-                "Partially invalid due to picking incorrect parent. {:?}",
-                block_header.clone()
-            );
-            return false;
-        }
-
-        // Check whether difficulty is set correctly
-        if inner.arena[new].difficulty
-            != inner.expected_difficulty(&inner.arena[parent].hash)
-        {
-            warn!(
-                "Partially invalid due to wrong difficulty. {:?}",
-                block_header.clone()
-            );
-            return false;
-        }
-
-        // Check adaptivity match. Note that in bench mode we do not check
-        // the adaptive field correctness. We simply override its value
-        // with the right one.
-        if !self.conf.bench_mode {
-            if inner.arena[new].adaptive != adaptive {
-                warn!(
-                    "Partially invalid due to invalid adaptive field. {:?}",
-                    block_header.clone()
-                );
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     /// Subroutine called by on_new_block()
     fn insert_block_initial(
         &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
@@ -767,95 +182,6 @@ impl ConsensusNewBlockHandler {
         self.statistics
             .set_consensus_graph_inserted_block_count(indices_len);
         me
-    }
-
-    /// Subroutine called by on_new_block()
-    fn update_lcts_initial(&self, inner: &mut ConsensusGraphInner, me: usize) {
-        let parent = inner.arena[me].parent;
-
-        inner.weight_tree.make_tree(me);
-        inner.weight_tree.link(parent, me);
-        inner.inclusive_weight_tree.make_tree(me);
-        inner.inclusive_weight_tree.link(parent, me);
-        inner.stable_weight_tree.make_tree(me);
-        inner.stable_weight_tree.link(parent, me);
-
-        inner.stable_tree.make_tree(me);
-        inner.stable_tree.link(parent, me);
-        let past_era_weight = if inner.arena[parent].height
-            % inner.inner_conf.era_epoch_count
-            == 0
-        {
-            0
-        } else {
-            inner.arena[parent].past_era_weight
-        };
-        inner.stable_tree.set(
-            me,
-            (inner.inner_conf.adaptive_weight_alpha_num as i128)
-                * (inner.block_weight(parent, false /* inclusive */)
-                    + past_era_weight),
-        );
-
-        inner.adaptive_tree.make_tree(me);
-        inner.adaptive_tree.link(parent, me);
-        let parent_w = inner.weight_tree.get(parent);
-        inner.adaptive_tree.set(
-            me,
-            -parent_w * (inner.inner_conf.adaptive_weight_alpha_num as i128),
-        );
-
-        inner.inclusive_adaptive_tree.make_tree(me);
-        inner.inclusive_adaptive_tree.link(parent, me);
-        let parent_iw = inner.inclusive_weight_tree.get(parent);
-        inner.inclusive_adaptive_tree.set(
-            me,
-            -parent_iw * (inner.inner_conf.adaptive_weight_alpha_num as i128),
-        );
-    }
-
-    /// Subroutine called by on_new_block()
-    fn update_lcts_finalize(
-        &self, inner: &mut ConsensusGraphInner, me: usize, stable: bool,
-    ) -> i128 {
-        let parent = inner.arena[me].parent;
-        let weight = inner.block_weight(me, false /* inclusive */);
-        let inclusive_weight =
-            inner.block_weight(me, true /* inclusive */);
-
-        inner.weight_tree.path_apply(me, weight);
-        inner.inclusive_weight_tree.path_apply(me, inclusive_weight);
-        if stable {
-            inner.stable_weight_tree.path_apply(me, weight);
-        }
-
-        inner.stable_tree.path_apply(
-            me,
-            (inner.inner_conf.adaptive_weight_alpha_den as i128) * weight,
-        );
-        if stable {
-            inner.adaptive_tree.path_apply(
-                me,
-                (inner.inner_conf.adaptive_weight_alpha_den as i128) * weight,
-            );
-        }
-        inner.adaptive_tree.caterpillar_apply(
-            parent,
-            -weight * (inner.inner_conf.adaptive_weight_alpha_num as i128),
-        );
-
-        inner.inclusive_adaptive_tree.path_apply(
-            me,
-            (inner.inner_conf.adaptive_weight_alpha_den as i128)
-                * inclusive_weight,
-        );
-        inner.inclusive_adaptive_tree.caterpillar_apply(
-            parent,
-            -inclusive_weight
-                * (inner.inner_conf.adaptive_weight_alpha_num as i128),
-        );
-
-        weight
     }
 
     fn process_outside_block(
@@ -882,30 +208,24 @@ impl ConsensusNewBlockHandler {
     fn recycle_tx_outside_era(
         &self, inner: &mut ConsensusGraphInner, era_block: usize,
     ) {
-        let mut anticone_tmp = HashSet::new();
-        let anticone = if let Some(x) = inner.anticone_cache.get(era_block) {
-            x
-        } else {
-            let anticone_bitset =
-                ConsensusNewBlockHandler::compute_anticone_bruteforce(
-                    inner, era_block,
-                );
-            for idx in anticone_bitset.iter() {
-                anticone_tmp.insert(idx as usize);
-            }
-            &anticone_tmp
-        };
+        let past = inner.compute_past_bitset(era_block);
+        let future = inner.compute_future_bitset(era_block);
 
-        for idx in anticone.iter() {
-            self.recycle_tx_in_block(inner, *idx);
+        // Recycle transactions in anticone
+        for (index, _) in inner.arena.iter() {
+            if !past.contains(index as u32) && !future.contains(index as u32) {
+                self.recycle_tx_in_block(inner, index);
+            }
         }
 
-        let future = inner.compute_future_bitset(era_block);
+        // Recycle transactions in future, but not in subtree of `era_block`.
         for idx in future.iter() {
             let index = idx as usize;
-            let lca = inner.lca(index, era_block);
-            if lca != era_block {
-                self.recycle_tx_in_block(inner, index);
+            if inner.arena[index].parent.is_some() {
+                let lca = inner.lca(index, era_block);
+                if lca != era_block {
+                    self.recycle_tx_in_block(inner, index);
+                }
             }
         }
     }
@@ -934,62 +254,31 @@ impl ConsensusNewBlockHandler {
     }
 
     fn persist_terminals(&self, inner: &ConsensusGraphInner) {
-        let mut terminals = Vec::with_capacity(inner.terminal_hashes.len());
-        for h in &inner.terminal_hashes {
-            terminals.push(h.clone());
-        }
-        self.data_man.insert_terminals_to_db(terminals);
+        self.data_man.insert_terminals_to_db(
+            inner.terminal_hashes.iter().cloned().collect(),
+        );
     }
 
-    fn try_clear_blockset_in_own_view_of_epoch(
-        inner: &mut ConsensusGraphInner, me: usize,
-    ) {
-        if inner.arena[me].data.blockset_in_own_view_of_epoch.len() as u64
-            > BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP
-        {
-            inner.arena[me].data.blockset_in_own_view_of_epoch =
-                Default::default();
-            inner.arena[me].data.ordered_executable_epoch_blocks =
-                Default::default();
-            inner.arena[me].data.blockset_cleared = true;
-        }
-    }
+    /// Determine the parent edges of given blocks and also extend the pivot
+    /// chain.
+    pub fn commit(_blocks: Vec<H256>) {}
 
     /// The top level function invoked by ConsensusGraph to insert a new block.
     pub fn on_new_block(
-        &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
-        hash: &H256, block_header: &BlockHeader,
+        &self, inner: &mut ConsensusGraphInner, hash: &H256,
+        block_header: &BlockHeader,
         transactions: Option<&Vec<Arc<SignedTransaction>>>,
     )
     {
-        let parent_hash = block_header.parent_hash();
-        let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
         let block_status_in_db = self
             .data_man
             .local_block_info_from_db(hash)
             .map(|info| info.get_status())
             .unwrap_or(BlockStatus::Pending);
-        // current block is outside era or it's parent is outside era
-        if parent_index.is_none()
-            || inner.arena[*parent_index.unwrap()].era_block == NULL
-        {
-            debug!(
-                "parent={:?} not in consensus graph, set header to pending",
-                parent_hash
-            );
-            let sn = self.process_outside_block(inner, &block_header);
-            let block_info = LocalBlockInfo::new(
-                block_status_in_db,
-                sn,
-                self.data_man.get_instance_id(),
-            );
-            self.data_man
-                .insert_local_block_info_to_db(hash, block_info);
-            return;
-        }
+        // TODO: decide the logic of legacy blocks
 
         let me = self.insert_block_initial(inner, &block_header);
-        let parent = inner.arena[me].parent;
+        /*let parent = inner.arena[me].parent;
         let era_genesis_height =
             inner.get_era_genesis_height(inner.arena[parent].height, 0);
         let mut fully_valid = true;
@@ -1413,12 +702,12 @@ impl ConsensusNewBlockHandler {
                 ));
                 state_at += 1;
             }
-        }
+        }*/
 
         self.persist_terminal_and_block_info(
             inner,
             me,
-            block_status,
+            block_status_in_db,
             transactions.is_some(),
         );
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
@@ -1435,7 +724,7 @@ impl ConsensusNewBlockHandler {
 
         let block_info = LocalBlockInfo::new(
             block_status,
-            inner.arena[me].data.sequence_number,
+            inner.arena[me].sequence_number,
             self.data_man.get_instance_id(),
         );
         self.data_man
