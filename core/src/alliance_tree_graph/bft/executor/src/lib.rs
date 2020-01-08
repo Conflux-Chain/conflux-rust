@@ -271,7 +271,7 @@ impl Executor {
                     // Real execution
 
                     let vm_status = VMStatus {
-                        major_status: StatusCode::UNKNOWN_VALIDATION_STATUS,
+                        major_status: StatusCode::EXECUTED,
                         sub_status: None,
                         message: None,
                     };
