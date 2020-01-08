@@ -311,7 +311,9 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
 impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn get_null_snapshot() -> Self { unimplemented!() }
 
-    fn open(_snapshot_path: &str) -> Result<Option<Self>> { unimplemented!() }
+    fn open(_snapshot_path: &str, _read_only: bool) -> Result<Option<Self>> {
+        unimplemented!()
+    }
 
     fn create(_snapshot_path: &str) -> Result<Self> { unimplemented!() }
 
