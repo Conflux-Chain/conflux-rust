@@ -15,11 +15,11 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 3
         self.conf_parameters = {
-            "dev_snapshot_epoch_count": "25",
+            "dev_snapshot_epoch_count": "10",
             "era_epoch_count": "50",
             "era_checkpoint_gap": "50",
             "chunk_size_byte": "1000",
-            "log_level": '"trace"',
+            "log_level": '"debug"',
         }
 
     def setup_network(self):
@@ -34,7 +34,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for _ in range(num):
             addr = client.rand_addr()
             tx_gas = client.DEFAULT_TX_GAS
-            tx = client.new_tx(receiver=addr, nonce=self.genesis_nonce, value=0, gas=tx_gas, data=b'')
+            tx = client.new_tx(receiver=addr, nonce=self.genesis_nonce, value=21000, gas=tx_gas, data=b'')
             self.genesis_nonce += 1
             txs.append(tx)
         return txs

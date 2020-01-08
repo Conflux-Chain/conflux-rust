@@ -190,11 +190,13 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
 impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self { Self { maybe_db: None } }
 
-    fn open(snapshot_path: &str) -> Result<Option<SnapshotDbSqlite>> {
+    fn open(
+        snapshot_path: &str, read_only: bool,
+    ) -> Result<Option<SnapshotDbSqlite>> {
         let file_exists = Path::new(&snapshot_path).exists();
         let sqlite_open_result = SqliteConnection::open(
             &Self::db_file_paths(snapshot_path)[0],
-            true,
+            read_only,
             SqliteConnection::default_open_flags(),
         );
         if file_exists {

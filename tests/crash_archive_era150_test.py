@@ -83,8 +83,6 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
         for _ in range(2000):
             self.nodes[0].generate(1, 0)
-            # FIXME This waiting is just used to ensure that there is enough time for making snapshot
-            time.sleep(0.005)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(sender_addr)), sender_balance)
         assert_equal(parse_as_int(self.nodes[0].cfx_getBalance(receiver_addr)), value)
         time.sleep(1)
