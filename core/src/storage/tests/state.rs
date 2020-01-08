@@ -192,7 +192,7 @@ fn test_set_delete() {
     println!("Testing with {} delete operations.", keys.len());
     for key in &keys {
         let value = state
-            .delete(StorageKey::AccountKey(key))
+            .delete_test_only(StorageKey::AccountKey(key))
             .expect("Failed to delete key.")
             .expect("Failed to get key");
         let equal = (&**key).eq(value.as_ref());

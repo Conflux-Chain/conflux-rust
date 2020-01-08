@@ -240,10 +240,33 @@ impl<'a> StateTrait for State<'a> {
         Ok(())
     }
 
-    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
-        let old_value = self.get(access_key)?;
+    fn delete(&mut self, access_key: StorageKey) -> Result<()> {
         self.set(access_key, MptValue::<Box<[u8]>>::TombStone.unwrap())?;
-        Ok(old_value.and_then(|x| if x.len() == 0 { None } else { Some(x) }))
+        Ok(())
+    }
+
+    fn delete_test_only(
+        &mut self, access_key: StorageKey,
+    ) -> Result<Option<Box<[u8]>>> {
+        self.pre_modification();
+
+        match self.get_delta_root_node() {
+            None => Ok(None),
+            Some(old_root_node) => {
+                let (old_value, _, root_node) = SubTrieVisitor::new(
+                    &self.delta_trie,
+                    old_root_node,
+                    &mut self.owned_node_set,
+                )?
+                .delete(
+                    &access_key
+                        .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
+                )?;
+                self.delta_trie_root =
+                    root_node.map(|maybe_node| maybe_node.into());
+                Ok(old_value)
+            }
+        }
     }
 
     /// Delete all key/value pairs with access_key_prefix as prefix. These
