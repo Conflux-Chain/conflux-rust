@@ -83,24 +83,28 @@ impl Encodable for SnapshotSyncCandidate {
 impl Decodable for SnapshotSyncCandidate {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let type_id: u8 = rlp.val_at(0)?;
-        match type_id {
-            0 => Ok(SnapshotSyncCandidate::OneStepSync {
+        let parsed = match type_id {
+            0 => SnapshotSyncCandidate::OneStepSync {
                 height: rlp.val_at(1)?,
                 snapshot_epoch_id: rlp.val_at(2)?,
-            }),
-            1 => Ok(SnapshotSyncCandidate::FullSync {
+            },
+            1 => SnapshotSyncCandidate::FullSync {
                 height: rlp.val_at(1)?,
                 snapshot_epoch_id: rlp.val_at(2)?,
-            }),
-            2 => Ok(SnapshotSyncCandidate::IncSync {
+            },
+            2 => SnapshotSyncCandidate::IncSync {
                 height: rlp.val_at(1)?,
                 base_snapshot_epoch_id: rlp.val_at(2)?,
                 snapshot_epoch_id: rlp.val_at(3)?,
-            }),
-            _ => Err(DecoderError::Custom(
-                "Unknown SnapshotSyncCandidate type id",
-            )),
-        }
+            },
+            _ => {
+                return Err(DecoderError::Custom(
+                    "Unknown SnapshotSyncCandidate type id",
+                ))
+            }
+        };
+        debug_assert_eq!(parsed.to_type_id(), type_id);
+        Ok(parsed)
     }
 }
 

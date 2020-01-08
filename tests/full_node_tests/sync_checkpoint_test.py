@@ -26,7 +26,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.add_nodes(self.num_nodes)
         for i in range(self.num_nodes - 1):
             self.start_node(i)
-        connect_sample_nodes(self.nodes[:-1], self.log)
+        connect_sample_nodes(self.nodes[:-1], self.log, latency_max=1)
     
     def _generate_txs(self, peer, num):
         client = RpcClient(self.nodes[peer])
@@ -49,6 +49,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for _ in range(num_blocks):
             txs = self._generate_txs(0, random.randint(5, 10))
             archive_node_client.generate_block_with_fake_txs(txs)
+        sync_blocks(self.nodes[:-1])
 
         # Start node[full_node_index] as full node to sync checkpoint
         # Change phase from CatchUpSyncBlockHeader to CatchUpCheckpoint

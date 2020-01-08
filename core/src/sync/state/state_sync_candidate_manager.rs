@@ -136,7 +136,7 @@ impl StateSyncCandidateManager {
         self.active_candidate.is_none() || self.active_peers.is_empty()
     }
 
-    pub fn active_peers(&self) -> HashSet<PeerId> { self.active_peers.clone() }
+    pub fn active_peers(&self) -> &HashSet<PeerId> { &self.active_peers }
 
     /// `peer` cannot support the active candidate now
     pub fn note_state_sync_failure(&mut self, peer: &PeerId) {
@@ -157,6 +157,10 @@ impl StateSyncCandidateManager {
     fn set_active_candidate(&mut self) {
         for (candidate, peer_set) in &self.candidates {
             if !peer_set.is_empty() {
+                debug!(
+                    "StateSync: set active_candidate={:?}, active_peers={:?}",
+                    candidate, peer_set
+                );
                 self.active_candidate = Some(candidate.clone());
                 self.active_peers = peer_set.clone();
             }
