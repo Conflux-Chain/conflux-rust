@@ -21,7 +21,9 @@ use consensus_types::common::{Author, Payload, Round};
 use futures::{select, stream::StreamExt};
 use libra_config::config::{ConsensusProposerType, NodeConfig};
 //use libra_logger::prelude::*;
-use crate::alliance_tree_graph::bft::consensus::chained_bft::network::NetworkSender;
+use crate::alliance_tree_graph::bft::consensus::{
+    chained_bft::network::NetworkSender, state_replication::StateComputer,
+};
 use libra_types::crypto_proxies::EpochInfo;
 use network::NetworkService;
 use safety_rules::SafetyRulesManager;
@@ -30,7 +32,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::runtime::{Handle, Runtime};
-use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
 
 /// Consensus configuration derived from ConsensusConfig
 pub struct ChainedBftSMRConfig {

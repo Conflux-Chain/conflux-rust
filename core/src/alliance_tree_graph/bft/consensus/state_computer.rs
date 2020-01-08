@@ -13,7 +13,7 @@ use libra_types::{
     transaction::{SignedTransaction, Transaction},
 };
 //use state_synchronizer::StateSyncClient;
-use executor::ProcessedVMOutput;
+use executor::{Executor, ProcessedVMOutput};
 use std::{
     convert::TryFrom,
     sync::Arc,
@@ -24,15 +24,16 @@ use std::{
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
 pub struct ExecutionProxy {
-    //executor: Arc<Executor<LibraVM>>,
-//synchronizer: Arc<StateSyncClient>,
+    executor: Arc<Executor>,
+    //synchronizer: Arc<StateSyncClient>,
 }
 
 impl ExecutionProxy {
-    pub fn new(/*executor: Arc<Executor<LibraVM>>, synchronizer: Arc<StateSyncClient>*/
+    pub fn new(
+        executor: Arc<Executor>, /* , synchronizer: Arc<StateSyncClient> */
     ) -> Self {
         Self {
-            //executor,
+            executor,
             //synchronizer,
         }
     }
@@ -66,18 +67,18 @@ impl StateComputer for ExecutionProxy {
          *committed_trees: &ExecutedTrees, */
     ) -> Result<ProcessedVMOutput>
     {
-        /*
-        let pre_execution_instant = Instant::now();
+        //let pre_execution_instant = Instant::now();
         // TODO: figure out error handling for the prologue txn
         self.executor
             .execute_block(
                 Self::transactions_from_block(block),
-                parent_executed_trees,
-                committed_trees,
+                //parent_executed_trees,
+                //committed_trees,
                 block.parent_id(),
                 block.id(),
             )
             .and_then(|output| {
+                /*
                 let execution_duration = pre_execution_instant.elapsed();
                 let num_txns = output.transaction_data().len();
                 ensure!(num_txns > 0, "metadata txn failed to execute");
@@ -90,10 +91,9 @@ impl StateComputer for ExecutionProxy {
                     counters::TXN_EXECUTION_DURATION_S
                         .observe_duration(Duration::from_nanos(nanos_per_txn));
                 }
+                */
                 Ok(output)
             })
-        */
-        Ok(ProcessedVMOutput::new(None))
     }
 
     /// Send a successful commit. A future is fulfilled when the state is
@@ -105,7 +105,6 @@ impl StateComputer for ExecutionProxy {
         //committed_trees: &ExecutedTrees,
     ) -> Result<()>
     {
-        /*
         let version = finality_proof.ledger_info().version();
         counters::LAST_COMMITTED_VERSION.set(version as i64);
 
@@ -122,8 +121,10 @@ impl StateComputer for ExecutionProxy {
             .collect();
 
         self.executor
-            .commit_blocks(committable_blocks, finality_proof, committed_trees)?;
-        counters::BLOCK_COMMIT_DURATION_S.observe_duration(pre_commit_instant.elapsed());
+            .commit_blocks(committable_blocks, finality_proof)?;
+        counters::BLOCK_COMMIT_DURATION_S
+            .observe_duration(pre_commit_instant.elapsed());
+        /*
         if let Err(e) = self.synchronizer.commit().await {
             error!("failed to notify state synchronizer: {:?}", e);
         }

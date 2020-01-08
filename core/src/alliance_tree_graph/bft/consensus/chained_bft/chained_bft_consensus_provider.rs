@@ -23,6 +23,7 @@ use safety_rules::SafetyRulesManagerConfig;
 use crate::alliance_tree_graph::bft::consensus::{
     state_computer::ExecutionProxy, state_replication::StateComputer,
 };
+use executor::Executor;
 use network::NetworkService;
 use primitives::TransactionWithSignature;
 use std::sync::Arc;
@@ -49,8 +50,9 @@ impl ChainedBftProvider {
         node_config: &mut NodeConfig,
         /*network_sender: ConsensusNetworkSender,
          *network_events: ConsensusNetworkEvents,
-         *executor: Arc<Executor<LibraVM>>,
-         *synchronizer_client: Arc<StateSyncClient>, */
+         */
+        executor: Arc<Executor>,
+        /* synchronizer_client: Arc<StateSyncClient>, */
     ) -> Self
     {
         let runtime = runtime::Builder::new()
@@ -74,9 +76,9 @@ impl ChainedBftProvider {
         let txn_manager = MempoolProxy::new(mempool_client);
         */
 
-        let state_computer = Arc::new(
-            ExecutionProxy::new(/*executor, synchronizer_client.clone())*/),
-        );
+        let state_computer = Arc::new(ExecutionProxy::new(
+            executor, /* , synchronizer_client.clone()) */
+        ));
         let smr = ChainedBftSMR::new(
             initial_setup,
             runtime,

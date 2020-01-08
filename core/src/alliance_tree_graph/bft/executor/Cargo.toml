@@ -12,4 +12,9 @@ edition = "2018"
 [dependencies]
 serde = "1.0"
 serde_derive = "1.0"
+anyhow = "1.0"
+itertools = { version = "0.8.0", default-features = false }
 libra-types = { path = "../types" }
+libra-crypto = { path = "../crypto/crypto" }
+libra-config = { path = "../config" }
+libra-logger = { path = "../common/logger", version = "0.1.0" }

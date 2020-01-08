@@ -1478,6 +1478,11 @@ dependencies = [
 name = "executor"
 version = "0.1.0"
 dependencies = [
+ "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libra-config 0.1.0",
+ "libra-crypto 0.1.0",
+ "libra-logger 0.1.0",
  "libra-types 0.1.0",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",

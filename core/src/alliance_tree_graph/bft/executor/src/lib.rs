@@ -1,8 +1,28 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use libra_types::crypto_proxies::ValidatorSet;
+use anyhow::{bail, ensure, format_err, Result};
+use libra_config::config::NodeConfig;
+use libra_crypto::{
+    hash::{GENESIS_BLOCK_ID, PRE_GENESIS_BLOCK_ID},
+    HashValue,
+};
+use libra_logger::prelude::*;
+use libra_types::{
+    block_info::{BlockInfo, Round},
+    crypto_proxies::{LedgerInfoWithSignatures, ValidatorSet},
+    ledger_info::LedgerInfo,
+    transaction::{
+        Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
+    },
+    vm_error::{StatusCode, VMStatus},
+    write_set::WriteSet,
+};
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, sync::Arc};
+
+const GENESIS_EPOCH: u64 = 0;
+const GENESIS_ROUND: Round = 0;
 
 /// A structure that summarizes the result of the execution needed for consensus
 /// to agree on. The execution is responsible for generating the ID of the new
@@ -148,5 +168,366 @@ impl ProcessedVMOutput {
                 .collect(),
                 */
         }
+    }
+}
+
+/// `Executor` implements all functionalities the execution module needs to
+/// provide.
+pub struct Executor {}
+
+impl Executor {
+    /// Constructs an `Executor`.
+    pub fn new(config: &NodeConfig) -> Self {
+        let mut executor = Executor {};
+
+        //FIXME: if start from original genesis
+        {
+            let genesis_txn = config
+                .execution
+                .genesis
+                .as_ref()
+                .expect("failed to load genesis transaction!")
+                .clone();
+            executor.init_genesis(genesis_txn);
+        }
+        executor
+    }
+
+    /// This is used when we start for the first time and the DB is completely
+    /// empty. It will write necessary information to DB by committing the
+    /// genesis transaction.
+    fn init_genesis(&mut self, genesis_txn: Transaction) {
+        let genesis_txns = vec![genesis_txn];
+
+        // Create a block with genesis_txn being the only transaction. Execute
+        // it then commit it immediately.
+        // We create `PRE_GENESIS_BLOCK_ID` as the parent of the genesis block.
+        let output = self
+            .execute_block(
+                genesis_txns.clone(),
+                *PRE_GENESIS_BLOCK_ID,
+                *GENESIS_BLOCK_ID,
+            )
+            .expect("Failed to execute genesis block.");
+
+        let ledger_info = LedgerInfo::new(
+            BlockInfo::new(
+                GENESIS_EPOCH,
+                GENESIS_ROUND,
+                *PRE_GENESIS_BLOCK_ID,
+                HashValue::zero(),
+                0,
+                0,
+                output.validators().clone(),
+            ),
+            HashValue::zero(),
+        );
+        let ledger_info_with_sigs = LedgerInfoWithSignatures::new(
+            ledger_info,
+            /* signatures = */ BTreeMap::new(),
+        );
+        self.commit_blocks(
+            vec![(genesis_txns, Arc::new(output))],
+            ledger_info_with_sigs,
+        )
+        .expect("Failed to commit genesis block.");
+        info!("GENESIS transaction is committed.")
+    }
+
+    /// Executes a block.
+    pub fn execute_block(
+        &self, transactions: Vec<Transaction>, parent_id: HashValue,
+        id: HashValue,
+    ) -> Result<ProcessedVMOutput>
+    {
+        debug!(
+            "Received request to execute block. Parent id: {:x}. Id: {:x}.",
+            parent_id, id
+        );
+
+        ensure!(
+            transactions.len() <= 1,
+            "One block can at most contain 1 transactions for proposal."
+        );
+        let mut vm_outputs = Vec::new();
+        for transaction in transactions {
+            // Execute the transaction
+            match transaction {
+                Transaction::UserTransaction(trans) => {
+                    let trans = trans.check_signature()?;
+                    let payload = trans.payload();
+                    let events = match payload {
+                        TransactionPayload::WriteSet(change_set) => {
+                            change_set.events().to_vec()
+                        }
+                        _ => bail!("Wrong transaction payload"),
+                    };
+
+                    ensure!(
+                        events.len() == 1,
+                        "One transaction can contain exactly 1 event."
+                    );
+
+                    // Real execution
+
+                    let vm_status = VMStatus {
+                        major_status: StatusCode::UNKNOWN_VALIDATION_STATUS,
+                        sub_status: None,
+                        message: None,
+                    };
+
+                    let status = TransactionStatus::Keep(vm_status);
+
+                    let output = TransactionOutput::new(
+                        WriteSet::default(),
+                        events,
+                        0,
+                        status,
+                    );
+
+                    vm_outputs.push(output);
+                }
+                _ => bail!("Wrong transaction type"),
+            }
+        }
+
+        let status: Vec<_> = vm_outputs
+            .iter()
+            .map(TransactionOutput::status)
+            .cloned()
+            .collect();
+        if !status.is_empty() {
+            debug!("Execution status: {:?}", status);
+        }
+
+        let output = Self::process_vm_outputs(vm_outputs)
+            .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+
+        Ok(output)
+    }
+
+    /// Saves eligible blocks to persistent storage.
+    /// If we have multiple blocks and not all of them have signatures, we may
+    /// send them to storage in a few batches. For example, if we have
+    /// ```text
+    /// A <- B <- C <- D <- E
+    /// ```
+    /// and only `C` and `E` have signatures, we will send `A`, `B` and `C` in
+    /// the first batch, then `D` and `E` later in the another batch.
+    /// Commits a block and all its ancestors in a batch manner. Returns
+    /// `Ok(())` if successful.
+    pub fn commit_blocks(
+        &self, blocks: Vec<(Vec<Transaction>, Arc<ProcessedVMOutput>)>,
+        ledger_info_with_sigs: LedgerInfoWithSignatures,
+    ) -> Result<()>
+    {
+        Ok(())
+    }
+
+    /*
+    /// Verifies the transactions based on the provided proofs and ledger info. If the transactions
+    /// are valid, executes them and commits immediately if execution results match the proofs.
+    pub fn execute_and_commit_chunk(
+        &self,
+        txn_list_with_proof: TransactionListWithProof,
+        // Target LI that has been verified independently: the proofs are relative to this version.
+        verified_target_li: LedgerInfoWithSignatures,
+        // An optional end of epoch LedgerInfo. We do not allow chunks that end epoch without
+        // carrying any epoch change LI.
+        epoch_change_li: Option<LedgerInfoWithSignatures>,
+        synced_trees: &mut ExecutedTrees,
+    ) -> Result<()> {
+        info!(
+            "Local synced version: {}. First transaction version in request: {:?}. \
+             Number of transactions in request: {}.",
+            synced_trees.txn_accumulator().num_leaves() - 1,
+            txn_list_with_proof.first_transaction_version,
+            txn_list_with_proof.transactions.len(),
+        );
+
+        let (num_txns_to_skip, first_version) = Self::verify_chunk(
+            &txn_list_with_proof,
+            &verified_target_li,
+            synced_trees.txn_accumulator().num_leaves(),
+        )?;
+
+        info!("Skipping the first {} transactions.", num_txns_to_skip);
+        let transactions: Vec<_> = txn_list_with_proof
+            .transactions
+            .into_iter()
+            .skip(num_txns_to_skip as usize)
+            .collect();
+
+        // Construct a StateView and pass the transactions to VM.
+        let state_view = VerifiedStateView::new(
+            Arc::clone(&self.storage_read_client),
+            synced_trees.version(),
+            synced_trees.state_root(),
+            synced_trees.state_tree(),
+        );
+        let vm_outputs = {
+            let _timer = OP_COUNTERS.timer("vm_execute_chunk_time_s");
+            V::execute_block(transactions.to_vec(), &self.vm_config, &state_view)?
+        };
+
+        // Since other validators have committed these transactions, their status should all be
+        // TransactionStatus::Keep.
+        for output in &vm_outputs {
+            if let TransactionStatus::Discard(_) = output.status() {
+                bail!("Syncing transactions that should be discarded.");
+            }
+        }
+
+        let (account_to_btree, account_to_proof) = state_view.into();
+
+        let output = Self::process_vm_outputs(
+            account_to_btree,
+            account_to_proof,
+            &transactions,
+            vm_outputs,
+            synced_trees,
+        )?;
+
+        // Since we have verified the proofs, we just need to verify that each TransactionInfo
+        // object matches what we have computed locally.
+        let mut txns_to_commit = vec![];
+        for (txn, txn_data) in itertools::zip_eq(transactions, output.transaction_data()) {
+            txns_to_commit.push(TransactionToCommit::new(
+                txn,
+                txn_data.account_blobs().clone(),
+                txn_data.events().to_vec(),
+                txn_data.gas_used(),
+                txn_data.status().vm_status().major_status,
+            ));
+        }
+
+        let ledger_info_to_commit =
+            Self::find_chunk_li(verified_target_li, epoch_change_li, &output)?;
+        if ledger_info_to_commit.is_none() && txns_to_commit.is_empty() {
+            return Ok(());
+        }
+        self.storage_write_client.save_transactions(
+            txns_to_commit,
+            first_version,
+            ledger_info_to_commit.clone(),
+        )?;
+
+        *synced_trees = output.executed_trees().clone();
+        info!(
+            "Synced to version {}, the corresponding LedgerInfo is {}.",
+            synced_trees.version().expect("version must exist"),
+            if ledger_info_to_commit.is_some() {
+                "committed"
+            } else {
+                "not committed"
+            },
+        );
+        Ok(())
+    }
+
+    /// In case there is a new LI to be added to a LedgerStore, verify and return it.
+    fn find_chunk_li(
+        verified_target_li: LedgerInfoWithSignatures,
+        epoch_change_li: Option<LedgerInfoWithSignatures>,
+        new_output: &ProcessedVMOutput,
+    ) -> Result<Option<LedgerInfoWithSignatures>> {
+        // If the chunk corresponds to the target LI, the target LI can be added to storage.
+        if verified_target_li.ledger_info().version() == new_output.version().unwrap_or(0) {
+            ensure!(
+                verified_target_li
+                    .ledger_info()
+                    .transaction_accumulator_hash()
+                    == new_output.accu_root(),
+                "Root hash in target ledger info does not match local computation."
+            );
+            return Ok(Some(verified_target_li));
+        }
+        // If the epoch change LI is present, it must match the version of the chunk:
+        // verify the version and the root hash.
+        if let Some(epoch_change_li) = epoch_change_li {
+            // Verify that the given ledger info corresponds to the new accumulator.
+            ensure!(
+                epoch_change_li.ledger_info().transaction_accumulator_hash()
+                    == new_output.accu_root(),
+                "Root hash of a given epoch LI does not match local computation."
+            );
+            ensure!(
+                epoch_change_li.ledger_info().version() == new_output.version().unwrap_or(0),
+                "Version of a given epoch LI does not match local computation."
+            );
+            ensure!(
+                epoch_change_li.ledger_info().next_validator_set().is_some(),
+                "Epoch change LI does not carry validator set"
+            );
+            ensure!(
+                epoch_change_li.ledger_info().next_validator_set()
+                    == new_output.validators().as_ref(),
+                "New validator set of a given epoch LI does not match local computation"
+            );
+            return Ok(Some(epoch_change_li));
+        }
+        ensure!(
+            new_output.validators.is_none(),
+            "End of epoch chunk based on local computation but no EoE LedgerInfo provided."
+        );
+        Ok(None)
+    }
+
+    /// Verifies proofs using provided ledger info. Also verifies that the version of the first
+    /// transaction matches the latest committed transaction. If the first few transaction happens
+    /// to be older, returns how many need to be skipped and the first version to be committed.
+    fn verify_chunk(
+        txn_list_with_proof: &TransactionListWithProof,
+        ledger_info_with_sigs: &LedgerInfoWithSignatures,
+        num_committed_txns: u64,
+    ) -> Result<(LeafCount, Version)> {
+        txn_list_with_proof.verify(
+            ledger_info_with_sigs.ledger_info(),
+            txn_list_with_proof.first_transaction_version,
+        )?;
+
+        if txn_list_with_proof.transactions.is_empty() {
+            return Ok((0, num_committed_txns as Version /* first_version */));
+        }
+
+        let first_txn_version = txn_list_with_proof
+            .first_transaction_version
+            .expect("first_transaction_version should exist.")
+            as Version;
+
+        ensure!(
+            first_txn_version <= num_committed_txns,
+            "Transaction list too new. Expected version: {}. First transaction version: {}.",
+            num_committed_txns,
+            first_txn_version
+        );
+        Ok((
+            num_committed_txns - first_txn_version,
+            num_committed_txns as Version,
+        ))
+    }
+    */
+
+    /// Post-processing of what the VM outputs. Returns the entire block's
+    /// output.
+    fn process_vm_outputs(
+        vm_outputs: Vec<TransactionOutput>,
+    ) -> Result<ProcessedVMOutput> {
+        let mut next_validator_set = None;
+
+        for vm_output in vm_outputs.into_iter() {
+            // check for change in validator set
+            let validator_set_change_event_key =
+                ValidatorSet::change_event_key();
+            for event in vm_output.events() {
+                if *event.key() == validator_set_change_event_key {
+                    next_validator_set =
+                        Some(ValidatorSet::from_bytes(event.event_data())?);
+                    break;
+                }
+            }
+        }
+
+        Ok(ProcessedVMOutput::new(next_validator_set))
     }
 }
