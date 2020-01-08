@@ -110,9 +110,7 @@ pub fn open_database(
         }
     };
 
-    let sys_db = SystemDB {
-        key_value: Arc::new(db),
-    };
+    let sys_db = SystemDB::new(Arc::new(db));
 
     Ok(Arc::new(sys_db))
 }
