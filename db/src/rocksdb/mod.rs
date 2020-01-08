@@ -30,10 +30,19 @@ pub struct SystemDB {
     key_value: Arc<Database>,
 }
 
+impl Drop for SystemDB {
+    fn drop(&mut self) {
+        info!("SystemDB dropped.");
+    }
+}
+
 impl SystemDB {
     pub fn key_value(&self) -> &Arc<Database> { &self.key_value }
 
-    pub fn new(kvdb: Arc<Database>) -> Self { Self { key_value: kvdb } }
+    pub fn new(kvdb: Arc<Database>) -> Self {
+        info!("SystemDB created.");
+        Self { key_value: kvdb }
+    }
 }
 
 /// db compaction profile
