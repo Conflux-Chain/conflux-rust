@@ -154,7 +154,6 @@ fn test_set_delete() {
     let state_manager = new_state_manager_for_unit_test();
 
     let mut state = state_manager.get_state_for_genesis_write();
-    let empty_state_root = state.compute_state_root().unwrap();
 
     let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
     let (keys_0, keys_1) = (
@@ -193,7 +192,7 @@ fn test_set_delete() {
     println!("Testing with {} delete operations.", keys.len());
     for key in &keys {
         let value = state
-            .delete(StorageKey::AccountKey(key))
+            .delete_test_only(StorageKey::AccountKey(key))
             .expect("Failed to delete key.")
             .expect("Failed to get key");
         let equal = (&**key).eq(value.as_ref());
@@ -202,10 +201,8 @@ fn test_set_delete() {
 
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 2;
-    let state_root = state.compute_state_root().unwrap();
+    state.compute_state_root().unwrap();
     state.commit(epoch_id).unwrap();
-
-    assert_eq!(state_root, empty_state_root);
 }
 
 #[test]

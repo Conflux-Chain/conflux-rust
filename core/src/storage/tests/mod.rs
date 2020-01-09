@@ -148,10 +148,8 @@ impl DumpedDeltaMptIterator {
 impl KVInserter<(Vec<u8>, Box<[u8]>)> for DumpedDeltaMptIterator {
     fn push(&mut self, v: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = v;
-        let mut addr = Address::default();
         let snapshot_key =
-            StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
-                .to_key_bytes();
+            StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
 
         self.kv.push((snapshot_key, value));
         Ok(())
@@ -210,7 +208,6 @@ use crate::storage::{
     impls::{errors::*, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,
 };
-use cfx_types::Address;
 use elastic_array::ElasticArray128;
 use kvdb::{DBTransaction, KeyValueDB};
 use primitives::StorageKey;

@@ -518,10 +518,8 @@ impl<'a> DeltaMptDumperSqlite<'a> {
 impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = x;
-        let mut addr = Address::default();
         let snapshot_key =
-            StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
-                .to_key_bytes();
+            StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
 
         if value.len() > 0 {
             self.snapshot_db
@@ -592,7 +590,6 @@ use crate::storage::{
         SnapshotMptValue,
     },
 };
-use cfx_types::Address;
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, StorageKey};
 use sqlite::Statement;

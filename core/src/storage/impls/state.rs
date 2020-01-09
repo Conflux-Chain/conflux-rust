@@ -238,7 +238,14 @@ impl<'a> StateTrait for State<'a> {
         Ok(())
     }
 
-    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+    fn delete(&mut self, access_key: StorageKey) -> Result<()> {
+        self.set(access_key, MptValue::<Box<[u8]>>::TombStone.unwrap())?;
+        Ok(())
+    }
+
+    fn delete_test_only(
+        &mut self, access_key: StorageKey,
+    ) -> Result<Option<Box<[u8]>>> {
         self.pre_modification();
 
         match self.get_delta_root_node() {
@@ -260,13 +267,22 @@ impl<'a> StateTrait for State<'a> {
         }
     }
 
+    /// Delete all key/value pairs with access_key_prefix as prefix. These
+    /// key/value pairs exist in three places: Delta Trie, Intermediate Trie
+    /// and Snapshot DB.
+    ///
+    /// For key/value pairs in Delta Trie, we can simply delete them. For
+    /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
+    /// enumerate all key/value pairs and set tombstone in Delta Trie.
     fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
         self.pre_modification();
+        // TODO: add unit tests
 
-        match &self.delta_trie_root {
-            None => Ok(None),
+        // Retrieve and delete key/value pairs from delta trie
+        let delta_trie_kvs = match &self.delta_trie_root {
+            None => None,
             Some(old_root_node) => {
                 let delta_mpt_key_prefix = access_key_prefix
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
@@ -278,8 +294,122 @@ impl<'a> StateTrait for State<'a> {
                 .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
-                Ok(deleted)
+                deleted
             }
+        };
+
+        // Retrieve key/value pairs from intermediate trie
+        let intermediate_trie_kvs = match &self.intermediate_trie_root {
+            None => None,
+            Some(root_node) => {
+                if self.maybe_intermediate_trie_key_padding.is_some()
+                    && self.maybe_intermediate_trie.is_some()
+                {
+                    let intermediate_trie_key_padding = self
+                        .maybe_intermediate_trie_key_padding
+                        .as_ref()
+                        .unwrap();
+                    let intermediate_mpt_key_prefix = access_key_prefix
+                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                    let values = SubTrieVisitor::new(
+                        self.maybe_intermediate_trie.as_ref().unwrap(),
+                        root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .traversal(
+                        &intermediate_mpt_key_prefix,
+                        &intermediate_mpt_key_prefix,
+                    )?;
+
+                    values
+                } else {
+                    None
+                }
+            }
+        };
+
+        // Retrieve key/value pairs from snapshot
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let mut upper_bound_excl_value = lower_bound_incl.clone();
+        let upper_bound_excl = if lower_bound_incl.len() == 0 {
+            None
+        } else {
+            let mut carry = 1;
+            let len = upper_bound_excl_value.len();
+            for i in 0..len {
+                if upper_bound_excl_value[len - 1 - i] == 255 {
+                    upper_bound_excl_value[len - 1 - i] = 0;
+                } else {
+                    upper_bound_excl_value[len - 1 - i] += 1;
+                    carry = 0;
+                    break;
+                }
+            }
+            // all bytes in lower_bound_incl are 255, which means no upper bound
+            // is needed.
+            if carry == 1 {
+                None
+            } else {
+                Some(upper_bound_excl_value.as_slice())
+            }
+        };
+        let mut kvs = kv_iterator
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+
+        let mut snapshot_kvs = Vec::new();
+        while let Some((key, value)) = kvs.next()? {
+            snapshot_kvs.push((key, value.into_boxed_slice()));
+        }
+
+        let mut result = Vec::new();
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+        if let Some(kvs) = delta_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if let Some(kvs) = intermediate_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                // Only delete nonempty keys.
+                if v.len() > 0 {
+                    self.delete(storage_key)?;
+                }
+                let k = storage_key.to_key_bytes();
+                if !deleted_keys.contains(&k) {
+                    deleted_keys.insert(k.clone());
+                    if v.len() > 0 {
+                        result.push((k, v));
+                    }
+                }
+            }
+        }
+
+        for (k, v) in snapshot_kvs {
+            let storage_key = StorageKey::from_delta_mpt_key(&k);
+            // Only delete nonempty keys.
+            if v.len() > 0 {
+                self.delete(storage_key)?;
+            }
+            if !deleted_keys.contains(&k) {
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
         }
     }
 
@@ -634,6 +764,7 @@ use crate::storage::{
     storage_db::*,
     StateRootAuxInfo, StateRootWithAuxInfo,
 };
+use fallible_iterator::FallibleIterator;
 use parity_bytes::ToPretty;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,
@@ -641,7 +772,7 @@ use primitives::{
 };
 use std::{
     cell::UnsafeCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };

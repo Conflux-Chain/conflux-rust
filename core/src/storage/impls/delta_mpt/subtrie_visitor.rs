@@ -403,18 +403,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         }
     }
 
-    // FIXME: Without tombstone, delete_all is like delete, assuming the
-    // FIXME: existence of the prefix. However with tombstone, the
-    // FIXME: corresponding action is mark_delete_all, which can operate on
-    // FIXME: non-existing prefix in delta-MPT.
-    // FIXME: When iterating, skip existing marks because they were already
-    // FIXME: deleted.
-    #[allow(unused)]
-    pub fn mark_delete_all() {
-        // FIXME: implement.
-        unimplemented!();
-    }
-
     /// The visitor can only be used once to modify.
     /// Returns (deleted value, is root node replaced, the current root node for
     /// the subtree).
@@ -569,6 +557,68 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         )?;
 
         Ok((Some(old_values), true, None))
+    }
+
+    /// return all key/value pairs given the prefix
+    pub fn traversal(
+        mut self, key: KeyPart, key_remaining: KeyPart,
+    ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
+        let node_memory_manager = self.node_memory_manager();
+        let allocator = node_memory_manager.get_allocator();
+        let mut node_cow = self.root.take();
+
+        let trie_node_ref = node_cow.get_trie_node(
+            node_memory_manager,
+            &allocator,
+            &mut **self.db.get_mut(),
+        )?;
+
+        let key_prefix: CompressedPathRaw;
+        match trie_node_ref.walk::<Write>(key_remaining) {
+            WalkStop::ChildNotFound { .. } => return Ok(None),
+            WalkStop::Arrived => {
+                // To enumerate the subtree.
+                key_prefix = key.into();
+            }
+            WalkStop::PathDiverted {
+                key_child_index,
+                unmatched_child_index,
+                unmatched_path_remaining,
+                ..
+            } => {
+                if key_child_index.is_some() {
+                    return Ok(None);
+                }
+                // To enumerate the subtree.
+                key_prefix = CompressedPathRaw::join_connected_paths(
+                    &key,
+                    unmatched_child_index,
+                    &unmatched_path_remaining,
+                );
+            }
+            WalkStop::Descent {
+                key_remaining,
+                child_node,
+                ..
+            } => {
+                let values = self
+                    .new_visitor_for_subtree(child_node.clone().into())
+                    .traversal(key, key_remaining)?;
+                return Ok(values);
+            }
+        }
+
+        let trie_node = GuardedValue::take(trie_node_ref);
+        let mut values = vec![];
+        node_cow.iterate_internal(
+            self.owned_node_set.get_ref(),
+            self.get_trie_ref(),
+            trie_node,
+            key_prefix,
+            &mut values,
+            &mut **self.db.get_mut(),
+        )?;
+        Ok(Some(values))
     }
 
     // In a method we visit node one or 2 times but borrow-checker prevent
