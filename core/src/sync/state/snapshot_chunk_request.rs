@@ -61,13 +61,7 @@ impl Request for SnapshotChunkRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        Some(Box::new(self.clone()))
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 
-    fn required_capability(&self) -> Option<DynamicCapability> {
-        Some(DynamicCapability::ServeCheckpoint(Some(
-            self.checkpoint.clone(),
-        )))
-    }
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

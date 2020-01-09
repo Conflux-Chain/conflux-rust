@@ -21,6 +21,7 @@ use crate::{
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
+        StateSyncConfiguration,
     },
 };
 use cfx_types::H256;
@@ -31,7 +32,7 @@ use network::{
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, SignedTransaction, NULL_EPOCH};
+use primitives::{Block, BlockHeader, SignedTransaction};
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::{
@@ -250,6 +251,9 @@ pub struct ProtocolConfiguration {
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
+    pub snapshot_candidate_request_timeout_ms: Duration,
+    pub snapshot_manifest_request_timeout_ms: Duration,
+    pub snapshot_chunk_request_timeout_ms: Duration,
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub received_tx_index_maintain_timeout: Duration,
@@ -263,11 +267,13 @@ pub struct ProtocolConfiguration {
     pub test_mode: bool,
     pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
+    pub chunk_size_byte: u64,
 }
 
 impl SynchronizationProtocolHandler {
     pub fn new(
         is_full_node: bool, protocol_config: ProtocolConfiguration,
+        state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
         light_provider: Arc<LightProvider>,
@@ -283,9 +289,7 @@ impl SynchronizationProtocolHandler {
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
 
-        let state_sync = Arc::new(SnapshotChunkSync::new(
-            protocol_config.max_download_state_peers,
-        ));
+        let state_sync = Arc::new(SnapshotChunkSync::new(state_sync_config));
 
         Self {
             protocol_config,
@@ -479,6 +483,9 @@ impl SynchronizationProtocolHandler {
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
+            }
+            ErrorKind::UnexpectedMessage(_) => {
+                op = Some(UpdateNodeOperation::Remove)
             }
         }
 
@@ -1355,23 +1362,6 @@ impl SynchronizationProtocolHandler {
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
-
-    fn notify_checkpoint_capability(&self, io: &dyn NetworkContext) {
-        // FIXME get actual checkpoint
-        let checkpoint = NULL_EPOCH;
-        let cap = DynamicCapability::ServeCheckpoint(Some(checkpoint));
-        let mut peers = Vec::new();
-
-        for (peer_id, state) in self.syn.peers.read().iter() {
-            let mut state = state.write();
-            if !state.notified_capabilities.contains(cap) {
-                peers.push(*peer_id);
-                state.notified_capabilities.insert(cap);
-            }
-        }
-
-        cap.broadcast_with_peers(io, peers);
-    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -1472,6 +1462,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         self.syn.peers.write().remove(&peer);
         self.syn.handshaking_peers.write().remove(&peer);
         self.request_manager.on_peer_disconnected(io, peer);
+        self.state_sync.on_peer_disconnected(&peer);
     }
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
@@ -1495,7 +1486,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_CATCH_UP_MODE_TIMER => {
                 self.update_sync_phase(io);
-                self.notify_checkpoint_capability(io);
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();

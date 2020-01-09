@@ -86,5 +86,5 @@ pub use crate::{
 pub use network::PeerInfo;
 pub use parameters::{
     block as block_parameters, consensus as consensus_parameters,
-    WORKER_COMPUTATION_PARALLELISM,
+    sync as sync_parameters, WORKER_COMPUTATION_PARALLELISM,
 };

@@ -9,7 +9,8 @@ use cfxcore::{
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{self, ConsensusParam, StorageConfiguration},
-    sync::{ProtocolConfiguration, SyncGraphConfig},
+    sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
+    sync_parameters::*,
     transaction_pool::TxPoolConfig,
 };
 use metrics::MetricsConfiguration;
@@ -116,6 +117,7 @@ build_config! {
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 30_000)
         (check_request_period_ms, (u64), 1000)
+        (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
@@ -130,6 +132,9 @@ build_config! {
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
+        (snapshot_candidate_request_timeout_ms, (u64), 10_000)
+        (snapshot_chunk_request_timeout_ms, (u64), 30_000)
+        (snapshot_manifest_request_timeout_ms, (u64), 10_000)
         (throttling_conf, (Option<String>), None)
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
@@ -450,6 +455,31 @@ impl Configuration {
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
+            snapshot_candidate_request_timeout_ms: Duration::from_millis(
+                self.raw_conf.snapshot_candidate_request_timeout_ms,
+            ),
+            snapshot_manifest_request_timeout_ms: Duration::from_millis(
+                self.raw_conf.snapshot_manifest_request_timeout_ms,
+            ),
+            snapshot_chunk_request_timeout_ms: Duration::from_millis(
+                self.raw_conf.snapshot_chunk_request_timeout_ms,
+            ),
+            chunk_size_byte: self.raw_conf.chunk_size_byte,
+        }
+    }
+
+    pub fn state_sync_config(&self) -> StateSyncConfiguration {
+        StateSyncConfiguration {
+            max_download_peers: self.raw_conf.max_download_state_peers,
+            candidate_request_timeout: Duration::from_millis(
+                self.raw_conf.snapshot_candidate_request_timeout_ms,
+            ),
+            chunk_request_timeout: Duration::from_millis(
+                self.raw_conf.snapshot_chunk_request_timeout_ms,
+            ),
+            manifest_request_timeout: Duration::from_millis(
+                self.raw_conf.snapshot_manifest_request_timeout_ms,
+            ),
         }
     }
 

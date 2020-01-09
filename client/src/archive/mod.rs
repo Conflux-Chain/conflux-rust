@@ -217,6 +217,7 @@ impl ArchiveClient {
             network.clone(),
             sync_graph.clone(),
             protocol_config,
+            conf.state_sync_config(),
             initial_sync_phase,
             light_provider,
         ));
