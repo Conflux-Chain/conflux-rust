@@ -38,6 +38,10 @@ pub struct StateManager {
     pub number_committed_nodes: AtomicUsize,
 }
 
+impl Drop for StateManager {
+    fn drop(&mut self) { self.storage_manager.graceful_shutdown(); }
+}
+
 impl StateManager {
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
