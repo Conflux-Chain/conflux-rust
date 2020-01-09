@@ -24,7 +24,11 @@ impl<'trie> SubTrieVisitor<'trie, 'trie> {
         Ok(Self {
             trie_ref,
             db: ReturnAfterUse::new_from_value(trie_ref.db_owned_read()?),
-            root: CowNodeRef::new(root, owned_node_set.as_ref().unwrap()),
+            root: CowNodeRef::new(
+                root,
+                owned_node_set.as_ref().unwrap(),
+                trie_ref.get_mpt_id(),
+            ),
             owned_node_set: ReturnAfterUse::new(owned_node_set),
         })
     }
@@ -36,8 +40,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     ) -> SubTrieVisitor<'a, 'db>
     where 'trie: 'a {
         let trie_ref = self.trie_ref;
-        let cow_child_node =
-            CowNodeRef::new(child_node, self.owned_node_set.get_ref());
+        let cow_child_node = CowNodeRef::new(
+            child_node,
+            self.owned_node_set.get_ref(),
+            self.trie_ref.get_mpt_id(),
+        );
         SubTrieVisitor {
             trie_ref,
             db: ReturnAfterUse::<
@@ -53,7 +60,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 
     pub fn get_trie_ref(&self) -> &'trie MerklePatriciaTrie { self.trie_ref }
 
-    fn node_memory_manager(&self) -> &'trie NodeMemoryManagerDeltaMpt {
+    fn node_memory_manager(&self) -> &'trie DeltaMptsNodeMemoryManager {
         &self.get_trie_ref().get_node_memory_manager()
     }
 
@@ -62,7 +69,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     ) -> Result<
         Option<
             GuardedValue<
-                Option<MutexGuard<'a, CacheManagerDeltaMpt>>,
+                Option<MutexGuard<'a, DeltaMptsCacheManager>>,
                 &'a TrieNodeDeltaMpt,
             >,
         >,
@@ -82,6 +89,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     node_ref,
                     cache_manager,
                     &mut **self.db.get_mut(),
+                    self.trie_ref.get_mpt_id(),
                     &mut is_loaded_from_db,
                 )?;
             if is_loaded_from_db {
@@ -147,6 +155,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     node_ref.clone(),
                     cache_manager,
                     &mut **self.db.get_mut(),
+                    self.trie_ref.get_mpt_id(),
                     &mut false,
                 )?;
 
@@ -361,7 +370,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 None => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -371,7 +379,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 Some(replacement) => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -516,7 +523,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 None => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -526,7 +532,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 Some(replacement) => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -632,7 +637,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                         )?);
                     node_cow
                         .cow_modify(
-                            node_memory_manager,
                             &allocator,
                             self.owned_node_set.get_mut(),
                             trie_node,
@@ -661,6 +665,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     CowNodeRef::new_uninitialized_node(
                         &allocator,
                         self.owned_node_set.get_mut(),
+                        self.trie_ref.get_mpt_id(),
                     )?;
                 let mut new_node = MemOptimizedTrieNode::default();
                 // set compressed path.
@@ -694,6 +699,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                             CowNodeRef::new_uninitialized_node(
                                 &allocator,
                                 self.owned_node_set.get_mut(),
+                                self.trie_ref.get_mpt_id(),
                             )?;
                         let mut new_child_node =
                             MemOptimizedTrieNode::default();
@@ -725,6 +731,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     CowNodeRef::new_uninitialized_node(
                         &allocator,
                         self.owned_node_set.get_mut(),
+                        self.trie_ref.get_mpt_id(),
                     )?;
                 let mut new_child_node = MemOptimizedTrieNode::default();
                 // set compressed path.
@@ -736,7 +743,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let trie_node = GuardedValue::take(trie_node_ref);
                 node_cow
                     .cow_modify(
-                        node_memory_manager,
                         &allocator,
                         self.owned_node_set.get_mut(),
                         trie_node,

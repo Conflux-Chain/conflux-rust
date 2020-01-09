@@ -241,7 +241,7 @@ impl KeyValueDbToOwnedReadTrait for Arc<Mutex<FakeSnapshotDb>> {
     ) -> Result<Box<dyn KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>>
     {
         // No need to implement because it's only used by DeltaMpt.
-        unimplemented!()
+        unreachable!()
     }
 }
 
@@ -273,7 +273,7 @@ impl SnapshotMptTraitReadOnly for Arc<Mutex<FakeSnapshotMptDb>> {
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>> {
         // We can't simply forward the call to FakeSnapshotMptDb because
         // lifetime doesn't match.
-        unimplemented!()
+        unreachable!()
     }
 }
 
@@ -309,20 +309,20 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
 }
 
 impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
-    fn get_null_snapshot() -> Self { unimplemented!() }
+    fn get_null_snapshot() -> Self { unreachable!() }
 
     fn open(_snapshot_path: &str, _read_only: bool) -> Result<Option<Self>> {
-        unimplemented!()
+        unreachable!()
     }
 
-    fn create(_snapshot_path: &str) -> Result<Self> { unimplemented!() }
+    fn create(_snapshot_path: &str) -> Result<Self> { unreachable!() }
 
-    fn direct_merge(&mut self) -> Result<H256> { unimplemented!() }
+    fn direct_merge(&mut self) -> Result<MerkleHash> { unreachable!() }
 
     fn copy_and_merge(
         &mut self, _old_snapshot_db: &mut Self,
     ) -> Result<MerkleHash> {
-        unimplemented!()
+        unreachable!()
     }
 }
 
@@ -334,10 +334,20 @@ struct FakeSnapshotDbManager {
 impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     type SnapshotDb = Arc<Mutex<FakeSnapshotDb>>;
 
+    fn get_snapshot_dir(&self) -> String { unreachable!() }
+
+    fn get_snapshot_db_name(&self, _snapshot_epoch_id: &EpochId) -> String {
+        unreachable!()
+    }
+
+    fn get_snapshot_db_path(&self, _snapshot_epoch_id: &EpochId) -> String {
+        unreachable!()
+    }
+
     fn scan_persist_state(
-        &self, _snapshot_info_map: &mut HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<Vec<H256>> {
-        unimplemented!()
+        &self, _snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
+    ) -> Result<Vec<EpochId>> {
+        unreachable!()
     }
 
     fn new_snapshot_by_merging(
@@ -345,17 +355,17 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
     ) -> Result<SnapshotInfo>
     {
-        unimplemented!()
+        unreachable!()
     }
 
     fn get_snapshot_by_epoch_id(
         &self, _epoch_id: &EpochId,
     ) -> Result<Option<Self::SnapshotDb>> {
-        unimplemented!()
+        unreachable!()
     }
 
     fn destroy_snapshot(&self, _snapshot_epoch_id: &EpochId) -> Result<()> {
-        unimplemented!()
+        unreachable!()
     }
 
     fn new_temp_snapshot_for_full_sync(
@@ -367,7 +377,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn finalize_full_sync_snapshot(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
     ) -> Result<()> {
-        unimplemented!()
+        unreachable!()
     }
 }
 
@@ -566,7 +576,6 @@ use crate::storage::{
     },
     DeltaMptIterator, MptSlicer,
 };
-use cfx_types::H256;
 use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rand::Rng;

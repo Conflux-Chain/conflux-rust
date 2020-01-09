@@ -54,6 +54,8 @@ fn test_load_chain() {
     let mut conf = Configuration::default();
     conf.raw_conf.mode = Some("test".to_owned());
     let tmp_dir = TempDir::new("conflux-test").unwrap();
+    conf.raw_conf.conflux_data_dir =
+        tmp_dir.path().to_str().unwrap().to_string() + "/";
     conf.raw_conf.db_dir = Some(
         tmp_dir
             .path()

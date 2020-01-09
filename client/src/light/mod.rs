@@ -11,7 +11,6 @@ use std::{
 
 use cfx_types::{Address, U256};
 use ctrlc::CtrlC;
-use db::SystemDB;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use secret_store::SecretStore;
@@ -40,7 +39,7 @@ use super::{
 pub struct LightClientHandle {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
-    pub ledger_db: Weak<SystemDB>,
+    pub block_data_manager: Weak<BlockDataManager>,
     pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
@@ -49,9 +48,9 @@ pub struct LightClientHandle {
 }
 
 impl LightClientHandle {
-    pub fn into_be_dropped(self) -> (Weak<SystemDB>, Box<dyn Any>) {
+    pub fn into_be_dropped(self) -> (Weak<BlockDataManager>, Box<dyn Any>) {
         (
-            self.ledger_db,
+            self.block_data_manager,
             Box::new((
                 self.consensus,
                 self.debug_rpc_http_server,
@@ -93,7 +92,7 @@ impl LightClient {
 
         let secret_store = Arc::new(SecretStore::new());
         let storage_manager = Arc::new(
-            StorageManager::new(ledger_db.clone(), conf.storage_config())
+            StorageManager::new(conf.storage_config())
                 .expect("Failed to initialize storage."),
         );
         {
@@ -165,7 +164,7 @@ impl LightClient {
             vm,
             txpool.clone(),
             statistics,
-            data_man,
+            data_man.clone(),
             pow_config.clone(),
         ));
 
@@ -251,7 +250,7 @@ impl LightClient {
         Ok(LightClientHandle {
             consensus,
             debug_rpc_http_server,
-            ledger_db: Arc::downgrade(&ledger_db),
+            block_data_manager: Arc::downgrade(&data_man),
             light,
             rpc_http_server,
             rpc_tcp_server,

@@ -421,6 +421,7 @@ dependencies = [
  "io 0.1.0",
  "keccak-hash 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kvdb-rocksdb 0.1.6",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "link-cut-tree 0.1.0",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",

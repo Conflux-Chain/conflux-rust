@@ -6,11 +6,54 @@
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
 
+    fn get_snapshot_dir(&self) -> String;
+    fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String;
+    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> String;
+
     // Scan snapshot dir, remove extra files and return the list of missing
     // snapshots.
     fn scan_persist_state(
-        &self, snapshot_info_map: &mut HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<Vec<EpochId>>;
+        &self, snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
+    ) -> Result<Vec<EpochId>> {
+        let mut missing_snapshots = HashMap::new();
+        for (snapshot_epoch_id, _snapshot_info) in snapshot_info_map {
+            missing_snapshots.insert(
+                self.get_snapshot_db_path(snapshot_epoch_id).into_bytes(),
+                snapshot_epoch_id.clone(),
+            );
+        }
+
+        // Scan the snapshot dir. Remove extra files, and return the list of
+        // missing snapshots.
+        for entry in fs::read_dir(self.get_snapshot_dir())? {
+            let entry = entry?;
+            let path = entry.path();
+            let dir_name = path.as_path().file_name().unwrap().to_str();
+            if dir_name.is_none() {
+                error!(
+                    "Unexpected snapshot path {}, deleted.",
+                    entry.path().display()
+                );
+                fs::remove_dir_all(entry.path())?;
+                continue;
+            }
+            let dir_name = dir_name.unwrap();
+            if !missing_snapshots.contains_key(dir_name.as_bytes()) {
+                error!(
+                    "Unexpected snapshot path {}, deleted.",
+                    entry.path().display()
+                );
+                fs::remove_dir_all(entry.path())?;
+            } else {
+                missing_snapshots.remove(dir_name.as_bytes());
+            }
+        }
+
+        Ok(missing_snapshots
+            .into_iter()
+            .map(|(_path_bytes, snapshot_epoch_id)| snapshot_epoch_id)
+            .collect())
+    }
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
@@ -35,4 +78,4 @@ use super::{
     snapshot_db::*,
 };
 use primitives::{EpochId, MerkleHash};
-use std::collections::HashMap;
+use std::{collections::HashMap, fs};

@@ -3,18 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 pub struct KvdbRocksdb {
-    /// Currently this is only a wrapper around the old system_db.
-    /// This is going to be deprecated.
-    pub kvdb: Arc<dyn KeyValueDB>,
-
-    /// The column that this kvdb instance operates on
+    pub kvdb: Arc<Database>,
     pub col: Option<u32>,
 }
 
 pub struct KvdbRocksDbTransaction {
     pending: DBTransaction,
-
-    /// The column that this kvdb transaction instance operates on
     col: Option<u32>,
 }
 
@@ -135,5 +129,6 @@ use super::super::{
     super::storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
     errors::*,
 };
-use kvdb::{DBTransaction, KeyValueDB};
+use kvdb::DBTransaction;
+use kvdb_rocksdb::Database;
 use std::{any::Any, sync::Arc};

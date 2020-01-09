@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::storage::impls::delta_mpt::node_ref_map::DeltaMptId;
 use std::{io, num};
 
 error_chain! {
@@ -38,16 +39,18 @@ error_chain! {
             display("Key not found."),
         }
 
-        // TODO(yz): encode key into error message.
-        MPTInvalidKey {
-            description("Invalid key."),
-            display("Invalid key."),
+        MPTInvalidKeyLength(length: usize, length_limit: usize){
+            description("Invalid key length."),
+            display(
+                "Invalid key length {}. length must be within [1, {}].",
+                length, length_limit),
         }
 
-        // TODO(yz): encode value into error message.
-        MPTInvalidValue {
-            description("Invalid value."),
-            display("Invalid value."),
+        MPTInvalidValueLength(length: usize, length_limit: usize) {
+            description("Invalid value length."),
+            display(
+                "Invalid value length {}. Length must be less than {}",
+                length, length_limit),
         }
 
         MPTTooManyNodes {
@@ -96,6 +99,11 @@ error_chain! {
             display("Trie node not found when loading Snapshot MPT."),
         }
 
+        TooManyDeltaMPT {
+            description("Too many Delta MPTs created."),
+            display("Too many Delta MPTs created ({}).", DeltaMptId::max_value()),
+        }
+
         DeltaMPTAlreadyExists {
             description("Attempting to create a Delta MPT which already exists."),
             display("Attempting to create a Delta MPT which already exists."),
@@ -114,6 +122,11 @@ error_chain! {
         InvalidSnapshotSyncProof {
             description("Snapshot sync proof is invalid"),
             display("Snapshot sync proof is invalid"),
+        }
+
+        FailedToCreateUnitTestDataDir {
+            description("Failed to create unit test data dir."),
+            display("Failed to create unit test data dir."),
         }
     }
 }

@@ -48,21 +48,83 @@ impl KeyValueDB for FakeDbForStateTest {
 }
 
 #[cfg(test)]
-pub fn new_state_manager_for_testing() -> StateManager {
-    StateManager::new(
-        Arc::new(SystemDB::new(Arc::new(FakeDbForStateTest::default()))),
-        StorageConfiguration {
-            cache_start_size: 1_000_000,
-            cache_size: 20_000_000,
-            idle_size: 200_000,
-            node_map_size: 20_000_000,
-            recent_lfu_factor: 4.0,
-            consensus_param: ConsensusParam {
-                snapshot_epoch_count: 10000000,
-            },
-        },
-    )
-    .unwrap()
+pub struct FakeStateManager {
+    data_dir: String,
+    state_manager: Option<StateManager>,
+}
+
+#[cfg(test)]
+impl FakeStateManager {
+    fn new(conflux_data_dir: String) -> Result<Self> {
+        fs::create_dir_all(conflux_data_dir.as_str())?;
+        let mut unit_test_data_dir = "".to_string();
+        for i in 0..100 {
+            let try_unit_test_data_dir =
+                conflux_data_dir.clone() + &i.to_string() + "/";
+            if !Path::new(try_unit_test_data_dir.as_str()).exists() {
+                if fs::create_dir(try_unit_test_data_dir.as_str()).is_ok() {
+                    unit_test_data_dir = try_unit_test_data_dir;
+                    break;
+                }
+            }
+        }
+        if unit_test_data_dir == "" {
+            Err(ErrorKind::FailedToCreateUnitTestDataDir.into())
+        } else {
+            Ok(FakeStateManager {
+                data_dir: unit_test_data_dir.clone(),
+                state_manager: Some(StateManager::new(StorageConfiguration {
+                    consensus_param: ConsensusParam {
+                        snapshot_epoch_count: 10_000_000,
+                    },
+                    delta_mpts_cache_recent_lfu_factor: 4.0,
+                    delta_mpts_cache_size: 20_000_000,
+                    delta_mpts_cache_start_size: 1_000_000,
+                    delta_mpts_node_map_vec_size: 20_000_000,
+                    delta_mpts_slab_idle_size: 200_000,
+                    path_delta_mpts_dir: unit_test_data_dir.clone()
+                        + StorageConfiguration::DELTA_MPTS_DIR,
+                    path_snapshot_dir: unit_test_data_dir.clone()
+                        + StorageConfiguration::SNAPSHOT_DIR,
+                    path_snapshot_info_db: unit_test_data_dir.clone()
+                        + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
+                    path_storage_dir: unit_test_data_dir.clone()
+                        + StorageConfiguration::STORAGE_DIR,
+                })?),
+            })
+        }
+    }
+}
+
+#[cfg(test)]
+impl Drop for FakeStateManager {
+    fn drop(&mut self) {
+        self.state_manager.take();
+        fs::remove_dir_all(self.data_dir.as_str()).ok();
+        let maybe_parent_dir = Path::new(self.data_dir.as_str()).parent();
+        if let Some(parent_dir) = maybe_parent_dir {
+            fs::remove_dir(parent_dir).ok();
+        }
+    }
+}
+
+#[cfg(test)]
+impl Deref for FakeStateManager {
+    type Target = StateManager;
+
+    fn deref(&self) -> &Self::Target { self.state_manager.as_ref().unwrap() }
+}
+
+#[cfg(test)]
+impl DerefMut for FakeStateManager {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.state_manager.as_mut().unwrap()
+    }
+}
+
+#[cfg(test)]
+pub fn new_state_manager_for_unit_test() -> FakeStateManager {
+    FakeStateManager::new("./conflux_unit_test_data_dir/".to_string()).unwrap()
 }
 
 #[derive(Default)]
@@ -140,25 +202,25 @@ pub fn print_mpt_key(key: &[u8]) {
     println!(")");
 }
 
+#[cfg(test)]
 use crate::storage::{
-    impls::{errors::Result, merkle_patricia_trie::CompressedPathRaw},
+    impls::state_manager::StateManager, ConsensusParam, StorageConfiguration,
+};
+use crate::storage::{
+    impls::{errors::*, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,
 };
 use cfx_types::Address;
 use elastic_array::ElasticArray128;
 use kvdb::{DBTransaction, KeyValueDB};
 use primitives::StorageKey;
-
-#[cfg(test)]
-use crate::{
-    ext_db::SystemDB,
-    storage::{
-        state_manager::StateManager, ConsensusParam, StorageConfiguration,
-    },
-};
 #[cfg(test)]
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 #[cfg(test)]
 use rand_chacha::ChaChaRng;
 #[cfg(test)]
-use std::{mem, sync::Arc};
+use std::{
+    fs, mem,
+    ops::{Deref, DerefMut},
+    path::Path,
+};
