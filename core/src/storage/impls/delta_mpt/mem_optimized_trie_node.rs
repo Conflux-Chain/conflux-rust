@@ -404,11 +404,11 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 None => {}
             },
             None => {
-                let value_size = self.value_size as usize;
+                let byte_size = self.value_memory_manager.get_size();
                 ret.value_size = self.value_size;
                 ret.value = MaybeInPlaceByteArray::copy_from(
-                    self.value.get_slice(value_size),
-                    value_size,
+                    self.value.get_slice(byte_size),
+                    byte_size,
                 );
             }
         }
