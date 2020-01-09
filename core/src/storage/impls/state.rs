@@ -211,9 +211,7 @@ impl<'a> Drop for State<'a> {
 impl<'a> StateTrait for State<'a> {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.get_from_all_tries(access_key, false)
-            .map(|(value, _)| {
-                value.and_then(|x| if x.len() == 0 { None } else { Some(x) })
-            })
+            .map(|(value, _)| value)
     }
 
     fn get_with_proof(
@@ -401,7 +399,6 @@ impl<'a> StateTrait for State<'a> {
             if v.len() > 0 {
                 self.delete(storage_key)?;
             }
-            let k = storage_key.to_key_bytes();
             if !deleted_keys.contains(&k) {
                 if v.len() > 0 {
                     result.push((k, v));
