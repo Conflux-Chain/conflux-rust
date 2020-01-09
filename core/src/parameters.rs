@@ -103,6 +103,7 @@ pub mod sync {
             Duration::from_secs(1);
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
+    pub const DEFAULT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
 }
 
 pub mod pow {

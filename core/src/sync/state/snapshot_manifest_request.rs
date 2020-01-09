@@ -39,13 +39,19 @@ impl Handleable for SnapshotManifestRequest {
             &self.snapshot_epoch_id,
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
+            ctx.manager.protocol_config.chunk_size_byte,
         ) {
             Ok(Some((m, merkle_root))) => {
                 snapshot_merkle_root = merkle_root;
                 m
             }
             _ => {
-                // FIXME: Unable to offer. Define Response and reply.
+                // Return an empty response to indicate that we cannot serve the
+                // state
+                ctx.send_response(&SnapshotManifestResponse {
+                    request_id: self.request_id,
+                    ..Default::default()
+                })?;
                 return Ok(());
             }
         };
@@ -261,13 +267,7 @@ impl Request for SnapshotManifestRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        Some(Box::new(self.clone()))
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 
-    fn required_capability(&self) -> Option<DynamicCapability> {
-        Some(DynamicCapability::ServeCheckpoint(Some(
-            self.snapshot_epoch_id.clone(),
-        )))
-    }
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

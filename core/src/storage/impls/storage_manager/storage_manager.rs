@@ -12,6 +12,9 @@ pub struct StorageManager {
             > + Send
             + Sync,
     >,
+    delta_mpts_id_gen: Mutex<DeltaMptIdGen>,
+    delta_mpts_node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
+
     maybe_db_errors: MaybeDbErrors,
     snapshot_associated_mpts_by_epoch: RwLock<
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
@@ -40,6 +43,7 @@ pub struct StorageManager {
 pub struct DeltaDbReleaser {
     pub storage_manager: Weak<StorageManager>,
     pub snapshot_epoch_id: EpochId,
+    pub mpt_id: DeltaMptId,
 }
 
 impl Drop for DeltaDbReleaser {
@@ -50,8 +54,10 @@ impl Drop for DeltaDbReleaser {
         // Note that when an error happens in db, the program should fail
         // gracefully, but not in destructor.
         Weak::upgrade(&self.storage_manager).map(|storage_manager| {
-            storage_manager
-                .release_delta_mpt_actions_in_drop(&self.snapshot_epoch_id)
+            storage_manager.release_delta_mpt_actions_in_drop(
+                &self.snapshot_epoch_id,
+                self.mpt_id,
+            )
         });
     }
 }
@@ -66,30 +72,43 @@ pub struct InProgressSnapshotInfo {
 
 impl StorageManager {
     pub fn new_arc(
-        delta_db_manager: DeltaDbManager, /* , node type, full node or
-                                           * archive node */
+        /* TODO: Add node type, full node or archive node */
         storage_conf: StorageConfiguration,
     ) -> Result<Arc<Self>>
     {
-        let snapshot_dir = Path::new(StorageConfiguration::SNAPSHOT_DIR);
-        if !snapshot_dir.exists() {
-            fs::create_dir_all(snapshot_dir)?;
+        let storage_dir = Path::new(storage_conf.path_storage_dir.as_str());
+        if !storage_dir.exists() {
+            fs::create_dir_all(storage_dir)?;
         }
 
         let (_, snapshot_info_db) = KvdbSqlite::open_or_create(
-            StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
+            storage_conf.path_snapshot_info_db.clone(),
             SNAPSHOT_KVDB_STATEMENTS.clone(),
         )?;
 
         let new_storage_manager_result = Ok(Arc::new(Self {
-            delta_db_manager,
+            delta_db_manager: DeltaDbManager::new(
+                storage_conf.path_delta_mpts_dir.clone(),
+            )?,
             snapshot_manager: Box::new(StorageManagerFullNode::<
                 SnapshotDbManager,
             > {
                 snapshot_db_manager: SnapshotDbManager::new(
-                    StorageConfiguration::SNAPSHOT_DIR.to_string(),
-                ),
+                    storage_conf.path_snapshot_dir.clone(),
+                )?,
             }),
+            delta_mpts_id_gen: Default::default(),
+            delta_mpts_node_memory_manager: Arc::new(
+                DeltaMptsNodeMemoryManager::new(
+                    storage_conf.delta_mpts_cache_start_size,
+                    storage_conf.delta_mpts_cache_size,
+                    storage_conf.delta_mpts_slab_idle_size,
+                    storage_conf.delta_mpts_node_map_vec_size,
+                    DeltaMptsCacheAlgorithm::new(
+                        storage_conf.delta_mpts_cache_size,
+                    ),
+                ),
+            ),
             maybe_db_errors: MaybeDbErrors {
                 delta_trie_destroy_error_1: Cell::new(None),
                 delta_trie_destroy_error_2: Cell::new(None),
@@ -205,7 +224,9 @@ impl StorageManager {
         // If the DeltaMpt already exists, the empty delta db creation should
         // fail already.
         let db_result = storage_manager.delta_db_manager.new_empty_delta_db(
-            &DeltaDbManager::delta_db_name(snapshot_epoch_id),
+            &storage_manager
+                .delta_db_manager
+                .get_delta_db_name(snapshot_epoch_id),
         );
 
         let mut maybe_snapshot_entry =
@@ -224,13 +245,13 @@ impl StorageManager {
         } else {
             let db = Arc::new(db_result?);
 
-            // FIXME: implement delta mpt so that multiple of them coexists.
             let arc_delta_mpt = Arc::new(DeltaMpt::new(
                 db,
-                &storage_manager.storage_conf,
                 snapshot_epoch_id.clone(),
                 storage_manager.clone(),
-            ));
+                &mut *storage_manager.delta_mpts_id_gen.lock(),
+                storage_manager.delta_mpts_node_memory_manager.clone(),
+            )?);
 
             maybe_snapshot_entry.as_mut().unwrap().1 =
                 Some(arc_delta_mpt.clone());
@@ -247,12 +268,17 @@ impl StorageManager {
     /// The methods clean up Delta DB when dropping an Delta MPT.
     /// It silently finishes and in case of error, it keeps the error
     /// and raise it later on.
-    fn release_delta_mpt_actions_in_drop(&self, snapshot_epoch_id: &EpochId) {
+    fn release_delta_mpt_actions_in_drop(
+        &self, snapshot_epoch_id: &EpochId, delta_mpt_id: DeltaMptId,
+    ) {
+        self.delta_mpts_node_memory_manager
+            .delete_mpt_from_cache(delta_mpt_id);
+        self.delta_mpts_id_gen.lock().free(delta_mpt_id);
         let maybe_another_error = self
             .maybe_db_errors
             .delta_trie_destroy_error_1
             .replace(Some(self.delta_db_manager.destroy_delta_db(
-                &DeltaDbManager::delta_db_name(snapshot_epoch_id),
+                &self.delta_db_manager.get_delta_db_name(snapshot_epoch_id),
             )));
         self.maybe_db_errors
             .delta_trie_destroy_error_2
@@ -774,8 +800,21 @@ impl StorageManager {
             }
         }
 
+        // Always keep the information for genesis snapshot.
+        self.snapshot_associated_mpts_by_epoch
+            .write()
+            .insert(NULL_EPOCH, (None, None));
+        snapshot_info_map
+            .insert(NULL_EPOCH, SnapshotInfo::genesis_snapshot_info());
+        self.snapshot_info_db.put(
+            NULL_EPOCH.as_ref(),
+            &SnapshotInfo::genesis_snapshot_info().rlp_bytes(),
+        )?;
+        self.current_snapshots
+            .write()
+            .push(SnapshotInfo::genesis_snapshot_info());
+
         if snapshot_info_map.len() > 0 {
-            println!("NULL_EPOCH {:?}", NULL_EPOCH);
             // Persist state loaded.
             let missing_snapshots = self
                 .snapshot_manager
@@ -794,6 +833,44 @@ impl StorageManager {
                     snapshot_epoch_id, snapshot_info
                 );
                 self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
+                self.delta_db_manager.destroy_delta_db(
+                    &self
+                        .delta_db_manager
+                        .get_delta_db_name(&snapshot_epoch_id),
+                )?;
+            }
+
+            let (missing_snapshots, delta_dbs) = self
+                .delta_db_manager
+                .scan_persist_state(snapshot_info_map)?;
+
+            let mut delta_mpts = HashMap::new();
+            for (snapshot_epoch_id, delta_db) in delta_dbs {
+                delta_mpts.insert(
+                    snapshot_epoch_id.clone(),
+                    Arc::new(DeltaMpt::new(
+                        Arc::new(delta_db),
+                        snapshot_epoch_id.clone(),
+                        unsafe { shared_from_this(self) },
+                        &mut *self.delta_mpts_id_gen.lock(),
+                        self.delta_mpts_node_memory_manager.clone(),
+                    )?),
+                );
+            }
+
+            for snapshot_epoch_id in missing_snapshots {
+                if snapshot_epoch_id == NULL_EPOCH {
+                    continue;
+                }
+                error!(
+                    "Missing delta mpt for snapshot {:?}",
+                    snapshot_epoch_id
+                );
+                snapshot_info_map.remove(&snapshot_epoch_id);
+                self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
+                self.snapshot_manager
+                    .get_snapshot_db_manager()
+                    .destroy_snapshot(&snapshot_epoch_id)?;
             }
 
             // Restore current_snapshots.
@@ -806,46 +883,21 @@ impl StorageManager {
             let current_snapshots = &mut *self.current_snapshots.write();
             std::mem::replace(current_snapshots, snapshots);
 
-            // Restore snapshot_associated_mpts_by_epoch.
-            // FIXME: for now we haven't separated delta mpt by
-            // snapshot_epoch_id, therefore we create the only delta
-            // mpt. This should be replaced by loading the delta mpt
-            // for each snapshot_epoch_id in the loop for each snapshot_info.
-            let the_only_deltampt = Arc::new(DeltaMpt::new(
-                Arc::new(self.delta_db_manager.new_empty_delta_db(
-                    &DeltaDbManager::delta_db_name(&NULL_EPOCH),
-                )?),
-                &self.storage_conf,
-                NULL_EPOCH,
-                unsafe { shared_from_this(self) },
-            ));
             let snapshot_associated_mpts =
                 &mut *self.snapshot_associated_mpts_by_epoch.write();
-            for snapshot_epoch_info in current_snapshots {
+            for snapshot_info in current_snapshots {
                 snapshot_associated_mpts.insert(
-                    snapshot_epoch_info.get_snapshot_epoch_id().clone(),
+                    snapshot_info.get_snapshot_epoch_id().clone(),
                     (
-                        snapshot_associated_mpts
-                            .get(&snapshot_epoch_info.parent_snapshot_epoch_id)
-                            .map(|x| x.1.clone().unwrap()),
-                        Some(the_only_deltampt.clone()),
+                        delta_mpts
+                            .get(&snapshot_info.parent_snapshot_epoch_id)
+                            .map(|x| x.clone()),
+                        delta_mpts
+                            .get(snapshot_info.get_snapshot_epoch_id())
+                            .map(|x| x.clone()),
                     ),
                 );
             }
-        } else {
-            // Start for the first time.
-            self.snapshot_associated_mpts_by_epoch
-                .write()
-                .insert(NULL_EPOCH, (None, None));
-            snapshot_info_map
-                .insert(NULL_EPOCH, SnapshotInfo::genesis_snapshot_info());
-            self.snapshot_info_db.put(
-                NULL_EPOCH.as_ref(),
-                &SnapshotInfo::genesis_snapshot_info().rlp_bytes(),
-            )?;
-            self.current_snapshots
-                .write()
-                .push(SnapshotInfo::genesis_snapshot_info());
         }
 
         Ok(())
@@ -892,13 +944,21 @@ use super::{
     *,
 };
 use crate::storage::{
-    impls::storage_db::{
-        kvdb_sqlite::{
-            KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
-            KvdbSqliteStatements,
+    impls::{
+        delta_mpt::{
+            node_memory_manager::{
+                DeltaMptsCacheAlgorithm, DeltaMptsNodeMemoryManager,
+            },
+            node_ref_map::DeltaMptId,
         },
-        snapshot_db_sqlite::SnapshotDbSqlite,
-        sqlite::ConnectionWithRowParser,
+        storage_db::{
+            kvdb_sqlite::{
+                KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
+                KvdbSqliteStatements,
+            },
+            snapshot_db_sqlite::SnapshotDbSqlite,
+            sqlite::ConnectionWithRowParser,
+        },
     },
     storage_db::KeyValueDbIterableTrait,
     KeyValueDbTrait, KvdbSqlite, StorageConfiguration,

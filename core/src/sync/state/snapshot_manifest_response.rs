@@ -14,7 +14,7 @@ use cfx_types::H256;
 use primitives::{EpochId, MerkleHash, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(RlpDecodable, RlpEncodable)]
+#[derive(RlpDecodable, RlpEncodable, Default)]
 pub struct SnapshotManifestResponse {
     pub request_id: u64,
     pub snapshot_epoch_id: EpochId,

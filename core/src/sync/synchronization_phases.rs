@@ -291,6 +291,9 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
 
 pub struct CatchUpCheckpointPhase {
     state_sync: Arc<SnapshotChunkSync>,
+
+    /// Is `true` if we have the state locally and do not need to sync
+    /// checkpoints. Only set when the phase starts.
     has_state: AtomicBool,
 }
 
@@ -316,44 +319,21 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         if self.has_state.load(AtomicOrdering::SeqCst) {
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
-
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
-        match sync_handler
-            .graph
-            .consensus
-            .get_trusted_blame_block_for_snapshot(&epoch_to_sync)
-        {
-            Some(trusted_blame_block) => {
-                if self.state_sync.snapshot_epoch_id() == epoch_to_sync {
-                    if self.state_sync.status() == Status::Completed {
-                        DynamicCapability::ServeCheckpoint(Some(epoch_to_sync))
-                            .broadcast(io, &sync_handler.syn);
-                        self.state_sync.restore_execution_state(sync_handler);
-                        *sync_handler
-                            .graph
-                            .consensus
-                            .synced_epoch_id_and_blame_block
-                            .lock() =
-                            Some((epoch_to_sync, trusted_blame_block));
-                        return SyncPhaseType::CatchUpRecoverBlockFromDB;
-                    }
-                } else {
-                    // start to sync new checkpoint if new era started,
-                    self.state_sync.start(
-                        epoch_to_sync,
-                        trusted_blame_block,
-                        io,
-                        sync_handler,
-                    )
-                }
-            }
-            None => {
-                // FIXME should find the trusted blame block
-                error!("failed to start checkpoint sync, the trusted blame block is unavailable");
-            }
+        self.state_sync
+            .update_status(epoch_to_sync, io, sync_handler);
+        if self.state_sync.status() == Status::Completed {
+            self.state_sync.restore_execution_state(sync_handler);
+            *sync_handler
+                .graph
+                .consensus
+                .synced_epoch_id_and_blame_block
+                .lock() =
+                Some((epoch_to_sync, self.state_sync.trusted_blame_block()));
+            SyncPhaseType::CatchUpRecoverBlockFromDB
+        } else {
+            self.phase_type()
         }
-
-        self.phase_type()
     }
 
     fn start(
@@ -374,27 +354,8 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return;
         }
 
-        match sync_handler
-            .graph
-            .consensus
-            .get_trusted_blame_block_for_snapshot(&epoch_to_sync)
-        {
-            Some(trusted_blame_block) => {
-                info!("start to sync state for checkpoint {:?}, trusted blame block = {:?}", epoch_to_sync, trusted_blame_block);
-
-                self.state_sync.start(
-                    epoch_to_sync,
-                    trusted_blame_block,
-                    io,
-                    sync_handler,
-                );
-            }
-            None => {
-                // FIXME should find the trusted blame block
-                error!("failed to start checkpoint sync, the trusted blame block is unavailable");
-                return;
-            }
-        }
+        self.state_sync
+            .update_status(epoch_to_sync, io, sync_handler);
     }
 }
 

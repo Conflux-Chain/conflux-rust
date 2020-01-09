@@ -151,6 +151,8 @@ impl ValueSizeFieldConverter {
 }
 
 impl SizeFieldConverterTrait<u32> for ValueSizeFieldConverter {
+    fn max_size() -> usize { Self::MAX_VALUE_SIZE }
+
     fn is_size_over_limit(size: usize) -> bool { size > Self::MAX_VALUE_SIZE }
 
     fn get(size_field: &u32) -> usize {
@@ -215,8 +217,10 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn check_value_size(value: &[u8]) -> Result<()> {
         let value_size = value.len();
         if ValueSizeFieldConverter::is_size_over_limit(value_size) {
-            // TODO(yz): value too long.
-            return Err(Error::from_kind(ErrorKind::MPTInvalidValue));
+            return Err(Error::from_kind(ErrorKind::MPTInvalidValueLength(
+                value_size,
+                ValueSizeFieldConverter::max_size(),
+            )));
         }
         // We may use empty value to represent special state, such as tombstone.
         // Therefore We don't check for emptiness.
@@ -227,12 +231,16 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn check_key_size(access_key: &[u8]) -> Result<()> {
         let key_size = access_key.len();
         if TrivialSizeFieldConverterU16::is_size_over_limit(key_size) {
-            // TODO(yz): key too long.
-            return Err(Error::from_kind(ErrorKind::MPTInvalidKey));
+            return Err(Error::from_kind(ErrorKind::MPTInvalidKeyLength(
+                key_size,
+                TrivialSizeFieldConverterU16::max_size(),
+            )));
         }
         if key_size == 0 {
-            // TODO(yz): key is empty.
-            return Err(Error::from_kind(ErrorKind::MPTInvalidKey));
+            return Err(Error::from_kind(ErrorKind::MPTInvalidKeyLength(
+                key_size,
+                TrivialSizeFieldConverterU16::max_size(),
+            )));
         }
 
         Ok(())
@@ -396,11 +404,11 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 None => {}
             },
             None => {
-                let value_size = self.value_size as usize;
+                let byte_size = self.value_memory_manager.get_size();
                 ret.value_size = self.value_size;
                 ret.value = MaybeInPlaceByteArray::copy_from(
-                    self.value.get_slice(value_size),
-                    value_size,
+                    self.value.get_slice(byte_size),
+                    byte_size,
                 );
             }
         }

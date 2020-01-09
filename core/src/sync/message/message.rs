@@ -10,6 +10,7 @@ use crate::{
         state::{
             SnapshotChunkRequest, SnapshotChunkResponse,
             SnapshotManifestRequest, SnapshotManifestResponse,
+            StateSyncCandidateRequest, StateSyncCandidateResponse,
         },
         Error,
     },
@@ -49,6 +50,8 @@ build_msgid! {
     GET_SNAPSHOT_CHUNK_RESPONSE = 0x1c
     GET_TRANSACTIONS_FROM_TX_HASHES = 0x1d
     GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE = 0x1e
+    STATE_SYNC_CANDIDATE_REQUEST = 0x20
+    STATE_SYNC_CANDIDATE_RESPONSE = 0x21
 
     THROTTLED = 0xfe
 
@@ -75,6 +78,8 @@ build_msg_with_request_id_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_M
 build_msg_with_request_id_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
 build_msg_with_request_id_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
 build_msg_with_request_id_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
+build_msg_with_request_id_impl! { StateSyncCandidateRequest, msgid::STATE_SYNC_CANDIDATE_REQUEST, "StateSyncCandidateRequest" }
+build_msg_with_request_id_impl! { StateSyncCandidateResponse, msgid::STATE_SYNC_CANDIDATE_RESPONSE, "StateSyncCandidateResponse" }
 build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled" }
 
 // normal priority and size-sensitive message types
@@ -301,6 +306,12 @@ pub fn handle_rlp_message(
         }
         msgid::GET_SNAPSHOT_CHUNK_RESPONSE => {
             handle_message::<SnapshotChunkResponse>(ctx, rlp)?;
+        }
+        msgid::STATE_SYNC_CANDIDATE_REQUEST => {
+            handle_message::<StateSyncCandidateRequest>(ctx, rlp)?;
+        }
+        msgid::STATE_SYNC_CANDIDATE_RESPONSE => {
+            handle_message::<StateSyncCandidateResponse>(ctx, rlp)?;
         }
         _ => return Ok(false),
     }

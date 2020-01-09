@@ -17,8 +17,11 @@ impl DeltaMptIterator {
             Some(root_node) => {
                 let db = &mut *self.mpt.db_owned_read()?;
                 let owned_node_set = Default::default();
-                let mut cow_root_node =
-                    CowNodeRef::new(root_node.clone(), &owned_node_set);
+                let mut cow_root_node = CowNodeRef::new(
+                    root_node.clone(),
+                    &owned_node_set,
+                    self.mpt.get_mpt_id(),
+                );
                 let guarded_trie_node =
                     GuardedValue::take(cow_root_node.get_trie_node(
                         self.mpt.get_node_memory_manager(),
