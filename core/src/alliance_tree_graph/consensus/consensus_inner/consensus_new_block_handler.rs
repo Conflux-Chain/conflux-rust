@@ -1298,7 +1298,10 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_genesis_height
             );
         }
-        let mut confirmed_height = meter.get_confirmed_epoch_num();
+        let mut confirmed_height = meter.get_confirmed_epoch_num(
+            inner.cur_era_genesis_height
+                + 2 * self.data_man.get_snapshot_epoch_count() as u64,
+        );
         if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
             confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
         }
