@@ -1493,8 +1493,6 @@ impl ConsensusExecutionHandler {
         )
     }
 
-    // FIXME: we assumed that the epoch_id is valid,
-    // FIXME: but I can't know if it's true.
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
     ) -> Result<(Vec<u8>, U256), String> {
@@ -1505,10 +1503,12 @@ impl ConsensusExecutionHandler {
             return Err("invalid epoch id".to_string());
         }
         let best_block_header = best_block_header.unwrap();
-        if !self
-            .data_man
-            .state_availability_boundary
-            .read()
+
+        // Keep the lock until we get the desired State, otherwise the State may
+        // expire.
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        if !state_availability_boundary
             .check_availability(best_block_header.height(), epoch_id)
         {
             return Err("state is not ready".to_string());
@@ -1529,6 +1529,8 @@ impl ConsensusExecutionHandler {
             0.into(),
             self.vm.clone(),
         );
+        drop(state_availability_boundary);
+
         let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),

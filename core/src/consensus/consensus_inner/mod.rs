@@ -2647,6 +2647,8 @@ impl ConsensusGraphInner {
             "collect_blocks_missing_execution_commitments: me={}, height={}",
             me, self.arena[me].height
         );
+        // FIXME: Same here. Be explicit about whether a checkpoint or a synced
+        // FIXME: snapshot is requested, and distinguish two cases.
         let state_boundary_height =
             self.data_man.state_availability_boundary.read().lower_bound;
         loop {
@@ -2675,6 +2677,8 @@ impl ConsensusGraphInner {
         // in order
         let mut blocks_to_compute = Vec::new();
         let mut cur = me;
+        // FIXME: Same here. Be explicit about whether a checkpoint or a synced
+        // FIXME: snapshot is requested, and distinguish two cases.
         let state_boundary_height =
             self.data_man.state_availability_boundary.read().lower_bound;
         loop {
@@ -2761,6 +2765,8 @@ impl ConsensusGraphInner {
     /// `state_boundary_height` and set `state_valid` of it and its blamed
     /// blocks. This block is found according to blame_ratio.
     pub fn recover_state_valid(&mut self) {
+        // FIXME: Same here. Be explicit about whether a checkpoint or a synced
+        // FIXME: snapshot is requested, and distinguish two cases.
         let start_pivot_index =
             (self.data_man.state_availability_boundary.read().lower_bound
                 - self.cur_era_genesis_height) as usize;

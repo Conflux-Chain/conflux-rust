@@ -15,7 +15,7 @@ pub struct StorageManager {
     delta_mpts_id_gen: Mutex<DeltaMptIdGen>,
     delta_mpts_node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
 
-    maybe_db_errors: MaybeDbErrors,
+    maybe_db_errors: MaybeDeltaTrieDestroyErrors,
     snapshot_associated_mpts_by_epoch: RwLock<
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
@@ -35,7 +35,7 @@ pub struct StorageManager {
     current_snapshots: RwLock<Vec<SnapshotInfo>>,
     snapshot_info_map_by_epoch: RwLock<HashMap<EpochId, SnapshotInfo>>,
 
-    last_confirmed_snapshotable_epoch_id: Mutex<Option<EpochId>>,
+    last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
 
     storage_conf: StorageConfiguration,
 }
@@ -133,10 +133,7 @@ impl StorageManager {
                     ),
                 ),
             ),
-            maybe_db_errors: MaybeDbErrors {
-                delta_trie_destroy_error_1: Cell::new(None),
-                delta_trie_destroy_error_2: Cell::new(None),
-            },
+            maybe_db_errors: MaybeDeltaTrieDestroyErrors::new(),
             snapshot_associated_mpts_by_epoch: Default::default(),
             in_progress_snapshotting_tasks: Default::default(),
             in_progress_snapshot_finish_signaler: Arc::new(Mutex::new(
@@ -146,7 +143,7 @@ impl StorageManager {
             snapshot_info_db,
             current_snapshots: Default::default(),
             snapshot_info_map_by_epoch: Default::default(),
-            last_confirmed_snapshotable_epoch_id: Default::default(),
+            last_confirmed_snapshottable_epoch_id: Default::default(),
             storage_conf,
         }));
 
@@ -351,37 +348,27 @@ impl StorageManager {
         self.delta_mpts_node_memory_manager
             .delete_mpt_from_cache(delta_mpt_id);
         self.delta_mpts_id_gen.lock().free(delta_mpt_id);
-        let maybe_another_error = self
-            .maybe_db_errors
-            .delta_trie_destroy_error_1
-            .replace(Some(self.delta_db_manager.destroy_delta_db(
-                &self.delta_db_manager.get_delta_db_name(snapshot_epoch_id),
-            )));
-        self.maybe_db_errors
-            .delta_trie_destroy_error_2
-            .set(maybe_another_error);
+        self.maybe_db_errors.set_maybe_error(
+            self.delta_db_manager
+                .destroy_delta_db(
+                    &self.delta_db_manager.get_delta_db_name(snapshot_epoch_id),
+                )
+                .err(),
+        );
     }
 
-    // FIXME: use snapshot removing logics, check delta mpt lifetime,
-    // FIXME: and maintain snapshot status.
-    #[allow(unused)]
     fn release_delta_mpts_from_snapshot(
-        &self, snapshot_epoch_id: &EpochId,
-    ) -> Result<()> {
-        let mut snapshot_associated_mpts_guard =
-            self.snapshot_associated_mpts_by_epoch.write();
+        &self,
+        snapshot_associated_mpts_by_epoch: &mut HashMap<
+            EpochId,
+            (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>),
+        >,
+        snapshot_epoch_id: &EpochId,
+    ) -> Result<()>
+    {
         // Release
-        snapshot_associated_mpts_guard.remove(snapshot_epoch_id);
-        self.check_db_destroy_errors()
-    }
-
-    fn check_db_destroy_errors(&self) -> Result<()> {
-        let _maybe_error_1 =
-            self.maybe_db_errors.delta_trie_destroy_error_1.take();
-        let _maybe_error_2 =
-            self.maybe_db_errors.delta_trie_destroy_error_2.take();
-        // FIXME: Combine two errors, instruct users, and raise combined error.
-        unimplemented!()
+        snapshot_associated_mpts_by_epoch.remove(snapshot_epoch_id);
+        self.maybe_db_errors.take_result()
     }
 
     pub fn check_make_register_snapshot_background(
@@ -389,10 +376,6 @@ impl StorageManager {
         maybe_delta_db: Option<DeltaMptIterator>,
     ) -> Result<()>
     {
-        debug!(
-            "check_make_register_snapshot_background: epoch={:?} height={:?}",
-            snapshot_epoch_id, height
-        );
         let this_cloned = this.clone();
         let mut in_progress_snapshoting_tasks =
             this_cloned.in_progress_snapshotting_tasks.write();
@@ -403,6 +386,11 @@ impl StorageManager {
                 .read()
                 .contains_key(&snapshot_epoch_id)
         {
+            debug!(
+                "start check_make_register_snapshot_background: epoch={:?} height={:?}",
+                snapshot_epoch_id, height
+            );
+
             let mut pivot_chain_parts = vec![
                 Default::default();
                 this.storage_conf.consensus_param.snapshot_epoch_count
@@ -592,31 +580,30 @@ impl StorageManager {
     ///
     /// The behavior of old pivot snapshot deletion can be different between
     /// Archive Node and Full Node.
+    ///
+    /// Returns the first available state height after the maintenance.
     pub fn maintain_snapshots_pivot_chain_confirmed(
-        &self, confirmed_height: u64,
-        confirmed_snapshotable_epoch_id: &EpochId,
+        &self, confirmed_height: u64, confirmed_epoch_id: &EpochId,
         confirmed_state_root: &StateRootWithAuxInfo,
+        state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
     ) -> Result<()>
     {
         // Update the confirmed epoch id. Skip remaining actions when the
-        // confirmed epoch id doesn't change
+        // confirmed snapshottable epoch id doesn't change
         {
-            let mut last_confirmed_snapshotable_id_locked =
-                self.last_confirmed_snapshotable_epoch_id.lock();
-            if last_confirmed_snapshotable_id_locked.is_some() {
-                if confirmed_snapshotable_epoch_id
-                    .eq(last_confirmed_snapshotable_id_locked.as_ref().unwrap())
-                {
+            let mut last_confirmed_snapshottable_id_locked =
+                self.last_confirmed_snapshottable_epoch_id.lock();
+            if last_confirmed_snapshottable_id_locked.is_some() {
+                if confirmed_state_root.aux_info.intermediate_epoch_id.eq(
+                    last_confirmed_snapshottable_id_locked.as_ref().unwrap(),
+                ) {
                     return Ok(());
                 }
             }
-            *last_confirmed_snapshotable_id_locked =
-                Some(confirmed_snapshotable_epoch_id.clone());
+            *last_confirmed_snapshottable_id_locked = Some(
+                confirmed_state_root.aux_info.intermediate_epoch_id.clone(),
+            );
         }
-
-        let mut non_pivot_snapshots_to_remove = HashSet::new();
-        let mut old_pivot_snapshots_to_remove = vec![];
-        let mut in_progress_snapshot_to_cancel = vec![];
 
         let confirmed_intermediate_height = confirmed_height
             - StateIndex::height_to_delta_height(
@@ -624,18 +611,36 @@ impl StorageManager {
                 self.get_snapshot_epoch_count(),
             ) as u64;
 
+        let confirmed_snapshot_height = if confirmed_intermediate_height
+            > self.storage_conf.consensus_param.snapshot_epoch_count as u64
+        {
+            confirmed_intermediate_height
+                - self.storage_conf.consensus_param.snapshot_epoch_count as u64
+        } else {
+            0
+        };
+        let first_available_state_height = if confirmed_snapshot_height > 0 {
+            confirmed_snapshot_height + 1
+        } else {
+            0
+        };
+
+        debug!(
+            "maintain_snapshots_pivot_chain_confirmed: confirmed_height {}, \
+             confirmed_epoch_id {:?}, confirmed_intermediate_height {}, \
+             confirmed_snapshot_height {}, first_available_state_height {}",
+            confirmed_height,
+            confirmed_epoch_id,
+            confirmed_intermediate_height,
+            confirmed_snapshot_height,
+            first_available_state_height,
+        );
+        let mut non_pivot_snapshots_to_remove = HashSet::new();
+        let mut old_pivot_snapshots_to_remove = vec![];
+        let mut in_progress_snapshot_to_cancel = vec![];
+
         {
             let current_snapshots = self.current_snapshots.read();
-
-            let confirmed_snapshot_height = if confirmed_intermediate_height
-                > self.storage_conf.consensus_param.snapshot_epoch_count as u64
-            {
-                confirmed_intermediate_height
-                    - self.storage_conf.consensus_param.snapshot_epoch_count
-                        as u64
-            } else {
-                0
-            };
 
             let mut prev_snapshot_epoch_id = &NULL_EPOCH;
 
@@ -695,7 +700,7 @@ impl StorageManager {
                         // Check if the snapshot is within
                         // confirmed_epoch's
                         // subtree.
-                        if path_epoch_id != confirmed_snapshotable_epoch_id {
+                        if path_epoch_id != confirmed_epoch_id {
                             non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
@@ -742,7 +747,7 @@ impl StorageManager {
                     .get_epoch_id_at_height(confirmed_height)
                 {
                     Some(path_epoch_id) => {
-                        if path_epoch_id != confirmed_snapshotable_epoch_id {
+                        if path_epoch_id != confirmed_epoch_id {
                             to_cancel = true;
                         }
                     }
@@ -765,6 +770,15 @@ impl StorageManager {
         if !non_pivot_snapshots_to_remove.is_empty()
             || !old_pivot_snapshots_to_remove.is_empty()
         {
+            {
+                // FIXME: Archive node may do something different.
+                let state_boundary = &mut *state_availability_boundary.write();
+                if first_available_state_height > state_boundary.lower_bound {
+                    state_boundary
+                        .adjust_lower_bound(first_available_state_height);
+                }
+            }
+
             let mut snapshots_to_remove = non_pivot_snapshots_to_remove.clone();
 
             let mut current_snapshots_locked = self.current_snapshots.write();
@@ -778,6 +792,10 @@ impl StorageManager {
                     .remove_non_pivot_snapshot(&snapshot_epoch_id)?;
             }
 
+            debug!(
+                "maintain_snapshots_pivot_chain_confirmed: remove the following snapshots {:?}",
+                snapshots_to_remove,
+            );
             current_snapshots_locked.retain(|x| {
                 !snapshots_to_remove.contains(x.get_snapshot_epoch_id())
             });
@@ -786,19 +804,33 @@ impl StorageManager {
                     !snapshots_to_remove.contains(snapshot_epoch_id)
                 },
             );
+            {
+                let snapshot_associated_mpts_by_epoch_locked =
+                    &mut *self.snapshot_associated_mpts_by_epoch.write();
+
+                for snapshot_epoch_id in &snapshots_to_remove {
+                    self.release_delta_mpts_from_snapshot(
+                        snapshot_associated_mpts_by_epoch_locked,
+                        snapshot_epoch_id,
+                    )?
+                }
+            }
             for snapshot_epoch_id in snapshots_to_remove {
                 self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
             }
+            debug!("maintain_snapshots_pivot_chain_confirmed: finished");
         }
 
+        // TODO: implement in_progress_snapshot cancellation.
+        /*
         if !in_progress_snapshot_to_cancel.is_empty() {
-            let mut in_progress_snapshoting_locked =
+            let mut in_progress_snapshotting_locked =
                 self.in_progress_snapshotting_tasks.write();
             for epoch_id in in_progress_snapshot_to_cancel {
-                // TODO: implement cancellation in a better way.
-                in_progress_snapshoting_locked.remove(&epoch_id);
+                unimplemented!();
             }
         }
+        */
 
         Ok(())
     }
@@ -974,13 +1006,37 @@ impl StorageManager {
     }
 }
 
-struct MaybeDbErrors {
-    delta_trie_destroy_error_1: Cell<Option<Result<()>>>,
-    delta_trie_destroy_error_2: Cell<Option<Result<()>>>,
+struct MaybeDeltaTrieDestroyErrors {
+    delta_trie_destroy_error_1: Cell<Option<Error>>,
+    delta_trie_destroy_error_2: Cell<Option<Error>>,
 }
 
 // It's only used when relevant lock has been acquired.
-unsafe impl Sync for MaybeDbErrors {}
+unsafe impl Sync for MaybeDeltaTrieDestroyErrors {}
+
+impl MaybeDeltaTrieDestroyErrors {
+    fn new() -> Self {
+        Self {
+            delta_trie_destroy_error_1: Cell::new(None),
+            delta_trie_destroy_error_2: Cell::new(None),
+        }
+    }
+
+    fn set_maybe_error(&self, e: Option<Error>) {
+        self.delta_trie_destroy_error_2
+            .replace(self.delta_trie_destroy_error_1.replace(e));
+    }
+
+    fn take_result(&self) -> Result<()> {
+        let e1 = self.delta_trie_destroy_error_1.take().map(|e| Box::new(e));
+        let e2 = self.delta_trie_destroy_error_2.take().map(|e| Box::new(e));
+        if e1.is_some() || e2.is_some() {
+            Err(ErrorKind::DeltaMPTDestroyErrors(e1, e2).into())
+        } else {
+            Ok(())
+        }
+    }
+}
 
 lazy_static! {
     static ref SNAPSHOT_KVDB_STATEMENTS: Arc<KvdbSqliteStatements> = Arc::new(
@@ -1012,25 +1068,28 @@ use super::{
     },
     *,
 };
-use crate::storage::{
-    impls::{
-        delta_mpt::{
-            node_memory_manager::{
-                DeltaMptsCacheAlgorithm, DeltaMptsNodeMemoryManager,
+use crate::{
+    block_data_manager::StateAvailabilityBoundary,
+    storage::{
+        impls::{
+            delta_mpt::{
+                node_memory_manager::{
+                    DeltaMptsCacheAlgorithm, DeltaMptsNodeMemoryManager,
+                },
+                node_ref_map::DeltaMptId,
             },
-            node_ref_map::DeltaMptId,
-        },
-        storage_db::{
-            kvdb_sqlite::{
-                KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
-                KvdbSqliteStatements,
+            storage_db::{
+                kvdb_sqlite::{
+                    KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
+                    KvdbSqliteStatements,
+                },
+                snapshot_db_sqlite::SnapshotDbSqlite,
+                sqlite::ConnectionWithRowParser,
             },
-            snapshot_db_sqlite::SnapshotDbSqlite,
-            sqlite::ConnectionWithRowParser,
         },
+        storage_db::KeyValueDbIterableTrait,
+        KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
     },
-    storage_db::KeyValueDbIterableTrait,
-    KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
 };
 use fallible_iterator::FallibleIterator;
 use parking_lot::{Mutex, RwLock};
