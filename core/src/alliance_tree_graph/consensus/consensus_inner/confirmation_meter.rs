@@ -9,7 +9,7 @@ use super::super::{
 
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{collections::VecDeque, convert::TryFrom};
+use std::{cmp::min, collections::VecDeque, convert::TryFrom};
 
 pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
 pub const MAX_NUM_MAINTAINED_RISK: usize = 10;
@@ -103,10 +103,14 @@ impl ConfirmationMeter {
         inner.total_weight_in_past_2d.delta
     }
 
-    pub fn get_confirmed_epoch_num(&self) -> u64 {
+    // FIXME: For now we sync at checkpoint rather than the latest snapshot,
+    // FIXME: therefore we fake the confirmed epoch_num by passing it.
+    pub fn get_confirmed_epoch_num(
+        &self, keep_snapshot_till_cur_era_genesis_height: u64,
+    ) -> u64 {
         let x = self.inner.read().finality_manager.lowest_epoch_num;
         if x > 0 {
-            x - 1
+            min(x - 1, keep_snapshot_till_cur_era_genesis_height)
         } else {
             0
         }
