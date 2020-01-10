@@ -33,7 +33,7 @@ pub struct StorageManager {
     current_snapshots: RwLock<Vec<SnapshotInfo>>,
     snapshot_info_map_by_epoch: RwLock<HashMap<EpochId, SnapshotInfo>>,
 
-    last_confirmed_snapshotable_epoch_id: Mutex<Option<EpochId>>,
+    last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
 
     storage_conf: StorageConfiguration,
 }
@@ -119,7 +119,7 @@ impl StorageManager {
             snapshot_info_db,
             current_snapshots: Default::default(),
             snapshot_info_map_by_epoch: Default::default(),
-            last_confirmed_snapshotable_epoch_id: Default::default(),
+            last_confirmed_snapshottable_epoch_id: Default::default(),
             storage_conf,
         }));
 
@@ -517,50 +517,51 @@ impl StorageManager {
     ///
     /// The behavior of old pivot snapshot deletion can be different between
     /// Archive Node and Full Node.
+    ///
+    /// Returns the confirmed snapshot height after the maintenance.
     pub fn maintain_snapshots_pivot_chain_confirmed(
-        &self, confirmed_height: u64,
-        confirmed_snapshotable_epoch_id: &EpochId,
+        &self, confirmed_height: u64, confirmed_epoch_id: &EpochId,
         confirmed_state_root: &StateRootWithAuxInfo,
-    ) -> Result<()>
+    ) -> Result<u64>
     {
-        // Update the confirmed epoch id. Skip remaining actions when the
-        // confirmed epoch id doesn't change
-        {
-            let mut last_confirmed_snapshotable_id_locked =
-                self.last_confirmed_snapshotable_epoch_id.lock();
-            if last_confirmed_snapshotable_id_locked.is_some() {
-                if confirmed_snapshotable_epoch_id
-                    .eq(last_confirmed_snapshotable_id_locked.as_ref().unwrap())
-                {
-                    return Ok(());
-                }
-            }
-            *last_confirmed_snapshotable_id_locked =
-                Some(confirmed_snapshotable_epoch_id.clone());
-        }
-
-        let mut non_pivot_snapshots_to_remove = HashSet::new();
-        let mut old_pivot_snapshots_to_remove = vec![];
-        let mut in_progress_snapshot_to_cancel = vec![];
-
         let confirmed_intermediate_height = confirmed_height
             - StateIndex::height_to_delta_height(
                 confirmed_height,
                 self.get_snapshot_epoch_count(),
             ) as u64;
 
+        let confirmed_snapshot_height = if confirmed_intermediate_height
+            > self.storage_conf.consensus_param.snapshot_epoch_count as u64
+        {
+            confirmed_intermediate_height
+                - self.storage_conf.consensus_param.snapshot_epoch_count as u64
+        } else {
+            0
+        };
+
+        // Update the confirmed epoch id. Skip remaining actions when the
+        // confirmed snapshottable epoch id doesn't change
+        {
+            let mut last_confirmed_snapshottable_id_locked =
+                self.last_confirmed_snapshottable_epoch_id.lock();
+            if last_confirmed_snapshottable_id_locked.is_some() {
+                if confirmed_state_root.aux_info.intermediate_epoch_id.eq(
+                    last_confirmed_snapshottable_id_locked.as_ref().unwrap(),
+                ) {
+                    return Ok(confirmed_snapshot_height);
+                }
+            }
+            *last_confirmed_snapshottable_id_locked = Some(
+                confirmed_state_root.aux_info.intermediate_epoch_id.clone(),
+            );
+        }
+
+        let mut non_pivot_snapshots_to_remove = HashSet::new();
+        let mut old_pivot_snapshots_to_remove = vec![];
+        let mut in_progress_snapshot_to_cancel = vec![];
+
         {
             let current_snapshots = self.current_snapshots.read();
-
-            let confirmed_snapshot_height = if confirmed_intermediate_height
-                > self.storage_conf.consensus_param.snapshot_epoch_count as u64
-            {
-                confirmed_intermediate_height
-                    - self.storage_conf.consensus_param.snapshot_epoch_count
-                        as u64
-            } else {
-                0
-            };
 
             let mut prev_snapshot_epoch_id = &NULL_EPOCH;
 
@@ -620,7 +621,7 @@ impl StorageManager {
                         // Check if the snapshot is within
                         // confirmed_epoch's
                         // subtree.
-                        if path_epoch_id != confirmed_snapshotable_epoch_id {
+                        if path_epoch_id != confirmed_epoch_id {
                             non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
@@ -670,7 +671,7 @@ impl StorageManager {
                     .get_epoch_id_at_height(confirmed_height)
                 {
                     Some(path_epoch_id) => {
-                        if path_epoch_id != confirmed_snapshotable_epoch_id {
+                        if path_epoch_id != confirmed_epoch_id {
                             to_cancel = true;
                         }
                     }
@@ -716,21 +717,28 @@ impl StorageManager {
                     !snapshots_to_remove.contains(snapshot_epoch_id)
                 },
             );
+            self.snapshot_associated_mpts_by_epoch.write().retain(
+                |snapshot_epoch_id, _| {
+                    !snapshots_to_remove.contains(snapshot_epoch_id)
+                },
+            );
             for snapshot_epoch_id in snapshots_to_remove {
                 self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
             }
         }
 
+        // TODO: implement in_progress_snapshot cancellation.
+        /*
         if !in_progress_snapshot_to_cancel.is_empty() {
-            let mut in_progress_snapshoting_locked =
-                self.in_progress_snapshoting_tasks.write();
+            let mut in_progress_snapshotting_locked =
+                self.in_progress_snapshotting_tasks.write();
             for epoch_id in in_progress_snapshot_to_cancel {
-                // TODO: implement cancellation in a better way.
-                in_progress_snapshoting_locked.remove(&epoch_id);
+                unimplemented!();
             }
         }
+        */
 
-        Ok(())
+        Ok(confirmed_snapshot_height)
     }
 
     pub fn get_snapshot_info_at_epoch(

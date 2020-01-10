@@ -446,6 +446,11 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         *epoch_synced,
                         epoch_synced_height,
                     );
+                self.graph
+                    .data_man
+                    .state_availability_boundary
+                    .write()
+                    .adjust_lower_bound(epoch_synced_height + 1);
                 // This map will be used to recover `state_valid` info for each
                 // pivot block before `trusted_blame_block`.
                 let mut pivot_block_state_valid_map =
