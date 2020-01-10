@@ -53,6 +53,7 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn fs_remove_snapshot(path: &str) -> Result<()> {
+        debug!("Remove snapshot at {}", path);
         Ok(fs::remove_dir_all(path)?)
     }
 
