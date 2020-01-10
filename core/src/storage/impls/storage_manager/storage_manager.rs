@@ -67,8 +67,7 @@ impl Drop for DeltaDbReleaser {
 // TODO: Add support for cancellation and io throttling.
 pub struct InProgressSnapshotTask {
     snapshot_info: SnapshotInfo,
-    task_result: Arc<Mutex<Option<Result<()>>>>,
-    thread_handle: Option<thread::JoinHandle<()>>,
+    thread_handle: Option<thread::JoinHandle<Result<()>>>,
 }
 
 impl InProgressSnapshotTask {
@@ -76,17 +75,17 @@ impl InProgressSnapshotTask {
     // background snapshotting result when the thread is first joined.
     pub fn join(&mut self) -> Option<Result<()>> {
         if let Some(join_handle) = self.thread_handle.take() {
-            let panic = join_handle.join();
-            if let Err(_) = panic {
-                *self.task_result.lock() =
-                    Some(Err(ErrorKind::ThreadPanicked(format!(
-                        "Background Snapshotting for {:?} panicked.",
-                        self.snapshot_info
-                    ))
-                    .into()));
+            match join_handle.join() {
+                Ok(task_result) => Some(task_result),
+                Err(_) => Some(Err(ErrorKind::ThreadPanicked(format!(
+                    "Background Snapshotting for {:?} panicked.",
+                    self.snapshot_info
+                ))
+                .into())),
             }
+        } else {
+            None
         }
-        self.task_result.lock().take()
     }
 }
 
@@ -456,12 +455,10 @@ impl StorageManager {
                 pivot_chain_parts,
             };
 
-            let task_result_holder = Arc::new(Mutex::new(None));
             let parent_snapshot_epoch_id_cloned =
                 in_progress_snapshot_info.parent_snapshot_epoch_id.clone();
             let mut in_progress_snapshot_info_cloned =
                 in_progress_snapshot_info.clone();
-            let task_result_holder_cloned = task_result_holder.clone();
             let task_finished_sender_cloned =
                 this.in_progress_snapshot_finish_signaler.clone();
             let thread_handle = thread::Builder::new()
@@ -499,15 +496,15 @@ impl StorageManager {
                     warn!(
                         "Failed to create snapshot for epoch_id {:?} with error {:?}",
                         snapshot_epoch_id, task_result.as_ref().unwrap_err());
-                    *task_result_holder_cloned.lock() = Some(task_result);
                 }
+
+                task_result
             })?;
 
             in_progress_snapshoting_tasks.insert(
                 snapshot_epoch_id,
                 Arc::new(RwLock::new(InProgressSnapshotTask {
                     snapshot_info: in_progress_snapshot_info,
-                    task_result: task_result_holder,
                     thread_handle: Some(thread_handle),
                 })),
             );
