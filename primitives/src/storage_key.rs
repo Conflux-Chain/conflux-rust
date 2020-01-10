@@ -77,10 +77,13 @@ impl<'a> StorageKey<'a> {
 
                     x
                 } else {
+                    unsafe { unreachable_unchecked() }
+                    /*
                     unreachable!(
                         "Invalid account key. Unrecognized: {:?}",
                         address_bytes
                     );
+                    */
                 }
             }
             StorageKey::StorageRootKey(address_bytes) => {
@@ -197,10 +200,13 @@ impl<'a> StorageKey<'a> {
                     StorageKey::CodeRootKey(address_bytes)
                 }
             } else {
+                unsafe { unreachable_unchecked() }
+                /*
                 unreachable!(
                     "Invalid key format. Unrecognized: {:?}, account: {:?}",
                     bytes, address_bytes
                 );
+                */
             }
         }
     }
@@ -247,6 +253,7 @@ impl Decodable for DeltaMptKeyPadding {
 
 mod delta_mpt_storage_key {
     use super::*;
+    use std::hint::unreachable_unchecked;
 
     pub const ACCOUNT_KEYPART_BYTES: usize = 32;
     const ACCOUNT_PADDING_BYTES: usize = 12;
@@ -398,10 +405,13 @@ mod delta_mpt_storage_key {
                     // length, it's passed to DeltaMPT directly.
                     return StorageKey::AccountKey(remaining_bytes);
                 } else {
+                    unsafe { unreachable_unchecked() }
+                    /*
                     unreachable!(
                         "Invalid delta mpt key format. Unrecognized: {:?}",
                         remaining_bytes
                     );
+                    */
                 }
             } else {
                 let address_bytes = &remaining_bytes
@@ -431,10 +441,13 @@ mod delta_mpt_storage_key {
                         StorageKey::CodeRootKey(address_bytes)
                     }
                 } else {
+                    unsafe { unreachable_unchecked() }
+                    /*
                     unreachable!(
                         "Invalid key format. Unrecognized: {:?}, account: {:?} delta_mpt_key: {:?}",
                         remaining_bytes, address_bytes, delta_mpt_key,
                     );
+                    */
                 }
             }
         }
@@ -448,6 +461,7 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::AsRef,
+    hint::unreachable_unchecked,
     ops::{Deref, DerefMut},
     vec::Vec,
 };
