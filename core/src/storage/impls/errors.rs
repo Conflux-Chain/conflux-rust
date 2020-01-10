@@ -114,6 +114,15 @@ error_chain! {
             display("Can't find requested Delta MPT in registry."),
         }
 
+        DeltaMPTDestroyErrors(e1: Option<Box<Error>>, e2: Option<Box<Error>>) {
+            description("Error(s) happened in Delta MPT destroy"),
+            display(
+                "Error(s) happened in Delta MPT destroy, error_1: {:?}, error_2: {:?}",
+                e1.as_ref().map(|x| format!("{}", &**x)),
+                e2.as_ref().map(|x| format!("{}", &**x)),
+            ),
+        }
+
         InvalidTrieProof {
             description("Trie proof is invalid."),
             display("Trie proof is invalid."),
