@@ -128,5 +128,15 @@ error_chain! {
             description("Failed to create unit test data dir."),
             display("Failed to create unit test data dir."),
         }
+
+        ThreadPanicked(msg: String) {
+            description("Thread panicked."),
+            display("Thread panicked with message {:?}.", msg),
+        }
+
+        MpscError {
+            description("Error from std::sync::mpsc."),
+            display("Error from std::sync::mpsc."),
+        }
     }
 }

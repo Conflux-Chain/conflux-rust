@@ -20,8 +20,10 @@ pub struct StorageManager {
         HashMap<EpochId, (Option<Arc<DeltaMpt>>, Option<Arc<DeltaMpt>>)>,
     >,
 
-    pub in_progress_snapshoting_tasks:
-        RwLock<HashMap<EpochId, InProgressSnapshotInfo>>,
+    pub in_progress_snapshotting_tasks:
+        RwLock<HashMap<EpochId, Arc<RwLock<InProgressSnapshotTask>>>>,
+    in_progress_snapshot_finish_signaler: Arc<Mutex<Sender<Option<EpochId>>>>,
+    in_progress_snapshotting_joiner: Mutex<Option<JoinHandle<()>>>,
 
     // Db to persist snapshot_info.
     snapshot_info_db: KvdbSqlite<Box<[u8]>>,
@@ -62,12 +64,29 @@ impl Drop for DeltaDbReleaser {
     }
 }
 
-// FIXME: the thread variable is used. But it's subject to refinements for sure.
-pub struct InProgressSnapshotInfo {
+// TODO: Add support for cancellation and io throttling.
+pub struct InProgressSnapshotTask {
     snapshot_info: SnapshotInfo,
-    // TODO: change to something that can control the progress or cancel the
-    // snapshotting.
-    pub thread: thread::JoinHandle<()>,
+    thread_handle: Option<thread::JoinHandle<Result<()>>>,
+}
+
+impl InProgressSnapshotTask {
+    // Returns None if the thread has been joined already. Returns the
+    // background snapshotting result when the thread is first joined.
+    pub fn join(&mut self) -> Option<Result<()>> {
+        if let Some(join_handle) = self.thread_handle.take() {
+            match join_handle.join() {
+                Ok(task_result) => Some(task_result),
+                Err(_) => Some(Err(ErrorKind::ThreadPanicked(format!(
+                    "Background Snapshotting for {:?} panicked.",
+                    self.snapshot_info
+                ))
+                .into())),
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl StorageManager {
@@ -85,6 +104,11 @@ impl StorageManager {
             storage_conf.path_snapshot_info_db.clone(),
             SNAPSHOT_KVDB_STATEMENTS.clone(),
         )?;
+
+        let (
+            in_progress_snapshot_finish_signaler,
+            in_progress_snapshot_finish_signal_receiver,
+        ) = channel();
 
         let new_storage_manager_result = Ok(Arc::new(Self {
             delta_db_manager: DeltaDbManager::new(
@@ -112,16 +136,47 @@ impl StorageManager {
             maybe_db_errors: MaybeDbErrors {
                 delta_trie_destroy_error_1: Cell::new(None),
                 delta_trie_destroy_error_2: Cell::new(None),
-                snapshot_error: Cell::new(None),
             },
             snapshot_associated_mpts_by_epoch: Default::default(),
-            in_progress_snapshoting_tasks: Default::default(),
+            in_progress_snapshotting_tasks: Default::default(),
+            in_progress_snapshot_finish_signaler: Arc::new(Mutex::new(
+                in_progress_snapshot_finish_signaler,
+            )),
+            in_progress_snapshotting_joiner: Default::default(),
             snapshot_info_db,
             current_snapshots: Default::default(),
             snapshot_info_map_by_epoch: Default::default(),
             last_confirmed_snapshotable_epoch_id: Default::default(),
             storage_conf,
         }));
+
+        let storage_manager_arc =
+            new_storage_manager_result.as_ref().unwrap().clone();
+        *new_storage_manager_result.as_ref().unwrap().in_progress_snapshotting_joiner.lock() =
+            Some(thread::Builder::new()
+                .name("Background Snapshot Joiner".to_string()).spawn(
+            move || {
+                for exit_program_or_finished_snapshot in
+                    in_progress_snapshot_finish_signal_receiver.iter() {
+                    if exit_program_or_finished_snapshot.is_none() {
+                        break;
+                    }
+                    let finished_snapshot = exit_program_or_finished_snapshot.unwrap();
+                    if let Some(task) = storage_manager_arc
+                        .in_progress_snapshotting_tasks.read().get(&finished_snapshot) {
+                        let snapshot_result = task.write().join();
+                        if let Some(Err(e)) = snapshot_result {
+                            warn!(
+                                "Background snapshotting for {:?} failed with {}",
+                                finished_snapshot, e);
+                        }
+                    }
+                    storage_manager_arc.in_progress_snapshotting_tasks
+                        .write().remove(&finished_snapshot);
+                }
+                // TODO: handle program exit signal.
+            }
+        )?);
 
         new_storage_manager_result
             .as_ref()
@@ -140,21 +195,39 @@ impl StorageManager {
         {
             Some(snapshot_db) => Ok(Some(snapshot_db)),
             None => {
-                // Keep the lock while waiting.
-                let mut locked = self.in_progress_snapshoting_tasks.write();
                 // Wait for in progress snapshot.
-                if let Some(in_progress_snapshot_info) =
-                    locked.remove(snapshot_epoch_id)
+                if let Some(in_progress_snapshot_task) = self
+                    .in_progress_snapshotting_tasks
+                    .read()
+                    .get(snapshot_epoch_id)
+                    .cloned()
                 {
-                    in_progress_snapshot_info.thread.join().ok();
-                    // FIXME: improve the wait mechanism and throw out errors
-                    // FIXME: happened in making snapshot.
+                    // Snapshot error is thrown-out when the snapshot is first
+                    // requested here.
+                    if let Some(result) =
+                        in_progress_snapshot_task.write().join()
+                    {
+                        result?;
+                    }
                     self.snapshot_manager
                         .get_snapshot_by_epoch_id(snapshot_epoch_id)
                 } else {
                     Ok(None)
                 }
             }
+        }
+    }
+
+    pub fn graceful_shutdown(&self) {
+        // TODO: First cancel any ongoing thread join from
+        // in_progress_snapshotting_joiner thread.
+        self.in_progress_snapshot_finish_signaler
+            .lock()
+            .send(None)
+            .ok();
+        if let Some(joiner) = self.in_progress_snapshotting_joiner.lock().take()
+        {
+            joiner.join().ok();
         }
     }
 
@@ -318,7 +391,7 @@ impl StorageManager {
         );
         let this_cloned = this.clone();
         let mut in_progress_snapshoting_tasks =
-            this_cloned.in_progress_snapshoting_tasks.write();
+            this_cloned.in_progress_snapshotting_tasks.write();
 
         if !in_progress_snapshoting_tasks.contains_key(&snapshot_epoch_id)
             && !this
@@ -386,8 +459,11 @@ impl StorageManager {
                 in_progress_snapshot_info.parent_snapshot_epoch_id.clone();
             let mut in_progress_snapshot_info_cloned =
                 in_progress_snapshot_info.clone();
-            let task = thread::Builder::new()
+            let task_finished_sender_cloned =
+                this.in_progress_snapshot_finish_signaler.clone();
+            let thread_handle = thread::Builder::new()
                 .name("Background Snapshotting".into()).spawn(move || {
+                // TODO: add support for cancellation and io throttling.
                 let f = || -> Result<()> {
                     let new_snapshot_info = match maybe_delta_db {
                         None => {
@@ -399,7 +475,7 @@ impl StorageManager {
                                 .get_snapshot_db_manager()
                                 .new_snapshot_by_merging(
                                     &parent_snapshot_epoch_id_cloned,
-                                    snapshot_epoch_id, delta_db,
+                                    snapshot_epoch_id.clone(), delta_db,
                                     in_progress_snapshot_info_cloned)
                         }
                     }?;
@@ -411,31 +487,26 @@ impl StorageManager {
                         bail!(e);
                     }
 
+                    task_finished_sender_cloned.lock().send(Some(snapshot_epoch_id)).or(Err(Error::from(ErrorKind::MpscError)))?;
                     Ok(())
                 };
 
-                if let Err(e) = f() {
+                let task_result = f();
+                if task_result.is_err() {
                     warn!(
                         "Failed to create snapshot for epoch_id {:?} with error {:?}",
-                        snapshot_epoch_id, e);
-                    // TODO: improve the cancellation in a better way.
-                    // Check for cancellation.
-                    if this.in_progress_snapshoting_tasks.
-                        read().contains_key(&snapshot_epoch_id) {
-                        // FIXME: maybe add more details...
-                        this.maybe_db_errors
-                            .snapshot_error.replace(Some(Err(e)));
-                    }
+                        snapshot_epoch_id, task_result.as_ref().unwrap_err());
                 }
 
+                task_result
             })?;
 
             in_progress_snapshoting_tasks.insert(
                 snapshot_epoch_id,
-                InProgressSnapshotInfo {
+                Arc::new(RwLock::new(InProgressSnapshotTask {
                     snapshot_info: in_progress_snapshot_info,
-                    thread: task,
-                },
+                    thread_handle: Some(thread_handle),
+                })),
             );
         }
 
@@ -642,21 +713,19 @@ impl StorageManager {
             }
         }
 
-        for (in_progress_epoch_id, in_progress_snapshot_info) in
-            &*self.in_progress_snapshoting_tasks.read()
+        for (in_progress_epoch_id, in_progress_snapshot_task) in
+            &*self.in_progress_snapshotting_tasks.read()
         {
             let mut to_cancel = false;
+            let in_progress_snapshot_info =
+                &in_progress_snapshot_task.read().snapshot_info;
 
             // The logic is similar as above for snapshot deletion.
-            if in_progress_snapshot_info.snapshot_info.height
-                < confirmed_intermediate_height
+            if in_progress_snapshot_info.height < confirmed_intermediate_height
             {
                 to_cancel = true;
-            } else if in_progress_snapshot_info.snapshot_info.height
-                < confirmed_height
-            {
+            } else if in_progress_snapshot_info.height < confirmed_height {
                 if in_progress_snapshot_info
-                    .snapshot_info
                     .get_epoch_id_at_height(confirmed_intermediate_height)
                     != Some(
                         &confirmed_state_root.aux_info.intermediate_epoch_id,
@@ -666,7 +735,6 @@ impl StorageManager {
                 }
             } else {
                 match in_progress_snapshot_info
-                    .snapshot_info
                     .get_epoch_id_at_height(confirmed_height)
                 {
                     Some(path_epoch_id) => {
@@ -676,9 +744,7 @@ impl StorageManager {
                     }
                     None => {
                         if non_pivot_snapshots_to_remove.contains(
-                            &in_progress_snapshot_info
-                                .snapshot_info
-                                .parent_snapshot_epoch_id,
+                            &in_progress_snapshot_info.parent_snapshot_epoch_id,
                         ) {
                             to_cancel = true;
                         }
@@ -723,7 +789,7 @@ impl StorageManager {
 
         if !in_progress_snapshot_to_cancel.is_empty() {
             let mut in_progress_snapshoting_locked =
-                self.in_progress_snapshoting_tasks.write();
+                self.in_progress_snapshotting_tasks.write();
             for epoch_id in in_progress_snapshot_to_cancel {
                 // TODO: implement cancellation in a better way.
                 in_progress_snapshoting_locked.remove(&epoch_id);
@@ -907,7 +973,6 @@ impl StorageManager {
 struct MaybeDbErrors {
     delta_trie_destroy_error_1: Cell<Option<Result<()>>>,
     delta_trie_destroy_error_2: Cell<Option<Result<()>>>,
-    snapshot_error: Cell<Option<Result<()>>>,
 }
 
 // It's only used when relevant lock has been acquired.
@@ -973,6 +1038,9 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::Path,
-    sync::{Arc, Weak},
-    thread,
+    sync::{
+        mpsc::{channel, Sender},
+        Arc, Weak,
+    },
+    thread::{self, JoinHandle},
 };
