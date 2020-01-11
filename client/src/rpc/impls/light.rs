@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use cfx_types::{H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
-use primitives::TransactionWithSignature;
+use primitives::{Account, TransactionWithSignature};
 
 use network::{
     node_table::{Node, NodeId},
@@ -18,12 +18,12 @@ use network::{
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
-        CallRequest, ConsensusGraphStates, EpochNumber, Filter as RpcFilter,
-        Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
-        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
-        U64 as RpcU64,
+        Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
+        Status as RpcStatus, SyncGraphStates, Transaction as RpcTransaction,
+        H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
+        U256 as RpcU256, U64 as RpcU64,
     },
 };
 
@@ -38,6 +38,30 @@ pub struct RpcImpl {
 
 impl RpcImpl {
     pub fn new(light: Arc<LightQueryService>) -> Self { RpcImpl { light } }
+
+    fn account(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> RpcResult<RpcAccount> {
+        let address: H160 = address.into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+        info!(
+            "RPC Request: cfx_getAccount address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        self.light
+            .get_account(epoch, address)
+            .map(|maybe_acc| {
+                RpcAccount::new(maybe_acc.unwrap_or(
+                    Account::new_empty_with_balance(
+                        &address,
+                        &U256::zero(), /* balance */
+                        &U256::zero(), /* nonce */
+                    ),
+                ))
+            })
+            .map_err(RpcError::invalid_params)
+    }
 
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
@@ -280,6 +304,7 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
+            fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcAccount>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
@@ -291,6 +316,11 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
         }
+    }
+
+    not_supported! {
+        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
     }
 }
 

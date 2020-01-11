@@ -7,12 +7,12 @@ use delegate::delegate;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        sign_call, BlameInfo, Block as RpcBlock, BlockHashOrEpochNumber, Bytes,
-        CallRequest, ConsensusGraphStates, EpochNumber, Filter as RpcFilter,
-        Log as RpcLog, Receipt as RpcReceipt, Status as RpcStatus,
-        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
-        U64 as RpcU64,
+        sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
+        Status as RpcStatus, SyncGraphStates, Transaction as RpcTransaction,
+        H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
+        U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -132,38 +132,45 @@ impl RpcImpl {
             .map_err(RpcError::invalid_params)
     }
 
-    //    fn account(
-    //        &self, address: RpcH160, include_txs: bool, num_txs: RpcU64,
-    //        epoch_num: Option<EpochNumber>,
-    //    ) -> RpcResult<Account>
-    //    {
-    //        let inner = &mut *self.consensus.inner.write();
-    //
-    //        let address: H160 = address.into();
-    //        let num_txs = num_txs.as_usize();
-    //        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-    //        info!(
-    //            "RPC Request: cfx_getAccount address={:?} include_txs={:?}
-    // num_txs={:?} epoch_num={:?}",            address, include_txs,
-    // num_txs, epoch_num        );
-    //        self.consensus
-    //            .get_account(
-    //                address,
-    //                num_txs,
-    //                epoch_num.into(),
-    //            )
-    //            .and_then(|(balance, transactions)| {
-    //                Ok(Account {
-    //                    balance: balance.into(),
-    //                    transactions: BlockTransactions::new(
-    //                        &transactions,
-    //                        include_txs,
-    //                        inner,
-    //                    ),
-    //                })
-    //            })
-    //            .map_err(|err| RpcError::invalid_params(err))
-    //    }
+    /// Return account related states of the given account
+    fn account(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<RpcAccount> {
+        let address: H160 = address.into();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        info!(
+            "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
+            address, epoch_num
+        );
+        self.consensus
+            .get_account(address, epoch_num.into())
+            .map(|acc| RpcAccount::new(acc))
+            .map_err(|err| {
+                RpcError::invalid_params(format!("Error: {:?}", err))
+            })
+    }
+
+    /// Returns interest rate of the given epoch
+    fn interest_rate(
+        &self, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        self.consensus
+            .get_interest_rate(epoch_num.into())
+            .map(|x| x.into())
+            .map_err(RpcError::invalid_params)
+    }
+
+    /// Returns accumulate interest rate of the given epoch
+    fn accumulate_interest_rate(
+        &self, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        self.consensus
+            .get_accumulate_interest_rate(epoch_num.into())
+            .map(|x| x.into())
+            .map_err(RpcError::invalid_params)
+    }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
         info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
@@ -580,6 +587,9 @@ impl Cfx for CfxHandler {
 
         target self.rpc_impl {
             fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcAccount>;
+            fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;

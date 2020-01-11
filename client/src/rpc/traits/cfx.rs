@@ -3,9 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Block, Bytes, CallRequest, EpochNumber, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, Transaction, H160 as RpcH160, H256 as RpcH256,
-    U256 as RpcU256, U64 as RpcU64,
+    Account as RpcAccount, Block, Bytes, CallRequest, EpochNumber,
+    Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt, Transaction,
+    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use jsonrpc_core::Result as RpcResult;
@@ -162,9 +162,23 @@ pub trait Cfx {
         &self, tx_hash: RpcH256,
     ) -> RpcResult<Option<RpcReceipt>>;
 
-    //        #[rpc(name = "cfx_getAccount")]
-    //        fn account(&self, RpcH160, bool, RpcU64, Option<EpochNumber>) ->
-    // RpcResult<Account>;
+    /// Return account related states of the given account
+    #[rpc(name = "cfx_getAccount")]
+    fn account(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<RpcAccount>;
+
+    /// Returns interest rate of the given epoch
+    #[rpc(name = "cfx_getInterestRate")]
+    fn interest_rate(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256>;
+
+    /// Returns accumulate interest rate of the given epoch
+    #[rpc(name = "cfx_getAccumulateInterestRate")]
+    fn accumulate_interest_rate(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> RpcResult<RpcU256>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
