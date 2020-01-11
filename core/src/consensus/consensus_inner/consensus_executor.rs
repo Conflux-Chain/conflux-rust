@@ -908,10 +908,11 @@ impl ConsensusExecutionHandler {
                             &state_root,
                         ))
                         // FIXME: propogate error.
-                        .expect(&format!(
-                            "{}:{}:{}",
+                        .expect(&concat!(
                             file!(),
+                            ":",
                             line!(),
+                            ":",
                             column!()
                         ));
                 }
@@ -987,18 +988,19 @@ impl ConsensusExecutionHandler {
         if on_local_pivot {
             state_root = state
                 .commit_and_notify(*epoch_hash, &self.tx_pool)
-                .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
                 ))
-                .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
         } else {
-            state_root = state.commit(*epoch_hash).expect(&format!(
-                "{}:{}:{}",
+            state_root = state.commit(*epoch_hash).expect(&concat!(
                 file!(),
+                ":",
                 line!(),
+                ":",
                 column!()
             ));
         };

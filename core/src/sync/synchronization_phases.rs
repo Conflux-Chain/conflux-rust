@@ -525,7 +525,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             .txpool
             .notify_new_best_info(self.graph.consensus.best_info())
             // FIXME: propogate error.
-            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
         self.recovered.store(false, AtomicOrdering::SeqCst);
         let recovered = self.recovered.clone();

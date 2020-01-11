@@ -1325,7 +1325,7 @@ impl ConsensusNewBlockHandler {
         let confirmed_epoch_hash = inner
             .get_hash_from_epoch_number(confirmed_height)
             // FIXME: shouldn't unwrap but the function doesn't return error...
-            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         // FIXME: we also need more helper function to get the execution result
         // FIXME: for block deferred or not.
         if let Some(confirmed_epoch) = &*self
@@ -1346,7 +1346,7 @@ impl ConsensusNewBlockHandler {
                         &self.data_man.state_availability_boundary,
                     )
                     // FIXME: propogate error.
-                    .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
         }
 

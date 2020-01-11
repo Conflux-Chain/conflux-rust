@@ -112,10 +112,10 @@ impl TransactionPool {
                         &data_man.true_genesis_state_root(),
                     ))
                     // Safe because we don't expect any error at program start.
-                    .expect(&format!("{}:{}:{}", file!(), line!(), column!()))
+                    .expect(&concat!(file!(), ":", line!(), ":", column!()))
                     // Safe because true genesis state is available at program
                     // start.
-                    .expect(&format!("{}:{}:{}", file!(), line!(), column!())),
+                    .expect(&concat!(file!(), ":", line!(), ":", column!())),
             ))),
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
