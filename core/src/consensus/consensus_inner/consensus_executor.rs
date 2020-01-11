@@ -893,9 +893,23 @@ impl ConsensusExecutionHandler {
                     .get_epoch_execution_commitment(epoch_hash)
                     .unwrap()
                     .state_root_with_aux_info;
-                self.tx_pool.set_best_executed_epoch(
-                    StateIndex::new_for_readonly(epoch_hash, &state_root),
-                );
+                // When the state have expired, don't inform TransactionPool.
+                // TransactionPool doesn't require a precise best_executed_state
+                // when pivot chain oscillates.
+                if self
+                    .data_man
+                    .state_availability_boundary
+                    .read()
+                    .check_availability(start_block_number + 1, epoch_hash)
+                {
+                    self.tx_pool
+                        .set_best_executed_epoch(StateIndex::new_for_readonly(
+                            epoch_hash,
+                            &state_root,
+                        ))
+                        // FIXME: propogate error.
+                        .unwrap()
+                }
             }
             self.data_man
                 .state_availability_boundary
@@ -972,7 +986,9 @@ impl ConsensusExecutionHandler {
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
-                ));
+                ))
+                // FIXME: propogate error.
+                .unwrap();
         } else {
             state_root = state.commit(*epoch_hash).unwrap();
         };

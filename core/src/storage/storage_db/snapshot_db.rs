@@ -71,11 +71,15 @@ pub trait SnapshotDbTrait:
 {
     fn get_null_snapshot() -> Self;
 
-    // FIXME: upon opening we should load something..
-    fn open(snapshot_path: &str, read_only: bool) -> Result<Option<Self>>;
+    fn open(
+        snapshot_path: &str, read_only: bool,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Option<Self>>;
 
-    // FIXME: what should be stored after a snapshot is created?
-    fn create(snapshot_path: &str) -> Result<Self>;
+    fn create(
+        snapshot_path: &str,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Self>;
 
     fn direct_merge(&mut self) -> Result<MerkleHash>;
 
@@ -119,5 +123,7 @@ use super::{
 use crate::storage::storage_db::{
     SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
 };
+use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::{collections::HashMap, sync::Arc};

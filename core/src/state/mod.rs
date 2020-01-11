@@ -49,8 +49,8 @@ pub enum CleanupMode<'a> {
     TrackTouched(&'a mut HashSet<Address>),
 }
 
-pub struct State<'a> {
-    db: StateDb<'a>,
+pub struct State {
+    db: StateDb,
 
     cache: RefCell<HashMap<Address, AccountEntry>>,
     checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
@@ -63,10 +63,8 @@ pub struct State<'a> {
     vm: VmFactory,
 }
 
-impl<'a> State<'a> {
-    pub fn new(
-        db: StateDb<'a>, account_start_nonce: U256, vm: VmFactory,
-    ) -> Self {
+impl State {
+    pub fn new(db: StateDb, account_start_nonce: U256, vm: VmFactory) -> Self {
         let interest_rate = db.get_interest_rate().expect("no db error");
         let accumulate_interest_rate =
             db.get_accumulate_interest_rate().expect("no db error");
@@ -538,7 +536,7 @@ impl<'a> State<'a> {
     /// Load required account data from the databases. Returns whether the
     /// cache succeeds.
     fn update_account_cache(
-        require: RequireCache, account: &mut OverlayAccount, db: &StateDb<'a>,
+        require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
     ) -> bool {
         if let RequireCache::None = require {
             return true;
