@@ -181,7 +181,7 @@ impl ConsensusGraph {
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
             // FIXME: propogate error.
-            .unwrap();
+            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
         graph
     }
 
@@ -623,7 +623,7 @@ impl ConsensusGraph {
                 self.txpool
                     .notify_new_best_info(self.best_info.read().clone())
                     // FIXME: propogate error.
-                    .unwrap();
+                    .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
             }
 
             if inner.inner_conf.enable_state_expose {

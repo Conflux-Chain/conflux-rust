@@ -908,7 +908,12 @@ impl ConsensusExecutionHandler {
                             &state_root,
                         ))
                         // FIXME: propogate error.
-                        .unwrap()
+                        .expect(&format!(
+                            "{}:{}:{}",
+                            file!(),
+                            line!(),
+                            column!()
+                        ));
                 }
             }
             self.data_man
@@ -980,17 +985,22 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
-            state_root =
-                state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
+            state_root = state
+                .commit_and_notify(*epoch_hash, &self.tx_pool)
+                .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
                 ))
-                // FIXME: propogate error.
-                .unwrap();
+                .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
         } else {
-            state_root = state.commit(*epoch_hash).unwrap();
+            state_root = state.commit(*epoch_hash).expect(&format!(
+                "{}:{}:{}",
+                file!(),
+                line!(),
+                column!()
+            ));
         };
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),

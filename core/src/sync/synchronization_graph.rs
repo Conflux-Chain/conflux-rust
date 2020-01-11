@@ -1183,9 +1183,9 @@ impl SynchronizationGraph {
             .update_best_info(&*self.consensus.inner.read());
         self.consensus
             .txpool
-            // FIXME: propogate error.
             .notify_new_best_info(self.consensus.best_info())
-            .unwrap();
+            // FIXME: propogate error.
+            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 

@@ -279,7 +279,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                                 &temp_db_path,
                             ),
                         )?
-                        .unwrap();
+                        .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
 
                         // Drop copied old snapshot delta mpt dump
                         snapshot_db.drop_delta_mpt_dump()?;
