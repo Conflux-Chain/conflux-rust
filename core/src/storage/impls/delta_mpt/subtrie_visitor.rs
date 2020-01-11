@@ -601,6 +601,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 child_node,
                 ..
             } => {
+                drop(trie_node_ref);
                 let values = self
                     .new_visitor_for_subtree(child_node.clone().into())
                     .traversal(key, key_remaining)?;
