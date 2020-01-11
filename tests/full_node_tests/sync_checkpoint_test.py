@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import time
 import random
 from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
@@ -83,6 +84,9 @@ class SyncCheckpointTests(ConfluxTestFramework):
             except ReceivedErrorResponseError as e:
                 assert "State for epoch" in e.response.message
                 assert "does not exist" in e.response.message
+
+        # Wait for execution to complete.
+        time.sleep(1)
 
         # There should be states after checkpoint
         for i in range(snapshot_epoch + 1, full_node_client.epoch_number() - 3):

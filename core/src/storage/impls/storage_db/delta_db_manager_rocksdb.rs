@@ -7,9 +7,19 @@ pub struct DeltaDbManagerRocksdb {
     creation_mutex: Mutex<()>,
 }
 
-#[allow(unused)]
 impl DeltaDbManagerRocksdb {
     const DELTA_DB_ROCKSDB_DIR_PREFIX: &'static str = "rocksdb_";
+    const ROCKSDB_CONFIG: DatabaseConfig = DatabaseConfig {
+        max_open_files: 512,
+        memory_budget: None,
+        compaction: CompactionProfile {
+            initial_file_size: 512 * 1048576 as u64,
+            block_size: 16 * 1024,
+            write_rate_limit: Some(64 * 1048576 as u64),
+        },
+        columns: None,
+        disable_wal: false,
+    };
 
     pub fn new(delta_db_path: String) -> Result<DeltaDbManagerRocksdb> {
         let delta_db_dir = Path::new(delta_db_path.as_str());
@@ -46,7 +56,8 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
             Err(ErrorKind::DeltaMPTAlreadyExists.into())
         } else {
             Ok(KvdbRocksdb {
-                kvdb: Arc::new(Database::open_default(
+                kvdb: Arc::new(Database::open(
+                    &Self::ROCKSDB_CONFIG,
                     &self.get_delta_db_path(delta_db_name),
                 )?),
                 col: None,
@@ -60,7 +71,10 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
         let path_str = self.get_delta_db_path(delta_db_name);
         if Path::new(&path_str).exists() {
             Ok(Some(KvdbRocksdb {
-                kvdb: Arc::new(Database::open_default(&path_str)?),
+                kvdb: Arc::new(Database::open(
+                    &Self::ROCKSDB_CONFIG,
+                    &path_str,
+                )?),
                 col: None,
             }))
         } else {
@@ -79,7 +93,7 @@ use super::{
     },
     kvdb_rocksdb::KvdbRocksdb,
 };
-use kvdb_rocksdb::Database;
+use kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
 use parity_bytes::ToPretty;
 use parking_lot::Mutex;
 use primitives::EpochId;
