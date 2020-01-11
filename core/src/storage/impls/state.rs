@@ -5,9 +5,8 @@
 pub type ChildrenMerkleMap =
     BTreeMap<ActualSlabIndex, VanillaChildrenTable<MerkleHash>>;
 
-// FIXME: remove 'a.
-pub struct State<'a> {
-    manager: &'a StateManager,
+pub struct State {
+    manager: Arc<StateManager>,
     snapshot_db: SnapshotDb,
     snapshot_epoch_id: EpochId,
     snapshot_merkle_root: MerkleHash,
@@ -35,8 +34,8 @@ pub struct State<'a> {
     parent_epoch_id: EpochId,
 }
 
-impl<'a> State<'a> {
-    pub fn new(manager: &'a StateManager, state_trees: StateTrees) -> Self {
+impl State {
+    pub fn new(manager: Arc<StateManager>, state_trees: StateTrees) -> Self {
         Self {
             manager,
             snapshot_db: state_trees.snapshot_db,
@@ -63,7 +62,7 @@ impl<'a> State<'a> {
     }
 
     fn get_from_delta(
-        &self, mpt: &'a DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
+        &self, mpt: &DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
         access_key: &[u8], with_proof: bool,
     ) -> Result<(MptValue<Box<[u8]>>, Option<TrieProof>)>
     {
@@ -200,7 +199,7 @@ impl<'a> State<'a> {
     }
 }
 
-impl<'a> Drop for State<'a> {
+impl Drop for State {
     fn drop(&mut self) {
         if self.dirty {
             panic!("State is dirty however is not committed before free.");
@@ -208,7 +207,7 @@ impl<'a> Drop for State<'a> {
     }
 }
 
-impl<'a> StateTrait for State<'a> {
+impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.get_from_all_tries(access_key, false)
             .map(|(value, _)| value)
@@ -509,7 +508,7 @@ impl<'a> StateTrait for State<'a> {
     }
 }
 
-impl<'a> State<'a> {
+impl State {
     fn pre_modification(&mut self) {
         if !self.dirty {
             self.dirty = true

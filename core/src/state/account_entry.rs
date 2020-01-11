@@ -168,8 +168,8 @@ impl OverlayAccount {
 
     pub fn balance(&self) -> &U256 { &self.balance }
 
-    pub fn commission_balance<'a>(
-        &self, db: &StateDb<'a>, contract_address: &Address,
+    pub fn commission_balance(
+        &self, db: &StateDb, contract_address: &Address,
     ) -> U256 {
         let mut rlp_stream = RlpStream::new_list(2);
         rlp_stream.append_list(contract_address.as_ref());
@@ -183,8 +183,8 @@ impl OverlayAccount {
     /// Subtract `by` from current commission balance.
     /// The caller will make sure the minimum value of current commission
     /// balance and current balance will be greater than or equal to `by`.
-    pub fn sub_commission_balance<'a>(
-        &mut self, db: &StateDb<'a>, contract_address: &Address, by: &U256,
+    pub fn sub_commission_balance(
+        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
     ) {
         let mut rlp_stream = RlpStream::new_list(2);
         rlp_stream.append_list(contract_address.as_ref());
@@ -222,8 +222,8 @@ impl OverlayAccount {
         self.set_storage(key, BigEndianHash::from_uint(val), *contract_owner);
     }
 
-    pub fn check_commission_privilege<'a>(
-        &self, db: &StateDb<'a>, contract_address: &Address, user: &Address,
+    pub fn check_commission_privilege(
+        &self, db: &StateDb, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
         let special_key = {
             let mut rlp_stream = RlpStream::new_list(2);
@@ -395,7 +395,7 @@ impl OverlayAccount {
         self.storage_balance -= *by;
     }
 
-    pub fn cache_code<'a>(&mut self, db: &StateDb<'a>) -> Option<Arc<Bytes>> {
+    pub fn cache_code(&mut self, db: &StateDb) -> Option<Arc<Bytes>> {
         trace!("OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 
         if self.is_cached() {
@@ -462,9 +462,7 @@ impl OverlayAccount {
         None
     }
 
-    pub fn storage_at<'a>(
-        &self, db: &StateDb<'a>, key: &H256,
-    ) -> DbResult<H256> {
+    pub fn storage_at(&self, db: &StateDb, key: &H256) -> DbResult<H256> {
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
         }
@@ -482,8 +480,8 @@ impl OverlayAccount {
     }
 
     /// TODO: Remove this function since it is not used outside.
-    pub fn original_storage_at<'a>(
-        &self, db: &StateDb<'a>, key: &H256,
+    pub fn original_storage_at(
+        &self, db: &StateDb, key: &H256,
     ) -> DbResult<H256> {
         if let Some(value) = self.storage_cache.borrow().get(key) {
             return Ok(value.clone());
@@ -497,9 +495,9 @@ impl OverlayAccount {
         )
     }
 
-    fn get_and_cache_storage<'a>(
+    fn get_and_cache_storage(
         storage_cache: &mut HashMap<H256, H256>,
-        ownership_cache: &mut HashMap<H256, Option<Address>>, db: &StateDb<'a>,
+        ownership_cache: &mut HashMap<H256, Option<Address>>, db: &StateDb,
         address: &Address, key: &H256,
     ) -> DbResult<H256>
     {
@@ -548,8 +546,8 @@ impl OverlayAccount {
     /// Return the owner of `key` before this execution. If it is `None`, it
     /// means the value of the key is zero before this execution. Otherwise, the
     /// value of the key is nonzero.
-    fn original_ownership_at<'a>(
-        &self, db: &StateDb<'a>, key: &H256,
+    fn original_ownership_at(
+        &self, db: &StateDb, key: &H256,
     ) -> Option<Address> {
         if let Some(value) = self.ownership_cache.borrow().get(key) {
             return value.clone();
@@ -577,8 +575,8 @@ impl OverlayAccount {
     /// value means the number of keys occupied by this account in current
     /// execution. The second value means the nubmer of keys released by this
     /// account in current execution.
-    pub fn commit_ownership_change<'a>(
-        &mut self, db: &StateDb<'a>,
+    pub fn commit_ownership_change(
+        &mut self, db: &StateDb,
     ) -> HashMap<Address, (usize, usize)> {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
@@ -623,7 +621,7 @@ impl OverlayAccount {
         storage_delta
     }
 
-    pub fn commit<'a>(&mut self, db: &mut StateDb<'a>) -> DbResult<()> {
+    pub fn commit(&mut self, db: &mut StateDb) -> DbResult<()> {
         if self.reset_storage {
             db.delete_all(StorageKey::new_storage_root_key(&self.address))?;
             db.delete_all(StorageKey::new_code_root_key(&self.address))?;

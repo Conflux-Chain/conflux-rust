@@ -1,21 +1,18 @@
-use crate::{
-    statedb::{Result as StateDbResult, StateDb},
-    storage::StorageState,
-};
+use crate::statedb::{Result as StateDbResult, StateDb};
 use cfx_types::Address;
 use primitives::Account;
-use std::collections::hash_map::HashMap;
+use std::{collections::hash_map::HashMap, sync::Arc};
 
-pub struct AccountCache<'storage> {
+pub struct AccountCache {
     pub accounts: HashMap<Address, Account>,
-    pub storage: StateDb<'storage>,
+    pub storage: Arc<StateDb>,
 }
 
-impl<'storage> AccountCache<'storage> {
-    pub fn new(storage: StorageState<'storage>) -> Self {
+impl AccountCache {
+    pub fn new(storage: Arc<StateDb>) -> Self {
         AccountCache {
             accounts: HashMap::new(),
-            storage: StateDb::new(storage),
+            storage,
         }
     }
 

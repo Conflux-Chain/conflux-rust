@@ -311,11 +311,21 @@ impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
 impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn get_null_snapshot() -> Self { unreachable!() }
 
-    fn open(_snapshot_path: &str, _read_only: bool) -> Result<Option<Self>> {
+    fn open(
+        _snapshot_path: &str, _read_only: bool,
+        _ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Option<Self>>
+    {
         unreachable!()
     }
 
-    fn create(_snapshot_path: &str) -> Result<Self> { unreachable!() }
+    fn create(
+        _snapshot_path: &str,
+        _ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Self>
+    {
+        unreachable!()
+    }
 
     fn direct_merge(&mut self) -> Result<MerkleHash> { unreachable!() }
 

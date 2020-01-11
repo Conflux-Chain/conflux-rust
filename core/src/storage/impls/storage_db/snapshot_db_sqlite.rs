@@ -5,6 +5,8 @@
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db: Option<SqliteConnection>,
+    ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    path: String,
 }
 
 pub struct SnapshotDbStatements {
@@ -55,6 +57,17 @@ lazy_static! {
             delta_mpt_delete_keys_statements,
         }
     };
+}
+
+impl Drop for SnapshotDbSqlite {
+    fn drop(&mut self) {
+        if !self.path.is_empty() {
+            SnapshotDbManagerSqlite::update_ref_count_and_destroy_close(
+                &self.ref_count,
+                &self.path,
+            )
+        }
+    }
 }
 
 impl SnapshotDbSqlite {
@@ -188,11 +201,19 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
 }
 
 impl SnapshotDbTrait for SnapshotDbSqlite {
-    fn get_null_snapshot() -> Self { Self { maybe_db: None } }
+    fn get_null_snapshot() -> Self {
+        Self {
+            maybe_db: None,
+            ref_count: Default::default(),
+            path: Default::default(),
+        }
+    }
 
     fn open(
         snapshot_path: &str, read_only: bool,
-    ) -> Result<Option<SnapshotDbSqlite>> {
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Option<SnapshotDbSqlite>>
+    {
         let file_exists = Path::new(&snapshot_path).exists();
         let sqlite_open_result = SqliteConnection::open(
             &Self::db_file_paths(snapshot_path)[0],
@@ -202,13 +223,19 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         if file_exists {
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db: Some(sqlite_open_result?),
+                ref_count,
+                path: snapshot_path.to_string(),
             }));
         } else {
             return Ok(None);
         }
     }
 
-    fn create(snapshot_path: &str) -> Result<SnapshotDbSqlite> {
+    fn create(
+        snapshot_path: &str,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<SnapshotDbSqlite>
+    {
         fs::create_dir_all(snapshot_path).ok();
 
         let create_result = SqliteConnection::create_and_open(
@@ -225,6 +252,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             Ok(db_conn) => {
                 ok_result = Ok(SnapshotDbSqlite {
                     maybe_db: Some(db_conn),
+                    ref_count,
+                    path: snapshot_path.to_string(),
                 });
             }
         }
@@ -319,6 +348,11 @@ impl SnapshotDbSqlite {
                 None => None,
                 Some(conn) => Some(conn.try_clone()?),
             },
+            ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
+                &self.ref_count,
+                &self.path,
+            ),
+            path: self.path.clone(),
         })
     }
 
@@ -589,8 +623,10 @@ use crate::storage::{
         SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
         SnapshotMptValue,
     },
+    SnapshotDbManagerSqlite,
 };
 use fallible_iterator::FallibleIterator;
+use parking_lot::Mutex;
 use primitives::{MerkleHash, StorageKey};
 use sqlite::Statement;
-use std::{fs, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};

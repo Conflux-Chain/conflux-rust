@@ -524,13 +524,18 @@ impl StateManagerTrait for StateManager {
         let maybe_state_trees = self.get_state_trees(&epoch_id)?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => Ok(Some(State::new(self, state_trees))),
+            Some(state_trees) => Ok(Some(State::new(
+                // Safe because StateManager is always an Arc.
+                unsafe { shared_from_this(self) },
+                state_trees,
+            ))),
         }
     }
 
     fn get_state_for_genesis_write(&self) -> State {
         State::new(
-            self,
+            // Safe because StateManager is always an Arc.
+            unsafe { shared_from_this(self) },
             StateTrees {
                 snapshot_db: self
                     .storage_manager
@@ -578,7 +583,11 @@ impl StateManagerTrait for StateManager {
             self.get_state_trees_for_next_epoch(&parent_epoch_id)?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => Ok(Some(State::new(self, state_trees))),
+            Some(state_trees) => Ok(Some(State::new(
+                // Safe because StateManager is always an Arc.
+                unsafe { shared_from_this(self) },
+                state_trees,
+            ))),
         }
     }
 }
@@ -598,6 +607,7 @@ use crate::{
         state::*,
         state_manager::*,
         storage_db::*,
+        utils::arc_ext::shared_from_this,
         StorageConfiguration,
     },
 };
