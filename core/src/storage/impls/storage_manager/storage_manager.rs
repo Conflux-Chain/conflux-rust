@@ -344,6 +344,10 @@ impl StorageManager {
     fn release_delta_mpt_actions_in_drop(
         &self, snapshot_epoch_id: &EpochId, delta_mpt_id: DeltaMptId,
     ) {
+        debug!(
+            "release_delta_mpt_actions_in_drop: snapshot_epoch_id: {:?}, delta_mpt_id: {}",
+            snapshot_epoch_id, delta_mpt_id
+        );
         self.delta_mpts_node_memory_manager
             .delete_mpt_from_cache(delta_mpt_id);
         self.delta_mpts_id_gen.lock().free(delta_mpt_id);

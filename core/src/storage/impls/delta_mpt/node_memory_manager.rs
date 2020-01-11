@@ -171,6 +171,7 @@ impl<
                 (mpt_id, db_key),
                 cache_info,
             );
+            cache_mut.node_ref_map.delete((mpt_id, db_key));
         }
     }
 
