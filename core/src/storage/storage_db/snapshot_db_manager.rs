@@ -18,7 +18,7 @@ pub trait SnapshotDbManagerTrait {
         let mut missing_snapshots = HashMap::new();
         for (snapshot_epoch_id, _snapshot_info) in snapshot_info_map {
             missing_snapshots.insert(
-                self.get_snapshot_db_path(snapshot_epoch_id).into_bytes(),
+                self.get_snapshot_db_name(snapshot_epoch_id).into_bytes(),
                 snapshot_epoch_id.clone(),
             );
         }
