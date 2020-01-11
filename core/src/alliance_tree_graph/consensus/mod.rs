@@ -170,7 +170,7 @@ impl TreeGraphConsensus {
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
             // FIXME: propogate error.
-            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         graph
     }
 
@@ -346,17 +346,23 @@ impl TreeGraphConsensus {
         Ok(())
     }
 
-    // FIXME: I think the assumption is that this is a pivot block and it's
-    // locked in pivot chain?
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<StateDb, String> {
-        // FIXME: And what is it? Epoch Number or Height?
         self.validate_stated_epoch(&epoch_number)?;
-        // FIXME: Change the method name and variable name..
-        let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
-        let hash =
-            self.inner.read().get_hash_from_epoch_number(epoch_number)?;
+        let height = self.get_height_from_epoch_number(epoch_number)?;
+        let hash = self.inner.read().get_hash_from_epoch_number(height)?;
+        // Keep the lock until we get the desired State, otherwise the State may
+        // expire.
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        if !state_availability_boundary.check_availability(height, &hash) {
+            return Err(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                height, hash, self.data_man.state_availability_boundary.read()
+            )
+                .into());
+        }
         let (_state_index_guard, maybe_state_readonly_index) =
             self.data_man.get_state_readonly_index(&hash).into();
         let maybe_state = match maybe_state_readonly_index {
@@ -373,7 +379,7 @@ impl TreeGraphConsensus {
             None => {
                 return Err(format!(
                     "State for epoch (number={:?} hash={:?}) does not exist",
-                    epoch_number, hash
+                    height, hash
                 )
                 .into())
             }
@@ -600,7 +606,7 @@ impl TreeGraphConsensus {
                 self.txpool
                     .notify_new_best_info(self.best_info.read().clone())
                     // FIXME: propogate error.
-                    .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
 
             if inner.inner_conf.enable_state_expose {

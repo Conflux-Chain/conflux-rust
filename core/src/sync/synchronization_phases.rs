@@ -446,6 +446,11 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         *epoch_synced,
                         epoch_synced_height,
                     );
+                self.graph
+                    .data_man
+                    .state_availability_boundary
+                    .write()
+                    .set_synced_state_height(epoch_synced_height);
                 // This map will be used to recover `state_valid` info for each
                 // pivot block before `trusted_blame_block`.
                 let mut pivot_block_state_valid_map =
@@ -520,7 +525,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             .txpool
             .notify_new_best_info(self.graph.consensus.best_info())
             // FIXME: propogate error.
-            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
         self.recovered.store(false, AtomicOrdering::SeqCst);
         let recovered = self.recovered.clone();

@@ -501,10 +501,6 @@ impl StateManager {
         intermediate_epoch_id: &EpochId, new_height: u64,
     ) -> Result<()>
     {
-        debug!(
-            "check_make_snapshot called for {:?} at height {}",
-            intermediate_epoch_id, new_height
-        );
         StorageManager::check_make_register_snapshot_background(
             self.storage_manager.clone(),
             intermediate_epoch_id.clone(),

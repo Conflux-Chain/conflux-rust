@@ -1185,7 +1185,7 @@ impl SynchronizationGraph {
             .txpool
             .notify_new_best_info(self.consensus.best_info())
             // FIXME: propogate error.
-            .expect(&format!("{}:{}:{}", file!(), line!(), column!()));
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
