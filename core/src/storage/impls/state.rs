@@ -273,7 +273,8 @@ impl<'a> StateTrait for State<'a> {
     ///
     /// For key/value pairs in Delta Trie, we can simply delete them. For
     /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
-    /// enumerate all key/value pairs and set tombstone in Delta Trie.
+    /// enumerate all key/value pairs and set tombstone in Delta Trie only when
+    /// necessary.
     fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
@@ -393,16 +394,13 @@ impl<'a> StateTrait for State<'a> {
             }
         }
 
+        // No need to check v.len() because there are no tombStone values in
+        // snapshot.
         for (k, v) in snapshot_kvs {
             let storage_key = StorageKey::from_delta_mpt_key(&k);
-            // Only delete nonempty keys.
-            if v.len() > 0 {
-                self.delete(storage_key)?;
-            }
+            self.delete(storage_key)?;
             if !deleted_keys.contains(&k) {
-                if v.len() > 0 {
-                    result.push((k, v));
-                }
+                result.push((k, v));
             }
         }
 
