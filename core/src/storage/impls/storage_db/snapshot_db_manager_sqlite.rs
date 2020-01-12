@@ -187,7 +187,7 @@ impl SnapshotDbManagerSqlite {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
             &snapshot_path,
-            true,
+            /* readonly = */ true,
             Self::update_ref_count_open(
                 &self.open_ref_count_and_to_destroy,
                 &snapshot_path,
@@ -273,10 +273,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         )
                         .is_ok()
                     {
-                        // open the copied database.
+                        // Open the copied database.
                         snapshot_db = Self::SnapshotDb::open(
                             &temp_db_path,
-                            false,
+                            /* readonly = */ false,
                             Self::update_ref_count_open(
                                 &self.open_ref_count_and_to_destroy,
                                 &temp_db_path,
@@ -327,7 +327,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             let path = self.get_snapshot_db_path(snapshot_epoch_id);
             Self::SnapshotDb::open(
                 &path,
-                true,
+                /* readonly = */ true,
                 Self::update_ref_count_open(
                     &self.open_ref_count_and_to_destroy,
                     &path,

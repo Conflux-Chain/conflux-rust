@@ -3,6 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 #[cfg(test)]
+mod sharded_iter_merger;
+#[cfg(test)]
 mod snapshot;
 #[cfg(test)]
 mod state;

@@ -865,26 +865,18 @@ impl StorageManager {
         // Load snapshot info from db.
         {
             let mut new_db = self.snapshot_info_db.try_clone()?;
-            let mut snapshot_info_db_iter = ConnectionWithRowParser::<
-                KvdbSqliteBorrowMutReadOnly<Box<[u8]>>,
-                Box<
-                    dyn for<'db> FnMut(
-                        &'db Statement,
-                    )
-                        -> Result<(Vec<u8>, Vec<u8>)>,
-                >,
-            >(
-                KvdbSqliteBorrowMutReadOnly::new(
-                    // FIXME: refactor so that a KeyValueDbMultiReader can be
-                    // iterate without a mut borrow.
-                    new_db.destructure_mut(),
-                ),
-                // FIXME: it's confused to use a parser for SnapshotDbSqlite.
-                Box::new(|x| SnapshotDbSqlite::snapshot_kv_row_parser(x)),
-            );
-            let mut snapshot_info_iter = snapshot_info_db_iter
-                .iter_range(&[], None)?
-                .map(|(key, value)| {
+            let (maybe_info_db_connection, statements) =
+                new_db.destructure_mut();
+
+            let mut snapshot_info_iter = kvdb_sqlite_iter_range_impl(
+                maybe_info_db_connection,
+                statements,
+                &[],
+                None,
+                |row: &Statement<'_>| {
+                    let key = row.read::<Vec<u8>>(0)?;
+                    let value = row.read::<Vec<u8>>(1)?;
+
                     if key.len() != EpochId::len_bytes() {
                         Err(DecoderError::RlpInvalidLength.into())
                     } else {
@@ -893,8 +885,8 @@ impl StorageManager {
                             SnapshotInfo::decode(&Rlp::new(&value))?,
                         ))
                     }
-                });
-            // FIXME: refactor iterator. ConnectionWithRowParser is superfluous.
+                },
+            )?;
             while let Some((snapshot_epoch, snapshot_info)) =
                 snapshot_info_iter.next()?
             {
@@ -1078,16 +1070,11 @@ use crate::{
                 },
                 node_ref_map::DeltaMptId,
             },
-            storage_db::{
-                kvdb_sqlite::{
-                    KvdbSqliteBorrowMutReadOnly, KvdbSqliteDestructureTrait,
-                    KvdbSqliteStatements,
-                },
-                snapshot_db_sqlite::SnapshotDbSqlite,
-                sqlite::ConnectionWithRowParser,
+            storage_db::kvdb_sqlite::{
+                kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
+                KvdbSqliteStatements,
             },
         },
-        storage_db::KeyValueDbIterableTrait,
         KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
     },
 };
