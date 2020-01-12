@@ -26,14 +26,14 @@ pub trait DerefMutPlusSelf {
 macro_rules! enable_deref_for_self {
     ($type:ty) => {
         impl DerefPlusSelf for $type {
-            type Target = $type;
+            type Target = Self;
 
-            fn deref(&self) -> &$type { self }
+            fn deref(&self) -> &Self { self }
         }
         impl DerefMutPlusSelf for $type {
-            type Target = $type;
+            type Target = Self;
 
-            fn deref_mut(&mut self) -> &mut $type { self }
+            fn deref_mut(&mut self) -> &mut Self { self }
         }
     };
 }

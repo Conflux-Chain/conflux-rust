@@ -382,7 +382,7 @@ impl Chunk {
         let mut values = Vec::new();
         while let Some((key, value)) = kvs.next()? {
             keys.push(key);
-            values.push(value);
+            values.push(value.into());
         }
 
         debug!(

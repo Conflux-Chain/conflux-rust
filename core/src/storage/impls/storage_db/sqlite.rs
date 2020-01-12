@@ -258,6 +258,12 @@ pub trait SqlReadable: SqlReadableIntoSelf + Sized {
     fn from_column(row: &Statement<'_>, column: usize) -> Result<Self>;
 }
 
+impl SqlReadable for Vec<u8> {
+    fn from_column(row: &Statement<'_>, column: usize) -> Result<Self> {
+        Ok(Self::read(row, column)?)
+    }
+}
+
 impl SqlReadable for Box<[u8]> {
     fn from_column(row: &Statement<'_>, column: usize) -> Result<Self> {
         Ok(Vec::<u8>::read(row, column)?.into_boxed_slice())
@@ -441,6 +447,7 @@ impl ScopedStatement {
     ) -> Result<MaybeUnfinishedStatement<'_>> {
         self.bind(params)?;
 
+        // FIXME: Should we wait for the first row to become available?
         let result = self.stmt.next();
         match result {
             Ok(State::Done) => Ok(None),
@@ -463,8 +470,26 @@ pub trait ValueRead {
     type Kind: ?Sized;
 }
 
+impl ValueRead for () {
+    type Kind = ();
+}
+
 impl ValueRead for Box<[u8]> {
     type Kind = dyn SqlReadableIntoSelf;
+}
+
+impl ValueReadImpl<()> for () {
+    fn from_row_impl(
+        _row: &Statement<'_>, _value_column: usize,
+    ) -> Result<Self> {
+        Ok(())
+    }
+
+    fn from_kv_row_impl(
+        _row: &Statement<'_>, _key: &mut dyn SqlReadableIntoSelf,
+    ) -> Result<Self> {
+        Ok(())
+    }
 }
 
 impl<ValueType: SqlReadable> ValueReadImpl<dyn SqlReadableIntoSelf>
@@ -558,6 +583,10 @@ pub trait SqlBindableValue {
     type Kind: ?Sized;
 }
 
+impl SqlBindableValue for () {
+    type Kind = ();
+}
+
 impl SqlBindableValue for [u8] {
     /// Use SqlBindable for all single element.
     type Kind = dyn SqlBindable;
@@ -593,6 +622,10 @@ impl<T: 'static + SqlBindableValue + SqlBindable + Clone>
     fn make_bind_list(&self) -> Vec<SqlBindableBox<'_>> {
         vec![Box::new(self.clone())]
     }
+}
+
+impl BindValueAppendImpl<()> for () {
+    fn make_bind_list(&self) -> Vec<Box<dyn SqlBindable>> { vec![] }
 }
 
 impl BindValueAppendImpl<dyn SqlBindable> for [u8] {
