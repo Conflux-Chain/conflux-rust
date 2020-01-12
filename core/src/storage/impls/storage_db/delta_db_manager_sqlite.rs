@@ -46,6 +46,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
         KvdbSqlite::create_and_open(
             delta_db_name,
             Self::kvdb_sqlite_statements(),
+            /* create_table = */ true,
         )
     }
 

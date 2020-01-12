@@ -456,7 +456,7 @@ fn test_two_way_merge() {
     keys_deletion.sort();
     let deletion = keys_deletion
         .iter()
-        .map(|k| Ok(Vec::<u8>::from(&k[..])))
+        .map(|k| Ok((Vec::<u8>::from(&k[..]), ())))
         .collect::<Vec<_>>();
     let mut keys_insertion = [keys_new, keys_overwritten].concat();
     keys_insertion.sort();
