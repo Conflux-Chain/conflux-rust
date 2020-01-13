@@ -29,7 +29,7 @@ jsonrpc-http-server = "14.0.0"
 jsonrpc-core-client = { version = "14.0.0", features = ["http"] }
 error-chain = { version = "0.12" }
 log = "0.4"
-ethereum-types = "0.8"
+ethereum-types = "0.7"
 slab = "0.4"
 cfxcore = { path = "core" }
 network = { path = "network" }
@@ -40,7 +40,7 @@ secret-store = { path = "secret_store" }
 primitives = { path = "primitives" }
 log4rs = "0.9.0"
 rlp = "0.4.0"
-keccak-hash = "0.4"
+keccak-hash = "0.3.0"
 rand = "0.7"
 kvdb-rocksdb = {path="db/src/kvdb-rocksdb"}
 client = { path = "client" }
@@ -78,12 +78,6 @@ path = "tools/tg_config_gen/main.rs"
 
 [features]
 deadlock_detection = ["parking_lot/deadlock_detection"]
-
-#[replace]
-#"bzip2-sys:0.1.6"={git = "https://github.com/alexcrichton/bzip2-rs.git"}
-
-[patch.crates-io]
-bzip2-sys = {git = "https://github.com/alexcrichton/bzip2-rs.git"}
 
 [profile.test]
 debug-assertions = true

@@ -33,7 +33,7 @@ enum DBTable {
     EpochNumbers,
 }
 
-fn rocks_db_col(table: DBTable) -> u32 {
+fn rocks_db_col(table: DBTable) -> Option<u32> {
     match table {
         DBTable::Misc => COL_MISC,
         DBTable::Blocks => COL_BLOCKS,
