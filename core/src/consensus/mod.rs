@@ -36,7 +36,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    EpochId, EpochNumber, SignedTransaction, TransactionAddress,
+    Account, EpochId, EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
 use std::{
@@ -419,6 +419,45 @@ impl ConsensusGraph {
         match state_db.get_code(&address, &acc.code_hash) {
             Some(code) => Ok(code),
             None => Ok(vec![]),
+        }
+    }
+
+    pub fn get_interest_rate(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<U256, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        if let Ok(interest_rate) = state_db.get_interest_rate() {
+            Ok(interest_rate)
+        } else {
+            Err("db error occurred".into())
+        }
+    }
+
+    pub fn get_accumulate_interest_rate(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<U256, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        if let Ok(accumulate_interest_rate) =
+            state_db.get_accumulate_interest_rate()
+        {
+            Ok(accumulate_interest_rate)
+        } else {
+            Err("db error occurred".into())
+        }
+    }
+
+    pub fn get_account(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<Account, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        if let Ok(maybe_acc) = state_db.get_account(&address) {
+            Ok(maybe_acc.unwrap_or(Account::new_empty_with_balance(
+                &address,
+                &U256::zero(), /* balance */
+                &U256::zero(), /* nonce */
+            )))
+        } else {
+            Err("db error occurred".into())
         }
     }
 
