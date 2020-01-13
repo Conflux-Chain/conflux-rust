@@ -22,7 +22,7 @@ use super::super::instructions::{self, Instruction};
 use crate::hash::KECCAK_EMPTY;
 use bit_set::BitSet;
 use cfx_types::H256;
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use heapsize::HeapSizeOf;
 use memory_cache::MemoryLruCache;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -32,8 +32,9 @@ const DEFAULT_CACHE_SIZE: usize = 4 * 1024 * 1024;
 // stub for a HeapSizeOf implementation.
 struct Bits(Arc<BitSet>);
 
-impl MallocSizeOf for Bits {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+// FIXME Use malloc_size_of
+impl HeapSizeOf for Bits {
+    fn heap_size_of_children(&self) -> usize {
         // dealing in bits here
         self.0.capacity() * 8
     }

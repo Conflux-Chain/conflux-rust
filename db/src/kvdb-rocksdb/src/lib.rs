@@ -18,19 +18,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod iter;
+
 use std::{cmp, collections::HashMap, error, fs, io, mem, path::Path, result};
 
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use rocksdb::{
-    BlockBasedOptions, CFHandle, ColumnFamilyOptions, DBOptions, ReadOptions,
-    Writable, WriteBatch, WriteOptions, DB,
+    BlockBasedOptions, ColumnFamily, Error, Options, ReadOptions, WriteBatch,
+    WriteOptions, DB,
 };
 
+use crate::iter::KeyValuePair;
+use elastic_array::ElasticArray32;
 use fs_swap::{swap, swap_nonatomic};
-use kvdb::{DBKey, DBOp, DBTransaction, DBValue, KeyValueDB};
+use interleaved_ordered::interleave_ordered;
+use kvdb::{DBOp, DBTransaction, DBValue, KeyValueDB};
 use log::{debug, warn};
 
-use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
 #[cfg(target_os = "linux")]
 use regex::Regex;
 #[cfg(target_os = "linux")]
@@ -40,8 +44,6 @@ use std::path::PathBuf;
 #[cfg(target_os = "linux")]
 use std::process::Command;
 
-type DBError = String;
-type KeyValuePair = (Box<[u8]>, Box<[u8]>);
 fn other_io_err<E>(e: E) -> io::Error
 where E: Into<Box<dyn error::Error + Send + Sync>> {
     io::Error::new(io::ErrorKind::Other, e)
@@ -161,7 +163,7 @@ pub struct DatabaseConfig {
     /// Compaction profile
     pub compaction: CompactionProfile,
     /// Set number of columns
-    pub columns: u32,
+    pub columns: Option<u32>,
     /// Disable WAL if set to `true`
     pub disable_wal: bool,
 }
@@ -169,7 +171,7 @@ pub struct DatabaseConfig {
 impl DatabaseConfig {
     /// Create new `DatabaseConfig` with default parameters and specified set of
     /// columns. Note that cache sizes must be explicitly set.
-    pub fn with_columns(columns: u32) -> Self {
+    pub fn with_columns(columns: Option<u32>) -> Self {
         let mut config = Self::default();
         config.columns = columns;
         config
@@ -180,7 +182,7 @@ impl DatabaseConfig {
     }
 
     pub fn memory_budget_per_col(&self) -> usize {
-        self.memory_budget() / self.columns as usize
+        self.memory_budget() / self.columns.unwrap_or(1) as usize
     }
 
     pub fn memory_budget_mb(&self) -> usize {
@@ -194,7 +196,7 @@ impl Default for DatabaseConfig {
             max_open_files: 512,
             memory_budget: None,
             compaction: CompactionProfile::default(),
-            columns: 1,
+            columns: None,
             disable_wal: false,
         }
     }
@@ -206,7 +208,7 @@ struct DBAndColumns {
 }
 
 impl DBAndColumns {
-    fn get_cf(&self, i: usize) -> &CFHandle {
+    fn get_cf(&self, i: usize) -> &ColumnFamily {
         self.db
             .cf_handle(&self.column_names[i])
             .expect("the specified column name is correct; qed")
@@ -216,34 +218,30 @@ impl DBAndColumns {
 // get column family configuration from database config.
 fn col_config(
     config: &DatabaseConfig, block_opts: &BlockBasedOptions,
-) -> io::Result<ColumnFamilyOptions> {
-    let mut opts = ColumnFamilyOptions::default();
+) -> io::Result<Options> {
+    let mut opts = Options::default();
 
     opts.set_level_compaction_dynamic_level_bytes(true);
     opts.set_block_based_table_factory(block_opts);
-    opts.optimize_level_style_compaction(config.memory_budget_per_col() as i32);
+    opts.optimize_level_style_compaction(config.memory_budget_per_col());
     opts.set_target_file_size_base(config.compaction.initial_file_size);
-    opts.set_write_buffer_size(config.memory_budget_per_col() as u64 / 2);
-    opts.set_block_cache_size_mb(config.memory_budget_mb() as u64 / 3);
+    opts.set_compression_per_level(&[]);
 
     Ok(opts)
 }
 
-unsafe impl Send for Database {}
-unsafe impl Sync for Database {}
-/// TODO Mutex around Options may not be needed
 /// Key-Value database.
 pub struct Database {
     db: RwLock<Option<DBAndColumns>>,
     config: DatabaseConfig,
     path: String,
-    write_opts: Mutex<WriteOptions>,
-    read_opts: Mutex<ReadOptions>,
-    block_opts: Mutex<BlockBasedOptions>,
+    write_opts: WriteOptions,
+    read_opts: ReadOptions,
+    block_opts: BlockBasedOptions,
     // Dirty values added with `write_buffered`. Cleaned on `flush`.
-    overlay: RwLock<Vec<HashMap<DBKey, KeyState>>>,
+    overlay: RwLock<Vec<HashMap<ElasticArray32<u8>, KeyState>>>,
     // Values currently being flushed. Cleared when `flush` completes.
-    flushing: RwLock<Vec<HashMap<DBKey, KeyState>>>,
+    flushing: RwLock<Vec<HashMap<ElasticArray32<u8>, KeyState>>>,
     // Prevents concurrent flushes.
     // Value indicates if a flush is in progress.
     flushing_lock: Mutex<bool>,
@@ -251,7 +249,7 @@ pub struct Database {
 
 #[inline]
 fn check_for_corruption<T, P: AsRef<Path>>(
-    path: P, res: result::Result<T, DBError>,
+    path: P, res: result::Result<T, Error>,
 ) -> io::Result<T> {
     if let Err(ref s) = res {
         if is_corrupted(s) {
@@ -268,16 +266,16 @@ fn check_for_corruption<T, P: AsRef<Path>>(
     res.map_err(other_io_err)
 }
 
-fn is_corrupted(err: &DBError) -> bool {
-    err.starts_with("Corruption:")
-        || err.starts_with(
+fn is_corrupted(err: &Error) -> bool {
+    err.as_ref().starts_with("Corruption:")
+        || err.as_ref().starts_with(
             "Invalid argument: You have to open all column families",
         )
 }
 
 /// Generate the options for RocksDB, based on the given `DatabaseConfig`.
-fn generate_options(config: &DatabaseConfig) -> DBOptions {
-    let mut opts = DBOptions::default();
+fn generate_options(config: &DatabaseConfig) -> Options {
+    let mut opts = Options::default();
 
     //TODO: rate_limiter_bytes_per_sec={} was removed
 
@@ -286,8 +284,9 @@ fn generate_options(config: &DatabaseConfig) -> DBOptions {
     opts.set_max_open_files(config.max_open_files);
     opts.set_bytes_per_sync(1 * MB as u64);
     opts.set_keep_log_file_num(1);
+    opts.set_write_buffer_size(config.memory_budget_per_col() / 2);
     opts.increase_parallelism(cmp::max(1, num_cpus::get() as i32 / 2));
-    opts.enable_statistics(true);
+    opts.enable_statistics();
 
     opts
 }
@@ -306,6 +305,8 @@ impl Database {
         block_opts.set_block_size(config.compaction.block_size);
         // Set cache size as recommended by
         // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
+        let cache_size = config.memory_budget() / 3;
+        block_opts.set_lru_cache(cache_size);
         block_opts.set_cache_index_and_filter_blocks(true);
         block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
         block_opts.set_bloom_filter(10, true);
@@ -318,14 +319,11 @@ impl Database {
             warn!(
                 "DB has been previously marked as corrupted, attempting repair"
             );
-            DB::repair(opts.clone(), path).map_err(other_io_err)?;
+            DB::repair(&opts, path).map_err(other_io_err)?;
             fs::remove_file(db_corrupted)?;
         }
 
-        let columns = config.columns as usize;
-        if columns == 0 {
-            return Err(other_io_err("columns number cannot be 0"));
-        }
+        let columns = config.columns.unwrap_or(0) as usize;
 
         let mut cf_options = Vec::with_capacity(columns);
         let column_names: Vec<_> =
@@ -333,9 +331,8 @@ impl Database {
         let cfnames: Vec<&str> =
             column_names.iter().map(|n| n as &str).collect();
 
-        for i in 0..config.columns {
-            cf_options
-                .push((cfnames[i as usize], col_config(&config, &block_opts)?));
+        for _ in 0..config.columns.unwrap_or(0) {
+            cf_options.push(col_config(&config, &block_opts)?);
         }
 
         let mut write_opts = WriteOptions::new();
@@ -344,46 +341,51 @@ impl Database {
         read_opts.set_prefix_same_as_start(true);
         read_opts.set_verify_checksums(false);
 
-        let db = match DB::open_cf(opts.clone(), path, cf_options.clone()) {
-            Ok(db) => {
-                for name in &cfnames {
-                    let _ = db.cf_handle(name).expect(
-                        "rocksdb opens a cf_handle for each cfname; qed",
-                    );
-                }
-                Ok(db)
-            }
-            Err(_) => {
-                // retry and create CFs
-                match DB::open_cf(
-                    opts.clone(),
-                    path,
-                    Vec::<(&str, ColumnFamilyOptions)>::new(),
-                ) {
-                    Ok(mut db) => {
-                        for cfd in &cf_options {
-                            db.create_cf(cfd.clone()).map_err(other_io_err)?;
+        let db = match config.columns {
+            Some(_) => {
+                match DB::open_cf(&opts, path, &cfnames) {
+                    Ok(db) => {
+                        for name in &cfnames {
+                            let _ = db.cf_handle(name).expect("rocksdb opens a cf_handle for each cfname; qed");
                         }
                         Ok(db)
                     }
-                    err => err,
+                    Err(_) => {
+                        // retry and create CFs
+                        match DB::open_cf(&opts, path, &[] as &[&str]) {
+                            Ok(mut db) => {
+                                for (i, name) in cfnames.iter().enumerate() {
+                                    db.create_cf(name, &cf_options[i])
+                                        .map_err(other_io_err)?;
+                                }
+                                Ok(db)
+                            }
+                            err => err,
+                        }
+                    }
                 }
             }
+            None => DB::open(&opts, path),
         };
 
         let db = match db {
             Ok(db) => db,
             Err(ref s) if is_corrupted(s) => {
                 warn!("DB corrupted: {}, attempting repair", s);
-                DB::repair(opts.clone(), path).map_err(other_io_err)?;
-                let db = DB::open_cf(opts, path, cf_options)
-                    .map_err(other_io_err)?;
-                for name in cfnames {
-                    let _ = db.cf_handle(name).expect(
-                        "rocksdb opens a cf_handle for each cfname; qed",
-                    );
+                DB::repair(&opts, path).map_err(other_io_err)?;
+
+                if cfnames.is_empty() {
+                    DB::open(&opts, path).map_err(other_io_err)?
+                } else {
+                    let db = DB::open_cf(&opts, path, &cfnames)
+                        .map_err(other_io_err)?;
+                    for name in cfnames {
+                        let _ = db.cf_handle(name).expect(
+                            "rocksdb opens a cf_handle for each cfname; qed",
+                        );
+                    }
+                    db
                 }
-                db
             }
             Err(s) => return Err(other_io_err(s)),
         };
@@ -399,14 +401,18 @@ impl Database {
             ),
             flushing_lock: Mutex::new(false),
             path: path.to_owned(),
-            read_opts: Mutex::new(read_opts),
-            write_opts: Mutex::new(write_opts),
-            block_opts: Mutex::new(block_opts),
+            read_opts,
+            write_opts,
+            block_opts,
         })
     }
 
     /// Helper to create new transaction for this database.
     pub fn transaction(&self) -> DBTransaction { DBTransaction::new() }
+
+    fn to_overlay_column(col: Option<u32>) -> usize {
+        col.map_or(0, |c| (c + 1) as usize)
+    }
 
     /// Commit transaction to database.
     pub fn write_buffered(&self, tr: DBTransaction) {
@@ -415,10 +421,12 @@ impl Database {
         for op in ops {
             match op {
                 DBOp::Insert { col, key, value } => {
-                    overlay[col as usize].insert(key, KeyState::Insert(value));
+                    let c = Self::to_overlay_column(col);
+                    overlay[c].insert(key, KeyState::Insert(value));
                 }
                 DBOp::Delete { col, key } => {
-                    overlay[col as usize].insert(key, KeyState::Delete);
+                    let c = Self::to_overlay_column(col);
+                    overlay[c].insert(key, KeyState::Delete);
                 }
             }
         }
@@ -430,7 +438,7 @@ impl Database {
     ) -> io::Result<()> {
         match *self.db.read() {
             Some(ref cfs) => {
-                let batch = WriteBatch::default();
+                let mut batch = WriteBatch::default();
                 mem::swap(
                     &mut *self.overlay.write(),
                     &mut *self.flushing.write(),
@@ -440,16 +448,28 @@ impl Database {
                         for (key, state) in column.iter() {
                             match *state {
                                 KeyState::Delete => {
-                                    let cf = cfs.get_cf(c);
-                                    batch
-                                        .delete_cf(cf, key)
-                                        .map_err(other_io_err)?;
+                                    if c > 0 {
+                                        let cf = cfs.get_cf(c - 1);
+                                        batch
+                                            .delete_cf(cf, key)
+                                            .map_err(other_io_err)?;
+                                    } else {
+                                        batch
+                                            .delete(key)
+                                            .map_err(other_io_err)?;
+                                    }
                                 }
                                 KeyState::Insert(ref value) => {
-                                    let cf = cfs.get_cf(c);
-                                    batch
-                                        .put_cf(cf, key, value)
-                                        .map_err(other_io_err)?;
+                                    if c > 0 {
+                                        let cf = cfs.get_cf(c - 1);
+                                        batch
+                                            .put_cf(cf, key, value)
+                                            .map_err(other_io_err)?;
+                                    } else {
+                                        batch
+                                            .put(key, value)
+                                            .map_err(other_io_err)?;
+                                    }
                                 }
                             }
                         }
@@ -458,7 +478,7 @@ impl Database {
 
                 check_for_corruption(
                     &self.path,
-                    cfs.db.write_opt(&batch, &*self.write_opts.lock()),
+                    cfs.db.write_opt(batch, &self.write_opts),
                 )?;
 
                 for column in self.flushing.write().iter_mut() {
@@ -494,25 +514,34 @@ impl Database {
     pub fn write(&self, tr: DBTransaction) -> io::Result<()> {
         match *self.db.read() {
             Some(ref cfs) => {
-                let batch = WriteBatch::default();
+                let mut batch = WriteBatch::default();
                 let ops = tr.ops;
                 for op in ops {
                     // remove any buffered operation for this key
-                    self.overlay.write()[op.col() as usize].remove(op.key());
+                    self.overlay.write()[Self::to_overlay_column(op.col())]
+                        .remove(op.key());
 
                     match op {
-                        DBOp::Insert { col, key, value } => batch
-                            .put_cf(cfs.get_cf(col as usize), &key, &value)
-                            .map_err(other_io_err)?,
-                        DBOp::Delete { col, key } => batch
-                            .delete_cf(cfs.get_cf(col as usize), &key)
-                            .map_err(other_io_err)?,
+                        DBOp::Insert { col, key, value } => match col {
+                            None => {
+                                batch.put(&key, &value).map_err(other_io_err)?
+                            }
+                            Some(c) => batch
+                                .put_cf(cfs.get_cf(c as usize), &key, &value)
+                                .map_err(other_io_err)?,
+                        },
+                        DBOp::Delete { col, key } => match col {
+                            None => batch.delete(&key).map_err(other_io_err)?,
+                            Some(c) => batch
+                                .delete_cf(cfs.get_cf(c as usize), &key)
+                                .map_err(other_io_err)?,
+                        },
                     }
                 }
 
                 check_for_corruption(
                     &self.path,
-                    cfs.db.write_opt(&batch, &*self.write_opts.lock()),
+                    cfs.db.write_opt(batch, &self.write_opts),
                 )
             }
             None => Err(other_io_err("Database is closed")),
@@ -520,30 +549,51 @@ impl Database {
     }
 
     /// Get value by key.
-    pub fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<DBValue>> {
+    pub fn get(
+        &self, col: Option<u32>, key: &[u8],
+    ) -> io::Result<Option<DBValue>> {
         match *self.db.read() {
             Some(ref cfs) => {
-                let overlay = &self.overlay.read()[col as usize];
+                let overlay =
+                    &self.overlay.read()[Self::to_overlay_column(col)];
                 match overlay.get(key) {
                     Some(&KeyState::Insert(ref value)) => {
                         Ok(Some(value.clone()))
                     }
                     Some(&KeyState::Delete) => Ok(None),
                     None => {
-                        let flushing = &self.flushing.read()[col as usize];
+                        let flushing =
+                            &self.flushing.read()[Self::to_overlay_column(col)];
                         match flushing.get(key) {
                             Some(&KeyState::Insert(ref value)) => {
                                 Ok(Some(value.clone()))
                             }
                             Some(&KeyState::Delete) => Ok(None),
-                            None => cfs
-                                .db
-                                .get_cf_opt(
-                                    cfs.get_cf(col as usize),
-                                    key,
-                                    &*self.read_opts.lock(),
+                            None => col
+                                .map_or_else(
+                                    || {
+                                        cfs.db
+                                            .get_opt(key, &self.read_opts)
+                                            .map(|r| {
+                                                r.map(|v| {
+                                                    DBValue::from_slice(&v)
+                                                })
+                                            })
+                                    },
+                                    |c| {
+                                        cfs.db
+                                            .get_cf_opt(
+                                                cfs.get_cf(c as usize),
+                                                key,
+                                                &self.read_opts,
+                                            )
+                                            .map(|r| {
+                                                r.map(|v| {
+                                                    DBValue::from_slice(&v)
+                                                })
+                                            })
+                                    },
                                 )
-                                .map(|r| r.map(|v| v.to_vec()))
                                 .map_err(other_io_err),
                         }
                     }
@@ -551,6 +601,66 @@ impl Database {
             }
             None => Ok(None),
         }
+    }
+
+    /// Get value by partial key. Prefix size should match configured prefix
+    /// size. Only searches flushed values.
+    // TODO: support prefix seek for unflushed data
+    pub fn get_by_prefix(
+        &self, col: Option<u32>, prefix: &[u8],
+    ) -> Option<Box<[u8]>> {
+        self.iter_from_prefix(col, prefix).next().map(|(_, v)| v)
+    }
+
+    /// Get database iterator for flushed data.
+    /// Will hold a lock until the iterator is dropped
+    /// preventing the database from being closed.
+    pub fn iter<'a>(
+        &'a self, col: Option<u32>,
+    ) -> impl Iterator<Item = KeyValuePair> + 'a {
+        let read_lock = self.db.read();
+        let optional = if read_lock.is_some() {
+            let c = Self::to_overlay_column(col);
+            let overlay_data = {
+                let overlay = &self.overlay.read()[c];
+                let mut overlay_data = overlay
+                    .iter()
+                    .filter_map(|(k, v)| match *v {
+                        KeyState::Insert(ref value) => Some((
+                            k.clone().into_vec().into_boxed_slice(),
+                            value.clone().into_vec().into_boxed_slice(),
+                        )),
+                        KeyState::Delete => None,
+                    })
+                    .collect::<Vec<_>>();
+                overlay_data.sort();
+                overlay_data
+            };
+
+            let guarded = iter::ReadGuardedIterator::new(read_lock, col);
+            Some(interleave_ordered(overlay_data, guarded))
+        } else {
+            None
+        };
+        optional.into_iter().flatten()
+    }
+
+    /// Get database iterator from prefix for flushed data.
+    /// Will hold a lock until the iterator is dropped
+    /// preventing the database from being closed.
+    fn iter_from_prefix<'a>(
+        &'a self, col: Option<u32>, prefix: &[u8],
+    ) -> impl Iterator<Item = iter::KeyValuePair> + 'a {
+        let read_lock = self.db.read();
+        let optional = if read_lock.is_some() {
+            let guarded = iter::ReadGuardedIterator::new_from_prefix(
+                read_lock, col, prefix,
+            );
+            Some(interleave_ordered(Vec::new(), guarded))
+        } else {
+            None
+        };
+        optional.into_iter().flatten()
     }
 
     /// Close the database
@@ -639,10 +749,10 @@ impl Database {
             }) => {
                 let col = column_names.len() as u32;
                 let name = format!("col{}", col);
-                db.create_cf((
-                    name.as_str(),
-                    col_config(&self.config, &*self.block_opts.lock())?,
-                ))
+                db.create_cf(
+                    &name,
+                    &col_config(&self.config, &self.block_opts)?,
+                )
                 .map_err(other_io_err)?;
                 column_names.push(name);
                 Ok(())
@@ -652,21 +762,17 @@ impl Database {
     }
 }
 
-// TODO Count db memory size in cache manager
-// Compatible hack for KeyValueDB
-impl MallocSizeOf for Database {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
-}
-
 // duplicate declaration of methods here to avoid trait import in certain
 // existing cases at time of addition.
 impl KeyValueDB for Database {
-    fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<DBValue>> {
+    fn get(&self, col: Option<u32>, key: &[u8]) -> io::Result<Option<DBValue>> {
         Database::get(self, col, key)
     }
 
-    fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
-        unimplemented!()
+    fn get_by_prefix(
+        &self, col: Option<u32>, prefix: &[u8],
+    ) -> Option<Box<[u8]>> {
+        Database::get_by_prefix(self, col, prefix)
     }
 
     fn write_buffered(&self, transaction: DBTransaction) {
@@ -680,15 +786,17 @@ impl KeyValueDB for Database {
     fn flush(&self) -> io::Result<()> { Database::flush(self) }
 
     fn iter<'a>(
-        &'a self, _col: u32,
+        &'a self, col: Option<u32>,
     ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
-        unimplemented!()
+        let unboxed = Database::iter(self, col);
+        Box::new(unboxed)
     }
 
     fn iter_from_prefix<'a>(
-        &'a self, _col: u32, _prefix: &'a [u8],
+        &'a self, col: Option<u32>, prefix: &'a [u8],
     ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
-        unimplemented!()
+        let unboxed = Database::iter_from_prefix(self, col, prefix);
+        Box::new(unboxed)
     }
 
     fn restore(&self, new_db: &str) -> io::Result<()> {
@@ -728,55 +836,55 @@ mod tests {
         .unwrap();
 
         let mut batch = db.transaction();
-        batch.put(0, key1.as_bytes(), b"cat");
-        batch.put(0, key2.as_bytes(), b"dog");
+        batch.put(None, key1.as_bytes(), b"cat");
+        batch.put(None, key2.as_bytes(), b"dog");
         db.write(batch).unwrap();
 
-        assert_eq!(&*db.get(0, key1.as_bytes()).unwrap().unwrap(), b"cat");
+        assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"cat");
 
-        // TODO implement iter
-        //        let contents: Vec<_> = db.iter(None).collect();
-        //        assert_eq!(contents.len(), 2);
-        //        assert_eq!(&*contents[0].0, key1.as_bytes());
-        //        assert_eq!(&*contents[0].1, b"cat");
-        //        assert_eq!(&*contents[1].0, key2.as_bytes());
-        //        assert_eq!(&*contents[1].1, b"dog");
+        let contents: Vec<_> = db.iter(None).collect();
+        assert_eq!(contents.len(), 2);
+        assert_eq!(&*contents[0].0, key1.as_bytes());
+        assert_eq!(&*contents[0].1, b"cat");
+        assert_eq!(&*contents[1].0, key2.as_bytes());
+        assert_eq!(&*contents[1].1, b"dog");
 
         let mut batch = db.transaction();
-        batch.delete(0, key1.as_bytes());
+        batch.delete(None, key1.as_bytes());
         db.write(batch).unwrap();
 
-        assert!(db.get(0, key1.as_bytes()).unwrap().is_none());
+        assert!(db.get(None, key1.as_bytes()).unwrap().is_none());
 
         let mut batch = db.transaction();
-        batch.put(0, key1.as_bytes(), b"cat");
+        batch.put(None, key1.as_bytes(), b"cat");
         db.write(batch).unwrap();
 
         let mut transaction = db.transaction();
-        transaction.put(0, key3.as_bytes(), b"elephant");
-        transaction.delete(0, key1.as_bytes());
+        transaction.put(None, key3.as_bytes(), b"elephant");
+        transaction.delete(None, key1.as_bytes());
         db.write(transaction).unwrap();
-        assert!(db.get(0, key1.as_bytes()).unwrap().is_none());
-        assert_eq!(&*db.get(0, key3.as_bytes()).unwrap().unwrap(), b"elephant");
+        assert!(db.get(None, key1.as_bytes()).unwrap().is_none());
+        assert_eq!(
+            &*db.get(None, key3.as_bytes()).unwrap().unwrap(),
+            b"elephant"
+        );
 
-        // TODO Implement get_by_prefix
-        //        assert_eq!(
-        //            &*db.get_by_prefix(None, key3.as_bytes()).unwrap(),
-        //            b"elephant"
-        //        );
-        //        assert_eq!(&*db.get_by_prefix(None, key2.as_bytes()).unwrap(),
-        // b"dog");
+        assert_eq!(
+            &*db.get_by_prefix(None, key3.as_bytes()).unwrap(),
+            b"elephant"
+        );
+        assert_eq!(&*db.get_by_prefix(None, key2.as_bytes()).unwrap(), b"dog");
 
         let mut transaction = db.transaction();
-        transaction.put(0, key1.as_bytes(), b"horse");
-        transaction.delete(0, key3.as_bytes());
+        transaction.put(None, key1.as_bytes(), b"horse");
+        transaction.delete(None, key3.as_bytes());
         db.write_buffered(transaction);
-        assert!(db.get(0, key3.as_bytes()).unwrap().is_none());
-        assert_eq!(&*db.get(0, key1.as_bytes()).unwrap().unwrap(), b"horse");
+        assert!(db.get(None, key3.as_bytes()).unwrap().is_none());
+        assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"horse");
 
         db.flush().unwrap();
-        assert!(db.get(0, key3.as_bytes()).unwrap().is_none());
-        assert_eq!(&*db.get(0, key1.as_bytes()).unwrap().unwrap(), b"horse");
+        assert!(db.get(None, key3.as_bytes()).unwrap().is_none());
+        assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"horse");
     }
 
     #[test]
@@ -810,7 +918,7 @@ mod tests {
     #[test]
     fn add_columns() {
         let config = DatabaseConfig::default();
-        let config_5 = DatabaseConfig::with_columns(5);
+        let config_5 = DatabaseConfig::with_columns(Some(5));
 
         let tempdir = TempDir::new("").unwrap();
 
@@ -818,11 +926,11 @@ mod tests {
         {
             let db = Database::open(&config, tempdir.path().to_str().unwrap())
                 .unwrap();
-            assert_eq!(db.num_columns(), 1);
+            assert_eq!(db.num_columns(), 0);
 
-            for i in 0..4 {
+            for i in 0..5 {
                 db.add_column().unwrap();
-                assert_eq!(db.num_columns(), i + 2);
+                assert_eq!(db.num_columns(), i + 1);
             }
         }
 
@@ -838,7 +946,7 @@ mod tests {
     #[test]
     fn drop_columns() {
         let config = DatabaseConfig::default();
-        let config_5 = DatabaseConfig::with_columns(5);
+        let config_5 = DatabaseConfig::with_columns(Some(5));
 
         let tempdir = TempDir::new("").unwrap();
 
@@ -859,7 +967,7 @@ mod tests {
         {
             let db = Database::open(&config, tempdir.path().to_str().unwrap())
                 .unwrap();
-            assert_eq!(db.num_columns(), 1);
+            assert_eq!(db.num_columns(), 0);
         }
     }
 
@@ -871,13 +979,13 @@ mod tests {
             Database::open(&config, tempdir.path().to_str().unwrap()).unwrap();
 
         let mut batch = db.transaction();
-        batch.put(0, b"foo", b"bar");
+        batch.put(None, b"foo", b"bar");
         db.write_buffered(batch);
 
         let mut batch = db.transaction();
-        batch.put(0, b"foo", b"baz");
+        batch.put(None, b"foo", b"baz");
         db.write(batch).unwrap();
 
-        assert_eq!(db.get(0, b"foo").unwrap().unwrap(), b"baz");
+        assert_eq!(db.get(None, b"foo").unwrap().unwrap().as_ref(), b"baz");
     }
 }

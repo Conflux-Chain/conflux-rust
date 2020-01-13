@@ -5,5 +5,5 @@ license = "GPL-3.0"
 description = "Conflux types"
 
 [dependencies]
-ethereum-types = "0.8"
+ethereum-types = "0.7"
 
