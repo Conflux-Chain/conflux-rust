@@ -36,10 +36,7 @@ use primitives::{
     EpochId, EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
-use std::{
-    cmp::Reverse, collections::HashSet, sync::Arc, thread::sleep,
-    time::Duration,
-};
+use std::{cmp::Reverse, collections::HashSet, sync::Arc};
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
@@ -177,21 +174,6 @@ impl TreeGraphConsensus {
             pow_config,
             &genesis_hash,
         )
-    }
-
-    /// Wait for the generation and the execution completion of a block in the
-    /// consensus graph. This API is used mainly for testing purpose
-    pub fn wait_for_generation(&self, hash: &H256) {
-        while !self
-            .inner
-            .read_recursive()
-            .hash_to_arena_indices
-            .contains_key(hash)
-        {
-            sleep(Duration::from_millis(1));
-        }
-        let best_state_block = self.inner.read_recursive().best_block_hash();
-        self.executor.wait_for_result(best_state_block);
     }
 
     /// Convert EpochNumber to height based on the current TreeGraphConsensus
@@ -614,13 +596,9 @@ impl TreeGraphConsensus {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        let state = State::new(
-            state_db,
-            0.into(),           /* account_start_nonce */
-            Default::default(), /* vm */
-        );
-        state
-            .nonce(&address)
+        state_db
+            .get_account(&address)
+            .map(|maybe_acc| maybe_acc.map_or(0.into(), |acc| acc.nonce))
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 

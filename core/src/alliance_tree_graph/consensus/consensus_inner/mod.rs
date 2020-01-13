@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod candidate_pivot_tree;
 pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
@@ -9,8 +10,8 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
-    state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
+use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
 use hibitset::BitSet;
 use link_cut_tree::SizeMinLinkCutTree;
@@ -40,7 +41,7 @@ pub struct ConsensusGraphPivotData {
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
-    pub blockset_in_own_view_of_epoch: Vec<usize>,
+    pub blockset_in_epoch: Vec<usize>,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
     ///
@@ -102,9 +103,10 @@ pub struct ConsensusGraphInner {
     /// The cache to store Anticone information of each node. This could be
     /// very large so we periodically remove old ones in the cache.
     sequence_number_of_block_entrance: u64,
-    last_recycled_era_block: usize,
+    //last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph
     pub old_era_block_set: Mutex<VecDeque<H256>>,
+    pub candidate_pivot_tree: CandidatePivotTree,
 
     /// The lowest height of the epochs that have available states and
     /// commitments. For archive node, it equals `cur_era_stable_height`.
@@ -166,15 +168,16 @@ impl ConsensusGraphInner {
             inner_conf,
             sequence_number_of_block_entrance: 0,
             // TODO handle checkpoint in recovery
-            last_recycled_era_block: 0,
+            // last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
             state_boundary_height: cur_era_stable_height,
+            candidate_pivot_tree: CandidatePivotTree::new(NULL),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
-        let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
+        let (genesis_arena_index, _, _) = inner.insert(&genesis_block_header);
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
         inner.inclusive_weight_tree.make_tree(genesis_arena_index);
         inner.arena[genesis_arena_index].epoch_number = cur_era_genesis_height;
@@ -186,7 +189,7 @@ impl ConsensusGraphInner {
         inner.pivot_chain.push(genesis_arena_index);
         inner.pastset.add(genesis_arena_index as u32);
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
-            blockset_in_own_view_of_epoch: Vec::new(),
+            blockset_in_epoch: Vec::new(),
             ordered_executable_epoch_blocks: vec![genesis_arena_index],
         });
 
@@ -258,6 +261,7 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn get_era_genesis_height(&self, parent_height: u64, offset: u64) -> u64 {
         let era_genesis_height = if parent_height > offset {
             (parent_height - offset) / self.inner_conf.era_epoch_count
@@ -274,6 +278,7 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn get_era_genesis_block_with_parent(
         &self, parent: usize, offset: u64,
     ) -> usize {
@@ -312,6 +317,7 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
+    #[allow(dead_code)]
     fn is_legacy_block(&self, index: usize) -> bool {
         self.arena[index].era_block == NULL
     }
@@ -321,10 +327,9 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
-    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot_index: usize) {
+    fn collect_blockset_in_epoch(&mut self, pivot_index: usize) {
+        assert!(pivot_index < self.pivot_chain.len());
         let pivot_arena_index = self.pivot_chain[pivot_index];
-        // TODO: add some assertions.
-        // let parent = self.arena[pivot_arena_index].parent;
 
         let mut queue = VecDeque::new();
         queue.push_back(pivot_arena_index);
@@ -332,7 +337,7 @@ impl ConsensusGraphInner {
         while let Some(index) = queue.pop_front() {
             if index != pivot_arena_index {
                 self.pivot_chain_metadata[pivot_index]
-                    .blockset_in_own_view_of_epoch
+                    .blockset_in_epoch
                     .push(index);
             }
             for referee in &self.arena[index].referees {
@@ -344,7 +349,7 @@ impl ConsensusGraphInner {
         }
 
         let filtered_blockset = self.pivot_chain_metadata[pivot_index]
-            .blockset_in_own_view_of_epoch
+            .blockset_in_epoch
             .iter()
             .filter(|idx| self.is_same_era(**idx, pivot_arena_index))
             .map(|idx| *idx)
@@ -384,67 +389,32 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// Try to insert an outside era block, return it's sequence number. If both
-    /// it's parent and referees are empty, we will not insert it into
-    /// `arena`.
-    pub fn insert_out_era_block(&mut self, block_header: &BlockHeader) -> u64 {
+    /// Insert a block into consensus, return `(arena_index, indices_len,
+    /// sequence_number)`. If this block has no in memory referees, this block
+    /// will be simply ignored.
+    fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize, u64) {
+        let mut referees: Vec<usize> = Vec::new();
+        for hash in block_header.referee_hashes().iter() {
+            if let Some(x) = self.hash_to_arena_indices.get(hash) {
+                self.insert_referee_if_not_duplicate(&mut referees, *x);
+            }
+        }
+
         let sn = self.get_next_sequence_number();
         let hash = block_header.hash();
 
-        let mut referees: Vec<usize> = Vec::new();
-        for hash in block_header.referee_hashes().iter() {
-            if let Some(x) = self.hash_to_arena_indices.get(hash) {
-                self.insert_referee_if_not_duplicate(&mut referees, *x);
-            }
-        }
-
         if referees.is_empty() {
-            self.old_era_block_set.lock().push_back(hash);
-            return sn;
-        }
-
-        // actually, we only need these fields: `parent`, `referees`,
-        // `children`, `referrers`, `era_block`
-        let index = self.arena.insert(ConsensusGraphNode {
-            hash,
-            height: block_header.height(),
-            past_num_blocks: 0,
-            parent: None,
-            era_block: NULL,
-            children: Vec::new(),
-            referees: referees.clone(),
-            referrers: Vec::new(),
-            epoch_number: NULLU64,
-            sequence_number: sn,
-        });
-        self.hash_to_arena_indices.insert(hash, index);
-
-        for referee in referees {
-            self.arena[referee].referrers.push(index);
-        }
-
-        self.inclusive_weight_tree.make_tree(index);
-
-        sn
-    }
-
-    fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
-        let mut referees: Vec<usize> = Vec::new();
-        for hash in block_header.referee_hashes().iter() {
-            if let Some(x) = self.hash_to_arena_indices.get(hash) {
-                self.insert_referee_if_not_duplicate(&mut referees, *x);
-            }
+            debug!("ignore isolated legacy block");
+            return (NULL, self.hash_to_arena_indices.len(), sn);
         }
 
         for referee in &referees {
             self.terminal_hashes.remove(&self.arena[*referee].hash);
         }
 
-        let hash = block_header.hash();
-        let sn = self.get_next_sequence_number();
         let index = self.arena.insert(ConsensusGraphNode {
             hash,
-            height: block_header.height(),
+            height: NULLU64,
             past_num_blocks: 0,
             parent: None,
             era_block: NULL,
@@ -466,10 +436,11 @@ impl ConsensusGraphInner {
             hash, index,
         );
 
-        (index, self.hash_to_arena_indices.len())
+        (index, self.hash_to_arena_indices.len(), sn)
     }
 
     /// Compute future set of `me`, excluding `me`.
+    #[allow(dead_code)]
     fn compute_future_bitset(&self, me: usize) -> BitSet {
         let mut queue: VecDeque<usize> = VecDeque::new();
         let mut visited = BitSet::with_capacity(self.arena.len() as u32);
@@ -488,6 +459,7 @@ impl ConsensusGraphInner {
     }
 
     /// Compute past set of `me`, including `me`.
+    #[allow(dead_code)]
     fn compute_past_bitset(&self, me: usize) -> BitSet {
         let mut queue: VecDeque<usize> = VecDeque::new();
         let mut visited = BitSet::with_capacity(self.arena.len() as u32);
@@ -742,14 +714,15 @@ impl ConsensusGraphInner {
         Ok(())
     }
 
-    /// Recompute metadata associated information on pivot chain changes
-    pub fn recompute_metadata(&mut self, start_at: u64) {
+    /// Compute metadata associated information on pivot chain extending.
+    pub fn compute_metadata(&mut self, start_at: u64) {
         self.pivot_chain_metadata
             .resize_with(self.pivot_chain.len(), Default::default);
         let pivot_height = self.get_pivot_height();
         for height in start_at..pivot_height {
             let pivot_index = self.height_to_pivot_index(height);
-            self.collect_blockset_in_own_view_of_epoch(pivot_index);
+            // TODO: determine parent of block in `blockset_in_epoch`.
+            self.collect_blockset_in_epoch(pivot_index);
             self.set_epoch_number_in_epoch(pivot_index, height)
         }
     }
@@ -776,7 +749,7 @@ impl ConsensusGraphInner {
             stable,
             self.pivot_chain.len()
         );
-        self.recompute_metadata(self.cur_era_genesis_height);
+        self.compute_metadata(self.cur_era_genesis_height);
     }
 
     pub fn total_processed_block_count(&self) -> u64 {
@@ -811,12 +784,58 @@ impl ConsensusGraphInner {
     pub fn set_epoch_number_in_epoch(
         &mut self, pivot_index: usize, epoch_number: u64,
     ) {
-        for idx in &self.pivot_chain_metadata[pivot_index]
-            .blockset_in_own_view_of_epoch
-        {
+        for idx in &self.pivot_chain_metadata[pivot_index].blockset_in_epoch {
             self.arena[*idx].epoch_number = epoch_number;
         }
         let pivot_arena_index = self.pivot_chain[pivot_index];
         self.arena[pivot_arena_index].epoch_number = epoch_number;
+    }
+
+    /// Given a new `PivotBlockDecision` check whether it is valid. If it is
+    /// valid this block will be added to `candidate_pivot_tree`.
+    pub fn on_new_candidate_pivot(
+        &mut self, _block_hash: &H256, _parent_hash: &H256, _height: u64,
+    ) -> bool {
+        true
+    }
+
+    pub fn on_new_pivot(&mut self, pivot_arena_index: usize) {
+        // move to consensus_new_block_handler
+        assert!(self.arena.contains(pivot_arena_index));
+        let parent = self.arena[pivot_arena_index]
+            .parent
+            .expect("parent must set");
+        assert!(parent == self.best_epoch_arena_index());
+        self.pivot_chain.push(pivot_arena_index);
+        self.pivot_chain_metadata.push(Default::default());
+        self.compute_metadata(
+            self.arena[pivot_arena_index].height - self.cur_era_genesis_height,
+        );
+
+        // TODO: recycle out era transactions
+        // TODO: execution
+    }
+
+    /// TODO: move this function to `ConsensusNewBlockHandler` or
+    /// `TreeGraphConsensus`
+    pub fn commit(&mut self, committable_blocks: &Vec<H256>) {
+        let mut last = *self.pivot_chain.last().unwrap();
+        for block_hash in committable_blocks {
+            let arena_index = self.hash_to_arena_indices[block_hash];
+            self.arena[arena_index].parent = Some(last);
+            self.arena[arena_index].height = self.arena[last].height + 1;
+            self.data_man.insert_epoch_block_hash_to_db(
+                self.arena[arena_index].height,
+                block_hash,
+            );
+            self.data_man.insert_block_height_to_db(
+                block_hash,
+                self.arena[arena_index].height,
+            );
+            self.on_new_pivot(arena_index);
+            last = arena_index;
+        }
+        self.candidate_pivot_tree =
+            CandidatePivotTree::new(*self.pivot_chain.last().unwrap());
     }
 }
