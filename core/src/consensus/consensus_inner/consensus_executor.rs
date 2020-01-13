@@ -1053,11 +1053,6 @@ impl ConsensusExecutionHandler {
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
             block_number += 1;
-            let mut accumulated_fee: U256 = 0.into();
-            let mut n_invalid_nonce = 0;
-            let mut n_ok = 0;
-            let mut n_other = 0;
-            let mut cumulative_gas_used = U256::zero();
             for (idx, transaction) in block.transactions.iter().enumerate() {
                 let mut tx_outcome_status =
                     TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
@@ -1086,7 +1081,6 @@ impl ConsensusExecutionHandler {
                     }
                     Err(ExecutionError::InvalidNonce { expected, got }) => {
                         // not inc nonce
-                        n_invalid_nonce += 1;
                         trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
                         // Add future transactions back to pool if we are
                         // not verifying forking chain
@@ -1099,24 +1093,20 @@ impl ConsensusExecutionHandler {
                         }
                     }
                     Ok(ref executed) => {
+                        env.gas_used = executed.cumulative_gas_used;
+                        transaction_logs = executed.logs.clone();
                         if executed.exception.is_some() {
                             warn!(
                                 "tx execution error: transaction={:?}, err={:?}",
                                 transaction, r
                             );
                         } else {
-                            env.gas_used = executed.cumulative_gas_used;
-                            cumulative_gas_used = executed.cumulative_gas_used;
-                            n_ok += 1;
                             GOOD_TPS_METER.mark(1);
-                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                            accumulated_fee += executed.fee;
-                            transaction_logs = executed.logs.clone();
                             tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                         }
                     }
                     _ => {
-                        n_other += 1;
                         trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
                     }
                 }
@@ -1130,7 +1120,7 @@ impl ConsensusExecutionHandler {
 
                 let receipt = Receipt::new(
                     tx_outcome_status,
-                    cumulative_gas_used,
+                    env.gas_used,
                     transaction_logs,
                 );
                 receipts.push(receipt);
@@ -1158,10 +1148,6 @@ impl ConsensusExecutionHandler {
                 on_local_pivot,
             );
             epoch_receipts.push(block_receipts);
-            debug!(
-                "n_invalid_nonce={}, n_ok={}, n_other={}",
-                n_invalid_nonce, n_ok, n_other
-            );
         }
 
         if on_local_pivot {
