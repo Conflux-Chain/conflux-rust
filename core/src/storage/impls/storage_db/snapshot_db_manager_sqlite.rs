@@ -88,7 +88,8 @@ impl SnapshotDbManagerSqlite {
             // XFS
             command = Command::new("cp");
             command
-                .arg("-R --reflink=always")
+                .arg("-R")
+                .arg("--reflink=always")
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path);
         } else if cfg!(target_os = "macos") {
