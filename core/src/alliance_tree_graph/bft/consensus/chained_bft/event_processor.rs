@@ -24,7 +24,7 @@ use crate::alliance_tree_graph::hsb_sync_protocol::{
 };
 use anyhow::{ensure, format_err, Context};
 use cfx_types::H256;
-use consensus_types::{
+use super::super::consensus_types::{
     accumulator_extension_proof::AccumulatorExtensionProof,
     block::Block,
     common::{Author, Payload, Round},
@@ -35,6 +35,9 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
     vote_proposal::VoteProposal,
+    block_retrieval::{
+        BlockRetrievalResponse, BlockRetrievalStatus,
+    },
 };
 use libra_crypto::hash::TransactionAccumulatorHasher;
 use libra_logger::prelude::{security_log, SecurityEvent};
@@ -52,12 +55,9 @@ use crate::message::Message;
 use network::{NetworkService, PeerId};
 
 use super::super::chained_bft::network::IncomingBlockRetrievalRequest;
-use consensus_types::block_retrieval::{
-    BlockRetrievalResponse, BlockRetrievalStatus,
-};
-#[cfg(test)]
-use safety_rules::ConsensusState;
-use safety_rules::TSafetyRules;
+
+use super::super::safety_rules::{ConsensusState, TSafetyRules};
+
 //use std::convert::TryInto;
 use crate::alliance_tree_graph::{
     bft::consensus::chained_bft::network::NetworkSender,

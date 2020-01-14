@@ -7,7 +7,7 @@ use super::super::super::super::{
 };
 use crate::alliance_tree_graph::hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest;
 use anyhow::{bail, format_err};
-use consensus_types::{
+use super::super::super::super::consensus_types::{
     block::Block,
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus},
     common::{Author, Payload},

@@ -20,7 +20,7 @@ use super::super::{
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 //use crate::state_replication::{StateComputer, TxnManager};
 use super::super::util::time_service::{ClockTimeService, TimeService};
-use consensus_types::{
+use super::super::consensus_types::{
     common::{Payload, Round},
     epoch_retrieval::EpochRetrievalRequest,
 };
@@ -40,7 +40,7 @@ use crate::alliance_tree_graph::bft::consensus::{
 use futures::executor::block_on;
 use libra_types::validator_change::ValidatorChangeProof;
 use network::NetworkService;
-use safety_rules::SafetyRulesManager;
+use super::super::safety_rules::SafetyRulesManager;
 use std::{
     cmp::Ordering,
     sync::{Arc, RwLock},

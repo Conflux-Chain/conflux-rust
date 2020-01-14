@@ -1,7 +1,7 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{block::Block, common::Payload};
+use super::{block::Block, common::Payload};
 use anyhow::ensure;
 use libra_crypto::hash::HashValue;
 use libra_types::crypto_proxies::ValidatorVerifier;

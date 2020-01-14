@@ -11,7 +11,7 @@ use super::super::super::{
     counters,
 };
 use anyhow::{bail, ensure, format_err, Context};
-use consensus_types::{
+use super::super::super::consensus_types::{
     block::Block, common::Payload, executed_block::ExecutedBlock,
     quorum_cert::QuorumCert, timeout_certificate::TimeoutCertificate,
     vote::Vote,
@@ -22,7 +22,7 @@ use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
 
 use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
-use executor::ProcessedVMOutput;
+use super::super::super::super::executor::ProcessedVMOutput;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_types::crypto_proxies::ValidatorSet;
 use libra_types::crypto_proxies::{

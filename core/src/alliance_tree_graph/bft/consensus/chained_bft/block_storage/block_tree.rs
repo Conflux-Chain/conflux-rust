@@ -9,7 +9,7 @@ use super::super::super::{
     util::time_service::duration_since_epoch,
 };
 use anyhow::bail;
-use consensus_types::{
+use super::super::super::consensus_types::{
     executed_block::ExecutedBlock, quorum_cert::QuorumCert,
     timeout_certificate::TimeoutCertificate, vote::Vote,
 };

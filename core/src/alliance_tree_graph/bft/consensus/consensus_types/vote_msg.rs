@@ -1,7 +1,7 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{sync_info::SyncInfo, vote::Vote};
+use super::{sync_info::SyncInfo, vote::Vote};
 use anyhow::ensure;
 use libra_types::crypto_proxies::ValidatorVerifier;
 use serde::{Deserialize, Serialize};

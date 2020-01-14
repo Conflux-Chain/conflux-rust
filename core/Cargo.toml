@@ -71,7 +71,6 @@ tokio = { version = "0.2", features = ["full"] }
 termion = { version = "1.5.3", default-features = false }
 mirai-annotations = { version = "1.4.0", default-features = false }
 libra-canonical-serialization = { path = "src/alliance_tree_graph/bft/common/lcs" }
-consensus-types = { path = "src/alliance_tree_graph/bft/consensus/consensus-types" }
 prometheus = { version = "0.7.0", default-features = false }
 thiserror = "1.0"
 async-trait = "0.1"
@@ -85,7 +84,6 @@ libra-crypto-derive = { path = "src/alliance_tree_graph/bft/crypto/crypto-derive
 libra-nibble = { path = "src/alliance_tree_graph/bft/common/nibble" }
 libra-proptest-helpers = { path = "src/alliance_tree_graph/bft/common/proptest-helpers" }
 libra-tools = { path = "src/alliance_tree_graph/bft/common/tools" }
-safety-rules = { path = "src/alliance_tree_graph/bft/consensus/safety-rules" }
 libra-metrics = { path = "src/alliance_tree_graph/bft/common/metrics" }
 channel = { path = "src/alliance_tree_graph/bft/common/channel" }
 debug-interface = { path = "src/alliance_tree_graph/bft/common/debug-interface" }
@@ -95,7 +93,6 @@ scratchpad = { path = "src/alliance_tree_graph/bft/storage/scratchpad" }
 libra-state-view = { path="src/alliance_tree_graph/bft/storage/state-view" }
 storage-client = { path = "src/alliance_tree_graph/bft/storage/storage-client" }
 storage-proto = { path = "src/alliance_tree_graph/bft/storage/storage-proto" }
-executor = { path = "src/alliance_tree_graph/bft/executor" }
 threadpool = "1.0"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 zip = "*"
@@ -106,4 +103,4 @@ primitives = { path = "../primitives", features = ["test_no_account_length_check
 
 [features]
 default = ["primitives"]
-fuzzing = ["consensus-types/fuzzing", "libra-crypto/fuzzing", "libra-types/fuzzing"]
+fuzzing = ["libra-crypto/fuzzing", "libra-types/fuzzing"]

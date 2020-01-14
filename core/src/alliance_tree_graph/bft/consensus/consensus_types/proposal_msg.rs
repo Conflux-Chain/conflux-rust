@@ -1,7 +1,7 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use super::{
     block::Block,
     common::{Author, Payload, Round},
     sync_info::SyncInfo,

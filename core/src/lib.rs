@@ -30,8 +30,6 @@ extern crate lazy_static;
 extern crate bit_set;
 extern crate bn;
 extern crate byteorder;
-extern crate consensus_types as hotstuff_types;
-extern crate executor;
 extern crate libra_canonical_serialization as lcs;
 extern crate memory_cache;
 extern crate num;

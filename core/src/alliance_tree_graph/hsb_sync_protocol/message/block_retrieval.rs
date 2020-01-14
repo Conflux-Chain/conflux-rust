@@ -15,7 +15,7 @@ use crate::{
 use bytes::Bytes;
 use cfx_types::H256;
 use futures::channel::oneshot;
-use hotstuff_types::{block_retrieval::BlockRetrievalRequest, common::Payload};
+use crate::alliance_tree_graph::bft::consensus::consensus_types::{block_retrieval::BlockRetrievalRequest, common::Payload};
 use libra_types::account_address::AccountAddress;
 use primitives::TransactionWithSignature;
 use serde::{Deserialize, Serialize};

@@ -10,7 +10,7 @@ use crate::{
             block_retrieval::BlockRetrievalRpcRequest, msgid,
         },
     },
-    hotstuff_types::{
+    alliance_tree_graph::bft::consensus::consensus_types::{
         common::Payload,
         proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
         sync_info::SyncInfo,

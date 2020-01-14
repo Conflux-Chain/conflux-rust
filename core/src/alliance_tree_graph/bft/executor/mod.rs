@@ -7,7 +7,6 @@ use libra_crypto::{
     hash::{GENESIS_BLOCK_ID, PRE_GENESIS_BLOCK_ID},
     HashValue,
 };
-use libra_logger::prelude::*;
 use libra_types::{
     block_info::{BlockInfo, Round},
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorSet},

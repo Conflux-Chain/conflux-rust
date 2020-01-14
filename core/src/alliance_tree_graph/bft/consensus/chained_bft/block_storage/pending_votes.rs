@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::super::chained_bft::block_storage::VoteReceptionResult;
-use consensus_types::{
+use super::super::super::consensus_types::{
     common::{Author, Round},
     quorum_cert::QuorumCert,
     timeout_certificate::TimeoutCertificate,

@@ -12,7 +12,8 @@ pub mod vote;
 
 use crate::message::{Message, MsgId};
 
-use crate::hotstuff_types::{
+
+use crate::alliance_tree_graph::bft::consensus::consensus_types::{
     common::Payload, epoch_retrieval::EpochRetrievalRequest,
     proposal_msg::ProposalMsg, sync_info::SyncInfo, vote_msg::VoteMsg,
 };

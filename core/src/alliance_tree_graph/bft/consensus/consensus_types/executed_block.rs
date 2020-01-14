@@ -1,9 +1,9 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{block::Block, common::Round, quorum_cert::QuorumCert};
+use super::{block::Block, common::Round, quorum_cert::QuorumCert};
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
-use executor::{ProcessedVMOutput, StateComputeResult};
+use super::super::super::executor::{ProcessedVMOutput, StateComputeResult};
 use libra_crypto::hash::HashValue;
 use libra_types::block_info::BlockInfo;
 use std::{

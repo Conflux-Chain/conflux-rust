@@ -6,7 +6,7 @@ use super::super::super::{
     util::time_service::{SendTask, TimeService},
 };
 use channel;
-use consensus_types::common::Round;
+use super::super::super::consensus_types::common::Round;
 //use libra_logger::prelude::*;
 use std::{
     fmt,

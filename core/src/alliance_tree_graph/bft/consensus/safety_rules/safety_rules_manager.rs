@@ -1,11 +1,11 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use super::{
     local_client::LocalClient, persistent_storage::PersistentStorage,
     InMemoryStorage, OnDiskStorage, SafetyRules, TSafetyRules,
 };
-use consensus_types::common::Payload;
+use super::super::consensus_types::common::Payload;
 use libra_config::config::{NodeConfig, SafetyRulesBackend, SafetyRulesConfig};
 use libra_types::crypto_proxies::ValidatorSigner;
 use std::sync::{Arc, RwLock};

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use consensus_types::common::Round;
+use super::super::consensus_types::common::Round;
 use libra_config::config::PersistableConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

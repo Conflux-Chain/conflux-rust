@@ -11,7 +11,7 @@
 
 use super::BLOCK_CF_NAME;
 use anyhow::Result;
-use consensus_types::{block::Block, common::Payload};
+use super::super::super::super::consensus_types::{block::Block, common::Payload};
 use libra_crypto::HashValue;
 use schemadb::schema::{KeyCodec, Schema, ValueCodec};
 use std::{cmp, fmt, marker::PhantomData};

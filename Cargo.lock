@@ -549,14 +549,12 @@ dependencies = [
  "cfx-types 0.1.0",
  "channel 0.1.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "consensus-types 0.1.0",
  "criterion 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "db 0.1.0",
  "debug-interface 0.1.0",
  "elastic-array 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethkey 0.3.0",
- "executor 0.1.0",
  "fallible-iterator 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs_extra 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -610,7 +608,6 @@ dependencies = [
  "rlp 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp_derive 0.1.0 (git+https://github.com/Conflux-Chain/conflux-parity-deps.git)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "safety-rules 0.1.0",
  "schemadb 0.1.0",
  "scratchpad 0.1.0",
  "secret-store 0.1.0",
@@ -777,7 +774,6 @@ dependencies = [
  "channel 0.1.0",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "client 0.1.0",
- "consensus-types 0.1.0",
  "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
  "db 0.1.0",
  "debug-interface 0.1.0",
@@ -823,7 +819,6 @@ dependencies = [
  "rpassword 4.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "runtime 0.1.0",
  "rustc-hex 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "safety-rules 0.1.0",
  "schemadb 0.1.0",
  "scratchpad 0.1.0",
  "secret-store 0.1.0",
@@ -838,24 +833,6 @@ dependencies = [
  "threadpool 1.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "txgen 0.1.0",
-]
-
-[[package]]
-name = "consensus-types"
-version = "0.1.0"
-dependencies = [
- "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "executor 0.1.0",
- "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libra-canonical-serialization 0.1.0",
- "libra-crypto 0.1.0",
- "libra-crypto-derive 0.1.0",
- "libra-types 0.1.0",
- "mirai-annotations 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1474,20 +1451,6 @@ dependencies = [
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "executor"
-version = "0.1.0"
-dependencies = [
- "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "libra-config 0.1.0",
- "libra-crypto 0.1.0",
- "libra-logger 0.1.0",
- "libra-types 0.1.0",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -4231,22 +4194,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "safemem"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "safety-rules"
-version = "0.1.0"
-dependencies = [
- "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "consensus-types 0.1.0",
- "criterion 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "libra-config 0.1.0",
- "libra-crypto 0.1.0",
- "libra-types 0.1.0",
- "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "same-file"

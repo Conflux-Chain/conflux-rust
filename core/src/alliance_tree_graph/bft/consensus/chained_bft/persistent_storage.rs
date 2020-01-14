@@ -6,7 +6,7 @@ use super::super::{
     consensus_provider::create_storage_read_client,
 };
 use anyhow::{format_err, Context, Result};
-use consensus_types::{
+use super::super::consensus_types::{
     block::Block, common::Payload, quorum_cert::QuorumCert,
     timeout_certificate::TimeoutCertificate, vote::Vote,
 };

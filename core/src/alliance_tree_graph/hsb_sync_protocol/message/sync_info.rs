@@ -4,7 +4,7 @@
 
 use super::super::sync_protocol::{Context, Handleable};
 use crate::{
-    hotstuff_types::{common::Payload, sync_info::SyncInfo},
+    alliance_tree_graph::bft::consensus::consensus_types::{common::Payload, sync_info::SyncInfo},
     sync::Error,
 };
 use libra_types::account_address::AccountAddress;

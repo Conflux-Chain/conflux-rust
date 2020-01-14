@@ -3,8 +3,7 @@
 
 use super::{counters, state_replication::StateComputer};
 use anyhow::{ensure, Result};
-use consensus_types::{block::Block, executed_block::ExecutedBlock};
-//use executor::{ExecutedTrees, Executor, ProcessedVMOutput};
+use super::consensus_types::{block::Block, executed_block::ExecutedBlock};
 use libra_logger::prelude::*;
 use libra_types::{
     crypto_proxies::{
@@ -13,7 +12,7 @@ use libra_types::{
     transaction::{SignedTransaction, Transaction},
 };
 //use state_synchronizer::StateSyncClient;
-use executor::{Executor, ProcessedVMOutput};
+use super::super::executor::{Executor, ProcessedVMOutput};
 use std::{
     convert::TryFrom,
     sync::Arc,

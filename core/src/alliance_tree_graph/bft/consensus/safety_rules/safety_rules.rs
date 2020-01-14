@@ -1,11 +1,11 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
+use super::{
     consensus_state::ConsensusState, error::Error,
     persistent_storage::PersistentStorage, t_safety_rules::TSafetyRules,
 };
-use consensus_types::{
+use super::super::consensus_types::{
     block::Block, block_data::BlockData, common::Payload,
     quorum_cert::QuorumCert, timeout::Timeout, vote::Vote, vote_data::VoteData,
     vote_proposal::VoteProposal,

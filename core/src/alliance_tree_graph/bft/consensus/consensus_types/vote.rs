@@ -1,7 +1,7 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{common::Author, timeout::Timeout, vote_data::VoteData};
+use super::{common::Author, timeout::Timeout, vote_data::VoteData};
 use anyhow::{ensure, Context};
 use libra_crypto::hash::CryptoHash;
 use libra_types::{

@@ -15,7 +15,7 @@ use std::sync::Arc;
 use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
-use executor::Executor;
+use super::super::executor::Executor;
 use libra_types::transaction::SignedTransaction;
 use primitives::TransactionWithSignature;
 

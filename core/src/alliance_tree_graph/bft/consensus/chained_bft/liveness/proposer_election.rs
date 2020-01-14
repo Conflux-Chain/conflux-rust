@@ -1,7 +1,7 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus_types::{
+use super::super::super::consensus_types::{
     block::Block,
     common::{Author, Round},
 };

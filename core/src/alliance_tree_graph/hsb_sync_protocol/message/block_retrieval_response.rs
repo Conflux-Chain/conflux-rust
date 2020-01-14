@@ -5,10 +5,10 @@
 use super::super::sync_protocol::{Context, Handleable, RpcResponse};
 use crate::{
     alliance_tree_graph::hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest,
+    alliance_tree_graph::bft::consensus::consensus_types::{
+        block_retrieval::BlockRetrievalResponse, common::Payload,
+    },
     message::RequestId, sync::Error,
-};
-use hotstuff_types::{
-    block_retrieval::BlockRetrievalResponse, common::Payload,
 };
 use libra_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};

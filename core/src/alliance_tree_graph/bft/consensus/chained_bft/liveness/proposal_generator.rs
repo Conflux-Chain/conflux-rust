@@ -9,7 +9,7 @@ use super::super::super::{
     },
 };
 use anyhow::{bail, ensure, format_err};
-use consensus_types::{
+use super::super::super::consensus_types::{
     block::Block,
     block_data::BlockData,
     common::{Author, Payload, Round},

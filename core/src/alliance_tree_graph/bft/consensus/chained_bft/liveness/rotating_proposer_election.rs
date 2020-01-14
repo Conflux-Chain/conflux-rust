@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::super::chained_bft::liveness::proposer_election::ProposerElection;
-use consensus_types::{
+use super::super::super::consensus_types::{
     block::Block,
     common::{Author, Payload, Round},
 };

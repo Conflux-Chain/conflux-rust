@@ -18,12 +18,12 @@ use libra_config::config::NodeConfig;
 use libra_types::transaction::SignedTransaction;
 //use network::validator_network::{ConsensusNetworkEvents,
 // ConsensusNetworkSender};
-use safety_rules::SafetyRulesManagerConfig;
+use super::super::safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
 use crate::alliance_tree_graph::bft::consensus::{
     state_computer::ExecutionProxy, state_replication::StateComputer,
 };
-use executor::Executor;
+use super::super::super::executor::Executor;
 use network::NetworkService;
 use primitives::TransactionWithSignature;
 use std::sync::Arc;

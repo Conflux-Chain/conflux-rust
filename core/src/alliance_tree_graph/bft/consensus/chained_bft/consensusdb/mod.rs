@@ -6,7 +6,7 @@ mod consensusdb_test;
 mod schema;
 
 use anyhow::{ensure, Result};
-use consensus_types::{block::Block, common::Payload, quorum_cert::QuorumCert};
+use super::super::consensus_types::{block::Block, common::Payload, quorum_cert::QuorumCert};
 use libra_crypto::HashValue;
 use schema::{
     block::{BlockSchema, SchemaBlock},

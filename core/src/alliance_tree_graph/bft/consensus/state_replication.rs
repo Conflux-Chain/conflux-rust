@@ -3,8 +3,8 @@
 
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
-use consensus_types::{block::Block, executed_block::ExecutedBlock};
-use executor::ProcessedVMOutput;
+use super::consensus_types::{block::Block, executed_block::ExecutedBlock};
+use super::super::executor::ProcessedVMOutput;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use libra_types::crypto_proxies::{
     LedgerInfoWithSignatures, ValidatorChangeProof,

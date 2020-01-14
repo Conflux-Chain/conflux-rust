@@ -5,7 +5,7 @@ use super::super::counters;
 use anyhow::ensure;
 //use bytes::Bytes;
 use channel::{self, libra_channel, message_queues::QueueStyle};
-use consensus_types::{
+use super::super::consensus_types::{
     block_retrieval::{
         BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,
     },
