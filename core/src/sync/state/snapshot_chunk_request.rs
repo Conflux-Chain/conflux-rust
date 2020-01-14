@@ -34,7 +34,11 @@ impl SnapshotChunkRequest {
 
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let chunk = match Chunk::load(&self.checkpoint, &self.chunk_key) {
+        let chunk = match Chunk::load(
+            &self.checkpoint,
+            &self.chunk_key,
+            &ctx.manager.graph.data_man.storage_manager,
+        ) {
             Ok(Some(chunk)) => chunk,
             _ => Chunk::default(),
         };
@@ -57,13 +61,7 @@ impl Request for SnapshotChunkRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> {
-        Some(Box::new(self.clone()))
-    }
+    fn resend(&self) -> Option<Box<dyn Request>> { None }
 
-    fn required_capability(&self) -> Option<DynamicCapability> {
-        Some(DynamicCapability::ServeCheckpoint(Some(
-            self.checkpoint.clone(),
-        )))
-    }
+    fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

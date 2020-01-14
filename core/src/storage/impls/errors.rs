@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::storage::impls::delta_mpt::node_ref_map::DeltaMptId;
 use std::{io, num};
 
 error_chain! {
@@ -38,16 +39,18 @@ error_chain! {
             display("Key not found."),
         }
 
-        // TODO(yz): encode key into error message.
-        MPTInvalidKey {
-            description("Invalid key."),
-            display("Invalid key."),
+        MPTInvalidKeyLength(length: usize, length_limit: usize){
+            description("Invalid key length."),
+            display(
+                "Invalid key length {}. length must be within [1, {}].",
+                length, length_limit),
         }
 
-        // TODO(yz): encode value into error message.
-        MPTInvalidValue {
-            description("Invalid value."),
-            display("Invalid value."),
+        MPTInvalidValueLength(length: usize, length_limit: usize) {
+            description("Invalid value length."),
+            display(
+                "Invalid value length {}. Length must be less than {}",
+                length, length_limit),
         }
 
         MPTTooManyNodes {
@@ -81,6 +84,11 @@ error_chain! {
             display("Failed to create new snapshot by COW. Use XFS on linux or APFS on Mac."),
         }
 
+        SnapshotCopyFailure {
+            description("Failed to directly copy a snapshot."),
+            display("Failed to copy a snapshot."),
+        }
+
         SnapshotNotFound {
             description("Snapshot file not found."),
             display("Snapshot file not found."),
@@ -89,6 +97,11 @@ error_chain! {
         SnapshotMPTTrieNodeNotFound {
             description("Trie node not found when loading Snapshot MPT."),
             display("Trie node not found when loading Snapshot MPT."),
+        }
+
+        TooManyDeltaMPT {
+            description("Too many Delta MPTs created."),
+            display("Too many Delta MPTs created ({}).", DeltaMptId::max_value()),
         }
 
         DeltaMPTAlreadyExists {
@@ -101,6 +114,15 @@ error_chain! {
             display("Can't find requested Delta MPT in registry."),
         }
 
+        DeltaMPTDestroyErrors(e1: Option<Box<Error>>, e2: Option<Box<Error>>) {
+            description("Error(s) happened in Delta MPT destroy"),
+            display(
+                "Error(s) happened in Delta MPT destroy, error_1: {:?}, error_2: {:?}",
+                e1.as_ref().map(|x| format!("{}", &**x)),
+                e2.as_ref().map(|x| format!("{}", &**x)),
+            ),
+        }
+
         InvalidTrieProof {
             description("Trie proof is invalid."),
             display("Trie proof is invalid."),
@@ -109,6 +131,21 @@ error_chain! {
         InvalidSnapshotSyncProof {
             description("Snapshot sync proof is invalid"),
             display("Snapshot sync proof is invalid"),
+        }
+
+        FailedToCreateUnitTestDataDir {
+            description("Failed to create unit test data dir."),
+            display("Failed to create unit test data dir."),
+        }
+
+        ThreadPanicked(msg: String) {
+            description("Thread panicked."),
+            display("Thread panicked with message {:?}.", msg),
+        }
+
+        MpscError {
+            description("Error from std::sync::mpsc."),
+            display("Error from std::sync::mpsc."),
         }
     }
 }

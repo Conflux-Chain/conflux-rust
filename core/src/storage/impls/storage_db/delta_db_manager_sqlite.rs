@@ -2,25 +2,50 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub struct DeltaDbManagerSqlite {}
+pub struct DeltaDbManagerSqlite {
+    pub delta_db_path: String,
+}
 
 impl DeltaDbManagerSqlite {
+    const DELTA_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
     const DELTA_DB_TABLE_NAME: &'static str = "delta_mpt";
 
     #[allow(unused)]
-    pub fn new(_num_shards: u16) -> Self { Self {} }
+    pub fn new(_num_shards: u16, delta_db_path: String) -> Self {
+        Self { delta_db_path }
+    }
+
+    pub fn kvdb_sqlite_statements() -> Arc<KvdbSqliteStatements> {
+        Arc::new(
+            KvdbSqliteStatements::make_statements(
+                &[&"value"],
+                &[&"BLOB"],
+                Self::DELTA_DB_TABLE_NAME,
+                true,
+            )
+            .unwrap(),
+        )
+    }
 }
 
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
     type DeltaDb = KvdbSqlite<Box<[u8]>>;
 
+    fn get_delta_db_dir(&self) -> String { self.delta_db_path.clone() }
+
+    fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
+        Self::DELTA_DB_SQLITE_DIR_PREFIX.to_string()
+            + &snapshot_epoch_id.to_hex()
+    }
+
+    fn get_delta_db_path(&self, delta_db_name: &str) -> String {
+        self.delta_db_path.clone() + delta_db_name
+    }
+
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
         KvdbSqlite::create_and_open(
             delta_db_name,
-            Self::DELTA_DB_TABLE_NAME,
-            &[&"value"],
-            &[&"BLOB"],
-            true,
+            Self::kvdb_sqlite_statements(),
         )
     }
 
@@ -41,4 +66,7 @@ use super::{
     },
     kvdb_sqlite::KvdbSqlite,
 };
-use std::fs::remove_file;
+use crate::storage::impls::storage_db::kvdb_sqlite::KvdbSqliteStatements;
+use parity_bytes::ToPretty;
+use primitives::EpochId;
+use std::{fs::remove_file, sync::Arc};

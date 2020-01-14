@@ -6,9 +6,8 @@ use crate::{
     storage::{
         storage_db::{
             key_value_db::KeyValueDbIterableTrait, OpenSnapshotMptTrait,
-            SnapshotDbManagerTrait,
         },
-        MptSlicer, SnapshotDbManagerSqlite, StorageManager, TrieProof,
+        MptSlicer, StorageManager, TrieProof,
     },
     sync::{Error, ErrorKind},
 };
@@ -18,7 +17,96 @@ use primitives::{EpochId, MerkleHash};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-const DEFAULT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
+#[derive(Clone, Hash, Ord, PartialOrd, PartialEq, Eq, Debug)]
+pub enum SnapshotSyncCandidate {
+    OneStepSync {
+        height: u64,
+        snapshot_epoch_id: EpochId,
+    },
+    FullSync {
+        height: u64,
+        snapshot_epoch_id: EpochId,
+    },
+    IncSync {
+        height: u64,
+        base_snapshot_epoch_id: EpochId,
+        snapshot_epoch_id: EpochId,
+    },
+}
+
+impl SnapshotSyncCandidate {
+    fn to_type_id(&self) -> u8 {
+        match &self {
+            SnapshotSyncCandidate::OneStepSync { .. } => 0,
+            SnapshotSyncCandidate::FullSync { .. } => 1,
+            SnapshotSyncCandidate::IncSync { .. } => 2,
+        }
+    }
+}
+
+impl Encodable for SnapshotSyncCandidate {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match &self {
+            SnapshotSyncCandidate::OneStepSync {
+                height,
+                snapshot_epoch_id,
+            } => {
+                s.begin_list(3)
+                    .append(&self.to_type_id())
+                    .append(height)
+                    .append(snapshot_epoch_id);
+            }
+            SnapshotSyncCandidate::FullSync {
+                height,
+                snapshot_epoch_id,
+            } => {
+                s.begin_list(3)
+                    .append(&self.to_type_id())
+                    .append(height)
+                    .append(snapshot_epoch_id);
+            }
+            SnapshotSyncCandidate::IncSync {
+                height,
+                base_snapshot_epoch_id,
+                snapshot_epoch_id,
+            } => {
+                s.begin_list(4)
+                    .append(&self.to_type_id())
+                    .append(height)
+                    .append(base_snapshot_epoch_id)
+                    .append(snapshot_epoch_id);
+            }
+        }
+    }
+}
+
+impl Decodable for SnapshotSyncCandidate {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let type_id: u8 = rlp.val_at(0)?;
+        let parsed = match type_id {
+            0 => SnapshotSyncCandidate::OneStepSync {
+                height: rlp.val_at(1)?,
+                snapshot_epoch_id: rlp.val_at(2)?,
+            },
+            1 => SnapshotSyncCandidate::FullSync {
+                height: rlp.val_at(1)?,
+                snapshot_epoch_id: rlp.val_at(2)?,
+            },
+            2 => SnapshotSyncCandidate::IncSync {
+                height: rlp.val_at(1)?,
+                base_snapshot_epoch_id: rlp.val_at(2)?,
+                snapshot_epoch_id: rlp.val_at(3)?,
+            },
+            _ => {
+                return Err(DecoderError::Custom(
+                    "Unknown SnapshotSyncCandidate type id",
+                ))
+            }
+        };
+        debug_assert_eq!(parsed.to_type_id(), type_id);
+        Ok(parsed)
+    }
+}
 
 #[derive(
     Clone,
@@ -136,11 +224,11 @@ impl RangedManifest {
 
     pub fn load(
         snapshot_epoch_id: &EpochId, start_key: Option<Vec<u8>>,
-        storage_manager: &StorageManager,
-    ) -> Result<Option<RangedManifest>, Error>
+        storage_manager: &StorageManager, chunk_size: u64,
+    ) -> Result<Option<(RangedManifest, MerkleHash)>, Error>
     {
         debug!(
-            "begin to load manifest, checkpoint = {:?}, start_key = {:?}",
+            "begin to load manifest, snapshot_epoch_id = {:?}, start_key = {:?}",
             snapshot_epoch_id, start_key
         );
 
@@ -160,6 +248,7 @@ impl RangedManifest {
             }
         };
         let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_read_only()?;
+        let merkle_root = snapshot_mpt.merkle_root;
         let mut slicer = match start_key {
             Some(ref key) => MptSlicer::new_from_key(&mut snapshot_mpt, key)?,
             None => MptSlicer::new(&mut snapshot_mpt)?,
@@ -172,7 +261,7 @@ impl RangedManifest {
         let max_chunks = i32::max_value();
         for i in 0..max_chunks {
             trace!("cut chunks for manifest, loop = {}", i);
-            slicer.advance(DEFAULT_CHUNK_SIZE)?;
+            slicer.advance(chunk_size)?;
             match slicer.get_range_end_key() {
                 None => {
                     has_next = false;
@@ -201,7 +290,7 @@ impl RangedManifest {
             manifest.next
         );
 
-        Ok(Some(manifest))
+        Ok(Some((manifest, merkle_root)))
     }
 }
 
@@ -257,24 +346,29 @@ impl Chunk {
     }
 
     pub fn load(
-        checkpoint: &H256, chunk_key: &ChunkKey,
-    ) -> Result<Option<Chunk>, Error> {
+        snapshot_epoch_id: &H256, chunk_key: &ChunkKey,
+        storage_manager: &StorageManager,
+    ) -> Result<Option<Chunk>, Error>
+    {
         debug!(
-            "begin to load chunk, checkpoint = {:?}, key = {:?}",
-            checkpoint, chunk_key
+            "begin to load chunk, snapshot_epoch_id = {:?}, key = {:?}",
+            snapshot_epoch_id, chunk_key
         );
 
-        let snapshot_db_manager = SnapshotDbManagerSqlite::default();
-        let mut snapshot_db =
-            match snapshot_db_manager.get_snapshot_by_epoch_id(checkpoint)? {
-                Some(db) => db,
-                None => {
-                    debug!(
+        let snapshot_db_manager =
+            storage_manager.get_storage_manager().get_snapshot_manager();
+
+        let mut snapshot_db = match snapshot_db_manager
+            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
+        {
+            Some(db) => db,
+            None => {
+                debug!(
                     "failed to load chunk, cannot find snapshot by checkpoint"
                 );
-                    return Ok(None);
-                }
-            };
+                return Ok(None);
+            }
+        };
 
         let mut kv_iterator = snapshot_db.snapshot_kv_iterator();
         let lower_bound_incl =

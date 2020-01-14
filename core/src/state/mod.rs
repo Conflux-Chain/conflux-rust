@@ -49,8 +49,8 @@ pub enum CleanupMode<'a> {
     TrackTouched(&'a mut HashSet<Address>),
 }
 
-pub struct State<'a> {
-    db: StateDb<'a>,
+pub struct State {
+    db: StateDb,
 
     cache: RefCell<HashMap<Address, AccountEntry>>,
     checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
@@ -63,10 +63,8 @@ pub struct State<'a> {
     vm: VmFactory,
 }
 
-impl<'a> State<'a> {
-    pub fn new(
-        db: StateDb<'a>, account_start_nonce: U256, vm: VmFactory,
-    ) -> Self {
+impl State {
+    pub fn new(db: StateDb, account_start_nonce: U256, vm: VmFactory) -> Self {
         let interest_rate = db.get_interest_rate().expect("no db error");
         let accumulate_interest_rate =
             db.get_accumulate_interest_rate().expect("no db error");
@@ -538,7 +536,7 @@ impl<'a> State<'a> {
     /// Load required account data from the databases. Returns whether the
     /// cache succeeds.
     fn update_account_cache(
-        require: RequireCache, account: &mut OverlayAccount, db: &StateDb<'a>,
+        require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
     ) -> bool {
         if let RequireCache::None = require {
             return true;
@@ -988,7 +986,7 @@ impl<'a> State<'a> {
 mod tests {
     use super::*;
     use crate::storage::{
-        tests::new_state_manager_for_testing, StateIndex, StorageManager,
+        tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
         StorageManagerTrait,
     };
     use cfx_types::{Address, BigEndianHash, U256};
@@ -1018,7 +1016,7 @@ mod tests {
 
     #[test]
     fn checkpoint_basic() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let address = Address::zero();
         state.checkpoint();
@@ -1039,7 +1037,7 @@ mod tests {
 
     #[test]
     fn checkpoint_nested() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let address = Address::zero();
         state.checkpoint();
@@ -1056,7 +1054,7 @@ mod tests {
 
     #[test]
     fn checkpoint_revert_to_get_storage_at() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let address = Address::zero();
         let key = BigEndianHash::from_uint(&U256::from(0));
@@ -1097,7 +1095,7 @@ mod tests {
 
     #[test]
     fn checkpoint_from_empty_get_storage_at() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::zero();
         let k = BigEndianHash::from_uint(&U256::from(0));
@@ -1236,7 +1234,7 @@ mod tests {
 
     #[test]
     fn checkpoint_get_storage_at() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::zero();
         let k = BigEndianHash::from_uint(&U256::from(0));
@@ -1427,7 +1425,7 @@ mod tests {
 
     #[test]
     fn kill_account_with_checkpoints() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::zero();
         let k = BigEndianHash::from_uint(&U256::from(0));
@@ -1451,7 +1449,7 @@ mod tests {
 
     #[test]
     fn create_contract_fail() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::from_low_u64_be(1000);
 
@@ -1476,7 +1474,7 @@ mod tests {
 
     #[test]
     fn create_contract_fail_previous_storage() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let a = Address::from_low_u64_be(1000);
         let k = BigEndianHash::from_uint(&U256::from(0));
@@ -1538,7 +1536,7 @@ mod tests {
 
     #[test]
     fn test_automatic_staking_normal_account() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let normal_account = Address::from_low_u64_be(0);
         let contract_account = Address::from_low_u64_be(1);
@@ -1720,7 +1718,7 @@ mod tests {
 
     #[test]
     fn test_automatic_staking_contract_account() {
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         let contract_account = Address::from_low_u64_be(1);
         let k1: H256 = BigEndianHash::from_uint(&U256::from(0));

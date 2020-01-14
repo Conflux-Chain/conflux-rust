@@ -10,7 +10,7 @@ use crate::{
     storage::{
         state_manager::StateIndex, utils::guarded_value::*,
         StateRootWithAuxInfo, StorageManager, StorageManagerTrait,
-        StorageTrait,
+        StorageStateTrait,
     },
 };
 use cfx_types::{Bloom, H256};
@@ -40,6 +40,7 @@ use crate::block_data_manager::{
 pub use block_data_types::*;
 use std::{hash::Hash, path::Path, time::Duration};
 
+use crate::parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 lazy_static! {
     static ref TX_POOL_RECOVER_TIMER: Arc<dyn Meter> =
@@ -53,6 +54,7 @@ pub const NULLU64: u64 = !0;
 pub struct StateAvailabilityBoundary {
     /// This is the hash of blocks in pivot chain based on current graph.
     pub pivot_chain: Vec<H256>,
+    pub synced_state_height: u64,
     /// This is the lower boundary height of available state.
     pub lower_bound: u64,
     /// This is the upper boundary height of available state.
@@ -68,6 +70,7 @@ impl StateAvailabilityBoundary {
     pub fn new(epoch_hash: H256, epoch_height: u64) -> Self {
         Self {
             pivot_chain: vec![epoch_hash],
+            synced_state_height: 0,
             lower_bound: epoch_height,
             upper_bound: epoch_height,
             optimistic_executed_height: None,
@@ -75,7 +78,8 @@ impl StateAvailabilityBoundary {
     }
 
     pub fn check_availability(&self, height: u64, block_hash: &H256) -> bool {
-        self.lower_bound <= height
+        (height == 0 || height != self.synced_state_height)
+            && self.lower_bound <= height
             && height <= self.upper_bound
             && self.pivot_chain[(height - self.lower_bound) as usize]
                 == *block_hash
@@ -90,13 +94,25 @@ impl StateAvailabilityBoundary {
         {
             self.upper_bound += 1;
         }
+        if self.lower_bound == self.synced_state_height
+            && self.synced_state_height != 0
+            && self.upper_bound > self.synced_state_height
+        {
+            self.adjust_lower_bound(self.lower_bound + 1)
+        }
+    }
+
+    /// This function will record the most recent synced_state_height for
+    /// special case handling.
+    pub fn set_synced_state_height(&mut self, synced_state_height: u64) {
+        self.synced_state_height = synced_state_height;
     }
 
     /// This function will set a new lower boundary height of available state.
     /// Caller should make sure the new lower boundary height should be greater
-    /// than or equal to currrent lower boundary height.
+    /// than or equal to current lower boundary height.
     /// Caller should also make sure the new lower boundary height should be
-    /// less than or equal to currrent upper boundary height.
+    /// less than or equal to current upper boundary height.
     pub fn adjust_lower_bound(&mut self, new_lower_bound: u64) {
         // If we are going to call this function, `upper_bound` will not be 0
         // unless it is a full node and is in header phase. And we should do
@@ -105,7 +121,18 @@ impl StateAvailabilityBoundary {
             return;
         }
         assert!(self.lower_bound <= new_lower_bound);
-        assert!(new_lower_bound <= self.upper_bound);
+        assert!(
+            new_lower_bound <= self.upper_bound,
+            "however {} > {}, self {:?}",
+            new_lower_bound,
+            self.upper_bound,
+            self,
+        );
+        if self.synced_state_height != 0
+            && new_lower_bound > self.synced_state_height + REWARD_EPOCH_COUNT
+        {
+            self.synced_state_height = 0;
+        }
         self.pivot_chain = self
             .pivot_chain
             .split_off((new_lower_bound - self.lower_bound) as usize);
@@ -337,7 +364,7 @@ impl BlockDataManager {
         self.storage_manager
             .get_state_no_commit(StateIndex::new_for_readonly(
                 &true_genesis_hash,
-                &StateRootWithAuxInfo::genesis(&true_genesis_hash).aux_info,
+                &StateRootWithAuxInfo::genesis(&true_genesis_hash),
             ))
             .unwrap()
             .unwrap()
@@ -1029,7 +1056,7 @@ impl BlockDataManager {
             None => None,
             Some(execution_commitment) => Some(StateIndex::new_for_readonly(
                 block_hash,
-                &execution_commitment.state_root_with_aux_info.aux_info,
+                &execution_commitment.state_root_with_aux_info,
             )),
         };
 
@@ -1062,6 +1089,15 @@ impl BlockDataManager {
         self.storage_manager
             .get_storage_manager()
             .get_snapshot_epoch_count()
+    }
+
+    pub fn get_snapshot_blame_plus_depth(&self) -> usize {
+        // We need the extra + 1 to get a state root that points to the
+        // snapshot we want.
+        self.storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count() as usize
+            + 1
     }
 }
 

@@ -24,7 +24,11 @@ impl<'trie> SubTrieVisitor<'trie, 'trie> {
         Ok(Self {
             trie_ref,
             db: ReturnAfterUse::new_from_value(trie_ref.db_owned_read()?),
-            root: CowNodeRef::new(root, owned_node_set.as_ref().unwrap()),
+            root: CowNodeRef::new(
+                root,
+                owned_node_set.as_ref().unwrap(),
+                trie_ref.get_mpt_id(),
+            ),
             owned_node_set: ReturnAfterUse::new(owned_node_set),
         })
     }
@@ -36,8 +40,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     ) -> SubTrieVisitor<'a, 'db>
     where 'trie: 'a {
         let trie_ref = self.trie_ref;
-        let cow_child_node =
-            CowNodeRef::new(child_node, self.owned_node_set.get_ref());
+        let cow_child_node = CowNodeRef::new(
+            child_node,
+            self.owned_node_set.get_ref(),
+            self.trie_ref.get_mpt_id(),
+        );
         SubTrieVisitor {
             trie_ref,
             db: ReturnAfterUse::<
@@ -53,7 +60,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 
     pub fn get_trie_ref(&self) -> &'trie MerklePatriciaTrie { self.trie_ref }
 
-    fn node_memory_manager(&self) -> &'trie NodeMemoryManagerDeltaMpt {
+    fn node_memory_manager(&self) -> &'trie DeltaMptsNodeMemoryManager {
         &self.get_trie_ref().get_node_memory_manager()
     }
 
@@ -62,7 +69,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     ) -> Result<
         Option<
             GuardedValue<
-                Option<MutexGuard<'a, CacheManagerDeltaMpt>>,
+                Option<MutexGuard<'a, DeltaMptsCacheManager>>,
                 &'a TrieNodeDeltaMpt,
             >,
         >,
@@ -82,6 +89,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     node_ref,
                     cache_manager,
                     &mut **self.db.get_mut(),
+                    self.trie_ref.get_mpt_id(),
                     &mut is_loaded_from_db,
                 )?;
             if is_loaded_from_db {
@@ -147,6 +155,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     node_ref.clone(),
                     cache_manager,
                     &mut **self.db.get_mut(),
+                    self.trie_ref.get_mpt_id(),
                     &mut false,
                 )?;
 
@@ -361,7 +370,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 None => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -371,7 +379,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 Some(replacement) => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -394,18 +401,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 
             _ => Ok((None, false, node_cow.into_child())),
         }
-    }
-
-    // FIXME: Without tombstone, delete_all is like delete, assuming the
-    // FIXME: existence of the prefix. However with tombstone, the
-    // FIXME: corresponding action is mark_delete_all, which can operate on
-    // FIXME: non-existing prefix in delta-MPT.
-    // FIXME: When iterating, skip existing marks because they were already
-    // FIXME: deleted.
-    #[allow(unused)]
-    pub fn mark_delete_all() {
-        // FIXME: implement.
-        unimplemented!();
     }
 
     /// The visitor can only be used once to modify.
@@ -516,7 +511,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 None => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -526,7 +520,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 Some(replacement) => {
                                     node_cow
                                         .cow_modify(
-                                            node_memory_manager,
                                             &allocator,
                                             self.owned_node_set.get_mut(),
                                             trie_node,
@@ -564,6 +557,69 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         )?;
 
         Ok((Some(old_values), true, None))
+    }
+
+    /// return all key/value pairs given the prefix
+    pub fn traversal(
+        mut self, key: KeyPart, key_remaining: KeyPart,
+    ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
+        let node_memory_manager = self.node_memory_manager();
+        let allocator = node_memory_manager.get_allocator();
+        let mut node_cow = self.root.take();
+
+        let trie_node_ref = node_cow.get_trie_node(
+            node_memory_manager,
+            &allocator,
+            &mut **self.db.get_mut(),
+        )?;
+
+        let key_prefix: CompressedPathRaw;
+        match trie_node_ref.walk::<Write>(key_remaining) {
+            WalkStop::ChildNotFound { .. } => return Ok(None),
+            WalkStop::Arrived => {
+                // To enumerate the subtree.
+                key_prefix = key.into();
+            }
+            WalkStop::PathDiverted {
+                key_child_index,
+                unmatched_child_index,
+                unmatched_path_remaining,
+                ..
+            } => {
+                if key_child_index.is_some() {
+                    return Ok(None);
+                }
+                // To enumerate the subtree.
+                key_prefix = CompressedPathRaw::join_connected_paths(
+                    &key,
+                    unmatched_child_index,
+                    &unmatched_path_remaining,
+                );
+            }
+            WalkStop::Descent {
+                key_remaining,
+                child_node,
+                ..
+            } => {
+                drop(trie_node_ref);
+                let values = self
+                    .new_visitor_for_subtree(child_node.clone().into())
+                    .traversal(key, key_remaining)?;
+                return Ok(values);
+            }
+        }
+
+        let trie_node = GuardedValue::take(trie_node_ref);
+        let mut values = vec![];
+        node_cow.iterate_internal(
+            self.owned_node_set.get_ref(),
+            self.get_trie_ref(),
+            trie_node,
+            key_prefix,
+            &mut values,
+            &mut **self.db.get_mut(),
+        )?;
+        Ok(Some(values))
     }
 
     // In a method we visit node one or 2 times but borrow-checker prevent
@@ -632,7 +688,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                         )?);
                     node_cow
                         .cow_modify(
-                            node_memory_manager,
                             &allocator,
                             self.owned_node_set.get_mut(),
                             trie_node,
@@ -661,6 +716,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     CowNodeRef::new_uninitialized_node(
                         &allocator,
                         self.owned_node_set.get_mut(),
+                        self.trie_ref.get_mpt_id(),
                     )?;
                 let mut new_node = MemOptimizedTrieNode::default();
                 // set compressed path.
@@ -694,6 +750,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                             CowNodeRef::new_uninitialized_node(
                                 &allocator,
                                 self.owned_node_set.get_mut(),
+                                self.trie_ref.get_mpt_id(),
                             )?;
                         let mut new_child_node =
                             MemOptimizedTrieNode::default();
@@ -725,6 +782,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     CowNodeRef::new_uninitialized_node(
                         &allocator,
                         self.owned_node_set.get_mut(),
+                        self.trie_ref.get_mpt_id(),
                     )?;
                 let mut new_child_node = MemOptimizedTrieNode::default();
                 // set compressed path.
@@ -736,7 +794,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let trie_node = GuardedValue::take(trie_node_ref);
                 node_cow
                     .cow_modify(
-                        node_memory_manager,
                         &allocator,
                         self.owned_node_set.get_mut(),
                         trie_node,

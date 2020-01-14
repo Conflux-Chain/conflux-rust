@@ -108,11 +108,11 @@ log_conf="log.yaml"
 #
 # ledger_cache_size=2048
 # db_cache_size=128
-# storage_cache_start_size=1000000
-# storage_cache_size=20000000
-# storage_recent_lfu_factor=4.0
-# storage_idle_size=200000
-# storage_node_map_size=80000000
+# storage_delta_mpts_cache_recent_lfu_factor=4.0
+# storage_delta_mpts_cache_size=20000000
+# storage_delta_mpts_cache_start_size=1000000
+# storage_delta_mpts_node_map_vec_size=80000000
+# storage_delta_mpts_slab_idle_size=200000
 # tx_pool_size=500_000
 # tx_pool_min_tx_gas_price=1
 

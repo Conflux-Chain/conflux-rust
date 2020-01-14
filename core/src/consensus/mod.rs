@@ -179,7 +179,9 @@ impl ConsensusGraph {
         graph.update_best_info(&*graph.inner.read());
         graph
             .txpool
-            .notify_new_best_info(graph.best_info.read_recursive().clone());
+            .notify_new_best_info(graph.best_info.read_recursive().clone())
+            // FIXME: propogate error.
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         graph
     }
 
@@ -355,26 +357,20 @@ impl ConsensusGraph {
         Ok(())
     }
 
-    // FIXME: I think the assumption is that this is a pivot block and it's
-    // locked in pivot chain?
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<StateDb, String> {
-        // FIXME: And what is it? Epoch Number or Height?
         self.validate_stated_epoch(&epoch_number)?;
-        // FIXME: Change the method name and variable name..
-        let epoch_number = self.get_height_from_epoch_number(epoch_number)?;
-        let hash =
-            self.inner.read().get_hash_from_epoch_number(epoch_number)?;
-        if !self
-            .data_man
-            .state_availability_boundary
-            .read()
-            .check_availability(epoch_number, &hash)
-        {
+        let height = self.get_height_from_epoch_number(epoch_number)?;
+        let hash = self.inner.read().get_hash_from_epoch_number(height)?;
+        // Keep the lock until we get the desired State, otherwise the State may
+        // expire.
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        if !state_availability_boundary.check_availability(height, &hash) {
             return Err(format!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
-                epoch_number, hash, self.data_man.state_availability_boundary.read()
+                height, hash, self.data_man.state_availability_boundary.read()
             )
             .into());
         }
@@ -394,7 +390,7 @@ impl ConsensusGraph {
             None => {
                 return Err(format!(
                     "State for epoch (number={:?} hash={:?}) does not exist",
-                    epoch_number, hash
+                    height, hash
                 )
                 .into())
             }
@@ -619,7 +615,9 @@ impl ConsensusGraph {
             if update_best_info {
                 self.update_best_info(inner);
                 self.txpool
-                    .notify_new_best_info(self.best_info.read().clone());
+                    .notify_new_best_info(self.best_info.read().clone())
+                    // FIXME: propogate error.
+                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
 
             if inner.inner_conf.enable_state_expose {
@@ -995,18 +993,17 @@ impl ConsensusGraph {
 
     /// Find a trusted blame block for checkpoint
     pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
-        self.inner
-            .read()
-            .get_trusted_blame_block(stable_hash, false)
+        self.inner.read().get_trusted_blame_block(stable_hash, 0)
     }
 
     /// Find a trusted blame block for snapshot full sync
     pub fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Option<H256> {
-        self.inner
-            .read()
-            .get_trusted_blame_block(snapshot_epoch_id, true)
+        self.inner.read().get_trusted_blame_block(
+            snapshot_epoch_id,
+            self.data_man.get_snapshot_blame_plus_depth(),
+        )
     }
 
     /// Return the epoch that we are going to sync the state

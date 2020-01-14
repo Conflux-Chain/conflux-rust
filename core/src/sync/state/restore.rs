@@ -6,11 +6,10 @@ use crate::{
     storage::{
         state_manager::StateManager,
         storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-        FullSyncVerifier, SnapshotDbManagerSqlite,
+        FullSyncVerifier, Result as StorageResult, SnapshotDbManagerSqlite,
     },
     sync::state::storage::{Chunk, ChunkKey},
 };
-use cfx_types::H256;
 use primitives::{EpochId, MerkleHash};
 use std::sync::{
     atomic::{AtomicUsize, Ordering::Relaxed},
@@ -27,17 +26,13 @@ pub struct Restorer {
 }
 
 impl Default for Restorer {
-    fn default() -> Self { Self::new_with_default_root_dir(H256::zero()) }
+    fn default() -> Self { Self::new(EpochId::default()) }
 }
 
 impl Restorer {
-    pub fn new_with_default_root_dir(checkpoint: H256) -> Self {
-        Self::new(checkpoint)
-    }
-
-    pub fn new(checkpoint: H256) -> Self {
+    pub fn new(snapshot_epoch_id: EpochId) -> Self {
         Restorer {
-            snapshot_epoch_id: checkpoint,
+            snapshot_epoch_id,
             snapshot_merkle_root: Default::default(),
             verifier: None,
         }
@@ -70,7 +65,7 @@ impl Restorer {
     /// Start to restore chunks asynchronously.
     pub fn finalize_restoration(
         &self, state_manager: Arc<StateManager>, snapshot_info: SnapshotInfo,
-    ) {
+    ) -> StorageResult<()> {
         state_manager
             .get_storage_manager()
             .get_snapshot_manager()
@@ -82,9 +77,10 @@ impl Restorer {
             .expect("Fail to finalize full sync");
         state_manager
             .get_storage_manager()
-            .register_new_snapshot(snapshot_info, true);
+            .register_new_snapshot(snapshot_info)?;
 
-        debug!("complete to restore snapshot chunks");
+        debug!("Completed snapshot restoration.");
+        Ok(())
     }
 }
 

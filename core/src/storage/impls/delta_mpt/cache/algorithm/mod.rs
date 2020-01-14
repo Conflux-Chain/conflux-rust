@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub(in super::super) mod lru;
-pub(in super::super) mod recent_lfu;
+pub mod lru;
+pub mod recent_lfu;
 pub mod removable_heap;
 
 #[cfg(test)]

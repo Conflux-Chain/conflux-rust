@@ -9,7 +9,6 @@ use crate::{
         Error, SynchronizationState,
     },
 };
-use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
@@ -18,11 +17,6 @@ use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 pub enum DynamicCapability {
     TxRelay(bool),      // provide tx relay
     ServeHeaders(bool), // provide block header downloads
-    ServeCheckpoint(Option<H256>), /* provide checkpoint downloads
-                         * FIXME: after a certain period, the checkpoint
-                         * FIXME: and/or snapshot will become
-                         * FIXME: unavailable. How is this situation
-                         * FIXME: handled? */
 }
 
 impl DynamicCapability {
@@ -30,7 +24,6 @@ impl DynamicCapability {
         match self {
             DynamicCapability::TxRelay(_) => 0,
             DynamicCapability::ServeHeaders(_) => 1,
-            DynamicCapability::ServeCheckpoint(_) => 2,
         }
     }
 
@@ -61,7 +54,6 @@ impl Encodable for DynamicCapability {
         match self {
             DynamicCapability::TxRelay(enabled) => s.append(enabled),
             DynamicCapability::ServeHeaders(enabled) => s.append(enabled),
-            DynamicCapability::ServeCheckpoint(cp) => s.append(cp),
         };
     }
 }
@@ -75,7 +67,6 @@ impl Decodable for DynamicCapability {
         match rlp.val_at::<u8>(0)? {
             0 => Ok(DynamicCapability::TxRelay(rlp.val_at(1)?)),
             1 => Ok(DynamicCapability::ServeHeaders(rlp.val_at(1)?)),
-            2 => Ok(DynamicCapability::ServeCheckpoint(rlp.val_at(1)?)),
             _ => Err(DecoderError::Custom("invalid capability code")),
         }
     }
@@ -108,15 +99,6 @@ impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
         peer.write().capabilities.insert(self.changed);
-
-        if let DynamicCapability::ServeCheckpoint(Some(checkpoint)) =
-            self.changed
-        {
-            ctx.manager
-                .state_sync
-                .on_checkpoint_served(ctx, &checkpoint);
-        }
-
         Ok(())
     }
 }

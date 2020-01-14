@@ -273,8 +273,8 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
-    fn transfer_exec_balance<'b: 'a>(
-        params: &ActionParams, spec: &Spec, state: &mut State<'b>,
+    fn transfer_exec_balance(
+        params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
@@ -290,11 +290,9 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
-    fn deposit<'b: 'a>(
-        params: &ActionParams, state: &mut State<'b>, val: &U256,
-        deposit_time: u64,
-    ) -> vm::Result<()>
-    {
+    fn deposit(
+        params: &ActionParams, state: &mut State, val: &U256, deposit_time: u64,
+    ) -> vm::Result<()> {
         if state.balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
         } else {
@@ -303,8 +301,8 @@ impl<'a> CallCreateExecutive<'a> {
         }
     }
 
-    fn withdraw<'b: 'a>(
-        params: &ActionParams, state: &mut State<'b>, val: &U256,
+    fn withdraw(
+        params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
         if state.bank_balance(&params.sender)?
             - state.storage_balance(&params.sender)?
@@ -319,8 +317,8 @@ impl<'a> CallCreateExecutive<'a> {
         }
     }
 
-    fn transfer_exec_balance_and_init_contract<'b: 'a>(
-        params: &ActionParams, spec: &Spec, state: &mut State<'b>,
+    fn transfer_exec_balance_and_init_contract(
+        params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
@@ -340,9 +338,9 @@ impl<'a> CallCreateExecutive<'a> {
         Ok(())
     }
 
-    fn enact_result<'b>(
+    fn enact_result(
         result: &vm::Result<FinalizationResult>, env: &'a Env,
-        state: &mut State<'b>, substate: &mut Substate,
+        state: &mut State, substate: &mut Substate,
         unconfirmed_substate: Substate,
     )
     {
@@ -377,12 +375,12 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     /// Creates `Context` from `Executive`.
-    fn as_context<'any, 'b: 'any>(
-        state: &'any mut State<'b>, env: &'any Env, machine: &'any Machine,
+    fn as_context<'any>(
+        state: &'any mut State, env: &'any Env, machine: &'any Machine,
         spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
         origin: &'any OriginInfo, substate: &'any mut Substate,
         output: OutputPolicy,
-    ) -> Context<'any, 'b>
+    ) -> Context<'any>
     {
         Context::new(
             state,
@@ -399,8 +397,8 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     /// Implementation of deposit and withdraw tokens in bank.
-    fn exec_storage_interest_staking_contract<'b: 'a>(
-        params: &ActionParams, state: &mut State<'b>, gas_cost: &U256,
+    fn exec_storage_interest_staking_contract(
+        params: &ActionParams, state: &mut State, gas_cost: &U256,
         timestamp: u64,
     ) -> vm::Result<()>
     {
@@ -440,8 +438,8 @@ impl<'a> CallCreateExecutive<'a> {
         }
     }
 
-    fn exec_commission_privilege_control_contract<'b: 'a>(
-        params: &ActionParams, state: &mut State<'b>, gas_cost: &U256,
+    fn exec_commission_privilege_control_contract(
+        params: &ActionParams, state: &mut State, gas_cost: &U256,
     ) -> vm::Result<()> {
         // FIXME: params.sender should be address of a contract.
         if *gas_cost > params.gas {
@@ -537,8 +535,8 @@ impl<'a> CallCreateExecutive<'a> {
         }
     }
 
-    fn exec_storage_commission_privilege_control_contract<'b: 'a>(
-        params: &ActionParams, state: &mut State<'b>, gas_cost: &U256,
+    fn exec_storage_commission_privilege_control_contract(
+        params: &ActionParams, state: &mut State, gas_cost: &U256,
     ) -> vm::Result<()> {
         // FIXME: params.sender should be address of a contract.
         if *gas_cost > params.gas {
@@ -622,8 +620,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume_call` or `resume_create` to continue the execution.
-    pub fn exec<'b: 'a>(
-        mut self, state: &mut State<'b>, substate: &mut Substate,
+    pub fn exec(
+        mut self, state: &mut State, substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult> {
         match self.kind {
             CallCreateExecutiveKind::Transfer(ref params) => {
@@ -953,8 +951,8 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     /// Resume execution from a call trap previously trapped by `exec'.
-    pub fn resume_call<'b: 'a>(
-        mut self, result: vm::MessageCallResult, state: &mut State<'b>,
+    pub fn resume_call(
+        mut self, result: vm::MessageCallResult, state: &mut State,
         substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
@@ -1034,8 +1032,8 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     /// Resume execution from a create trap previously trapped by `exec`.
-    pub fn resume_create<'b: 'a>(
-        mut self, result: vm::ContractCreateResult, state: &mut State<'b>,
+    pub fn resume_create(
+        mut self, result: vm::ContractCreateResult, state: &mut State,
         substate: &mut Substate,
     ) -> ExecutiveTrapResult<'a, FinalizationResult>
     {
@@ -1117,8 +1115,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// Execute and consume the current executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume<'b: 'a>(
-        self, state: &mut State<'b>, top_substate: &mut Substate,
+    pub fn consume(
+        self, state: &mut State, top_substate: &mut Substate,
     ) -> vm::Result<FinalizationResult> {
         let mut last_res =
             Some((false, self.gas, self.exec(state, top_substate)));
@@ -1223,8 +1221,8 @@ pub type ExecutiveTrapResult<'a, T> =
 //    vm::TrapError<CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
 
 /// Transaction executor.
-pub struct Executive<'a, 'b: 'a> {
-    pub state: &'a mut State<'b>,
+pub struct Executive<'a> {
+    pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -1232,10 +1230,10 @@ pub struct Executive<'a, 'b: 'a> {
     static_flag: bool,
 }
 
-impl<'a, 'b> Executive<'a, 'b> {
+impl<'a> Executive<'a> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec,
     ) -> Self
     {
@@ -1251,7 +1249,7 @@ impl<'a, 'b> Executive<'a, 'b> {
 
     /// Populates executive from parent properties. Increments executive depth.
     pub fn from_parent(
-        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, parent_depth: usize, static_flag: bool,
     ) -> Self
     {
@@ -1690,7 +1688,7 @@ mod tests {
         state::{CleanupMode, State, Substate},
         statedb::StateDb,
         storage::{
-            tests::new_state_manager_for_testing, StorageManager,
+            tests::new_state_manager_for_unit_test, StorageManager,
             StorageManagerTrait,
         },
         test_helpers::{
@@ -1753,7 +1751,7 @@ mod tests {
         params.gas = U256::from(100_000);
         params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
         params.value = ActionValue::Transfer(U256::from(0x7));
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -1841,7 +1839,7 @@ mod tests {
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::from(100));
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -1911,7 +1909,7 @@ mod tests {
         params.value = ActionValue::Transfer(U256::from(100));
         params.call_type = CallType::Call;
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write(&storage_manager);
         state
             .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
@@ -1943,7 +1941,7 @@ mod tests {
         let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
         let returns = "726576657274206d657373616765".from_hex().unwrap();
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state = get_state_for_genesis_write_with_factory(
             &storage_manager,
             factory.clone(),
@@ -2025,7 +2023,7 @@ mod tests {
         params.value =
             ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -2067,7 +2065,7 @@ mod tests {
         .sign(keypair.secret());
         let sender = t.sender();
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         state
@@ -2099,7 +2097,7 @@ mod tests {
     fn test_deposit_withdraw() {
         let factory = Factory::new(VMType::Interpreter, 1024 * 32);
         let sender = Address::zero();
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         let env = Env::default();
@@ -2245,7 +2243,7 @@ mod tests {
         params.code = Some(Arc::new(code));
         params.value = ActionValue::Transfer(U256::from(1000000));
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         let env = Env::default();
@@ -2462,7 +2460,7 @@ mod tests {
         params.value =
             ActionValue::Transfer(U256::from(RENTAL_PRICE_PER_STORAGE_KEY));
 
-        let storage_manager = new_state_manager_for_testing();
+        let storage_manager = new_state_manager_for_unit_test();
         let mut state =
             get_state_for_genesis_write_with_factory(&storage_manager, factory);
         let env = Env::default();

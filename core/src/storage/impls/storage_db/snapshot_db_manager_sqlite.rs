@@ -7,32 +7,61 @@ pub struct SnapshotDbManagerSqlite {
     // FIXME: add an command line option to assert that this method made
     // successfully cow_copy and print error messages if it fails.
     force_cow: bool,
-}
-
-// TODO: used to sync checkpoint state
-// Note, the sync state context only has instance of type StateManager.
-impl Default for SnapshotDbManagerSqlite {
-    fn default() -> Self {
-        SnapshotDbManagerSqlite::new("./storage_db/snapshot/".to_string())
-    }
+    open_ref_count_and_to_destroy: Arc<Mutex<HashMap<String, (u32, bool)>>>,
 }
 
 impl SnapshotDbManagerSqlite {
-    pub fn new(snapshot_path: String) -> Self {
-        Self {
-            snapshot_path: snapshot_path + "/sqlite_",
+    const SNAPSHOT_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
+
+    pub fn new(snapshot_path: String) -> Result<Self> {
+        let snapshot_dir = Path::new(snapshot_path.as_str());
+        if !snapshot_dir.exists() {
+            fs::create_dir_all(snapshot_dir)?;
+        }
+
+        Ok(Self {
+            snapshot_path,
             force_cow: false,
+            open_ref_count_and_to_destroy: Default::default(),
+        })
+    }
+
+    pub fn update_ref_count_open(
+        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>, path: &str,
+    ) -> Arc<Mutex<HashMap<String, (u32, bool)>>> {
+        ref_count
+            .lock()
+            .entry(path.to_string())
+            .or_insert((0, false))
+            .0 += 1;
+        ref_count.clone()
+    }
+
+    pub fn update_ref_count_and_destroy_close(
+        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>, path: &str,
+    ) {
+        let ref_count_locked = &mut *ref_count.lock();
+        // Unwrap is safe because it's guaranteed to exist.
+        let entry = ref_count_locked.get_mut(path).unwrap();
+        entry.0 -= 1;
+        if entry.0 == 0 {
+            // Destroy at close.
+            if ref_count_locked.remove(path).unwrap().1 {
+                Self::fs_remove_snapshot(path).ok();
+            }
         }
     }
 
-    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> String {
-        self.snapshot_path.clone() + &snapshot_epoch_id.to_hex()
+    fn fs_remove_snapshot(path: &str) -> Result<()> {
+        debug!("Remove snapshot at {}", path);
+        Ok(fs::remove_dir_all(path)?)
     }
 
     fn get_merge_temp_snapshot_db_path(
         &self, old_snapshot_epoch_id: &EpochId, delta_merkle_root: &MerkleHash,
     ) -> String {
         self.snapshot_path.clone()
+            + Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX
             + "merge_temp_"
             + &old_snapshot_epoch_id.to_hex()
             + &delta_merkle_root.to_hex()
@@ -42,6 +71,7 @@ impl SnapshotDbManagerSqlite {
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
     ) -> String {
         self.snapshot_path.clone()
+            + Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX
             + "full_sync_temp_"
             + &snapshot_epoch_id.to_hex()
             + &merkle_root.to_hex()
@@ -61,11 +91,12 @@ impl SnapshotDbManagerSqlite {
                 .arg("-R --reflink=always")
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path);
-        } else if cfg!(target_os = "mac") {
+        } else if cfg!(target_os = "macos") {
             // APFS
             command = Command::new("cp");
             command
-                .arg("-R -c")
+                .arg("-R")
+                .arg("-c")
                 .arg(old_snapshot_path)
                 .arg(new_snapshot_path);
         } else {
@@ -92,6 +123,28 @@ impl SnapshotDbManagerSqlite {
             }
         } else {
             Ok(true)
+        }
+    }
+
+    fn try_copy_snapshot(
+        &self, old_snapshot_path: &str, new_snapshot_path: &str,
+    ) -> Result<()> {
+        if self
+            .try_make_snapshot_cow_copy(old_snapshot_path, new_snapshot_path)?
+        {
+            Ok(())
+        } else {
+            let mut options = CopyOptions::new();
+            options.copy_inside = true; // copy recursively like `cp -r`
+            fs_extra::dir::copy(old_snapshot_path, new_snapshot_path, &options)
+                .map(|_| ())
+                .map_err(|e| {
+                    warn!(
+                        "Fail to copy snapshot {:?}, err={:?}",
+                        old_snapshot_path, e,
+                    );
+                    ErrorKind::SnapshotCopyFailure.into()
+                })
         }
     }
 
@@ -129,8 +182,14 @@ impl SnapshotDbManagerSqlite {
         old_snapshot_epoch_id: &EpochId,
     ) -> Result<MerkleHash>
     {
+        let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
-            &self.get_snapshot_db_path(old_snapshot_epoch_id),
+            &snapshot_path,
+            true,
+            Self::update_ref_count_open(
+                &self.open_ref_count_and_to_destroy,
+                &snapshot_path,
+            ),
         )?;
         let mut old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
@@ -144,6 +203,18 @@ impl SnapshotDbManagerSqlite {
 
 impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     type SnapshotDb = SnapshotDbSqlite;
+
+    fn get_snapshot_dir(&self) -> String { self.snapshot_path.clone() }
+
+    fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
+        Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
+            + &snapshot_epoch_id.to_hex()
+    }
+
+    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> String {
+        self.snapshot_path.clone()
+            + &self.get_snapshot_db_name(snapshot_epoch_id)
+    }
 
     fn new_snapshot_by_merging(
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
@@ -183,17 +254,33 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH
                 {
                     // direct merge the first snapshot
-                    snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
+                    snapshot_db = Self::SnapshotDb::create(
+                        &temp_db_path,
+                        Self::update_ref_count_open(
+                            &self.open_ref_count_and_to_destroy,
+                            &temp_db_path,
+                        ),
+                    )?;
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge()?
                 } else {
-                    if self.try_make_snapshot_cow_copy(
-                        &self.get_snapshot_db_path(old_snapshot_epoch_id),
-                        &temp_db_path,
-                    )? {
+                    if self
+                        .try_copy_snapshot(
+                            &self.get_snapshot_db_path(old_snapshot_epoch_id),
+                            &temp_db_path,
+                        )
+                        .is_ok()
+                    {
                         // open the copied database.
-                        snapshot_db =
-                            Self::SnapshotDb::open(&temp_db_path)?.unwrap();
+                        snapshot_db = Self::SnapshotDb::open(
+                            &temp_db_path,
+                            false,
+                            Self::update_ref_count_open(
+                                &self.open_ref_count_and_to_destroy,
+                                &temp_db_path,
+                            ),
+                        )?
+                        .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
 
                         // Drop copied old snapshot delta mpt dump
                         snapshot_db.drop_delta_mpt_dump()?;
@@ -202,7 +289,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         snapshot_db.direct_merge()?
                     } else {
-                        snapshot_db = Self::SnapshotDb::create(&temp_db_path)?;
+                        snapshot_db = Self::SnapshotDb::create(
+                            &temp_db_path,
+                            Self::update_ref_count_open(
+                                &self.open_ref_count_and_to_destroy,
+                                &temp_db_path,
+                            ),
+                        )?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
                             &mut snapshot_db,
@@ -229,16 +322,33 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         if snapshot_epoch_id.eq(&NULL_EPOCH) {
             return Ok(Some(Self::SnapshotDb::get_null_snapshot()));
         } else {
+            let path = self.get_snapshot_db_path(snapshot_epoch_id);
             Self::SnapshotDb::open(
-                &self.get_snapshot_db_path(snapshot_epoch_id),
+                &path,
+                true,
+                Self::update_ref_count_open(
+                    &self.open_ref_count_and_to_destroy,
+                    &path,
+                ),
             )
         }
     }
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
-        Ok(fs::remove_dir_all(
-            self.get_snapshot_db_path(snapshot_epoch_id),
-        )?)
+        let path = self.get_snapshot_db_path(snapshot_epoch_id);
+        match self.open_ref_count_and_to_destroy.lock().get_mut(&path) {
+            Some(ref_count_and_to_destroy) => {
+                ref_count_and_to_destroy.1 = true;
+                Ok(())
+            }
+            None => {
+                if snapshot_epoch_id.ne(&NULL_EPOCH) {
+                    Self::fs_remove_snapshot(&path)
+                } else {
+                    Ok(())
+                }
+            }
+        }
     }
 
     fn new_temp_snapshot_for_full_sync(
@@ -248,7 +358,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             snapshot_epoch_id,
             merkle_root,
         );
-        Self::SnapshotDb::create(&temp_db_path)
+        Self::SnapshotDb::create(
+            &temp_db_path,
+            Self::update_ref_count_open(
+                &self.open_ref_count_and_to_destroy,
+                &temp_db_path,
+            ),
+        )
     }
 
     fn finalize_full_sync_snapshot(
@@ -263,16 +379,15 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::{
-            SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
-        },
-        errors::*,
-        storage_manager::DeltaMptIterator,
+use crate::storage::{
+    impls::{
+        delta_mpt::DeltaMptIterator, errors::*,
+        storage_db::snapshot_db_sqlite::*,
     },
-    snapshot_db_sqlite::*,
+    storage_db::{SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo},
 };
+use fs_extra::dir::CopyOptions;
 use parity_bytes::ToPretty;
+use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
-use std::{fs, process::Command};
+use std::{collections::HashMap, fs, path::Path, process::Command, sync::Arc};

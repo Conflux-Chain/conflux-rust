@@ -56,8 +56,8 @@ impl OriginInfo {
 }
 
 /// Implementation of evm context.
-pub struct Context<'a, 'b: 'a> {
-    state: &'a mut State<'b>,
+pub struct Context<'a> {
+    state: &'a mut State,
     env: &'a Env,
     depth: usize,
     stack_depth: usize,
@@ -69,10 +69,10 @@ pub struct Context<'a, 'b: 'a> {
     static_flag: bool,
 }
 
-impl<'a, 'b: 'a> Context<'a, 'b> {
+impl<'a> Context<'a> {
     /// Basic `Context` constructor.
     pub fn new(
-        state: &'a mut State<'b>, env: &'a Env, machine: &'a Machine,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
@@ -93,7 +93,7 @@ impl<'a, 'b: 'a> Context<'a, 'b> {
     }
 }
 
-impl<'a, 'b: 'a> ContextTrait for Context<'a, 'b> {
+impl<'a> ContextTrait for Context<'a> {
     fn storage_at(&self, key: &H256) -> vm::Result<H256> {
         self.state
             .storage_at(&self.origin.address, key)
@@ -382,8 +382,8 @@ mod tests {
         machine::{new_machine, new_machine_with_builtin},
         statedb::StateDb,
         storage::{
-            new_storage_manager_for_testing, state::StateTrait, StorageManager,
-            StorageManagerTrait,
+            new_storage_manager_for_testing, state::StateTrait,
+            tests::FakeStateManager, StorageManager, StorageManagerTrait,
         },
         test_helpers::get_state_for_genesis_write,
         vm::Env,
@@ -417,8 +417,8 @@ mod tests {
     }
 
     struct TestSetup {
-        storage_manager: Option<Box<StorageManager>>,
-        state: Option<State<'static>>,
+        storage_manager: Option<Box<FakeStateManager>>,
+        state: Option<State>,
         machine: Machine,
         spec: Spec,
         substate: Substate,
@@ -446,7 +446,7 @@ mod tests {
             };
             setup.storage_manager = Some(storage_manager);
             setup.init_state(unsafe {
-                &*(setup.storage_manager.as_ref().unwrap().as_ref()
+                &*(&**setup.storage_manager.as_ref().unwrap().as_ref()
                     as *const StorageManager)
             });
 

@@ -154,7 +154,7 @@ impl ConsensusNewBlockHandler {
 
     fn make_checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
-        will_execute: bool,
+        will_execute: bool, executor: &ConsensusExecutor,
     )
     {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
@@ -167,6 +167,10 @@ impl ConsensusNewBlockHandler {
         // ensure all blocks on the pivot chain before stable_era_genesis
         // have state_valid computed
         if will_execute {
+            // Make sure state execution is finished before setting lower_bound
+            // to the new_checkpoint_era_genesis.
+            executor
+                .wait_for_result(inner.arena[new_era_block_arena_index].hash);
             inner
                 .compute_state_valid(stable_era_genesis)
                 .expect("Old cur_era_stable_height has available state_valid");
@@ -1283,6 +1287,7 @@ impl ConsensusNewBlockHandler {
                 inner,
                 new_checkpoint_era_genesis,
                 transactions.is_some(),
+                &self.executor,
             );
             let stable_era_genesis_arena_index =
                 inner.ancestor_at(me, inner.cur_era_stable_height);
@@ -1298,40 +1303,47 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_genesis_height
             );
         }
-        let mut confirmed_height = meter.get_confirmed_epoch_num();
+        // FIXME: we need a function to compute the deferred epoch
+        // FIXME: number. the current codebase may not be
+        // FIXME: consistent at all places.
+        let mut confirmed_height = meter.get_confirmed_epoch_num(
+            inner.cur_era_genesis_height
+                + 2 * self.data_man.get_snapshot_epoch_count() as u64
+                + DEFERRED_STATE_EPOCH_COUNT,
+        );
         if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
-            confirmed_height = DEFERRED_STATE_EPOCH_COUNT;
+            confirmed_height = 0;
+        } else {
+            confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
         }
         // We can not assume that confirmed epoch are already executed,
         // but we can assume that the deferred block are executed.
-        // FIXME: shouldn't unwrap but the function doesn't return error...
-
         let confirmed_epoch_hash = inner
-            .get_hash_from_epoch_number(
-                // FIXME: we need a function to compute the deferred epoch
-                // FIXME: number. the current codebase may not be
-                // FIXME: consistent at all places.
-                confirmed_height - DEFERRED_STATE_EPOCH_COUNT,
-            )
-            .unwrap();
+            .get_hash_from_epoch_number(confirmed_height)
+            // FIXME: shouldn't unwrap but the function doesn't return error...
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         // FIXME: we also need more helper function to get the execution result
         // FIXME: for block deferred or not.
         if let Some(confirmed_epoch) = &*self
             .data_man
             .get_epoch_execution_commitment(&confirmed_epoch_hash)
         {
-            // FIXME: convert the epoch hash to the most recent snapshottable
-            // hash.
-            self.data_man
-                .storage_manager
-                .get_storage_manager()
-                .maintain_snapshots_pivot_chain_confirmed(
-                    confirmed_height,
-                    &confirmed_epoch_hash,
-                    &confirmed_epoch.state_root_with_aux_info,
-                )
-                // FIXME: handle error.
-                .ok();
+            if confirmed_height
+                > self.data_man.state_availability_boundary.read().lower_bound
+            {
+                // FIXME: how about archive node?
+                self.data_man
+                    .storage_manager
+                    .get_storage_manager()
+                    .maintain_snapshots_pivot_chain_confirmed(
+                        confirmed_height,
+                        &confirmed_epoch_hash,
+                        &confirmed_epoch.state_root_with_aux_info,
+                        &self.data_man.state_availability_boundary,
+                    )
+                    // FIXME: propogate error.
+                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            }
         }
 
         // FIXME: this is header only.

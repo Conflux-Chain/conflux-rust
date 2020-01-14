@@ -4,6 +4,7 @@
 
 #[derive(Clone, Debug, Default)]
 pub struct SnapshotInfo {
+    // FIXME: update serve_one_step_sync at maintenance.
     pub serve_one_step_sync: bool,
 
     pub merkle_root: MerkleHash,
@@ -70,17 +71,46 @@ pub trait SnapshotDbTrait:
 {
     fn get_null_snapshot() -> Self;
 
-    // FIXME: upon opening we should load something..
-    fn open(snapshot_path: &str) -> Result<Option<Self>>;
+    fn open(
+        snapshot_path: &str, read_only: bool,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Option<Self>>;
 
-    // FIXME: what should be stored after a snapshot is created?
-    fn create(snapshot_path: &str) -> Result<Self>;
+    fn create(
+        snapshot_path: &str,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Self>;
 
     fn direct_merge(&mut self) -> Result<MerkleHash>;
 
     fn copy_and_merge(
         &mut self, old_snapshot_db: &mut Self,
     ) -> Result<MerkleHash>;
+}
+
+impl Encodable for SnapshotInfo {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(6)
+            .append(&self.merkle_root)
+            .append(&self.height)
+            .append(&self.serve_one_step_sync)
+            .append(&self.parent_snapshot_epoch_id)
+            .append(&self.parent_snapshot_height)
+            .append_list(&self.pivot_chain_parts);
+    }
+}
+
+impl Decodable for SnapshotInfo {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        Ok(Self {
+            merkle_root: rlp.val_at(0)?,
+            height: rlp.val_at(1)?,
+            serve_one_step_sync: rlp.val_at(2)?,
+            parent_snapshot_epoch_id: rlp.val_at(3)?,
+            parent_snapshot_height: rlp.val_at(4)?,
+            pivot_chain_parts: rlp.list_at(5)?,
+        })
+    }
 }
 
 use super::{
@@ -93,4 +123,7 @@ use super::{
 use crate::storage::storage_db::{
     SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
 };
+use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use std::{collections::HashMap, sync::Arc};

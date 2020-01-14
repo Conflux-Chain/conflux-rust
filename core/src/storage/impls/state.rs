@@ -5,15 +5,16 @@
 pub type ChildrenMerkleMap =
     BTreeMap<ActualSlabIndex, VanillaChildrenTable<MerkleHash>>;
 
-// FIXME: remove 'a.
-pub struct State<'a> {
-    manager: &'a StateManager,
+pub struct State {
+    manager: Arc<StateManager>,
     snapshot_db: SnapshotDb,
     snapshot_epoch_id: EpochId,
     snapshot_merkle_root: MerkleHash,
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
     intermediate_trie_root: Option<NodeRefDeltaMpt>,
     intermediate_trie_root_merkle: MerkleHash,
+    /// A None value indicate the special case when snapshot_db is actually the
+    /// snapshot_db from the intermediate_epoch_id.
     maybe_intermediate_trie_key_padding: Option<DeltaMptKeyPadding>,
     delta_trie: Arc<DeltaMpt>,
     delta_trie_root: Option<NodeRefDeltaMpt>,
@@ -33,8 +34,8 @@ pub struct State<'a> {
     parent_epoch_id: EpochId,
 }
 
-impl<'a> State<'a> {
-    pub fn new(manager: &'a StateManager, state_trees: StateTrees) -> Self {
+impl State {
+    pub fn new(manager: Arc<StateManager>, state_trees: StateTrees) -> Self {
         Self {
             manager,
             snapshot_db: state_trees.snapshot_db,
@@ -61,7 +62,7 @@ impl<'a> State<'a> {
     }
 
     fn get_from_delta(
-        &self, mpt: &'a DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
+        &self, mpt: &DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
         access_key: &[u8], with_proof: bool,
     ) -> Result<(MptValue<Box<[u8]>>, Option<TrieProof>)>
     {
@@ -198,7 +199,7 @@ impl<'a> State<'a> {
     }
 }
 
-impl<'a> Drop for State<'a> {
+impl Drop for State {
     fn drop(&mut self) {
         if self.dirty {
             panic!("State is dirty however is not committed before free.");
@@ -206,7 +207,7 @@ impl<'a> Drop for State<'a> {
     }
 }
 
-impl<'a> StateTrait for State<'a> {
+impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
         self.get_from_all_tries(access_key, false)
             .map(|(value, _)| value)
@@ -236,7 +237,14 @@ impl<'a> StateTrait for State<'a> {
         Ok(())
     }
 
-    fn delete(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+    fn delete(&mut self, access_key: StorageKey) -> Result<()> {
+        self.set(access_key, MptValue::<Box<[u8]>>::TombStone.unwrap())?;
+        Ok(())
+    }
+
+    fn delete_test_only(
+        &mut self, access_key: StorageKey,
+    ) -> Result<Option<Box<[u8]>>> {
         self.pre_modification();
 
         match self.get_delta_root_node() {
@@ -258,13 +266,23 @@ impl<'a> StateTrait for State<'a> {
         }
     }
 
+    /// Delete all key/value pairs with access_key_prefix as prefix. These
+    /// key/value pairs exist in three places: Delta Trie, Intermediate Trie
+    /// and Snapshot DB.
+    ///
+    /// For key/value pairs in Delta Trie, we can simply delete them. For
+    /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
+    /// enumerate all key/value pairs and set tombstone in Delta Trie only when
+    /// necessary.
     fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<(Vec<u8>, Box<[u8]>)>>> {
         self.pre_modification();
+        // TODO: add unit tests
 
-        match &self.delta_trie_root {
-            None => Ok(None),
+        // Retrieve and delete key/value pairs from delta trie
+        let delta_trie_kvs = match &self.delta_trie_root {
+            None => None,
             Some(old_root_node) => {
                 let delta_mpt_key_prefix = access_key_prefix
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
@@ -276,8 +294,119 @@ impl<'a> StateTrait for State<'a> {
                 .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
-                Ok(deleted)
+                deleted
             }
+        };
+
+        // Retrieve key/value pairs from intermediate trie
+        let intermediate_trie_kvs = match &self.intermediate_trie_root {
+            None => None,
+            Some(root_node) => {
+                if self.maybe_intermediate_trie_key_padding.is_some()
+                    && self.maybe_intermediate_trie.is_some()
+                {
+                    let intermediate_trie_key_padding = self
+                        .maybe_intermediate_trie_key_padding
+                        .as_ref()
+                        .unwrap();
+                    let intermediate_mpt_key_prefix = access_key_prefix
+                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                    let values = SubTrieVisitor::new(
+                        self.maybe_intermediate_trie.as_ref().unwrap(),
+                        root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .traversal(
+                        &intermediate_mpt_key_prefix,
+                        &intermediate_mpt_key_prefix,
+                    )?;
+
+                    values
+                } else {
+                    None
+                }
+            }
+        };
+
+        // Retrieve key/value pairs from snapshot
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let mut upper_bound_excl_value = lower_bound_incl.clone();
+        let upper_bound_excl = if lower_bound_incl.len() == 0 {
+            None
+        } else {
+            let mut carry = 1;
+            let len = upper_bound_excl_value.len();
+            for i in 0..len {
+                if upper_bound_excl_value[len - 1 - i] == 255 {
+                    upper_bound_excl_value[len - 1 - i] = 0;
+                } else {
+                    upper_bound_excl_value[len - 1 - i] += 1;
+                    carry = 0;
+                    break;
+                }
+            }
+            // all bytes in lower_bound_incl are 255, which means no upper bound
+            // is needed.
+            if carry == 1 {
+                None
+            } else {
+                Some(upper_bound_excl_value.as_slice())
+            }
+        };
+        let mut kvs = kv_iterator
+            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?;
+
+        let mut snapshot_kvs = Vec::new();
+        while let Some((key, value)) = kvs.next()? {
+            snapshot_kvs.push((key, value.into_boxed_slice()));
+        }
+
+        let mut result = Vec::new();
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+        if let Some(kvs) = delta_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if let Some(kvs) = intermediate_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                // Only delete nonempty keys.
+                if v.len() > 0 {
+                    self.delete(storage_key)?;
+                }
+                let k = storage_key.to_key_bytes();
+                if !deleted_keys.contains(&k) {
+                    deleted_keys.insert(k.clone());
+                    if v.len() > 0 {
+                        result.push((k, v));
+                    }
+                }
+            }
+        }
+
+        // No need to check v.len() because there are no tombStone values in
+        // snapshot.
+        for (k, v) in snapshot_kvs {
+            let storage_key = StorageKey::from_delta_mpt_key(&k);
+            self.delete(storage_key)?;
+            if !deleted_keys.contains(&k) {
+                result.push((k, v));
+            }
+        }
+
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
         }
     }
 
@@ -331,24 +460,19 @@ impl<'a> StateTrait for State<'a> {
             self.revert();
         }
         debug!(
-            "commit: delta_trie_height={:?} has_intermediate={}, height={:?}",
+            "commit state for epoch {:?}: delta_trie_height={:?} \
+            has_intermediate={}, height={:?}, snapshot_epoch_id={:?}, \
+            intermediate_epoch_id={:?}, intermediate_mpt_id={:?}, delta_mpt_id={}.",
+            epoch_id,
             self.delta_trie_height,
             self.maybe_intermediate_trie.is_some(),
             self.height,
+            self.snapshot_epoch_id,
+            self.intermediate_epoch_id,
+            self.maybe_intermediate_trie.as_ref().map(|mpt| mpt.get_mpt_id()),
+            self.delta_trie.get_mpt_id(),
         );
-        if self.maybe_intermediate_trie.is_none()
-            && self.delta_trie_height.unwrap()
-                == self
-                    .manager
-                    .get_storage_manager()
-                    .get_snapshot_epoch_count()
-        {
-            // For genesis or full sync, we will make snapshot to move the
-            // delta_mpt to intermediate_mpt
-            self.manager
-                .get_storage_manager()
-                .reregister_genesis_snapshot(&self.snapshot_epoch_id)?;
-        } else if self.delta_trie_height.unwrap()
+        if self.delta_trie_height.unwrap()
             >= self
                 .manager
                 .get_storage_manager()
@@ -376,14 +500,15 @@ impl<'a> StateTrait for State<'a> {
         // Free all modified nodes.
         let owned_node_set = self.owned_node_set.as_ref().unwrap();
         for owned_node in owned_node_set {
-            self.delta_trie
-                .get_node_memory_manager()
-                .free_owned_node(&mut owned_node.clone());
+            self.delta_trie.get_node_memory_manager().free_owned_node(
+                &mut owned_node.clone(),
+                self.delta_trie.get_mpt_id(),
+            );
         }
     }
 }
 
-impl<'a> State<'a> {
+impl State {
     fn pre_modification(&mut self) {
         if !self.dirty {
             self.dirty = true
@@ -402,6 +527,7 @@ impl<'a> State<'a> {
             let (root_cow, entry) = CowNodeRef::new_uninitialized_node(
                 &allocator,
                 self.owned_node_set.as_mut().unwrap(),
+                self.delta_trie.get_mpt_id(),
             )?;
             // Insert empty node.
             entry.insert(UnsafeCell::new(Default::default()));
@@ -427,6 +553,7 @@ impl<'a> State<'a> {
                 let mut cow_root = CowNodeRef::new(
                     root_node.clone(),
                     self.owned_node_set.as_ref().unwrap(),
+                    self.delta_trie.get_mpt_id(),
                 );
                 let allocator =
                     self.delta_trie.get_node_memory_manager().get_allocator();
@@ -452,24 +579,44 @@ impl<'a> State<'a> {
     fn do_db_commit(
         &mut self, epoch_id: EpochId, merkle_root: &MerkleHash,
     ) -> Result<()> {
-        // TODO(yz): accumulate to db write counter.
         self.dirty = false;
+
+        let maybe_existing_merkle_root =
+            self.delta_trie.get_merkle_root_by_epoch_id(&epoch_id)?;
+        if maybe_existing_merkle_root.is_some() {
+            error!(
+                "Overwriting computed state for epoch {:?}, \
+                 committed merkle root {:?}, new merkle root {:?}",
+                epoch_id,
+                maybe_existing_merkle_root.unwrap(),
+                merkle_root
+            );
+            debug_assert!(false);
+            assert_eq!(
+                maybe_existing_merkle_root,
+                Some(*merkle_root),
+                "Overwriting computed state with a different merkle root."
+            );
+            return Ok(());
+        }
+
+        // Use coarse lock to prevent row number from interleaving,
+        // which makes it cleaner to restart from db failure. It also
+        // benefits performance because without a coarse lock all
+        // threads may not be able to do anything else when they compete
+        // with each other on slow db writing.
+        let mut commit_transaction = self.delta_trie.start_commit()?;
 
         let maybe_root_node = self.delta_trie_root.clone();
         match maybe_root_node {
             None => {}
             Some(root_node) => {
-                // Use coarse lock to prevent row number from interleaving,
-                // which makes it cleaner to restart from db failure. It also
-                // benefits performance because without a coarse lock all
-                // threads may not be able to do anything else when they compete
-                // with each other on slow db writing.
-                let mut commit_transaction = self.delta_trie.start_commit()?;
                 let start_row_number = commit_transaction.info.row_number.value;
 
                 let mut cow_root = CowNodeRef::new(
                     root_node,
                     self.owned_node_set.as_ref().unwrap(),
+                    self.delta_trie.get_mpt_id(),
                 );
 
                 if cow_root.is_owned() {
@@ -541,17 +688,6 @@ impl<'a> State<'a> {
                     db_key.to_string().as_bytes(),
                 )?;
 
-                commit_transaction.transaction.put(
-                    ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
-                        .concat()
-                        .as_slice(),
-                    self.parent_epoch_id.to_hex().as_bytes(),
-                )?;
-
-                commit_transaction
-                    .transaction
-                    .commit(self.delta_trie.db_commit())?;
-
                 self.manager.number_committed_nodes.fetch_add(
                     (commit_transaction.info.row_number.value
                         - start_row_number) as usize,
@@ -560,11 +696,21 @@ impl<'a> State<'a> {
             }
         }
 
-        StateManager::mpt_commit_state_root(
-            &self.delta_trie,
+        commit_transaction.transaction.put(
+            ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
+                .concat()
+                .as_slice(),
+            self.parent_epoch_id.to_hex().as_bytes(),
+        )?;
+
+        commit_transaction
+            .transaction
+            .commit(self.delta_trie.db_commit())?;
+
+        self.delta_trie.state_root_committed(
             epoch_id,
             merkle_root,
-            self.parent_epoch_id.clone(),
+            self.parent_epoch_id,
             self.delta_trie_root.clone(),
         );
 
@@ -610,12 +756,12 @@ use crate::storage::{
         },
         state_manager::*,
         state_proof::StateProof,
-        storage_manager::DeltaMptIterator,
     },
     state::*,
     storage_db::*,
     StateRootAuxInfo, StateRootWithAuxInfo,
 };
+use fallible_iterator::FallibleIterator;
 use parity_bytes::ToPretty;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot, StorageKey,
@@ -623,7 +769,7 @@ use primitives::{
 };
 use std::{
     cell::UnsafeCell,
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };

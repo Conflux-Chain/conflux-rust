@@ -11,7 +11,7 @@ use crate::{
     sync::{
         synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
-        SynchronizationPhaseTrait,
+        StateSyncConfiguration, SynchronizationPhaseTrait,
     },
 };
 use cfx_types::H256;
@@ -30,12 +30,14 @@ impl SynchronizationService {
         is_full_node: bool, network: Arc<NetworkService>,
         sync_graph: SharedSynchronizationGraph,
         protocol_config: ProtocolConfiguration,
+        state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType, light_provider: Arc<LightProvider>,
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
             is_full_node,
             protocol_config,
+            state_sync_config,
             initial_sync_phase,
             sync_graph.clone(),
             light_provider,

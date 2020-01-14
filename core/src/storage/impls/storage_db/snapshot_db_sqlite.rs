@@ -5,6 +5,8 @@
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db: Option<SqliteConnection>,
+    ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    path: String,
 }
 
 pub struct SnapshotDbStatements {
@@ -55,6 +57,17 @@ lazy_static! {
             delta_mpt_delete_keys_statements,
         }
     };
+}
+
+impl Drop for SnapshotDbSqlite {
+    fn drop(&mut self) {
+        if !self.path.is_empty() {
+            SnapshotDbManagerSqlite::update_ref_count_and_destroy_close(
+                &self.ref_count,
+                &self.path,
+            )
+        }
+    }
 }
 
 impl SnapshotDbSqlite {
@@ -180,8 +193,6 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
         >(
             KvdbSqliteBorrowMutReadOnly::new((
                 self.maybe_db.as_mut(),
-                Self::SNAPSHOT_MPT_TABLE_NAME,
-                Self::SNAPSHOT_MPT_TABLE_NAME,
                 &SNAPSHOT_DB_STATEMENTS.mpt_statements,
             )),
             Box::new(|x| Self::snapshot_mpt_row_parser(x)),
@@ -190,25 +201,41 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
 }
 
 impl SnapshotDbTrait for SnapshotDbSqlite {
-    fn get_null_snapshot() -> Self { Self { maybe_db: None } }
+    fn get_null_snapshot() -> Self {
+        Self {
+            maybe_db: None,
+            ref_count: Default::default(),
+            path: Default::default(),
+        }
+    }
 
-    fn open(snapshot_path: &str) -> Result<Option<SnapshotDbSqlite>> {
+    fn open(
+        snapshot_path: &str, read_only: bool,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<Option<SnapshotDbSqlite>>
+    {
         let file_exists = Path::new(&snapshot_path).exists();
         let sqlite_open_result = SqliteConnection::open(
             &Self::db_file_paths(snapshot_path)[0],
-            true,
+            read_only,
             SqliteConnection::default_open_flags(),
         );
         if file_exists {
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db: Some(sqlite_open_result?),
+                ref_count,
+                path: snapshot_path.to_string(),
             }));
         } else {
             return Ok(None);
         }
     }
 
-    fn create(snapshot_path: &str) -> Result<SnapshotDbSqlite> {
+    fn create(
+        snapshot_path: &str,
+        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    ) -> Result<SnapshotDbSqlite>
+    {
         fs::create_dir_all(snapshot_path).ok();
 
         let create_result = SqliteConnection::create_and_open(
@@ -225,6 +252,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             Ok(db_conn) => {
                 ok_result = Ok(SnapshotDbSqlite {
                     maybe_db: Some(db_conn),
+                    ref_count,
+                    path: snapshot_path.to_string(),
                 });
             }
         }
@@ -319,10 +348,16 @@ impl SnapshotDbSqlite {
                 None => None,
                 Some(conn) => Some(conn.try_clone()?),
             },
+            ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
+                &self.ref_count,
+                &self.path,
+            ),
+            path: self.path.clone(),
         })
     }
 
-    fn snapshot_kv_row_parser<'db>(
+    // FIXME: pub is problematic.
+    pub fn snapshot_kv_row_parser<'db>(
         row: &Statement<'db>,
     ) -> Result<(Vec<u8>, Vec<u8>)> {
         let key = row.read::<Vec<u8>>(0)?;
@@ -517,10 +552,8 @@ impl<'a> DeltaMptDumperSqlite<'a> {
 impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = x;
-        let mut addr = Address::default();
         let snapshot_key =
-            StorageKey::from_delta_mpt_key(&mpt_key, addr.as_bytes_mut())
-                .to_key_bytes();
+            StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
 
         if value.len() > 0 {
             self.snapshot_db
@@ -554,6 +587,8 @@ impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
     }
 }
 
+// FIXME: These Parser are all trivial, why not name them by key, value, and put
+// into a central place?
 pub type SnapshotKVParserSqlite =
     Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<(Vec<u8>, Vec<u8>)>>;
 pub type SnapshotMptValueParserSqlite =
@@ -563,35 +598,35 @@ pub type DeltaKVInsertionParserSqlite =
 pub type DeltaKVDeletionParserSqlite =
     Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<Vec<u8>>>;
 
-use super::{
-    super::{
-        super::storage_db::{
-            KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
-            KeyValueDbTypes, OwnedReadImplFamily, ReadImplFamily,
-            SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
-            SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-            SnapshotMptValue,
-        },
+use crate::storage::{
+    impls::{
+        delta_mpt::DeltaMptIterator,
         errors::*,
         merkle_patricia_trie::{KVInserter, MptMerger},
-        storage_manager::DeltaMptIterator,
+        storage_db::{
+            kvdb_sqlite::{
+                KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
+                KvdbSqliteDestructureTrait, KvdbSqliteStatements,
+            },
+            snapshot_mpt::SnapshotMpt,
+            sqlite::{
+                ConnectionWithRowParser, SqlBindableRef, SqliteConnection,
+                SQLITE_NO_PARAM,
+            },
+        },
     },
-    kvdb_sqlite::{
-        KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
-        KvdbSqliteDestructureTrait, KvdbSqliteStatements,
-    },
-    snapshot_mpt::SnapshotMpt,
-    sqlite::{ConnectionWithRowParser, SqlBindableRef, SqliteConnection},
-};
-use crate::storage::{
-    impls::storage_db::sqlite::SQLITE_NO_PARAM,
     storage_db::{
-        KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter,
-        OpenSnapshotMptTrait,
+        KeyValueDbIterableTrait, KeyValueDbToOwnedReadTrait,
+        KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
+        OpenSnapshotMptTrait, OwnedReadImplFamily, ReadImplFamily,
+        SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+        SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+        SnapshotMptValue,
     },
+    SnapshotDbManagerSqlite,
 };
-use cfx_types::Address;
 use fallible_iterator::FallibleIterator;
+use parking_lot::Mutex;
 use primitives::{MerkleHash, StorageKey};
 use sqlite::Statement;
-use std::{fs, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};

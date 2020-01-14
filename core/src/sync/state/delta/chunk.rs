@@ -14,7 +14,7 @@ use crate::{
         Error, ErrorKind,
     },
 };
-use cfx_types::{Address, H256};
+use cfx_types::H256;
 use keccak_hash::keccak;
 use primitives::StorageKey;
 use rlp::{Encodable, Rlp};
@@ -149,9 +149,8 @@ impl Chunk {
             data_pos += self.metadata[index + 1];
             index += 2;
 
-            let mut address = Address::default();
             state.set(
-                StorageKey::from_delta_mpt_key(key, address.as_mut()),
+                StorageKey::from_delta_mpt_key(key),
                 value.to_vec().into_boxed_slice(),
             )?;
         }

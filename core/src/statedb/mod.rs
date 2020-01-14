@@ -8,7 +8,7 @@ use crate::{
     parameters::consensus_internal::INITIAL_INTEREST_RATE,
     storage::{
         Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
-        StateRootWithAuxInfo, Storage, StorageTrait,
+        StateRootWithAuxInfo, StorageState, StorageStateTrait,
     },
 };
 use cfx_types::{Address, H256, U256};
@@ -18,11 +18,11 @@ mod error;
 
 pub use self::error::{Error, ErrorKind, Result};
 
-pub struct StateDb<'a> {
-    storage: Storage<'a>,
+pub struct StateDb {
+    storage: StorageState,
 }
 
-impl<'a> StateDb<'a> {
+impl StateDb {
     const ACCUMULATE_INTEREST_RATE_KEY: &'static [u8] =
         b"accumulate_interest_rate";
     const INTEREST_RATE_KEY: &'static [u8] = b"interest_rate";
@@ -30,10 +30,10 @@ impl<'a> StateDb<'a> {
     const TOTAL_STORAGE_TOKENS_KEY: &'static [u8] = b"total_storage_tokens";
     const TOTAL_TOKENS_KEY: &'static [u8] = b"total_tokens";
 
-    pub fn new(storage: Storage<'a>) -> Self { StateDb { storage } }
+    pub fn new(storage: StorageState) -> Self { StateDb { storage } }
 
     #[allow(unused)]
-    pub fn get_storage_mut(&mut self) -> &mut Storage<'a> { &mut self.storage }
+    pub fn get_storage_mut(&mut self) -> &mut StorageState { &mut self.storage }
 
     pub fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
     where T: ::rlp::Decodable {

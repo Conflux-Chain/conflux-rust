@@ -893,12 +893,29 @@ impl ConsensusExecutionHandler {
                     .get_epoch_execution_commitment(epoch_hash)
                     .unwrap()
                     .state_root_with_aux_info;
-                self.tx_pool.set_best_executed_epoch(
-                    StateIndex::new_for_readonly(
-                        epoch_hash,
-                        &state_root.aux_info,
-                    ),
-                );
+                // When the state have expired, don't inform TransactionPool.
+                // TransactionPool doesn't require a precise best_executed_state
+                // when pivot chain oscillates.
+                if self
+                    .data_man
+                    .state_availability_boundary
+                    .read()
+                    .check_availability(start_block_number + 1, epoch_hash)
+                {
+                    self.tx_pool
+                        .set_best_executed_epoch(StateIndex::new_for_readonly(
+                            epoch_hash,
+                            &state_root,
+                        ))
+                        // FIXME: propogate error.
+                        .expect(&concat!(
+                            file!(),
+                            ":",
+                            line!(),
+                            ":",
+                            column!()
+                        ));
+                }
             }
             self.data_man
                 .state_availability_boundary
@@ -937,8 +954,7 @@ impl ConsensusExecutionHandler {
                             )
                             // Unwrapping is safe because the state exists.
                             .unwrap()
-                            .state_root_with_aux_info
-                            .aux_info,
+                            .state_root_with_aux_info,
                         pivot_block.block_header.height() - 1,
                         self.data_man.get_snapshot_epoch_count(),
                     ))
@@ -970,15 +986,23 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
-            state_root =
-                state.commit_and_notify(*epoch_hash, &self.tx_pool).unwrap();
+            state_root = state
+                .commit_and_notify(*epoch_hash, &self.tx_pool)
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
-                    &state_root.aux_info,
-                ));
+                    &state_root,
+                ))
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
         } else {
-            state_root = state.commit(*epoch_hash).unwrap();
+            state_root = state.commit(*epoch_hash).expect(&concat!(
+                file!(),
+                ":",
+                line!(),
+                ":",
+                column!()
+            ));
         };
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
@@ -1452,8 +1476,7 @@ impl ConsensusExecutionHandler {
                             )
                             // Unwrapping is safe because the state exists.
                             .unwrap()
-                            .state_root_with_aux_info
-                            .aux_info,
+                            .state_root_with_aux_info,
                         pivot_block.block_header.height() - 1,
                         self.data_man.get_snapshot_epoch_count(),
                     ))
@@ -1472,8 +1495,6 @@ impl ConsensusExecutionHandler {
         )
     }
 
-    // FIXME: we assumed that the epoch_id is valid,
-    // FIXME: but I can't know if it's true.
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
     ) -> Result<(Vec<u8>, U256), String> {
@@ -1484,10 +1505,12 @@ impl ConsensusExecutionHandler {
             return Err("invalid epoch id".to_string());
         }
         let best_block_header = best_block_header.unwrap();
-        if !self
-            .data_man
-            .state_availability_boundary
-            .read()
+
+        // Keep the lock until we get the desired State, otherwise the State may
+        // expire.
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        if !state_availability_boundary
             .check_availability(best_block_header.height(), epoch_id)
         {
             return Err("state is not ready".to_string());
@@ -1501,13 +1524,16 @@ impl ConsensusExecutionHandler {
                 self.data_man
                     .storage_manager
                     .get_state_no_commit(state_index.unwrap())
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
-                    .unwrap(),
+                    // FIXME: propogate error
+                    .expect("No DB Error")
+                    // Safe because the state exists.
+                    .expect("State Exists"),
             ),
             0.into(),
             self.vm.clone(),
         );
+        drop(state_availability_boundary);
+
         let env = Env {
             number: 0, // TODO: replace 0 with correct cardinal number
             author: Default::default(),

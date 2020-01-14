@@ -90,6 +90,11 @@ error_chain! {
             description("Internal error"),
             display("Internal error: {:?}", reason),
         }
+
+        UnexpectedMessage(reason: String) {
+            description("Message received in unexpected"),
+            display("UnexpectedMessage: {:?}", reason)
+        }
     }
 }
 

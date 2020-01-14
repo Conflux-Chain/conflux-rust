@@ -169,14 +169,16 @@ impl SynchronizationState {
 }
 
 #[derive(Default)]
-pub struct PeerFilter {
+/// Filter peers that match ``all'' the provided conditions.
+pub struct PeerFilter<'a> {
     throttle_msg_ids: Option<HashSet<MsgId>>,
     excludes: Option<HashSet<PeerId>>,
+    choose_from: Option<&'a HashSet<PeerId>>,
     cap: Option<DynamicCapability>,
     min_best_epoch: Option<u64>,
 }
 
-impl PeerFilter {
+impl<'a> PeerFilter<'a> {
     pub fn new(msg_id: MsgId) -> Self { PeerFilter::default().throttle(msg_id) }
 
     pub fn throttle(mut self, msg_id: MsgId) -> Self {
@@ -190,6 +192,12 @@ impl PeerFilter {
         self.excludes
             .get_or_insert_with(|| HashSet::new())
             .insert(peer);
+        self
+    }
+
+    /// Exclude the peers not in the `peer_set`
+    pub fn choose_from(mut self, peer_set: &'a HashSet<PeerId>) -> Self {
+        self.choose_from = Some(peer_set);
         self
     }
 
@@ -213,6 +221,12 @@ impl PeerFilter {
         for (id, peer) in syn.peers.read().iter() {
             if let Some(ref excludes) = self.excludes {
                 if excludes.contains(id) {
+                    continue;
+                }
+            }
+
+            if let Some(ref choose_from) = self.choose_from {
+                if !choose_from.contains(id) {
                     continue;
                 }
             }
