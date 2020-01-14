@@ -5,8 +5,10 @@
 mod consensusdb_test;
 mod schema;
 
+use super::super::consensus_types::{
+    block::Block, common::Payload, quorum_cert::QuorumCert,
+};
 use anyhow::{ensure, Result};
-use super::super::consensus_types::{block::Block, common::Payload, quorum_cert::QuorumCert};
 use libra_crypto::HashValue;
 use schema::{
     block::{BlockSchema, SchemaBlock},

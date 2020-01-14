@@ -18,7 +18,7 @@ pub mod consensus_provider;
 
 mod counters;
 
-mod state_computer;
-mod state_replication;
 pub mod consensus_types;
 pub mod safety_rules;
+pub mod state_computer;
+mod state_replication;

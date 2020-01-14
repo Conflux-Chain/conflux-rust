@@ -19,10 +19,12 @@ use super::super::{
 };
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 //use crate::state_replication::{StateComputer, TxnManager};
-use super::super::util::time_service::{ClockTimeService, TimeService};
-use super::super::consensus_types::{
-    common::{Payload, Round},
-    epoch_retrieval::EpochRetrievalRequest,
+use super::super::{
+    consensus_types::{
+        common::{Payload, Round},
+        epoch_retrieval::EpochRetrievalRequest,
+    },
+    util::time_service::{ClockTimeService, TimeService},
 };
 //use futures::executor::block_on;
 use libra_config::config::ConsensusProposerType;
@@ -34,13 +36,13 @@ use libra_types::{
 //use network::proto::ConsensusMsg;
 //use network::proto::ConsensusMsg_oneof;
 //use network::validator_network::{ConsensusNetworkSender, Event};
+use super::super::safety_rules::SafetyRulesManager;
 use crate::alliance_tree_graph::bft::consensus::{
     chained_bft::network::NetworkSender, state_replication::StateComputer,
 };
 use futures::executor::block_on;
 use libra_types::validator_change::ValidatorChangeProof;
 use network::NetworkService;
-use super::super::safety_rules::SafetyRulesManager;
 use std::{
     cmp::Ordering,
     sync::{Arc, RwLock},

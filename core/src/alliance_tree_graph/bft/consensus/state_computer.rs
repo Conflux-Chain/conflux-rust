@@ -1,11 +1,16 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{counters, state_replication::StateComputer};
+use super::{
+    consensus_types::{block::Block, executed_block::ExecutedBlock},
+    counters,
+    state_replication::StateComputer,
+};
 use anyhow::{ensure, Result};
-use super::consensus_types::{block::Block, executed_block::ExecutedBlock};
+use cfx_types::H256;
 use libra_logger::prelude::*;
 use libra_types::{
+    account_config,
     crypto_proxies::{
         LedgerInfoWithSignatures, ValidatorChangeProof, ValidatorSet,
     },
@@ -13,12 +18,33 @@ use libra_types::{
 };
 //use state_synchronizer::StateSyncClient;
 use super::super::executor::{Executor, ProcessedVMOutput};
+use libra_types::event::EventKey;
+use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
     sync::Arc,
     time::{Duration, Instant},
 };
 //use vm_runtime::LibraVM;
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PivotBlockDecision {
+    height: u64,
+    block_hash: H256,
+}
+
+impl PivotBlockDecision {
+    pub fn pivot_select_event_key() -> EventKey {
+        EventKey::new_from_address(
+            &account_config::pivot_chain_select_address(),
+            2,
+        )
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        lcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.

@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    consensus_state::ConsensusState, error::Error,
-    persistent_storage::PersistentStorage, t_safety_rules::TSafetyRules,
-};
-use super::super::consensus_types::{
-    block::Block, block_data::BlockData, common::Payload,
-    quorum_cert::QuorumCert, timeout::Timeout, vote::Vote, vote_data::VoteData,
-    vote_proposal::VoteProposal,
+    super::consensus_types::{
+        block::Block, block_data::BlockData, common::Payload,
+        quorum_cert::QuorumCert, timeout::Timeout, vote::Vote,
+        vote_data::VoteData, vote_proposal::VoteProposal,
+    },
+    consensus_state::ConsensusState,
+    error::Error,
+    persistent_storage::PersistentStorage,
+    t_safety_rules::TSafetyRules,
 };
 use libra_crypto::hash::HashValue;
 use libra_types::{

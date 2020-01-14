@@ -1,10 +1,12 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::super::chained_bft::liveness::proposer_election::ProposerElection;
-use super::super::super::consensus_types::{
-    block::Block,
-    common::{Author, Payload, Round},
+use super::super::super::{
+    chained_bft::liveness::proposer_election::ProposerElection,
+    consensus_types::{
+        block::Block,
+        common::{Author, Payload, Round},
+    },
 };
 
 /// The rotating proposer maps a round to an author according to a round-robin

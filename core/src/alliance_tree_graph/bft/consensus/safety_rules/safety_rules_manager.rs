@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    local_client::LocalClient, persistent_storage::PersistentStorage,
-    InMemoryStorage, OnDiskStorage, SafetyRules, TSafetyRules,
+    super::consensus_types::common::Payload, local_client::LocalClient,
+    persistent_storage::PersistentStorage, InMemoryStorage, OnDiskStorage,
+    SafetyRules, TSafetyRules,
 };
-use super::super::consensus_types::common::Payload;
 use libra_config::config::{NodeConfig, SafetyRulesBackend, SafetyRulesConfig};
 use libra_types::crypto_proxies::ValidatorSigner;
 use std::sync::{Arc, RwLock};

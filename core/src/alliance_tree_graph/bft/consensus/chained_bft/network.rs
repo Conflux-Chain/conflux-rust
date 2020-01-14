@@ -4,7 +4,6 @@
 use super::super::counters;
 use anyhow::ensure;
 //use bytes::Bytes;
-use channel::{self, libra_channel, message_queues::QueueStyle};
 use super::super::consensus_types::{
     block_retrieval::{
         BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,
@@ -15,6 +14,7 @@ use super::super::consensus_types::{
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
+use channel::{self, libra_channel, message_queues::QueueStyle};
 use network::{NetworkService, PeerId};
 //use futures::{channel::oneshot};
 //use libra_logger::prelude::*;

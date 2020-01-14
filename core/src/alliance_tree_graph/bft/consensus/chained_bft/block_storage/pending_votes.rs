@@ -1,12 +1,14 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::super::super::chained_bft::block_storage::VoteReceptionResult;
-use super::super::super::consensus_types::{
-    common::{Author, Round},
-    quorum_cert::QuorumCert,
-    timeout_certificate::TimeoutCertificate,
-    vote::Vote,
+use super::super::super::{
+    chained_bft::block_storage::VoteReceptionResult,
+    consensus_types::{
+        common::{Author, Round},
+        quorum_cert::QuorumCert,
+        timeout_certificate::TimeoutCertificate,
+        vote::Vote,
+    },
 };
 use libra_crypto::{hash::CryptoHash, HashValue};
 //use libra_logger::prelude::*;

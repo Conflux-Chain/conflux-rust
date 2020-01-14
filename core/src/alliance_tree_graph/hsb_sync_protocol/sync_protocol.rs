@@ -5,16 +5,18 @@
 use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 use crate::{
     alliance_tree_graph::{
-        bft::consensus::chained_bft::network::NetworkTask,
+        bft::consensus::{
+            chained_bft::network::NetworkTask,
+            consensus_types::{
+                common::Payload,
+                proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
+                sync_info::SyncInfo,
+                vote_msg::VoteMsg,
+            },
+        },
         hsb_sync_protocol::message::{
             block_retrieval::BlockRetrievalRpcRequest, msgid,
         },
-    },
-    alliance_tree_graph::bft::consensus::consensus_types::{
-        common::Payload,
-        proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
-        sync_info::SyncInfo,
-        vote_msg::VoteMsg,
     },
     message::{Message, MsgId},
     network::{

@@ -1,8 +1,8 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow;
 use super::super::consensus_types::common::Round;
+use anyhow;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq)]

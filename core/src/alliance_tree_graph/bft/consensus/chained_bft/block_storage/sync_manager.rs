@@ -3,17 +3,17 @@
 
 use super::super::super::super::{
     chained_bft::block_storage::{BlockReader, BlockStore},
+    consensus_types::{
+        block::Block,
+        block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus},
+        common::{Author, Payload},
+        quorum_cert::QuorumCert,
+        sync_info::SyncInfo,
+    },
     counters,
 };
 use crate::alliance_tree_graph::hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest;
 use anyhow::{bail, format_err};
-use super::super::super::super::consensus_types::{
-    block::Block,
-    block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus},
-    common::{Author, Payload},
-    quorum_cert::QuorumCert,
-    sync_info::SyncInfo,
-};
 //use libra_logger::prelude::*;
 use libra_types::account_address::AccountAddress;
 //use libra_types::validator_change::ValidatorChangeProof;

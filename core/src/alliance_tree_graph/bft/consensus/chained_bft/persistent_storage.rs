@@ -4,12 +4,12 @@
 use super::super::{
     chained_bft::consensusdb::ConsensusDB,
     consensus_provider::create_storage_read_client,
+    consensus_types::{
+        block::Block, common::Payload, quorum_cert::QuorumCert,
+        timeout_certificate::TimeoutCertificate, vote::Vote,
+    },
 };
 use anyhow::{format_err, Context, Result};
-use super::super::consensus_types::{
-    block::Block, common::Payload, quorum_cert::QuorumCert,
-    timeout_certificate::TimeoutCertificate, vote::Vote,
-};
 //use executor::ExecutedTrees;
 use libra_config::config::NodeConfig;
 use libra_crypto::HashValue;

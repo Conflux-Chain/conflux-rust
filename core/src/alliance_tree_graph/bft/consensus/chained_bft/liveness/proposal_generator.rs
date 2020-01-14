@@ -3,18 +3,18 @@
 
 use super::super::super::{
     chained_bft::block_storage::BlockReader,
+    consensus_types::{
+        block::Block,
+        block_data::BlockData,
+        common::{Author, Payload, Round},
+        quorum_cert::QuorumCert,
+    },
     counters,
     util::time_service::{
         wait_if_possible, TimeService, WaitingError, WaitingSuccess,
     },
 };
 use anyhow::{bail, ensure, format_err};
-use super::super::super::consensus_types::{
-    block::Block,
-    block_data::BlockData,
-    common::{Author, Payload, Round},
-    quorum_cert::QuorumCert,
-};
 //use libra_logger::prelude::*;
 use std::{
     sync::{Arc, Mutex},

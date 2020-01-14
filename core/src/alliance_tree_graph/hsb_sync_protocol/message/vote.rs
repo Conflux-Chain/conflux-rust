@@ -4,7 +4,9 @@
 
 use super::super::sync_protocol::{Context, Handleable};
 use crate::{
-    alliance_tree_graph::bft::consensus::consensus_types::{common::Payload, vote_msg::VoteMsg},
+    alliance_tree_graph::bft::consensus::consensus_types::{
+        common::Payload, vote_msg::VoteMsg,
+    },
     sync::Error,
 };
 use libra_logger::prelude::{security_log, SecurityEvent};

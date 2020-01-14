@@ -4,7 +4,12 @@
 
 use super::super::sync_protocol::{Context, Handleable, RpcResponse};
 use crate::{
-    alliance_tree_graph::bft::consensus::chained_bft::network::IncomingBlockRetrievalRequest,
+    alliance_tree_graph::bft::consensus::{
+        chained_bft::network::IncomingBlockRetrievalRequest,
+        consensus_types::{
+            block_retrieval::BlockRetrievalRequest, common::Payload,
+        },
+    },
     message::{Message, RequestId},
     sync::{
         message::{Key, KeyContainer},
@@ -15,7 +20,6 @@ use crate::{
 use bytes::Bytes;
 use cfx_types::H256;
 use futures::channel::oneshot;
-use crate::alliance_tree_graph::bft::consensus::consensus_types::{block_retrieval::BlockRetrievalRequest, common::Payload};
 use libra_types::account_address::AccountAddress;
 use primitives::TransactionWithSignature;
 use serde::{Deserialize, Serialize};

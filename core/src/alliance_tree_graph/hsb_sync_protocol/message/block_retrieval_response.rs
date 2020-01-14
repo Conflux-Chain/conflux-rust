@@ -4,11 +4,14 @@
 
 use super::super::sync_protocol::{Context, Handleable, RpcResponse};
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest,
-    alliance_tree_graph::bft::consensus::consensus_types::{
-        block_retrieval::BlockRetrievalResponse, common::Payload,
+    alliance_tree_graph::{
+        bft::consensus::consensus_types::{
+            block_retrieval::BlockRetrievalResponse, common::Payload,
+        },
+        hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest,
     },
-    message::RequestId, sync::Error,
+    message::RequestId,
+    sync::Error,
 };
 use libra_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};

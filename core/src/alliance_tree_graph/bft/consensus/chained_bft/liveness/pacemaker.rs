@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::super::{
+    consensus_types::common::Round,
     counters,
     util::time_service::{SendTask, TimeService},
 };
 use channel;
-use super::super::super::consensus_types::common::Round;
 //use libra_logger::prelude::*;
 use std::{
     fmt,

@@ -1,8 +1,8 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
 use super::super::consensus_types::common::Round;
+use anyhow::Result;
 use libra_config::config::PersistableConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

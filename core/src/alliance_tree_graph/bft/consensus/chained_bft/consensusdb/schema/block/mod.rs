@@ -9,9 +9,11 @@
 //! | block_hash |    block    |
 //! ```
 
-use super::BLOCK_CF_NAME;
+use super::{
+    super::super::super::consensus_types::{block::Block, common::Payload},
+    BLOCK_CF_NAME,
+};
 use anyhow::Result;
-use super::super::super::super::consensus_types::{block::Block, common::Payload};
 use libra_crypto::HashValue;
 use schemadb::schema::{KeyCodec, Schema, ValueCodec};
 use std::{cmp, fmt, marker::PhantomData};

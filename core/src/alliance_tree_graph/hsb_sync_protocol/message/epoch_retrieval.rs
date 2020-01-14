@@ -4,7 +4,9 @@
 
 use super::super::sync_protocol::{Context, Handleable};
 use crate::{
-    alliance_tree_graph::bft::consensus::consensus_types::{common::Payload, epoch_retrieval::EpochRetrievalRequest},
+    alliance_tree_graph::bft::consensus::consensus_types::{
+        common::Payload, epoch_retrieval::EpochRetrievalRequest,
+    },
     sync::Error,
 };
 use libra_types::account_address::AccountAddress;

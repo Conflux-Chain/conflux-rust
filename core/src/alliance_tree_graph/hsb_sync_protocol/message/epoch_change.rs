@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::sync_protocol::{Context, Handleable};
-use crate::{alliance_tree_graph::bft::consensus::consensus_types::common::Payload, sync::Error};
+use crate::{
+    alliance_tree_graph::bft::consensus::consensus_types::common::Payload,
+    sync::Error,
+};
 use libra_types::{
     account_address::AccountAddress, validator_change::ValidatorChangeProof,
 };

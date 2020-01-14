@@ -10,9 +10,10 @@
 //! | block_hash |  QuorumCert  |
 //! ```
 
-use super::QC_CF_NAME;
+use super::{
+    super::super::super::consensus_types::quorum_cert::QuorumCert, QC_CF_NAME,
+};
 use anyhow::Result;
-use super::super::super::super::consensus_types::quorum_cert::QuorumCert;
 use libra_crypto::HashValue;
 use schemadb::{
     define_schema,

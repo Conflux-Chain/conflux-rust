@@ -5,14 +5,14 @@ use super::super::super::{
     chained_bft::block_storage::{
         pending_votes::PendingVotes, VoteReceptionResult,
     },
+    consensus_types::{
+        executed_block::ExecutedBlock, quorum_cert::QuorumCert,
+        timeout_certificate::TimeoutCertificate, vote::Vote,
+    },
     counters,
     util::time_service::duration_since_epoch,
 };
 use anyhow::bail;
-use super::super::super::consensus_types::{
-    executed_block::ExecutedBlock, quorum_cert::QuorumCert,
-    timeout_certificate::TimeoutCertificate, vote::Vote,
-};
 use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
 use libra_types::crypto_proxies::ValidatorVerifier;

@@ -1,10 +1,12 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{
+    super::executor::ProcessedVMOutput,
+    consensus_types::{block::Block, executed_block::ExecutedBlock},
+};
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
-use super::consensus_types::{block::Block, executed_block::ExecutedBlock};
-use super::super::executor::ProcessedVMOutput;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use libra_types::crypto_proxies::{
     LedgerInfoWithSignatures, ValidatorChangeProof,

@@ -1,6 +1,7 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use super::consensus::state_computer::PivotBlockDecision;
 use anyhow::{bail, ensure, format_err, Result};
 use libra_config::config::NodeConfig;
 use libra_crypto::{
@@ -102,6 +103,8 @@ pub struct ProcessedVMOutput {
     /// block is committed. TODO [Reconfiguration] the validators are
     /// currently ignored, no reconfiguration yet.
     validators: Option<ValidatorSet>,
+    /// If set, this is the selected pivot block in current transaction.
+    pivot_block: Option<PivotBlockDecision>,
 }
 
 impl ProcessedVMOutput {
@@ -109,12 +112,14 @@ impl ProcessedVMOutput {
         //transaction_data: Vec<TransactionData>,
         //executed_trees: ExecutedTrees,
         validators: Option<ValidatorSet>,
+        pivot_block: Option<PivotBlockDecision>,
     ) -> Self
     {
         ProcessedVMOutput {
             //transaction_data,
             //executed_trees,
             validators,
+            pivot_block,
         }
     }
 
@@ -512,21 +517,36 @@ impl Executor {
     fn process_vm_outputs(
         vm_outputs: Vec<TransactionOutput>,
     ) -> Result<ProcessedVMOutput> {
+        ensure!(
+            vm_outputs.len() == 1,
+            "One block can have only one transaction output!"
+        );
+
         let mut next_validator_set = None;
+        let mut next_pivot_block = None;
 
         for vm_output in vm_outputs.into_iter() {
-            // check for change in validator set
             let validator_set_change_event_key =
                 ValidatorSet::change_event_key();
+            let pivot_select_event_key =
+                PivotBlockDecision::pivot_select_event_key();
             for event in vm_output.events() {
+                // check for change in validator set
                 if *event.key() == validator_set_change_event_key {
                     next_validator_set =
                         Some(ValidatorSet::from_bytes(event.event_data())?);
                     break;
                 }
+                // check for pivot block selection.
+                if *event.key() == pivot_select_event_key {
+                    next_pivot_block = Some(PivotBlockDecision::from_bytes(
+                        event.event_data(),
+                    )?);
+                    break;
+                }
             }
         }
 
-        Ok(ProcessedVMOutput::new(next_validator_set))
+        Ok(ProcessedVMOutput::new(next_validator_set, next_pivot_block))
     }
 }

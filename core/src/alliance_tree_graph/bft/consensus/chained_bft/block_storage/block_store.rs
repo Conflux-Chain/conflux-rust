@@ -8,21 +8,21 @@ use super::super::super::{
         },
         persistent_storage::{PersistentStorage, RecoveryData},
     },
+    consensus_types::{
+        block::Block, common::Payload, executed_block::ExecutedBlock,
+        quorum_cert::QuorumCert, timeout_certificate::TimeoutCertificate,
+        vote::Vote,
+    },
     counters,
 };
 use anyhow::{bail, ensure, format_err, Context};
-use super::super::super::consensus_types::{
-    block::Block, common::Payload, executed_block::ExecutedBlock,
-    quorum_cert::QuorumCert, timeout_certificate::TimeoutCertificate,
-    vote::Vote,
-};
 use debug_interface::event;
 //use executor::{ExecutedTrees, ProcessedVMOutput};
 use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
 
-use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
 use super::super::super::super::executor::ProcessedVMOutput;
+use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_types::crypto_proxies::ValidatorSet;
 use libra_types::crypto_proxies::{
@@ -102,26 +102,12 @@ impl<T: Payload> BlockStore<T> {
     ) -> BlockTree<T>
     {
         let (root_block, root_qc, root_li) = (root.0, root.1, root.2);
-        /*
-        assert_eq!(
-            root_qc.certified_block().version(),
-            root_executed_trees.version().unwrap_or(0),
-            "root qc version {} doesn't match committed trees {}",
-            root_qc.certified_block().version(),
-            root_executed_trees.version().unwrap_or(0),
-        );
-        assert_eq!(
-            root_qc.certified_block().executed_state_id(),
-            root_executed_trees.state_id(),
-            "root qc state id {} doesn't match committed trees {}",
-            root_qc.certified_block().executed_state_id(),
-            root_executed_trees.state_id(),
-        );
-        */
+        // FIXME: set correct pivot block decision.
         let root_output = ProcessedVMOutput::new(
             //vec![], /* not used */
             //root_executed_trees,
             root_qc.certified_block().next_validator_set().cloned(),
+            None,
         );
 
         let executed_root_block = ExecutedBlock::new(root_block, root_output);
@@ -310,6 +296,7 @@ impl<T: Payload> BlockStore<T> {
                 //vec![],
                 //parent_block.output().executed_trees().clone(),
                 parent_block.output().validators().clone(),
+                None,
             )
         } else {
             //let parent_trees = parent_block.executed_trees().clone();

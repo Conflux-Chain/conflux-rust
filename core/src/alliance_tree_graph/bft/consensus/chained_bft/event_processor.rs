@@ -13,6 +13,19 @@ use super::super::{
         },
         persistent_storage::PersistentStorage,
     },
+    consensus_types::{
+        accumulator_extension_proof::AccumulatorExtensionProof,
+        block::Block,
+        block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus},
+        common::{Author, Payload, Round},
+        proposal_msg::ProposalMsg,
+        quorum_cert::QuorumCert,
+        sync_info::SyncInfo,
+        timeout_certificate::TimeoutCertificate,
+        vote::Vote,
+        vote_msg::VoteMsg,
+        vote_proposal::VoteProposal,
+    },
     counters,
     util::time_service::{
         duration_since_epoch, wait_if_possible, TimeService, WaitingError,
@@ -24,21 +37,6 @@ use crate::alliance_tree_graph::hsb_sync_protocol::{
 };
 use anyhow::{ensure, format_err, Context};
 use cfx_types::H256;
-use super::super::consensus_types::{
-    accumulator_extension_proof::AccumulatorExtensionProof,
-    block::Block,
-    common::{Author, Payload, Round},
-    proposal_msg::ProposalMsg,
-    quorum_cert::QuorumCert,
-    sync_info::SyncInfo,
-    timeout_certificate::TimeoutCertificate,
-    vote::Vote,
-    vote_msg::VoteMsg,
-    vote_proposal::VoteProposal,
-    block_retrieval::{
-        BlockRetrievalResponse, BlockRetrievalStatus,
-    },
-};
 use libra_crypto::hash::TransactionAccumulatorHasher;
 use libra_logger::prelude::{security_log, SecurityEvent};
 //use libra_prost_ext::MessageExt;

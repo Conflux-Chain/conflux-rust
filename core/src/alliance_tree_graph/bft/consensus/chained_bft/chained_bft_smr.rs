@@ -10,6 +10,7 @@ use super::super::{
         network::{NetworkReceivers, NetworkTask},
         persistent_storage::{PersistentStorage, RecoveryData},
     },
+    consensus_types::common::{Author, Payload, Round},
     counters,
     state_replication::StateMachineReplication,
     util::time_service::ClockTimeService,
@@ -17,16 +18,15 @@ use super::super::{
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
 use channel;
-use super::super::consensus_types::common::{Author, Payload, Round};
 use futures::{select, stream::StreamExt};
 use libra_config::config::{ConsensusProposerType, NodeConfig};
 //use libra_logger::prelude::*;
+use super::super::safety_rules::SafetyRulesManager;
 use crate::alliance_tree_graph::bft::consensus::{
     chained_bft::network::NetworkSender, state_replication::StateComputer,
 };
 use libra_types::crypto_proxies::EpochInfo;
 use network::NetworkService;
-use super::super::safety_rules::SafetyRulesManager;
 use std::{
     sync::{Arc, RwLock},
     time::{Duration, Instant},

@@ -3,10 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::sync_protocol::{Context, Handleable};
-use crate::sync::Error;
-use crate::alliance_tree_graph::bft::consensus::consensus_types::{
-    common::Payload,
-    proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
+use crate::{
+    alliance_tree_graph::bft::consensus::consensus_types::{
+        common::Payload,
+        proposal_msg::{ProposalMsg, ProposalUncheckedSignatures},
+    },
+    sync::Error,
 };
 
 use libra_types::{

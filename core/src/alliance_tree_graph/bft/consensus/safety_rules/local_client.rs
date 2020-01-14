@@ -1,11 +1,13 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ConsensusState, Error, SafetyRules, TSafetyRules};
-use super::super::consensus_types::{
-    block::Block, block_data::BlockData, common::Payload,
-    quorum_cert::QuorumCert, timeout::Timeout, vote::Vote,
-    vote_proposal::VoteProposal,
+use super::{
+    super::consensus_types::{
+        block::Block, block_data::BlockData, common::Payload,
+        quorum_cert::QuorumCert, timeout::Timeout, vote::Vote,
+        vote_proposal::VoteProposal,
+    },
+    ConsensusState, Error, SafetyRules, TSafetyRules,
 };
 use libra_types::crypto_proxies::Signature;
 use std::sync::{Arc, RwLock};
