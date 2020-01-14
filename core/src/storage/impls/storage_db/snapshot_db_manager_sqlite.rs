@@ -109,6 +109,7 @@ impl SnapshotDbManagerSqlite {
             fs::remove_dir_all(new_snapshot_path)?;
         }
         if !command_result?.status.success() {
+            fs::remove_dir_all(new_snapshot_path)?;
             if self.force_cow {
                 error!(
                     "COW copy failed, check file system support. Command {:?}",
