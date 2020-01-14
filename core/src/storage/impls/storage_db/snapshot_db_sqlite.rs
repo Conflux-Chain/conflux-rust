@@ -4,51 +4,57 @@
 
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
-    maybe_db: Option<SqliteConnection>,
+    maybe_db_connections: Option<Box<[SqliteConnection]>>,
     ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
     path: String,
 }
 
 pub struct SnapshotDbStatements {
-    kvdb_statements: KvdbSqliteStatements,
-    mpt_statements: KvdbSqliteStatements,
-    delta_mpt_set_keys_statements: KvdbSqliteStatements,
-    delta_mpt_delete_keys_statements: KvdbSqliteStatements,
+    kvdb_statements: Arc<KvdbSqliteStatements>,
+    mpt_statements: Arc<KvdbSqliteStatements>,
+    delta_mpt_set_keys_statements: Arc<KvdbSqliteStatements>,
+    delta_mpt_delete_keys_statements: Arc<KvdbSqliteStatements>,
 }
 
 lazy_static! {
     pub static ref SNAPSHOT_DB_STATEMENTS: SnapshotDbStatements = {
-        let kvdb_statements = KvdbSqliteStatements::make_statements(
-            &["value"],
-            &["BLOB"],
-            SnapshotDbSqlite::SNAPSHOT_KV_TABLE_NAME,
-            false,
-        )
-        .unwrap();
-        let mpt_statements = KvdbSqliteStatements::make_statements(
-            &["node_rlp"],
-            &["BLOB"],
-            SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
-            false,
-        )
-        .unwrap();
-
-        let delta_mpt_set_keys_statements =
+        let kvdb_statements = Arc::new(
             KvdbSqliteStatements::make_statements(
                 &["value"],
                 &["BLOB"],
-                SnapshotDbSqlite::DELTA_KV_INSERT_TABLE_NAME,
+                SnapshotDbSqlite::SNAPSHOT_KV_TABLE_NAME,
                 false,
             )
-            .unwrap();
-        let delta_mpt_delete_keys_statements =
+            .unwrap(),
+        );
+        let mpt_statements = Arc::new(
+            KvdbSqliteStatements::make_statements(
+                &["node_rlp"],
+                &["BLOB"],
+                SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
+                false,
+            )
+            .unwrap(),
+        );
+
+        let delta_mpt_set_keys_statements = Arc::new(
+            KvdbSqliteStatements::make_statements(
+                &["value"],
+                &["BLOB"],
+                SnapshotDbSqlite::DELTA_KV_SET_TABLE_NAME,
+                false,
+            )
+            .unwrap(),
+        );
+        let delta_mpt_delete_keys_statements = Arc::new(
             KvdbSqliteStatements::make_statements(
                 &[],
                 &[],
                 SnapshotDbSqlite::DELTA_KV_DELETE_TABLE_NAME,
                 false,
             )
-            .unwrap();
+            .unwrap(),
+        );
 
         SnapshotDbStatements {
             kvdb_statements,
@@ -71,12 +77,12 @@ impl Drop for SnapshotDbSqlite {
 }
 
 impl SnapshotDbSqlite {
+    pub const DB_SHARDS: u16 = 32;
     /// These two tables are temporary table for the merging process, but they
     /// remain to help other nodes to do 1-step syncing.
     pub const DELTA_KV_DELETE_TABLE_NAME: &'static str =
         "delta_mpt_key_value_delete";
-    pub const DELTA_KV_INSERT_TABLE_NAME: &'static str =
-        "delta_mpt_key_value_insert";
+    pub const DELTA_KV_SET_TABLE_NAME: &'static str = "delta_mpt_key_value_set";
     // FIXME: Archive node will have different db schema to support versioned
     // FIXME: read and to provide incremental syncing.
     // FIXME:
@@ -97,132 +103,108 @@ impl SnapshotDbSqlite {
     pub const SNAPSHOT_MPT_TABLE_NAME: &'static str = "snapshot_mpt";
 }
 
-impl KvdbSqliteDestructureTrait for SnapshotDbSqlite {
+impl KeyValueDbTypes for SnapshotDbSqlite {
+    type ValueType = Box<[u8]>;
+}
+
+// For Snapshot KV DB.
+impl KvdbSqliteShardedRefDestructureTrait for SnapshotDbSqlite {
     fn destructure(
         &self,
-    ) -> (Option<&SqliteConnection>, &KvdbSqliteStatements) {
+    ) -> (Option<&[SqliteConnection]>, &KvdbSqliteStatements) {
         (
-            self.maybe_db.as_ref(),
-            &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
-        )
-    }
-
-    fn destructure_mut(
-        &mut self,
-    ) -> (Option<&mut SqliteConnection>, &KvdbSqliteStatements) {
-        (
-            self.maybe_db.as_mut(),
-            &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
+            self.maybe_db_connections.as_ref().map(|b| &**b),
+            &*SNAPSHOT_DB_STATEMENTS.kvdb_statements,
         )
     }
 }
 
-impl KeyValueDbTypes for SnapshotDbSqlite {
-    type ValueType = Box<[u8]>;
+impl KvdbSqliteShardedDestructureTrait for SnapshotDbSqlite {
+    fn destructure_mut(
+        &mut self,
+    ) -> (Option<&mut [SqliteConnection]>, &KvdbSqliteStatements) {
+        (
+            self.maybe_db_connections.as_mut().map(|b| &mut **b),
+            &*SNAPSHOT_DB_STATEMENTS.kvdb_statements,
+        )
+    }
 }
 
 /// Automatically implement KeyValueDbTraitRead with the same code of
 /// KvdbSqlite.
 impl ReadImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentative = KvdbSqlite<Box<[u8]>>;
+    type FamilyRepresentative = KvdbSqliteSharded<Box<[u8]>>;
 }
 
 impl OwnedReadImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentative = KvdbSqlite<Box<[u8]>>;
+    type FamilyRepresentative = KvdbSqliteSharded<Box<[u8]>>;
 }
 
 impl SingleWriterImplFamily for SnapshotDbSqlite {
-    type FamilyRepresentative = KvdbSqlite<Box<[u8]>>;
-}
-
-impl KeyValueDbToOwnedReadTrait for SnapshotDbSqlite {
-    fn to_owned_read<'a>(
-        &'a self,
-    ) -> Result<
-        Box<dyn 'a + KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>,
-    > {
-        Ok(Box::new(self.try_clone()?))
-    }
+    type FamilyRepresentative = KvdbSqliteSharded<Box<[u8]>>;
 }
 
 impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
     type SnapshotMptReadType = SnapshotMpt<
-        ConnectionWithRowParser<
-            KvdbSqliteBorrowMutReadOnly<'db, SnapshotMptDbValue>,
-            SnapshotMptValueParserSqlite,
-        >,
-        ConnectionWithRowParser<
-            KvdbSqliteBorrowMutReadOnly<'db, SnapshotMptDbValue>,
-            SnapshotMptValueParserSqlite,
-        >,
+        KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
+        KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
     >;
     type SnapshotMptWriteType = SnapshotMpt<
-        ConnectionWithRowParser<
-            KvdbSqliteBorrowMut<'db, SnapshotMptDbValue>,
-            SnapshotMptValueParserSqlite,
-        >,
-        ConnectionWithRowParser<
-            KvdbSqliteBorrowMut<'db, SnapshotMptDbValue>,
-            SnapshotMptValueParserSqlite,
-        >,
+        KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
+        KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
     >;
 
     fn open_snapshot_mpt_for_write(
         &'db mut self,
     ) -> Result<Self::SnapshotMptWriteType> {
-        // Can't omit template types because it fails to compile if omitted.
-        Ok(SnapshotMpt::new(ConnectionWithRowParser::<
-            KvdbSqliteBorrowMut<'db, SnapshotMptDbValue>,
-            SnapshotMptValueParserSqlite,
-        >(
-            KvdbSqliteBorrowMut::new((
-                self.maybe_db.as_mut(),
-                &SNAPSHOT_DB_STATEMENTS.mpt_statements,
-            )),
-            Box::new(|x| Self::snapshot_mpt_row_parser(x)),
-        ))?)
+        Ok(SnapshotMpt::new(unsafe {
+            std::mem::transmute(
+                KvdbSqliteShardedBorrowMut::<SnapshotMptDbValue>::new(
+                    self.maybe_db_connections.as_mut().map(|b| &mut **b),
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
+                ),
+            )
+        })?)
     }
 
     fn open_snapshot_mpt_read_only(
         &'db mut self,
     ) -> Result<Self::SnapshotMptReadType> {
-        // Can't omit template types because it fails to compile if omitted.
-        Ok(SnapshotMpt::new(ConnectionWithRowParser::<
-            KvdbSqliteBorrowMutReadOnly<'db, SnapshotMptDbValue>,
-            SnapshotMptValueParserSqlite,
-        >(
-            KvdbSqliteBorrowMutReadOnly::new((
-                self.maybe_db.as_mut(),
-                &SNAPSHOT_DB_STATEMENTS.mpt_statements,
-            )),
-            Box::new(|x| Self::snapshot_mpt_row_parser(x)),
-        ))?)
+        Ok(SnapshotMpt::new(unsafe {
+            std::mem::transmute(
+                KvdbSqliteShardedBorrowMut::<SnapshotMptDbValue>::new(
+                    self.maybe_db_connections.as_mut().map(|b| &mut **b),
+                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
+                ),
+            )
+        })?)
     }
 }
 
 impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self {
         Self {
-            maybe_db: None,
+            maybe_db_connections: None,
             ref_count: Default::default(),
             path: Default::default(),
         }
     }
 
     fn open(
-        snapshot_path: &str, read_only: bool,
+        snapshot_path: &str, readonly: bool,
         ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Option<SnapshotDbSqlite>>
     {
         let file_exists = Path::new(&snapshot_path).exists();
-        let sqlite_open_result = SqliteConnection::open(
-            &Self::db_file_paths(snapshot_path)[0],
-            read_only,
-            SqliteConnection::default_open_flags(),
-        );
         if file_exists {
+            let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
+                Self::DB_SHARDS,
+                snapshot_path,
+                readonly,
+                SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
+            )?;
             return Ok(Some(SnapshotDbSqlite {
-                maybe_db: Some(sqlite_open_result?),
+                maybe_db_connections: kvdb_sqlite_sharded.into_connections(),
                 ref_count,
                 path: snapshot_path.to_string(),
             }));
@@ -236,62 +218,45 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<SnapshotDbSqlite>
     {
-        fs::create_dir_all(snapshot_path).ok();
+        fs::create_dir_all(snapshot_path)?;
 
-        let create_result = SqliteConnection::create_and_open(
-            &Self::db_file_paths(snapshot_path)[0],
-            SqliteConnection::default_open_flags(),
-        );
+        let create_result = (|| -> Result<Box<[SqliteConnection]>> {
+            let kvdb_sqlite_sharded =
+                KvdbSqliteSharded::<Box<[u8]>>::create_and_open(
+                    Self::DB_SHARDS,
+                    snapshot_path,
+                    SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
+                    /* create_table = */ true,
+                )?;
+            let mut connections =
+            // Safe to unwrap since the connections are newly created.
+                kvdb_sqlite_sharded.into_connections().unwrap();
+            // Create Snapshot MPT table.
+            KvdbSqliteSharded::<Self::ValueType>::create_table(
+                &mut connections,
+                &SNAPSHOT_DB_STATEMENTS.mpt_statements,
+            )?;
+            Ok(connections)
+        })();
 
-        let mut ok_result;
         match create_result {
             Err(e) => {
                 fs::remove_dir_all(snapshot_path)?;
                 bail!(e);
             }
-            Ok(db_conn) => {
-                ok_result = Ok(SnapshotDbSqlite {
-                    maybe_db: Some(db_conn),
-                    ref_count,
-                    path: snapshot_path.to_string(),
-                });
-            }
+            Ok(connections) => Ok(SnapshotDbSqlite {
+                maybe_db_connections: Some(connections),
+                ref_count,
+                path: snapshot_path.to_string(),
+            }),
         }
-
-        {
-            let snapshot_db =
-                ok_result.as_mut().unwrap().maybe_db.as_mut().unwrap();
-
-            snapshot_db
-                .execute(
-                    &SNAPSHOT_DB_STATEMENTS
-                        .kvdb_statements
-                        .stmts_main_table
-                        .create_table,
-                    SQLITE_NO_PARAM,
-                )?
-                .finish_ignore_rows()?;
-            snapshot_db
-                .execute(
-                    &SNAPSHOT_DB_STATEMENTS
-                        .mpt_statements
-                        .stmts_main_table
-                        .create_table,
-                    SQLITE_NO_PARAM,
-                )?
-                .finish_ignore_rows()?;
-            // FIXME: create index.
-        }
-
-        ok_result
     }
 
     // FIXME: use a mechanism with rate limit.
     fn direct_merge(&mut self) -> Result<MerkleHash> {
         self.apply_update_to_kvdb()?;
 
-        let mut insert_keys_iter =
-            self.dumped_delta_kv_insert_keys_iterator()?;
+        let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
         let mut mpt_to_modify = self.open_snapshot_mpt_for_write()?;
@@ -301,7 +266,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         );
         mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?,
-            insert_keys_iter.iter_range(&[], None)?,
+            set_keys_iter.iter_range(&[], None)?,
         )
     }
 
@@ -320,8 +285,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         }
         self.apply_update_to_kvdb()?;
 
-        let mut insert_keys_iter =
-            self.dumped_delta_kv_insert_keys_iterator()?;
+        let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
         let mut base_mpt = old_snapshot_db.open_snapshot_mpt_read_only()?;
@@ -332,22 +296,29 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         );
         mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?,
-            insert_keys_iter.iter_range(&[], None)?,
+            set_keys_iter.iter_range(&[], None)?,
         )
     }
 }
 
 impl SnapshotDbSqlite {
-    pub fn db_file_paths(db_path: &str) -> Vec<String> {
-        vec![db_path.to_string() + "/shard_00"]
+    fn try_clone_connections(&self) -> Result<Option<Box<[SqliteConnection]>>> {
+        match &self.maybe_db_connections {
+            None => Ok(None),
+            Some(old_connections) => {
+                let mut connections = Vec::with_capacity(old_connections.len());
+                for old_connection in old_connections.iter() {
+                    let new_connection = old_connection.try_clone()?;
+                    connections.push(new_connection);
+                }
+                Ok(Some(connections.into_boxed_slice()))
+            }
+        }
     }
 
     pub fn try_clone(&self) -> Result<Self> {
         Ok(Self {
-            maybe_db: match &self.maybe_db {
-                None => None,
-                Some(conn) => Some(conn.try_clone()?),
-            },
+            maybe_db_connections: self.try_clone_connections()?,
             ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
                 &self.ref_count,
                 &self.path,
@@ -356,102 +327,32 @@ impl SnapshotDbSqlite {
         })
     }
 
-    // FIXME: pub is problematic.
-    pub fn snapshot_kv_row_parser<'db>(
-        row: &Statement<'db>,
-    ) -> Result<(Vec<u8>, Vec<u8>)> {
-        let key = row.read::<Vec<u8>>(0)?;
-        let value = row.read::<Vec<u8>>(1)?;
-
-        Ok((key, value))
-    }
-
     pub fn snapshot_kv_iterator(
         &mut self,
-    ) -> ConnectionWithRowParser<
-        KvdbSqliteBorrowMut<SnapshotMptDbValue>,
-        SnapshotKVParserSqlite,
-    > {
-        ConnectionWithRowParser(
-            KvdbSqliteBorrowMut::new((
-                self.maybe_db.as_mut(),
-                &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
-            )),
-            Box::new(|x| Self::snapshot_kv_row_parser(x)),
+    ) -> KvdbSqliteShardedBorrowMut<<Self as KeyValueDbTypes>::ValueType> {
+        KvdbSqliteShardedBorrowMut::new(
+            self.maybe_db_connections.as_mut().map(|b| &mut **b),
+            &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
         )
     }
 
-    fn snapshot_mpt_row_parser<'db>(
-        row: &Statement<'db>,
-    ) -> Result<SnapshotMptValue> {
-        let key = row.read::<Vec<u8>>(0)?;
-        let value = row.read::<Vec<u8>>(1)?;
-        Ok((key.into_boxed_slice(), value.into_boxed_slice()))
-    }
-
-    fn delta_kv_insertion_row_parser<'db>(
-        row: &Statement<'db>,
-    ) -> Result<(Vec<u8>, Box<[u8]>)> {
-        let key = row.read::<Vec<u8>>(0)?;
-        let value = row.read::<Vec<u8>>(1)?;
-        Ok((key, value.into_boxed_slice()))
-    }
-
-    pub fn dumped_delta_kv_insert_keys_iterator(
+    pub fn dumped_delta_kv_set_keys_iterator(
         &self,
-    ) -> Result<
-        ConnectionWithRowParser<
-            KvdbSqlite<Box<[u8]>>,
-            DeltaKVInsertionParserSqlite,
-        >,
-    > {
-        let maybe_db = match &self.maybe_db {
-            None => None,
-            Some(db) => Some(db.try_clone()?),
-        };
-        Ok(ConnectionWithRowParser(
-            KvdbSqlite::new(
-                maybe_db,
-                Arc::new(
-                    SNAPSHOT_DB_STATEMENTS
-                        .delta_mpt_set_keys_statements
-                        .clone(),
-                ),
-            )?,
-            Box::new(|x| Self::delta_kv_insertion_row_parser(x)),
+    ) -> Result<KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>> {
+        Ok(KvdbSqliteSharded::new(
+            self.try_clone_connections()?,
+            SNAPSHOT_DB_STATEMENTS.delta_mpt_set_keys_statements.clone(),
         ))
-    }
-
-    fn delta_kv_deletion_row_parser<'db>(
-        row: &Statement<'db>,
-    ) -> Result<Vec<u8>> {
-        let key = row.read::<Vec<u8>>(0)?;
-
-        Ok(key)
     }
 
     pub fn dumped_delta_kv_delete_keys_iterator(
         &self,
-    ) -> Result<
-        ConnectionWithRowParser<
-            KvdbSqlite<Box<[u8]>>,
-            DeltaKVDeletionParserSqlite,
-        >,
-    > {
-        let maybe_db = match &self.maybe_db {
-            None => None,
-            Some(db) => Some(db.try_clone()?),
-        };
-        Ok(ConnectionWithRowParser(
-            KvdbSqlite::new(
-                maybe_db,
-                Arc::new(
-                    SNAPSHOT_DB_STATEMENTS
-                        .delta_mpt_delete_keys_statements
-                        .clone(),
-                ),
-            )?,
-            Box::new(|x| Self::delta_kv_deletion_row_parser(x)),
+    ) -> Result<KvdbSqliteSharded<()>> {
+        Ok(KvdbSqliteSharded::new(
+            self.try_clone_connections()?,
+            SNAPSHOT_DB_STATEMENTS
+                .delta_mpt_delete_keys_statements
+                .clone(),
         ))
     }
 
@@ -460,173 +361,164 @@ impl SnapshotDbSqlite {
     pub fn dump_delta_mpt(
         &mut self, delta_mpt: &DeltaMptIterator,
     ) -> Result<()> {
-        let sqlite = self.maybe_db.as_mut().unwrap();
-        sqlite
-            .execute(
-                &SNAPSHOT_DB_STATEMENTS
-                    .delta_mpt_delete_keys_statements
-                    .stmts_main_table
-                    .create_table,
-                SQLITE_NO_PARAM,
-            )?
-            .finish_ignore_rows()?;
-        sqlite
-            .execute(
-                &SNAPSHOT_DB_STATEMENTS
-                    .delta_mpt_set_keys_statements
-                    .stmts_main_table
-                    .create_table,
-                SQLITE_NO_PARAM,
-            )?
-            .finish_ignore_rows()?;
+        // Safe to unwrap since we are not on a NULL snapshot.
+        let connections = self.maybe_db_connections.as_mut().unwrap();
+        <DeltaMptDumperSetDb as SingleWriterImplFamily>::FamilyRepresentative::create_table(
+            connections,
+            &SNAPSHOT_DB_STATEMENTS.delta_mpt_set_keys_statements,
+        )?;
+        <DeltaMptDumperDeleteDb as SingleWriterImplFamily>::FamilyRepresentative::create_table(
+            connections,
+            &SNAPSHOT_DB_STATEMENTS.delta_mpt_delete_keys_statements,
+        )?;
 
         // Dump code.
-        delta_mpt.iterate(&mut DeltaMptDumperSqlite::new(self))
+        delta_mpt.iterate(&mut DeltaMptMergeDumperSqlite { connections })
     }
 
     /// Dropping is optional, because these tables are necessary to provide
     /// 1-step syncing.
     pub fn drop_delta_mpt_dump(&mut self) -> Result<()> {
-        let sqlite = self.maybe_db.as_mut().unwrap();
-        sqlite
-            .execute(
-                &SNAPSHOT_DB_STATEMENTS
-                    .delta_mpt_set_keys_statements
-                    .stmts_main_table
-                    .drop_table,
-                SQLITE_NO_PARAM,
-            )?
-            .finish_ignore_rows()?;
-        sqlite
-            .execute(
-                &SNAPSHOT_DB_STATEMENTS
-                    .delta_mpt_delete_keys_statements
-                    .stmts_main_table
-                    .drop_table,
-                SQLITE_NO_PARAM,
-            )?
-            .finish_ignore_rows()?;
-
-        Ok(())
+        // Safe to unwrap since we are not on a NULL snapshot.
+        let connections = self.maybe_db_connections.as_mut().unwrap();
+        <DeltaMptDumperSetDb as SingleWriterImplFamily>::FamilyRepresentative::drop_table(
+            connections,
+            &SNAPSHOT_DB_STATEMENTS.delta_mpt_set_keys_statements,
+        )?;
+        <DeltaMptDumperDeleteDb as SingleWriterImplFamily>::FamilyRepresentative::drop_table(
+            connections,
+            &SNAPSHOT_DB_STATEMENTS.delta_mpt_delete_keys_statements,
+        )
     }
 
     fn apply_update_to_kvdb(&mut self) -> Result<()> {
-        let sqlite = self.maybe_db.as_mut().unwrap();
-        sqlite
-            .execute(
-                format!(
-                    "DELETE FROM {} WHERE KEY IN (SELECT key FROM {})",
-                    Self::SNAPSHOT_KV_TABLE_NAME,
-                    Self::DELTA_KV_DELETE_TABLE_NAME
-                )
-                .as_str(),
-                SQLITE_NO_PARAM,
-            )?
-            .finish_ignore_rows()?;
-        sqlite
-            .execute(
-                format!(
-                    "INSERT OR REPLACE INTO {} (key, value) \
-                     SELECT key, value FROM {}",
-                    Self::SNAPSHOT_KV_TABLE_NAME,
-                    Self::DELTA_KV_INSERT_TABLE_NAME
-                )
-                .as_str(),
-                SQLITE_NO_PARAM,
-            )?
-            .finish_ignore_rows()?;
+        // Safe to unwrap since we are not on a NULL snapshot.
+        for sqlite in self.maybe_db_connections.as_mut().unwrap().iter_mut() {
+            sqlite
+                .execute(
+                    format!(
+                        "DELETE FROM {} WHERE KEY IN (SELECT key FROM {})",
+                        Self::SNAPSHOT_KV_TABLE_NAME,
+                        Self::DELTA_KV_DELETE_TABLE_NAME
+                    )
+                    .as_str(),
+                    SQLITE_NO_PARAM,
+                )?
+                .finish_ignore_rows()?;
+            sqlite
+                .execute(
+                    format!(
+                        "INSERT OR REPLACE INTO {} (key, value) \
+                         SELECT key, value FROM {}",
+                        Self::SNAPSHOT_KV_TABLE_NAME,
+                        Self::DELTA_KV_SET_TABLE_NAME
+                    )
+                    .as_str(),
+                    SQLITE_NO_PARAM,
+                )?
+                .finish_ignore_rows()?;
+        }
         Ok(())
     }
 }
 
-pub struct DeltaMptDumperSqlite<'a> {
-    snapshot_db: &'a mut SnapshotDbSqlite,
+pub struct DeltaMptMergeDumperSqlite<'a> {
+    connections: &'a mut [SqliteConnection],
 }
 
-impl<'a> DeltaMptDumperSqlite<'a> {
-    pub fn new(snapshot_db: &'a mut SnapshotDbSqlite) -> Self {
-        Self { snapshot_db }
+pub struct DeltaMptDumperSetDb<'a> {
+    connections: &'a mut [SqliteConnection],
+}
+
+pub struct DeltaMptDumperDeleteDb<'a> {
+    connections: &'a mut [SqliteConnection],
+}
+
+impl KeyValueDbTypes for DeltaMptDumperSetDb<'_> {
+    type ValueType = Box<[u8]>;
+}
+
+impl KeyValueDbTypes for DeltaMptDumperDeleteDb<'_> {
+    type ValueType = ();
+}
+
+impl SingleWriterImplFamily for DeltaMptDumperSetDb<'_> {
+    type FamilyRepresentative = KvdbSqliteSharded<Box<[u8]>>;
+}
+
+impl SingleWriterImplFamily for DeltaMptDumperDeleteDb<'_> {
+    type FamilyRepresentative = KvdbSqliteSharded<()>;
+}
+
+impl KvdbSqliteShardedDestructureTrait for DeltaMptDumperSetDb<'_> {
+    fn destructure_mut(
+        &mut self,
+    ) -> (Option<&mut [SqliteConnection]>, &KvdbSqliteStatements) {
+        (
+            Some(*&mut self.connections),
+            &SNAPSHOT_DB_STATEMENTS.delta_mpt_set_keys_statements,
+        )
     }
 }
 
-impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptDumperSqlite<'a> {
+impl KvdbSqliteShardedDestructureTrait for DeltaMptDumperDeleteDb<'_> {
+    fn destructure_mut(
+        &mut self,
+    ) -> (Option<&mut [SqliteConnection]>, &KvdbSqliteStatements) {
+        (
+            Some(*&mut self.connections),
+            &SNAPSHOT_DB_STATEMENTS.delta_mpt_delete_keys_statements,
+        )
+    }
+}
+
+impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptMergeDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
         let (mpt_key, value) = x;
         let snapshot_key =
             StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
-
         if value.len() > 0 {
-            self.snapshot_db
-                .maybe_db
-                .as_mut()
-                .unwrap()
-                .execute(
-                    &SNAPSHOT_DB_STATEMENTS
-                        .delta_mpt_set_keys_statements
-                        .stmts_main_table
-                        .put,
-                    &[&&snapshot_key as SqlBindableRef, &&value],
-                )?
-                .finish_ignore_rows()?;
+            DeltaMptDumperSetDb {
+                connections: *&mut self.connections,
+            }
+            .put_impl(&snapshot_key, &value)?;
         } else {
-            self.snapshot_db
-                .maybe_db
-                .as_mut()
-                .unwrap()
-                .execute(
-                    &SNAPSHOT_DB_STATEMENTS
-                        .delta_mpt_delete_keys_statements
-                        .stmts_main_table
-                        .put,
-                    &[&&snapshot_key as SqlBindableRef],
-                )?
-                .finish_ignore_rows()?;
+            DeltaMptDumperDeleteDb {
+                connections: *&mut self.connections,
+            }
+            .put_impl(&snapshot_key, &())?;
         }
 
         Ok(())
     }
 }
 
-// FIXME: These Parser are all trivial, why not name them by key, value, and put
-// into a central place?
-pub type SnapshotKVParserSqlite =
-    Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<(Vec<u8>, Vec<u8>)>>;
-pub type SnapshotMptValueParserSqlite =
-    Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<SnapshotMptValue>>;
-pub type DeltaKVInsertionParserSqlite =
-    Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<(Vec<u8>, Box<[u8]>)>>;
-pub type DeltaKVDeletionParserSqlite =
-    Box<dyn for<'db> FnMut(&Statement<'db>) -> Result<Vec<u8>>>;
-
 use crate::storage::{
     impls::{
         delta_mpt::DeltaMptIterator,
         errors::*,
-        merkle_patricia_trie::{KVInserter, MptMerger},
+        merkle_patricia_trie::MptMerger,
         storage_db::{
-            kvdb_sqlite::{
-                KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowMutReadOnly,
-                KvdbSqliteDestructureTrait, KvdbSqliteStatements,
+            kvdb_sqlite::KvdbSqliteStatements,
+            kvdb_sqlite_sharded::{
+                KvdbSqliteSharded, KvdbSqliteShardedBorrowMut,
+                KvdbSqliteShardedDestructureTrait,
+                KvdbSqliteShardedRefDestructureTrait,
             },
             snapshot_mpt::SnapshotMpt,
-            sqlite::{
-                ConnectionWithRowParser, SqlBindableRef, SqliteConnection,
-                SQLITE_NO_PARAM,
-            },
+            sqlite::SQLITE_NO_PARAM,
         },
     },
     storage_db::{
-        KeyValueDbIterableTrait, KeyValueDbToOwnedReadTrait,
-        KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
+        KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
         OpenSnapshotMptTrait, OwnedReadImplFamily, ReadImplFamily,
-        SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
-        SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
-        SnapshotMptValue,
+        SingleWriterImplByFamily, SingleWriterImplFamily, SnapshotDbTrait,
+        SnapshotMptDbValue, SnapshotMptTraitReadOnly,
+        SnapshotMptTraitSingleWriter,
     },
-    SnapshotDbManagerSqlite,
+    KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
 use parking_lot::Mutex;
 use primitives::{MerkleHash, StorageKey};
-use sqlite::Statement;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};

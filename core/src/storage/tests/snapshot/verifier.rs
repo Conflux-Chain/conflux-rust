@@ -235,13 +235,9 @@ impl KeyValueDbTraitOwnedRead for Arc<Mutex<FakeSnapshotDb>> {
     }
 }
 
-impl KeyValueDbToOwnedReadTrait for Arc<Mutex<FakeSnapshotDb>> {
-    fn to_owned_read(
-        &self,
-    ) -> Result<Box<dyn KeyValueDbTraitOwnedRead<ValueType = Self::ValueType>>>
-    {
-        // No need to implement because it's only used by DeltaMpt.
-        unreachable!()
+impl KeyValueDbTraitRead for Arc<Mutex<FakeSnapshotDb>> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
+        Ok(self.lock().kv.get(key).cloned())
     }
 }
 
@@ -312,7 +308,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn get_null_snapshot() -> Self { unreachable!() }
 
     fn open(
-        _snapshot_path: &str, _read_only: bool,
+        _snapshot_path: &str, _readonly: bool,
         _ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Option<Self>>
     {
@@ -574,7 +570,7 @@ use crate::storage::{
         },
     },
     storage_db::{
-        DbValueType, KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
+        DbValueType, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
         KeyValueDbTraitSingleWriter, KeyValueDbTypes, OpenSnapshotMptTrait,
         SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
         SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitReadOnly,

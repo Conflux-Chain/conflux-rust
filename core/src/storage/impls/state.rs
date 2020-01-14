@@ -359,7 +359,7 @@ impl StateTrait for State {
 
         let mut snapshot_kvs = Vec::new();
         while let Some((key, value)) = kvs.next()? {
-            snapshot_kvs.push((key, value.into_boxed_slice()));
+            snapshot_kvs.push((key, value));
         }
 
         let mut result = Vec::new();
