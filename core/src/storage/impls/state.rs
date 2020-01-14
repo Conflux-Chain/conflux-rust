@@ -101,13 +101,13 @@ impl State {
     pub fn get_from_snapshot(
         &self, access_key: &[u8], with_proof: bool,
     ) -> Result<(Option<Box<[u8]>>, Option<TrieProof>)> {
-        let mut snapshot_db_new_connection = self.snapshot_db.try_clone()?;
-        let value = snapshot_db_new_connection.get(access_key)?;
+        let value = self.snapshot_db.get(access_key)?;
         Ok((
             value,
             if with_proof {
+                // FIXME: check if we can use KvdbSqliteShardedBorrowShared than try_clone()?.
                 let mut mpt =
-                    snapshot_db_new_connection.open_snapshot_mpt_read_only()?;
+                    self.snapshot_db.try_clone()?.open_snapshot_mpt_read_only()?;
                 let mut cursor = MptCursor::<
                     &mut dyn SnapshotMptTraitReadOnly,
                     BasicPathNode<&mut dyn SnapshotMptTraitReadOnly>,
