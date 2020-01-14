@@ -105,9 +105,12 @@ impl State {
         Ok((
             value,
             if with_proof {
-                // FIXME: check if we can use KvdbSqliteShardedBorrowShared than try_clone()?.
-                let mut mpt =
-                    self.snapshot_db.try_clone()?.open_snapshot_mpt_read_only()?;
+                // FIXME: check if we can use KvdbSqliteShardedBorrowShared than
+                // FIXME: try_clone()?.
+                let mut mpt = self
+                    .snapshot_db
+                    .try_clone()?
+                    .open_snapshot_mpt_read_only()?;
                 let mut cursor = MptCursor::<
                     &mut dyn SnapshotMptTraitReadOnly,
                     BasicPathNode<&mut dyn SnapshotMptTraitReadOnly>,
