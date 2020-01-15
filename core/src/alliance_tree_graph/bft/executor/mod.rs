@@ -102,9 +102,9 @@ pub struct ProcessedVMOutput {
     /// If set, this is the validator set that should be changed to if this
     /// block is committed. TODO [Reconfiguration] the validators are
     /// currently ignored, no reconfiguration yet.
-    validators: Option<ValidatorSet>,
+    pub validators: Option<ValidatorSet>,
     /// If set, this is the selected pivot block in current transaction.
-    pivot_block: Option<PivotBlockDecision>,
+    pub pivot_block: Option<PivotBlockDecision>,
 }
 
 impl ProcessedVMOutput {

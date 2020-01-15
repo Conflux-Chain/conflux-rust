@@ -51,6 +51,7 @@ impl PivotBlockDecision {
 pub struct ExecutionProxy {
     executor: Arc<Executor>,
     //synchronizer: Arc<StateSyncClient>,
+    last_pivot_height: u64,
 }
 
 impl ExecutionProxy {
@@ -60,6 +61,8 @@ impl ExecutionProxy {
         Self {
             executor,
             //synchronizer,
+            // FIXME: initialize last_pivot_height properly.
+            last_pivot_height: 0,
         }
     }
 
@@ -86,10 +89,6 @@ impl StateComputer for ExecutionProxy {
         &self,
         // The block to be executed.
         block: &Block<Self::Payload>,
-        /* The executed trees after executing the parent block.
-         *parent_executed_trees: &ExecutedTrees,
-         * The last committed trees.
-         *committed_trees: &ExecutedTrees, */
     ) -> Result<ProcessedVMOutput>
     {
         //let pre_execution_instant = Instant::now();
@@ -103,20 +102,7 @@ impl StateComputer for ExecutionProxy {
                 block.id(),
             )
             .and_then(|output| {
-                /*
-                let execution_duration = pre_execution_instant.elapsed();
-                let num_txns = output.transaction_data().len();
-                ensure!(num_txns > 0, "metadata txn failed to execute");
-                counters::BLOCK_EXECUTION_DURATION_S.observe_duration(execution_duration);
-                if let Ok(nanos_per_txn) =
-                    u64::try_from(execution_duration.as_nanos() / num_txns as u128)
-                {
-                    // TODO: use duration_float once it's stable
-                    // Tracking: https://github.com/rust-lang/rust/issues/54361
-                    counters::TXN_EXECUTION_DURATION_S
-                        .observe_duration(Duration::from_nanos(nanos_per_txn));
-                }
-                */
+                if let Some(p) = output.pivot_block.as_ref() {}
                 Ok(output)
             })
     }
