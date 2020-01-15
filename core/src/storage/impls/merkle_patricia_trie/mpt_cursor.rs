@@ -1450,29 +1450,29 @@ impl<Mpt> Drop for ReadWritePathNode<Mpt> {
 pub trait GetReadMpt {
     fn get_merkle_root(&self) -> MerkleHash;
 
-    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly;
+    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitRead;
 }
 
 pub trait GetRwMpt: GetReadMpt {
-    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitSingleWriter;
+    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw;
 
     fn get_write_and_read_mpt(
         &mut self,
     ) -> (
-        &mut dyn SnapshotMptTraitSingleWriter,
-        Option<&mut dyn SnapshotMptTraitReadOnly>,
+        &mut dyn SnapshotMptTraitRw,
+        Option<&mut dyn SnapshotMptTraitReadAndIterate>,
     );
 
     fn is_save_as_write(&self) -> bool;
     fn is_in_place_update(&self) -> bool;
 }
 
-impl GetReadMpt for &mut dyn SnapshotMptTraitReadOnly {
+impl GetReadMpt for &mut dyn SnapshotMptTraitRead {
     fn get_merkle_root(&self) -> MerkleHash {
-        SnapshotMptTraitReadOnly::get_merkle_root(*self)
+        SnapshotMptTraitRead::get_merkle_root(*self)
     }
 
-    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { *self }
+    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitRead { *self }
 }
 
 pub trait TakeMpt<Mpt> {

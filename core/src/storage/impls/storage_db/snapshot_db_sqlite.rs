@@ -144,19 +144,40 @@ impl SingleWriterImplFamily for SnapshotDbSqlite {
     type FamilyRepresentative = KvdbSqliteSharded<Box<[u8]>>;
 }
 
+impl SnapshotMptLoadNode
+    for KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>
+{
+    fn load_node_rlp(
+        &mut self, key: &[u8],
+    ) -> Result<Option<SnapshotMptDbValue>> {
+        self.get_mut_impl(key)
+    }
+}
+
+impl SnapshotMptLoadNode
+    for KvdbSqliteShardedBorrowShared<'static, SnapshotMptDbValue>
+{
+    fn load_node_rlp(
+        &mut self, key: &[u8],
+    ) -> Result<Option<SnapshotMptDbValue>> {
+        self.get_impl(key)
+    }
+}
+
 impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
-    type SnapshotMptReadType = SnapshotMpt<
+    /// The 'static lifetime is for for<'db> KeyValueDbIterableTrait<'db, ...>.
+    type SnapshotDbBorrowMutType = SnapshotMpt<
         KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
         KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
     >;
-    type SnapshotMptWriteType = SnapshotMpt<
-        KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
-        KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
+    type SnapshotDbBorrowSharedType = SnapshotMpt<
+        KvdbSqliteShardedBorrowShared<'static, SnapshotMptDbValue>,
+        KvdbSqliteShardedBorrowShared<'static, SnapshotMptDbValue>,
     >;
 
-    fn open_snapshot_mpt_for_write(
+    fn open_snapshot_mpt_owned(
         &'db mut self,
-    ) -> Result<Self::SnapshotMptWriteType> {
+    ) -> Result<Self::SnapshotDbBorrowMutType> {
         Ok(SnapshotMpt::new(unsafe {
             std::mem::transmute(
                 KvdbSqliteShardedBorrowMut::<SnapshotMptDbValue>::new(
@@ -167,16 +188,16 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
         })?)
     }
 
-    fn open_snapshot_mpt_read_only(
-        &'db mut self,
-    ) -> Result<Self::SnapshotMptReadType> {
+    fn open_snapshot_mpt_shared(
+        &'db self,
+    ) -> Result<Self::SnapshotDbBorrowSharedType> {
         Ok(SnapshotMpt::new(unsafe {
-            std::mem::transmute(
-                KvdbSqliteShardedBorrowMut::<SnapshotMptDbValue>::new(
-                    self.maybe_db_connections.as_mut().map(|b| &mut **b),
-                    &SNAPSHOT_DB_STATEMENTS.mpt_statements,
-                ),
-            )
+            std::mem::transmute(KvdbSqliteShardedBorrowShared::<
+                SnapshotMptDbValue,
+            >::new(
+                self.maybe_db_connections.as_ref().map(|b| &**b),
+                &SNAPSHOT_DB_STATEMENTS.mpt_statements,
+            ))
         })?)
     }
 }
@@ -259,10 +280,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
-        let mut mpt_to_modify = self.open_snapshot_mpt_for_write()?;
+        let mut mpt_to_modify = self.open_snapshot_mpt_owned()?;
         let mut mpt_merger = MptMerger::new(
             None,
-            &mut mpt_to_modify as &mut dyn SnapshotMptTraitSingleWriter,
+            &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
         );
         mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?,
@@ -288,11 +309,11 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
-        let mut base_mpt = old_snapshot_db.open_snapshot_mpt_read_only()?;
-        let mut save_as_mpt = self.open_snapshot_mpt_for_write()?;
+        let mut base_mpt = old_snapshot_db.open_snapshot_mpt_owned()?;
+        let mut save_as_mpt = self.open_snapshot_mpt_owned()?;
         let mut mpt_merger = MptMerger::new(
-            Some(&mut base_mpt as &mut dyn SnapshotMptTraitReadOnly),
-            &mut save_as_mpt as &mut dyn SnapshotMptTraitSingleWriter,
+            Some(&mut base_mpt as &mut dyn SnapshotMptTraitReadAndIterate),
+            &mut save_as_mpt as &mut dyn SnapshotMptTraitRw,
         );
         mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?,
@@ -502,19 +523,20 @@ use crate::storage::{
             kvdb_sqlite::KvdbSqliteStatements,
             kvdb_sqlite_sharded::{
                 KvdbSqliteSharded, KvdbSqliteShardedBorrowMut,
+                KvdbSqliteShardedBorrowShared,
                 KvdbSqliteShardedDestructureTrait,
                 KvdbSqliteShardedRefDestructureTrait,
             },
-            snapshot_mpt::SnapshotMpt,
+            snapshot_mpt::{SnapshotMpt, SnapshotMptLoadNode},
             sqlite::SQLITE_NO_PARAM,
         },
     },
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
-        OpenSnapshotMptTrait, OwnedReadImplFamily, ReadImplFamily,
-        SingleWriterImplByFamily, SingleWriterImplFamily, SnapshotDbTrait,
-        SnapshotMptDbValue, SnapshotMptTraitReadOnly,
-        SnapshotMptTraitSingleWriter,
+        OpenSnapshotMptTrait, OwnedReadImplByFamily, OwnedReadImplFamily,
+        ReadImplByFamily, ReadImplFamily, SingleWriterImplByFamily,
+        SingleWriterImplFamily, SnapshotDbTrait, SnapshotMptDbValue,
+        SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
     KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };

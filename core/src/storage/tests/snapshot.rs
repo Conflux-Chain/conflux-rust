@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::storage::storage_db::SnapshotMptTraitReadAndIterate;
+
 mod slicer;
 mod verifier;
 
@@ -58,7 +60,7 @@ struct FakeSnapshotMptDbIter<'a>(
     btree_map::Range<'a, Vec<u8>, SnapshotMptNode>,
 );
 
-impl SnapshotMptTraitReadOnly for FakeSnapshotMptDb {
+impl SnapshotMptTraitRead for FakeSnapshotMptDb {
     fn get_merkle_root(&self) -> MerkleHash { unimplemented!() }
 
     fn load_node(
@@ -66,7 +68,9 @@ impl SnapshotMptTraitReadOnly for FakeSnapshotMptDb {
     ) -> Result<Option<SnapshotMptNode>> {
         Ok(self.db.get(&mpt_node_path_to_db_key(path)).cloned())
     }
+}
 
+impl SnapshotMptTraitReadAndIterate for FakeSnapshotMptDb {
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>> {
@@ -83,10 +87,7 @@ impl SnapshotMptTraitReadOnly for FakeSnapshotMptDb {
     }
 }
 
-impl SnapshotMptTraitSingleWriter for FakeSnapshotMptDb {
-    #[allow(unused)]
-    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
-
+impl SnapshotMptTraitRw for FakeSnapshotMptDb {
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
         let old_value = self.db.remove(&key);
@@ -496,8 +497,8 @@ use crate::storage::{
     state::StateTrait,
     state_manager::StateManagerTrait,
     storage_db::{
-        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitReadOnly,
-        SnapshotMptTraitSingleWriter,
+        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
+        SnapshotMptTraitRw,
     },
     tests::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,

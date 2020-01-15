@@ -105,15 +105,10 @@ impl State {
         Ok((
             value,
             if with_proof {
-                // FIXME: check if we can use KvdbSqliteShardedBorrowShared than
-                // FIXME: try_clone()?.
-                let mut mpt = self
-                    .snapshot_db
-                    .try_clone()?
-                    .open_snapshot_mpt_read_only()?;
+                let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
                 let mut cursor = MptCursor::<
-                    &mut dyn SnapshotMptTraitReadOnly,
-                    BasicPathNode<&mut dyn SnapshotMptTraitReadOnly>,
+                    &mut dyn SnapshotMptTraitRead,
+                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
                 >::new(&mut mpt);
                 cursor.load_root()?;
                 cursor.open_path_for_key::<access_mode::Read>(access_key)?;
