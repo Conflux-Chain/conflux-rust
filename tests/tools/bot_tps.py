@@ -16,8 +16,10 @@ from test_framework.util import assert_equal, get_simple_rpc_proxy
 
 DRIPS_PER_CFX = 10**18
 
+
 class Sender:
-    def __init__(self, client:RpcClient, addr:str, priv_key_hex:str, balance:int, nonce:int):
+
+    def __init__(self, client: RpcClient, addr: str, priv_key_hex: str, balance: int, nonce: int):
         self.client = client
         self.addr = addr
         self.priv_key = eth_utils.decode_hex(priv_key_hex)
@@ -25,15 +27,16 @@ class Sender:
         self.nonce = nonce
 
     @staticmethod
-    def new(rpc_url:str, addr:str, priv_key_hex:str):
+    def new(rpc_url: str, addr: str, priv_key_hex: str):
         client = new_client(rpc_url)
         balance = client.get_balance(addr)
         nonce = client.get_nonce(addr)
         return Sender(client, addr, priv_key_hex, balance, nonce)
 
-    def new_sender(self, amount:int, rpc_url:str=None):
+    def new_sender(self, amount: int, rpc_url: str=None):
         (addr, priv_key) = self.client.rand_account()
-        tx = self.client.new_tx(sender=self.addr, receiver=addr, nonce=self.nonce, value=amount, priv_key=self.priv_key)
+        tx = self.client.new_tx(sender=self.addr, receiver=addr,
+                                nonce=self.nonce, value=amount, priv_key=self.priv_key)
         assert_equal(self.client.send_tx(tx), tx.hash_hex())
 
         self.balance -= self.client.DEFAULT_TX_FEE + amount
@@ -44,20 +47,23 @@ class Sender:
 
         return sender
 
-    def wait_for_balance(self, interval=3):
-        while True:
+    def wait_for_balance(self, interval=1, retry=30):
+        while retry >= 0:
             balance = self.client.get_balance(self.addr)
             if balance > 0:
                 assert_equal(balance, self.balance)
-                break
+                return
             else:
                 time.sleep(interval)
+            retry -= 1
+        raise Exception("Wait for balance timeout after retrying")
 
     def account_nonce(self):
         return self.client.get_nonce(self.addr)
 
-    def send(self, to:str, amount:int, retry_interval=5):
-        tx = self.client.new_tx(sender=self.addr, receiver=to, nonce=self.nonce, value=amount, priv_key=self.priv_key)
+    def send(self, to: str, amount: int, retry_interval=5):
+        tx = self.client.new_tx(sender=self.addr, receiver=to,
+                                nonce=self.nonce, value=amount, priv_key=self.priv_key)
 
         while True:
             try:
@@ -70,11 +76,14 @@ class Sender:
         self.balance -= self.client.DEFAULT_TX_FEE + amount
         self.nonce += 1
 
+
 class TpsWorker(threading.Thread):
-    def __init__(self, sender:Sender, num_receivers:int):
+
+    def __init__(self, sender: Sender, num_receivers: int):
         threading.Thread.__init__(self, daemon=False)
         self.sender = sender
-        self.receivers = [sender.client.rand_addr() for _ in range(num_receivers)]
+        self.receivers = [sender.client.rand_addr()
+                          for _ in range(num_receivers)]
 
     def run(self):
         while self.sender.balance > 30000:
@@ -88,9 +97,11 @@ class TpsWorker(threading.Thread):
                 to = self.receivers[random.randint(0, len(self.receivers) - 1)]
                 self.sender.send(to, 9000)
 
+
 def load_boot_nodes():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    config_file_path = os.path.abspath(os.path.join(current_dir, "..", "..", "run", "default.toml"))
+    config_file_path = os.path.abspath(os.path.join(
+        current_dir, "..", "..", "run", "default.toml"))
     if not os.path.exists(config_file_path):
         print("file not found:", config_file_path)
         sys.exit(1)
@@ -104,31 +115,43 @@ def load_boot_nodes():
 
     return nodes
 
-def new_client(rpc_url):
-    return RpcClient(node=get_simple_rpc_proxy(rpc_url, 3))
 
-def work(faucet_addr, faucet_priv_key_hex, rpc_urls:list, num_threads:int, num_receivers:int):
+def new_client(rpc_url):
+    return RpcClient(node=get_simple_rpc_proxy(rpc_url, 3, 10))
+
+
+def work(faucet_addr, faucet_priv_key_hex, rpc_urls: list, num_threads: int, num_receivers: int):
     # init faucet
     print("Initialize faucet ...")
     faucet = Sender.new(rpc_urls[0], faucet_addr, faucet_priv_key_hex)
-    print("Faucet: balance = {}, nonce = {}".format(faucet.balance, faucet.nonce))
+    print("Faucet: balance = {}, nonce = {}".format(
+        faucet.balance, faucet.nonce))
 
-    # init global sender for all nodes, so that only 1 tx required from faucet account.
+    # init global sender for all nodes, so that only 1 tx required from faucet
+    # account.
     print("Initialize global sender ...")
-    global_sender = faucet.new_sender((len(rpc_urls) * num_threads + 1) * DRIPS_PER_CFX)
+    global_sender = faucet.new_sender(
+        (len(rpc_urls) * num_threads + 1) * DRIPS_PER_CFX)
     global_sender.wait_for_balance()
-    print("Global sender: balance = {}, nonce = {}".format(global_sender.balance, global_sender.nonce))
+    print("Global sender: balance = {}, nonce = {}".format(
+        global_sender.balance, global_sender.nonce))
 
     # init senders for all threads
     print("Initialize node/thread senders ...")
-    senders = []
+    all_senders = []
     for url in rpc_urls:
         for _ in range(num_threads):
             sender = global_sender.new_sender(DRIPS_PER_CFX, url)
+            all_senders.append(sender)
+    senders = []
+    for sender in all_senders:
+        try:
+            print("Check {} with addr {}".format(sender.client.node.url, sender.addr))
+            sender.wait_for_balance()
             senders.append(sender)
-    for s in senders:
-        s.wait_for_balance()
-        # print("\tnode sender: balance = {}, nonce = {}".format(s.balance, s.nonce))
+        except Exception as e:
+            print(sender.client.node.url, "is not available for Exception", e)
+            break
 
     # start threads to send txs to different nodes
     print("begin to send txs ...")
