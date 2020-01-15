@@ -64,7 +64,7 @@ pub trait OpenSnapshotMptTrait<'db> {
 
 pub trait SnapshotDbTrait:
     KeyValueDbTraitOwnedRead
-    + KeyValueDbToOwnedReadTrait
+    + KeyValueDbTraitRead
     + KeyValueDbTraitSingleWriter
     + for<'db> OpenSnapshotMptTrait<'db>
     + Sized
@@ -72,7 +72,7 @@ pub trait SnapshotDbTrait:
     fn get_null_snapshot() -> Self;
 
     fn open(
-        snapshot_path: &str, read_only: bool,
+        snapshot_path: &str, readonly: bool,
         ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Option<Self>>;
 
@@ -115,13 +115,10 @@ impl Decodable for SnapshotInfo {
 
 use super::{
     super::impls::errors::*,
-    key_value_db::{
-        KeyValueDbToOwnedReadTrait, KeyValueDbTraitOwnedRead,
-        KeyValueDbTraitSingleWriter,
-    },
+    key_value_db::{KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter},
 };
 use crate::storage::storage_db::{
-    SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+    KeyValueDbTraitRead, SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
 };
 use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};

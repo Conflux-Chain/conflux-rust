@@ -404,6 +404,10 @@ macro_rules! mark_kvdb_multi_reader {
     };
 }
 
+impl DbValueType for () {
+    type Type = ();
+}
+
 impl DbValueType for Box<[u8]> {
     type Type = [u8];
 }

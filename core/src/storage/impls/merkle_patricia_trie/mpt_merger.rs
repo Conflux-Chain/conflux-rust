@@ -75,8 +75,11 @@ impl<'a> MptMerger<'a> {
     /// The iterators operate on key, value store.
     pub fn merge_insertion_deletion_separated<'k>(
         &mut self,
-        mut delete_keys_iter: impl FallibleIterator<Item = Vec<u8>, Error = Error>,
-        mut insert_keys_iter: impl FallibleIterator<
+        mut delete_keys_iter: impl FallibleIterator<
+            Item = (Vec<u8>, ()),
+            Error = Error,
+        >,
+        mut set_keys_iter: impl FallibleIterator<
             Item = (Vec<u8>, Box<[u8]>),
             Error = Error,
         >,
@@ -85,24 +88,25 @@ impl<'a> MptMerger<'a> {
         self.rw_cursor.load_root()?;
 
         let mut key_to_delete = delete_keys_iter.next()?;
-        let mut key_value_to_insert = insert_keys_iter.next()?;
+        let mut key_value_to_set = set_keys_iter.next()?;
 
         loop {
             if key_to_delete.is_none() {
-                if key_value_to_insert.is_some() {
-                    let (key, value) = key_value_to_insert.unwrap();
+                if key_value_to_set.is_some() {
+                    let (key, value) = key_value_to_set.unwrap();
                     self.rw_cursor.insert(&key, value)?;
-                    while let Some((key, value)) = insert_keys_iter.next()? {
+                    while let Some((key, value)) = set_keys_iter.next()? {
                         self.rw_cursor.insert(&key, value)?;
                     }
                     break;
                 }
             };
 
-            if key_value_to_insert.is_none() {
+            if key_value_to_set.is_none() {
                 if key_to_delete.is_some() {
-                    self.rw_cursor.delete(key_to_delete.as_ref().unwrap())?;
-                    while let Some(key) = delete_keys_iter.next()? {
+                    self.rw_cursor
+                        .delete(&key_to_delete.as_ref().unwrap().0)?;
+                    while let Some((key, _)) = delete_keys_iter.next()? {
                         self.rw_cursor.delete(&key)?;
                     }
                     break;
@@ -113,14 +117,14 @@ impl<'a> MptMerger<'a> {
             // delete only happens before the insertion because the inserted key
             // value must present in the final merged result for it to be in the
             // diff.
-            let key_delete = key_to_delete.as_ref().unwrap();
-            if key_delete <= &key_value_to_insert.as_ref().unwrap().0 {
+            let key_delete = &key_to_delete.as_ref().unwrap().0;
+            if key_delete <= &key_value_to_set.as_ref().unwrap().0 {
                 self.rw_cursor.delete(key_delete)?;
                 key_to_delete = delete_keys_iter.next()?;
             } else {
-                let (key_insert, value) = key_value_to_insert.take().unwrap();
+                let (key_insert, value) = key_value_to_set.take().unwrap();
                 self.rw_cursor.insert(&key_insert, value)?;
-                key_value_to_insert = insert_keys_iter.next()?;
+                key_value_to_set = set_keys_iter.next()?;
             }
         }
 
