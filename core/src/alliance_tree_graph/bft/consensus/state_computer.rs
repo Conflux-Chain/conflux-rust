@@ -51,7 +51,6 @@ impl PivotBlockDecision {
 pub struct ExecutionProxy {
     executor: Arc<Executor>,
     //synchronizer: Arc<StateSyncClient>,
-    last_pivot_height: u64,
 }
 
 impl ExecutionProxy {
@@ -61,8 +60,6 @@ impl ExecutionProxy {
         Self {
             executor,
             //synchronizer,
-            // FIXME: initialize last_pivot_height properly.
-            last_pivot_height: 0,
         }
     }
 
@@ -91,7 +88,6 @@ impl StateComputer for ExecutionProxy {
         block: &Block<Self::Payload>,
     ) -> Result<ProcessedVMOutput>
     {
-        //let pre_execution_instant = Instant::now();
         // TODO: figure out error handling for the prologue txn
         self.executor
             .execute_block(
