@@ -318,22 +318,25 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     {
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         if self.has_state.load(AtomicOrdering::SeqCst) {
-            // TODO Implement a mechanism to ensure the expect
-            let trusted_blame_block = sync_handler
-                .graph
-                .consensus
-                .get_trusted_blame_block_for_snapshot(&epoch_to_sync)
-                .expect(
-                    "It's ensured that a trusted blame block can be found for \
+            if epoch_to_sync != sync_handler.graph.data_man.true_genesis.hash()
+            {
+                // TODO Implement a mechanism to ensure the expect
+                let trusted_blame_block = sync_handler
+                    .graph
+                    .consensus
+                    .get_trusted_blame_block(&epoch_to_sync)
+                    .expect(
+                        "It's ensured that a trusted blame block can be found for \
                      a stable epoch_to_sync",
-                );
-            // Set trusted_blame_block to ensure that state_valid
-            // can be passed to Block-related phases
-            *sync_handler
-                .graph
-                .consensus
-                .synced_epoch_id_and_blame_block
-                .lock() = Some((epoch_to_sync, trusted_blame_block));
+                    );
+                // Set trusted_blame_block to ensure that state_valid
+                // can be passed to Block-related phases
+                *sync_handler
+                    .graph
+                    .consensus
+                    .synced_epoch_id_and_blame_block
+                    .lock() = Some((epoch_to_sync, trusted_blame_block));
+            }
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
         self.state_sync
