@@ -21,8 +21,11 @@ use libra_types::transaction::SignedTransaction;
 use super::super::safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
 use super::super::super::executor::Executor;
-use crate::alliance_tree_graph::bft::consensus::{
-    state_computer::ExecutionProxy, state_replication::StateComputer,
+use crate::alliance_tree_graph::{
+    bft::consensus::{
+        state_computer::ExecutionProxy, state_replication::StateComputer,
+    },
+    consensus::TreeGraphConsensus,
 };
 use network::NetworkService;
 use primitives::TransactionWithSignature;
@@ -53,6 +56,7 @@ impl ChainedBftProvider {
          */
         executor: Arc<Executor>,
         /* synchronizer_client: Arc<StateSyncClient>, */
+        tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Self
     {
         let runtime = runtime::Builder::new()
@@ -78,6 +82,7 @@ impl ChainedBftProvider {
 
         let state_computer = Arc::new(ExecutionProxy::new(
             executor, /* , synchronizer_client.clone()) */
+            tg_consensus,
         ));
         let smr = ChainedBftSMR::new(
             initial_setup,

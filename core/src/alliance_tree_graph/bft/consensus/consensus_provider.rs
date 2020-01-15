@@ -15,7 +15,10 @@ use std::sync::Arc;
 use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use super::super::executor::Executor;
-use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
+use crate::alliance_tree_graph::{
+    consensus::TreeGraphConsensus,
+    hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol,
+};
 use libra_types::transaction::SignedTransaction;
 use primitives::TransactionWithSignature;
 
@@ -45,6 +48,7 @@ pub fn make_consensus_provider(
      *network_receiver: ConsensusNetworkEvents, */
     executor: Arc<Executor>,
     /* state_sync_client: Arc<StateSyncClient>, */
+    tg_consensus: Arc<TreeGraphConsensus>,
 ) -> Box<dyn ConsensusProvider>
 {
     Box::new(ChainedBftProvider::new(
@@ -53,6 +57,7 @@ pub fn make_consensus_provider(
          *network_receiver, */
         executor,
         /* state_sync_client, */
+        tg_consensus,
     ))
 }
 

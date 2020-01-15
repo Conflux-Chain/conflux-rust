@@ -18,6 +18,7 @@ use libra_types::{
 };
 //use state_synchronizer::StateSyncClient;
 use super::super::executor::{Executor, ProcessedVMOutput};
+use crate::alliance_tree_graph::consensus::TreeGraphConsensus;
 use libra_types::event::EventKey;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -25,12 +26,12 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-//use vm_runtime::LibraVM;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PivotBlockDecision {
     height: u64,
     block_hash: H256,
+    parent_hash: H256,
 }
 
 impl PivotBlockDecision {
@@ -51,15 +52,19 @@ impl PivotBlockDecision {
 pub struct ExecutionProxy {
     executor: Arc<Executor>,
     //synchronizer: Arc<StateSyncClient>,
+    tg_consensus: Arc<TreeGraphConsensus>,
 }
 
 impl ExecutionProxy {
     pub fn new(
         executor: Arc<Executor>, /* , synchronizer: Arc<StateSyncClient> */
-    ) -> Self {
+        tg_consensus: Arc<TreeGraphConsensus>,
+    ) -> Self
+    {
         Self {
             executor,
             //synchronizer,
+            tg_consensus,
         }
     }
 
@@ -98,7 +103,19 @@ impl StateComputer for ExecutionProxy {
                 block.id(),
             )
             .and_then(|output| {
-                if let Some(p) = output.pivot_block.as_ref() {}
+                // Check whether pivot block selection is valid.
+                if let Some(p) = output.pivot_block.as_ref() {
+                    let mut inner = self.tg_consensus.inner.write();
+                    ensure!(
+                        inner.on_new_candidate_pivot(
+                            &p.block_hash,
+                            &p.parent_hash,
+                            p.height
+                        ),
+                        "Invalid pivot block proposal!"
+                    );
+                }
+                // FIXME: Check whether new membership is valid.
                 Ok(output)
             })
     }
@@ -106,10 +123,8 @@ impl StateComputer for ExecutionProxy {
     /// Send a successful commit. A future is fulfilled when the state is
     /// finalized.
     async fn commit(
-        &self,
-        blocks: Vec<&ExecutedBlock<Self::Payload>>,
+        &self, blocks: Vec<&ExecutedBlock<Self::Payload>>,
         finality_proof: LedgerInfoWithSignatures,
-        //committed_trees: &ExecutedTrees,
     ) -> Result<()>
     {
         let version = finality_proof.ledger_info().version();
@@ -117,7 +132,10 @@ impl StateComputer for ExecutionProxy {
 
         let pre_commit_instant = Instant::now();
 
-        let committable_blocks = blocks
+        let committable_blocks: Vec<(
+            Vec<Transaction>,
+            Arc<ProcessedVMOutput>,
+        )> = blocks
             .into_iter()
             .map(|executed_block| {
                 (
@@ -126,6 +144,14 @@ impl StateComputer for ExecutionProxy {
                 )
             })
             .collect();
+
+        let mut committed_blocks = Vec::new();
+        for (_, output) in &committable_blocks {
+            if let Some(p) = output.pivot_block.as_ref() {
+                committed_blocks.push(p.block_hash);
+            }
+        }
+        self.tg_consensus.inner.write().commit(&committed_blocks);
 
         self.executor
             .commit_blocks(committable_blocks, finality_proof)?;
