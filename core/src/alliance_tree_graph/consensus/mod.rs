@@ -2,13 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod anticone_cache;
 pub mod consensus_inner;
 mod debug;
-mod pastset_cache;
 
 use super::consensus::consensus_inner::{
-    confirmation_meter::ConfirmationMeter,
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler, ConsensusGraphInner,
     ConsensusInnerConfig,
@@ -28,7 +25,7 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
-use cfx_types::{Bloom, H160, H256, U256};
+use cfx_types::{Address, Bloom, H256, U256};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -39,13 +36,7 @@ use primitives::{
     EpochId, EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
-use std::{
-    cmp::Reverse,
-    collections::{HashMap, HashSet},
-    sync::Arc,
-    thread::sleep,
-    time::Duration,
-};
+use std::{cmp::Reverse, collections::HashSet, sync::Arc};
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
@@ -103,19 +94,12 @@ pub struct TreeGraphConsensus {
     executor: Arc<ConsensusExecutor>,
     pub statistics: SharedStatistics,
     pub new_block_handler: ConsensusNewBlockHandler,
-    pub confirmation_meter: ConfirmationMeter,
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
     /// This is the hash of latest block inserted into consensus graph.
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_inserted_block: Mutex<H256>,
-    /// This HashMap stores whether the state in header is correct or not for
-    /// pivot blocks from current era genesis to first trusted blame block
-    /// after current era stable genesis.
-    /// We use `Mutex` here because other thread will only modify it once and
-    /// after that only current thread will operate this map.
-    pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
 
     /// The epoch id of the remotely synchronized state and the trusted block
     /// whose blame includes it. This is always `None` for archive nodes.
@@ -148,7 +132,6 @@ impl TreeGraphConsensus {
             inner.clone(),
             conf.bench_mode,
         );
-        let confirmation_meter = ConfirmationMeter::new();
 
         let graph = TreeGraphConsensus {
             inner,
@@ -159,10 +142,8 @@ impl TreeGraphConsensus {
             new_block_handler: ConsensusNewBlockHandler::new(
                 conf, txpool, data_man, executor, statistics,
             ),
-            confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
-            pivot_block_state_valid_map: Default::default(),
             synced_epoch_id_and_blame_block: Default::default(),
         };
         graph.update_best_info(&*graph.inner.read());
@@ -195,52 +176,6 @@ impl TreeGraphConsensus {
         )
     }
 
-    /// Compute the expected difficulty of a new block given its parent
-    pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
-        let inner = self.inner.read();
-        inner.expected_difficulty(parent_hash)
-    }
-
-    pub fn update_total_weight_in_past(&self) {
-        self.confirmation_meter.update_total_weight_in_past();
-    }
-
-    /// Wait for the generation and the execution completion of a block in the
-    /// consensus graph. This API is used mainly for testing purpose
-    pub fn wait_for_generation(&self, hash: &H256) {
-        while !self
-            .inner
-            .read_recursive()
-            .hash_to_arena_indices
-            .contains_key(hash)
-        {
-            sleep(Duration::from_millis(1));
-        }
-        let best_state_block =
-            self.inner.read_recursive().best_state_block_hash();
-        self.executor.wait_for_result(best_state_block);
-    }
-
-    /// Determine whether the next mined block should have adaptive weight or
-    /// not
-    pub fn check_mining_adaptive_block(
-        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        referees: &Vec<H256>, difficulty: &U256,
-    ) -> bool
-    {
-        let parent_index =
-            *inner.hash_to_arena_indices.get(parent_hash).unwrap();
-        let referee_indices: Vec<_> = referees
-            .iter()
-            .map(|h| *inner.hash_to_arena_indices.get(h).unwrap())
-            .collect();
-        inner.check_mining_adaptive_block(
-            parent_index,
-            referee_indices,
-            *difficulty,
-        )
-    }
-
     /// Convert EpochNumber to height based on the current TreeGraphConsensus
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,
@@ -248,11 +183,11 @@ impl TreeGraphConsensus {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
+            EpochNumber::LatestState => self.best_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
-                    return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
+                    return Err("Invalid params: expected a numbers with less than largest epoch number.".into());
                 }
                 epoch_num
             }
@@ -334,8 +269,7 @@ impl TreeGraphConsensus {
                 return Err("Latest mined epoch is not executed".into());
             }
             EpochNumber::Number(num) => {
-                let latest_state_epoch =
-                    self.executed_best_state_epoch_number();
+                let latest_state_epoch = self.best_epoch_number();
                 if *num > latest_state_epoch {
                     return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
                 }
@@ -351,7 +285,7 @@ impl TreeGraphConsensus {
     ) -> Result<StateDb, String> {
         self.validate_stated_epoch(&epoch_number)?;
         let height = self.get_height_from_epoch_number(epoch_number)?;
-        let hash = self.inner.read().get_hash_from_epoch_number(height)?;
+        let hash = self.inner.read().epoch_hash(height)?;
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -390,7 +324,7 @@ impl TreeGraphConsensus {
 
     /// Get the code of an address
     pub fn get_code(
-        &self, address: H160, epoch_number: EpochNumber,
+        &self, address: Address, epoch_number: EpochNumber,
     ) -> Result<Bytes, String> {
         let state_db =
             self.get_state_db_by_epoch_number(epoch_number.clone())?;
@@ -413,7 +347,7 @@ impl TreeGraphConsensus {
 
     /// Get the current balance of an address
     pub fn get_balance(
-        &self, address: H160, epoch_number: EpochNumber,
+        &self, address: Address, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
@@ -425,7 +359,7 @@ impl TreeGraphConsensus {
 
     /// Get the current bank balance of an address
     pub fn get_bank_balance(
-        &self, address: H160, epoch_number: EpochNumber,
+        &self, address: Address, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
@@ -439,7 +373,7 @@ impl TreeGraphConsensus {
 
     /// Get the current storage balance of an address
     pub fn get_storage_balance(
-        &self, address: H160, epoch_number: EpochNumber,
+        &self, address: Address, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
@@ -449,38 +383,6 @@ impl TreeGraphConsensus {
         } else {
             0.into()
         })
-    }
-
-    // FIXME: structure the return value?
-    /// Force the engine to recompute the deferred state root for a particular
-    /// block given a delay.
-    pub fn force_compute_blame_and_deferred_state_for_generation(
-        &self, parent_block_hash: &H256,
-    ) -> Result<(u32, H256, H256, H256), String> {
-        {
-            let inner = &mut *self.inner.write();
-            let hash = inner
-                .get_state_block_with_delay(
-                    parent_block_hash,
-                    DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-                )?
-                .clone();
-            self.executor.compute_state_for_block(&hash, inner)?;
-        }
-        self.executor.get_blame_and_deferred_state_for_generation(
-            parent_block_hash,
-            &self.inner,
-        )
-    }
-
-    // FIXME: structure the return value?
-    pub fn get_blame_and_deferred_state_for_generation(
-        &self, parent_block_hash: &H256,
-    ) -> Result<(u32, H256, H256, H256), String> {
-        self.executor.get_blame_and_deferred_state_for_generation(
-            parent_block_hash,
-            &self.inner,
-        )
     }
 
     /// This function is called after a new block appended to the
@@ -512,7 +414,7 @@ impl TreeGraphConsensus {
         *best_info = Arc::new(BestInformation {
             best_block_hash: inner.best_block_hash(),
             best_epoch_number: inner.best_epoch_number(),
-            current_difficulty: inner.current_difficulty,
+            current_difficulty: 0.into(),
             terminal_block_hashes,
             bounded_terminal_block_hashes,
         });
@@ -551,7 +453,6 @@ impl TreeGraphConsensus {
                 );
                 self.new_block_handler.on_new_block(
                     inner,
-                    &self.confirmation_meter,
                     hash,
                     &block.block_header,
                     Some(&block.transactions),
@@ -568,28 +469,10 @@ impl TreeGraphConsensus {
                 );
                 self.new_block_handler.on_new_block(
                     inner,
-                    &self.confirmation_meter,
                     hash,
                     header.as_ref(),
                     None,
                 );
-            }
-
-            // for full node, we should recover state_valid for pivot block
-            let mut pivot_block_state_valid_map =
-                self.pivot_block_state_valid_map.lock();
-            if !pivot_block_state_valid_map.is_empty()
-                && pivot_block_state_valid_map.contains_key(&hash)
-            {
-                let arena_index =
-                    *inner.hash_to_arena_indices.get(&hash).unwrap();
-                trace!(
-                    "Restore state_valid: hash={:?} height={}",
-                    hash,
-                    inner.arena[arena_index].height
-                );
-                inner.arena[arena_index].data.state_valid =
-                    pivot_block_state_valid_map.remove(&hash);
             }
 
             // Reset pivot chain according to checkpoint information during
@@ -616,7 +499,7 @@ impl TreeGraphConsensus {
                         .data_man
                         .local_block_info_from_db(hash)
                         .expect("local block info must exist in db");
-                    let era_block = inner.arena[*arena_index].era_block();
+                    let era_block = inner.arena[*arena_index].era_block;
                     let era_block_hash = if era_block != NULL {
                         inner.arena[era_block].hash
                     } else {
@@ -627,11 +510,10 @@ impl TreeGraphConsensus {
                             block_hash: *hash,
                             best_block_hash: inner.best_block_hash(),
                             block_status: local_info.get_status(),
-                            past_era_weight: inner.arena[*arena_index]
-                                .past_era_weight(),
+                            past_era_weight: 0.into(),
                             era_block_hash,
-                            stable: inner.arena[*arena_index].stable(),
-                            adaptive: inner.arena[*arena_index].adaptive(),
+                            stable: true,
+                            adaptive: false,
                         },
                     )
                 }
@@ -643,29 +525,11 @@ impl TreeGraphConsensus {
         self.best_info.read_recursive().best_block_hash
     }
 
-    /// Returns the latest epoch with executed state.
-    pub fn executed_best_state_epoch_number(&self) -> u64 {
-        self.inner
-            .read_recursive()
-            .executed_best_state_epoch_number()
-    }
-
-    /// Returns the latest epoch whose state execution has been enqueued.
-    /// And this state should be the `deferred_state` of the block being mined.
-    ///
-    /// Note that the state may not exist, and the caller should wait for the
-    /// result if the state is going to be used.
-    pub fn best_state_epoch_number(&self) -> u64 {
-        self.inner.read_recursive().best_state_epoch_number()
-    }
-
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, String> {
         self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read().get_hash_from_epoch_number(height)
-            })
+            .and_then(|height| self.inner.read().epoch_hash(height))
     }
 
     pub fn get_transaction_info_by_hash(
@@ -718,7 +582,7 @@ impl TreeGraphConsensus {
     }
 
     pub fn transaction_count(
-        &self, address: H160,
+        &self, address: Address,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
     ) -> Result<U256, String>
     {
@@ -732,19 +596,15 @@ impl TreeGraphConsensus {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        let state = State::new(
-            state_db,
-            0.into(),           /* account_start_nonce */
-            Default::default(), /* vm */
-        );
-        state
-            .nonce(&address)
+        state_db
+            .get_account(&address)
+            .map(|maybe_acc| maybe_acc.map_or(0.into(), |acc| acc.nonce))
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
     /// Wait until the best state has been executed, and return the state
     pub fn get_best_state(&self) -> State {
-        let best_state_hash = self.inner.read().best_state_block_hash();
+        let best_state_hash = self.inner.read().best_block_hash();
         self.executor.wait_for_result(best_state_hash);
         // FIXME: it's only absolute safe with lock, otherwise storage /
         // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
@@ -827,13 +687,11 @@ impl TreeGraphConsensus {
                     }
                 } else {
                     // Use the epoch set maintained in memory
-                    let epoch_hash = &inner.arena
-                        [inner.get_pivot_block_arena_index(epoch_number)]
-                    .hash;
-                    for index in &inner.arena
-                        [inner.get_pivot_block_arena_index(epoch_number)]
-                    .data
-                    .ordered_executable_epoch_blocks
+                    let pivot_index = inner.height_to_pivot_index(epoch_number);
+                    let pivot_arena_index = inner.pivot_chain[pivot_index];
+                    let epoch_hash = &inner.arena[pivot_arena_index].hash;
+                    for index in &inner.pivot_chain_metadata[pivot_index]
+                        .ordered_executable_epoch_blocks
                     {
                         let hash = &inner.arena[*index].hash;
                         if self.block_matches_bloom(hash, epoch_hash, &blooms) {
@@ -956,9 +814,7 @@ impl TreeGraphConsensus {
     /// Return the sequence number of the current era genesis hash.
     pub fn current_era_genesis_seq_num(&self) -> u64 {
         let inner = self.inner.read_recursive();
-        inner.arena[inner.cur_era_genesis_block_arena_index]
-            .data
-            .sequence_number
+        inner.arena[inner.cur_era_genesis_block_arena_index].sequence_number
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
@@ -980,32 +836,9 @@ impl TreeGraphConsensus {
         self.inner.read().old_era_block_set.lock().pop_front()
     }
 
-    /// Find a trusted blame block for checkpoint
-    pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
-        self.inner.read().get_trusted_blame_block(stable_hash)
-    }
-
     /// Return the epoch that we are going to sync the state
     pub fn get_to_sync_epoch_id(&self) -> EpochId {
         self.inner.read().get_to_sync_epoch_id()
-    }
-
-    pub fn first_trusted_header_starting_from(
-        &self, height: u64, blame_bound: Option<u32>,
-    ) -> Option<u64> {
-        // TODO(thegaram): change logic to work with arbitrary height, not just
-        // the ones from the current era (i.e. use epoch instead of pivot index)
-        let inner = self.inner.read();
-
-        // for now, make sure to avoid underflow
-        let pivot_index = match height {
-            h if h < inner.get_cur_era_genesis_height() => return None,
-            h => inner.height_to_pivot_index(h),
-        };
-
-        let trusted =
-            inner.find_first_trusted_starting_from(pivot_index, blame_bound);
-        trusted.map(|index| inner.pivot_index_to_height(index))
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
@@ -1015,7 +848,6 @@ impl TreeGraphConsensus {
         let inner = &mut *self.inner.write();
         // Ensure that `state_valid` of the first valid block after
         // cur_era_stable_genesis is set
-        inner.recover_state_valid();
         self.new_block_handler.construct_pivot_state(inner);
     }
 
