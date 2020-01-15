@@ -5,6 +5,11 @@ appenders:
     kind: console
     encoder:
         pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"
+    filters: 
+      -
+        kind: "threshold"
+        level: "info"
+
 
   logfile:
     kind: rolling_file
@@ -33,7 +38,7 @@ loggers:
     network:
         level: info
     cfxcore:
-        level: info
+        level: debug
     rpc:
         level: info
     discovery:
