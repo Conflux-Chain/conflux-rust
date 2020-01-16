@@ -25,18 +25,28 @@ pub struct SubtreeMerkleWithSize {
 // TODO: The key for SnapshotMpt should be changed to something else because
 // TODO: we'd like to use a multi-version snapshot db to manage multiple
 // TODO: snapshots.
-pub trait SnapshotMptTraitReadOnly {
+pub trait SnapshotMptTraitRead: AsSnapshotMptTraitRead {
     fn get_merkle_root(&self) -> MerkleHash;
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Option<SnapshotMptNode>>;
+}
+
+pub trait AsSnapshotMptTraitRead {
+    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitRead;
+}
+
+impl<T: SnapshotMptTraitRead> AsSnapshotMptTraitRead for T {
+    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitRead { self }
+}
+
+pub trait SnapshotMptTraitReadAndIterate: SnapshotMptTraitRead {
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>>;
 }
 
-pub trait SnapshotMptTraitSingleWriter: SnapshotMptTraitReadOnly {
-    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly;
+pub trait SnapshotMptTraitRw: SnapshotMptTraitReadAndIterate {
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()>;
     fn write_node(
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,

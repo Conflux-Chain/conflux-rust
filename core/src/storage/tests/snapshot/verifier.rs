@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::storage::storage_db::SnapshotMptTraitReadAndIterate;
+
 #[test]
 fn test_slice_verifier_zero_or_one_chunk() {
     // Slice empty mpt.
@@ -255,7 +257,7 @@ impl KeyValueDbTraitSingleWriter for Arc<Mutex<FakeSnapshotDb>> {
     }
 }
 
-impl SnapshotMptTraitReadOnly for Arc<Mutex<FakeSnapshotMptDb>> {
+impl SnapshotMptTraitRead for Arc<Mutex<FakeSnapshotMptDb>> {
     fn get_merkle_root(&self) -> MerkleHash { self.lock().get_merkle_root() }
 
     fn load_node(
@@ -263,7 +265,9 @@ impl SnapshotMptTraitReadOnly for Arc<Mutex<FakeSnapshotMptDb>> {
     ) -> Result<Option<SnapshotMptNode>> {
         self.lock().load_node(path)
     }
+}
 
+impl SnapshotMptTraitReadAndIterate for Arc<Mutex<FakeSnapshotMptDb>> {
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, _path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>> {
@@ -273,9 +277,7 @@ impl SnapshotMptTraitReadOnly for Arc<Mutex<FakeSnapshotMptDb>> {
     }
 }
 
-impl SnapshotMptTraitSingleWriter for Arc<Mutex<FakeSnapshotMptDb>> {
-    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
-
+impl SnapshotMptTraitRw for Arc<Mutex<FakeSnapshotMptDb>> {
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         self.lock().delete_node(path)
     }
@@ -288,18 +290,18 @@ impl SnapshotMptTraitSingleWriter for Arc<Mutex<FakeSnapshotMptDb>> {
 }
 
 impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
-    type SnapshotMptReadType = Arc<Mutex<FakeSnapshotMptDb>>;
-    type SnapshotMptWriteType = Arc<Mutex<FakeSnapshotMptDb>>;
+    type SnapshotDbBorrowMutType = Arc<Mutex<FakeSnapshotMptDb>>;
+    type SnapshotDbBorrowSharedType = Arc<Mutex<FakeSnapshotMptDb>>;
 
-    fn open_snapshot_mpt_for_write(
-        &mut self,
-    ) -> Result<Self::SnapshotMptWriteType> {
+    fn open_snapshot_mpt_owned(
+        &'db mut self,
+    ) -> Result<Self::SnapshotDbBorrowMutType> {
         Ok(self.lock().mpt_db.clone())
     }
 
-    fn open_snapshot_mpt_read_only(
-        &mut self,
-    ) -> Result<Self::SnapshotMptReadType> {
+    fn open_snapshot_mpt_shared(
+        &'db self,
+    ) -> Result<Self::SnapshotDbBorrowSharedType> {
         Ok(self.lock().mpt_db.clone())
     }
 }
@@ -573,8 +575,8 @@ use crate::storage::{
         DbValueType, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
         KeyValueDbTraitSingleWriter, KeyValueDbTypes, OpenSnapshotMptTrait,
         SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
-        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitReadOnly,
-        SnapshotMptTraitSingleWriter,
+        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
+        SnapshotMptTraitRw,
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,
