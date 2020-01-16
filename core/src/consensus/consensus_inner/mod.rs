@@ -2817,4 +2817,10 @@ impl ConsensusGraphInner {
             error!("Fail to recover state_valid");
         }
     }
+
+    pub fn block_node(&self, block_hash: &H256) -> Option<&ConsensusGraphNode> {
+        self.hash_to_arena_indices
+            .get(block_hash)
+            .and_then(|arena_index| self.arena.get(*arena_index))
+    }
 }
