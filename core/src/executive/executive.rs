@@ -12,13 +12,6 @@ use crate::{
     hash::keccak,
     machine::Machine,
     state::{CleanupMode, State, Substate},
-};
-use cfx_types::{Address, H256, U256, U512};
-use primitives::{transaction::Action, SignedTransaction};
-use std::{convert::TryFrom, str::FromStr, sync::Arc};
-//use crate::storage::{Storage, StorageTrait};
-//use crate::transaction_pool::SharedTransactionPool;
-use crate::{
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
         CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
@@ -26,6 +19,9 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
+use cfx_types::{Address, H256, U256, U512};
+use primitives::{transaction::Action, SignedTransaction};
+use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 lazy_static! {
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
@@ -1657,7 +1653,7 @@ mod tests {
     use keylib::{Generator, Random};
     use primitives::Transaction;
     use rustc_hex::FromHex;
-    use std::str::FromStr;
+    use std::{cmp, str::FromStr};
 
     fn make_byzantium_machine(max_depth: usize) -> Machine {
         let mut machine = crate::machine::new_machine_with_builtin();
