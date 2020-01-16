@@ -739,6 +739,7 @@ impl SynchronizationProtocolHandler {
     ) -> Result<(), Error> {
         let mut need_to_relay = Vec::new();
         let mut received_blocks = HashSet::new();
+        let mut dependent_hashes = HashSet::new();
         for mut block in task.blocks {
             let hash = block.hash();
             if self.graph.contains_block(&hash) {
@@ -760,8 +761,9 @@ impl SynchronizationProtocolHandler {
                 Some(header) => block.block_header = header,
                 None => {
                     // Blocks may be synced directly without inserting headers
-                    // before. We can only enter this case
-                    // if we are catching up, so we do not need to relay.
+                    // before. We can only enter this case if we are catching
+                    // up. We do not need to relay headers
+                    // during catch-up.
                     let (valid, _) = self.graph.insert_block_header(
                         &mut block.block_header,
                         true,  // need_to_verify
@@ -770,12 +772,28 @@ impl SynchronizationProtocolHandler {
                         true,  // persistent
                     );
                     if !valid {
+                        // If header is invalid, we do not need to request the
+                        // block, so just mark it
+                        // received
                         received_blocks.insert(hash);
                         continue;
                     }
+
+                    // Request missing dependent blocks. This is needed because
+                    // they may not be in any epoch_set because of out of stable
+                    // era, so they will not be retrieved by
+                    // request_epochs.
+                    let parent = block.block_header.parent_hash();
+                    if !self.graph.contains_block(parent) {
+                        dependent_hashes.insert(*parent);
+                    }
+                    for referee in block.block_header.referee_hashes() {
+                        if !self.graph.contains_block(referee) {
+                            dependent_hashes.insert(*referee);
+                        }
+                    }
                 }
             }
-
             let (success, to_relay) = self.graph.insert_block(
                 block, true,  /* need_to_verify */
                 true,  /* persistent */
@@ -789,7 +807,10 @@ impl SynchronizationProtocolHandler {
                 need_to_relay.push(hash);
             }
         }
-
+        let missing_dependencies = dependent_hashes
+            .difference(&received_blocks)
+            .map(Clone::clone)
+            .collect();
         let chosen_peer = PeerFilter::new(msgid::GET_BLOCKS)
             .exclude(task.failed_peer)
             .select(&self.syn);
@@ -801,6 +822,7 @@ impl SynchronizationProtocolHandler {
             !task.compact,
             chosen_peer,
         );
+        self.request_blocks(io, chosen_peer, missing_dependencies);
 
         self.relay_blocks(io, need_to_relay)
     }
@@ -1507,7 +1529,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             EXPIRE_BLOCK_GC_TIMER => {
                 // remove expire blocks every 450 seconds
-                self.expire_block_gc(io, 450).ok();
+                self.expire_block_gc(io, 30).ok();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

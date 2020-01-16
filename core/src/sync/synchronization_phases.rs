@@ -316,10 +316,29 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
+        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         if self.has_state.load(AtomicOrdering::SeqCst) {
+            if epoch_to_sync != sync_handler.graph.data_man.true_genesis.hash()
+            {
+                // TODO Implement a mechanism to ensure the expect
+                let trusted_blame_block = sync_handler
+                    .graph
+                    .consensus
+                    .get_trusted_blame_block(&epoch_to_sync)
+                    .expect(
+                        "It's ensured that a trusted blame block can be found for \
+                     a stable epoch_to_sync",
+                    );
+                // Set trusted_blame_block to ensure that state_valid
+                // can be passed to Block-related phases
+                *sync_handler
+                    .graph
+                    .consensus
+                    .synced_epoch_id_and_blame_block
+                    .lock() = Some((epoch_to_sync, trusted_blame_block));
+            }
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
-        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         self.state_sync
             .update_status(epoch_to_sync, io, sync_handler);
         if self.state_sync.status() == Status::Completed {
@@ -344,12 +363,13 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         info!("start phase {:?}", self.name());
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
-        let has_state = sync_handler
+        if let Some(commitment) = sync_handler
             .graph
             .data_man
             .get_epoch_execution_commitment_with_db(&epoch_to_sync)
-            .is_some();
-        if has_state {
+        {
+            info!("CatchUpCheckpointPhase: commitment for epoch {:?} exists, skip state sync. \
+                commitment={:?}", epoch_to_sync, commitment);
             self.has_state.store(true, AtomicOrdering::SeqCst);
             return;
         }
