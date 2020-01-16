@@ -15,7 +15,7 @@ use crate::{
 };
 use cfx_types::{Address, H256, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
-use std::{cmp, convert::TryFrom, str::FromStr, sync::Arc};
+use std::{convert::TryFrom, str::FromStr, sync::Arc};
 //use crate::storage::{Storage, StorageTrait};
 //use crate::transaction_pool::SharedTransactionPool;
 use crate::{
@@ -1563,55 +1563,14 @@ impl<'a> Executive<'a> {
         result: vm::Result<FinalizationResult>, output: Bytes,
     ) -> ExecutionResult<Executed>
     {
-        let spec = self.spec;
-
-        // refunds from SSTORE nonzero -> zero
-        assert!(
-            substate.sstore_clears_refund >= 0,
-            "On transaction level, sstore clears refund cannot go below zero."
-        );
-        let sstore_refunds = U256::from(substate.sstore_clears_refund as u64);
-        // refunds from contract suicides
-        let suicide_refunds = U256::from(spec.suicide_refund_gas)
-            * U256::from(substate.suicides.len());
-        let refunds_bound = sstore_refunds + suicide_refunds;
-
-        // real ammount to refund
-        let gas_left_prerefund = match result {
+        let gas_left = match result {
             Ok(FinalizationResult { gas_left, .. }) => gas_left,
             _ => 0.into(),
         };
-        let refunded =
-            cmp::min(refunds_bound, (tx.gas - gas_left_prerefund) >> 1);
-        let gas_left = gas_left_prerefund + refunded;
 
+        // gas_used is only used to estimate gas needed
         let gas_used = tx.gas - gas_left;
-        let refund_value = U256::zero();
         let fees_value = tx.gas * tx.gas_price;
-
-        trace!("exec::finalize: tx.gas={}, sstore_refunds={}, suicide_refunds={}, refunds_bound={}, gas_left_prerefund={}, refunded={}, gas_left={}, gas_used={}, refund_value={}, fees_value={}\n",
-               tx.gas, sstore_refunds, suicide_refunds, refunds_bound, gas_left_prerefund, refunded, gas_left, gas_used, refund_value, fees_value);
-
-        let sender = tx.sender();
-        trace!(
-            "exec::finalize: Refunding refund_value={}, sender={}\n",
-            refund_value,
-            sender
-        );
-        // Below: NoEmpty is safe since the sender must already be non-null to
-        // have sent this transaction
-        self.state
-            .add_balance(&sender, &refund_value, CleanupMode::NoEmpty)?;
-        trace!(
-            "exec::finalize: Compensating author: fees_value={}, author={}\n",
-            fees_value,
-            &self.env.author
-        );
-        //        self.state.add_balance(
-        //            &self.env.author,
-        //            &fees_value,
-        //            substate.to_cleanup_mode(&spec),
-        //        )?;
 
         // perform suicides
         for address in &substate.suicides {
@@ -1649,7 +1608,6 @@ impl<'a> Executive<'a> {
                 exception: Some(exception),
                 gas: tx.gas,
                 gas_used: tx.gas,
-                refunded: U256::zero(),
                 fee: fees_value,
                 cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
@@ -1664,9 +1622,8 @@ impl<'a> Executive<'a> {
                 },
                 gas: tx.gas,
                 gas_used,
-                refunded,
                 fee: fees_value,
-                cumulative_gas_used: self.env.gas_used + gas_used,
+                cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: substate.logs,
                 contracts_created: substate.contracts_created,
                 output,
