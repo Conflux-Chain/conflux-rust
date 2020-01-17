@@ -93,6 +93,7 @@ scratchpad = { path = "src/alliance_tree_graph/bft/storage/scratchpad" }
 libra-state-view = { path="src/alliance_tree_graph/bft/storage/state-view" }
 storage-client = { path = "src/alliance_tree_graph/bft/storage/storage-client" }
 storage-proto = { path = "src/alliance_tree_graph/bft/storage/storage-proto" }
+libradb = { path = "src/alliance_tree_graph/bft/storage/libradb" }
 threadpool = "1.0"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 zip = "*"

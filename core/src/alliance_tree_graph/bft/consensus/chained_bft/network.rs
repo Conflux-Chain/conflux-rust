@@ -328,29 +328,4 @@ impl<T: Payload> NetworkTask<T> {
             }
         }
     }
-
-    async fn process_epoch_request(
-        &mut self,
-        _peer_id: AccountAddress,
-        //request: RequestEpoch,
-    ) -> anyhow::Result<()>
-    {
-        /*
-        let request = EpochRetrievalRequest::try_from(request)?;
-        debug!(
-            "Received epoch retrieval from peer {}, start epoch {}, end epoch {}",
-            peer_id, request.start_epoch, request.end_epoch
-        );
-        match request.end_epoch.cmp(&self.epoch()) {
-            Ordering::Less | Ordering::Equal => {
-                self.epoch_retrieval_tx.push(peer_id, (request, peer_id))
-            }
-            Ordering::Greater => {
-                warn!("Received EpochRetrievalRequest beyond what we have locally");
-                Ok(())
-            }
-        }
-        */
-        Ok(())
-    }
 }

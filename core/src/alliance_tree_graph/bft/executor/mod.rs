@@ -18,6 +18,7 @@ use libra_types::{
     vm_error::{StatusCode, VMStatus},
     write_set::WriteSet,
 };
+use libradb::LibraDB;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -177,12 +178,15 @@ impl ProcessedVMOutput {
 
 /// `Executor` implements all functionalities the execution module needs to
 /// provide.
-pub struct Executor {}
+pub struct Executor {
+    db: Arc<LibraDB>,
+}
 
 impl Executor {
     /// Constructs an `Executor`.
     pub fn new(config: &NodeConfig) -> Self {
-        let mut executor = Executor {};
+        let db = Arc::new(LibraDB::new("./bft_db"));
+        let mut executor = Executor { db };
 
         //FIXME: if start from original genesis
         {
@@ -325,7 +329,16 @@ impl Executor {
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<()>
     {
+        self.db
+            .save_ledger_info(&Some(ledger_info_with_sigs.clone()))?;
         Ok(())
+    }
+
+    pub fn get_epoch_change_ledger_infos(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> Result<(Vec<LedgerInfoWithSignatures>, bool)> {
+        self.db
+            .get_epoch_change_ledger_infos(start_epoch, end_epoch)
     }
 
     /*

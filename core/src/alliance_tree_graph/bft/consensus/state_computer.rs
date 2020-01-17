@@ -177,11 +177,14 @@ impl StateComputer for ExecutionProxy {
     async fn get_epoch_proof(
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<ValidatorChangeProof> {
+        let (ledger_infos, more) = self
+            .executor
+            .get_epoch_change_ledger_infos(start_epoch, end_epoch)?;
+        Ok(ValidatorChangeProof::new(ledger_infos, more))
         /*
         self.synchronizer
             .get_epoch_proof(start_epoch, end_epoch)
             .await
             */
-        Ok(ValidatorChangeProof::new(Vec::new(), false))
     }
 }
