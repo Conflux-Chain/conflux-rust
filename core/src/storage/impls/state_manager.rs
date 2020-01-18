@@ -325,6 +325,8 @@ impl StateManager {
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
                     intermediate_trie_root_merkle = MERKLE_NULL_NODE;
+                    maybe_delta_mpt_key_padding =
+                        Some(parent_state_index.delta_mpt_key_padding);
                     match self
                         .storage_manager
                         .get_intermediate_mpt(parent_state_index.epoch_id)?
@@ -386,10 +388,10 @@ impl StateManager {
                     };
                     maybe_intermediate_mpt_key_padding =
                         Some(parent_state_index.delta_mpt_key_padding);
+                    maybe_delta_mpt_key_padding = None;
                 }
             };
             maybe_delta_trie_height = Some(1);
-            maybe_delta_mpt_key_padding = None;
             new_delta_root = true;
         } else {
             snapshot_epoch_id = parent_state_index.snapshot_epoch_id;

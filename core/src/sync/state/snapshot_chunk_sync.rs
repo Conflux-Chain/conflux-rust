@@ -717,9 +717,11 @@ impl SnapshotChunkSync {
                     // to know. We put the
                     // parent_snapshot_merkle_root here.
                     snapshot_epoch_id: state_root_vec[offset - 1].snapshot_root,
+                    // We put the expected delta_mpt_key_padding for the
+                    // delta_mpt of the next snapshot here.
                     delta_mpt_key_padding: StorageKey::delta_mpt_padding(
-                        &state_root_vec[offset].snapshot_root,
-                        &state_root_vec[offset].intermediate_delta_root,
+                        &state_root_vec[offset - 1].snapshot_root,
+                        &state_root_vec[offset - 1].intermediate_delta_root,
                     ),
                     intermediate_epoch_id: parent_snapshot_epoch,
                     // We don't necessarily need to know because

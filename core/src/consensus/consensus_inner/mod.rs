@@ -2624,6 +2624,16 @@ impl ConsensusGraphInner {
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
     }
 
+    /// Find a trusted blame block for snapshot full sync
+    pub fn get_trusted_blame_block_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<H256> {
+        self.get_trusted_blame_block(
+            snapshot_epoch_id,
+            self.data_man.get_snapshot_blame_plus_depth(),
+        )
+    }
+
     /// Return the epoch that we are going to sync the state
     pub fn get_to_sync_epoch_id(&self) -> EpochId {
         let height_to_sync = self.latest_snapshot_height();
