@@ -316,20 +316,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         if self.has_state.load(AtomicOrdering::SeqCst) {
-            // TODO Here has_state could mean we have the snapshot of the state
-            // or the last snapshot and the delta mpt. We only need to specially
-            // handle the case of snapshot-only state where we
-            // cannot compute state_valid because we do not have a
-            // valid state root.
-            if epoch_to_sync != sync_handler.graph.data_man.true_genesis.hash()
-            {
-                *sync_handler.graph.consensus.synced_epoch_id.lock() =
-                    Some(epoch_to_sync);
-            }
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
+        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         self.state_sync
             .update_status(epoch_to_sync, io, sync_handler);
         if self.state_sync.status() == Status::Completed {
@@ -358,6 +348,17 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             info!("CatchUpCheckpointPhase: commitment for epoch {:?} exists, skip state sync. \
                 commitment={:?}", epoch_to_sync, commitment);
             self.has_state.store(true, AtomicOrdering::SeqCst);
+
+            // TODO Here has_state could mean we have the snapshot of the state
+            // or the last snapshot and the delta mpt. We only need to specially
+            // handle the case of snapshot-only state where we
+            // cannot compute state_valid because we do not have a
+            // valid state root.
+            if epoch_to_sync != sync_handler.graph.data_man.true_genesis.hash()
+            {
+                *sync_handler.graph.consensus.synced_epoch_id.lock() =
+                    Some(epoch_to_sync);
+            }
             return;
         }
 
