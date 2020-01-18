@@ -17,10 +17,6 @@ pub struct Executed {
     /// Gas used during execution of transaction.
     pub gas_used: U256,
 
-    /// Gas refunded after the execution of transaction.
-    /// To get gas that was required up front, add `refunded` and `gas_used`.
-    pub refunded: U256,
-
     /// Fee that need to be paid by execution of this transaction.
     pub fee: U256,
 
