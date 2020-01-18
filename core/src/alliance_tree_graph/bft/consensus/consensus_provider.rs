@@ -12,7 +12,7 @@ use grpcio::EnvBuilder;
 //use state_synchronizer::StateSyncClient;
 use network::NetworkService;
 use std::sync::Arc;
-use storage_client::{StorageRead, StorageReadServiceClient};
+//use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use super::super::executor::Executor;
 use crate::alliance_tree_graph::{
@@ -61,6 +61,7 @@ pub fn make_consensus_provider(
     ))
 }
 
+/*
 /// Create a storage read client based on the config
 pub fn create_storage_read_client(config: &NodeConfig) -> Arc<dyn StorageRead> {
     let env = Arc::new(EnvBuilder::new().name_prefix("grpc-con-sto-").build());
@@ -70,3 +71,4 @@ pub fn create_storage_read_client(config: &NodeConfig) -> Arc<dyn StorageRead> {
         config.storage.port,
     ))
 }
+*/

@@ -3,7 +3,6 @@
 
 use super::super::{
     chained_bft::consensusdb::ConsensusDB,
-    consensus_provider::create_storage_read_client,
     consensus_types::{
         block::Block, common::Payload, quorum_cert::QuorumCert,
         timeout_certificate::TimeoutCertificate, vote::Vote,
@@ -18,8 +17,9 @@ use libra_types::{
     crypto_proxies::{ValidatorPublicKeys, ValidatorSet, ValidatorVerifier},
     ledger_info::LedgerInfo,
 };
+use libradb::LibraDB;
 use std::{collections::HashSet, sync::Arc};
-use storage_client::StorageRead;
+//use storage_client::StorageRead;
 
 /// Persistent storage is essential for maintaining safety when a node crashes.
 /// Specifically, upon a restart, a correct node will not equivocate.  Even if
@@ -256,14 +256,16 @@ impl<T: Payload> RecoveryData<T> {
 /// The proxy we use to persist data in libra db storage service via grpc.
 pub struct StorageWriteProxy {
     db: Arc<ConsensusDB>,
-    read_client: Arc<dyn StorageRead>,
+    libra_db: Arc<LibraDB>,
+    //read_client: Arc<dyn StorageRead>,
 }
 
 impl StorageWriteProxy {
-    pub fn new(config: &NodeConfig) -> Self {
-        let read_client = create_storage_read_client(config);
+    pub fn new(config: &NodeConfig, libra_db: Arc<LibraDB>) -> Self {
+        //let read_client = create_storage_read_client(config);
         let db = Arc::new(ConsensusDB::new(config.storage.dir()));
-        StorageWriteProxy { db, read_client }
+        //StorageWriteProxy { db, read_client }
+        StorageWriteProxy { db, libra_db }
     }
 }
 
@@ -323,7 +325,7 @@ impl<T: Payload> PersistentStorage<T> for StorageWriteProxy {
 
         // find the block corresponding to storage latest ledger info
         let startup_info = self
-            .read_client
+            .libra_db
             .get_startup_info()
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");

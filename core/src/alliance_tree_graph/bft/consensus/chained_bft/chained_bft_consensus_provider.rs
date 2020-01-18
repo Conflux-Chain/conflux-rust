@@ -27,6 +27,7 @@ use crate::alliance_tree_graph::{
     },
     consensus::TreeGraphConsensus,
 };
+use libradb::LibraDB;
 use network::NetworkService;
 use primitives::TransactionWithSignature;
 use std::sync::Arc;
@@ -72,7 +73,11 @@ impl ChainedBftProvider {
         );
         let config = ChainedBftSMRConfig::from_node_config(&node_config);
         debug!("[Consensus] My peer: {:?}", config.author);
-        let storage = Arc::new(StorageWriteProxy::new(node_config));
+
+        let libra_db = executor.get_libra_db();
+
+        let storage =
+            Arc::new(StorageWriteProxy::new(node_config, libra_db.clone()));
         let initial_data = storage.start();
 
         /*

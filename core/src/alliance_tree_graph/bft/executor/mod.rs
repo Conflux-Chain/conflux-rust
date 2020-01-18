@@ -246,6 +246,8 @@ impl Executor {
         info!("GENESIS transaction is committed.")
     }
 
+    pub fn get_libra_db(&self) -> Arc<LibraDB> { self.db.clone() }
+
     /// Executes a block.
     pub fn execute_block(
         &self, transactions: Vec<Transaction>, parent_id: HashValue,
