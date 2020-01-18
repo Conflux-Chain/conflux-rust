@@ -29,9 +29,9 @@ use std::{
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PivotBlockDecision {
-    height: u64,
-    block_hash: H256,
-    parent_hash: H256,
+    pub height: u64,
+    pub block_hash: H256,
+    pub parent_hash: H256,
 }
 
 impl PivotBlockDecision {

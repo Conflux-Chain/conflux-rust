@@ -144,6 +144,10 @@ impl ProcessedVMOutput {
 
     pub fn validators(&self) -> &Option<ValidatorSet> { &self.validators }
 
+    pub fn pivot_block(&self) -> &Option<PivotBlockDecision> {
+        &self.pivot_block
+    }
+
     // This method should only be called by tests.
     pub fn set_validators(&mut self, validator_set: ValidatorSet) {
         self.validators = Some(validator_set)

@@ -12,6 +12,7 @@ use super::consensus::consensus_inner::{
 };
 
 use crate::{
+    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::BestInformation,
@@ -22,10 +23,12 @@ use crate::{
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
+    sync::Error,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, Bloom, H256, U256};
+use futures::channel::oneshot;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -192,6 +195,14 @@ impl TreeGraphConsensus {
                 epoch_num
             }
         })
+    }
+
+    pub fn get_next_selected_pivot_block(
+        &self, last_pivot_hash: &H256,
+        callback: oneshot::Sender<Result<PivotBlockDecision, Error>>,
+    )
+    {
+
     }
 
     pub fn best_epoch_number(&self) -> u64 {

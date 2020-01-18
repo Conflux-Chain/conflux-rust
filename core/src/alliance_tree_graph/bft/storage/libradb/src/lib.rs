@@ -62,6 +62,7 @@ use libra_types::{
         TransactionWithProof, Version,
     },
 };
+use num_traits::real::Real;
 use prometheus::{IntCounter, IntGauge, IntGaugeVec};
 use schemadb::{
     ColumnFamilyOptions, ColumnFamilyOptionsMap, DB, DEFAULT_CF_NAME,
@@ -70,7 +71,6 @@ use std::{
     convert::TryInto, iter::Iterator, path::Path, sync::Arc, time::Instant,
 };
 use storage_proto::{StartupInfo, TreeState};
-use num_traits::real::Real;
 
 lazy_static! {
     static ref OP_COUNTER: OpMetrics = OpMetrics::new_and_registered("storage");

@@ -22,8 +22,11 @@ use futures::{select, stream::StreamExt};
 use libra_config::config::{ConsensusProposerType, NodeConfig};
 //use libra_logger::prelude::*;
 use super::super::safety_rules::SafetyRulesManager;
-use crate::alliance_tree_graph::bft::consensus::{
-    chained_bft::network::NetworkSender, state_replication::StateComputer,
+use crate::alliance_tree_graph::{
+    bft::consensus::{
+        chained_bft::network::NetworkSender, state_replication::StateComputer,
+    },
+    consensus::TreeGraphConsensus,
 };
 use libra_types::crypto_proxies::EpochInfo;
 use network::NetworkService;
@@ -185,6 +188,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>,
         protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
+        tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Result<()>
     {
         let mut initial_setup = self
@@ -233,6 +237,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             state_computer,
             self.storage.clone(),
             safety_rules_manager,
+            tg_consensus,
         );
 
         // Step 2

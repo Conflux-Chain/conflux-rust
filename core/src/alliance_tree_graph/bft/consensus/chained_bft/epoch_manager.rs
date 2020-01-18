@@ -37,8 +37,11 @@ use libra_types::{
 //use network::proto::ConsensusMsg_oneof;
 //use network::validator_network::{ConsensusNetworkSender, Event};
 use super::super::safety_rules::SafetyRulesManager;
-use crate::alliance_tree_graph::bft::consensus::{
-    chained_bft::network::NetworkSender, state_replication::StateComputer,
+use crate::alliance_tree_graph::{
+    bft::consensus::{
+        chained_bft::network::NetworkSender, state_replication::StateComputer,
+    },
+    consensus::TreeGraphConsensus,
 };
 use futures::executor::block_on;
 use libra_types::validator_change::ValidatorChangeProof;
@@ -61,6 +64,7 @@ pub struct EpochManager</* TM, */ T> {
     state_computer: Arc<dyn StateComputer<Payload = T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     safety_rules_manager: SafetyRulesManager<T>,
+    tg_consensus: Arc<TreeGraphConsensus>,
 }
 
 impl</* TM, */ T> EpochManager</* TM, */ T>
@@ -78,6 +82,7 @@ where
         state_computer: Arc<dyn StateComputer<Payload = T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         safety_rules_manager: SafetyRulesManager<T>,
+        tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Self
     {
         Self {
@@ -91,6 +96,7 @@ where
             state_computer,
             storage,
             safety_rules_manager,
+            tg_consensus,
         }
     }
 
@@ -249,6 +255,7 @@ where
             //self.txn_manager.clone(),
             self.time_service.clone(),
             self.config.max_block_size,
+            self.tg_consensus.clone(),
         );
 
         let pacemaker = self.create_pacemaker(

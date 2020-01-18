@@ -16,6 +16,17 @@ use super::super::super::{
 };
 use anyhow::{bail, ensure, format_err};
 //use libra_logger::prelude::*;
+use crate::alliance_tree_graph::{
+    bft::consensus::state_computer::PivotBlockDecision,
+    consensus::TreeGraphConsensus,
+};
+use futures::channel::oneshot;
+use libra_types::{
+    contract_event::ContractEvent,
+    language_storage::TypeTag,
+    transaction::{ChangeSet, RawTransaction, SignedTransaction},
+    write_set::WriteSet,
+};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -49,6 +60,8 @@ pub struct ProposalGenerator</* TM, */ T> {
     max_block_size: u64,
     // Last round that a proposal was generated
     last_round_generated: Mutex<Round>,
+    // TreeGraph consensus graph.
+    tg_consensus: Arc<TreeGraphConsensus>,
 }
 
 impl</* TM, */ T> ProposalGenerator</* TM, */ T>
@@ -62,6 +75,7 @@ where
         //txn_manager: TM,
         time_service: Arc<dyn TimeService>,
         max_block_size: u64,
+        tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Self
     {
         Self {
@@ -71,6 +85,7 @@ where
             time_service,
             max_block_size,
             last_round_generated: Mutex::new(0),
+            tg_consensus,
         }
     }
 
@@ -215,6 +230,37 @@ where
                 }
             }
         };
+
+        let parent_block = pending_blocks.last().unwrap();
+        let (callback, cb_receiver) = oneshot::channel();
+        self.tg_consensus.get_next_selected_pivot_block(
+            &parent_block
+                .output()
+                .pivot_block()
+                .as_ref()
+                .unwrap()
+                .block_hash,
+            callback,
+        );
+
+        let response = cb_receiver.await?;
+        let pivot_decision = match response {
+            Ok(res) => res,
+            _ => {
+                bail!("Error getting the next selected pivot block");
+            }
+        };
+
+        let event_data = lcs::to_bytes(&pivot_decision)?;
+        let event = ContractEvent::new(
+            PivotBlockDecision::pivot_select_event_key(),
+            0, /* sequence_number */
+            TypeTag::ByteArray,
+            event_data,
+        );
+
+        let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
+        let raw_tx = RawTransaction::new_change_set(self.author, 0, change_set);
 
         /*
         let txns = self

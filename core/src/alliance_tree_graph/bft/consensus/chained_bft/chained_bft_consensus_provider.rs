@@ -46,6 +46,7 @@ pub struct ChainedBftProvider {
     smr: ChainedBftSMR<Vec<SignedTransaction>>,
     //txn_manager: MempoolProxy,
     state_computer: Arc<dyn StateComputer<Payload = Vec<SignedTransaction>>>,
+    tg_consensus: Arc<TreeGraphConsensus>,
 }
 
 impl ChainedBftProvider {
@@ -82,7 +83,7 @@ impl ChainedBftProvider {
 
         let state_computer = Arc::new(ExecutionProxy::new(
             executor, /* , synchronizer_client.clone()) */
-            tg_consensus,
+            tg_consensus.clone(),
         ));
         let smr = ChainedBftSMR::new(
             initial_setup,
@@ -95,6 +96,7 @@ impl ChainedBftProvider {
             smr,
             //txn_manager,
             state_computer,
+            tg_consensus,
         }
     }
 
@@ -131,6 +133,7 @@ impl ConsensusProvider for ChainedBftProvider {
             Arc::clone(&self.state_computer),
             network,
             protocol_handler,
+            self.tg_consensus.clone(),
         )
     }
 
