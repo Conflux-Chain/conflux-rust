@@ -269,6 +269,7 @@ impl Executor {
             match transaction {
                 Transaction::UserTransaction(trans) => {
                     let trans = trans.check_signature()?;
+                    // FIXME: Check the public key in validator set.
                     let payload = trans.payload();
                     let events = match payload {
                         TransactionPayload::WriteSet(change_set) => {

@@ -9,12 +9,28 @@ use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchr
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use crate::alliance_tree_graph::consensus::TreeGraphConsensus;
-use libra_types::crypto_proxies::{
-    LedgerInfoWithSignatures, ValidatorChangeProof,
+use libra_types::{
+    crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
+    transaction::SignedTransaction,
 };
 use network::NetworkService;
 use primitives::TransactionWithSignature;
 use std::sync::Arc;
+
+pub trait TxnTransformer: Send + Sync + Clone + 'static {
+    type Payload;
+
+    fn convert(&self, tx: SignedTransaction) -> Self::Payload;
+}
+
+#[derive(Default, Clone)]
+pub struct TxnTransformerProxy {}
+
+impl TxnTransformer for TxnTransformerProxy {
+    type Payload = Vec<SignedTransaction>;
+
+    fn convert(&self, tx: SignedTransaction) -> Self::Payload { vec![tx] }
+}
 
 /// Retrieves and updates the status of transactions on demand (e.g., via
 /// talking with Mempool)
@@ -90,9 +106,8 @@ pub trait StateMachineReplication {
     /// The function is synchronous: it returns when the state is initialized /
     /// recovered from persisted storage and all the threads have been
     /// started.
-    fn start(
-        &mut self,
-        //txn_manager: TM,
+    fn start<TT: TxnTransformer<Payload = Self::Payload>>(
+        &mut self, txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>,
         protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,

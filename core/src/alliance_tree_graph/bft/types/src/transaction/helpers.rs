@@ -27,7 +27,8 @@ pub fn get_signed_transactions_digest(
         let signed_txn: SignedTransaction =
             lcs::from_bytes(&transaction.txn_bytes)
                 .expect("Unable to deserialize SignedTransaction");
-        signatures.extend_from_slice(&signed_txn.signature().to_bytes());
+        signatures
+            .extend_from_slice(signed_txn.signature().to_vec().as_slice());
     }
     signatures.test_only_hash()
 }
@@ -54,6 +55,7 @@ pub fn create_unsigned_txn(
     )
 }
 
+/*
 pub trait TransactionSigner {
     fn sign_txn(&self, raw_txn: RawTransaction) -> Result<SignedTransaction>;
 }
@@ -90,3 +92,4 @@ impl TransactionSigner for KeyPair<Ed25519PrivateKey, Ed25519PublicKey> {
         ))
     }
 }
+*/

@@ -14,7 +14,8 @@ use crate::{
     vm_error::{StatusCode, StatusType, VMStatus},
     write_set::WriteSet,
 };
-use anyhow::{ensure, format_err, Error, Result};
+use anyhow::{bail, ensure, format_err, Error, Result};
+use ethkey::{verify_public, Secret, Signature};
 use libra_crypto::{
     ed25519::*,
     hash::{CryptoHash, CryptoHasher, EventAccumulatorHasher},
@@ -42,6 +43,7 @@ pub use change_set::ChangeSet;
 pub use module::Module;
 pub use script::{Script, SCRIPT_HASH_LENGTH};
 
+use cfx_types::{BigEndianHash, Public, H256, U256};
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_as_transaction_argument, TransactionArgument,
@@ -209,16 +211,35 @@ impl RawTransaction {
     /// For a transaction that has just been signed, its signature is expected
     /// to be valid.
     pub fn sign(
+        self, secret: &Secret, public_key: Public,
+    ) -> Result<SignatureCheckedTransaction> {
+        let signature = ::ethkey::sign(
+            secret,
+            &H256::from_slice(self.hash().to_vec().as_slice()),
+        )
+        .expect("data is valid and context has signing capabilities; qed");
+        Ok(SignatureCheckedTransaction(SignedTransaction::new(
+            self,
+            public_key,
+            signature.v(),
+            signature.r().into(),
+            signature.s().into(),
+        )))
+    }
+
+    /*
+    pub fn sign(
         self, private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
     ) -> Result<SignatureCheckedTransaction> {
         let signature = private_key.sign_message(&self.hash());
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
             self, public_key, signature,
         )))
-    }
+    }*/
 
     pub fn into_payload(self) -> TransactionPayload { self.payload }
 
+    /*
     pub fn format_for_client(
         &self, get_transaction_name: impl Fn(&[u8]) -> String,
     ) -> String {
@@ -263,6 +284,7 @@ impl RawTransaction {
             self.expiration_time,
         )
     }
+    */
 
     /// Return the sender of this transaction.
     pub fn sender(&self) -> AccountAddress { self.sender }
@@ -311,10 +333,19 @@ pub struct SignedTransaction {
     /// Sender's public key. When checking the signature, we first need to
     /// check whether this key is indeed the pre-image of the pubkey hash
     /// stored under sender's account.
-    public_key: Ed25519PublicKey,
+    //public_key: Ed25519PublicKey,
+    pub public_key: Public,
 
     /// Signature of the transaction that correspond to the public key
-    signature: Ed25519Signature,
+    //signature: Ed25519Signature,
+
+    /// The V field of the signature; helps describe which half of the curve
+    /// our point falls in.
+    pub v: u8,
+    /// The R field of the signature; helps describe the point on the curve.
+    pub r: U256,
+    /// The S field of the signature; helps describe the point on the curve.
+    pub s: U256,
 }
 
 /// A transaction for which the signature has been verified. Created by
@@ -348,27 +379,43 @@ impl fmt::Debug for SignedTransaction {
              signature: {:#?}, \n \
              }} \n \
              }}",
-            self.raw_txn, self.public_key, self.signature,
+            self.raw_txn,
+            self.public_key,
+            self.signature(),
         )
     }
 }
 
 impl SignedTransaction {
     pub fn new(
-        raw_txn: RawTransaction, public_key: Ed25519PublicKey,
-        signature: Ed25519Signature,
+        raw_txn: RawTransaction,
+        //public_key: Ed25519PublicKey,
+        //signature: Ed25519Signature,
+        public_key: Public,
+        v: u8,
+        r: U256,
+        s: U256,
     ) -> SignedTransaction
     {
         SignedTransaction {
             raw_txn,
             public_key,
-            signature,
+            v,
+            r,
+            s,
         }
     }
 
-    pub fn public_key(&self) -> Ed25519PublicKey { self.public_key.clone() }
+    //pub fn public_key(&self) -> Ed25519PublicKey { self.public_key.clone() }
+    pub fn public_key(&self) -> Public { self.public_key.clone() }
 
-    pub fn signature(&self) -> Ed25519Signature { self.signature.clone() }
+    //pub fn signature(&self) -> Ed25519Signature { self.signature.clone() }
+    /// Construct a signature object from the sig.
+    pub fn signature(&self) -> Signature {
+        let r: H256 = BigEndianHash::from_uint(&self.r);
+        let s: H256 = BigEndianHash::from_uint(&self.s);
+        Signature::from_rsv(&r, &s, self.v)
+    }
 
     pub fn sender(&self) -> AccountAddress { self.raw_txn.sender }
 
@@ -393,11 +440,21 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns
     /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        self.public_key
-            .verify_signature(&self.raw_txn.hash(), &self.signature)?;
-        Ok(SignatureCheckedTransaction(self))
+        //self.public_key
+        //    .verify_signature(&self.raw_txn.hash(), &self.signature)?;
+        let verify_result = verify_public(
+            &self.public_key,
+            &self.signature(),
+            &H256::from_slice(self.raw_txn.hash().to_vec().as_slice()),
+        )?;
+        if verify_result {
+            Ok(SignatureCheckedTransaction(self))
+        } else {
+            bail!("Incorrect signature");
+        }
     }
 
+    /*
     pub fn format_for_client(
         &self, get_transaction_name: impl Fn(&[u8]) -> String,
     ) -> String {
@@ -412,6 +469,7 @@ impl SignedTransaction {
             self.signature,
         )
     }
+    */
 }
 
 impl TryFrom<crate::proto::types::SignedTransaction> for SignedTransaction {
@@ -1073,6 +1131,7 @@ impl Transaction {
         }
     }
 
+    /*
     pub fn format_for_client(
         &self, get_transaction_name: impl Fn(&[u8]) -> String,
     ) -> String {
@@ -1088,6 +1147,7 @@ impl Transaction {
             }
         }
     }
+    */
 }
 
 impl CryptoHash for Transaction {

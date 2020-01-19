@@ -17,10 +17,13 @@ use super::super::super::{
 use anyhow::{bail, ensure, format_err};
 //use libra_logger::prelude::*;
 use crate::alliance_tree_graph::{
-    bft::consensus::state_computer::PivotBlockDecision,
+    bft::consensus::{
+        state_computer::PivotBlockDecision, state_replication::TxnTransformer,
+    },
     consensus::TreeGraphConsensus,
 };
 use futures::channel::oneshot;
+use keylib::KeyPair;
 use libra_types::{
     contract_event::ContractEvent,
     language_storage::TypeTag,
@@ -46,14 +49,14 @@ mod proposal_generator_test;
 /// TxnManager should be aware of the pending transactions in the branch that it
 /// is extending, such that it will filter them out to avoid transaction
 /// duplication.
-pub struct ProposalGenerator</* TM, */ T> {
+pub struct ProposalGenerator<TT, T> {
     // The account address of this validator
     author: Author,
     // Block store is queried both for finding the branch to extend and for
     // generating the proposed block.
     block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
     // Transaction manager is delivering the transactions.
-    //txn_manager: TM,
+    txn_transformer: TT,
     // Time service to generate block timestamps
     time_service: Arc<dyn TimeService>,
     // Max number of transactions to be added to a proposed block.
@@ -62,30 +65,31 @@ pub struct ProposalGenerator</* TM, */ T> {
     last_round_generated: Mutex<Round>,
     // TreeGraph consensus graph.
     tg_consensus: Arc<TreeGraphConsensus>,
+    key_pair: KeyPair,
 }
 
-impl</* TM, */ T> ProposalGenerator</* TM, */ T>
+impl<TT, T> ProposalGenerator<TT, T>
 where
-    /* TM: TxnManager<Payload =
-     * T>, */ T: Payload
+    TT: TxnTransformer<Payload = T>,
+    T: Payload,
 {
     pub fn new(
         author: Author,
         block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
-        //txn_manager: TM,
-        time_service: Arc<dyn TimeService>,
-        max_block_size: u64,
-        tg_consensus: Arc<TreeGraphConsensus>,
+        txn_transformer: TT, time_service: Arc<dyn TimeService>,
+        max_block_size: u64, tg_consensus: Arc<TreeGraphConsensus>,
+        key_pair: KeyPair,
     ) -> Self
     {
         Self {
             author,
             block_store,
-            //txn_manager,
+            txn_transformer,
             time_service,
             max_block_size,
             last_round_generated: Mutex::new(0),
             tg_consensus,
+            key_pair,
         }
     }
 
@@ -261,6 +265,11 @@ where
 
         let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
         let raw_tx = RawTransaction::new_change_set(self.author, 0, change_set);
+        let signed_tx = raw_tx
+            .sign(self.key_pair.secret(), self.key_pair.public().clone())?
+            .into_inner();
+
+        let txns = self.txn_transformer.convert(signed_tx);
 
         /*
         let txns = self
@@ -271,7 +280,7 @@ where
             */
 
         Ok(BlockData::new_proposal(
-            T::default(), /* txns */
+            txns,
             self.author,
             round,
             block_timestamp.as_micros() as u64,

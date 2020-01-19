@@ -24,7 +24,8 @@ use libra_config::config::{ConsensusProposerType, NodeConfig};
 use super::super::safety_rules::SafetyRulesManager;
 use crate::alliance_tree_graph::{
     bft::consensus::{
-        chained_bft::network::NetworkSender, state_replication::StateComputer,
+        chained_bft::network::NetworkSender,
+        state_replication::{StateComputer, TxnTransformer},
     },
     consensus::TreeGraphConsensus,
 };
@@ -110,10 +111,10 @@ impl<T: Payload> ChainedBftSMR<T> {
         self.block_store.clone()
     }
 
-    fn start_event_processing(
+    fn start_event_processing<TT: TxnTransformer<Payload = T>>(
         executor: Handle,
-        mut epoch_manager: EpochManager</* TM, */ T>,
-        mut event_processor: EventProcessor</* TM, */ T>,
+        mut epoch_manager: EpochManager<TT, T>,
+        mut event_processor: EventProcessor<TT, T>,
         mut pacemaker_timeout_sender_rx: channel::Receiver<Round>,
         //network_task: NetworkTask<T>,
         mut network_receivers: NetworkReceivers<T>,
@@ -182,9 +183,8 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
     /// 2. Construct per-epoch component with the fixed Validators provided by
     /// EpochManager including ProposerElection, Pacemaker, SafetyRules,
     /// Network(Populate with known validators), EventProcessor
-    fn start(
-        &mut self,
-        //txn_manager: TM,
+    fn start<TT: TxnTransformer<Payload = Self::Payload>>(
+        &mut self, txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>,
         protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
@@ -233,7 +233,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             //initial_setup.network_sender,
             network_sender.clone(),
             timeout_sender,
-            //txn_manager,
+            txn_transformer,
             state_computer,
             self.storage.clone(),
             safety_rules_manager,
