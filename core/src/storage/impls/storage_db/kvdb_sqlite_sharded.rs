@@ -789,6 +789,7 @@ impl<ValueType> ReadImplFamily
 
 enable_deref_for_self! {KvdbSqliteSharded<Box<[u8]>>}
 enable_deref_for_self! {KvdbSqliteSharded<()>}
+enable_deref_for_self! {KvdbSqliteShardedBorrowShared<'_, Box<[u8]>>}
 enable_deref_for_self! {KvdbSqliteShardedBorrowMut<'_, Box<[u8]>>}
 enable_deref_mut_plus_impl_or_borrow_mut_self!(
     KvdbSqliteShardedDestructureTraitWithValueType<ValueType = Box<[u8]>>

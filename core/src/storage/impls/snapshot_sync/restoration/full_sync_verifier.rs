@@ -158,7 +158,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
 
             // Commit inner nodes.
             let mut snapshot_mpt =
-                self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
+                self.temp_snapshot_db.open_snapshot_mpt_owned()?;
             for (path, node) in chunk_rebuilder.inner_nodes_to_write {
                 snapshot_mpt.write_node(&path, &node)?;
             }
@@ -214,7 +214,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
     /// completed.
     pub fn finalize(&mut self) -> Result<()> {
         let mut snapshot_mpt =
-            self.temp_snapshot_db.open_snapshot_mpt_for_write()?;
+            self.temp_snapshot_db.open_snapshot_mpt_owned()?;
 
         for (path, mut node) in self.pending_boundary_nodes.drain() {
             let mut subtree_index = BoundarySubtreeIndex {
@@ -254,7 +254,7 @@ use crate::storage::{
     },
     storage_db::{
         key_value_db::KeyValueDbTraitSingleWriter, OpenSnapshotMptTrait,
-        SnapshotDbManagerTrait, SnapshotMptNode, SnapshotMptTraitSingleWriter,
+        SnapshotDbManagerTrait, SnapshotMptNode, SnapshotMptTraitRw,
         SubtreeMerkleWithSize,
     },
     TrieProof,

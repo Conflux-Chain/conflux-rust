@@ -2,13 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub struct SnapshotMpt<
-    DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
-    BorrowType: BorrowMut<DbType>,
-> {
+pub struct SnapshotMpt<DbType: ?Sized, BorrowType: BorrowMut<DbType>> {
     pub db: BorrowType,
     pub merkle_root: MerkleHash,
     pub _marker_db_type: std::marker::PhantomData<DbType>,
+}
+
+pub trait SnapshotMptLoadNode {
+    fn load_node_rlp(
+        &mut self, key: &[u8],
+    ) -> Result<Option<SnapshotMptDbValue>>;
 }
 
 pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
@@ -70,12 +73,8 @@ pub fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     Ok(path)
 }
 
-impl<
-        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
-        BorrowType: BorrowMut<DbType>,
-    > SnapshotMpt<DbType, BorrowType>
-where DbType:
-        for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
+    SnapshotMpt<DbType, BorrowType>
 {
     pub fn new(db: BorrowType) -> Result<Self> {
         let mut mpt = Self {
@@ -83,32 +82,41 @@ where DbType:
             merkle_root: MERKLE_NULL_NODE,
             _marker_db_type: Default::default(),
         };
-        if let Some(root_node) = mpt.load_node(&CompressedPathRaw::default())? {
-            mpt.merkle_root = *root_node.get_merkle();
+        if let Some(rlp) = mpt.db.borrow_mut().load_node_rlp(
+            &mpt_node_path_to_db_key(&CompressedPathRaw::default()),
+        )? {
+            mpt.merkle_root =
+                *SnapshotMptNode(Rlp::new(&rlp).as_val()?).get_merkle();
         }
         Ok(mpt)
     }
+
+    pub fn get_merkle_root_impl(&self) -> MerkleHash { self.merkle_root }
 }
 
-impl<
-        DbType: KeyValueDbTraitOwnedRead<ValueType = SnapshotMptDbValue> + ?Sized,
-        BorrowType: BorrowMut<DbType>,
-    > SnapshotMptTraitReadOnly for SnapshotMpt<DbType, BorrowType>
-where DbType:
-        for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+impl<DbType: SnapshotMptLoadNode + ?Sized, BorrowType: BorrowMut<DbType>>
+    SnapshotMptTraitRead for SnapshotMpt<DbType, BorrowType>
 {
-    fn get_merkle_root(&self) -> MerkleHash { self.merkle_root }
+    fn get_merkle_root(&self) -> MerkleHash { self.get_merkle_root_impl() }
 
     fn load_node(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Option<SnapshotMptNode>> {
         let key = mpt_node_path_to_db_key(path);
-        match self.db.borrow_mut().get_mut(&key)? {
+        match self.db.borrow_mut().load_node_rlp(&key)? {
             None => Ok(None),
             Some(rlp) => Ok(Some(SnapshotMptNode(Rlp::new(&rlp).as_val()?))),
         }
     }
+}
 
+impl<
+        DbType: SnapshotMptLoadNode
+            + for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+            + ?Sized,
+        BorrowType: BorrowMut<DbType>,
+    > SnapshotMptTraitReadAndIterate for SnapshotMpt<DbType, BorrowType>
+{
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait + '_>> {
@@ -133,14 +141,13 @@ where DbType:
 }
 
 impl<
-        DbType: KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue> + ?Sized,
+        DbType: SnapshotMptLoadNode
+            + KeyValueDbTraitSingleWriter<ValueType = SnapshotMptDbValue>
+            + for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+            + ?Sized,
         BorrowType: BorrowMut<DbType>,
-    > SnapshotMptTraitSingleWriter for SnapshotMpt<DbType, BorrowType>
-where DbType:
-        for<'db> KeyValueDbIterableTrait<'db, SnapshotMptValue, Error, [u8]>
+    > SnapshotMptTraitRw for SnapshotMpt<DbType, BorrowType>
 {
-    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
-
     fn delete_node(&mut self, path: &dyn CompressedPathTrait) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
         self.db.borrow_mut().delete(&key)?;
@@ -158,16 +165,16 @@ where DbType:
     }
 }
 
-use super::super::{
-    super::storage_db::{
-        key_value_db::{
-            KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
-            KeyValueDbTraitSingleWriter,
-        },
-        snapshot_mpt::*,
+use crate::storage::{
+    impls::{
+        errors::*,
+        merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
     },
-    errors::*,
-    merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
+    storage_db::{
+        key_value_db::{KeyValueDbIterableTrait, KeyValueDbTraitSingleWriter},
+        snapshot_mpt::*,
+        SnapshotMptTraitRead,
+    },
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

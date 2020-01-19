@@ -1618,7 +1618,7 @@ impl SynchronizationGraph {
                     queue.push_back(*referrer);
                 }
             } else {
-                debug!("Block index {:?} not block_graph_ready, current frontier: {:?}", index, inner.not_ready_blocks_frontier.get_frontier());
+                trace!("Block index {:?} not block_graph_ready, current frontier: {:?}", index, inner.not_ready_blocks_frontier.get_frontier());
             }
         }
 

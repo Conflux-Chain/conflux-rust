@@ -1068,17 +1068,6 @@ impl ConsensusExecutionHandler {
                 // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
                 // but its nonce is increased, which might need fixing.
                 match r {
-                    Err(ExecutionError::NotEnoughBaseGas {
-                        required: _,
-                        got: _,
-                    })
-                    | Err(ExecutionError::SenderMustExist {})
-                    | Err(ExecutionError::Internal(_)) => {
-                        warn!(
-                            "tx execution error: transaction={:?}, err={:?}",
-                            transaction, r
-                        );
-                    }
                     Err(ExecutionError::InvalidNonce { expected, got }) => {
                         // not inc nonce
                         trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
@@ -1106,8 +1095,8 @@ impl ConsensusExecutionHandler {
                             trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                         }
                     }
-                    _ => {
-                        trace!("tx executed: transaction={:?}, result={:?}, in block {:?}", transaction, r, block.hash());
+                    Err(e) => {
+                        info!("tx execution error: transaction={:?}, err={:?}, in block {:?}", transaction, e, block.hash());
                     }
                 }
 
