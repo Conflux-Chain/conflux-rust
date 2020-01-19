@@ -83,10 +83,6 @@ impl ChainedBftProvider {
             Arc::new(StorageWriteProxy::new(node_config, libra_db.clone()));
         let initial_data = storage.start();
 
-        /*
-        let mempool_client =
-            MempoolClientWrapper::new("localhost", node_config.mempool.mempool_service_port);
-        */
         let txn_transformer = TxnTransformerProxy::default();
 
         let state_computer = Arc::new(ExecutionProxy::new(

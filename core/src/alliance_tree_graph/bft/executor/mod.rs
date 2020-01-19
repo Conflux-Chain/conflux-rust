@@ -192,7 +192,11 @@ impl Executor {
         let db = Arc::new(LibraDB::new("./bft_db"));
         let mut executor = Executor { db };
 
-        //FIXME: if start from original genesis
+        if executor
+            .db
+            .get_startup_info()
+            .expect("Shouldn't fail")
+            .is_none()
         {
             let genesis_txn = config
                 .execution
