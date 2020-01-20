@@ -128,8 +128,11 @@ pub struct ConsensusGraphNode {
     pub parent: Option<usize>,
     pub sequence_number: u64,
 
-    /// The genesis arena index of the era that `self` is in.
-    ///
+    /// This is the most recent pivot block it can reach using referrence edge.
+    /// We will use it to determine the parent edge for non-pivot blocks.
+    pub last_pivot_in_past: u64,
+
+    /// The genesis arena index of the era that current block`self` is in.
     /// It is `NULL` if `self` is not in the subtree of `cur_era_genesis`.
     pub era_block: usize,
     children: Vec<usize>,
@@ -167,11 +170,10 @@ impl ConsensusGraphInner {
             data_man: data_man.clone(),
             inner_conf,
             sequence_number_of_block_entrance: 0,
-            // TODO handle checkpoint in recovery
             // last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
+            candidate_pivot_tree: CandidatePivotTree::new(NULL, NULLU64),
             state_boundary_height: cur_era_stable_height,
-            candidate_pivot_tree: CandidatePivotTree::new(NULL),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -192,6 +194,11 @@ impl ConsensusGraphInner {
             blockset_in_epoch: Vec::new(),
             ordered_executable_epoch_blocks: vec![genesis_arena_index],
         });
+
+        inner.candidate_pivot_tree = CandidatePivotTree::new(
+            genesis_arena_index,
+            cur_era_genesis_height,
+        );
 
         inner
     }
@@ -334,11 +341,13 @@ impl ConsensusGraphInner {
         let mut queue = VecDeque::new();
         queue.push_back(pivot_arena_index);
         self.pastset.add(pivot_arena_index as u32);
+        let mut blockset = HashSet::new();
         while let Some(index) = queue.pop_front() {
             if index != pivot_arena_index {
                 self.pivot_chain_metadata[pivot_index]
                     .blockset_in_epoch
                     .push(index);
+                blockset.insert(index);
             }
             for referee in &self.arena[index].referees {
                 if !self.pastset.contains(*referee as u32) {
@@ -347,6 +356,39 @@ impl ConsensusGraphInner {
                 }
             }
         }
+
+        // Determine the parent edge for all blocks in blockset.
+        let ordered_blockset = self.topological_sort(&blockset);
+        for index in ordered_blockset {
+            assert!(self.arena[index].last_pivot_in_past == NULLU64);
+            let mut parent = NULL;
+            for referee in &self.arena[index].referees {
+                if self.arena[*referee].last_pivot_in_past == NULLU64 {
+                    continue;
+                }
+                if parent == NULL
+                    || self.arena[parent].last_pivot_in_past
+                        < self.arena[*referee].last_pivot_in_past
+                    || (self.arena[parent].last_pivot_in_past
+                        == self.arena[*referee].last_pivot_in_past
+                        && self.arena[parent].hash < self.arena[*referee].hash)
+                {
+                    parent = *referee;
+                }
+            }
+            if parent != NULL {
+                self.arena[index].parent = Some(parent);
+                self.arena[index].last_pivot_in_past =
+                    self.arena[parent].last_pivot_in_past;
+                self.arena[parent].children.push(index);
+                self.arena[index].height = self.arena[parent].height + 1;
+                self.inclusive_weight_tree.link(parent, index);
+                // TODO: determin era block
+            }
+        }
+
+        self.arena[pivot_arena_index].last_pivot_in_past =
+            self.pivot_index_to_height(pivot_index);
 
         let filtered_blockset = self.pivot_chain_metadata[pivot_index]
             .blockset_in_epoch
@@ -418,6 +460,7 @@ impl ConsensusGraphInner {
             past_num_blocks: 0,
             parent: None,
             era_block: NULL,
+            last_pivot_in_past: NULLU64,
             children: Vec::new(),
             referees: referees.clone(),
             referrers: Vec::new(),
@@ -425,6 +468,7 @@ impl ConsensusGraphInner {
             sequence_number: sn,
         });
         self.hash_to_arena_indices.insert(hash, index);
+        self.inclusive_weight_tree.make_tree(index);
 
         self.terminal_hashes.insert(hash);
         for referee in referees {
@@ -794,9 +838,24 @@ impl ConsensusGraphInner {
     /// Given a new `PivotBlockDecision` check whether it is valid. If it is
     /// valid this block will be added to `candidate_pivot_tree`.
     pub fn on_new_candidate_pivot(
-        &mut self, _block_hash: &H256, _parent_hash: &H256, _height: u64,
+        &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
     ) -> bool {
-        true
+        if !self.hash_to_arena_indices.contains_key(parent_hash) {
+            return false;
+        }
+        if !self.hash_to_arena_indices.contains_key(block_hash) {
+            return false;
+        }
+        let parent_arena_index = self.hash_to_arena_indices[parent_hash];
+        let parent_height =
+            self.candidate_pivot_tree.height(parent_arena_index);
+        let arena_index = self.hash_to_arena_indices[block_hash];
+        if parent_height == NULLU64 || parent_height + 1 != height {
+            return false;
+        }
+
+        self.candidate_pivot_tree
+            .add_leaf(parent_arena_index, arena_index)
     }
 
     pub fn on_new_pivot(&mut self, pivot_arena_index: usize) {
@@ -822,7 +881,9 @@ impl ConsensusGraphInner {
         let mut last = *self.pivot_chain.last().unwrap();
         for block_hash in committable_blocks {
             let arena_index = self.hash_to_arena_indices[block_hash];
+            self.arena[last].children.push(arena_index);
             self.arena[arena_index].parent = Some(last);
+            self.inclusive_weight_tree.link(arena_index, last);
             self.arena[arena_index].height = self.arena[last].height + 1;
             self.data_man.insert_epoch_block_hash_to_db(
                 self.arena[arena_index].height,
@@ -836,6 +897,6 @@ impl ConsensusGraphInner {
             last = arena_index;
         }
         self.candidate_pivot_tree =
-            CandidatePivotTree::new(*self.pivot_chain.last().unwrap());
+            CandidatePivotTree::new(last, self.arena[last].height);
     }
 }

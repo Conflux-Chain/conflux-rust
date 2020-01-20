@@ -282,6 +282,21 @@ impl ConsensusNewBlockHandler {
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 
+    #[allow(dead_code)]
+    pub fn commit(
+        &self, inner: &mut ConsensusGraphInner, committable_blocks: &Vec<H256>,
+    ) {
+    }
+
+    #[allow(dead_code)]
+    pub fn on_new_candidate_pivot(
+        &mut self, inner: &mut ConsensusGraphInner, block_hash: &H256,
+        parent_hash: &H256, height: u64,
+    ) -> bool
+    {
+        true
+    }
+
     fn persist_terminal_and_block_info(
         &self, inner: &mut ConsensusGraphInner, me: usize,
         block_status: BlockStatus, persist_terminal: bool,
