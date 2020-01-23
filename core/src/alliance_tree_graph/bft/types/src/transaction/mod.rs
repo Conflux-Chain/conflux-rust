@@ -229,7 +229,7 @@ impl RawTransaction {
 
     /*
     pub fn sign(
-        self, private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
+        self, private_key: &Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     ) -> Result<SignatureCheckedTransaction> {
         let signature = private_key.sign_message(&self.hash());
         Ok(SignatureCheckedTransaction(SignedTransaction::new(

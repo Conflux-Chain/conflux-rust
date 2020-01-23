@@ -27,7 +27,7 @@ fn test_invalid_signature() {
                 std::time::Duration::new(0, 0),
             ),
             keypair.1,
-            Ed25519Signature::try_from(&[1u8; 64][..]).unwrap(),
+            Secp256k1Signature::try_from(&[1u8; 64][..]).unwrap(),
         )
         .into();
     let txn = SignedTransaction::try_from(proto_txn)

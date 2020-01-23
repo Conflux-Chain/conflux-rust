@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::Result;
 use libra_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
     Uniform,
 };
 use libra_types::{
@@ -23,7 +23,7 @@ use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-type ConsensusKeyPair = KeyPair<Ed25519PrivateKey>;
+type ConsensusKeyPair = KeyPair<Secp256k1PrivateKey>;
 
 const CONSENSUS_KEYPAIR_DEFAULT: &str = "consensus.keys.toml";
 const CONSENSUS_PEERS_DEFAULT: &str = "consensus_peers.config.toml";
@@ -98,7 +98,7 @@ impl ConsensusConfig {
     }
 
     pub fn random(&mut self, rng: &mut StdRng, peer_id: PeerId) {
-        let privkey = Ed25519PrivateKey::generate_for_testing(rng);
+        let privkey = Secp256k1PrivateKey::generate_for_testing(rng);
         let consensus_keypair = ConsensusKeyPair::load(privkey);
         self.consensus_peers = Self::default_peers(&consensus_keypair, peer_id);
         self.consensus_keypair = consensus_keypair;
@@ -215,7 +215,7 @@ pub struct ConsensusPeerInfo {
     #[serde(serialize_with = "keys::serialize_key")]
     #[serde(deserialize_with = "keys::deserialize_key")]
     #[serde(rename = "c")]
-    pub consensus_pubkey: Ed25519PublicKey,
+    pub consensus_pubkey: Secp256k1PublicKey,
 }
 
 #[cfg(test)]

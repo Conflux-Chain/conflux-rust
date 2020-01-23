@@ -85,17 +85,20 @@ use std::{collections::BTreeMap, fmt};
 
 // used in chained_bft::consensus_types::block_test
 #[cfg(any(test, feature = "fuzzing"))]
-pub type SecretKey = Ed25519PrivateKey;
+pub type SecretKey = Secp256k1PrivateKey;
 
-pub type Signature = SignatureWrapper<Ed25519Signature>;
+pub type Signature = SignatureWrapper<Secp256k1Signature>;
 pub type LedgerInfoWithSignatures =
-    RawLedgerInfoWithSignatures<Ed25519Signature>;
-pub type ValidatorInfo = RawValidatorInfo<Ed25519PublicKey>;
-pub type ValidatorVerifier = RawValidatorVerifier<Ed25519PublicKey>;
-pub type ValidatorSigner = RawValidatorSigner<Ed25519PrivateKey>;
-pub type ValidatorPublicKeys = RawValidatorPublicKeys<Ed25519PublicKey>;
-pub type ValidatorSet = RawValidatorSet<Ed25519PublicKey>;
+    RawLedgerInfoWithSignatures<Secp256k1Signature>;
+pub type ValidatorInfo = RawValidatorInfo<Secp256k1PublicKey>;
+pub type ValidatorVerifier = RawValidatorVerifier<Secp256k1PublicKey>;
+pub type ValidatorSigner = RawValidatorSigner<Secp256k1PrivateKey>;
+pub type ValidatorPublicKeys = RawValidatorPublicKeys<Secp256k1PublicKey>;
+pub type ValidatorSet = RawValidatorSet<Secp256k1PublicKey>;
 pub use crate::validator_change::ValidatorChangeProof;
+use libra_crypto::secp256k1::{
+    Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
+};
 use std::sync::Arc;
 
 #[derive(Clone)]

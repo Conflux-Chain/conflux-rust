@@ -24,7 +24,7 @@ Libra Configuration is broken up into many utilities:
   configurations
 - config-builder extends src/generation with a Rust and command-line utility
   and support for generating genesis
-- generate-keypair generates Ed25519 key pairs in LCS format
+- generate-keypair generates Secp256k1 key pairs in LCS format
 
 The separation of the config-builder into its own crate was dicated by the
 need for config-builder to be able to generate genesis. Genesis requires the

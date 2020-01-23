@@ -346,7 +346,10 @@ mod tests {
             VerifyError::{self, TooLittleVotingPower},
         },
     };
-    use libra_crypto::{ed25519::*, test_utils::TEST_SEED, HashValue};
+    use libra_crypto::{
+        ed25519::*, secp256k1::Secp256k1PrivateKey, test_utils::TEST_SEED,
+        HashValue,
+    };
     use std::collections::BTreeMap;
 
     #[test]
@@ -383,7 +386,7 @@ mod tests {
     #[test]
     fn test_validator() {
         let validator_signer =
-            ValidatorSigner::<Ed25519PrivateKey>::random(TEST_SEED);
+            ValidatorSigner::<Secp256k1PrivateKey>::random(TEST_SEED);
         let random_hash = HashValue::random();
         let signature = validator_signer.sign_message(random_hash).unwrap();
         let validator = ValidatorVerifier::new_single(
@@ -399,7 +402,7 @@ mod tests {
             Ok(())
         );
         let unknown_validator_signer =
-            ValidatorSigner::<Ed25519PrivateKey>::random([1; 32]);
+            ValidatorSigner::<Secp256k1PrivateKey>::random([1; 32]);
         let unknown_signature =
             unknown_validator_signer.sign_message(random_hash).unwrap();
         assert_eq!(

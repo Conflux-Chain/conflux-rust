@@ -6,7 +6,7 @@
 use config_builder::ValidatorConfig;
 use libra_config::config::{NodeConfig, PersistableConfig};
 use libra_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
     test_utils::KeyPair,
 };
 use std::{
@@ -50,7 +50,7 @@ fn main() {
         .expect("ConfigBuilder failed");
 
     let key_path = args.output_dir.join("mint.key");
-    let faucet_keypair = KeyPair::<Ed25519PrivateKey, Ed25519PublicKey>::from(faucet_key);
+    let faucet_keypair = KeyPair::<Secp256k1PrivateKey, Secp256k1PublicKey>::from(faucet_key);
     let serialized_keys = lcs::to_bytes(&faucet_keypair).expect("Unable to serialize keys");
     let mut key_file = File::create(key_path).expect("Unable to create key file");
     key_file

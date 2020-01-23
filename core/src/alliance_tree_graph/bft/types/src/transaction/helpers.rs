@@ -82,7 +82,7 @@ pub fn create_user_txn<T: TransactionSigner + ?Sized>(
     signer.sign_txn(raw_txn)
 }
 
-impl TransactionSigner for KeyPair<Ed25519PrivateKey, Ed25519PublicKey> {
+impl TransactionSigner for KeyPair<Secp256k1PrivateKey, Secp256k1PublicKey> {
     fn sign_txn(&self, raw_txn: RawTransaction) -> Result<SignedTransaction> {
         let signature = self.private_key.sign_message(&raw_txn.hash());
         Ok(SignedTransaction::new(

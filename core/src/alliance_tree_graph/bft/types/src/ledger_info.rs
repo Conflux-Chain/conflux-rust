@@ -302,7 +302,7 @@ mod tests {
         let random_hash = HashValue::random();
         const NUM_SIGNERS: u8 = 7;
         // Generate NUM_SIGNERS random signers.
-        let validator_signers: Vec<ValidatorSigner<Ed25519PrivateKey>> = (0
+        let validator_signers: Vec<ValidatorSigner<Secp256k1PrivateKey>> = (0
             ..NUM_SIGNERS)
             .map(|i| ValidatorSigner::random([i; 32]))
             .collect();
