@@ -707,6 +707,7 @@ dependencies = [
  "ethcore-accounts 0.1.0",
  "ethkey 0.3.0",
  "ethstore 0.2.1",
+ "executable-helpers 0.1.0",
  "futures 0.1.29 (registry+https://github.com/rust-lang/crates.io-index)",
  "io 0.1.0",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -852,6 +853,16 @@ dependencies = [
 name = "core-foundation-sys"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "crash-handler"
+version = "0.1.0"
+dependencies = [
+ "backtrace 0.3.40 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libra-logger 0.1.0",
+ "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
+ "toml 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "crc"
@@ -1450,6 +1461,18 @@ dependencies = [
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "tiny-keccak 1.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "executable-helpers"
+version = "0.1.0"
+dependencies = [
+ "crash-handler 0.1.0",
+ "libra-config 0.1.0",
+ "libra-logger 0.1.0",
+ "libra-metrics 0.1.0",
+ "libra-types 0.1.0",
+ "slog-scope 4.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

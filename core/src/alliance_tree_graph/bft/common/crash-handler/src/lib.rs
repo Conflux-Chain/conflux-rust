@@ -19,9 +19,9 @@ pub struct CrashInfo {
 
 /// Invoke to ensure process exits on a thread panic.
 ///
-/// Tokio's default behavior is to catch panics and ignore them.  Invoking this function will
-/// ensure that all subsequent thread panics (even Tokio threads) will report the
-/// details/backtrace and then exit.
+/// Tokio's default behavior is to catch panics and ignore them.  Invoking this
+/// function will ensure that all subsequent thread panics (even Tokio threads)
+/// will report the details/backtrace and then exit.
 pub fn setup_panic_handler() {
     panic::set_hook(Box::new(move |pi: &PanicInfo<'_>| {
         handle_panic(pi);
@@ -30,7 +30,8 @@ pub fn setup_panic_handler() {
 
 // Formats and logs panic information
 fn handle_panic(panic_info: &PanicInfo<'_>) {
-    // The Display formatter for a PanicInfo contains the message, payload and location.
+    // The Display formatter for a PanicInfo contains the message, payload and
+    // location.
     let details = format!("{}", panic_info);
     let backtrace = format!("{:#?}", Backtrace::new());
 

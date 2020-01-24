@@ -17,8 +17,8 @@ pub fn load_config_from_path(config: Option<&Path>) -> NodeConfig {
         NodeConfig::random()
     };
 
-    // Node configuration contains important ephemeral port information and should
-    // not be subject to being disabled as with other logs
+    // Node configuration contains important ephemeral port information and
+    // should not be subject to being disabled as with other logs
     println!("Using node config {:?}", &node_config);
 
     node_config
@@ -35,11 +35,11 @@ pub fn setup_metrics(peer_id: PeerId, node_config: &NodeConfig) {
 }
 
 pub fn setup_executable(
-    config: Option<&Path>,
-    no_logging: bool,
+    config: Option<&Path>, no_logging: bool,
 ) -> (NodeConfig, Option<GlobalLoggerGuard>) {
     crash_handler::setup_panic_handler();
-    let mut _logger = set_default_global_logger(no_logging, &LoggerConfig::default());
+    let mut _logger =
+        set_default_global_logger(no_logging, &LoggerConfig::default());
 
     let config = load_config_from_path(config);
 
@@ -58,8 +58,7 @@ pub fn setup_executable(
 }
 
 fn set_default_global_logger(
-    is_logging_disabled: bool,
-    logger_config: &LoggerConfig,
+    is_logging_disabled: bool, logger_config: &LoggerConfig,
 ) -> Option<GlobalLoggerGuard> {
     if is_logging_disabled {
         return None;
