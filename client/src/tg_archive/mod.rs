@@ -33,6 +33,7 @@ use runtime::Runtime;
 use secret_store::SecretStore;
 use std::{
     any::Any,
+    path::PathBuf,
     str::FromStr,
     sync::{Arc, Weak},
     thread,
@@ -234,6 +235,16 @@ impl TgArchiveClient {
             light_provider,
         ));
         sync.register().unwrap();
+
+        let tg_config_path = match conf.raw_conf.tg_config_path.as_ref() {
+            Some(path) => Some(PathBuf::from(path)),
+            None => None,
+        };
+
+        let (mut config, _logger) = setup_executable(
+            tg_config_path.as_ref().map(PathBuf::as_path),
+            true,
+        );
 
         if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
             let dp = Arc::new(DataPropagation::new(
