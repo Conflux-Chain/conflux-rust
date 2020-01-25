@@ -353,6 +353,10 @@ impl SynchronizationProtocolHandler {
         self.graph.clone()
     }
 
+    pub fn get_request_manager(&self) -> Arc<RequestManager> {
+        self.request_manager.clone()
+    }
+
     pub fn append_received_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {

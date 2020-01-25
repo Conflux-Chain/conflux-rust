@@ -8,7 +8,11 @@ use super::{
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
-use crate::alliance_tree_graph::consensus::TreeGraphConsensus;
+use crate::{
+    alliance_tree_graph::consensus::TreeGraphConsensus,
+    sync::request_manager::RequestManager,
+};
+use cfx_types::H256;
 use libra_types::{
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
     transaction::SignedTransaction,
@@ -109,8 +113,8 @@ pub trait StateMachineReplication {
     fn start<TT: TxnTransformer<Payload = Self::Payload>>(
         &mut self, txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
-        network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
+        network: Arc<NetworkService>, own_node_hash: H256,
+        request_manager: Arc<RequestManager>,
         tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Result<()>;
 

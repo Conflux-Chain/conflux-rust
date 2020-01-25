@@ -15,10 +15,14 @@ use std::sync::Arc;
 //use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use super::super::executor::Executor;
-use crate::alliance_tree_graph::{
-    consensus::TreeGraphConsensus,
-    hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol,
+use crate::{
+    alliance_tree_graph::{
+        consensus::TreeGraphConsensus,
+        hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol,
+    },
+    sync::request_manager::RequestManager,
 };
+use cfx_types::H256;
 use libra_types::transaction::SignedTransaction;
 use primitives::TransactionWithSignature;
 
@@ -30,10 +34,8 @@ pub trait ConsensusProvider {
     /// recovered its initial state, and has established the required
     /// connections (e.g., to mempool and executor).
     fn start(
-        &mut self, network: Arc<NetworkService>,
-        protocol_handler: Arc<
-            HotStuffSynchronizationProtocol<Vec<SignedTransaction>>,
-        >,
+        &mut self, network: Arc<NetworkService>, own_node_hash: H256,
+        request_manager: Arc<RequestManager>,
     ) -> Result<()>;
 
     /// Stop the consensus operations. The function returns after graceful

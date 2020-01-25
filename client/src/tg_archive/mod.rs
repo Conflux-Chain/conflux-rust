@@ -8,6 +8,9 @@ use super::{
 pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 use executable_helpers::helpers::setup_executable;
+use libra_config::config::{NodeConfig, RoleType};
+use libra_metrics::metric_server;
+use libradb::LibraDB;
 
 use crate::rpc::{
     extractor::RpcExtractor,
@@ -16,16 +19,29 @@ use crate::rpc::{
     },
     setup_debug_rpc_apis, setup_public_rpc_apis,
 };
-use cfx_types::{Address, U256};
+use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    alliance_tree_graph::consensus::TreeGraphConsensus,
-    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
-    storage::StorageManager, sync::SyncPhaseType,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
+    alliance_tree_graph::{
+        bft::{
+            consensus::consensus_provider::{
+                make_consensus_provider, ConsensusProvider,
+            },
+            executor::Executor,
+        },
+        consensus::TreeGraphConsensus,
+    },
+    block_data_manager::BlockDataManager,
+    genesis,
+    statistics::Statistics,
+    storage::StorageManager,
+    sync::{request_manager::RequestManager, SyncPhaseType},
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    vm_factory::VmFactory,
     ConsensusGraph, LightProvider, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use ctrlc::CtrlC;
+use keccak_hash::keccak;
 use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
@@ -50,6 +66,7 @@ pub struct TgArchiveClientHandle {
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_http_server: Option<HttpServer>,
     pub consensus: Arc<ConsensusGraph>,
+    pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
     pub sync: Arc<SynchronizationService>,
     pub txgen: Arc<TransactionGenerator>,
@@ -69,6 +86,7 @@ impl TgArchiveClientHandle {
             self.blockgen,
             Box::new((
                 self.consensus,
+                self.tg_consensus_provider,
                 self.debug_rpc_http_server,
                 self.rpc_tcp_server,
                 self.rpc_http_server,
@@ -241,9 +259,19 @@ impl TgArchiveClient {
             None => None,
         };
 
-        let (mut config, _logger) = setup_executable(
+        let mut config = setup_executable(
             tg_config_path.as_ref().map(PathBuf::as_path),
             true,
+        );
+
+        let own_node_hash =
+            keccak(network.net_key_pair().expect("Error node key").public());
+        let consensus_provider = Self::setup_tg_environment(
+            &mut config,
+            tg_consensus,
+            network.clone(),
+            own_node_hash,
+            sync.get_request_manager(),
         );
 
         if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
@@ -441,10 +469,68 @@ impl TgArchiveClient {
             txgen_join_handle: txgen_handle,
             blockgen,
             consensus,
+            tg_consensus_provider: consensus_provider,
             secret_store,
             sync,
             runtime,
         })
+    }
+
+    fn setup_tg_environment(
+        node_config: &mut NodeConfig, tg_consensus: Arc<TreeGraphConsensus>,
+        network: Arc<NetworkService>, own_node_hash: H256,
+        request_manager: Arc<RequestManager>,
+    ) -> Option<Box<dyn ConsensusProvider>>
+    {
+        // Some of our code uses the rayon global thread pool. Name the rayon
+        // threads so it doesn't cause confusion, otherwise the threads
+        // would have their parent's name.
+        rayon::ThreadPoolBuilder::new()
+            .thread_name(|index| format!("rayon-global-{}", index))
+            .build_global()
+            .expect("Building rayon global thread pool should work.");
+
+        let mut instant = Instant::now();
+        let libra_db = Arc::new(LibraDB::new("./bft_db"));
+        debug!(
+            "BFT database started in {} ms",
+            instant.elapsed().as_millis()
+        );
+
+        instant = Instant::now();
+        let executor = Arc::new(Executor::new(node_config, libra_db.clone()));
+        debug!("Executor setup in {} ms", instant.elapsed().as_millis());
+
+        /*
+        let metrics_port = node_config.debug_interface.metrics_server_port;
+        let metric_host = node_config.debug_interface.address.clone();
+        thread::spawn(move || {
+            metric_server::start_server(metric_host, metrics_port, false)
+        });
+        let public_metrics_port =
+            node_config.debug_interface.public_metrics_server_port;
+        let public_metric_host = node_config.debug_interface.address.clone();
+        thread::spawn(move || {
+            metric_server::start_server(
+                public_metric_host,
+                public_metrics_port,
+                true,
+            )
+        });
+        */
+
+        let mut consensus = None;
+        // Initialize and start consensus.
+        instant = Instant::now();
+        let mut consensus_provider =
+            make_consensus_provider(node_config, executor, tg_consensus);
+        consensus_provider
+            .start(network, own_node_hash, request_manager)
+            .expect("Failed to start consensus. Can't proceed.");
+        consensus = Some(consensus_provider);
+        debug!("Consensus started in {} ms", instant.elapsed().as_millis());
+
+        consensus
     }
 
     /// Use a Weak pointer to ensure that other Arc pointers are released

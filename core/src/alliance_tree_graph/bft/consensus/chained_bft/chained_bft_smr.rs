@@ -22,13 +22,17 @@ use futures::{select, stream::StreamExt};
 use libra_config::config::{ConsensusProposerType, NodeConfig};
 //use libra_logger::prelude::*;
 use super::super::safety_rules::SafetyRulesManager;
-use crate::alliance_tree_graph::{
-    bft::consensus::{
-        chained_bft::network::NetworkSender,
-        state_replication::{StateComputer, TxnTransformer},
+use crate::{
+    alliance_tree_graph::{
+        bft::consensus::{
+            chained_bft::network::NetworkSender,
+            state_replication::{StateComputer, TxnTransformer},
+        },
+        consensus::TreeGraphConsensus,
     },
-    consensus::TreeGraphConsensus,
+    sync::request_manager::RequestManager,
 };
+use cfx_types::H256;
 use libra_types::crypto_proxies::EpochInfo;
 use network::NetworkService;
 use std::{
@@ -112,11 +116,9 @@ impl<T: Payload> ChainedBftSMR<T> {
     }
 
     fn start_event_processing<TT: TxnTransformer<Payload = T>>(
-        executor: Handle,
-        mut epoch_manager: EpochManager<TT, T>,
+        executor: Handle, mut epoch_manager: EpochManager<TT, T>,
         mut event_processor: EventProcessor<TT, T>,
         mut pacemaker_timeout_sender_rx: channel::Receiver<Round>,
-        //network_task: NetworkTask<T>,
         mut network_receivers: NetworkReceivers<T>,
     )
     {
@@ -170,7 +172,6 @@ impl<T: Payload> ChainedBftSMR<T> {
                     .observe_duration(idle_duration);
             }
         };
-        //executor.spawn(network_task.start());
         executor.spawn(fut);
     }
 }
@@ -186,8 +187,8 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
     fn start<TT: TxnTransformer<Payload = Self::Payload>>(
         &mut self, txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
-        network: Arc<NetworkService>,
-        protocol_handler: Arc<HotStuffSynchronizationProtocol<Self::Payload>>,
+        network: Arc<NetworkService>, own_node_hash: H256,
+        request_manager: Arc<RequestManager>,
         tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Result<()>
     {
@@ -215,6 +216,15 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             verifier: initial_data.validators(),
         }));
 
+        let (network_task, network_receiver) =
+            NetworkTask::new(epoch_info.clone());
+
+        let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
+            own_node_hash,
+            request_manager,
+            network_task,
+        ));
+
         let safety_rules_manager_config = initial_setup
             .safety_rules_manager_config
             .take()
@@ -222,11 +232,13 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         let safety_rules_manager =
             SafetyRulesManager::new(safety_rules_manager_config);
 
-        let network_sender =
-            Arc::new(NetworkSender::new(network, protocol_handler));
+        let network_sender = Arc::new(NetworkSender::new(
+            network.clone(),
+            protocol_handler.clone(),
+        ));
 
         let mut epoch_mgr = EpochManager::new(
-            Arc::clone(&epoch_info),
+            epoch_info.clone(),
             self.config.take().expect("already started, config is None"),
             time_service,
             //self_sender,
@@ -247,18 +259,15 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         // TODO: this is test only, we should remove this
         self.block_store = Some(event_processor.block_store());
 
-        let (network_task, network_receiver) = NetworkTask::new(
-            epoch_info, /* , initial_setup.network_events, self_receiver */
-        );
-
         Self::start_event_processing(
             executor.clone(),
             epoch_mgr,
             event_processor,
             timeout_receiver,
-            //network_task,
             network_receiver,
         );
+
+        protocol_handler.clone().register(network.clone()).unwrap();
         debug!("Chained BFT SMR started.");
         Ok(())
     }

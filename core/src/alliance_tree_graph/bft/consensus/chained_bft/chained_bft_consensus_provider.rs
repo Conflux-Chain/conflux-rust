@@ -21,15 +21,19 @@ use libra_types::transaction::SignedTransaction;
 use super::super::safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
 use super::super::super::executor::Executor;
-use crate::alliance_tree_graph::{
-    bft::consensus::{
-        state_computer::ExecutionProxy,
-        state_replication::{
-            StateComputer, TxnTransformer, TxnTransformerProxy,
+use crate::{
+    alliance_tree_graph::{
+        bft::consensus::{
+            state_computer::ExecutionProxy,
+            state_replication::{
+                StateComputer, TxnTransformer, TxnTransformerProxy,
+            },
         },
+        consensus::TreeGraphConsensus,
     },
-    consensus::TreeGraphConsensus,
+    sync::request_manager::RequestManager,
 };
+use cfx_types::H256;
 use libradb::LibraDB;
 use network::NetworkService;
 use primitives::TransactionWithSignature;
@@ -125,10 +129,8 @@ impl ChainedBftProvider {
 
 impl ConsensusProvider for ChainedBftProvider {
     fn start(
-        &mut self, network: Arc<NetworkService>,
-        protocol_handler: Arc<
-            HotStuffSynchronizationProtocol<Vec<SignedTransaction>>,
-        >,
+        &mut self, network: Arc<NetworkService>, own_node_hash: H256,
+        request_manager: Arc<RequestManager>,
     ) -> Result<()>
     {
         debug!("Starting consensus provider.");
@@ -136,7 +138,8 @@ impl ConsensusProvider for ChainedBftProvider {
             self.txn_transformer.clone(),
             Arc::clone(&self.state_computer),
             network,
-            protocol_handler,
+            own_node_hash,
+            request_manager,
             self.tg_consensus.clone(),
         )
     }

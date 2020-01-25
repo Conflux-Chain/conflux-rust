@@ -35,18 +35,21 @@ pub fn setup_metrics(peer_id: PeerId, node_config: &NodeConfig) {
 }
 
 pub fn setup_executable(
-    config: Option<&Path>, no_logging: bool,
-) -> (NodeConfig, Option<GlobalLoggerGuard>) {
-    crash_handler::setup_panic_handler();
-    let mut _logger =
-        set_default_global_logger(no_logging, &LoggerConfig::default());
+    config: Option<&Path>,
+    no_logging: bool,
+    //) -> (NodeConfig, Option<GlobalLoggerGuard>) {
+) -> NodeConfig
+{
+    //crash_handler::setup_panic_handler();
+    //let mut _logger =
+    //    set_default_global_logger(no_logging, &LoggerConfig::default());
 
     let config = load_config_from_path(config);
 
     // Reset the global logger using config (for chan_size currently).
     // We need to drop the global logger guard first before resetting it.
-    _logger = None;
-    let logger = set_default_global_logger(no_logging, &config.logger);
+    //_logger = None;
+    //let logger = set_default_global_logger(no_logging, &config.logger);
     for network in &config.full_node_networks {
         setup_metrics(network.peer_id, &config);
     }
@@ -54,7 +57,8 @@ pub fn setup_executable(
         setup_metrics(network.peer_id, &config);
     }
 
-    (config, logger)
+    //(config, logger)
+    config
 }
 
 fn set_default_global_logger(

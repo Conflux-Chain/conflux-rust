@@ -9,7 +9,7 @@ use crate::{
     light_protocol::Provider as LightProvider,
     parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
-        synchronization_phases::SyncPhaseType,
+        request_manager::RequestManager, synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
         StateSyncConfiguration, SynchronizationPhaseTrait,
     },
@@ -58,6 +58,10 @@ impl SynchronizationService {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.protocol_handler.get_synchronization_graph()
+    }
+
+    pub fn get_request_manager(&self) -> Arc<RequestManager> {
+        self.protocol_handler.get_request_manager()
     }
 
     pub fn current_sync_phase(&self) -> Arc<dyn SynchronizationPhaseTrait> {

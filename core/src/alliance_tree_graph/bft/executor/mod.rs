@@ -188,8 +188,7 @@ pub struct Executor {
 
 impl Executor {
     /// Constructs an `Executor`.
-    pub fn new(config: &NodeConfig) -> Self {
-        let db = Arc::new(LibraDB::new("./bft_db"));
+    pub fn new(config: &NodeConfig, db: Arc<LibraDB>) -> Self {
         let mut executor = Executor { db };
 
         if executor
