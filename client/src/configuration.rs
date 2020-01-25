@@ -183,7 +183,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (is_consortium, (bool), false)
-        (tg_config_path, (Option<String>), Some("./tg_config/tg_config".to_string()))
+        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
         (ledger_cache_size, (Option<usize>), Some(2048))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (max_download_state_peers, (usize), 8)
