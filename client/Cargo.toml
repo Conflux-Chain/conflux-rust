@@ -61,6 +61,7 @@ throttling = { path = "../util/throttling" }
 libra-config = { path = "../core/src/alliance_tree_graph/bft/config" }
 libradb = { path = "../core/src/alliance_tree_graph/bft/storage/libradb" }
 libra-metrics = { path = "../core/src/alliance_tree_graph/bft/common/metrics" }
+libra-crypto = { path = "../core/src/alliance_tree_graph/bft/crypto/crypto" }
 
 [dev-dependencies]
 criterion = "0.2"

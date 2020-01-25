@@ -181,7 +181,9 @@ impl NodeConfig {
     /// to doing some post-processing of the config
     /// Paths used in the config are either absolute or relative to the config
     /// location
-    pub fn load<P: AsRef<Path>>(input_path: P) -> Result<Self> {
+    pub fn load<P: AsRef<Path>>(
+        input_path: P, keypair: Option<ConsensusKeyPair>,
+    ) -> Result<Self> {
         let mut config = Self::load_config(&input_path)?;
         if config.base.role.is_validator() {
             ensure!(
@@ -196,7 +198,7 @@ impl NodeConfig {
         }
 
         let input_dir = RootPath::new(input_path);
-        config.consensus.load(&input_dir)?;
+        config.consensus.load(&input_dir, keypair)?;
         config.execution.load(&input_dir)?;
         if let Some(network) = &mut config.validator_network {
             network.load(&input_dir, RoleType::Validator)?;

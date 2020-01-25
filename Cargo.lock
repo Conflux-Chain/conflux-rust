@@ -720,6 +720,7 @@ dependencies = [
  "keccak-hash 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb-rocksdb 0.1.6",
  "libra-config 0.1.0",
+ "libra-crypto 0.1.0",
  "libra-metrics 0.1.0",
  "libradb 0.1.0",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",

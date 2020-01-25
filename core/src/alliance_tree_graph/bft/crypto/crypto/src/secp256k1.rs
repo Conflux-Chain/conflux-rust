@@ -55,6 +55,9 @@ impl Secp256k1PrivateKey {
             None => Err(CryptoMaterialError::DeserializationError),
         }
     }
+
+    /// Generate Secp256k1PrivateKey from Secret
+    pub fn from_secret(secret: Secret) -> Self { Self(secret) }
 }
 
 impl Secp256k1PublicKey {

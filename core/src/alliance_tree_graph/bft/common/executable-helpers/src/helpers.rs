@@ -1,17 +1,19 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use libra_config::config::{LoggerConfig, NodeConfig};
+use libra_config::config::{ConsensusKeyPair, LoggerConfig, NodeConfig};
 use libra_logger::prelude::*;
 use libra_types::PeerId;
 use slog_scope::GlobalLoggerGuard;
 use std::path::Path;
 
-pub fn load_config_from_path(config: Option<&Path>) -> NodeConfig {
+pub fn load_config_from_path(
+    config: Option<&Path>, keypair: Option<ConsensusKeyPair>,
+) -> NodeConfig {
     // Load the config
     let node_config = if let Some(path) = config {
         info!("Loading node config from: {}", path.display());
-        NodeConfig::load(path).expect("NodeConfig")
+        NodeConfig::load(path, keypair).expect("NodeConfig")
     } else {
         info!("Loading test configs");
         NodeConfig::random()
@@ -37,6 +39,7 @@ pub fn setup_metrics(peer_id: PeerId, node_config: &NodeConfig) {
 pub fn setup_executable(
     config: Option<&Path>,
     no_logging: bool,
+    keypair: Option<ConsensusKeyPair>,
     //) -> (NodeConfig, Option<GlobalLoggerGuard>) {
 ) -> NodeConfig
 {
@@ -44,7 +47,7 @@ pub fn setup_executable(
     //let mut _logger =
     //    set_default_global_logger(no_logging, &LoggerConfig::default());
 
-    let config = load_config_from_path(config);
+    let config = load_config_from_path(config, keypair);
 
     // Reset the global logger using config (for chan_size currently).
     // We need to drop the global logger guard first before resetting it.

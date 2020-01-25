@@ -8,7 +8,8 @@ use super::{
 pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 use executable_helpers::helpers::setup_executable;
-use libra_config::config::{NodeConfig, RoleType};
+use libra_config::config::{ConsensusKeyPair, NodeConfig, RoleType};
+use libra_crypto::secp256k1::Secp256k1PrivateKey;
 use libra_metrics::metric_server;
 use libradb::LibraDB;
 
@@ -259,9 +260,18 @@ impl TgArchiveClient {
             None => None,
         };
 
+        let secret = Secp256k1PrivateKey::from_secret(
+            network
+                .net_key_pair()
+                .expect("Error node key")
+                .secret()
+                .clone(),
+        );
+        let keypair = ConsensusKeyPair::load(secret);
         let mut config = setup_executable(
             tg_config_path.as_ref().map(PathBuf::as_path),
-            true,
+            true, /* no_logging */
+            Some(keypair),
         );
 
         let own_node_hash =

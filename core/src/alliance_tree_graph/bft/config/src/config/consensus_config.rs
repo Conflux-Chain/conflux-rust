@@ -23,7 +23,7 @@ use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-type ConsensusKeyPair = KeyPair<Secp256k1PrivateKey>;
+pub type ConsensusKeyPair = KeyPair<Secp256k1PrivateKey>;
 
 const CONSENSUS_KEYPAIR_DEFAULT: &str = "consensus.keys.toml";
 const CONSENSUS_PEERS_DEFAULT: &str = "consensus_peers.config.toml";
@@ -104,15 +104,21 @@ impl ConsensusConfig {
         self.consensus_keypair = consensus_keypair;
     }
 
-    pub fn load(&mut self, root_dir: &RootPath) -> Result<()> {
-        if !self.consensus_keypair_file.as_os_str().is_empty() {
+    pub fn load(
+        &mut self, root_dir: &RootPath, keypair: Option<ConsensusKeyPair>,
+    ) -> Result<()> {
+        if let Some(keypair) = keypair {
+            self.consensus_keypair = keypair;
+        } else if !self.consensus_keypair_file.as_os_str().is_empty() {
             let path = root_dir.full_path(&self.consensus_keypair_file);
             self.consensus_keypair = ConsensusKeyPair::load_config(path)?;
         }
+        /*
         if !self.consensus_peers_file.as_os_str().is_empty() {
             let path = root_dir.full_path(&self.consensus_peers_file);
             self.consensus_peers = ConsensusPeersConfig::load_config(path)?;
         }
+        */
         Ok(())
     }
 
@@ -127,11 +133,13 @@ impl ConsensusConfig {
             self.consensus_keypair.save_config(&path)?;
         }
 
+        /*
         if self.consensus_peers_file.as_os_str().is_empty() {
             self.consensus_peers_file = PathBuf::from(CONSENSUS_PEERS_DEFAULT);
         }
         let path = root_dir.full_path(&self.consensus_peers_file);
         self.consensus_peers.save_config(path)?;
+        */
         Ok(())
     }
 
