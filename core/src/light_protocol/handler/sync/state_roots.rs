@@ -2,14 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::StateRoot;
 use std::sync::Arc;
+use std::future::Future;
 
 use crate::{
     light_protocol::{
@@ -26,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
     witnesses::Witnesses,
 };
 
@@ -47,7 +46,7 @@ pub struct StateRoots {
     sync_manager: SyncManager<u64, MissingStateRoot>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, StateRoot>>>,
+    verified: Arc<RwLock<LruCache<u64, ItemOrWaker<StateRoot>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -85,13 +84,16 @@ impl StateRoots {
     /// Get state root for `epoch` from local cache.
     #[inline]
     pub fn state_root_of(&self, epoch: u64) -> Option<StateRoot> {
-        self.verified.write().get(&epoch).cloned()
+        match self.verified.write().get(&epoch) {
+            Some(ItemOrWaker::Item(i)) => Some(i.clone()),
+            _ => None,
+        }
     }
 
     #[inline]
-    pub fn request_now(
-        &self, io: &dyn NetworkContext, epoch: u64,
-    ) -> impl Future<Item = StateRoot, Error = Error> {
+    pub fn request_now(&self, io: &dyn NetworkContext, epoch: u64) -> impl Future<Output = StateRoot>
+    {
+        // TODO!!
         if !self.verified.read().contains_key(&epoch) {
             let missing = std::iter::once(MissingStateRoot::new(epoch));
 
@@ -132,7 +134,21 @@ impl StateRoots {
         self.validate_state_root(epoch, &state_root)?;
 
         // store state root by epoch
-        self.verified.write().insert(epoch, state_root);
+        let mut verified = self.verified.write();
+
+        match verified.get(&epoch) {
+            None => {
+                // TODO: this is fishy
+            },
+            Some(ItemOrWaker::Item(i)) => {
+                // TODO: check if matching
+            }
+            Some(ItemOrWaker::Waker(w)) => {
+                w.clone().wake();
+            }
+        }
+
+        verified.insert(epoch, ItemOrWaker::Item(state_root));
         self.sync_manager.remove_in_flight(&epoch);
 
         Ok(())

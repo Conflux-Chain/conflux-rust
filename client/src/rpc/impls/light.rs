@@ -31,13 +31,32 @@ use super::common::RpcImpl as CommonImpl;
 use crate::rpc::types::SendTxRequest;
 use rlp::Encodable;
 
+use tokio::runtime::{Runtime, Builder};
+use std::sync::RwLock;
+
 pub struct RpcImpl {
     // helper API for retrieving verified information from peers
     light: Arc<LightQueryService>,
+
+    // runtime for executing async tasks
+    rt: RwLock<Runtime>,
 }
 
 impl RpcImpl {
-    pub fn new(light: Arc<LightQueryService>) -> Self { RpcImpl { light } }
+    pub fn new(light: Arc<LightQueryService>) -> Self {
+        let rt = Builder::new()
+            .threaded_scheduler()
+            // .core_threads(4)
+            // .thread_name("my-custom-name")
+            // .thread_stack_size(3 * 1024 * 1024)
+            .build()
+            .unwrap();
+
+        RpcImpl {
+            light,
+            rt: RwLock::new(rt),
+        }
+    }
 
     fn account(
         &self, address: RpcH160, num: Option<EpochNumber>,
@@ -49,18 +68,22 @@ impl RpcImpl {
             address, epoch
         );
 
-        self.light
-            .get_account(epoch, address)
-            .map(|maybe_acc| {
-                RpcAccount::new(maybe_acc.unwrap_or(
-                    Account::new_empty_with_balance(
-                        &address,
-                        &U256::zero(), /* balance */
-                        &U256::zero(), /* nonce */
-                    ),
-                ))
-            })
-            .map_err(RpcError::invalid_params)
+        let fut = self.light.get_account(epoch, address);
+        let mut rt = self.rt.write().unwrap();
+        info!("account::before");
+        let account = rt.block_on(fut);
+        info!("account::after {:?}", account);
+
+        let maybe_acc = account
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(RpcAccount::new(maybe_acc.unwrap_or(
+            Account::new_empty_with_balance(
+                &address,
+                &U256::zero(), /* balance */
+                &U256::zero(), /* nonce */
+            ),
+        )))
     }
 
     fn balance(
@@ -74,12 +97,16 @@ impl RpcImpl {
             address, epoch
         );
 
-        let account = self
-            .light
-            .get_account(epoch, address)
+        let fut = self.light.get_account(epoch, address);
+        let mut rt = self.rt.write().unwrap();
+        info!("account::before");
+        let account = rt.block_on(fut);
+        info!("account::after {:?}", account);
+
+        let maybe_acc = account
             .map_err(RpcError::invalid_params)?;
 
-        Ok(account
+        Ok(maybe_acc
             .map(|account| account.balance.into())
             .unwrap_or_default())
     }
@@ -95,14 +122,27 @@ impl RpcImpl {
             address, epoch
         );
 
-        let account = self
-            .light
-            .get_account(epoch, address)
+        let fut = self.light.get_account(epoch, address);
+        let mut rt = self.rt.write().unwrap();
+        info!("bank_balance::before");
+        let account = rt.block_on(fut);
+        info!("bank_balance::after {:?}", account);
+
+        let maybe_acc = account
             .map_err(RpcError::invalid_params)?;
 
-        Ok(account
+        Ok(maybe_acc
             .map(|account| account.bank_balance.into())
             .unwrap_or_default())
+
+        // let account = self
+        //     .light
+        //     .get_account(epoch, address)
+        //     .map_err(RpcError::invalid_params)?;
+
+        // Ok(account
+        //     .map(|account| account.bank_balance.into())
+        //     .unwrap_or_default())
     }
 
     fn storage_balance(
@@ -116,14 +156,27 @@ impl RpcImpl {
             address, epoch
         );
 
-        let account = self
-            .light
-            .get_account(epoch, address)
+        let fut = self.light.get_account(epoch, address);
+        let mut rt = self.rt.write().unwrap();
+        info!("storage_balance::before");
+        let account = rt.block_on(fut);
+        info!("storage_balance::after {:?}", account);
+
+        let maybe_acc = account
             .map_err(RpcError::invalid_params)?;
 
-        Ok(account
+        Ok(maybe_acc
             .map(|account| account.storage_balance.into())
             .unwrap_or_default())
+
+        // let account = self
+        //     .light
+        //     .get_account(epoch, address)
+        //     .map_err(RpcError::invalid_params)?;
+
+        // Ok(account
+        //     .map(|account| account.storage_balance.into())
+        //     .unwrap_or_default())
     }
 
     #[allow(unused_variables)]
@@ -200,20 +253,35 @@ impl RpcImpl {
         if tx.nonce.is_none() {
             // TODO(thegaram): consider adding a light node specific tx pool to
             // track the nonce
-            let nonce = self
-                .light
-                .get_account(
-                    EpochNumber::LatestState.into_primitive(),
-                    tx.from.clone().into(),
-                )
-                .map_err(|e| {
-                    RpcError::invalid_params(format!(
-                        "failed to send transaction: {:?}",
-                        e
-                    ))
-                })?
+            // let nonce = self
+            //     .light
+            //     .get_account(
+            //         EpochNumber::LatestState.into_primitive(),
+            //         tx.from.clone().into(),
+            //     )
+            //     .map_err(|e| {
+            //         RpcError::invalid_params(format!(
+            //             "failed to send transaction: {:?}",
+            //             e
+            //         ))
+            //     })?
+            //     .map(|a| a.nonce)
+            //     .unwrap_or(U256::zero());
+
+            let fut = self.light.get_account(EpochNumber::LatestState.into_primitive(), tx.from.clone().into());
+            let mut rt = self.rt.write().unwrap();
+            info!("send_transaction::before");
+            let account = rt.block_on(fut);
+            info!("send_transaction::after {:?}", account);
+
+            let maybe_acc = account
+                .map_err(|e| RpcError::invalid_params(format!(
+                    "failed to send transaction: {:?}", e)))?;
+
+            let nonce = maybe_acc
                 .map(|a| a.nonce)
                 .unwrap_or(U256::zero());
+
             tx.nonce.replace(nonce.into());
             debug!("after loading nonce in latest state, tx = {:?}", tx);
         }
@@ -235,12 +303,19 @@ impl RpcImpl {
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
 
-        let tx = self
-            .light
-            .get_tx(hash.into())
-            .map_err(RpcError::invalid_params)?;
+        // let tx = self
+        //     .light
+        //     .get_tx(hash.into())
+        //     .map_err(RpcError::invalid_params)?;
+
+        let fut = self.light.get_tx(hash.into());
+        let mut rt = self.rt.write().unwrap();
+        info!("transaction_by_hash::before");
+        let tx = rt.block_on(fut);
+        info!("transaction_by_hash::after {:?}", tx);
 
         Ok(Some(RpcTransaction::from_signed(&tx, None)))
+        // Err(jsonrpc_core::Error::invalid_params("ABC"))
     }
 
     fn transaction_receipt(
@@ -249,10 +324,11 @@ impl RpcImpl {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
 
-        let (tx, receipt, address, maybe_epoch, maybe_state_root) = self
-            .light
-            .get_tx_info(hash)
-            .map_err(RpcError::invalid_params)?;
+        let fut = self.light.get_tx_info(hash);
+        let mut rt = self.rt.write().unwrap();
+        info!("transaction_receipt::before");
+        let (tx, receipt, address, maybe_epoch, maybe_state_root) = rt.block_on(fut);
+        info!("transaction_receipt::after {:?}", tx);
 
         let mut receipt = RpcReceipt::new(tx, receipt, address);
         receipt.set_epoch_number(maybe_epoch);

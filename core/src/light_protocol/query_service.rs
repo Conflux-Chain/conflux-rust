@@ -8,7 +8,7 @@ use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
         common::{
-            poll_future, poll_stream, with_timeout, FullPeerFilter, LedgerInfo,
+            FullPeerFilter, LedgerInfo,
         },
         message::msgid,
         Error, Handler as LightHandler, LIGHT_PROTOCOL_ID,
@@ -92,79 +92,88 @@ impl QueryService {
         res.unwrap()
     }
 
-    fn retrieve_state_root<'a>(
-        &'a self, epoch: u64,
-    ) -> impl Future<Item = StateRoot, Error = Error> + 'a {
+    async fn retrieve_state_root(&self, epoch: u64) -> StateRoot {
         trace!("retrieve_state_root epoch = {}", epoch);
 
-        with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
-            self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
-        )
+        // with_timeout(
+        //     *MAX_POLL_TIME, /* timeout */
+        //     format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
+        //     self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
+        // )
+
+        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+        self.handler.state_roots.request_now(&io, epoch).await
+        // TODO: timeout
     }
 
-    fn retrieve_state_entry<'a>(
-        &'a self, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Item = Option<Vec<u8>>, Error = Error> + 'a {
+    async fn retrieve_state_entry(&self, epoch: u64, key: Vec<u8>) -> Option<Vec<u8>> {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
-        with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
-            self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
-        )
+        // with_timeout(
+        //     *MAX_POLL_TIME, /* timeout */
+        //     format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
+        //     self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
+        // )
+
+        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+        self.handler.state_entries.request_now(&io, epoch, key.clone()).await
+        // TODO: timeout
     }
 
-    fn retrieve_bloom<'a>(
-        &'a self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> + 'a {
+    async fn retrieve_bloom(&self, epoch: u64) -> Bloom {
         trace!("retrieve_bloom epoch = {}", epoch);
 
-        with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
-            self.handler.blooms.request(epoch),
-        )
+        // with_timeout(
+        //     *MAX_POLL_TIME, /* timeout */
+        //     format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
+        //     self.handler.blooms.request(epoch),
+        // )
+
+        self.handler.blooms.request(epoch).await
+        // TODO: timeout
     }
 
-    fn retrieve_receipts<'a>(
-        &'a self, epoch: u64,
-    ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> + 'a {
+    async fn retrieve_receipts(&self, epoch: u64) -> Vec<Vec<Receipt>> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
-        with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
-            self.handler.receipts.request(epoch),
-        )
+        // with_timeout(
+        //     *MAX_POLL_TIME, /* timeout */
+        //     format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
+        //     self.handler.receipts.request(epoch),
+        // )
+
+        self.handler.receipts.request(epoch).await
+        // TODO: timeout
     }
 
-    fn retrieve_block_txs<'a>(
-        &'a self, hash: H256,
-    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> + 'a {
+    async fn retrieve_block_txs(&self, hash: H256) -> Vec<SignedTransaction> {
         trace!("retrieve_block_txs hash = {:?}", hash);
 
-        with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving block txs for block {}", hash), /* error */
-            self.handler.block_txs.request(hash),
-        )
+        // with_timeout(
+        //     *MAX_POLL_TIME, /* timeout */
+        //     format!("Timeout while retrieving block txs for block {}", hash), /* error */
+        //     self.handler.block_txs.request(hash),
+        // )
+
+        self.handler.block_txs.request(hash).await
+        // TODO: timeout
     }
 
-    fn retrieve_tx_info<'a>(
-        &'a self, hash: H256,
-    ) -> impl Future<
-        Item = (SignedTransaction, Receipt, TransactionAddress),
-        Error = Error,
-    > + 'a {
+    async fn retrieve_tx_info(&self, hash: H256) -> (SignedTransaction, Receipt, TransactionAddress) {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
-        with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving tx info for tx {}", hash), /* error */
-            self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
-        )
+        // with_timeout(
+        //     *MAX_POLL_TIME, /* timeout */
+        //     format!("Timeout while retrieving tx info for tx {}", hash), /* error */
+        //     self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
+        // )
+
+        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+        self.handler.tx_infos.request_now(&io, hash).await
+        // TODO: timeout
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
@@ -179,31 +188,33 @@ impl QueryService {
         .to_key_bytes()
     }
 
-    fn retrieve_account<'a>(
-        &'a self, epoch: u64, address: H160,
-    ) -> impl Future<Item = Option<Account>, Error = String> + 'a {
+    async fn retrieve_account(&self, epoch: u64, address: H160) -> Result<Option<Account>, Error>
+    {
         trace!(
             "retrieve_account epoch = {}, address = {:?}",
             epoch,
             address
         );
 
-        // FIXME: We don't need the state root when we don't verify the
-        // retrieved content. FIXME: but can we rule out the need for
-        // verification in the context?
-        self.retrieve_state_root(epoch)
-            .map(move |_root| Self::account_key(&address))
-            .and_then(move |key| self.retrieve_state_entry(epoch, key))
-            .and_then(|entry| match entry {
-                Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
-                None => Ok(None),
-            })
-            .map_err(|e| format!("{}", e))
+        // self.retrieve_state_root(epoch)
+        // trigger state root request but don't wait for result
+        // TODO: figure out a better way
+        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+        self.handler.state_roots.request_now(&io, epoch);
+        //////////
+
+        let key = Self::account_key(&address);
+        let entry = self.retrieve_state_entry(epoch, key).await;
+
+        match entry {
+            Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
+            None => Ok(None),
+        }
     }
 
-    fn retrieve_code<'a>(
-        &'a self, epoch: u64, address: H160, code_hash: H256,
-    ) -> impl Future<Item = Option<Vec<u8>>, Error = String> + 'a {
+    async fn retrieve_code(&self, epoch: u64, address: H160, code_hash: H256) -> Option<Vec<u8>>
+    {
         trace!(
             "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
             epoch,
@@ -211,18 +222,11 @@ impl QueryService {
             code_hash
         );
 
-        // FIXME: We don't need the state root when we don't verify the
-        // retrieved content. FIXME: but can we rule out the need for
-        // verification in the context?
-        self.retrieve_state_root(epoch)
-            .map(move |_root| Self::code_key(&address, &code_hash))
-            .and_then(move |key| self.retrieve_state_entry(epoch, key))
-            .map_err(|e| format!("{}", e))
+        let key = Self::code_key(&address, &code_hash);
+        self.retrieve_state_entry(epoch, key).await
     }
 
-    pub fn get_account(
-        &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Account>, String> {
+    pub async fn get_account(&self, epoch: EpochNumber, address: H160) -> Result<Option<Account>, String> {
         info!("get_account epoch={:?} address={:?}", epoch, address);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
@@ -230,13 +234,12 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        match poll_future(&mut self.retrieve_account(epoch, address)) {
-            Ok(account) => Ok(account),
-            Err(e) => {
-                warn!("Error while retrieving account: {}", e);
-                Err(format!("{}", e))
-            }
-        }
+        // TODO: make whole function async
+        // TODO: handle errors
+        self.retrieve_account(epoch, address).await
+            .map_err(|e| format!("{}", e))
+
+        // return Err(String::from("err during get_account"));
     }
 
     pub fn get_code(
@@ -249,49 +252,41 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        let mut code = self
-            .retrieve_account(epoch, address)
-            .and_then(move |acc| match acc {
-                Some(acc) => Ok(acc.code_hash),
-                None => Err(format!(
-                    "Account {:?} (number={:?}) does not exist",
-                    address, epoch,
-                )),
-            })
-            .and_then(move |hash| self.retrieve_code(epoch, address, hash));
+        // TODO: make whole function async
+        // TODO: handle errors
+        // let acc = self.retrieve_account(epoch, address).await;
 
-        match poll_future(&mut code) {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                warn!("Error while retrieving code: {}", e);
-                Err(e)
-            }
-        }
+        // let code_hash = match acc {
+        //     Some(acc) => acc.code_hash,
+        //     None => return Err(format!(
+        //         "Account {:?} (number={:?}) does not exist",
+        //         address, epoch,
+        //     )),
+        // };
+
+        // self.retrieve_code(epoch, address, code_hash).await
+
+        return Err(String::from("err during get_code"));
     }
 
-    pub fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
+    pub async fn get_tx_info(&self, hash: H256) -> TxInfo {
         info!("get_tx_info hash={:?}", hash);
 
-        let mut info = self.retrieve_tx_info(hash).map(|info| {
-            let (tx, receipt, address) = info;
+        // TODO: make whole function async
+        // TODO: handle errors
+        // TODO: what if it doesn't exist?
+        let (tx, receipt, address) = self.retrieve_tx_info(hash).await;
 
-            let hash = address.block_hash;
-            let epoch = self.consensus.get_block_epoch_number(&hash);
+        let hash = address.block_hash;
+        let epoch = self.consensus.get_block_epoch_number(&hash);
 
-            let root = epoch
-                .and_then(|e| self.handler.witnesses.root_hashes_of(e))
-                .map(|(state_root, _, _)| state_root);
+        let root = epoch
+            .and_then(|e| self.handler.witnesses.root_hashes_of(e))
+            .map(|(state_root, _, _)| state_root);
 
-            (tx, receipt, address, epoch, root)
-        });
+        (tx, receipt, address, epoch, root)
 
-        match poll_future(&mut info) {
-            Ok(info) => Ok(info),
-            Err(e) => {
-                warn!("Error while retrieving tx info: {}", e);
-                Err(format!("{}", e))
-            }
-        }
+        // return Err(String::from("err during get_tx_info"));
     }
 
     /// Relay raw transaction to all peers.
@@ -324,28 +319,19 @@ impl QueryService {
         success
     }
 
-    pub fn get_tx(&self, hash: H256) -> Result<SignedTransaction, String> {
+    pub async fn get_tx(&self, hash: H256) -> SignedTransaction {
         info!("get_tx hash={:?}", hash);
 
-        let mut tx = future::ok(hash).and_then(|hash| {
-            trace!("hash = {:?}", hash);
+        // TODO: make whole function async
+        // TODO: handle errors
+        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+        let tx = self.handler.txs.request_now(&io, hash).await;
+        info!("!!!!!!!!!! await complete: {:?}", tx);
+        tx
+        // TODO: timeout
 
-            let tx = self.with_io(|io| self.handler.txs.request_now(io, hash));
-
-            with_timeout(
-                *MAX_POLL_TIME,                                  /* timeout */
-                format!("Timeout while retrieving tx {}", hash), /* error */
-                tx,
-            )
-        });
-
-        match poll_future(&mut tx) {
-            Ok(tx) => Ok(tx),
-            Err(e) => {
-                warn!("Error while retrieving tx: {}", e);
-                Err(format!("{}", e))
-            }
-        }
+        // return Err(String::from("err"));
     }
 
     /// Apply filter to all logs within a receipt.
@@ -537,6 +523,7 @@ impl QueryService {
         // set maximum to number of logs returned
         let limit = filter.limit.unwrap_or(::std::usize::MAX) as u64;
 
+        /*
         // construct a stream object for log filtering
         // we first retrieve the epoch blooms and try to match against them. for
         // matching epochs, we retrieve the corresponding receipts and find the
@@ -629,7 +616,9 @@ impl QueryService {
                 Err(e) => return Err(FilterError::Custom(format!("{}", e))),
             }
         }
+        */
 
+        let mut matching = vec![];
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)

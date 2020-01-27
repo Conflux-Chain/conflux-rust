@@ -2,14 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
 use cfx_types::Bloom;
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::task::Waker;
+use std::future::Future;
 
 use crate::{
     hash::keccak,
@@ -27,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, KeyOrdered, SyncManager},
+    common::{KeyOrdered, SyncManager, ItemOrWaker, FutureItem},
     witnesses::Witnesses,
 };
 
@@ -49,7 +49,7 @@ pub struct Blooms {
     sync_manager: SyncManager<u64, MissingBloom>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, Bloom>>>,
+    verified: Arc<RwLock<LruCache<u64, ItemOrWaker<Bloom>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -84,13 +84,13 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn request(
-        &self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> {
+    pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom>
+    {
         if epoch == 0 {
-            self.verified.write().insert(0, Bloom::zero());
+            self.verified.write().insert(0, ItemOrWaker::Item(Bloom::zero()));
         }
 
+        // TODO!!
         if !self.verified.read().contains_key(&epoch) {
             let missing = MissingBloom::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -125,7 +125,21 @@ impl Blooms {
         self.validate_bloom(epoch, bloom)?;
 
         // store bloom by epoch
-        self.verified.write().insert(epoch, bloom);
+        let mut verified = self.verified.write();
+
+        match verified.get(&epoch) {
+            None => {
+                // TODO: this is fishy
+            },
+            Some(ItemOrWaker::Item(i)) => {
+                // TODO: check if matching
+            }
+            Some(ItemOrWaker::Waker(w)) => {
+                w.clone().wake();
+            }
+        }
+
+        verified.insert(epoch, ItemOrWaker::Item(bloom));
         self.sync_manager.remove_in_flight(&epoch);
 
         Ok(())

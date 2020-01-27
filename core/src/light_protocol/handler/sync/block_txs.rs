@@ -2,15 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
 use cfx_types::H256;
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Block, SignedTransaction};
 use std::sync::Arc;
+use std::future::Future;
 
 use crate::{
     consensus::ConsensusGraph,
@@ -28,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
     Txs,
 };
 
@@ -56,7 +55,7 @@ pub struct BlockTxs {
     txs: Arc<Txs>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, Vec<SignedTransaction>>>>,
+    verified: Arc<RwLock<LruCache<H256, ItemOrWaker<Vec<SignedTransaction>>>>>,
 }
 
 impl BlockTxs {
@@ -91,9 +90,9 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub fn request(
-        &self, hash: H256,
-    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> {
+    pub fn request(&self, hash: H256) -> impl Future<Output = Vec<SignedTransaction>>
+    {
+        // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -133,7 +132,21 @@ impl BlockTxs {
         self.validate_block_txs(hash, &block_txs)?;
 
         // store block bodies by block hash
-        self.verified.write().insert(hash, block_txs);
+        let mut verified = self.verified.write();
+
+        match verified.get(&hash) {
+            None => {
+                // TODO: this is fishy
+            },
+            Some(ItemOrWaker::Item(i)) => {
+                // TODO: check if matching
+            }
+            Some(ItemOrWaker::Waker(w)) => {
+                w.clone().wake();
+            }
+        }
+
+        verified.insert(hash, ItemOrWaker::Item(block_txs));
         self.sync_manager.remove_in_flight(&hash);
 
         Ok(())

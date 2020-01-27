@@ -2,15 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
 use cfx_types::H256;
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::SignedTransaction;
 use std::sync::Arc;
+use std::future::Future;
 
 use crate::{
     light_protocol::{
@@ -26,7 +25,7 @@ use crate::{
     },
 };
 
-use super::common::{FutureItem, SyncManager, TimeOrdered};
+use super::common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem};
 
 #[derive(Debug)]
 struct Statistics {
@@ -46,7 +45,7 @@ pub struct Txs {
     sync_manager: SyncManager<H256, MissingTx>,
 
     // txs received from full node
-    verified: Arc<RwLock<LruCache<H256, SignedTransaction>>>,
+    verified: Arc<RwLock<LruCache<H256, ItemOrWaker<SignedTransaction>>>>,
 }
 
 impl Txs {
@@ -75,9 +74,9 @@ impl Txs {
     }
 
     #[inline]
-    pub fn request_now(
-        &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Item = SignedTransaction, Error = Error> {
+    pub fn request_now(&self, io: &dyn NetworkContext, hash: H256) -> impl Future<Output = SignedTransaction>
+    {
+        // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTx::new(hash));
 
@@ -115,7 +114,24 @@ impl Txs {
         let hash = tx.hash();
         self.validate_tx(&tx)?;
 
-        self.verified.write().insert(hash, tx);
+        let mut verified = self.verified.write();
+
+        match verified.get(&hash) {
+            None => {
+                info!("txs::validate_and_store::A");
+                // TODO: this is fishy
+            },
+            Some(ItemOrWaker::Item(i)) => {
+                info!("txs::validate_and_store::B");
+                // TODO: check if matching
+            }
+            Some(ItemOrWaker::Waker(w)) => {
+                info!("txs::validate_and_store::C");
+                w.clone().wake();
+            }
+        }
+
+        verified.insert(hash, ItemOrWaker::Item(tx));
         self.sync_manager.remove_in_flight(&hash);
 
         Ok(())

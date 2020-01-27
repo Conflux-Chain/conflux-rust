@@ -2,15 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
 use cfx_types::H256;
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Receipt, SignedTransaction, TransactionAddress};
 use std::sync::Arc;
+use std::future::Future;
 
 use crate::{
     consensus::ConsensusGraph,
@@ -28,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
     BlockTxs, Receipts,
 };
 
@@ -61,7 +60,7 @@ pub struct TxInfos {
     sync_manager: SyncManager<H256, MissingTxInfo>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, TxInfoValidated>>>,
+    verified: Arc<RwLock<LruCache<H256, ItemOrWaker<TxInfoValidated>>>>,
 }
 
 impl TxInfos {
@@ -97,9 +96,9 @@ impl TxInfos {
     }
 
     #[inline]
-    pub fn request_now(
-        &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Item = TxInfoValidated, Error = Error> {
+    pub fn request_now(&self, io: &dyn NetworkContext, hash: H256) -> impl Future<Output = TxInfoValidated>
+    {
+        // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTxInfo::new(hash));
 
@@ -176,7 +175,22 @@ impl TxInfos {
         for (index, (tx, receipt)) in items.enumerate() {
             let hash = tx.hash();
             let address = TransactionAddress { block_hash, index };
-            self.verified.write().insert(hash, (tx, receipt, address));
+
+            let mut verified = self.verified.write();
+
+            match verified.get(&hash) {
+                None => {
+                    // TODO: this is fishy
+                },
+                Some(ItemOrWaker::Item(i)) => {
+                    // TODO: check if matching
+                }
+                Some(ItemOrWaker::Waker(w)) => {
+                    w.clone().wake();
+                }
+            }
+
+            verified.insert(hash, ItemOrWaker::Item((tx, receipt, address)));
             self.sync_manager.remove_in_flight(&hash);
         }
 

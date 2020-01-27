@@ -2,13 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::future::Future;
 
 use crate::{
     light_protocol::{
@@ -26,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
     state_roots::StateRoots,
 };
 
@@ -64,7 +63,7 @@ pub struct StateEntries {
     sync_manager: SyncManager<StateKey, MissingStateEntry>,
 
     // state entries received from full node
-    verified: Arc<RwLock<LruCache<StateKey, StateEntry>>>,
+    verified: Arc<RwLock<LruCache<StateKey, ItemOrWaker<StateEntry>>>>,
 }
 
 impl StateEntries {
@@ -99,9 +98,11 @@ impl StateEntries {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Item = StateEntry, Error = Error> {
+    ) -> impl Future<Output = StateEntry>
+    {
         let key = StateKey { epoch, key };
 
+        // TODO!!
         if !self.verified.read().contains_key(&key) {
             let missing = std::iter::once(MissingStateEntry::new(key.clone()));
 
@@ -139,7 +140,21 @@ impl StateEntries {
         self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
 
         // store state entry by state key
-        self.verified.write().insert(key.clone(), entry);
+        let mut verified = self.verified.write();
+
+        match verified.get(&key) {
+            None => {
+                // TODO: this is fishy
+            },
+            Some(ItemOrWaker::Item(i)) => {
+                // TODO: check if matching
+            }
+            Some(ItemOrWaker::Waker(w)) => {
+                w.clone().wake();
+            }
+        }
+
+        verified.insert(key.clone(), ItemOrWaker::Item(entry));
         self.sync_manager.remove_in_flight(&key);
 
         Ok(())
