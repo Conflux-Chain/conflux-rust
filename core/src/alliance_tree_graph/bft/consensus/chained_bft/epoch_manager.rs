@@ -39,7 +39,8 @@ use libra_types::{
 use super::super::safety_rules::SafetyRulesManager;
 use crate::alliance_tree_graph::{
     bft::consensus::{
-        chained_bft::network::NetworkSender, state_replication::StateComputer,
+        chained_bft::network::NetworkSender,
+        state_replication::{StateComputer, TxnTransformer},
     },
     consensus::TreeGraphConsensus,
 };
@@ -53,23 +54,24 @@ use std::{
 
 // Manager the components that shared across epoch and spawn per-epoch
 // EventProcessor with epoch-specific input.
-pub struct EpochManager</* TM, */ T> {
+pub struct EpochManager<TT, T> {
     epoch_info: Arc<RwLock<EpochInfo>>,
     config: ChainedBftSMRConfig,
     time_service: Arc<ClockTimeService>,
     //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
     network_sender: Arc<NetworkSender<T>>,
     timeout_sender: channel::Sender<Round>,
-    //txn_manager: TM,
+    txn_transformer: TT,
     state_computer: Arc<dyn StateComputer<Payload = T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     safety_rules_manager: SafetyRulesManager<T>,
     tg_consensus: Arc<TreeGraphConsensus>,
 }
 
-impl</* TM, */ T> EpochManager</* TM, */ T>
+impl<TT, T> EpochManager<TT, T>
 where
-    /* TM: TxnManager<Payload = T>, */ T: Payload
+    TT: TxnTransformer<Payload = T>,
+    T: Payload,
 {
     pub fn new(
         epoch_info: Arc<RwLock<EpochInfo>>,
@@ -78,7 +80,7 @@ where
         //self_sender: channel::Sender<anyhow::Result<Event<ConsensusMsg>>>,
         network_sender: Arc<NetworkSender<T>>,
         timeout_sender: channel::Sender<Round>,
-        //txn_manager: TM,
+        txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         safety_rules_manager: SafetyRulesManager<T>,
@@ -92,7 +94,7 @@ where
             //self_sender,
             network_sender,
             timeout_sender,
-            //txn_manager,
+            txn_transformer,
             state_computer,
             storage,
             safety_rules_manager,
@@ -192,7 +194,7 @@ where
     pub fn start_new_epoch(
         &mut self, ledger_info: LedgerInfoWithSignatures,
         network: Arc<NetworkSender<T>>,
-    ) -> EventProcessor</* TM, */ T>
+    ) -> EventProcessor<TT, T>
     {
         // make sure storage is on this ledger_info too, it should be no-op if
         // it's already committed
@@ -212,7 +214,7 @@ where
     pub fn start_epoch(
         &mut self, initial_data: RecoveryData<T>,
         network_sender: Arc<NetworkSender<T>>,
-    ) -> EventProcessor</* TM, */ T>
+    ) -> EventProcessor<TT, T>
     {
         let validators = initial_data.validators();
         let epoch = self.epoch();
@@ -252,10 +254,14 @@ where
         let proposal_generator = ProposalGenerator::new(
             self.config.author,
             block_store.clone(),
-            //self.txn_manager.clone(),
+            self.txn_transformer.clone(),
             self.time_service.clone(),
             self.config.max_block_size,
             self.tg_consensus.clone(),
+            network_sender
+                .network
+                .net_key_pair()
+                .expect("Network service not started yet!"),
         );
 
         let pacemaker = self.create_pacemaker(
@@ -273,7 +279,7 @@ where
             proposer_election,
             proposal_generator,
             safety_rules,
-            //self.txn_manager.clone(),
+            self.txn_transformer.clone(),
             network_sender,
             self.storage.clone(),
             self.time_service.clone(),

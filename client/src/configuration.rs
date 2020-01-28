@@ -5,6 +5,10 @@
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
 use cfxcore::{
+    alliance_tree_graph::consensus::{
+        consensus_inner::ConsensusInnerConfig as TreeGraphConsensusInnerConfig,
+        ConsensusConfig as TreeGraphConsensusConfig,
+    },
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
@@ -179,6 +183,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (is_consortium, (bool), false)
+        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
         (ledger_cache_size, (Option<usize>), Some(2048))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (max_download_state_peers, (usize), 8)
@@ -306,6 +311,26 @@ impl Configuration {
             NUM_COLUMNS.clone(),
             self.raw_conf.rocksdb_disable_wal,
         )
+    }
+
+    pub fn tg_consensus_config(&self) -> TreeGraphConsensusConfig {
+        let enable_optimistic_execution = if DEFERRED_STATE_EPOCH_COUNT <= 1 {
+            false
+        } else {
+            self.raw_conf.enable_optimistic_execution
+        };
+        TreeGraphConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            inner_conf: TreeGraphConsensusInnerConfig {
+                era_epoch_count: self.raw_conf.era_epoch_count,
+                era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
+                enable_state_expose: self.raw_conf.enable_state_expose,
+            },
+            bench_mode: false,
+        }
     }
 
     pub fn consensus_config(&self) -> ConsensusConfig {

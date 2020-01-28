@@ -247,7 +247,7 @@ impl RangedManifest {
                 return Ok(None);
             }
         };
-        let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_read_only()?;
+        let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_owned()?;
         let merkle_root = snapshot_mpt.merkle_root;
         let mut slicer = match start_key {
             Some(ref key) => MptSlicer::new_from_key(&mut snapshot_mpt, key)?,

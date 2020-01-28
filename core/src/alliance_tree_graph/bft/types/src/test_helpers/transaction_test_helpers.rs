@@ -9,7 +9,12 @@ use crate::{
     },
     write_set::WriteSet,
 };
-use libra_crypto::{ed25519::*, hash::CryptoHash, traits::*};
+use libra_crypto::{
+    ed25519::*,
+    hash::CryptoHash,
+    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
+    traits::*,
+};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 static PLACEHOLDER_SCRIPT: &[u8] =
@@ -21,7 +26,7 @@ const MAX_GAS_PRICE: u64 = 1;
 // Test helper for transaction creation
 pub fn get_test_signed_module_publishing_transaction(
     sender: AccountAddress, sequence_number: u64,
-    private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+    private_key: Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     module: Module,
 ) -> SignedTransaction
 {
@@ -47,7 +52,7 @@ pub fn get_test_signed_module_publishing_transaction(
 // Test helper for transaction creation
 pub fn get_test_signed_transaction(
     sender: AccountAddress, sequence_number: u64,
-    private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+    private_key: Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     script: Option<Script>, expiration_time: u64, gas_unit_price: u64,
     max_gas_amount: Option<u64>,
 ) -> SignedTransaction
@@ -70,7 +75,7 @@ pub fn get_test_signed_transaction(
 // checked.
 pub fn get_test_unchecked_transaction(
     sender: AccountAddress, sequence_number: u64,
-    private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+    private_key: Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     script: Option<Script>, expiration_time: u64, gas_unit_price: u64,
     max_gas_amount: Option<u64>,
 ) -> SignedTransaction
@@ -93,7 +98,7 @@ pub fn get_test_unchecked_transaction(
 // get_test_signed_transaction Omits some fields
 pub fn get_test_signed_txn(
     sender: AccountAddress, sequence_number: u64,
-    private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+    private_key: Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     script: Option<Script>,
 ) -> SignedTransaction
 {
@@ -116,7 +121,7 @@ pub fn get_test_signed_txn(
 
 pub fn get_test_unchecked_txn(
     sender: AccountAddress, sequence_number: u64,
-    private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+    private_key: Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     script: Option<Script>,
 ) -> SignedTransaction
 {
@@ -143,7 +148,7 @@ pub fn placeholder_script() -> Script {
 
 pub fn get_write_set_txn(
     sender: AccountAddress, sequence_number: u64,
-    private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+    private_key: Secp256k1PrivateKey, public_key: Secp256k1PublicKey,
     write_set: Option<WriteSet>,
 ) -> SignatureCheckedTransaction
 {

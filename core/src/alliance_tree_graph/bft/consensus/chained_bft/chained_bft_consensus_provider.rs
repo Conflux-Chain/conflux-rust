@@ -21,12 +21,19 @@ use libra_types::transaction::SignedTransaction;
 use super::super::safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
 use super::super::super::executor::Executor;
-use crate::alliance_tree_graph::{
-    bft::consensus::{
-        state_computer::ExecutionProxy, state_replication::StateComputer,
+use crate::{
+    alliance_tree_graph::{
+        bft::consensus::{
+            state_computer::ExecutionProxy,
+            state_replication::{
+                StateComputer, TxnTransformer, TxnTransformerProxy,
+            },
+        },
+        consensus::TreeGraphConsensus,
     },
-    consensus::TreeGraphConsensus,
+    sync::request_manager::RequestManager,
 };
+use cfx_types::H256;
 use libradb::LibraDB;
 use network::NetworkService;
 use primitives::TransactionWithSignature;
@@ -45,7 +52,7 @@ pub struct InitialSetup {
 /// Supports the implementation of ConsensusProvider using LibraBFT.
 pub struct ChainedBftProvider {
     smr: ChainedBftSMR<Vec<SignedTransaction>>,
-    //txn_manager: MempoolProxy,
+    txn_transformer: TxnTransformerProxy,
     state_computer: Arc<dyn StateComputer<Payload = Vec<SignedTransaction>>>,
     tg_consensus: Arc<TreeGraphConsensus>,
 }
@@ -80,11 +87,7 @@ impl ChainedBftProvider {
             Arc::new(StorageWriteProxy::new(node_config, libra_db.clone()));
         let initial_data = storage.start();
 
-        /*
-        let mempool_client =
-            MempoolClientWrapper::new("localhost", node_config.mempool.mempool_service_port);
-        let txn_manager = MempoolProxy::new(mempool_client);
-        */
+        let txn_transformer = TxnTransformerProxy::default();
 
         let state_computer = Arc::new(ExecutionProxy::new(
             executor, /* , synchronizer_client.clone()) */
@@ -99,7 +102,7 @@ impl ChainedBftProvider {
         );
         Self {
             smr,
-            //txn_manager,
+            txn_transformer,
             state_computer,
             tg_consensus,
         }
@@ -126,18 +129,17 @@ impl ChainedBftProvider {
 
 impl ConsensusProvider for ChainedBftProvider {
     fn start(
-        &mut self, network: Arc<NetworkService>,
-        protocol_handler: Arc<
-            HotStuffSynchronizationProtocol<Vec<SignedTransaction>>,
-        >,
+        &mut self, network: Arc<NetworkService>, own_node_hash: H256,
+        request_manager: Arc<RequestManager>,
     ) -> Result<()>
     {
         debug!("Starting consensus provider.");
         self.smr.start(
-            //self.txn_manager.clone(),
+            self.txn_transformer.clone(),
             Arc::clone(&self.state_computer),
             network,
-            protocol_handler,
+            own_node_hash,
+            request_manager,
             self.tg_consensus.clone(),
         )
     }

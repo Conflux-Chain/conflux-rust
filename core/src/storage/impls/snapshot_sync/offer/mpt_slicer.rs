@@ -5,20 +5,20 @@
 #[allow(unused)]
 pub struct MptSlicer<'a> {
     cursor: MptCursor<
-        &'a mut dyn SnapshotMptTraitReadOnly,
-        BasicPathNode<&'a mut dyn SnapshotMptTraitReadOnly>,
+        &'a mut dyn SnapshotMptTraitRead,
+        BasicPathNode<&'a mut dyn SnapshotMptTraitRead>,
     >,
 }
 
 impl<'a> MptSlicer<'a> {
-    pub fn new(mpt: &'a mut dyn SnapshotMptTraitReadOnly) -> Result<Self> {
+    pub fn new(mpt: &'a mut dyn SnapshotMptTraitRead) -> Result<Self> {
         let mut cursor = MptCursor::new(mpt);
         cursor.load_root()?;
         Ok(Self { cursor })
     }
 
     pub fn new_from_key(
-        mpt: &'a mut dyn SnapshotMptTraitReadOnly, key: &[u8],
+        mpt: &'a mut dyn SnapshotMptTraitRead, key: &[u8],
     ) -> Result<Self> {
         let mut slicer = Self::new(mpt)?;
         slicer.cursor.open_path_for_key::<access_mode::Read>(key)?;
@@ -88,11 +88,9 @@ impl<'a> MptSlicer<'a> {
                     // trie_node.
                     &mut *(current_node
                         as *const BasicPathNode<
-                            &'a mut dyn SnapshotMptTraitReadOnly,
+                            &'a mut dyn SnapshotMptTraitRead,
                         >
-                        as *mut BasicPathNode<
-                            &'a mut dyn SnapshotMptTraitReadOnly,
-                        >)
+                        as *mut BasicPathNode<&'a mut dyn SnapshotMptTraitRead>)
                 }
                 .open_child_index(this_child_index)?
                 // Unwrap is fine because the child is guaranteed to exist.
@@ -117,7 +115,7 @@ impl<'a> MptSlicer<'a> {
 
 use super::super::super::{
     super::storage_db::snapshot_mpt::{
-        SnapshotMptTraitReadOnly, SubtreeMerkleWithSize,
+        SnapshotMptTraitRead, SubtreeMerkleWithSize,
     },
     errors::*,
     merkle_patricia_trie::{mpt_cursor::*, *},

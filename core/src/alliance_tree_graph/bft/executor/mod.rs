@@ -188,11 +188,14 @@ pub struct Executor {
 
 impl Executor {
     /// Constructs an `Executor`.
-    pub fn new(config: &NodeConfig) -> Self {
-        let db = Arc::new(LibraDB::new("./bft_db"));
+    pub fn new(config: &NodeConfig, db: Arc<LibraDB>) -> Self {
         let mut executor = Executor { db };
 
-        //FIXME: if start from original genesis
+        if executor
+            .db
+            .get_startup_info()
+            .expect("Shouldn't fail")
+            .is_none()
         {
             let genesis_txn = config
                 .execution

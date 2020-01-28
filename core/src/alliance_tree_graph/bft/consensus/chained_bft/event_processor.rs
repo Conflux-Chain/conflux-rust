@@ -58,7 +58,9 @@ use super::super::safety_rules::{ConsensusState, TSafetyRules};
 
 //use std::convert::TryInto;
 use crate::alliance_tree_graph::{
-    bft::consensus::chained_bft::network::NetworkSender,
+    bft::consensus::{
+        chained_bft::network::NetworkSender, state_replication::TxnTransformer,
+    },
     hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
 };
 use libra_types::validator_change::ValidatorChangeProof;
@@ -81,13 +83,13 @@ pub mod event_processor_fuzzing;
 /// process_proposal, process_vote, etc.). It is exposing the async processing
 /// functions for each event type. The caller is responsible for running the
 /// event loops and driving the execution via some executors.
-pub struct EventProcessor</* TM, */ T> {
+pub struct EventProcessor<TT, T> {
     block_store: Arc<BlockStore<T>>,
     pacemaker: Pacemaker,
     proposer_election: Box<dyn ProposerElection<T> + Send + Sync>,
-    proposal_generator: ProposalGenerator</* TM, */ T>,
+    proposal_generator: ProposalGenerator<TT, T>,
     safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
-    //txn_manager: TM,
+    txn_transformer: TT,
     network: Arc<NetworkSender<T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     time_service: Arc<dyn TimeService>,
@@ -96,22 +98,20 @@ pub struct EventProcessor</* TM, */ T> {
     validators: Arc<ValidatorVerifier>,
 }
 
-impl</* TM, */ T> EventProcessor</* TM, */ T>
+impl<TT, T> EventProcessor<TT, T>
 where
-    /* TM: TxnManager<Payload = T>, */ T: Payload
+    TT: TxnTransformer<Payload = T>,
+    T: Payload,
 {
     pub fn new(
-        block_store: Arc<BlockStore<T>>,
-        last_vote: Option<Vote>,
+        block_store: Arc<BlockStore<T>>, last_vote: Option<Vote>,
         pacemaker: Pacemaker,
         proposer_election: Box<dyn ProposerElection<T> + Send + Sync>,
-        proposal_generator: ProposalGenerator</* TM, */ T>,
+        proposal_generator: ProposalGenerator<TT, T>,
         safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
-        //txn_manager: TM,
-        network: Arc<NetworkSender<T>>,
+        txn_transformer: TT, network: Arc<NetworkSender<T>>,
         storage: Arc<dyn PersistentStorage<T>>,
-        time_service: Arc<dyn TimeService>,
-        validators: Arc<ValidatorVerifier>,
+        time_service: Arc<dyn TimeService>, validators: Arc<ValidatorVerifier>,
     ) -> Self
     {
         counters::BLOCK_RETRIEVAL_COUNT.get();
@@ -127,7 +127,7 @@ where
             proposer_election,
             proposal_generator,
             safety_rules,
-            //txn_manager,
+            txn_transformer,
             network,
             storage,
             time_service,

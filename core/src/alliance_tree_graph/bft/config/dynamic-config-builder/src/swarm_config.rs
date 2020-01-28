@@ -4,7 +4,7 @@
 use anyhow::Result;
 use libra_config::config::NodeConfig;
 use libra_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
     test_utils::KeyPair,
 };
 use std::{
@@ -37,7 +37,7 @@ impl SwarmConfig {
         }
 
         let faucet_key_path = config_dir.join("mint.key");
-        let faucet_keypair = KeyPair::<Ed25519PrivateKey, Ed25519PublicKey>::from(faucet_key);
+        let faucet_keypair = KeyPair::<Secp256k1PrivateKey, Secp256k1PublicKey>::from(faucet_key);
         let serialized_key = lcs::to_bytes(&faucet_keypair)?;
         let mut faucet_key_file = File::create(&faucet_key_path)?;
         faucet_key_file.write_all(&serialized_key)?;
@@ -50,5 +50,5 @@ impl SwarmConfig {
 }
 
 pub trait BuildSwarm {
-    fn build_swarm(&self) -> Result<(Vec<NodeConfig>, Ed25519PrivateKey)>;
+    fn build_swarm(&self) -> Result<(Vec<NodeConfig>, Secp256k1PrivateKey)>;
 }

@@ -13,7 +13,7 @@ use std::{
     path::Path,
 };
 
-pub fn create_faucet_key_file(output_file: &str) -> KeyPair<Ed25519PrivateKey, Ed25519PublicKey> {
+pub fn create_faucet_key_file(output_file: &str) -> KeyPair<Secp256k1PrivateKey, Secp256k1PublicKey> {
     let output_file_path = Path::new(&output_file);
 
     if output_file_path.exists() && !output_file_path.is_file() {
@@ -38,7 +38,7 @@ pub fn create_faucet_key_file(output_file: &str) -> KeyPair<Ed25519PrivateKey, E
 /// Tries to load a keypair from the path given as argument
 pub fn load_key_from_file<P: AsRef<Path>>(
     path: P,
-) -> Result<KeyPair<Ed25519PrivateKey, Ed25519PublicKey>> {
+) -> Result<KeyPair<Secp256k1PrivateKey, Secp256k1PublicKey>> {
     lcs::from_bytes(&fs::read(path)?[..]).map_err(Into::into)
 }
 
@@ -48,7 +48,7 @@ pub fn load_key_from_file<P: AsRef<Path>>(
 pub fn load_faucet_key_or_create_default(
     file_path: Option<String>,
 ) -> (
-    KeyPair<Ed25519PrivateKey, Ed25519PublicKey>,
+    KeyPair<Secp256k1PrivateKey, Secp256k1PublicKey>,
     String,
     Option<TempPath>,
 ) {

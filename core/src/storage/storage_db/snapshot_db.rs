@@ -50,16 +50,16 @@ impl SnapshotInfo {
 }
 
 pub trait OpenSnapshotMptTrait<'db> {
-    type SnapshotMptReadType: 'db + SnapshotMptTraitReadOnly;
-    type SnapshotMptWriteType: 'db + SnapshotMptTraitSingleWriter;
+    type SnapshotDbBorrowSharedType: 'db + SnapshotMptTraitRead;
+    type SnapshotDbBorrowMutType: 'db + SnapshotMptTraitRw;
 
-    fn open_snapshot_mpt_for_write(
+    fn open_snapshot_mpt_owned(
         &'db mut self,
-    ) -> Result<Self::SnapshotMptWriteType>;
+    ) -> Result<Self::SnapshotDbBorrowMutType>;
 
-    fn open_snapshot_mpt_read_only(
-        &'db mut self,
-    ) -> Result<Self::SnapshotMptReadType>;
+    fn open_snapshot_mpt_shared(
+        &'db self,
+    ) -> Result<Self::SnapshotDbBorrowSharedType>;
 }
 
 pub trait SnapshotDbTrait:
@@ -118,7 +118,7 @@ use super::{
     key_value_db::{KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter},
 };
 use crate::storage::storage_db::{
-    KeyValueDbTraitRead, SnapshotMptTraitReadOnly, SnapshotMptTraitSingleWriter,
+    KeyValueDbTraitRead, SnapshotMptTraitRead, SnapshotMptTraitRw,
 };
 use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};

@@ -3,16 +3,25 @@ refresh_rate: 30 seconds
 appenders:
   stdout:
     kind: console
+    encoder:
+        pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"
+    filters: 
+      -
+        kind: "threshold"
+        level: "info"
+
 
   logfile:
     kind: rolling_file
     path: "log/conflux.log"
+    encoder:
+        pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"
 
     policy:
       kind: compound
       trigger:
         kind: size
-        limit: 50 mb
+        limit: 2000 mb
       roller:
         kind: fixed_window 
         pattern: "log/archive/conflux.{}.gz"
@@ -29,7 +38,7 @@ loggers:
     network:
         level: info
     cfxcore:
-        level: info
+        level: debug
     rpc:
         level: info
     discovery:

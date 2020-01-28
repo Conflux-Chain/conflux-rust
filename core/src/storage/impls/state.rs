@@ -101,16 +101,14 @@ impl State {
     pub fn get_from_snapshot(
         &self, access_key: &[u8], with_proof: bool,
     ) -> Result<(Option<Box<[u8]>>, Option<TrieProof>)> {
-        let mut snapshot_db_new_connection = self.snapshot_db.try_clone()?;
-        let value = snapshot_db_new_connection.get(access_key)?;
+        let value = self.snapshot_db.get(access_key)?;
         Ok((
             value,
             if with_proof {
-                let mut mpt =
-                    snapshot_db_new_connection.open_snapshot_mpt_read_only()?;
+                let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
                 let mut cursor = MptCursor::<
-                    &mut dyn SnapshotMptTraitReadOnly,
-                    BasicPathNode<&mut dyn SnapshotMptTraitReadOnly>,
+                    &mut dyn SnapshotMptTraitRead,
+                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
                 >::new(&mut mpt);
                 cursor.load_root()?;
                 cursor.open_path_for_key::<access_mode::Read>(access_key)?;

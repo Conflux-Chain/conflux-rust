@@ -28,8 +28,8 @@ pub struct MptMerger<'a> {
 
 impl<'a> MptMerger<'a> {
     pub fn new(
-        maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadOnly>,
-        out_mpt: &'a mut dyn SnapshotMptTraitSingleWriter,
+        maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadAndIterate>,
+        out_mpt: &'a mut dyn SnapshotMptTraitRw,
     ) -> Self
     {
         Self {
@@ -133,8 +133,8 @@ impl<'a> MptMerger<'a> {
 }
 
 struct MergeMptsInRequest<'a> {
-    maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadOnly>,
-    out_mpt: &'a mut dyn SnapshotMptTraitSingleWriter,
+    maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadAndIterate>,
+    out_mpt: &'a mut dyn SnapshotMptTraitRw,
 }
 
 impl GetReadMpt for MergeMptsInRequest<'_> {
@@ -146,9 +146,9 @@ impl GetReadMpt for MergeMptsInRequest<'_> {
         }
     }
 
-    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly {
+    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitRead {
         if self.maybe_readonly_mpt.is_some() {
-            *self.maybe_readonly_mpt.as_mut().unwrap()
+            self.maybe_readonly_mpt.as_mut().unwrap().as_readonly()
         } else {
             self.out_mpt.as_readonly()
         }
@@ -156,15 +156,13 @@ impl GetReadMpt for MergeMptsInRequest<'_> {
 }
 
 impl GetRwMpt for MergeMptsInRequest<'_> {
-    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitSingleWriter {
-        self.out_mpt
-    }
+    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw { self.out_mpt }
 
     fn get_write_and_read_mpt(
         &mut self,
     ) -> (
-        &mut dyn SnapshotMptTraitSingleWriter,
-        Option<&mut dyn SnapshotMptTraitReadOnly>,
+        &mut dyn SnapshotMptTraitRw,
+        Option<&mut dyn SnapshotMptTraitReadAndIterate>,
     ) {
         (
             self.out_mpt,

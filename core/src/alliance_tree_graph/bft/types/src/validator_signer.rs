@@ -145,7 +145,7 @@ pub mod proptests {
 
     proptest! {
         #[test]
-        fn test_new_signer(signing_key in arb_signing_key::<Ed25519PrivateKey>()){
+        fn test_new_signer(signing_key in arb_signing_key::<Secp256k1PrivateKey>()){
             let public_key = signing_key.public_key();
             let signer = ValidatorSigner::new(None, signing_key);
             prop_assert_eq!(public_key, signer.public_key());

@@ -3,7 +3,7 @@
 
 use crate::{account_address::AccountAddress, byte_array::ByteArray};
 use anyhow::Result;
-use libra_crypto::{ed25519::Ed25519Signature, HashValue};
+use libra_crypto::{secp256k1::Secp256k1Signature, HashValue};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -27,14 +27,14 @@ pub struct BlockMetadata {
     // Since Move doesn't support hashmaps, this vote map would be stored as a
     // vector of key value pairs in the Move module. Thus we need a
     // BTreeMap here to define how the values are being ordered.
-    previous_block_votes: BTreeMap<AccountAddress, Ed25519Signature>,
+    previous_block_votes: BTreeMap<AccountAddress, Secp256k1Signature>,
     proposer: AccountAddress,
 }
 
 impl BlockMetadata {
     pub fn new(
         id: HashValue, timestamp_usec: u64,
-        previous_block_votes: BTreeMap<AccountAddress, Ed25519Signature>,
+        previous_block_votes: BTreeMap<AccountAddress, Secp256k1Signature>,
         proposer: AccountAddress,
     ) -> Self
     {

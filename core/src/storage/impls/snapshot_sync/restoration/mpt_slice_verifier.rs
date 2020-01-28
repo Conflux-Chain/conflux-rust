@@ -244,7 +244,7 @@ impl MptSliceVerifier {
     }
 }
 
-impl SnapshotMptTraitReadOnly for SliceMptRebuilder {
+impl SnapshotMptTraitRead for SliceMptRebuilder {
     fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
 
     fn load_node(
@@ -252,7 +252,9 @@ impl SnapshotMptTraitReadOnly for SliceMptRebuilder {
     ) -> Result<Option<SnapshotMptNode>> {
         Ok(self.boundary_nodes_to_load.get(path).cloned())
     }
+}
 
+impl SnapshotMptTraitReadAndIterate for SliceMptRebuilder {
     fn iterate_subtree_trie_nodes_without_root(
         &mut self, _path: &dyn CompressedPathTrait,
     ) -> Result<Box<dyn SnapshotMptIteraterTrait>> {
@@ -262,9 +264,7 @@ impl SnapshotMptTraitReadOnly for SliceMptRebuilder {
     }
 }
 
-impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
-    fn as_readonly(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
-
+impl SnapshotMptTraitRw for SliceMptRebuilder {
     fn delete_node(&mut self, _path: &dyn CompressedPathTrait) -> Result<()> {
         // It may only happen for the terminal boundary node, when the key-value
         // is missing in the chunk to recover,.
@@ -324,19 +324,17 @@ impl SnapshotMptTraitSingleWriter for SliceMptRebuilder {
 impl GetReadMpt for SliceMptRebuilder {
     fn get_merkle_root(&self) -> MerkleHash { self.merkle_root.clone() }
 
-    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitReadOnly { self }
+    fn get_read_mpt(&mut self) -> &mut dyn SnapshotMptTraitRead { self }
 }
 
 impl GetRwMpt for SliceMptRebuilder {
-    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitSingleWriter {
-        self
-    }
+    fn get_write_mpt(&mut self) -> &mut dyn SnapshotMptTraitRw { self }
 
     fn get_write_and_read_mpt(
         &mut self,
     ) -> (
-        &mut dyn SnapshotMptTraitSingleWriter,
-        Option<&mut dyn SnapshotMptTraitReadOnly>,
+        &mut dyn SnapshotMptTraitRw,
+        Option<&mut dyn SnapshotMptTraitReadAndIterate>,
     ) {
         (self, None)
     }

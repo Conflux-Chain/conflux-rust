@@ -17,7 +17,7 @@ fn test_multi_proposer() {
     let mut signers = vec![];
     let mut proposers = vec![];
     for i in 0..8 {
-        let signer = ValidatorSigner::<Ed25519PrivateKey>::random([i; 32]);
+        let signer = ValidatorSigner::<Secp256k1PrivateKey>::random([i; 32]);
         proposers.push(signer.author());
         signers.push(signer);
     }
@@ -88,7 +88,7 @@ fn test_multi_proposer_take_all() {
     let mut signers = vec![];
     let mut proposers = vec![];
     for i in 0..8 {
-        let signer = ValidatorSigner::<Ed25519PrivateKey>::random([i; 32]);
+        let signer = ValidatorSigner::<Secp256k1PrivateKey>::random([i; 32]);
         proposers.push(signer.author());
         signers.push(signer);
     }

@@ -7,7 +7,7 @@ use libra_config::{
     config::{ConsensusPeersConfig, NodeConfig, SeedPeersConfig},
     generator,
 };
-use libra_crypto::{ed25519::Ed25519PrivateKey, PrivateKey, Uniform};
+use libra_crypto::{secp256k1::Secp256k1PrivateKey, PrivateKey, Uniform};
 use libra_types::transaction::Transaction;
 use parity_multiaddr::Multiaddr;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -111,12 +111,12 @@ impl ValidatorConfig {
         Ok(configs)
     }
 
-    pub fn build_faucet_client(&self) -> Result<(ConsensusPeersConfig, Ed25519PrivateKey)> {
+    pub fn build_faucet_client(&self) -> Result<(ConsensusPeersConfig, Secp256k1PrivateKey)> {
         let (configs, faucet_key) = self.build_common(false)?;
         Ok((configs[0].consensus.consensus_peers.clone(), faucet_key))
     }
 
-    fn build_common(&self, randomize_ports: bool) -> Result<(Vec<NodeConfig>, Ed25519PrivateKey)> {
+    fn build_common(&self, randomize_ports: bool) -> Result<(Vec<NodeConfig>, Secp256k1PrivateKey)> {
         ensure!(self.nodes > 0, Error::NonZeroNetwork);
         ensure!(
             self.index < self.nodes,
@@ -127,7 +127,7 @@ impl ValidatorConfig {
         );
 
         let mut faucet_rng = StdRng::from_seed(self.seed);
-        let faucet_key = Ed25519PrivateKey::generate_for_testing(&mut faucet_rng);
+        let faucet_key = Secp256k1PrivateKey::generate_for_testing(&mut faucet_rng);
         let config_seed: [u8; 32] = faucet_rng.gen();
         let mut configs =
             generator::validator_swarm(&self.template, self.nodes, config_seed, randomize_ports);
@@ -167,12 +167,12 @@ impl ValidatorConfig {
 }
 
 impl BuildSwarm for ValidatorConfig {
-    fn build_swarm(&self) -> Result<(Vec<NodeConfig>, Ed25519PrivateKey)> {
+    fn build_swarm(&self) -> Result<(Vec<NodeConfig>, Secp256k1PrivateKey)> {
         self.build_common(true)
     }
 }
 
-pub fn test_config() -> (NodeConfig, Ed25519PrivateKey) {
+pub fn test_config() -> (NodeConfig, Secp256k1PrivateKey) {
     let validator_config = ValidatorConfig::new();
     let (mut configs, key) = validator_config.build_swarm().unwrap();
     (configs.swap_remove(0), key)

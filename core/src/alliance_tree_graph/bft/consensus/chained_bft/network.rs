@@ -155,11 +155,7 @@ impl<T: Payload> NetworkTask<T> {
     /// receivers.
     pub fn new(
         epoch_info: Arc<RwLock<EpochInfo>>,
-        /*network_events: ConsensusNetworkEvents,
-         *self_receiver:
-         * channel::Receiver<anyhow::Result<Event<ConsensusMsg>>>, */
-    ) -> (NetworkTask<T>, NetworkReceivers<T>)
-    {
+    ) -> (NetworkTask<T>, NetworkReceivers<T>) {
         let (proposal_tx, proposal_rx) = libra_channel::new(
             QueueStyle::LIFO,
             1,

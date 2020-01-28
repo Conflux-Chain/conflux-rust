@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::keys::KeyPair;
-use libra_crypto::{ed25519::Ed25519PrivateKey, Uniform};
+use libra_crypto::{secp256k1::Secp256k1PrivateKey, Uniform};
 use libra_tools::tempdir::TempPath;
 use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-type AccountKeyPair = KeyPair<Ed25519PrivateKey>;
+type AccountKeyPair = KeyPair<Secp256k1PrivateKey>;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TestConfig {
@@ -46,7 +46,7 @@ impl TestConfig {
     }
 
     pub fn random(&mut self, rng: &mut StdRng) {
-        let privkey = Ed25519PrivateKey::generate_for_testing(rng);
+        let privkey = Secp256k1PrivateKey::generate_for_testing(rng);
         self.account_keypair = Some(AccountKeyPair::load(privkey));
     }
 

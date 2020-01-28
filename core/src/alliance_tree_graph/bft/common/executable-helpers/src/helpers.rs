@@ -1,24 +1,26 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use libra_config::config::{LoggerConfig, NodeConfig};
+use libra_config::config::{ConsensusKeyPair, LoggerConfig, NodeConfig};
 use libra_logger::prelude::*;
 use libra_types::PeerId;
 use slog_scope::GlobalLoggerGuard;
 use std::path::Path;
 
-pub fn load_config_from_path(config: Option<&Path>) -> NodeConfig {
+pub fn load_config_from_path(
+    config: Option<&Path>, keypair: Option<ConsensusKeyPair>,
+) -> NodeConfig {
     // Load the config
     let node_config = if let Some(path) = config {
         info!("Loading node config from: {}", path.display());
-        NodeConfig::load(path).expect("NodeConfig")
+        NodeConfig::load(path, keypair).expect("NodeConfig")
     } else {
         info!("Loading test configs");
         NodeConfig::random()
     };
 
-    // Node configuration contains important ephemeral port information and should
-    // not be subject to being disabled as with other logs
+    // Node configuration contains important ephemeral port information and
+    // should not be subject to being disabled as with other logs
     println!("Using node config {:?}", &node_config);
 
     node_config
@@ -37,16 +39,20 @@ pub fn setup_metrics(peer_id: PeerId, node_config: &NodeConfig) {
 pub fn setup_executable(
     config: Option<&Path>,
     no_logging: bool,
-) -> (NodeConfig, Option<GlobalLoggerGuard>) {
-    crash_handler::setup_panic_handler();
-    let mut _logger = set_default_global_logger(no_logging, &LoggerConfig::default());
+    keypair: Option<ConsensusKeyPair>,
+    //) -> (NodeConfig, Option<GlobalLoggerGuard>) {
+) -> NodeConfig
+{
+    //crash_handler::setup_panic_handler();
+    //let mut _logger =
+    //    set_default_global_logger(no_logging, &LoggerConfig::default());
 
-    let config = load_config_from_path(config);
+    let config = load_config_from_path(config, keypair);
 
     // Reset the global logger using config (for chan_size currently).
     // We need to drop the global logger guard first before resetting it.
-    _logger = None;
-    let logger = set_default_global_logger(no_logging, &config.logger);
+    //_logger = None;
+    //let logger = set_default_global_logger(no_logging, &config.logger);
     for network in &config.full_node_networks {
         setup_metrics(network.peer_id, &config);
     }
@@ -54,12 +60,12 @@ pub fn setup_executable(
         setup_metrics(network.peer_id, &config);
     }
 
-    (config, logger)
+    //(config, logger)
+    config
 }
 
 fn set_default_global_logger(
-    is_logging_disabled: bool,
-    logger_config: &LoggerConfig,
+    is_logging_disabled: bool, logger_config: &LoggerConfig,
 ) -> Option<GlobalLoggerGuard> {
     if is_logging_disabled {
         return None;
