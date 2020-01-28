@@ -14,12 +14,13 @@ use std::{
     thread::sleep,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use crate::block_data_manager::DbType;
 
 #[test]
 fn test_remove_expire_blocks() {
     {
         let (sync, _, _) =
-            initialize_synchronization_graph("./test.db/", 1, 1, 1, 1, 50000);
+            initialize_synchronization_graph("./test.db/", 1, 1, 1, 1, 50000, DbType::Rocksdb);
         // test initialization
         {
             let inner = sync.inner.read();
