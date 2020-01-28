@@ -21,10 +21,17 @@ use primitives::{
     transaction::SignedTransaction, Block, BlockHeader, EpochNumber,
 };
 use slab::Slab;
-use std::{cmp::max, collections::{HashMap, HashSet, VecDeque}, mem, sync::{
-    mpsc::{self, Sender},
-    Arc,
-}, thread, time::{Duration, SystemTime, UNIX_EPOCH}, panic};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet, VecDeque},
+    mem, panic,
+    sync::{
+        mpsc::{self, Sender},
+        Arc,
+    },
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use unexpected::{Mismatch, OutOfBounds};
 
 lazy_static! {

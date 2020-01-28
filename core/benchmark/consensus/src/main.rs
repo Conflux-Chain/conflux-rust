@@ -181,7 +181,7 @@ fn main() {
         beta,
         h_ratio,
         era_epoch_count,
-        DbType::Sqlite
+        DbType::Sqlite,
     );
 
     let mut hashes = Vec::new();
