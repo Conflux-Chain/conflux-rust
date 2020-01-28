@@ -105,9 +105,8 @@ impl StateComputer for ExecutionProxy {
             .and_then(|output| {
                 // Check whether pivot block selection is valid.
                 if let Some(p) = output.pivot_block.as_ref() {
-                    let mut inner = self.tg_consensus.inner.write();
                     ensure!(
-                        inner.on_new_candidate_pivot(
+                        self.tg_consensus.on_new_candidate_pivot(
                             &p.block_hash,
                             &p.parent_hash,
                             p.height

@@ -7,12 +7,15 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
+    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
+    sync::Error,
 };
 use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
+use futures::channel::oneshot;
 use hibitset::BitSet;
 use link_cut_tree::SizeMinLinkCutTree;
 use parking_lot::Mutex;
@@ -24,6 +27,8 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
+
+pub type CallbackType = oneshot::Sender<Result<PivotBlockDecision, Error>>;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
@@ -114,6 +119,7 @@ pub struct ConsensusGraphInner {
     /// start, and equals `cur_era_stable_height` after making a new
     /// checkpoint.
     pub state_boundary_height: u64,
+    waiting_block_hashes: HashMap<H256, CallbackType>,
 }
 
 pub struct ConsensusGraphNode {
@@ -174,6 +180,7 @@ impl ConsensusGraphInner {
             old_era_block_set: Mutex::new(VecDeque::new()),
             candidate_pivot_tree: CandidatePivotTree::new(NULL, NULLU64),
             state_boundary_height: cur_era_stable_height,
+            waiting_block_hashes: HashMap::new(),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -837,7 +844,7 @@ impl ConsensusGraphInner {
 
     /// Given a new `PivotBlockDecision` check whether it is valid. If it is
     /// valid this block will be added to `candidate_pivot_tree`.
-    pub fn on_new_candidate_pivot(
+    pub fn new_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
     ) -> bool {
         if !self.hash_to_arena_indices.contains_key(parent_hash) {
@@ -858,8 +865,7 @@ impl ConsensusGraphInner {
             .add_leaf(parent_arena_index, arena_index)
     }
 
-    pub fn on_new_pivot(&mut self, pivot_arena_index: usize) {
-        // move to consensus_new_block_handler
+    pub fn new_pivot(&mut self, pivot_arena_index: usize) {
         assert!(self.arena.contains(pivot_arena_index));
         let parent = self.arena[pivot_arena_index]
             .parent
@@ -875,8 +881,18 @@ impl ConsensusGraphInner {
         // TODO: execution
     }
 
-    /// TODO: move this function to `ConsensusNewBlockHandler` or
-    /// `TreeGraphConsensus`
+    pub fn new_block(&mut self, block_header: &BlockHeader) {
+        let hash = block_header.hash();
+        // TODO: move actual new block logic here.
+        if let Some(sender) = self.waiting_block_hashes.remove(&hash) {
+            sender.send(Ok(PivotBlockDecision {
+                height: block_header.height(),
+                block_hash: hash,
+                parent_hash: *block_header.parent_hash(),
+            }));
+        }
+    }
+
     pub fn commit(&mut self, committable_blocks: &Vec<H256>) {
         let mut last = *self.pivot_chain.last().unwrap();
         for block_hash in committable_blocks {
@@ -893,10 +909,44 @@ impl ConsensusGraphInner {
                 block_hash,
                 self.arena[arena_index].height,
             );
-            self.on_new_pivot(arena_index);
+            self.new_pivot(arena_index);
             last = arena_index;
         }
         self.candidate_pivot_tree =
             CandidatePivotTree::new(last, self.arena[last].height);
+    }
+
+    pub fn get_next_selected_pivot_block(
+        &mut self, last_pivot_hash: &H256, callback: CallbackType,
+    ) {
+        let arena_index = *self
+            .hash_to_arena_indices
+            .get(last_pivot_hash)
+            .expect("must exist");
+        if self.arena[arena_index].referees.is_empty() {
+            // TODO: call generate block function
+            self.waiting_block_hashes.insert(*last_pivot_hash, callback);
+        } else {
+            let height = self.candidate_pivot_tree.height(arena_index);
+            assert!(height != NULLU64);
+            let mut next_pivot = NULL;
+            for referrer in &self.arena[arena_index].referrers {
+                if (next_pivot == NULL
+                    || self.arena[*referrer].hash > self.arena[next_pivot].hash)
+                    && self.candidate_pivot_tree.height(*referrer) == NULLU64
+                {
+                    next_pivot = *referrer;
+                }
+            }
+            if next_pivot == NULL {
+                // TODO: send error back
+            } else {
+                callback.send(Ok(PivotBlockDecision {
+                    height: height + 1,
+                    block_hash: self.arena[next_pivot].hash,
+                    parent_hash: *last_pivot_hash,
+                }));
+            }
+        }
     }
 }
