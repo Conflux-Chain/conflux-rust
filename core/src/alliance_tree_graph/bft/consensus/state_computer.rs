@@ -6,7 +6,7 @@ use super::{
     counters,
     state_replication::StateComputer,
 };
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use cfx_types::H256;
 use libra_logger::prelude::*;
 use libra_types::{
@@ -18,7 +18,11 @@ use libra_types::{
 };
 //use state_synchronizer::StateSyncClient;
 use super::super::executor::{Executor, ProcessedVMOutput};
-use crate::alliance_tree_graph::consensus::TreeGraphConsensus;
+use crate::alliance_tree_graph::{
+    consensus::TreeGraphConsensus,
+    hsb_sync_protocol::sync_protocol::{PeerState, Peers},
+};
+use futures::{channel::oneshot, executor::block_on};
 use libra_types::event::EventKey;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -53,6 +57,7 @@ pub struct ExecutionProxy {
     executor: Arc<Executor>,
     //synchronizer: Arc<StateSyncClient>,
     tg_consensus: Arc<TreeGraphConsensus>,
+    peers: Arc<Peers<PeerState, H256>>,
 }
 
 impl ExecutionProxy {
@@ -65,6 +70,7 @@ impl ExecutionProxy {
             executor,
             //synchronizer,
             tg_consensus,
+            peers: Arc::new(Peers::default()),
         }
     }
 
@@ -94,30 +100,34 @@ impl StateComputer for ExecutionProxy {
     ) -> Result<ProcessedVMOutput>
     {
         // TODO: figure out error handling for the prologue txn
-        self.executor
-            .execute_block(
-                Self::transactions_from_block(block),
-                //parent_executed_trees,
-                //committed_trees,
-                block.parent_id(),
-                block.id(),
-            )
-            .and_then(|output| {
-                // Check whether pivot block selection is valid.
-                if let Some(p) = output.pivot_block.as_ref() {
-                    let mut inner = self.tg_consensus.inner.write();
-                    ensure!(
-                        inner.on_new_candidate_pivot(
-                            &p.block_hash,
-                            &p.parent_hash,
-                            p.height
-                        ),
-                        "Invalid pivot block proposal!"
-                    );
+        let output = self.executor.execute_block(
+            Self::transactions_from_block(block),
+            block.parent_id(),
+            block.id(),
+        )?;
+
+        // Check whether pivot block selection is valid.
+        if let Some(p) = output.pivot_block.as_ref() {
+            let peer_hash =
+                H256::from_slice(block.author().unwrap().to_vec().as_slice());
+            let peer_id = self
+                .peers
+                .get(&peer_hash)
+                .map(|peer_state| peer_state.read().get_id());
+            let (callback, cb_receiver) = oneshot::channel();
+            self.tg_consensus
+                .on_new_candidate_pivot(p, peer_id, callback);
+            let response = block_on(async move { cb_receiver.await? });
+            let valid_pivot_decision = match response {
+                Ok(res) => res,
+                _ => {
+                    bail!("Error checking validity of pivot selection");
                 }
-                // FIXME: Check whether new membership is valid.
-                Ok(output)
-            })
+            };
+            ensure!(valid_pivot_decision, "Invalid pivot block proposal!");
+        }
+        // FIXME: Check whether new membership is valid.
+        Ok(output)
     }
 
     /// Send a successful commit. A future is fulfilled when the state is
@@ -187,4 +197,6 @@ impl StateComputer for ExecutionProxy {
             .await
             */
     }
+
+    fn get_peers(&self) -> Arc<Peers<PeerState, H256>> { self.peers.clone() }
 }

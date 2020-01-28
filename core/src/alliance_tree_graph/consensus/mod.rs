@@ -30,6 +30,7 @@ use crate::{
 use cfx_types::{Address, Bloom, H256, U256};
 use futures::channel::oneshot;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
+use network::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     epoch::BlockHashOrEpochNumber,
@@ -177,6 +178,21 @@ impl TreeGraphConsensus {
             pow_config,
             &genesis_hash,
         )
+    }
+
+    pub fn on_new_candidate_pivot(
+        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
+        callback: oneshot::Sender<Result<bool, Error>>,
+    )
+    {
+        let mut inner = self.inner.write();
+        inner.on_new_candidate_pivot(
+            &pivot_decision.block_hash,
+            &pivot_decision.parent_hash,
+            pivot_decision.height,
+            peer_id,
+            callback,
+        );
     }
 
     /// Convert EpochNumber to height based on the current TreeGraphConsensus

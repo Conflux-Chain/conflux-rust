@@ -219,11 +219,13 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         let (network_task, network_receiver) =
             NetworkTask::new(epoch_info.clone());
 
-        let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
-            own_node_hash,
-            request_manager,
-            network_task,
-        ));
+        let protocol_handler =
+            Arc::new(HotStuffSynchronizationProtocol::with_peers(
+                own_node_hash,
+                request_manager,
+                network_task,
+                state_computer.get_peers(),
+            ));
 
         let safety_rules_manager_config = initial_setup
             .safety_rules_manager_config

@@ -23,6 +23,7 @@ use libra_crypto::HashValue;
 
 use super::super::super::super::executor::ProcessedVMOutput;
 use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
+use futures::executor::block_on;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_types::crypto_proxies::ValidatorSet;
 use libra_types::crypto_proxies::{
@@ -122,6 +123,7 @@ impl<T: Payload> BlockStore<T> {
             .into_iter()
             .map(|qc| (qc.certified_block().id(), qc))
             .collect::<HashMap<_, _>>();
+
         for block in blocks {
             assert!(!block.is_genesis_block());
 
@@ -135,12 +137,13 @@ impl<T: Payload> BlockStore<T> {
 
             let output = state_computer
                 .compute(
-                    &block, /* , &parent_trees, tree.root().executed_trees() */
+                    &block, /* , &parent_trees,
+                            * tree.root().executed_trees() */
                 )
                 .expect("fail to rebuild scratchpad");
 
-            // if this block is certified, ensure we agree with the certified
-            // state.
+            // if this block is certified, ensure we agree with the
+            // certified state.
             /*
             if let Some(qc) = quorum_certs.get(&block.id()) {
                 assert_eq!(
@@ -155,6 +158,7 @@ impl<T: Payload> BlockStore<T> {
             tree.insert_block(ExecutedBlock::new(block, output))
                 .expect("Block insertion failed while build the tree");
         }
+
         quorum_certs.into_iter().for_each(|(_, qc)| {
             tree.insert_quorum_cert(qc)
                 .expect("QuorumCert insertion failed while build the tree")
@@ -496,6 +500,7 @@ impl<T: Payload> BlockStore<T> {
         r
     }
 
+    /*
     /// Helper function to insert the block with the qc together
     pub fn insert_block_with_qc(
         &self, block: Block<T>,
@@ -521,4 +526,5 @@ impl<T: Payload> BlockStore<T> {
                 output,
             ))?)
     }
+    */
 }

@@ -5,7 +5,9 @@ use super::{
     super::executor::ProcessedVMOutput,
     consensus_types::{block::Block, executed_block::ExecutedBlock},
 };
-use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
+use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::{
+    HotStuffSynchronizationProtocol, PeerState, Peers,
+};
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use crate::{
@@ -103,6 +105,8 @@ pub trait StateComputer: Send + Sync {
     async fn get_epoch_proof(
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<ValidatorChangeProof>;
+
+    fn get_peers(&self) -> Arc<Peers<PeerState, H256>>;
 }
 
 pub trait StateMachineReplication {

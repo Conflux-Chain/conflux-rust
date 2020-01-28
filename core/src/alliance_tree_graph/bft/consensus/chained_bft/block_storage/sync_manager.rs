@@ -99,11 +99,13 @@ impl<T: Payload> BlockStore<T> {
     pub async fn sync_to(
         &self, sync_info: &SyncInfo, mut retriever: BlockRetriever<T>,
     ) -> anyhow::Result<()> {
+        /*
         self.process_highest_commit_cert(
             sync_info.highest_commit_cert().clone(),
             &mut retriever,
         )
         .await?;
+        */
 
         match self.need_fetch_for_quorum_cert(sync_info.highest_quorum_cert()) {
             NeedFetchResult::NeedFetch => {

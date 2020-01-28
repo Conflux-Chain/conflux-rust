@@ -136,7 +136,7 @@ impl ConsensusProvider for ChainedBftProvider {
         debug!("Starting consensus provider.");
         self.smr.start(
             self.txn_transformer.clone(),
-            Arc::clone(&self.state_computer),
+            self.state_computer.clone(),
             network,
             own_node_hash,
             request_manager,

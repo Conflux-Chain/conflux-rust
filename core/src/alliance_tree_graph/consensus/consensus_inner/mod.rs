@@ -10,11 +10,14 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
+    sync::Error,
 };
 use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
+use futures::channel::oneshot;
 use hibitset::BitSet;
 use link_cut_tree::SizeMinLinkCutTree;
+use network::PeerId;
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, EpochId, TransactionAddress,
@@ -795,8 +798,10 @@ impl ConsensusGraphInner {
     /// valid this block will be added to `candidate_pivot_tree`.
     pub fn on_new_candidate_pivot(
         &mut self, _block_hash: &H256, _parent_hash: &H256, _height: u64,
-    ) -> bool {
-        true
+        peer_id: Option<PeerId>,
+        callback: oneshot::Sender<Result<bool, Error>>,
+    )
+    {
     }
 
     pub fn on_new_pivot(&mut self, pivot_arena_index: usize) {
