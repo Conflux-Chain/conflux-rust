@@ -24,7 +24,7 @@ use slab::Slab;
 use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
-    mem,
+    mem, panic,
     sync::{
         mpsc::{self, Sender},
         Arc,

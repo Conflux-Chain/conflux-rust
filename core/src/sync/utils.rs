@@ -74,7 +74,7 @@ pub fn create_simple_block(
 /// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
     db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
-    era_epoch_count: u64,
+    era_epoch_count: u64, dbtype: DbType,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
 {
     let ledger_db = db::open_database(
@@ -125,7 +125,7 @@ pub fn initialize_synchronization_graph(
             false,                          /* do not record transaction
                                              * address */
             Duration::from_millis(300_000), /* max cached tx count */
-            DbType::Rocksdb,
+            dbtype,
         ),
     ));
 
