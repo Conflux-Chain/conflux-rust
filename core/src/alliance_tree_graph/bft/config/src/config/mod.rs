@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{ensure, Result};
+use keccak_hash::keccak;
 use libra_types::PeerId;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -40,6 +41,7 @@ mod test_config;
 pub use test_config::*;
 mod vm_config;
 use crate::waypoint::Waypoint;
+use libra_types::account_address::AccountAddress;
 pub use vm_config::*;
 
 /// Config pulls in configuration information from the config file.
@@ -185,6 +187,10 @@ impl NodeConfig {
         input_path: P, keypair: Option<ConsensusKeyPair>,
     ) -> Result<Self> {
         let mut config = Self::load_config(&input_path)?;
+        ensure!(config.base.role.is_validator(), "Node must be validator");
+        ensure!(keypair.is_some(), "key pair must be provided");
+
+        /*
         if config.base.role.is_validator() {
             ensure!(
                 config.validator_network.is_some(),
@@ -196,16 +202,27 @@ impl NodeConfig {
                 "Provided a validator network config for a full_node node"
             );
         }
+        */
+
+        let public_key = keypair.as_ref().unwrap().public().public().clone();
 
         let input_dir = RootPath::new(input_path);
         config.consensus.load(&input_dir, keypair)?;
         config.execution.load(&input_dir)?;
+
+        let mut network = NetworkConfig::default();
+        let peer_id = AccountAddress::new(keccak(&public_key).into());
+        network.load(&input_dir, RoleType::Validator, peer_id);
+
+        config.validator_network = Some(network);
+        /*
         if let Some(network) = &mut config.validator_network {
             network.load(&input_dir, RoleType::Validator)?;
         }
         for network in &mut config.full_node_networks {
             network.load(&input_dir, RoleType::FullNode)?;
         }
+        */
         config.set_data_dir(config.data_dir().clone());
         Ok(config)
     }
@@ -227,6 +244,7 @@ impl NodeConfig {
     }
 
     /// Returns true if network_config is for an upstream network
+    /*
     pub fn is_upstream_network(&self, network_config: &NetworkConfig) -> bool {
         self.state_sync
             .upstream_peers
@@ -236,6 +254,7 @@ impl NodeConfig {
                 network_config.network_peers.peers.contains_key(peer_id)
             })
     }
+    */
 
     pub fn randomize_ports(&mut self) {
         self.admission_control.randomize_ports();
@@ -263,6 +282,7 @@ impl NodeConfig {
     }
 
     fn random_internal(&mut self, rng: &mut StdRng) {
+        /*
         let mut test = TestConfig::new_with_temp_dir();
 
         if self.base.role == RoleType::Validator {
@@ -289,6 +309,7 @@ impl NodeConfig {
         }
         self.set_data_dir(test.temp_dir().unwrap().to_path_buf());
         self.test = Some(test);
+        */
     }
 }
 

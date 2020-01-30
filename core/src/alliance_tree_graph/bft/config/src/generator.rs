@@ -34,12 +34,14 @@ pub fn validator_swarm(
             SafetyRulesBackend::OnDiskStorage(storage_config);
 
         let network = config.validator_network.as_mut().unwrap();
+        /*
         network.listen_address = utils::get_available_port_in_multiaddr(true);
         network.advertised_address = network.listen_address.clone();
 
         network_peers
             .peers
             .insert(network.peer_id, network.network_keypairs.as_peer_info());
+            */
 
         consensus_peers.peers.insert(
             network.peer_id,
@@ -55,24 +57,30 @@ pub fn validator_swarm(
         configs.push(config);
     }
 
+    /*
     let mut seed_peers = SeedPeersConfig::default();
     let network = configs[0].validator_network.as_ref().unwrap();
     seed_peers
         .seed_peers
         .insert(network.peer_id, vec![network.listen_address.clone()]);
+        */
 
     for config in &mut configs {
         config.consensus.consensus_peers = consensus_peers.clone();
+        /*
         let network = config.validator_network.as_mut().unwrap();
         network.network_peers = network_peers.clone();
         network.seed_peers = seed_peers.clone();
+        */
     }
 
     configs
 }
 
+/*
 pub fn validator_swarm_for_testing(nodes: usize) -> Vec<NodeConfig> {
     let mut config = NodeConfig::default();
     config.vm_config.publishing_options = VMPublishingOption::Open;
     validator_swarm(&NodeConfig::default(), nodes, [1u8; 32], true)
 }
+*/

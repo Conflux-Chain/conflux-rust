@@ -29,6 +29,7 @@ const SEED_PEERS_DEFAULT: &str = "seed_peers.toml";
 #[serde(default, deny_unknown_fields)]
 pub struct NetworkConfig {
     pub peer_id: PeerId,
+    /*
     // TODO: Add support for multiple listen/advertised addresses in config.
     // The address that this node is listening on for new connections.
     pub listen_address: Multiaddr,
@@ -58,18 +59,22 @@ pub struct NetworkConfig {
     #[serde(skip)]
     pub seed_peers: SeedPeersConfig,
     pub seed_peers_file: PathBuf,
+    */
 }
 
 impl Default for NetworkConfig {
     fn default() -> Self {
+        /*
         let keypair = NetworkKeyPairs::default();
         let peer_id =
             PeerId::try_from(keypair.identity_keys.public().to_bytes())
                 .unwrap();
         let peers = Self::default_peers(&keypair, &peer_id);
+        */
 
         Self {
-            peer_id,
+            peer_id: PeerId::default(),
+            /*
             listen_address: "/ip4/0.0.0.0/tcp/6180"
                 .parse::<Multiaddr>()
                 .unwrap(),
@@ -86,6 +91,7 @@ impl Default for NetworkConfig {
             network_peers: peers,
             seed_peers_file: PathBuf::new(),
             seed_peers: SeedPeersConfig::default(),
+            */
         }
     }
 }
@@ -96,6 +102,7 @@ impl NetworkConfig {
     pub fn clone_for_template(&self) -> Self {
         Self {
             peer_id: self.peer_id,
+            /*
             listen_address: self.listen_address.clone(),
             advertised_address: self.advertised_address.clone(),
             discovery_interval_ms: self.discovery_interval_ms,
@@ -109,12 +116,17 @@ impl NetworkConfig {
             network_peers: self.network_peers.clone(),
             seed_peers_file: self.seed_peers_file.clone(),
             seed_peers: self.seed_peers.clone(),
+            */
         }
     }
 
     pub fn load(
-        &mut self, root_dir: &RootPath, network_role: RoleType,
-    ) -> Result<()> {
+        &mut self, root_dir: &RootPath, _network_role: RoleType,
+        peer_id: PeerId,
+    ) -> Result<()>
+    {
+        self.peer_id = peer_id;
+        /*
         if !self.network_peers_file.as_os_str().is_empty() {
             let path = root_dir.full_path(&self.network_peers_file);
             self.network_peers = NetworkPeersConfig::load_config(&path)?;
@@ -154,6 +166,7 @@ impl NetworkConfig {
                 "For non-validators, the peer_id should be derived from the identity key.",
             );
         }
+        */
         Ok(())
     }
 
@@ -162,6 +175,7 @@ impl NetworkConfig {
     }
 
     pub fn save(&mut self, root_dir: &RootPath) -> Result<()> {
+        /*
         if self.is_permissioned {
             if self.network_keypairs_file.as_os_str().is_empty() {
                 let file_name = self.default_path(NETWORK_KEYPAIRS_DEFAULT);
@@ -184,13 +198,17 @@ impl NetworkConfig {
         }
         let path = root_dir.full_path(&self.seed_peers_file);
         self.seed_peers.save_config(&path)?;
+        */
         Ok(())
     }
 
+    /*
     pub fn random(&mut self, rng: &mut StdRng) {
         self.random_with_peer_id(rng, None);
     }
+    */
 
+    /*
     pub fn random_with_peer_id(
         &mut self, rng: &mut StdRng, peer_id: Option<PeerId>,
     ) {
@@ -207,14 +225,18 @@ impl NetworkConfig {
         self.network_peers =
             Self::default_peers(&self.network_keypairs, &self.peer_id);
     }
+    */
 
+    /*
     pub fn set_default_peer_id(&mut self) {
         self.peer_id = PeerId::try_from(
             self.network_keypairs.identity_keys.public().to_bytes(),
         )
         .unwrap();
     }
+    */
 
+    /*
     fn default_peers(
         keypair: &NetworkKeyPairs, peer_id: &PeerId,
     ) -> NetworkPeersConfig {
@@ -228,6 +250,7 @@ impl NetworkConfig {
         );
         peers
     }
+    */
 }
 
 // This is separated to another config so that it can be written to its own file

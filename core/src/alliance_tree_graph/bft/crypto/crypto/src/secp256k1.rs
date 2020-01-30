@@ -81,6 +81,9 @@ impl Secp256k1PublicKey {
             .copy_from_slice(&bytes[0..SECP256K1_PUBLIC_KEY_LENGTH]);
         Ok(Secp256k1PublicKey(public))
     }
+
+    /// Return the reference on the internal public key.
+    pub fn public(&self) -> &Public { &self.0 }
 }
 
 impl Secp256k1Signature {

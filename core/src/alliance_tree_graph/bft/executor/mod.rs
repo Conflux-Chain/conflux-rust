@@ -197,12 +197,7 @@ impl Executor {
             .expect("Shouldn't fail")
             .is_none()
         {
-            let genesis_txn = config
-                .execution
-                .genesis
-                .as_ref()
-                .expect("failed to load genesis transaction!")
-                .clone();
+            let genesis_txn = config.execution.genesis.clone();
             executor.init_genesis(genesis_txn);
         }
         executor
@@ -211,8 +206,11 @@ impl Executor {
     /// This is used when we start for the first time and the DB is completely
     /// empty. It will write necessary information to DB by committing the
     /// genesis transaction.
-    fn init_genesis(&mut self, genesis_txn: Transaction) {
-        let genesis_txns = vec![genesis_txn];
+    fn init_genesis(&mut self, genesis_txn: Option<Transaction>) {
+        let genesis_txns = match genesis_txn {
+            Some(txn) => vec![txn],
+            None => Vec::new(),
+        };
 
         // Create a block with genesis_txn being the only transaction. Execute
         // it then commit it immediately.
@@ -540,8 +538,8 @@ impl Executor {
         vm_outputs: Vec<TransactionOutput>,
     ) -> Result<ProcessedVMOutput> {
         ensure!(
-            vm_outputs.len() == 1,
-            "One block can have only one transaction output!"
+            vm_outputs.len() <= 1,
+            "One block can have at most one transaction output!"
         );
 
         let mut next_validator_set = None;
