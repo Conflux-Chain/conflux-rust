@@ -204,16 +204,18 @@ impl NodeConfig {
         }
         */
 
-        let public_key = keypair.as_ref().unwrap().public().public().clone();
+        let public_key = keypair.as_ref().unwrap().public().clone();
 
         let input_dir = RootPath::new(input_path);
         config.consensus.load(&input_dir, keypair)?;
-        config.execution.load(&input_dir)?;
+        let validator_set =
+            config.consensus.consensus_peers.get_validator_set();
+        // Must happen after config.consensus.load()
+        config.execution.load(&input_dir, validator_set)?;
 
         let mut network = NetworkConfig::default();
-        let peer_id = AccountAddress::new(keccak(&public_key).into());
+        let peer_id = AccountAddress::new(keccak(public_key.public()).into());
         network.load(&input_dir, RoleType::Validator, peer_id);
-
         config.validator_network = Some(network);
         /*
         if let Some(network) = &mut config.validator_network {

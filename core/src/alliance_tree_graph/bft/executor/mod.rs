@@ -197,7 +197,12 @@ impl Executor {
             .expect("Shouldn't fail")
             .is_none()
         {
-            let genesis_txn = config.execution.genesis.clone();
+            let genesis_txn = config
+                .execution
+                .genesis
+                .as_ref()
+                .expect("failed to load genesis transaction!")
+                .clone();
             executor.init_genesis(genesis_txn);
         }
         executor
@@ -206,11 +211,8 @@ impl Executor {
     /// This is used when we start for the first time and the DB is completely
     /// empty. It will write necessary information to DB by committing the
     /// genesis transaction.
-    fn init_genesis(&mut self, genesis_txn: Option<Transaction>) {
-        let genesis_txns = match genesis_txn {
-            Some(txn) => vec![txn],
-            None => Vec::new(),
-        };
+    fn init_genesis(&mut self, genesis_txn: Transaction) {
+        let genesis_txns = vec![genesis_txn];
 
         // Create a block with genesis_txn being the only transaction. Execute
         // it then commit it immediately.
@@ -285,6 +287,29 @@ impl Executor {
 
                     // Real execution
 
+                    let vm_status = VMStatus {
+                        major_status: StatusCode::EXECUTED,
+                        sub_status: None,
+                        message: None,
+                    };
+
+                    let status = TransactionStatus::Keep(vm_status);
+
+                    let output = TransactionOutput::new(
+                        WriteSet::default(),
+                        events,
+                        0,
+                        status,
+                    );
+
+                    vm_outputs.push(output);
+                }
+                Transaction::WriteSet(change_set) => {
+                    let events = change_set.events().to_vec();
+                    ensure!(
+                        events.len() == 1,
+                        "One transaction can contain exactly 1 event."
+                    );
                     let vm_status = VMStatus {
                         major_status: StatusCode::EXECUTED,
                         sub_status: None,

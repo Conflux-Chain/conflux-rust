@@ -14,7 +14,7 @@ message ValidatorPublicKeys {
   // Validator voting power for consensus
   uint64 consensus_voting_power = 3;
   // Network signing publick key
-  bytes network_signing_public_key = 4;
+  //bytes network_signing_public_key = 4;
   /// Network identity publick key
-  bytes network_identity_public_key = 5;
+  //bytes network_identity_public_key = 5;
 }

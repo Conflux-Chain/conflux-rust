@@ -9,11 +9,13 @@ use crate::{
     utils,
 };
 use anyhow::Result;
+use keccak_hash::keccak;
 use libra_crypto::{
     secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey},
     Uniform,
 };
 use libra_types::{
+    account_address::AccountAddress,
     crypto_proxies::{
         ValidatorInfo, ValidatorPublicKeys, ValidatorSet, ValidatorVerifier,
     },
@@ -113,12 +115,20 @@ impl ConsensusConfig {
             let path = root_dir.full_path(&self.consensus_keypair_file);
             self.consensus_keypair = ConsensusKeyPair::load_config(path)?;
         }
-        /*
+
         if !self.consensus_peers_file.as_os_str().is_empty() {
             let path = root_dir.full_path(&self.consensus_peers_file);
             self.consensus_peers = ConsensusPeersConfig::load_config(path)?;
+        } else {
+            let consensus_pubkey = self.consensus_keypair.public().clone();
+            let peer_hash = keccak(consensus_pubkey.public());
+            let peer_id = AccountAddress::new(peer_hash.into());
+            self.consensus_peers = ConsensusConfig::default_peers(
+                &self.consensus_keypair,
+                peer_id,
+            );
         }
-        */
+
         Ok(())
     }
 
@@ -167,8 +177,10 @@ pub struct ConsensusPeersConfig {
 impl ConsensusPeersConfig {
     /// Return a sorted vector of ValidatorPublicKey's
     pub fn get_validator_set(
-        &self, network_peers_config: &NetworkPeersConfig,
-    ) -> ValidatorSet {
+        &self,
+        //network_peers_config: &NetworkPeersConfig,
+    ) -> ValidatorSet
+    {
         let mut keys: Vec<ValidatorPublicKeys> = self
             .peers
             .iter()
@@ -178,6 +190,7 @@ impl ConsensusPeersConfig {
                     peer_info.consensus_pubkey.clone(),
                     // TODO: Add support for dynamic voting weights in config
                     1,
+                    /*
                     network_peers_config
                         .peers
                         .get(peer_id)
@@ -190,6 +203,7 @@ impl ConsensusPeersConfig {
                         .unwrap()
                         .identity_public_key
                         .clone(),
+                        */
                 )
             })
             .collect();

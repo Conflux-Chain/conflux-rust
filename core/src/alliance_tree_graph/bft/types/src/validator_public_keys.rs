@@ -32,11 +32,11 @@ pub struct ValidatorPublicKeys<PublicKey> {
     consensus_public_key: PublicKey,
     // Voting power of this validator
     consensus_voting_power: u64,
-    // This key can validate signed messages at the network layer
-    network_signing_public_key: Ed25519PublicKey,
-    // This key establishes the corresponding PrivateKey holder's eligibility
-    // to join the p2p network
-    network_identity_public_key: X25519StaticPublicKey,
+    /* This key can validate signed messages at the network layer
+     *network_signing_public_key: Ed25519PublicKey,
+     * This key establishes the corresponding PrivateKey holder's
+     * eligibility to join the p2p network
+     *network_identity_public_key: X25519StaticPublicKey, */
 }
 
 impl<PublicKey> fmt::Display for ValidatorPublicKeys<PublicKey> {
@@ -49,16 +49,16 @@ impl<PublicKey> ValidatorPublicKeys<PublicKey> {
     pub fn new(
         account_address: AccountAddress, consensus_public_key: PublicKey,
         consensus_voting_power: u64,
-        network_signing_public_key: Ed25519PublicKey,
-        network_identity_public_key: X25519StaticPublicKey,
+        /*network_signing_public_key: Ed25519PublicKey,
+         *network_identity_public_key: X25519StaticPublicKey, */
     ) -> Self
     {
         ValidatorPublicKeys {
             account_address,
             consensus_public_key,
             consensus_voting_power,
-            network_signing_public_key,
-            network_identity_public_key,
+            /*network_signing_public_key,
+             *network_identity_public_key, */
         }
     }
 
@@ -68,14 +68,14 @@ impl<PublicKey> ValidatorPublicKeys<PublicKey> {
         consensus_voting_power: u64,
     ) -> Self
     {
-        let (_, network_signing_public_key) = generate_ed25519_keypair(None);
-        let (_, network_identity_public_key) = generate_x25519_keypair(None);
+        //let (_, network_signing_public_key) = generate_ed25519_keypair(None);
+        //let (_, network_identity_public_key) = generate_x25519_keypair(None);
         ValidatorPublicKeys {
             account_address,
             consensus_public_key,
             consensus_voting_power,
-            network_signing_public_key,
-            network_identity_public_key,
+            /*network_signing_public_key,
+             *network_identity_public_key, */
         }
     }
 
@@ -91,6 +91,7 @@ impl<PublicKey> ValidatorPublicKeys<PublicKey> {
     /// Returns the voting power for this validator
     pub fn consensus_voting_power(&self) -> u64 { self.consensus_voting_power }
 
+    /*
     /// Returns the key for validating signed messages at the network layers
     pub fn network_signing_public_key(&self) -> &Ed25519PublicKey {
         &self.network_signing_public_key
@@ -101,6 +102,7 @@ impl<PublicKey> ValidatorPublicKeys<PublicKey> {
     pub fn network_identity_public_key(&self) -> &X25519StaticPublicKey {
         &self.network_identity_public_key
     }
+    */
 }
 
 impl<PublicKey: VerifyingKey> TryFrom<crate::proto::types::ValidatorPublicKeys>
@@ -115,17 +117,18 @@ impl<PublicKey: VerifyingKey> TryFrom<crate::proto::types::ValidatorPublicKeys>
         let consensus_public_key =
             PublicKey::try_from(&proto.consensus_public_key[..])?;
         let consensus_voting_power = proto.consensus_voting_power;
-        let network_signing_public_key =
-            Ed25519PublicKey::try_from(&proto.network_signing_public_key[..])?;
-        let network_identity_public_key = X25519StaticPublicKey::try_from(
-            &proto.network_identity_public_key[..],
-        )?;
+        //let network_signing_public_key =
+        //    Ed25519PublicKey::try_from(&proto.network_signing_public_key[..])?
+        // ; let network_identity_public_key =
+        // X25519StaticPublicKey::try_from(
+        //    &proto.network_identity_public_key[..],
+        //)?;
         Ok(Self::new(
             account_address,
             consensus_public_key,
             consensus_voting_power,
-            network_signing_public_key,
-            network_identity_public_key,
+            /*network_signing_public_key,
+             *network_identity_public_key, */
         ))
     }
 }
@@ -134,18 +137,20 @@ impl<PublicKey: VerifyingKey> From<ValidatorPublicKeys<PublicKey>>
     for crate::proto::types::ValidatorPublicKeys
 {
     fn from(keys: ValidatorPublicKeys<PublicKey>) -> Self {
+        //let (_, network_signing_public_key) = generate_ed25519_keypair(None);
+        //let (_, network_identity_public_key) = generate_x25519_keypair(None);
         Self {
             account_address: keys.account_address.to_vec(),
             consensus_public_key: keys.consensus_public_key.to_bytes().to_vec(),
             consensus_voting_power: keys.consensus_voting_power,
-            network_signing_public_key: keys
-                .network_signing_public_key
+            /*
+            network_signing_public_key: network_signing_public_key
                 .to_bytes()
                 .to_vec(),
-            network_identity_public_key: keys
-                .network_identity_public_key
+            network_identity_public_key: network_identity_public_key
                 .to_bytes()
                 .to_vec(),
+                */
         }
     }
 }

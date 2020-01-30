@@ -3,7 +3,14 @@
 
 use crate::{config::RootPath, utils};
 use anyhow::Result;
-use libra_types::transaction::Transaction;
+use libra_crypto::secp256k1::Secp256k1PublicKey;
+use libra_types::{
+    contract_event::ContractEvent,
+    crypto_proxies::ValidatorSet,
+    language_storage::TypeTag,
+    transaction::{ChangeSet, RawTransaction, Transaction},
+    write_set::WriteSet,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -35,7 +42,9 @@ impl Default for ExecutionConfig {
 }
 
 impl ExecutionConfig {
-    pub fn load(&mut self, root_dir: &RootPath) -> Result<()> {
+    pub fn load(
+        &mut self, root_dir: &RootPath, validator_set: ValidatorSet,
+    ) -> Result<()> {
         if !self.genesis_file_location.as_os_str().is_empty() {
             let path = root_dir.full_path(&self.genesis_file_location);
             let mut file = File::open(&path)?;
@@ -43,6 +52,18 @@ impl ExecutionConfig {
             file.read_to_end(&mut buffer)?;
             // TODO: update to use `Transaction::WriteSet` variant when ready.
             self.genesis = Some(lcs::from_bytes(&buffer)?);
+        } else {
+            let event_data = lcs::to_bytes(&validator_set)?;
+            let event = ContractEvent::new(
+                ValidatorSet::change_event_key(),
+                0, /* sequence_number */
+                TypeTag::ByteArray,
+                event_data,
+            );
+
+            let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
+            let transaction = Transaction::WriteSet(change_set);
+            self.genesis = Some(transaction);
         }
 
         Ok(())
