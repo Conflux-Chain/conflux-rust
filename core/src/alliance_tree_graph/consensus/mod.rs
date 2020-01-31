@@ -7,8 +7,8 @@ mod debug;
 
 use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
-    consensus_new_block_handler::ConsensusNewBlockHandler, ConsensusGraphInner,
-    ConsensusInnerConfig,
+    consensus_new_block_handler::ConsensusNewBlockHandler, CallbackType,
+    ConsensusGraphInner, ConsensusInnerConfig,
 };
 
 use crate::{
@@ -180,21 +180,6 @@ impl TreeGraphConsensus {
         )
     }
 
-    pub fn on_new_candidate_pivot(
-        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
-        callback: oneshot::Sender<Result<bool, Error>>,
-    )
-    {
-        let mut inner = self.inner.write();
-        inner.on_new_candidate_pivot(
-            &pivot_decision.block_hash,
-            &pivot_decision.parent_hash,
-            pivot_decision.height,
-            peer_id,
-            callback,
-        );
-    }
-
     /// Convert EpochNumber to height based on the current TreeGraphConsensus
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,
@@ -214,11 +199,11 @@ impl TreeGraphConsensus {
     }
 
     pub fn get_next_selected_pivot_block(
-        &self, last_pivot_hash: &H256,
-        callback: oneshot::Sender<Result<PivotBlockDecision, Error>>,
-    )
-    {
-
+        &self, last_pivot_hash: &H256, callback: CallbackType,
+    ) {
+        self.inner
+            .write()
+            .get_next_selected_pivot_block(last_pivot_hash, callback)
     }
 
     pub fn best_epoch_number(&self) -> u64 {
@@ -384,34 +369,6 @@ impl TreeGraphConsensus {
         })
     }
 
-    /// Get the current bank balance of an address
-    pub fn get_bank_balance(
-        &self, address: Address, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc
-                .map_or(U256::zero(), |acc| acc.bank_balance)
-                .into()
-        } else {
-            0.into()
-        })
-    }
-
-    /// Get the current storage balance of an address
-    pub fn get_storage_balance(
-        &self, address: Address, epoch_number: EpochNumber,
-    ) -> Result<U256, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc
-                .map_or(U256::zero(), |acc| acc.storage_balance)
-                .into()
-        } else {
-            0.into()
-        })
-    }
-
     /// This function is called after a new block appended to the
     /// TreeGraphConsensus. Because BestInformation is often queried outside. We
     /// store a version of best_info outside the inner to prevent keep
@@ -450,57 +407,20 @@ impl TreeGraphConsensus {
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
     pub fn on_new_block(
-        &self, hash: &H256, ignore_body: bool, update_best_info: bool,
+        &self, hash: &H256, _ignore_body: bool, update_best_info: bool,
     ) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
 
-        let block_opt = if ignore_body {
-            None
-        } else {
-            self.data_man.block_by_hash(hash, true /* update_cache */)
-        };
-
-        let header_opt = if ignore_body {
-            self.data_man.block_header_by_hash(hash)
-        } else {
-            None
-        };
+        let block_header = self
+            .data_man
+            .block_header_by_hash(hash)
+            .expect("header must exist");
 
         {
             let inner = &mut *self.inner.write();
-            if !ignore_body {
-                let block = block_opt.unwrap();
-                debug!(
-                    "insert new block into consensus: block_header={:?} tx_count={}, block_size={}",
-                    block.block_header,
-                    block.transactions.len(),
-                    block.size(),
-                );
-                self.new_block_handler.on_new_block(
-                    inner,
-                    hash,
-                    &block.block_header,
-                    Some(&block.transactions),
-                );
-            } else {
-                // This `ignore_body` case will only be used when
-                // 1. archive node is in `CatchUpRecoverBlockFromDB` phase
-                // 2. full node is in `CatchUpRecoverBlockHeaderFromDB`,
-                // `CatchUpSyncBlockHeader` or `CatchUpRecoverBlockFromDB` phase
-                let header = header_opt.unwrap();
-                debug!(
-                    "insert new block_header into consensus: block_header={:?}",
-                    header
-                );
-                self.new_block_handler.on_new_block(
-                    inner,
-                    hash,
-                    header.as_ref(),
-                    None,
-                );
-            }
+            inner.new_block(&block_header);
 
             // Reset pivot chain according to checkpoint information during
             // recovery
@@ -546,6 +466,24 @@ impl TreeGraphConsensus {
                 }
             }
         }
+    }
+
+    pub fn on_new_candidate_pivot(
+        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
+        callback: oneshot::Sender<Result<bool, Error>>,
+    )
+    {
+        self.inner.write().on_new_candidate_pivot(
+            &pivot_decision.block_hash,
+            &pivot_decision.parent_hash,
+            pivot_decision.height,
+            peer_id,
+            callback,
+        );
+    }
+
+    pub fn on_commit(&mut self, committable_blocks: &Vec<H256>) {
+        self.inner.write().commit(committable_blocks)
     }
 
     pub fn best_block_hash(&self) -> H256 {

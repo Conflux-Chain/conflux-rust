@@ -116,15 +116,14 @@ impl ConsensusNewBlockHandler {
         // reassign the parent for outside era blocks
         for v in new_era_legacy_block_arena_index_set {
             let me = *v;
-            let mut parent =
-                inner.arena[me].parent.expect("parent must exists");
+            let mut parent = inner.arena[me].parent;
             if inner.arena[me].era_block != NULL {
                 inner.split_root(me);
             }
             if !new_era_block_arena_index_set.contains(&parent) {
                 parent = new_era_block_arena_index;
             }
-            inner.arena[me].parent = Some(parent);
+            inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
             inner.terminal_hashes.remove(&inner.arena[me].hash);
         }
@@ -208,11 +207,9 @@ impl ConsensusNewBlockHandler {
         // Recycle transactions in future, but not in subtree of `era_block`.
         for idx in future.iter() {
             let index = idx as usize;
-            if inner.arena[index].parent.is_some() {
-                let lca = inner.lca(index, era_block);
-                if lca != era_block {
-                    self.recycle_tx_in_block(inner, index);
-                }
+            let lca = inner.lca(index, era_block);
+            if lca != era_block {
+                self.recycle_tx_in_block(inner, index);
             }
         }
     }
@@ -245,41 +242,6 @@ impl ConsensusNewBlockHandler {
         self.data_man.insert_terminals_to_db(
             inner.terminal_hashes.iter().cloned().collect(),
         );
-    }
-
-    /// The top level function invoked by ConsensusGraph to insert a new block.
-    pub fn on_new_block(
-        &self, inner: &mut ConsensusGraphInner, hash: &H256,
-        block_header: &BlockHeader,
-        transactions: Option<&Vec<Arc<SignedTransaction>>>,
-    )
-    {
-        let block_status_in_db = self
-            .data_man
-            .local_block_info_from_db(hash)
-            .map(|info| info.get_status())
-            .unwrap_or(BlockStatus::Pending);
-        let (me, indices_len, sn) = inner.insert(&block_header);
-        let block_info = LocalBlockInfo::new(
-            block_status_in_db,
-            sn,
-            self.data_man.get_instance_id(),
-        );
-        self.data_man
-            .insert_local_block_info_to_db(hash, block_info);
-        self.statistics
-            .set_consensus_graph_inserted_block_count(indices_len);
-        if me == NULL {
-            return;
-        }
-
-        self.persist_terminal_and_block_info(
-            inner,
-            me,
-            block_status_in_db,
-            transactions.is_some(),
-        );
-        debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 
     fn persist_terminal_and_block_info(
