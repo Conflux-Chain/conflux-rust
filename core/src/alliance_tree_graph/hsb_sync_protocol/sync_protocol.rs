@@ -207,11 +207,95 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
     }
 
     fn handle_error(
-        &self, _io: &dyn NetworkContext, _peer: PeerId, _msg_id: MsgId,
-        _e: Error,
-    )
-    {
+        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error,
+    ) {
+        warn!(
+            "Error while handling message, peer={}, msgid={:?}, error={:?}",
+            peer, msg_id, e
+        );
 
+        let mut disconnect = true;
+        let reason = format!("{}", e.0);
+        let mut op = None;
+
+        // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
+        // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
+        match e.0 {
+            ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidMessageFormat => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
+            ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
+            // TODO handle the unexpected response case (timeout or real invalid
+            // message type)
+            ErrorKind::UnexpectedResponse => disconnect = true,
+            ErrorKind::RequestNotFound => disconnect = false,
+            ErrorKind::TooManyTrans => {}
+            ErrorKind::InvalidTimestamp => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidSnapshotManifest(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidSnapshotChunk(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::AlreadyThrottled(_) => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
+            ErrorKind::Throttled(_, msg) => {
+                disconnect = false;
+
+                if let Err(e) = msg.send(io, peer) {
+                    error!("failed to send throttled packet: {:?}", e);
+                    disconnect = true;
+                }
+            }
+            ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+            ErrorKind::Io(_) => disconnect = false,
+            ErrorKind::Network(kind) => match kind {
+                network::ErrorKind::AddressParse => disconnect = false,
+                network::ErrorKind::AddressResolve(_) => disconnect = false,
+                network::ErrorKind::Auth => disconnect = false,
+                network::ErrorKind::BadProtocol => {
+                    op = Some(UpdateNodeOperation::Remove)
+                }
+                network::ErrorKind::BadAddr => disconnect = false,
+                network::ErrorKind::Decoder => {
+                    op = Some(UpdateNodeOperation::Remove)
+                }
+                network::ErrorKind::Expired => disconnect = false,
+                network::ErrorKind::Disconnect(_) => disconnect = false,
+                network::ErrorKind::InvalidNodeId => disconnect = false,
+                network::ErrorKind::OversizedPacket => disconnect = false,
+                network::ErrorKind::Io(_) => disconnect = false,
+                network::ErrorKind::Throttling(_) => disconnect = false,
+                network::ErrorKind::SocketIo(_) => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+                network::ErrorKind::Msg(_) => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+                network::ErrorKind::__Nonexhaustive {} => {
+                    op = Some(UpdateNodeOperation::Failure)
+                }
+            },
+            ErrorKind::Storage(_) => {}
+            ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
+            ErrorKind::__Nonexhaustive {} => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
+            ErrorKind::InternalError(_) => {}
+            ErrorKind::RpcTimeout => {}
+            ErrorKind::RpcCancelledByEmpty => {}
+            ErrorKind::UnexpectedMessage(_) => {
+                op = Some(UpdateNodeOperation::Remove)
+            }
+        }
+
+        if disconnect {
+            io.disconnect_peer(peer, op, reason.as_str());
+        }
     }
 
     fn dispatch_message(
@@ -223,7 +307,11 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
             if node_id == NodeId::default() {
                 return Err(ErrorKind::UnknownPeer.into());
             }
-            keccak(&node_id)
+            let peer_hash = keccak(&node_id);
+            if !self.peers.contains(&peer_hash) {
+                return Err(ErrorKind::UnknownPeer.into());
+            }
+            peer_hash
         } else {
             self.own_node_hash.clone()
         };
