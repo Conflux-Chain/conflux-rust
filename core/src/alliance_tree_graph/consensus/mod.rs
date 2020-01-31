@@ -12,6 +12,7 @@ use super::consensus::consensus_inner::{
 };
 
 use crate::{
+    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::BestInformation,
@@ -22,12 +23,14 @@ use crate::{
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
+    sync::Error,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, Bloom, H256, U256};
 use futures::channel::oneshot;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
+use network::PeerId;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     epoch::BlockHashOrEpochNumber,
@@ -466,11 +469,17 @@ impl TreeGraphConsensus {
     }
 
     pub fn on_new_candidate_pivot(
-        &self, block_hash: &H256, parent_hash: &H256, height: u64,
-    ) -> bool {
-        self.inner
-            .write()
-            .new_candidate_pivot(block_hash, parent_hash, height)
+        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
+        callback: oneshot::Sender<Result<bool, Error>>,
+    )
+    {
+        self.inner.write().on_new_candidate_pivot(
+            &pivot_decision.block_hash,
+            &pivot_decision.parent_hash,
+            pivot_decision.height,
+            peer_id,
+            callback,
+        );
     }
 
     pub fn on_commit(&mut self, committable_blocks: &Vec<H256>) {

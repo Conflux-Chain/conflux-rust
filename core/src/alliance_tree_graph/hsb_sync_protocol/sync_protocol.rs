@@ -150,6 +150,19 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
         }
     }
 
+    pub fn with_peers(
+        own_node_hash: H256, request_manager: Arc<RequestManager>,
+        network_task: NetworkTask<P>, peers: Arc<Peers<PeerState, H256>>,
+    ) -> Self
+    {
+        HotStuffSynchronizationProtocol {
+            own_node_hash,
+            peers,
+            request_manager,
+            network_task,
+        }
+    }
+
     pub fn register(
         self: Arc<Self>, network: Arc<NetworkService>,
     ) -> Result<(), String> {
