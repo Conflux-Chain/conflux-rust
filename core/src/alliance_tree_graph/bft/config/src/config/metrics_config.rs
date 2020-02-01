@@ -18,7 +18,7 @@ impl Default for MetricsConfig {
     fn default() -> MetricsConfig {
         MetricsConfig {
             collection_interval_ms: 1000,
-            data_dir: PathBuf::from("/opt/libra/data"),
+            data_dir: PathBuf::from("./opt/libra/data"),
             enabled: false,
             dir: PathBuf::from("metrics"),
         }

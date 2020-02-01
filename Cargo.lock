@@ -2652,6 +2652,7 @@ dependencies = [
  "libra-prost-ext 0.1.0",
  "libra-tools 0.1.0",
  "libra-types 0.1.0",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "prometheus 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -57,7 +57,8 @@ impl Default for ConsensusConfig {
 
         ConsensusConfig {
             max_block_size: 100,
-            proposer_type: ConsensusProposerType::MultipleOrderedProposers,
+            //proposer_type: ConsensusProposerType::MultipleOrderedProposers,
+            proposer_type: ConsensusProposerType::RotatingProposer,
             contiguous_rounds: 2,
             max_pruned_blocks_in_mem: None,
             pacemaker_initial_timeout_ms: None,

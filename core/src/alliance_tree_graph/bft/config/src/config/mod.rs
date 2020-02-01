@@ -78,8 +78,6 @@ pub struct NodeConfig {
     pub test: Option<TestConfig>,
     #[serde(default)]
     pub validator_network: Option<NetworkConfig>,
-    #[serde(default)]
-    pub vm_config: VMConfig,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -93,7 +91,7 @@ pub struct BaseConfig {
 impl Default for BaseConfig {
     fn default() -> BaseConfig {
         BaseConfig {
-            data_dir: PathBuf::from("/opt/libra/data/commmon"),
+            data_dir: PathBuf::from("./opt/libra/data/common"),
             role: RoleType::Validator,
             waypoint: None,
         }
@@ -175,7 +173,7 @@ impl NodeConfig {
             } else {
                 None
             },
-            vm_config: self.vm_config.clone(),
+            //vm_config: self.vm_config.clone(),
         }
     }
 
@@ -469,7 +467,7 @@ mod test {
         assert_eq!(actual.storage, expected.storage);
         assert_eq!(actual.test, expected.test);
         assert_eq!(actual.validator_network, expected.validator_network);
-        assert_eq!(actual.vm_config, expected.vm_config);
+        //assert_eq!(actual.vm_config, expected.vm_config);
         assert_eq!(actual, expected);
     }
 

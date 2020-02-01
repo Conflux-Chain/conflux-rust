@@ -514,7 +514,7 @@ pub struct StartupInfo {
     /// If the above ledger info doesn't carry a validator set, the latest
     /// validator set. Otherwise `None`.
     pub latest_validator_set: Option<ValidatorSet>,
-    pub committed_tree_state: TreeState,
+    //pub committed_tree_state: TreeState,
     pub synced_tree_state: Option<TreeState>,
 }
 
@@ -522,13 +522,14 @@ impl StartupInfo {
     pub fn new(
         latest_ledger_info: LedgerInfoWithSignatures,
         latest_validator_set: Option<ValidatorSet>,
-        committed_tree_state: TreeState, synced_tree_state: Option<TreeState>,
+        //committed_tree_state: TreeState,
+        synced_tree_state: Option<TreeState>,
     ) -> Self
     {
         Self {
             latest_ledger_info,
             latest_validator_set,
-            committed_tree_state,
+            //committed_tree_state,
             synced_tree_state,
         }
     }
@@ -575,7 +576,7 @@ fn arb_startup_info() -> impl Strategy<Value = StartupInfo> {
                 StartupInfo::new(
                     latest_ledger_info,
                     latest_validator_set,
-                    committed_tree_state,
+                    //committed_tree_state,
                     synced_tree_state,
                 )
             },
@@ -604,10 +605,12 @@ impl TryFrom<crate::proto::storage::StartupInfo> for StartupInfo {
             .latest_validator_set
             .map(TryInto::try_into)
             .transpose()?;
+        /*
         let committed_tree_state = proto
             .committed_tree_state
             .ok_or_else(|| format_err!("Missing committed_tree_state"))?
             .try_into()?;
+            */
         let synced_tree_state =
             proto.synced_tree_state.map(TryInto::try_into).transpose()?;
 
@@ -623,7 +626,7 @@ impl TryFrom<crate::proto::storage::StartupInfo> for StartupInfo {
         Ok(Self {
             latest_ledger_info,
             latest_validator_set,
-            committed_tree_state,
+            //committed_tree_state,
             synced_tree_state,
         })
     }
@@ -633,13 +636,13 @@ impl From<StartupInfo> for crate::proto::storage::StartupInfo {
     fn from(info: StartupInfo) -> Self {
         let latest_ledger_info = Some(info.latest_ledger_info.into());
         let latest_validator_set = info.latest_validator_set.map(Into::into);
-        let committed_tree_state = Some(info.committed_tree_state.into());
+        //let committed_tree_state = Some(info.committed_tree_state.into());
         let synced_tree_state = info.synced_tree_state.map(Into::into);
 
         Self {
             latest_ledger_info,
             latest_validator_set,
-            committed_tree_state,
+            //committed_tree_state,
             synced_tree_state,
         }
     }

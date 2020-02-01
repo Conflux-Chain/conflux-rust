@@ -153,7 +153,7 @@ message StartupInfo {
     types.ValidatorSet latest_validator_set = 2;
 
     // The latest committed tree state matching the ledger info above.
-    TreeState committed_tree_state = 3;
+    //TreeState committed_tree_state = 3;
 
     // The latest synced tree state when the number of transactions is more than ledger_info
     // indicates.

@@ -12,6 +12,8 @@
 
 #[macro_use]
 extern crate prometheus;
+#[macro_use]
+extern crate log;
 // Used in this and other crates for testing.
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod test_helper;
@@ -43,7 +45,6 @@ use anyhow::{bail, ensure, Result};
 use itertools::{izip, zip_eq};
 use lazy_static::lazy_static;
 use libra_crypto::hash::{CryptoHash, HashValue};
-use libra_logger::prelude::*;
 use libra_metrics::OpMetrics;
 use libra_types::{
     access_path::AccessPath,
@@ -391,6 +392,7 @@ impl LibraDB {
     /// `txns_to_commit` is empty, `frist_version` is checked to be
     /// `ledger_info_with_sigs.ledger_info.version + 1` if
     /// `ledger_info_with_sigs` is not `None`.
+    /*
     pub fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: &Option<LedgerInfoWithSignatures>,
@@ -470,6 +472,7 @@ impl LibraDB {
 
         Ok(())
     }
+    */
 
     fn save_transactions_impl(
         &self, txns_to_commit: &[TransactionToCommit], first_version: u64,
@@ -731,6 +734,7 @@ impl LibraDB {
                 None => return Ok(None),
             };
 
+        /*
         let latest_tree_state = {
             let (latest_version, txn_info) =
                 self.ledger_store.get_latest_transaction_info()?;
@@ -744,7 +748,9 @@ impl LibraDB {
                 account_state_root_hash,
             )
         };
+        */
 
+        /*
         let li_version = latest_ledger_info.ledger_info().version();
         assert!(latest_tree_state.version >= li_version);
         let startup_info = if latest_tree_state.version != li_version {
@@ -774,10 +780,18 @@ impl LibraDB {
             StartupInfo::new(
                 latest_ledger_info,
                 latest_validator_set,
-                latest_tree_state,
+                //latest_tree_state,
                 None,
             )
         };
+        */
+
+        let startup_info = StartupInfo::new(
+            latest_ledger_info,
+            latest_validator_set,
+            //latest_tree_state,
+            None,
+        );
 
         Ok(Some(startup_info))
     }
