@@ -4,7 +4,9 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
-    consensus::{ConsensusGraphInner, SharedConsensusGraph},
+    consensus::{
+        ConsensusGraphInner, ConsensusGraphTrait, SharedConsensusGraph,
+    },
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
     pow::ProofOfWorkConfig,
@@ -941,7 +943,7 @@ impl SynchronizationGraph {
         sync_config: SyncGraphConfig, is_full_node: bool,
     ) -> Self
     {
-        let data_man = consensus.data_man.clone();
+        let data_man = consensus.get_data_manager().clone();
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
             .block_header_by_hash(&genesis_hash)
@@ -962,7 +964,7 @@ impl SynchronizationGraph {
             verification_config,
             sync_config,
             consensus: consensus.clone(),
-            statistics: consensus.statistics.clone(),
+            statistics: consensus.get_statistics().clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
             consensus_sender: Mutex::new(consensus_sender),
             is_full_node,
@@ -1006,14 +1008,16 @@ impl SynchronizationGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.consensus.txpool.get_to_be_propagated_transactions()
+        self.consensus
+            .get_tx_pool()
+            .get_to_be_propagated_transactions()
     }
 
     pub fn set_to_propagate_trans(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         self.consensus
-            .txpool
+            .get_tx_pool()
             .set_to_be_propagated_transactions(transactions);
     }
 
@@ -1058,10 +1062,7 @@ impl SynchronizationGraph {
             );
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
-        self.consensus
-            .inner
-            .write()
-            .set_initial_sequence_number(genesis_seq_num);
+        self.consensus.set_initial_sequence_number(genesis_seq_num);
         let genesis_header =
             self.data_man.block_header_by_hash(&genesis_hash).unwrap();
         debug!(
@@ -1179,10 +1180,9 @@ impl SynchronizationGraph {
             // Rebuild pivot chain state info.
             self.consensus.construct_pivot_state();
         }
+        self.consensus.update_best_info();
         self.consensus
-            .update_best_info(&*self.consensus.inner.read());
-        self.consensus
-            .txpool
+            .get_tx_pool()
             .notify_new_best_info(self.consensus.best_info())
             // FIXME: propogate error.
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
@@ -1190,13 +1190,10 @@ impl SynchronizationGraph {
     }
 
     pub fn check_mining_adaptive_block(
-        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        referees: &Vec<H256>, difficulty: &U256,
-    ) -> bool
-    {
+        &self, parent_hash: &H256, referees: &Vec<H256>, difficulty: &U256,
+    ) -> bool {
         if !self.is_consortium() {
             self.consensus.check_mining_adaptive_block(
-                inner,
                 parent_hash,
                 referees,
                 difficulty,
@@ -1745,10 +1742,6 @@ impl SynchronizationGraph {
     }
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
-
-    pub fn update_total_weight_in_past(&self) {
-        self.consensus.update_total_weight_in_past();
-    }
 
     /// Get the current number of blocks in the synchronization graph
     /// This only returns cached block count, and this is enough since this is

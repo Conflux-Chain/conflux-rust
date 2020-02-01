@@ -104,10 +104,6 @@ pub struct TreeGraphConsensus {
     /// This is the hash of latest block inserted into consensus graph.
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_inserted_block: Mutex<H256>,
-
-    /// The epoch id of the remotely synchronized state and the trusted block
-    /// whose blame includes it. This is always `None` for archive nodes.
-    pub synced_epoch_id_and_blame_block: Mutex<Option<(EpochId, H256)>>,
 }
 
 pub type SharedConsensusGraph = Arc<TreeGraphConsensus>;
@@ -148,7 +144,6 @@ impl TreeGraphConsensus {
             ),
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
-            synced_epoch_id_and_blame_block: Default::default(),
         };
         graph.update_best_info(&*graph.inner.read());
         graph

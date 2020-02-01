@@ -19,7 +19,7 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use primitives::StateRoot;
+use primitives::{EpochNumber, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::time::Duration;
 
@@ -97,14 +97,9 @@ impl SnapshotManifestRequest {
             if let Some(block) =
                 ctx.manager.graph.data_man.block_header_by_hash(&epoch_hash)
             {
-                match ctx
-                    .manager
-                    .graph
-                    .consensus
-                    .inner
-                    .read()
-                    .block_hashes_by_epoch(block.height())
-                {
+                match ctx.manager.graph.consensus.get_block_hashes_by_epoch(
+                    EpochNumber::Number(block.height()),
+                ) {
                     Ok(ordered_executable_epoch_blocks) => {
                         for hash in &ordered_executable_epoch_blocks {
                             match ctx

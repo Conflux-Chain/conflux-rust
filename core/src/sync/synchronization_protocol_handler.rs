@@ -8,6 +8,7 @@ use super::{
 };
 use crate::{
     block_data_manager::BlockStatus,
+    consensus::ConsensusGraphTrait,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
     parameters::sync::*,
@@ -32,7 +33,7 @@ use network::{
     NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, SignedTransaction};
+use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::{
@@ -61,7 +62,6 @@ const CHECK_REQUEST_TIMER: TimerToken = 1;
 const BLOCK_CACHE_GC_TIMER: TimerToken = 2;
 const CHECK_CATCH_UP_MODE_TIMER: TimerToken = 3;
 const LOG_STATISTIC_TIMER: TimerToken = 4;
-const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 5;
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
@@ -238,6 +238,10 @@ pub struct SynchronizationProtocolHandler {
     // state sync for any checkpoint
     pub state_sync: Arc<SnapshotChunkSync>,
 
+    /// The epoch id of the remotely synchronized state and the trusted block
+    /// whose blame includes it. This is always `None` for archive nodes.
+    pub synced_epoch_id_and_blame_block: Mutex<Option<(EpochId, H256)>>,
+
     // provider for serving light protocol queries
     light_provider: Arc<LightProvider>,
 }
@@ -314,6 +318,7 @@ impl SynchronizationProtocolHandler {
                 SyncHandlerWorkType::LocalMessage,
             ),
             state_sync,
+            synced_epoch_id_and_blame_block: Default::default(),
             light_provider,
         }
     }
@@ -902,7 +907,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn produce_status_message(&self) -> Status {
-        let best_info = self.graph.consensus.get_best_info();
+        let best_info = self.graph.consensus.best_info();
 
         let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
         {
@@ -1209,10 +1214,6 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
-    fn update_total_weight_in_past(&self) {
-        self.graph.update_total_weight_in_past();
-    }
-
     pub fn update_sync_phase(&self, io: &dyn NetworkContext) {
         {
             let _pm_lock = self.phase_manager_lock.lock();
@@ -1416,8 +1417,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
             .expect("Error registering log_statistics timer");
-        io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(60))
-            .expect("Error registering total_weight_in_past timer");
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
         io.register_timer(
@@ -1518,9 +1517,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();
-            }
-            TOTAL_WEIGHT_IN_PAST_TIMER => {
-                self.update_total_weight_in_past();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
                 let timeout = Duration::from_secs(180);

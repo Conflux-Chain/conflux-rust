@@ -64,7 +64,7 @@ impl Handleable for Transactions {
             .manager
             .graph
             .consensus
-            .txpool
+            .get_tx_pool()
             .insert_new_transactions(transactions);
 
         ctx.manager
@@ -496,7 +496,7 @@ impl Handleable for GetTransactionsResponse {
             .manager
             .graph
             .consensus
-            .txpool
+            .get_tx_pool()
             .insert_new_transactions(self.transactions);
 
         ctx.manager
@@ -556,7 +556,7 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
             .manager
             .graph
             .consensus
-            .txpool
+            .get_tx_pool()
             .insert_new_transactions(self.transactions);
 
         ctx.manager

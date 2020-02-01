@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::{ConsensusGraphTrait, SharedConsensusGraph},
     light_protocol::{
         common::{FullPeerFilter, LedgerInfo},
         message::msgid,
@@ -37,7 +37,7 @@ type TxInfo = (
 
 pub struct QueryService {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // light protocol handler
     handler: Arc<LightHandler>,
@@ -51,7 +51,7 @@ pub struct QueryService {
 
 impl QueryService {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+        consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>, throttling_config_file: Option<String>,
     ) -> Self
     {

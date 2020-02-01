@@ -7,7 +7,7 @@ use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers, UniqueId},
         message::{msgid, GetWitnessInfo, WitnessInfoWithHeight},
@@ -39,7 +39,7 @@ type MissingWitness = KeyReverseOrdered<u64>;
 
 pub struct Witnesses {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // latest header for which we have trusted information
     latest_verified_header: RwLock<u64>,
@@ -60,7 +60,7 @@ pub struct Witnesses {
 
 impl Witnesses {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
