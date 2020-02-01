@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    utils::{create_simple_block_impl, initialize_synchronization_graph},
-    SynchronizationGraphNode,
+use crate::{
+    block_data_manager::DbType,
+    sync::{
+        utils::{create_simple_block_impl, initialize_synchronization_graph},
+        SynchronizationGraphNode,
+    },
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::Block;
@@ -18,8 +21,15 @@ use std::{
 #[test]
 fn test_remove_expire_blocks() {
     {
-        let (sync, _, _) =
-            initialize_synchronization_graph("./test.db/", 1, 1, 1, 1, 50000);
+        let (sync, _, _) = initialize_synchronization_graph(
+            "./test.db/",
+            1,
+            1,
+            1,
+            1,
+            50000,
+            DbType::Rocksdb,
+        );
         // test initialization
         {
             let inner = sync.inner.read();
