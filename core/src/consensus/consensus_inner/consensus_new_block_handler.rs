@@ -958,6 +958,16 @@ impl ConsensusNewBlockHandler {
         }
     }
 
+    // This function computes the timer chain in the view of the new block.
+    // The first returned value is the fork height of the timer chain.
+    // The second is a map that overwrites timer_chain_height values after the
+    // fork height.
+    fn compute_timer_chain_tuple(
+        inner: &ConsensusGraphInner, me: usize, anticone_barrier: &BitSet,
+    ) -> (u64, HashMap<usize, u64>) {
+        (0, HashMap::new())
+    }
+
     /// The top level function invoked by ConsensusGraph to insert a new block.
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
@@ -1021,6 +1031,12 @@ impl ConsensusNewBlockHandler {
 
         let anticone_barrier =
             ConsensusNewBlockHandler::compute_anticone(inner, me);
+        let timer_chain_tuple =
+            ConsensusNewBlockHandler::compute_timer_chain_tuple(
+                inner,
+                me,
+                &anticone_barrier,
+            );
 
         let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
             Some(inner.compute_subtree_weights(me, &anticone_barrier))
@@ -1105,9 +1121,13 @@ impl ConsensusNewBlockHandler {
             let diff = inner.arena[me].timer_longest_difficulty
                 + inner.get_timer_difficulty(me);
             if inner.arena[me].is_timer
-                && (diff > inner.best_timer_chain_difficulty
-                    || (diff == inner.best_timer_chain_difficulty
-                        && inner.arena[me].hash < inner.best_timer_chain_hash))
+                && ConsensusGraphInner::is_heavier(
+                    (diff, &inner.arena[me].hash),
+                    (
+                        inner.best_timer_chain_difficulty,
+                        &inner.best_timer_chain_hash,
+                    ),
+                )
             {
                 inner.best_timer_chain_difficulty = diff;
                 inner.best_timer_chain_hash = inner.arena[me].hash.clone();

@@ -1523,22 +1523,33 @@ impl ConsensusGraphInner {
         }
 
         let mut timer_longest_difficulty = 0;
-        let mut last_timer_block_arena_index = NULL;
+        let mut longest_referee = NULL;
         for referee in &referees {
             self.terminal_hashes.remove(&self.arena[*referee].hash);
             let timer_difficulty = self.arena[*referee]
                 .timer_longest_difficulty
                 + self.get_timer_difficulty(*referee);
-            if timer_difficulty > timer_longest_difficulty {
+            if longest_referee == NULL
+                || ConsensusGraphInner::is_heavier(
+                    (timer_difficulty, &self.arena[*referee].hash),
+                    (
+                        timer_longest_difficulty,
+                        &self.arena[longest_referee].hash,
+                    ),
+                )
+            {
                 timer_longest_difficulty = timer_difficulty;
-                last_timer_block_arena_index = if self.arena[*referee].is_timer
-                {
-                    *referee
-                } else {
-                    self.arena[*referee].last_timer_block_arena_index
-                }
+                longest_referee = *referee;
             }
         }
+        let last_timer_block_arena_index = if longest_referee == NULL
+            || self.arena[longest_referee].is_timer
+        {
+            longest_referee
+        } else {
+            self.arena[longest_referee].last_timer_block_arena_index
+        };
+
         let my_height = block_header.height();
         let sn = self.get_next_sequence_number();
         let index = self.arena.insert(ConsensusGraphNode {
