@@ -2645,36 +2645,31 @@ impl ConsensusGraphInner {
             && self.timer_chain[timer_chain_index] == me
     }
 
-    pub fn update_timer_chain(&mut self, me: usize) {
+    fn compute_timer_chain_tuple(
+        &self, me: usize, anticone_barrier_opt: Option<&BitSet>,
+    ) -> (u64, HashMap<usize, u64>, Vec<usize>) {
+        let empty_barrier = BitSet::new();
+        let anticone_barrier = if let Some(a) = anticone_barrier_opt {
+            a
+        } else {
+            &empty_barrier
+        };
         let mut tmp_chain = Vec::new();
+        let mut tmp_chain_set = HashSet::new();
         let mut i = me;
         while i != NULL && !self.is_on_timer_chain(i) {
             tmp_chain.push(i);
+            tmp_chain_set.insert(i);
             i = self.arena[i].last_timer_block_arena_index;
         }
-        let fork_at = i;
+        tmp_chain.reverse();
+        let mut fork_at = 0;
         let mut fork_at_index = 0;
-
-        // Let's update the timer chain first
-        if fork_at == NULL {
-            self.timer_chain.resize(tmp_chain.len(), 0);
-        } else {
-            assert!(
-                self.arena[fork_at].timer_chain_height
-                    >= self.cur_era_genesis_height
-            );
-            fork_at_index = (self.arena[fork_at].timer_chain_height
-                - self.cur_era_genesis_height)
-                as usize
-                + 1;
-            self.timer_chain.resize(fork_at_index + tmp_chain.len(), 0);
-        }
-        let mut n = tmp_chain.len();
-        while let Some(u) = tmp_chain.pop() {
-            n -= 1;
-            self.pivot_chain[fork_at_index + n] = u;
-            self.arena[fork_at].timer_chain_height =
-                self.cur_era_genesis_height + (fork_at_index + n) as u64;
+        if i != NULL {
+            fork_at = self.arena[i].timer_chain_height;
+            assert!(fork_at >= self.cur_era_genesis_height);
+            fork_at_index =
+                (fork_at - self.cur_era_genesis_height) as usize + 1;
         }
 
         // Now we need to update the timer_chain_height field of the remaining
@@ -2682,7 +2677,7 @@ impl ConsensusGraphInner {
         let mut queue = VecDeque::new();
         let mut visited = HashSet::new();
         visited.clear();
-        if fork_at == NULL {
+        if i == NULL {
             queue.push_back(self.cur_era_genesis_block_arena_index);
         } else {
             queue.push_back(self.timer_chain[fork_at_index - 1]);
@@ -2690,6 +2685,9 @@ impl ConsensusGraphInner {
         while let Some(x) = queue.pop_front() {
             visited.insert(x);
             for referer in &self.arena[x].referrers {
+                if anticone_barrier.contains(*referer as u32) {
+                    continue;
+                }
                 if !visited.contains(referer) {
                     queue.push_back(*referer);
                 }
@@ -2706,31 +2704,55 @@ impl ConsensusGraphInner {
             counter.insert(*x, cnt);
         }
         visited.clear();
-        if fork_at == NULL {
+        if i == NULL {
             queue.push_back(self.cur_era_genesis_block_arena_index);
         } else {
             queue.push_back(self.timer_chain[fork_at_index - 1]);
         }
+        let mut res = HashMap::new();
         while let Some(x) = queue.pop_front() {
-            if !self.is_on_timer_chain(x) {
-                let mut timer_chain_height = 0;
-                for referee in &self.arena[x].referees {
-                    if self.arena[*referee].timer_chain_height
-                        > timer_chain_height
-                    {
-                        timer_chain_height =
-                            self.arena[*referee].timer_chain_height;
-                    }
+            let mut timer_chain_height = 0;
+            for referee in &self.arena[x].referees {
+                let height =
+                    if self.arena[*referee].timer_chain_height < fork_at {
+                        self.arena[*referee].timer_chain_height
+                    } else {
+                        *res.get(referee).unwrap()
+                    };
+                if height > timer_chain_height {
+                    timer_chain_height = height;
                 }
-                self.arena[x].timer_chain_height = timer_chain_height;
             }
+            if tmp_chain_set.contains(&x) {
+                timer_chain_height += 1;
+            }
+            res.insert(x, timer_chain_height);
+
             for referer in &self.arena[x].referrers {
+                if anticone_barrier.contains(*referer as u32) {
+                    continue;
+                }
                 let cnt = counter.get(referer).unwrap() - 1;
                 if cnt == 0 {
                     queue.push_back(*referer);
                 }
                 counter.insert(*referer, cnt);
             }
+        }
+        (fork_at, res, tmp_chain)
+    }
+
+    pub fn update_timer_chain(&mut self, me: usize) {
+        let (fork_at, res, tmp_chain) =
+            self.compute_timer_chain_tuple(me, None);
+
+        let fork_at_index = (fork_at - self.cur_era_genesis_height) as usize;
+        self.timer_chain.resize(fork_at_index + tmp_chain.len(), 0);
+        for i in 0..tmp_chain.len() {
+            self.timer_chain[fork_at_index + i] = tmp_chain[i];
+        }
+        for (k, v) in res {
+            self.arena[k].timer_chain_height = v;
         }
     }
 
