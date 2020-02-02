@@ -143,10 +143,6 @@ pub struct ConsensusGraphNode {
     pub parent: usize,
     pub sequence_number: u64,
 
-    /// This is the most recent pivot block it can reach using referrence edge.
-    /// We will use it to determine the parent edge for non-pivot blocks.
-    pub last_pivot_in_past: u64,
-
     /// The genesis arena index of the era that current block`self` is in.
     /// It is `NULL` if `self` is not in the subtree of `cur_era_genesis`.
     pub era_block: usize,
@@ -373,9 +369,6 @@ impl ConsensusGraphInner {
             }
         }
 
-        self.arena[pivot_arena_index].last_pivot_in_past =
-            self.pivot_index_to_height(pivot_index);
-
         let filtered_blockset = self.pivot_chain_metadata[pivot_index]
             .blockset_in_epoch
             .iter()
@@ -451,7 +444,6 @@ impl ConsensusGraphInner {
             past_num_blocks: 0,
             parent,
             era_block: NULL,
-            last_pivot_in_past: NULLU64,
             children: Vec::new(),
             referees: referees.clone(),
             referrers: Vec::new(),
@@ -515,7 +507,6 @@ impl ConsensusGraphInner {
             past_num_blocks: 0,
             parent,
             era_block: NULL,
-            last_pivot_in_past: 0,
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
@@ -579,6 +570,10 @@ impl ConsensusGraphInner {
 
         for me in index_set {
             num_incoming_edges.entry(*me).or_insert(0);
+            let parent = self.arena[*me].parent;
+            if index_set.contains(&parent) {
+                *num_incoming_edges.entry(parent).or_insert(0) += 1;
+            }
             for referee in &self.arena[*me].referees {
                 if index_set.contains(referee) {
                     *num_incoming_edges.entry(*referee).or_insert(0) += 1;
@@ -596,6 +591,14 @@ impl ConsensusGraphInner {
         }
         while let Some((_, me)) = candidates.pop() {
             reversed_indices.push(me);
+
+            let parent = self.arena[me].parent;
+            if index_set.contains(&parent) {
+                num_incoming_edges.entry(parent).and_modify(|e| *e -= 1);
+                if num_incoming_edges[&parent] == 0 {
+                    candidates.push((self.arena[parent].hash, parent));
+                }
+            }
 
             for referee in &self.arena[me].referees {
                 if index_set.contains(referee) {
@@ -957,7 +960,6 @@ impl ConsensusGraphInner {
         if parent_index.is_none()
             || self.arena[*parent_index.unwrap()].era_block == NULL
         {
-            assert!(!self.waiting_block_hashes.contains_key(&hash));
             debug!(
                 "parent={:?} not in consensus graph, set header to pending",
                 parent_hash
@@ -1000,7 +1002,7 @@ impl ConsensusGraphInner {
             let parent_hash = block_header.parent_hash();
             let height = block_header.height();
             callback.send(Ok(self.new_candidate_pivot(
-                block_hash,
+                &hash,
                 parent_hash,
                 height,
             )));
@@ -1046,7 +1048,8 @@ impl ConsensusGraphInner {
         // FIXME: we may use children instead of referees.
         if self.arena[arena_index].referees.is_empty() {
             // TODO: call generate block function
-            self.waiting_block_hashes.insert(H256::zero(), callback);
+            self.next_selected_pivot_waiting_list
+                .insert(H256::zero(), callback);
         } else {
             let height = self.candidate_pivot_tree.height(arena_index);
             assert!(height != NULLU64);

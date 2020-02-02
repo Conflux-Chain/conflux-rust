@@ -7,8 +7,9 @@ mod debug;
 
 use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
-    consensus_new_block_handler::ConsensusNewBlockHandler, CallbackType,
-    ConsensusGraphInner, ConsensusInnerConfig,
+    consensus_new_block_handler::ConsensusNewBlockHandler, ConsensusGraphInner,
+    ConsensusInnerConfig, NewCandidatePivotCallbackType,
+    NextSelectedPivotCallbackType,
 };
 
 use crate::{
@@ -194,7 +195,7 @@ impl TreeGraphConsensus {
     }
 
     pub fn get_next_selected_pivot_block(
-        &self, last_pivot_hash: &H256, callback: CallbackType,
+        &self, last_pivot_hash: &H256, callback: NextSelectedPivotCallbackType,
     ) {
         self.inner
             .write()
@@ -349,7 +350,7 @@ impl TreeGraphConsensus {
 
     pub fn on_new_candidate_pivot(
         &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
-        callback: oneshot::Sender<Result<bool, Error>>,
+        callback: NewCandidatePivotCallbackType,
     )
     {
         self.inner.write().on_new_candidate_pivot(
