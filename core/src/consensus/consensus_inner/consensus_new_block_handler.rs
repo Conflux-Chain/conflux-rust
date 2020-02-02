@@ -1101,6 +1101,30 @@ impl ConsensusNewBlockHandler {
         if fully_valid && !pending {
             meter.aggregate_total_weight_in_past(my_weight);
 
+            // Now we are going to maintain the timer chain.
+            let diff = inner.arena[me].timer_longest_difficulty
+                + inner.get_timer_difficulty(me);
+            if inner.arena[me].is_timer
+                && (diff > inner.best_timer_chain_difficulty
+                    || (diff == inner.best_timer_chain_difficulty
+                        && inner.arena[me].hash < inner.best_timer_chain_hash))
+            {
+                inner.best_timer_chain_difficulty = diff;
+                inner.best_timer_chain_hash = inner.arena[me].hash.clone();
+                inner.update_timer_chain(me);
+            } else {
+                let mut timer_chain_height = 0;
+                for referee in &inner.arena[me].referees {
+                    if inner.arena[*referee].timer_chain_height
+                        > timer_chain_height
+                    {
+                        timer_chain_height =
+                            inner.arena[*referee].timer_chain_height;
+                    }
+                }
+                inner.arena[me].timer_chain_height = timer_chain_height;
+            }
+
             let last = inner.pivot_chain.last().cloned().unwrap();
             if inner.arena[me].parent == last {
                 inner.pivot_chain.push(me);

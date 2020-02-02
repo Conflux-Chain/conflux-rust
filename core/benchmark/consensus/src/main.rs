@@ -180,6 +180,7 @@ fn main() {
         alpha_num,
         beta,
         h_ratio,
+        180,
         era_epoch_count,
         DbType::Sqlite,
     );

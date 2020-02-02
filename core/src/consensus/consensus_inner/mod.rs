@@ -47,6 +47,8 @@ pub struct ConsensusInnerConfig {
     pub adaptive_weight_beta: u64,
     // The heavy block ratio (h) in GHAST algorithm
     pub heavy_block_difficulty_ratio: u64,
+    // The timer block ratio in timer chain algorithm
+    pub timer_chain_block_difficulty_ratio: u64,
     // The number of epochs per era. Each era is a potential checkpoint
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
@@ -317,6 +319,8 @@ pub struct ConsensusGraphInner {
     pub pivot_chain: Vec<usize>,
     // The metadata associated with each pivot chain block
     pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
+    // The longest timer chain block indexes
+    pub timer_chain: Vec<usize>,
     // The set of *graph* tips in the TreeGraph.
     terminal_hashes: HashSet<H256>,
     // The ``current'' era_genesis block index. It will start being the
@@ -328,6 +332,11 @@ pub struct ConsensusGraphInner {
     // The height of the ``stable'' era block, unless from the start, it is
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
+    // The timer chain height of the ``current'' era_genesis block
+    cur_era_genesis_timer_chain_height: u64,
+    // The best timer chain difficulty and hash in the current graph
+    best_timer_chain_difficulty: i128,
+    best_timer_chain_hash: H256,
     // weight_tree maintains the subtree weight of each node in the TreeGraph
     weight_tree: DefaultMinLinkCutTree,
     inclusive_weight_tree: SizeMinLinkCutTree,
@@ -366,6 +375,15 @@ pub struct ConsensusGraphNode {
     past_num_blocks: u64,
     /// The total weight of its past set in its own era
     past_era_weight: i128,
+    is_timer: bool,
+    /// The longest chain of all timer blocks.
+    timer_longest_difficulty: i128,
+    /// The last timer block index in the chain.
+    last_timer_block_arena_index: usize,
+    /// The height of the closest timer block in the longest timer chain.
+    /// Note that this only considers the current longest timer chain and
+    /// ingores the remaining timer blocks.
+    timer_chain_height: u64,
     stable: bool,
     adaptive: bool,
     pub parent: usize,
@@ -416,10 +434,16 @@ impl ConsensusGraphInner {
             hash_to_arena_indices: HashMap::new(),
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
+            timer_chain: Vec::new(),
             terminal_hashes: Default::default(),
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
             cur_era_stable_height,
+            // Timer chain height is an internal number. We always start from
+            // zero.
+            cur_era_genesis_timer_chain_height: 0,
+            best_timer_chain_difficulty: 0,
+            best_timer_chain_hash: Default::default(),
             weight_tree: DefaultMinLinkCutTree::new(),
             inclusive_weight_tree: SizeMinLinkCutTree::new(),
             stable_weight_tree: DefaultMinLinkCutTree::new(),
@@ -512,6 +536,15 @@ impl ConsensusGraphInner {
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
         });
+        if inner.arena[inner.cur_era_genesis_block_arena_index].is_timer {
+            inner
+                .timer_chain
+                .push(inner.cur_era_genesis_block_arena_index);
+        }
+        inner.arena[inner.cur_era_genesis_block_arena_index]
+            .timer_chain_height = 0;
+        inner.best_timer_chain_difficulty =
+            inner.get_timer_difficulty(inner.cur_era_genesis_block_arena_index);
 
         inner
             .anticone_cache
@@ -1418,6 +1451,10 @@ impl ConsensusGraphInner {
             past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
+            is_timer: false,
+            timer_longest_difficulty: 0,
+            last_timer_block_arena_index: 0,
+            timer_chain_height: 0,
             stable: true,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1450,11 +1487,22 @@ impl ConsensusGraphInner {
         sn
     }
 
+    fn get_timer_difficulty(&self, me: usize) -> i128 {
+        if self.arena[me].is_timer {
+            i128::try_from(self.arena[me].difficulty.low_u128()).unwrap()
+        } else {
+            0
+        }
+    }
+
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let hash = block_header.hash();
 
         let is_heavy = U512::from(block_header.pow_quality)
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
+                * U512::from(block_header.difficulty());
+        let is_timer = U512::from(block_header.pow_quality)
+            >= U512::from(self.inner_conf.timer_chain_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
         let parent =
@@ -1474,8 +1522,22 @@ impl ConsensusGraphInner {
             }
         }
 
+        let mut timer_longest_difficulty = 0;
+        let mut last_timer_block_arena_index = NULL;
         for referee in &referees {
             self.terminal_hashes.remove(&self.arena[*referee].hash);
+            let timer_difficulty = self.arena[*referee]
+                .timer_longest_difficulty
+                + self.get_timer_difficulty(*referee);
+            if timer_difficulty > timer_longest_difficulty {
+                timer_longest_difficulty = timer_difficulty;
+                last_timer_block_arena_index = if self.arena[*referee].is_timer
+                {
+                    *referee
+                } else {
+                    self.arena[*referee].last_timer_block_arena_index
+                }
+            }
         }
         let my_height = block_header.height();
         let sn = self.get_next_sequence_number();
@@ -1487,6 +1549,10 @@ impl ConsensusGraphInner {
             past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
+            is_timer,
+            timer_longest_difficulty,
+            last_timer_block_arena_index,
+            timer_chain_height: NULLU64,
             stable: true,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -2553,6 +2619,106 @@ impl ConsensusGraphInner {
                 self.pivot_chain_metadata[last_pivot_index]
                     .last_pivot_in_past_blocks
                     .insert(me);
+            }
+        }
+    }
+
+    fn is_on_timer_chain(&self, me: usize) -> bool {
+        if !self.arena[me].is_timer {
+            return false;
+        }
+        let timer_chain_index = (self.arena[me].timer_chain_height
+            - self.cur_era_genesis_timer_chain_height)
+            as usize;
+        self.timer_chain.len() > timer_chain_index
+            && self.timer_chain[timer_chain_index] == me
+    }
+
+    pub fn update_timer_chain(&mut self, me: usize) {
+        let mut tmp_chain = Vec::new();
+        let mut i = me;
+        while i != NULL && !self.is_on_timer_chain(i) {
+            tmp_chain.push(i);
+            i = self.arena[i].last_timer_block_arena_index;
+        }
+        let fork_at = i;
+        let mut fork_at_index = 0;
+
+        // Let's update the timer chain first
+        if fork_at == NULL {
+            self.timer_chain.resize(tmp_chain.len(), 0);
+        } else {
+            assert!(
+                self.arena[fork_at].timer_chain_height
+                    >= self.cur_era_genesis_height
+            );
+            fork_at_index = (self.arena[fork_at].timer_chain_height
+                - self.cur_era_genesis_height)
+                as usize
+                + 1;
+            self.timer_chain.resize(fork_at_index + tmp_chain.len(), 0);
+        }
+        let mut n = tmp_chain.len();
+        while let Some(u) = tmp_chain.pop() {
+            n -= 1;
+            self.pivot_chain[fork_at_index + n] = u;
+            self.arena[fork_at].timer_chain_height =
+                self.cur_era_genesis_height + (fork_at_index + n) as u64;
+        }
+
+        // Now we need to update the timer_chain_height field of the remaining
+        // blocks with topological sort
+        let mut queue = VecDeque::new();
+        let mut visited = HashSet::new();
+        visited.clear();
+        if fork_at == NULL {
+            queue.push_back(self.cur_era_genesis_block_arena_index);
+        } else {
+            queue.push_back(self.timer_chain[fork_at_index - 1]);
+        }
+        while let Some(x) = queue.pop_front() {
+            visited.insert(x);
+            for referer in &self.arena[x].referrers {
+                if !visited.contains(referer) {
+                    queue.push_back(*referer);
+                }
+            }
+        }
+        let mut counter = HashMap::new();
+        for x in &visited {
+            let mut cnt = 0;
+            for referee in &self.arena[*x].referees {
+                if visited.contains(referee) {
+                    cnt += 1;
+                }
+            }
+            counter.insert(*x, cnt);
+        }
+        visited.clear();
+        if fork_at == NULL {
+            queue.push_back(self.cur_era_genesis_block_arena_index);
+        } else {
+            queue.push_back(self.timer_chain[fork_at_index - 1]);
+        }
+        while let Some(x) = queue.pop_front() {
+            if !self.is_on_timer_chain(x) {
+                let mut timer_chain_height = 0;
+                for referee in &self.arena[x].referees {
+                    if self.arena[*referee].timer_chain_height
+                        > timer_chain_height
+                    {
+                        timer_chain_height =
+                            self.arena[*referee].timer_chain_height;
+                    }
+                }
+                self.arena[x].timer_chain_height = timer_chain_height;
+            }
+            for referer in &self.arena[x].referrers {
+                let cnt = counter.get(referer).unwrap() - 1;
+                if cnt == 0 {
+                    queue.push_back(*referer);
+                }
+                counter.insert(*referer, cnt);
             }
         }
     }

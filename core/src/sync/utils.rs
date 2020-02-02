@@ -73,7 +73,7 @@ pub fn create_simple_block(
 
 /// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
-    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
+    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64, tcr: u64,
     era_epoch_count: u64, dbtype: DbType,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
 {
@@ -157,6 +157,7 @@ pub fn initialize_synchronization_graph(
                 adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
+                timer_chain_block_difficulty_ratio: tcr,
                 era_epoch_count,
                 era_checkpoint_gap: ERA_DEFAULT_CHECKPOINT_GAP,
                 enable_optimistic_execution: false,
