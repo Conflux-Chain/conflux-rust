@@ -32,7 +32,9 @@ use std::{
     sync::Arc,
 };
 
-pub type CallbackType = oneshot::Sender<Result<PivotBlockDecision, Error>>;
+pub type NextSelectedPivotCallbackType =
+    oneshot::Sender<Result<PivotBlockDecision, Error>>;
+pub type NewCandidatePivotCallbackType = oneshot::Sender<Result<bool, Error>>;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
@@ -123,7 +125,10 @@ pub struct ConsensusGraphInner {
     /// start, and equals `cur_era_stable_height` after making a new
     /// checkpoint.
     pub state_boundary_height: u64,
-    waiting_block_hashes: HashMap<H256, CallbackType>,
+    next_selected_pivot_waiting_list:
+        HashMap<H256, NextSelectedPivotCallbackType>,
+    new_candidate_pivot_waiting_list:
+        HashMap<H256, NewCandidatePivotCallbackType>,
 }
 
 pub struct ConsensusGraphNode {
@@ -184,7 +189,8 @@ impl ConsensusGraphInner {
             old_era_block_set: Mutex::new(VecDeque::new()),
             candidate_pivot_tree: CandidatePivotTree::new(NULL, NULLU64),
             state_boundary_height: cur_era_stable_height,
-            waiting_block_hashes: HashMap::new(),
+            next_selected_pivot_waiting_list: HashMap::new(),
+            new_candidate_pivot_waiting_list: HashMap::new(),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -908,17 +914,19 @@ impl ConsensusGraphInner {
 
     pub fn on_new_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
-        peer_id: Option<PeerId>,
-        callback: oneshot::Sender<Result<bool, Error>>,
+        peer_id: Option<PeerId>, callback: NewCandidatePivotCallbackType,
     )
     {
-        // TODO: we may need check some condition and save the callback for
-        // later use.
-        callback.send(Ok(self.new_candidate_pivot(
-            block_hash,
-            parent_hash,
-            height,
-        )));
+        if !self.hash_to_arena_indices.contains_key(block_hash) {
+            self.new_candidate_pivot_waiting_list
+                .insert(*block_hash, callback);
+        } else {
+            callback.send(Ok(self.new_candidate_pivot(
+                block_hash,
+                parent_hash,
+                height,
+            )));
+        }
     }
 
     pub fn new_pivot(&mut self, pivot_arena_index: usize) {
@@ -976,12 +984,26 @@ impl ConsensusGraphInner {
 
         // TODO: persist_terminal_and_block_info
         // TODO: write statistics info
-        if let Some(sender) = self.waiting_block_hashes.remove(&hash) {
-            sender.send(Ok(PivotBlockDecision {
+        if let Some(callback) =
+            self.next_selected_pivot_waiting_list.remove(&hash)
+        {
+            callback.send(Ok(PivotBlockDecision {
                 height: block_header.height(),
                 block_hash: hash,
                 parent_hash: *block_header.parent_hash(),
             }));
+        }
+
+        if let Some(callback) =
+            self.new_candidate_pivot_waiting_list.remove(&hash)
+        {
+            let parent_hash = block_header.parent_hash();
+            let height = block_header.height();
+            callback.send(Ok(self.new_candidate_pivot(
+                block_hash,
+                parent_hash,
+                height,
+            )));
         }
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
@@ -1012,16 +1034,19 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_next_selected_pivot_block(
-        &mut self, last_pivot_hash: &H256, callback: CallbackType,
-    ) {
+        &mut self, last_pivot_hash: &H256,
+        callback: NextSelectedPivotCallbackType,
+    )
+    {
         let arena_index = *self
             .hash_to_arena_indices
             .get(last_pivot_hash)
             .expect("must exist");
-        // TODO: we may use children instead of referees.
+        // FIXME: the logic here is not correctly implemented yet.
+        // FIXME: we may use children instead of referees.
         if self.arena[arena_index].referees.is_empty() {
             // TODO: call generate block function
-            self.waiting_block_hashes.insert(*last_pivot_hash, callback);
+            self.waiting_block_hashes.insert(H256::zero(), callback);
         } else {
             let height = self.candidate_pivot_tree.height(arena_index);
             assert!(height != NULLU64);
