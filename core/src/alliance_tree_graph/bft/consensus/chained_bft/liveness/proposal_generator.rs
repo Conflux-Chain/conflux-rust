@@ -158,10 +158,12 @@ where
 
         // Exclude all the pending transactions: these are all the ancestors of
         // parent (including) up to the root (excluding).
+        /*
         let exclude_payload: Vec<&T> = pending_blocks
             .iter()
             .flat_map(|block| block.payload())
             .collect();
+            */
 
         let block_timestamp = {
             match wait_if_possible(

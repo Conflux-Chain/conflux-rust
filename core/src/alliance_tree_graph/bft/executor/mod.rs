@@ -214,6 +214,8 @@ impl Executor {
     fn init_genesis(&mut self, genesis_txn: Transaction) {
         let genesis_txns = vec![genesis_txn];
 
+        info!("PRE_GENESIS_BLOCK_ID: {}", *PRE_GENESIS_BLOCK_ID);
+
         // Create a block with genesis_txn being the only transaction. Execute
         // it then commit it immediately.
         // We create `PRE_GENESIS_BLOCK_ID` as the parent of the genesis block.
@@ -361,6 +363,11 @@ impl Executor {
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<()>
     {
+        info!(
+            "Received request to commit block {:x}.",
+            ledger_info_with_sigs.ledger_info().consensus_block_id()
+        );
+
         self.db
             .save_ledger_info(&Some(ledger_info_with_sigs.clone()))?;
         Ok(())
