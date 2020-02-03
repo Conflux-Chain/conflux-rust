@@ -6,7 +6,7 @@ use super::{
     http::Server as HttpServer, tcp::Server as TcpServer, TESTNET_VERSION,
 };
 pub use crate::configuration::Configuration;
-use blockgen::BlockGenerator;
+use blockgen::TGBlockGenerator;
 use executable_helpers::helpers::setup_executable;
 use libra_config::config::{ConsensusKeyPair, NodeConfig, RoleType};
 use libra_crypto::secp256k1::Secp256k1PrivateKey;
@@ -63,34 +63,34 @@ use txgen::{
 };
 
 pub struct TgArchiveClientHandle {
-    pub debug_rpc_http_server: Option<HttpServer>,
-    pub rpc_tcp_server: Option<TcpServer>,
-    pub rpc_http_server: Option<HttpServer>,
+    // pub debug_rpc_http_server: Option<HttpServer>,
+    // pub rpc_tcp_server: Option<TcpServer>,
+    // pub rpc_http_server: Option<HttpServer>,
     pub consensus: Arc<ConsensusGraph>,
     pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
     pub sync: Arc<SynchronizationService>,
     pub txgen: Arc<TransactionGenerator>,
     pub txgen_join_handle: Option<thread::JoinHandle<()>>,
-    pub blockgen: Arc<BlockGenerator>,
+    pub blockgen: Arc<TGBlockGenerator>,
     pub secret_store: Arc<SecretStore>,
     pub block_data_manager: Weak<BlockDataManager>,
-    pub runtime: Runtime,
+    // pub runtime: Runtime,
 }
 
 impl TgArchiveClientHandle {
     pub fn into_be_dropped(
         self,
-    ) -> (Weak<BlockDataManager>, Arc<BlockGenerator>, Box<dyn Any>) {
+    ) -> (Weak<BlockDataManager>, Arc<TGBlockGenerator>, Box<dyn Any>) {
         (
             self.block_data_manager,
             self.blockgen,
             Box::new((
                 self.consensus,
                 self.tg_consensus_provider,
-                self.debug_rpc_http_server,
-                self.rpc_tcp_server,
-                self.rpc_http_server,
+                // self.debug_rpc_http_server,
+                // self.rpc_tcp_server,
+                // self.rpc_http_server,
                 self.txpool,
                 self.sync,
                 self.txgen,
@@ -309,8 +309,8 @@ impl TgArchiveClient {
             )));
 
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
-        let blockgen = Arc::new(BlockGenerator::new(
-            sync_graph,
+        let blockgen = Arc::new(TGBlockGenerator::new(
+            data_man.clone(),
             txpool.clone(),
             sync.clone(),
             txgen.clone(),
@@ -327,7 +327,7 @@ impl TgArchiveClient {
             thread::Builder::new()
                 .name("mining".into())
                 .spawn(move || {
-                    BlockGenerator::start_mining(bg, 0);
+                    bg.start();
                 })
                 .expect("Mining thread spawn error");
         } else {
@@ -390,6 +390,7 @@ impl TgArchiveClient {
             None
         };
 
+        /*
         let rpc_impl = Arc::new(RpcImpl::new(
             consensus.clone(),
             sync.clone(),
@@ -468,12 +469,13 @@ impl TgArchiveClient {
                 setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
             },
         )?;
+        */
 
         Ok(TgArchiveClientHandle {
             block_data_manager: Arc::downgrade(&data_man),
-            debug_rpc_http_server,
-            rpc_http_server,
-            rpc_tcp_server,
+            // debug_rpc_http_server,
+            // rpc_http_server,
+            // rpc_tcp_server,
             txpool,
             txgen,
             txgen_join_handle: txgen_handle,
@@ -482,7 +484,7 @@ impl TgArchiveClient {
             tg_consensus_provider: consensus_provider,
             secret_store,
             sync,
-            runtime,
+            // runtime,
         })
     }
 
@@ -565,7 +567,7 @@ impl TgArchiveClient {
 
     pub fn close(handle: TgArchiveClientHandle) {
         let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
-        BlockGenerator::stop(&blockgen);
+        blockgen.stop();
         drop(blockgen);
         drop(to_drop);
 

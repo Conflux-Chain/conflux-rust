@@ -78,7 +78,10 @@ pub mod test_helpers;
 
 pub use crate::{
     block_data_manager::BlockDataManager,
-    consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
+    consensus::{
+        BestInformation, ConsensusGraph, ConsensusGraphTrait,
+        SharedConsensusGraph,
+    },
     light_protocol::{
         Provider as LightProvider, QueryService as LightQueryService,
     },

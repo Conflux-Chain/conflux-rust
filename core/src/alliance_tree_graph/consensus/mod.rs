@@ -7,15 +7,16 @@ mod debug;
 
 use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
-    consensus_new_block_handler::ConsensusNewBlockHandler, CallbackType,
-    ConsensusGraphInner, ConsensusInnerConfig,
+    consensus_new_block_handler::ConsensusNewBlockHandler, ConsensusGraphInner,
+    ConsensusInnerConfig, NewCandidatePivotCallbackType,
+    NextSelectedPivotCallbackType,
 };
 
 use crate::{
     alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
-    consensus::BestInformation,
+    consensus::{BestInformation, ConsensusGraphTrait},
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
@@ -40,7 +41,7 @@ use primitives::{
     EpochId, EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
-use std::{cmp::Reverse, collections::HashSet, sync::Arc};
+use std::{any::Any, cmp::Reverse, collections::HashSet, sync::Arc};
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
@@ -104,10 +105,6 @@ pub struct TreeGraphConsensus {
     /// This is the hash of latest block inserted into consensus graph.
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_inserted_block: Mutex<H256>,
-
-    /// The epoch id of the remotely synchronized state and the trusted block
-    /// whose blame includes it. This is always `None` for archive nodes.
-    pub synced_epoch_id_and_blame_block: Mutex<Option<(EpochId, H256)>>,
 }
 
 pub type SharedConsensusGraph = Arc<TreeGraphConsensus>;
@@ -148,9 +145,8 @@ impl TreeGraphConsensus {
             ),
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
-            synced_epoch_id_and_blame_block: Default::default(),
         };
-        graph.update_best_info(&*graph.inner.read());
+        graph.update_best_info();
         graph
             .txpool
             .notify_new_best_info(graph.best_info.read_recursive().clone())
@@ -199,28 +195,11 @@ impl TreeGraphConsensus {
     }
 
     pub fn get_next_selected_pivot_block(
-        &self, last_pivot_hash: &H256, callback: CallbackType,
+        &self, last_pivot_hash: &H256, callback: NextSelectedPivotCallbackType,
     ) {
         self.inner
             .write()
             .get_next_selected_pivot_block(last_pivot_hash, callback)
-    }
-
-    pub fn best_epoch_number(&self) -> u64 {
-        self.best_info.read_recursive().best_epoch_number
-    }
-
-    pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        self.inner.read_recursive().get_block_epoch_number(hash)
-    }
-
-    pub fn get_block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read_recursive().block_hashes_by_epoch(height)
-            })
     }
 
     /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
@@ -369,108 +348,9 @@ impl TreeGraphConsensus {
         })
     }
 
-    /// This function is called after a new block appended to the
-    /// TreeGraphConsensus. Because BestInformation is often queried outside. We
-    /// store a version of best_info outside the inner to prevent keep
-    /// getting inner locks.
-    pub fn update_best_info(&self, inner: &ConsensusGraphInner) {
-        let mut best_info = self.best_info.write();
-
-        let terminal_hashes = inner.terminal_hashes();
-        let (terminal_block_hashes, bounded_terminal_block_hashes) =
-            if terminal_hashes.len() > REFEREE_BOUND {
-                let mut tmp = Vec::new();
-                let best_idx = inner.pivot_chain.last().unwrap();
-                for hash in terminal_hashes.iter() {
-                    let a_idx = inner.hash_to_arena_indices.get(hash).unwrap();
-                    let a_lca = inner.lca(*a_idx, *best_idx);
-                    tmp.push((inner.arena[a_lca].height, hash));
-                }
-                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
-                tmp.split_off(REFEREE_BOUND);
-                let bounded_hashes =
-                    tmp.iter().map(|(_, b)| (*b).clone()).collect();
-                (Some(terminal_hashes), bounded_hashes)
-            } else {
-                (None, terminal_hashes)
-            };
-
-        *best_info = Arc::new(BestInformation {
-            best_block_hash: inner.best_block_hash(),
-            best_epoch_number: inner.best_epoch_number(),
-            current_difficulty: 0.into(),
-            terminal_block_hashes,
-            bounded_terminal_block_hashes,
-        });
-    }
-
-    /// This is the main function that SynchronizationGraph calls to deliver a
-    /// new block to the consensus graph.
-    pub fn on_new_block(
-        &self, hash: &H256, _ignore_body: bool, update_best_info: bool,
-    ) {
-        let _timer =
-            MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
-        self.statistics.inc_consensus_graph_processed_block_count();
-
-        let block_header = self
-            .data_man
-            .block_header_by_hash(hash)
-            .expect("header must exist");
-
-        {
-            let inner = &mut *self.inner.write();
-            inner.new_block(&block_header);
-
-            // Reset pivot chain according to checkpoint information during
-            // recovery
-            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                inner.set_pivot_to_stable(hash);
-                self.update_best_info(inner);
-            }
-            *self.latest_inserted_block.lock() = *hash;
-
-            // Skip updating best info during recovery
-            if update_best_info {
-                self.update_best_info(inner);
-                self.txpool
-                    .notify_new_best_info(self.best_info.read().clone())
-                    // FIXME: propogate error.
-                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
-            }
-
-            if inner.inner_conf.enable_state_expose {
-                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
-                {
-                    let local_info = self
-                        .data_man
-                        .local_block_info_from_db(hash)
-                        .expect("local block info must exist in db");
-                    let era_block = inner.arena[*arena_index].era_block;
-                    let era_block_hash = if era_block != NULL {
-                        inner.arena[era_block].hash
-                    } else {
-                        Default::default()
-                    };
-                    STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
-                        ConsensusGraphBlockState {
-                            block_hash: *hash,
-                            best_block_hash: inner.best_block_hash(),
-                            block_status: local_info.get_status(),
-                            past_era_weight: 0.into(),
-                            era_block_hash,
-                            stable: true,
-                            adaptive: false,
-                        },
-                    )
-                }
-            }
-        }
-    }
-
     pub fn on_new_candidate_pivot(
         &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
-        callback: oneshot::Sender<Result<bool, Error>>,
+        callback: NewCandidatePivotCallbackType,
     )
     {
         self.inner.write().on_new_candidate_pivot(
@@ -484,37 +364,6 @@ impl TreeGraphConsensus {
 
     pub fn on_commit(&mut self, committable_blocks: &Vec<H256>) {
         self.inner.write().commit(committable_blocks)
-    }
-
-    pub fn best_block_hash(&self) -> H256 {
-        self.best_info.read_recursive().best_block_hash
-    }
-
-    pub fn get_hash_from_epoch_number(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<H256, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| self.inner.read().epoch_hash(height))
-    }
-
-    pub fn get_transaction_info_by_hash(
-        &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
-        // We need to hold the inner lock to ensure that tx_address and receipts
-        // are consistent
-        let inner = self.inner.read();
-        if let Some((receipt, address)) =
-            inner.get_transaction_receipt_with_address(hash)
-        {
-            let block = self.data_man.block_by_hash(
-                &address.block_hash,
-                false, /* update_cache */
-            )?;
-            let transaction = (*block.transactions[address.index]).clone();
-            Some((transaction, receipt, address))
-        } else {
-            None
-        }
     }
 
     pub fn get_transaction_receipt_and_block_info(
@@ -565,35 +414,6 @@ impl TreeGraphConsensus {
             .get_account(&address)
             .map(|maybe_acc| maybe_acc.map_or(0.into(), |acc| acc.nonce))
             .map_err(|err| format!("Get transaction count error: {:?}", err))
-    }
-
-    /// Wait until the best state has been executed, and return the state
-    pub fn get_best_state(&self) -> State {
-        let best_state_hash = self.inner.read().best_block_hash();
-        self.executor.wait_for_result(best_state_hash);
-        // FIXME: it's only absolute safe with lock, otherwise storage /
-        // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
-        let (_state_index_guard, best_state_index) = self
-            .data_man
-            .get_state_readonly_index(&best_state_hash)
-            .into();
-        if let Ok(state) = self
-            .data_man
-            .storage_manager
-            .get_state_no_commit(best_state_index.unwrap())
-        {
-            state
-                .map(|db| {
-                    State::new(
-                        StateDb::new(db),
-                        0.into(),           /* account_start_nonce */
-                        Default::default(), /* vm */
-                    )
-                })
-                .expect("Best state has been executed")
-        } else {
-            panic!("get_best_state: Error for hash {}", best_state_hash);
-        }
     }
 
     /// Returns the total number of blocks processed in consensus graph.
@@ -775,52 +595,266 @@ impl TreeGraphConsensus {
         self.executor.call_virtual(tx, &epoch_id)
     }
 
-    // FIXME store this in BlockDataManager
-    /// Return the sequence number of the current era genesis hash.
-    pub fn current_era_genesis_seq_num(&self) -> u64 {
-        let inner = self.inner.read_recursive();
-        inner.arena[inner.cur_era_genesis_block_arena_index].sequence_number
-    }
-
     /// Get the number of processed blocks (i.e., the number of calls to
     /// on_new_block()
     pub fn get_processed_block_count(&self) -> usize {
         self.statistics.get_consensus_graph_processed_block_count()
     }
+}
 
-    /// This function is called when preparing a new block for generation. It
-    /// propagate the ReadGuard up to make the read-lock live longer so that
-    /// the whole block packing process can be atomic.
-    pub fn get_best_info(&self) -> Arc<BestInformation> {
-        self.best_info.read_recursive().clone()
+impl Drop for TreeGraphConsensus {
+    fn drop(&mut self) { self.executor.stop(); }
+}
+
+impl ConsensusGraphTrait for TreeGraphConsensus {
+    fn as_any(&self) -> &dyn Any { self }
+
+    /// This is the main function that SynchronizationGraph calls to deliver a
+    /// new block to the consensus graph.
+    fn on_new_block(
+        &self, hash: &H256, _ignore_body: bool, update_best_info: bool,
+    ) {
+        let notify_tx_pool = update_best_info;
+        let mut update_best_info = update_best_info;
+        let _timer =
+            MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
+        self.statistics.inc_consensus_graph_processed_block_count();
+
+        let block_header = self
+            .data_man
+            .block_header_by_hash(hash)
+            .expect("header must exist");
+
+        {
+            let inner = &mut *self.inner.write();
+            inner.new_block(&block_header);
+
+            // Reset pivot chain according to checkpoint information during
+            // recovery
+            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
+                inner.set_pivot_to_stable(hash);
+                update_best_info = true;
+            }
+            *self.latest_inserted_block.lock() = *hash;
+
+            if inner.inner_conf.enable_state_expose {
+                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
+                {
+                    let local_info = self
+                        .data_man
+                        .local_block_info_from_db(hash)
+                        .expect("local block info must exist in db");
+                    let era_block = inner.arena[*arena_index].era_block;
+                    let era_block_hash = if era_block != NULL {
+                        inner.arena[era_block].hash
+                    } else {
+                        Default::default()
+                    };
+                    STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
+                        ConsensusGraphBlockState {
+                            block_hash: *hash,
+                            best_block_hash: inner.best_block_hash(),
+                            block_status: local_info.get_status(),
+                            past_era_weight: 0.into(),
+                            era_block_hash,
+                            stable: true,
+                            adaptive: false,
+                        },
+                    )
+                }
+            }
+        }
+        if update_best_info {
+            self.update_best_info();
+        }
+        if notify_tx_pool {
+            self.txpool
+                .notify_new_best_info(self.best_info.read().clone())
+                // FIXME: propogate error.
+                .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        }
     }
+
+    fn expected_difficulty(&self, _parent_hash: &H256) -> U256 { U256::zero() }
 
     /// This function returns the set of blocks that are two eras farther from
     /// current era. They can be safely garbage collected.
-    pub fn retrieve_old_era_blocks(&self) -> Option<H256> {
+    fn retrieve_old_era_blocks(&self) -> Option<H256> {
         self.inner.read().old_era_block_set.lock().pop_front()
-    }
-
-    /// Return the epoch that we are going to sync the state
-    pub fn get_to_sync_epoch_id(&self) -> EpochId {
-        self.inner.read().get_to_sync_epoch_id()
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
     /// avoiding intermediate redundant computation triggered by
     /// on_new_block().
-    pub fn construct_pivot_state(&self) {
+    fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
         // Ensure that `state_valid` of the first valid block after
         // cur_era_stable_genesis is set
         self.new_block_handler.construct_pivot_state(inner);
     }
 
-    pub fn best_info(&self) -> Arc<BestInformation> {
-        self.best_info.read().clone()
+    fn best_info(&self) -> Arc<BestInformation> {
+        self.best_info.read_recursive().clone()
     }
-}
 
-impl Drop for TreeGraphConsensus {
-    fn drop(&mut self) { self.executor.stop(); }
+    fn best_epoch_number(&self) -> u64 {
+        self.best_info.read_recursive().best_epoch_number
+    }
+
+    fn best_block_hash(&self) -> H256 {
+        self.best_info.read_recursive().best_block_hash
+    }
+
+    /// FIXME store this in BlockDataManager
+    /// Return the sequence number of the current era genesis hash.
+    fn current_era_genesis_seq_num(&self) -> u64 {
+        let inner = self.inner.read_recursive();
+        inner.arena[inner.cur_era_genesis_block_arena_index].sequence_number
+    }
+
+    fn get_data_manager(&self) -> &Arc<BlockDataManager> { &self.data_man }
+
+    fn get_tx_pool(&self) -> &SharedTransactionPool { &self.txpool }
+
+    fn get_statistics(&self) -> &SharedStatistics { &self.statistics }
+
+    fn get_hash_from_epoch_number(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<H256, String> {
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| self.inner.read().epoch_hash(height))
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| {
+                self.inner.read_recursive().block_hashes_by_epoch(height)
+            })
+    }
+
+    fn get_transaction_info_by_hash(
+        &self, hash: &H256,
+    ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
+        // We need to hold the inner lock to ensure that tx_address and receipts
+        // are consistent
+        let inner = self.inner.read();
+        if let Some((receipt, address)) =
+            inner.get_transaction_receipt_with_address(hash)
+        {
+            let block = self.data_man.block_by_hash(
+                &address.block_hash,
+                false, /* update_cache */
+            )?;
+            let transaction = (*block.transactions[address.index]).clone();
+            Some((transaction, receipt, address))
+        } else {
+            None
+        }
+    }
+
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.inner.read_recursive().get_block_epoch_number(hash)
+    }
+
+    /// Wait until the best state has been executed, and return the state
+    fn get_best_state(&self) -> State {
+        let best_state_hash = self.inner.read().best_block_hash();
+        self.executor.wait_for_result(best_state_hash);
+        // FIXME: it's only absolute safe with lock, otherwise storage /
+        // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
+        let (_state_index_guard, best_state_index) = self
+            .data_man
+            .get_state_readonly_index(&best_state_hash)
+            .into();
+        if let Ok(state) = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(best_state_index.unwrap())
+        {
+            state
+                .map(|db| {
+                    State::new(
+                        StateDb::new(db),
+                        0.into(),           /* account_start_nonce */
+                        Default::default(), /* vm */
+                    )
+                })
+                .expect("Best state has been executed")
+        } else {
+            panic!("get_best_state: Error for hash {}", best_state_hash);
+        }
+    }
+
+    fn get_trusted_blame_block_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<H256> {
+        None
+    }
+
+    /// Return the epoch that we are going to sync the state
+    fn get_to_sync_epoch_id(&self) -> EpochId {
+        self.inner.read().get_to_sync_epoch_id()
+    }
+
+    fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
+        None
+    }
+
+    fn first_trusted_header_starting_from(
+        &self, height: u64, blame_bound: Option<u32>,
+    ) -> Option<u64> {
+        None
+    }
+
+    fn set_initial_sequence_number(&self, initial_sn: u64) {
+        self.inner.write().set_initial_sequence_number(initial_sn);
+    }
+
+    fn check_mining_adaptive_block(
+        &self, parent_hash: &H256, referees: &Vec<H256>, difficulty: &U256,
+    ) -> bool {
+        true
+    }
+
+    /// This function is called after a new block appended to the
+    /// TreeGraphConsensus. Because BestInformation is often queried outside. We
+    /// store a version of best_info outside the inner to prevent keep
+    /// getting inner locks.
+    fn update_best_info(&self) {
+        let inner = self.inner.read();
+        let mut best_info = self.best_info.write();
+
+        let terminal_hashes = inner.terminal_hashes();
+        let (terminal_block_hashes, bounded_terminal_block_hashes) =
+            if terminal_hashes.len() > REFEREE_BOUND {
+                let mut tmp = Vec::new();
+                let best_idx = inner.pivot_chain.last().unwrap();
+                for hash in terminal_hashes.iter() {
+                    let a_idx = inner.hash_to_arena_indices.get(hash).unwrap();
+                    let a_lca = inner.lca(*a_idx, *best_idx);
+                    tmp.push((inner.arena[a_lca].height, hash));
+                }
+                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
+                tmp.split_off(REFEREE_BOUND);
+                let bounded_hashes =
+                    tmp.iter().map(|(_, b)| (*b).clone()).collect();
+                (Some(terminal_hashes), bounded_hashes)
+            } else {
+                (None, terminal_hashes)
+            };
+
+        *best_info = Arc::new(BestInformation {
+            best_block_hash: inner.best_block_hash(),
+            best_epoch_number: inner.best_epoch_number(),
+            current_difficulty: 0.into(),
+            terminal_block_hashes,
+            bounded_terminal_block_hashes,
+        });
+    }
+
+    fn latest_inserted_block(&self) -> H256 {
+        *self.latest_inserted_block.lock()
+    }
 }

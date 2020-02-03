@@ -4,7 +4,7 @@
 
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
-    consensus::ConsensusGraphInner,
+    consensus::{ConsensusGraph, ConsensusGraphInner, ConsensusGraphTrait},
     parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
     sync::{
         message::DynamicCapability,
@@ -331,11 +331,8 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
                     );
                 // Set trusted_blame_block to ensure that state_valid
                 // can be passed to Block-related phases
-                *sync_handler
-                    .graph
-                    .consensus
-                    .synced_epoch_id_and_blame_block
-                    .lock() = Some((epoch_to_sync, trusted_blame_block));
+                *sync_handler.synced_epoch_id_and_blame_block.lock() =
+                    Some((epoch_to_sync, trusted_blame_block));
             }
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
@@ -343,11 +340,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .update_status(epoch_to_sync, io, sync_handler);
         if self.state_sync.status() == Status::Completed {
             self.state_sync.restore_execution_state(sync_handler);
-            *sync_handler
-                .graph
-                .consensus
-                .synced_epoch_id_and_blame_block
-                .lock() =
+            *sync_handler.synced_epoch_id_and_blame_block.lock() =
                 Some((epoch_to_sync, self.state_sync.trusted_blame_block()));
             SyncPhaseType::CatchUpRecoverBlockFromDB
         } else {
@@ -413,23 +406,30 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
 
     fn start(
         &self, _io: &dyn NetworkContext,
-        _sync_handler: &SynchronizationProtocolHandler,
+        sync_handler: &SynchronizationProtocolHandler,
     )
     {
         info!("start phase {:?}", self.name());
         {
+            // FIXME: consider alliance tree graph
+            let consensus = self
+                .graph
+                .consensus
+                .as_any()
+                .downcast_ref::<ConsensusGraph>()
+                .expect("downcast should succeed");
             // Acquire the lock of synchronization graph first to make sure no
             // more blocks will be inserted into synchronization graph.
             let old_sync_inner = &mut *self.graph.inner.write();
             // Wait until all the graph ready blocks in queue are inserted into
             // consensus graph.
             while *self.graph.latest_graph_ready_block.lock()
-                != *self.graph.consensus.latest_inserted_block.lock()
+                != consensus.latest_inserted_block()
             {
                 thread::sleep(time::Duration::from_millis(100));
             }
             // Now, we can safely acquire the lock of consensus graph.
-            let old_consensus_inner = &mut *self.graph.consensus.inner.write();
+            let old_consensus_inner = &mut *consensus.inner.write();
             // We should assign a new instance_id here since we construct a new
             // consensus graph.
             old_sync_inner.data_man.initialize_instance_id();
@@ -453,7 +453,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // In both cases, we should set `state_availability_boundary` to
             // `[cur_era_stable_height, cur_era_stable_height]`.
             if let Some((epoch_synced, trusted_blame_block)) =
-                &*self.graph.consensus.synced_epoch_id_and_blame_block.lock()
+                &*sync_handler.synced_epoch_id_and_blame_block.lock()
             {
                 let epoch_synced_height = self
                     .graph
@@ -474,7 +474,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 // This map will be used to recover `state_valid` info for each
                 // pivot block before `trusted_blame_block`.
                 let mut pivot_block_state_valid_map =
-                    self.graph.consensus.pivot_block_state_valid_map.lock();
+                    consensus.pivot_block_state_valid_map.lock();
                 let mut cur = *old_consensus_inner
                     .hash_to_arena_indices
                     .get(trusted_blame_block)
@@ -521,10 +521,9 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                         cur_era_stable_height,
                     );
             }
-            self.graph.consensus.update_best_info(&new_consensus_inner);
             *old_consensus_inner = new_consensus_inner;
             // FIXME: We may need to some information of `confirmation_meter`.
-            self.graph.consensus.confirmation_meter.reset();
+            consensus.confirmation_meter.reset();
             let new_sync_inner = SynchronizationGraphInner::with_genesis_block(
                 self.graph
                     .data_man
@@ -540,9 +539,10 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 .statistics
                 .clear_sync_and_consensus_graph_statistics();
         }
+        self.graph.consensus.update_best_info();
         self.graph
             .consensus
-            .txpool
+            .get_tx_pool()
             .notify_new_best_info(self.graph.consensus.best_info())
             // FIXME: propogate error.
             .expect(&concat!(file!(), ":", line!(), ":", column!()));

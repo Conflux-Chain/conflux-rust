@@ -13,7 +13,7 @@ use primitives::{Receipt, SignedTransaction, TransactionAddress};
 use std::sync::Arc;
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers, UniqueId},
         message::{msgid, GetTxInfos, TxInfo},
@@ -66,7 +66,7 @@ pub struct TxInfos {
 
 impl TxInfos {
     pub fn new(
-        block_txs: Arc<BlockTxs>, consensus: Arc<ConsensusGraph>,
+        block_txs: Arc<BlockTxs>, consensus: SharedConsensusGraph,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
         receipts: Arc<Receipts>,
     ) -> Self
