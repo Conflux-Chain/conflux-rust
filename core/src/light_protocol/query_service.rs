@@ -87,8 +87,8 @@ impl QueryService {
     }
 
     fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
-        let res: Result<T, Error> =
-            self.network.with_context(LIGHT_PROTOCOL_ID, |io| Ok(f(io)));
+        let res: Result<T, String> =
+            self.network.with_context(LIGHT_PROTOCOL_ID, |io| f(io));
         res.unwrap()
     }
 
@@ -101,12 +101,7 @@ impl QueryService {
         //     self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
         // )
 
-        let fut = {
-            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-            self.handler.state_roots.request_now(&io, epoch)
-        };
-        fut.await
+        self.with_io(|io| self.handler.state_roots.request_now(io, epoch)).await
         // TODO: timeout
     }
 
@@ -119,12 +114,7 @@ impl QueryService {
         //     self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
         // )
 
-        let fut = {
-            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-            self.handler.state_entries.request_now(&io, epoch, key.clone())
-        };
-        fut.await
+        self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone())).await
         // TODO: timeout
     }
 
@@ -176,12 +166,7 @@ impl QueryService {
         //     self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         // )
 
-        let fut = {
-            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-            self.handler.tx_infos.request_now(&io, hash)
-        };
-        fut.await
+        self.with_io(|io| self.handler.tx_infos.request_now(io, hash)).await
         // TODO: timeout
     }
 
@@ -205,15 +190,10 @@ impl QueryService {
             address
         );
 
-        // self.retrieve_state_root(epoch)
         // trigger state root request but don't wait for result
         // TODO: figure out a better way
-        {
-            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-            self.handler.state_roots.request_now(&io, epoch);
-        }
-        //////////
+        // let _ = self.retrieve_state_root(epoch);
+        let _ = self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
         let key = Self::account_key(&address);
         let entry = self.retrieve_state_entry(epoch, key).await;
@@ -253,7 +233,7 @@ impl QueryService {
         // return Err(String::from("err during get_account"));
     }
 
-    pub fn get_code(
+    pub async fn get_code(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Vec<u8>>, String> {
         info!("get_code epoch={:?} address={:?}", epoch, address);
@@ -263,21 +243,19 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        // TODO: make whole function async
         // TODO: handle errors
-        // let acc = self.retrieve_account(epoch, address).await;
+        let acc = self.retrieve_account(epoch, address).await
+            .map_err(|e| format!("Unable to retrieve account: {:?}", e))?;
 
-        // let code_hash = match acc {
-        //     Some(acc) => acc.code_hash,
-        //     None => return Err(format!(
-        //         "Account {:?} (number={:?}) does not exist",
-        //         address, epoch,
-        //     )),
-        // };
+        let code_hash = match acc {
+            Some(acc) => acc.code_hash,
+            None => return Err(format!(
+                "Account {:?} (number={:?}) does not exist",
+                address, epoch,
+            )),
+        };
 
-        // self.retrieve_code(epoch, address, code_hash).await
-
-        return Err(String::from("err during get_code"));
+        Ok(self.retrieve_code(epoch, address, code_hash).await)
     }
 
     pub async fn get_tx_info(&self, hash: H256) -> TxInfo {
@@ -296,8 +274,6 @@ impl QueryService {
             .map(|(state_root, _, _)| state_root);
 
         (tx, receipt, address, epoch, root)
-
-        // return Err(String::from("err during get_tx_info"));
     }
 
     /// Relay raw transaction to all peers.
@@ -335,15 +311,8 @@ impl QueryService {
 
         // TODO: make whole function async
         // TODO: handle errors
-        let fut = {
-            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-            self.handler.txs.request_now(&io, hash)
-        };
-        fut.await
+        self.with_io(|io| self.handler.txs.request_now(io, hash)).await
         // TODO: timeout
-
-        // return Err(String::from("err"));
     }
 
     /// Apply filter to all logs within a receipt.

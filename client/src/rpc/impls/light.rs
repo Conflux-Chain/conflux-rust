@@ -173,7 +173,7 @@ impl RpcImpl {
 
     fn code(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
+    ) -> BoxFuture<Bytes> {
         let address: H160 = address.into();
         let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -182,11 +182,19 @@ impl RpcImpl {
             address, epoch
         );
 
-        self.light
-            .get_code(epoch, address)
-            .map(|code| code.unwrap_or_default())
-            .map(Bytes::new)
-            .map_err(RpcError::invalid_params)
+        // we clone `self.light` so that the async block keep no reference to `self`
+        // otherwise we would have lifetime conflicts
+        let light = self.light.clone();
+
+        // let fut : Future<Item = RpcAccount, Error = RpcError> = async {
+        let fut = async move {
+            light.get_code(epoch, address).await
+                .map(|code| code.unwrap_or_default())
+                .map(Bytes::new)
+                .map_err(RpcError::invalid_params)
+        };
+
+        Box::new(fut.boxed().compat())
     }
 
     #[allow(unused_variables)]
@@ -395,7 +403,7 @@ impl Cfx for CfxHandler {
             fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
-            fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;

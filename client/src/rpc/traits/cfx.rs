@@ -62,7 +62,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getCode")]
     fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes>;
+    ) -> BoxFuture<Bytes>;
 
     //        /// Returns content of the storage at given address.
     //        #[rpc(name = "cfx_getStorageAt")]

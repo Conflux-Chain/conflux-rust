@@ -71,7 +71,7 @@ impl RpcImpl {
 
     fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
+    ) -> BoxFuture<Bytes> {
         let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
         let address: H160 = addr.into();
         info!(
@@ -79,10 +79,12 @@ impl RpcImpl {
             address, epoch_number
         );
 
-        self.consensus
+        let res = self.consensus
             .get_code(address, epoch_number.into())
             .map(Bytes::new)
-            .map_err(RpcError::invalid_params)
+            .map_err(RpcError::invalid_params);
+
+        future::result(res).boxed()
     }
 
     fn balance(
@@ -609,7 +611,7 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
-            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
