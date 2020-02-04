@@ -9,7 +9,7 @@ use crate::{
             metrics::TX_HANDLE_TIMER, msgid, Context, DynamicCapability,
             Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
@@ -21,7 +21,7 @@ use rlp_derive::{
     RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
 };
 use siphasher::sip::SipHasher24;
-use std::{collections::HashSet, hash::Hasher, time::Duration};
+use std::{any::Any, collections::HashSet, hash::Hasher, time::Duration};
 
 #[derive(Debug, PartialEq, RlpDecodableWrapper, RlpEncodableWrapper)]
 pub struct Transactions {
@@ -253,6 +253,12 @@ pub struct GetTransactions {
     pub tx_hashes: HashSet<H256>,
 }
 
+impl AsAny for GetTransactions {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 impl Request for GetTransactions {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
         conf.transaction_request_timeout
@@ -383,6 +389,12 @@ pub struct GetTransactionsFromTxHashes {
     pub window_index: usize,
     pub indices: Vec<usize>,
     pub tx_hashes: HashSet<H256>,
+}
+
+impl AsAny for GetTransactionsFromTxHashes {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetTransactionsFromTxHashes {

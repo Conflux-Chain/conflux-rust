@@ -10,20 +10,26 @@ use crate::{
             Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
 use primitives::Block;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlocks {
     pub request_id: RequestId,
     pub with_public: bool,
     pub hashes: Vec<H256>,
+}
+
+impl AsAny for GetBlocks {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetBlocks {

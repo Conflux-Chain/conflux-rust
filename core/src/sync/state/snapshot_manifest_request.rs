@@ -10,7 +10,7 @@ use crate::{
     },
     sync::{
         message::{Context, DynamicCapability, Handleable, KeyContainer},
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         state::{
             snapshot_manifest_response::SnapshotManifestResponse,
             storage::RangedManifest,
@@ -21,7 +21,7 @@ use crate::{
 use cfx_types::H256;
 use primitives::{EpochNumber, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestRequest {
@@ -249,6 +249,12 @@ impl SnapshotManifestRequest {
 
         Some((state_root_vec, receipt_blame_vec, bloom_blame_vec))
     }
+}
+
+impl AsAny for SnapshotManifestRequest {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for SnapshotManifestRequest {
