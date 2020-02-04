@@ -13,7 +13,7 @@ use crate::{
     message::{Message, RequestId},
     sync::{
         message::{Key, KeyContainer},
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
@@ -23,7 +23,7 @@ use futures::channel::oneshot;
 use libra_types::account_address::AccountAddress;
 use primitives::TransactionWithSignature;
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::{any::Any, sync::Arc, time::Duration};
 
 //#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,6 +37,12 @@ pub struct BlockRetrievalRpcRequest {
         Option<oneshot::Sender<Result<Box<dyn RpcResponse>, Error>>>,
     #[serde(skip)]
     pub timeout: Duration,
+}
+
+impl AsAny for BlockRetrievalRpcRequest {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for BlockRetrievalRpcRequest {

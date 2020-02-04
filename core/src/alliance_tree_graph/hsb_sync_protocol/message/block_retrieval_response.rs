@@ -11,11 +11,11 @@ use crate::{
         hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest,
     },
     message::RequestId,
-    sync::Error,
+    sync::{request_manager::AsAny, Error},
 };
 use libra_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockRetrievalRpcResponse<P> {
@@ -24,6 +24,12 @@ pub struct BlockRetrievalRpcResponse<P> {
 }
 
 impl<P: Payload> RpcResponse for BlockRetrievalRpcResponse<P> {}
+
+impl<P: Payload> AsAny for BlockRetrievalRpcResponse<P> {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
 
 impl<P: Payload> Handleable<P> for BlockRetrievalRpcResponse<P> {
     fn handle(self, ctx: &Context<P>) -> Result<(), Error> {

@@ -24,9 +24,10 @@ use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature};
 pub use request_handler::{
-    Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
+    AsAny, Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
 use std::{
+    any::TypeId,
     cmp::Ordering,
     collections::{binary_heap::BinaryHeap, HashSet},
     sync::Arc,

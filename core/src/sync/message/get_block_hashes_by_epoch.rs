@@ -9,17 +9,23 @@ use crate::{
         message::{
             Context, GetBlockHashesResponse, Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ProtocolConfiguration,
     },
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHashesByEpoch {
     pub request_id: RequestId,
     pub epochs: Vec<u64>,
+}
+
+impl AsAny for GetBlockHashesByEpoch {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetBlockHashesByEpoch {
