@@ -5,13 +5,16 @@
 use super::super::{
     consensus_inner::{
         consensus_executor::{ConsensusExecutor, EpochExecutionTask},
-        ConsensusGraphInner, NULL,
+        ConsensusGraphInner, NewCandidatePivotCallbackType,
+        NextSelectedPivotCallbackType, NULL,
     },
     ConsensusConfig,
 };
 
 use crate::{
+    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
+    parameters::{consensus::*, consensus_internal::*},
     statistics::SharedStatistics,
     sync::delta::CHECKPOINT_DUMP_MANAGER,
     SharedTransactionPool,
@@ -54,12 +57,24 @@ impl ConsensusNewBlockHandler {
     #[allow(dead_code)]
     fn make_checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
-        _will_execute: bool,
+        will_execute: bool, executor: &ConsensusExecutor,
     )
     {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
         let new_era_stable_height =
             new_era_height + inner.inner_conf.era_epoch_count;
+        let stable_era_genesis =
+            inner.get_pivot_block_arena_index(new_era_stable_height);
+
+        // In transaction-execution phases (`RecoverBlockFromDb` or `Normal`),
+        // ensure all blocks on the pivot chain before stable_era_genesis
+        // have state_valid computed
+        if will_execute {
+            // Make sure state execution is finished before setting lower_bound
+            // to the new_checkpoint_era_genesis.
+            executor
+                .wait_for_result(inner.arena[new_era_block_arena_index].hash);
+        }
 
         // We first compute the set of blocks inside the new era.
         let mut new_era_block_arena_index_set = HashSet::new();
@@ -260,6 +275,149 @@ impl ConsensusNewBlockHandler {
         );
         self.data_man
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
+    }
+
+    pub fn on_new_block(
+        &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
+    ) {
+        let hash = block_header.hash();
+        let parent_hash = block_header.parent_hash();
+        let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
+        let block_status = self
+            .data_man
+            .local_block_info_from_db(&hash)
+            .map(|info| info.get_status())
+            .unwrap_or(BlockStatus::Pending);
+        // current block is outside era or it's parent is outside era
+        if parent_index.is_none()
+            || inner.arena[*parent_index.unwrap()].era_block == NULL
+        {
+            debug!(
+                "parent={:?} not in consensus graph, set header to pending",
+                parent_hash
+            );
+            let sn = inner.insert_out_era_block(block_header);
+            let block_info = LocalBlockInfo::new(
+                block_status,
+                sn,
+                self.data_man.get_instance_id(),
+            );
+            self.data_man
+                .insert_local_block_info_to_db(&hash, block_info);
+            return;
+        }
+
+        let (me, indices_len) = inner.insert(&block_header);
+        self.statistics
+            .set_consensus_graph_inserted_block_count(indices_len);
+
+        // handle pending callbacks
+        if let Some(callback) =
+            inner.next_selected_pivot_waiting_list.remove(&hash)
+        {
+            callback.send(Ok(PivotBlockDecision {
+                height: block_header.height(),
+                block_hash: hash,
+                parent_hash: *block_header.parent_hash(),
+            }));
+        }
+
+        if let Some(callback) =
+            inner.new_candidate_pivot_waiting_list.remove(&hash)
+        {
+            let height = block_header.height();
+            callback.send(Ok(inner.validate_and_add_candidate_pivot(
+                &hash,
+                parent_hash,
+                height,
+            )));
+        }
+
+        // FIXME: fill the correctly value of `persist_terminal`.
+        self.persist_terminal_and_block_info(
+            inner,
+            me,
+            block_status,
+            true, /* persist_terminal */
+        );
+
+        debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
+    }
+
+    pub fn on_new_candidate_pivot(
+        &self, inner: &mut ConsensusGraphInner,
+        pivot_decision: &PivotBlockDecision,
+        callback: NewCandidatePivotCallbackType,
+    )
+    {
+        inner.new_candidate_pivot(
+            &pivot_decision.block_hash,
+            &pivot_decision.parent_hash,
+            pivot_decision.height,
+            callback,
+        );
+    }
+
+    pub fn on_commit(
+        &self, inner: &mut ConsensusGraphInner, committable_blocks: &Vec<H256>,
+    ) {
+        for block_hash in committable_blocks {
+            inner.commit(block_hash);
+
+            // Note that after the checkpoint (if happens), the
+            // old_pivot_chain_len value will become obsolete
+            let pivot_arena_index = *inner.pivot_chain.last().unwrap();
+            let new_pivot_era_block =
+                inner.get_era_genesis_block_with_parent(pivot_arena_index, 0);
+            let new_era_height = inner.arena[new_pivot_era_block].height;
+            let new_checkpoint_era_genesis =
+                self.should_form_checkpoint_at(inner);
+            if new_checkpoint_era_genesis
+                != inner.cur_era_genesis_block_arena_index
+            {
+                info!(
+                    "Working on new checkpoint, old checkpoint block {} height {}",
+                    &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                    inner.cur_era_genesis_height
+                );
+
+                let stable_era_genesis_arena_index = inner.ancestor_at(
+                    pivot_arena_index,
+                    inner.cur_era_stable_height,
+                );
+                // FIXME: fill correct value of `will_execute`
+                ConsensusNewBlockHandler::make_checkpoint_at(
+                    inner,
+                    new_checkpoint_era_genesis,
+                    true, /* will_execute */
+                    &self.executor,
+                );
+                info!(
+                    "New checkpoint formed at block {} stable block {} height {}",
+                    &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                    &inner.arena[stable_era_genesis_arena_index].hash,
+                    inner.cur_era_genesis_height
+                );
+            }
+
+            // recycle out era transactions
+            if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
+                < inner.pivot_index_to_height(inner.pivot_chain.len())
+                && inner.last_recycled_era_block != new_pivot_era_block
+            {
+                self.recycle_tx_outside_era(inner, new_pivot_era_block);
+                inner.last_recycled_era_block = new_pivot_era_block;
+            }
+            // TODO: change block_status_in_db in disk
+            // FIXME: fill correct value
+            self.executor.enqueue_epoch(EpochExecutionTask::new(
+                inner.arena[pivot_arena_index].hash,
+                inner.get_epoch_block_hashes(pivot_arena_index),
+                inner.get_epoch_start_block_number(pivot_arena_index),
+                None,  /* reward_info */
+                false, /* debug_record */
+            ));
+        }
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
