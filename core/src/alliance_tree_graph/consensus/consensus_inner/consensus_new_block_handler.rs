@@ -12,7 +12,6 @@ use super::super::{
 };
 
 use crate::{
-    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     parameters::{consensus::*, consensus_internal::*},
     statistics::SharedStatistics,
@@ -21,6 +20,7 @@ use crate::{
 };
 use cfx_types::H256;
 use hibitset::BitSetLike;
+use libra_types::block_info::PivotBlockDecision;
 use primitives::{BlockHeader, SignedTransaction};
 use std::{
     collections::{HashSet, VecDeque},
