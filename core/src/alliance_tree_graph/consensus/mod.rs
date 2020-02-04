@@ -351,21 +351,21 @@ impl TreeGraphConsensus {
     }
 
     pub fn on_new_candidate_pivot(
-        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
+        &self, pivot_decision: &PivotBlockDecision, _peer_id: Option<PeerId>,
         callback: NewCandidatePivotCallbackType,
     )
     {
-        self.inner.write().on_new_candidate_pivot(
-            &pivot_decision.block_hash,
-            &pivot_decision.parent_hash,
-            pivot_decision.height,
-            peer_id,
+        let inner = &mut *self.inner.write();
+        self.new_block_handler.on_new_candidate_pivot(
+            inner,
+            pivot_decision,
             callback,
         );
     }
 
-    pub fn on_commit(&mut self, committable_blocks: &Vec<H256>) {
-        self.inner.write().commit(committable_blocks)
+    pub fn on_commit(&self, committable_blocks: &Vec<H256>) {
+        let inner = &mut *self.inner.write();
+        self.new_block_handler.on_commit(inner, committable_blocks);
     }
 
     pub fn get_transaction_receipt_and_block_info(
@@ -629,7 +629,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
 
         {
             let inner = &mut *self.inner.write();
-            inner.new_block(&block_header);
+            self.new_block_handler.on_new_block(inner, &block_header);
 
             // Reset pivot chain according to checkpoint information during
             // recovery

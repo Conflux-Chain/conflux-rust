@@ -114,7 +114,7 @@ pub struct ConsensusGraphInner {
     /// The cache to store Anticone information of each node. This could be
     /// very large so we periodically remove old ones in the cache.
     sequence_number_of_block_entrance: u64,
-    //last_recycled_era_block: usize,
+    pub last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph
     pub old_era_block_set: Mutex<VecDeque<H256>>,
     pub candidate_pivot_tree: CandidatePivotTree,
@@ -125,9 +125,9 @@ pub struct ConsensusGraphInner {
     /// start, and equals `cur_era_stable_height` after making a new
     /// checkpoint.
     pub state_boundary_height: u64,
-    next_selected_pivot_waiting_list:
+    pub next_selected_pivot_waiting_list:
         HashMap<H256, NextSelectedPivotCallbackType>,
-    new_candidate_pivot_waiting_list:
+    pub new_candidate_pivot_waiting_list:
         HashMap<H256, NewCandidatePivotCallbackType>,
 }
 
@@ -181,7 +181,7 @@ impl ConsensusGraphInner {
             data_man: data_man.clone(),
             inner_conf,
             sequence_number_of_block_entrance: 0,
-            // last_recycled_era_block: 0,
+            last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
             candidate_pivot_tree: CandidatePivotTree::new(NULL, NULLU64),
             state_boundary_height: cur_era_stable_height,
@@ -192,7 +192,7 @@ impl ConsensusGraphInner {
         // NOTE: Only genesis block will be first inserted into consensus graph
         // and then into synchronization graph. All the other blocks will be
         // inserted first into synchronization graph then consensus graph.
-        let (genesis_arena_index, _, _) = inner.insert(&genesis_block_header);
+        let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
         inner.inclusive_weight_tree.make_tree(genesis_arena_index);
         inner.arena[genesis_arena_index].epoch_number = cur_era_genesis_height;
@@ -413,7 +413,7 @@ impl ConsensusGraphInner {
     /// Insert a block into consensus, return `(arena_index, indices_len,
     /// sequence_number)`. If this block has no in memory referees, this block
     /// will be simply ignored.
-    fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize, u64) {
+    fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
         let mut referees: Vec<usize> = Vec::new();
         for hash in block_header.referee_hashes().iter() {
             if let Some(x) = self.hash_to_arena_indices.get(hash) {
@@ -469,7 +469,7 @@ impl ConsensusGraphInner {
             hash, index,
         );
 
-        (index, self.hash_to_arena_indices.len(), sn)
+        (index, self.hash_to_arena_indices.len())
     }
 
     /// Try to insert an outside era block, return it's sequence number. If both
@@ -894,7 +894,7 @@ impl ConsensusGraphInner {
 
     /// Given a new `PivotBlockDecision` check whether it is valid. If it is
     /// valid this block will be added to `candidate_pivot_tree`.
-    pub fn new_candidate_pivot(
+    pub fn validate_and_add_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
     ) -> bool {
         if !self.hash_to_arena_indices.contains_key(parent_hash) {
@@ -915,16 +915,16 @@ impl ConsensusGraphInner {
             .add_leaf(parent_arena_index, arena_index)
     }
 
-    pub fn on_new_candidate_pivot(
+    pub fn new_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
-        peer_id: Option<PeerId>, callback: NewCandidatePivotCallbackType,
+        callback: NewCandidatePivotCallbackType,
     )
     {
         if !self.hash_to_arena_indices.contains_key(block_hash) {
             self.new_candidate_pivot_waiting_list
                 .insert(*block_hash, callback);
         } else {
-            callback.send(Ok(self.new_candidate_pivot(
+            callback.send(Ok(self.validate_and_add_candidate_pivot(
                 block_hash,
                 parent_hash,
                 height,
@@ -941,98 +941,28 @@ impl ConsensusGraphInner {
         self.compute_metadata(
             self.arena[pivot_arena_index].height - self.cur_era_genesis_height,
         );
-
-        // TODO: recycle out era transactions
-        // TODO: change block_status_in_db in disk
-        // TODO: execution
     }
 
-    pub fn new_block(&mut self, block_header: &BlockHeader) {
-        let hash = block_header.hash();
-        let parent_hash = block_header.parent_hash();
-        let parent_index = self.hash_to_arena_indices.get(&parent_hash);
-        let block_status_in_db = self
-            .data_man
-            .local_block_info_from_db(&hash)
-            .map(|info| info.get_status())
-            .unwrap_or(BlockStatus::Pending);
-        // current block is outside era or it's parent is outside era
-        if parent_index.is_none()
-            || self.arena[*parent_index.unwrap()].era_block == NULL
-        {
-            debug!(
-                "parent={:?} not in consensus graph, set header to pending",
-                parent_hash
-            );
-            let sn = self.insert_out_era_block(block_header);
-            let block_info = LocalBlockInfo::new(
-                block_status_in_db,
-                sn,
-                self.data_man.get_instance_id(),
-            );
-            self.data_man
-                .insert_local_block_info_to_db(&hash, block_info);
-            return;
-        }
-
-        let (me, indices_len, sn) = self.insert(&block_header);
-        let block_info = LocalBlockInfo::new(
-            block_status_in_db,
-            sn,
-            self.data_man.get_instance_id(),
-        );
-        self.data_man
-            .insert_local_block_info_to_db(&hash, block_info);
-
-        // TODO: persist_terminal_and_block_info
-        // TODO: write statistics info
-        if let Some(callback) =
-            self.next_selected_pivot_waiting_list.remove(&hash)
-        {
-            callback.send(Ok(PivotBlockDecision {
-                height: block_header.height(),
-                block_hash: hash,
-                parent_hash: *block_header.parent_hash(),
-            }));
-        }
-
-        if let Some(callback) =
-            self.new_candidate_pivot_waiting_list.remove(&hash)
-        {
-            let parent_hash = block_header.parent_hash();
-            let height = block_header.height();
-            callback.send(Ok(self.new_candidate_pivot(
-                &hash,
-                parent_hash,
-                height,
-            )));
-        }
-        debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
-    }
-
-    pub fn commit(&mut self, committable_blocks: &Vec<H256>) {
+    pub fn commit(&mut self, block_hash: &H256) {
         // TODO: check those blocks are valid
-        let mut last = *self.pivot_chain.last().unwrap();
-        for block_hash in committable_blocks {
-            let arena_index = self.hash_to_arena_indices[block_hash];
-            // FIXIME: we may have to reassign the parent?
-            // self.arena[last].children.push(arena_index);
-            // self.arena[arena_index].parent = Some(last);
-            // self.inclusive_weight_tree.link(arena_index, last);
-            // self.arena[arena_index].height = self.arena[last].height + 1;
-            self.data_man.insert_epoch_block_hash_to_db(
-                self.arena[arena_index].height,
-                block_hash,
-            );
-            self.data_man.insert_block_height_to_db(
-                block_hash,
-                self.arena[arena_index].height,
-            );
-            self.new_pivot(arena_index);
-            last = arena_index;
-        }
-        self.candidate_pivot_tree =
-            CandidatePivotTree::new(last, self.arena[last].height);
+        let arena_index = self.hash_to_arena_indices[block_hash];
+        let parent_arena_index = self.arena[arena_index].parent;
+        assert!(*self.pivot_chain.last().unwrap() == parent_arena_index);
+        self.candidate_pivot_tree.make_root(arena_index);
+        // FIXIME: we may have to reassign the parent?
+        // self.arena[last].children.push(arena_index);
+        // self.arena[arena_index].parent = Some(last);
+        // self.inclusive_weight_tree.link(arena_index, last);
+        // self.arena[arena_index].height = self.arena[last].height + 1;
+        self.data_man.insert_epoch_block_hash_to_db(
+            self.arena[arena_index].height,
+            block_hash,
+        );
+        self.data_man.insert_block_height_to_db(
+            block_hash,
+            self.arena[arena_index].height,
+        );
+        self.new_pivot(arena_index);
     }
 
     pub fn get_next_selected_pivot_block(

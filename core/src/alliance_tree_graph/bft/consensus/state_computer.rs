@@ -149,7 +149,7 @@ impl StateComputer for ExecutionProxy {
                 committed_blocks.push(p.block_hash);
             }
         }
-        self.tg_consensus.inner.write().commit(&committed_blocks);
+        self.tg_consensus.on_commit(&committed_blocks);
 
         self.executor
             .commit_blocks(committable_blocks, finality_proof)?;
