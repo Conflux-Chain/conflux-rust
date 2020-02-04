@@ -66,7 +66,6 @@ pub struct TgArchiveClientHandle {
     // pub debug_rpc_http_server: Option<HttpServer>,
     // pub rpc_tcp_server: Option<TcpServer>,
     // pub rpc_http_server: Option<HttpServer>,
-    pub consensus: Arc<ConsensusGraph>,
     pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
     pub sync: Arc<SynchronizationService>,
@@ -86,7 +85,6 @@ impl TgArchiveClientHandle {
             self.block_data_manager,
             self.blockgen,
             Box::new((
-                self.consensus,
                 self.tg_consensus_provider,
                 // self.debug_rpc_http_server,
                 // self.rpc_tcp_server,
@@ -195,17 +193,7 @@ impl TgArchiveClient {
 
         let statistics = Arc::new(Statistics::new());
 
-        let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
-        let consensus = Arc::new(ConsensusGraph::new(
-            conf.consensus_config(),
-            vm,
-            txpool.clone(),
-            statistics.clone(),
-            data_man.clone(),
-            pow_config.clone(),
-        ));
-
         let vm = VmFactory::new(1024 * 32);
         let tg_consensus = Arc::new(TreeGraphConsensus::new(
             conf.tg_consensus_config(),
@@ -221,7 +209,7 @@ impl TgArchiveClient {
         let sync_config = conf.sync_graph_config();
 
         let sync_graph = Arc::new(SynchronizationGraph::new(
-            consensus.clone(),
+            tg_consensus.clone(),
             verification_config,
             pow_config.clone(),
             sync_config,
@@ -235,7 +223,7 @@ impl TgArchiveClient {
         };
 
         let light_provider = Arc::new(LightProvider::new(
-            consensus.clone(),
+            tg_consensus.clone(),
             sync_graph.clone(),
             Arc::downgrade(&network),
             txpool.clone(),
@@ -278,7 +266,7 @@ impl TgArchiveClient {
             keccak(network.net_key_pair().expect("Error node key").public());
         let consensus_provider = Self::setup_tg_environment(
             &mut config,
-            tg_consensus,
+            tg_consensus.clone(),
             network.clone(),
             own_node_hash,
             sync.get_request_manager(),
@@ -293,7 +281,7 @@ impl TgArchiveClient {
         }
 
         let txgen = Arc::new(TransactionGenerator::new(
-            consensus.clone(),
+            tg_consensus.clone(),
             txpool.clone(),
             sync.clone(),
             secret_store.clone(),
@@ -480,7 +468,6 @@ impl TgArchiveClient {
             txgen,
             txgen_join_handle: txgen_handle,
             blockgen,
-            consensus,
             tg_consensus_provider: consensus_provider,
             secret_store,
             sync,
