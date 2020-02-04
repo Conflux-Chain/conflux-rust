@@ -101,9 +101,12 @@ impl QueryService {
         //     self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
         // )
 
-        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-        self.handler.state_roots.request_now(&io, epoch).await
+        let fut = {
+            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+            self.handler.state_roots.request_now(&io, epoch)
+        };
+        fut.await
         // TODO: timeout
     }
 
@@ -116,9 +119,12 @@ impl QueryService {
         //     self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
         // )
 
-        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-        self.handler.state_entries.request_now(&io, epoch, key.clone()).await
+        let fut = {
+            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+            self.handler.state_entries.request_now(&io, epoch, key.clone())
+        };
+        fut.await
         // TODO: timeout
     }
 
@@ -170,9 +176,12 @@ impl QueryService {
         //     self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         // )
 
-        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-        self.handler.tx_infos.request_now(&io, hash).await
+        let fut = {
+            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+            self.handler.tx_infos.request_now(&io, hash)
+        };
+        fut.await
         // TODO: timeout
     }
 
@@ -199,9 +208,11 @@ impl QueryService {
         // self.retrieve_state_root(epoch)
         // trigger state root request but don't wait for result
         // TODO: figure out a better way
-        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-        self.handler.state_roots.request_now(&io, epoch);
+        {
+            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+            self.handler.state_roots.request_now(&io, epoch);
+        }
         //////////
 
         let key = Self::account_key(&address);
@@ -324,11 +335,12 @@ impl QueryService {
 
         // TODO: make whole function async
         // TODO: handle errors
-        let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
-        let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
-        let tx = self.handler.txs.request_now(&io, hash).await;
-        info!("!!!!!!!!!! await complete: {:?}", tx);
-        tx
+        let fut = {
+            let io0 = self.network.get_io_context(LIGHT_PROTOCOL_ID);
+            let io = self.network.get_network_context(&io0, LIGHT_PROTOCOL_ID);
+            self.handler.txs.request_now(&io, hash)
+        };
+        fut.await
         // TODO: timeout
 
         // return Err(String::from("err"));
