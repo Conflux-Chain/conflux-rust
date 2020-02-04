@@ -16,6 +16,7 @@ use crate::{
 };
 use cfx_types::H256;
 use libra_types::{
+    block_info::PivotBlockDecision,
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
     transaction::SignedTransaction,
 };
@@ -79,10 +80,8 @@ pub trait StateComputer: Send + Sync {
         &self,
         // The block that will be computed.
         block: &Block<Self::Payload>,
-        /* The executed trees of parent block.
-         *parent_executed_trees: &ExecutedTrees,
-         * The last committed trees.
-         *committed_trees: &ExecutedTrees, */
+        // The last pivot selection after executing the parent block.
+        last_pivot: Option<PivotBlockDecision>,
     ) -> Result<ProcessedVMOutput>;
 
     /// Send a successful commit. A future is fulfilled when the state is

@@ -3,7 +3,7 @@
 
 use crate::{
     account_address::AccountAddress,
-    block_info::{BlockInfo, Round},
+    block_info::{BlockInfo, PivotBlockDecision, Round},
     crypto_proxies::ValidatorSet,
     transaction::Version,
     validator_verifier::{ValidatorVerifier, VerifyError},
@@ -86,6 +86,10 @@ impl LedgerInfo {
 
     pub fn timestamp_usecs(&self) -> u64 { self.commit_info.timestamp_usecs() }
 
+    pub fn pivot(&self) -> Option<&PivotBlockDecision> {
+        self.commit_info.pivot_decision()
+    }
+
     pub fn next_validator_set(&self) -> Option<&ValidatorSet> {
         self.commit_info.next_validator_set()
     }
@@ -126,11 +130,19 @@ impl TryFrom<crate::proto::types::LedgerInfo> for LedgerInfo {
             } else {
                 None
             };
+
+        let pivot = if let Some(pivot_proto) = proto.pivot {
+            Some(PivotBlockDecision::try_from(pivot_proto)?)
+        } else {
+            None
+        };
+
         Ok(LedgerInfo::new(
             BlockInfo::new(
                 epoch,
                 round,
                 consensus_block_id,
+                pivot,
                 transaction_accumulator_hash,
                 version,
                 timestamp_usecs,
@@ -157,6 +169,7 @@ impl From<LedgerInfo> for crate::proto::types::LedgerInfo {
                 .next_validator_set()
                 .cloned()
                 .map(Into::into),
+            pivot: ledger_info.pivot().cloned().map(Into::into),
         }
     }
 }

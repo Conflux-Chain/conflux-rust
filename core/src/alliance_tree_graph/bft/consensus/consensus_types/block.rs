@@ -11,7 +11,7 @@ use anyhow::{bail, ensure, format_err};
 use libra_crypto::hash::{CryptoHash, HashValue};
 use libra_types::{
     account_address::{AccountAddress, ADDRESS_LENGTH},
-    block_info::BlockInfo,
+    block_info::{BlockInfo, PivotBlockDecision},
     block_metadata::BlockMetadata,
     crypto_proxies::{
         LedgerInfoWithSignatures, Signature, ValidatorSet, ValidatorSigner,
@@ -94,6 +94,7 @@ impl<T> Block<T> {
 
     pub fn gen_block_info(
         &self, executed_state_id: HashValue, version: Version,
+        pivot: Option<PivotBlockDecision>,
         next_validator_set: Option<ValidatorSet>,
     ) -> BlockInfo
     {
@@ -101,6 +102,7 @@ impl<T> Block<T> {
             self.epoch(),
             self.round(),
             self.id(),
+            pivot,
             executed_state_id,
             version,
             self.timestamp_usecs(),
@@ -134,10 +136,16 @@ where T: Default + PartialEq + Serialize
         ledger_info: &LedgerInfo,
     ) -> Self {
         assert!(ledger_info.next_validator_set().is_some());
+        let pivot = match ledger_info.pivot() {
+            Some(pivot) => Some(pivot.clone()),
+            None => None,
+        };
+
         let ancestor = BlockInfo::new(
             ledger_info.epoch(),
             0,
             HashValue::zero(),
+            pivot,
             ledger_info.transaction_accumulator_hash(),
             ledger_info.version(),
             ledger_info.timestamp_usecs(),

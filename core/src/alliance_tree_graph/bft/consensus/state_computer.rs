@@ -23,33 +23,13 @@ use crate::alliance_tree_graph::{
     hsb_sync_protocol::sync_protocol::{PeerState, Peers},
 };
 use futures::{channel::oneshot, executor::block_on};
-use libra_types::event::EventKey;
+use libra_types::block_info::PivotBlockDecision;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
     sync::Arc,
     time::{Duration, Instant},
 };
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct PivotBlockDecision {
-    pub height: u64,
-    pub block_hash: H256,
-    pub parent_hash: H256,
-}
-
-impl PivotBlockDecision {
-    pub fn pivot_select_event_key() -> EventKey {
-        EventKey::new_from_address(
-            &account_config::pivot_chain_select_address(),
-            2,
-        )
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        lcs::from_bytes(bytes).map_err(Into::into)
-    }
-}
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
@@ -97,17 +77,25 @@ impl StateComputer for ExecutionProxy {
         &self,
         // The block to be executed.
         block: &Block<Self::Payload>,
+        // The last pivot selection after executing the parent block.
+        last_pivot: Option<PivotBlockDecision>,
     ) -> Result<ProcessedVMOutput>
     {
         // TODO: figure out error handling for the prologue txn
         let output = self.executor.execute_block(
             Self::transactions_from_block(block),
+            last_pivot,
             block.parent_id(),
             block.id(),
         )?;
 
         // Check whether pivot block selection is valid.
-        if let Some(p) = output.pivot_block.as_ref() {
+        if output.pivot_updated {
+            ensure!(
+                output.pivot_block.is_some(),
+                "There must be pivot selection if updated."
+            );
+            let p = output.pivot_block.as_ref().unwrap();
             let peer_hash =
                 H256::from_slice(block.author().unwrap().to_vec().as_slice());
             let peer_id = self

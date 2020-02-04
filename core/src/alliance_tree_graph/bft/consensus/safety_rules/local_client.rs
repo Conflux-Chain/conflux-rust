@@ -9,7 +9,7 @@ use super::{
     },
     ConsensusState, Error, SafetyRules, TSafetyRules,
 };
-use libra_types::crypto_proxies::Signature;
+use libra_types::{block_info::PivotBlockDecision, crypto_proxies::Signature};
 use std::sync::{Arc, RwLock};
 
 /// A local interface into SafetyRules. Constructed in such a way that the
@@ -40,12 +40,16 @@ impl<T: Payload> TSafetyRules<T> for LocalClient<T> {
     }
 
     fn construct_and_sign_vote(
-        &mut self, vote_proposal: &VoteProposal<T>,
-    ) -> Result<Vote, Error> {
+        &mut self,
+        vote_proposal: &VoteProposal<T>,
+        // The pivot selection by executing the proposed block of the vote.
+        pivot: Option<PivotBlockDecision>,
+    ) -> Result<Vote, Error>
+    {
         self.internal
             .write()
             .unwrap()
-            .construct_and_sign_vote(vote_proposal)
+            .construct_and_sign_vote(vote_proposal, pivot)
     }
 
     fn sign_proposal(

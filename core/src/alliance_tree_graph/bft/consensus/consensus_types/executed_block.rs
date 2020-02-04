@@ -5,7 +5,7 @@ use super::{block::Block, common::Round, quorum_cert::QuorumCert};
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use super::super::super::executor::{ProcessedVMOutput, StateComputeResult};
 use libra_crypto::hash::HashValue;
-use libra_types::block_info::BlockInfo;
+use libra_types::block_info::{BlockInfo, PivotBlockDecision};
 use std::{
     fmt::{Display, Formatter},
     sync::Arc,
@@ -59,6 +59,10 @@ impl<T> ExecutedBlock<T> {
     //    self.output.executed_trees()
     //}
 
+    pub fn executed_pivot(&self) -> Option<PivotBlockDecision> {
+        self.output.pivot_block.clone()
+    }
+
     pub fn id(&self) -> HashValue { self.block().id() }
 
     pub fn output(&self) -> &Arc<ProcessedVMOutput> { &self.output }
@@ -90,6 +94,7 @@ impl<T> ExecutedBlock<T> {
         self.block().gen_block_info(
             HashValue::zero(), /* executed_state.state_id */
             0,                 /* executed_state.version */
+            executed_state.pivot,
             executed_state.validators,
         )
     }

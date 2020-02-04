@@ -14,6 +14,7 @@ use libra_config::config::NodeConfig;
 use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
 use libra_types::{
+    block_info::PivotBlockDecision,
     crypto_proxies::{ValidatorPublicKeys, ValidatorSet, ValidatorVerifier},
     ledger_info::LedgerInfo,
 };
@@ -57,6 +58,7 @@ pub struct RecoveryData<T> {
     // The last vote message sent by this validator.
     last_vote: Option<Vote>,
     root: (Block<T>, QuorumCert, QuorumCert),
+    root_executed_pivot: Option<PivotBlockDecision>,
     //root_executed_trees: ExecutedTrees,
     // 1. the blocks guarantee the topological ordering - parent <- child.
     // 2. all blocks are children of the root.
@@ -76,6 +78,7 @@ impl<T: Payload> RecoveryData<T> {
         mut blocks: Vec<Block<T>>,
         mut quorum_certs: Vec<QuorumCert>,
         storage_ledger: &LedgerInfo,
+        root_executed_pivot: Option<PivotBlockDecision>,
         //root_executed_trees: ExecutedTrees,
         highest_timeout_certificate: Option<TimeoutCertificate>,
         validator_keys: ValidatorSet,
@@ -114,6 +117,7 @@ impl<T: Payload> RecoveryData<T> {
                 _ => None,
             },
             root,
+            root_executed_pivot,
             //root_executed_trees,
             blocks,
             quorum_certs,
@@ -137,12 +141,14 @@ impl<T: Payload> RecoveryData<T> {
         self,
     ) -> (
         (Block<T>, QuorumCert, QuorumCert),
+        Option<PivotBlockDecision>,
         //ExecutedTrees,
         Vec<Block<T>>,
         Vec<QuorumCert>,
     ) {
         (
             self.root,
+            self.root_executed_pivot,
             //self.root_executed_trees,
             self.blocks,
             self.quorum_certs,
@@ -330,6 +336,7 @@ impl<T: Payload> PersistentStorage<T> for StorageWriteProxy {
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
         let validator_set = startup_info.get_validator_set().clone();
+        let root_executed_pivot = startup_info.get_pivot_decision();
         //let root_executed_trees =
         // ExecutedTrees::from(startup_info.committed_tree_state);
         let mut initial_data = RecoveryData::new(
@@ -337,6 +344,7 @@ impl<T: Payload> PersistentStorage<T> for StorageWriteProxy {
             blocks,
             quorum_certs,
             startup_info.latest_ledger_info.ledger_info(),
+            root_executed_pivot,
             //root_executed_trees,
             highest_timeout_certificate,
             validator_set,

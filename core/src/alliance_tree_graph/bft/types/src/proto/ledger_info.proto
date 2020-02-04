@@ -6,6 +6,7 @@ syntax = "proto3";
 package types;
 
 import "validator_set.proto";
+import "pivot_block_decision.proto";
 
 /// Even though we don't always need all hashes, we pass them in and return them
 /// always so that we keep them in sync on the client and don't make the client
@@ -71,6 +72,9 @@ message LedgerInfo {
   // An optional field with the validator set for the next epoch in case it's the last
   // ledger info in the current epoch.
   ValidatorSet next_validator_set = 8;
+
+  // An optional field with pivot block selection.
+  PivotBlockDecision pivot = 9;
 }
 
 /// The validator node returns this structure which includes signatures

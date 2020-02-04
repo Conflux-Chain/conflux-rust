@@ -13,7 +13,6 @@ use super::consensus::consensus_inner::{
 };
 
 use crate::{
-    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::{BestInformation, ConsensusGraphTrait},
@@ -30,6 +29,7 @@ use crate::{
 };
 use cfx_types::{Address, Bloom, H256, U256};
 use futures::channel::oneshot;
+use libra_types::block_info::PivotBlockDecision;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::PeerId;
 use parking_lot::{Mutex, RwLock};
@@ -195,8 +195,10 @@ impl TreeGraphConsensus {
     }
 
     pub fn get_next_selected_pivot_block(
-        &self, last_pivot_hash: &H256, callback: NextSelectedPivotCallbackType,
-    ) {
+        &self, last_pivot_hash: Option<&H256>,
+        callback: NextSelectedPivotCallbackType,
+    )
+    {
         self.inner
             .write()
             .get_next_selected_pivot_block(last_pivot_hash, callback)

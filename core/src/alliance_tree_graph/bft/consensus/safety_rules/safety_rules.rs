@@ -14,7 +14,7 @@ use super::{
 };
 use libra_crypto::hash::HashValue;
 use libra_types::{
-    block_info::BlockInfo,
+    block_info::{BlockInfo, PivotBlockDecision},
     crypto_proxies::{Signature, ValidatorSigner},
     ledger_info::LedgerInfo,
 };
@@ -121,8 +121,12 @@ impl<T: Payload> TSafetyRules<T> for SafetyRules<T> {
     /// @TODO verify QC correctness
     /// @TODO verify epoch on vote proposal
     fn construct_and_sign_vote(
-        &mut self, vote_proposal: &VoteProposal<T>,
-    ) -> Result<Vote, Error> {
+        &mut self,
+        vote_proposal: &VoteProposal<T>,
+        // The pivot selection by executing the proposed block of the vote.
+        pivot: Option<PivotBlockDecision>,
+    ) -> Result<Vote, Error>
+    {
         let proposed_block = vote_proposal.block();
 
         if proposed_block.round() <= self.persistent_storage.last_voted_round()
@@ -163,6 +167,7 @@ impl<T: Payload> TSafetyRules<T> for SafetyRules<T> {
                 proposed_block.gen_block_info(
                     new_tree.root_hash(),
                     new_tree.version(),
+                    pivot,
                     vote_proposal.next_validator_set().cloned(),
                 ),
                 proposed_block.quorum_cert().certified_block().clone(),

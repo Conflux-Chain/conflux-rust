@@ -8,7 +8,7 @@ use super::{
     },
     ConsensusState, Error,
 };
-use libra_types::crypto_proxies::Signature;
+use libra_types::{block_info::PivotBlockDecision, crypto_proxies::Signature};
 
 /// Interface for SafetyRules
 pub trait TSafetyRules<T> {
@@ -26,7 +26,10 @@ pub trait TSafetyRules<T> {
 
     /// Attempts to vote for a given proposal following the voting rules.
     fn construct_and_sign_vote(
-        &mut self, vote_proposal: &VoteProposal<T>,
+        &mut self,
+        vote_proposal: &VoteProposal<T>,
+        // The pivot selection by executing the proposed block of the vote.
+        pivot: Option<PivotBlockDecision>,
     ) -> Result<Vote, Error>;
 
     /// As the holder of the private key, SafetyRules also signs proposals or

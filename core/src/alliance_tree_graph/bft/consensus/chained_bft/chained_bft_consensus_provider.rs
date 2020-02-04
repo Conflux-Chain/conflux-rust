@@ -59,11 +59,7 @@ pub struct ChainedBftProvider {
 
 impl ChainedBftProvider {
     pub fn new(
-        node_config: &mut NodeConfig,
-        /*network_sender: ConsensusNetworkSender,
-         *network_events: ConsensusNetworkEvents,
-         */
-        executor: Arc<Executor>,
+        node_config: &mut NodeConfig, executor: Arc<Executor>,
         /* synchronizer_client: Arc<StateSyncClient>, */
         tg_consensus: Arc<TreeGraphConsensus>,
     ) -> Self
@@ -75,9 +71,7 @@ impl ChainedBftProvider {
             .build()
             .expect("Failed to create Tokio runtime!");
 
-        let initial_setup = Self::initialize_setup(
-            /* network_sender, network_events, */ node_config,
-        );
+        let initial_setup = Self::initialize_setup(node_config);
         let config = ChainedBftSMRConfig::from_node_config(&node_config);
         debug!("[Consensus] My peer: {:?}", config.author);
 

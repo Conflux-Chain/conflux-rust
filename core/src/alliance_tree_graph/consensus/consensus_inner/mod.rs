@@ -7,7 +7,6 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
-    alliance_tree_graph::bft::consensus::state_computer::PivotBlockDecision,
     block_data_manager::{
         BlockDataManager, BlockExecutionResultWithEpoch, BlockStatus,
         LocalBlockInfo,
@@ -20,6 +19,7 @@ use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
 use futures::channel::oneshot;
 use hibitset::BitSet;
+use libra_types::block_info::PivotBlockDecision;
 use link_cut_tree::SizeMinLinkCutTree;
 use network::PeerId;
 use parking_lot::Mutex;
@@ -1036,13 +1036,19 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_next_selected_pivot_block(
-        &mut self, last_pivot_hash: &H256,
+        &mut self, last_pivot_hash: Option<&H256>,
         callback: NextSelectedPivotCallbackType,
     )
     {
+        let last_pivot_hash = if let Some(p) = last_pivot_hash {
+            *p
+        } else {
+            self.data_man.true_genesis.hash()
+        };
+
         let arena_index = *self
             .hash_to_arena_indices
-            .get(last_pivot_hash)
+            .get(&last_pivot_hash)
             .expect("must exist");
         // FIXME: the logic here is not correctly implemented yet.
         // FIXME: we may use children instead of referees.
@@ -1068,7 +1074,7 @@ impl ConsensusGraphInner {
                 callback.send(Ok(PivotBlockDecision {
                     height: height + 1,
                     block_hash: self.arena[next_pivot].hash,
-                    parent_hash: *last_pivot_hash,
+                    parent_hash: last_pivot_hash,
                 }));
             }
         }

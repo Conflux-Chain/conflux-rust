@@ -35,8 +35,11 @@ use network::{
 };
 */
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::{
-        sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
+    alliance_tree_graph::{
+        bft::consensus::consensus_types::proposal_msg::ProposalUncheckedSignatures,
+        hsb_sync_protocol::{
+            sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
+        },
     },
     message::{Message, RequestId},
 };
@@ -275,6 +278,27 @@ impl<T: Payload> NetworkTask<T> {
             }
         }
         */
+    }
+
+    pub async fn process_proposal(
+        &self, peer_id: AccountAddress, proposal: ProposalMsg<T>,
+    ) -> anyhow::Result<()> {
+        let proposal = ProposalUncheckedSignatures(proposal);
+        if proposal.epoch() != self.epoch() {
+            return self
+                .different_epoch_tx
+                .push(peer_id, (proposal.epoch(), peer_id));
+        }
+
+        let proposal = proposal
+            .validate_signatures(&self.epoch_info.read().unwrap().verifier)?
+            .verify_well_formed()?;
+        ensure!(
+            proposal.proposal().author() == Some(peer_id),
+            "proposal received must be from the sending peer"
+        );
+        debug!("Received proposal {}", proposal);
+        self.proposal_tx.push(peer_id, proposal)
     }
 
     pub async fn process_vote(

@@ -17,14 +17,13 @@ use super::super::super::{
 use anyhow::{bail, ensure, format_err};
 //use libra_logger::prelude::*;
 use crate::alliance_tree_graph::{
-    bft::consensus::{
-        state_computer::PivotBlockDecision, state_replication::TxnTransformer,
-    },
+    bft::consensus::state_replication::TxnTransformer,
     consensus::TreeGraphConsensus,
 };
 use futures::channel::oneshot;
 use keylib::KeyPair;
 use libra_types::{
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     language_storage::TypeTag,
     transaction::{ChangeSet, RawTransaction, SignedTransaction},
@@ -237,17 +236,20 @@ where
             }
         };
 
-        let parent_block = pending_blocks.last().unwrap();
+        let parent_block = if let Some(p) = pending_blocks.last() {
+            p.clone()
+        } else {
+            self.block_store.root()
+        };
         let (callback, cb_receiver) = oneshot::channel();
-        self.tg_consensus.get_next_selected_pivot_block(
-            &parent_block
-                .output()
-                .pivot_block()
-                .as_ref()
-                .unwrap()
-                .block_hash,
-            callback,
-        );
+        let last_pivot_hash =
+            if let Some(p) = parent_block.output().pivot_block() {
+                Some(&p.block_hash)
+            } else {
+                None
+            };
+        self.tg_consensus
+            .get_next_selected_pivot_block(last_pivot_hash, callback);
 
         let response = cb_receiver.await?;
         let pivot_decision = match response {

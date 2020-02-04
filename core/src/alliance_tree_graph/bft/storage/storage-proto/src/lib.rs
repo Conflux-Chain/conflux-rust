@@ -36,6 +36,7 @@ use libra_crypto::HashValue;
 use libra_types::{
     account_address::AccountAddress,
     account_state_blob::AccountStateBlob,
+    block_info::PivotBlockDecision,
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorSet},
     proof::SparseMerkleProof,
     transaction::{TransactionListWithProof, TransactionToCommit, Version},
@@ -541,6 +542,13 @@ impl StartupInfo {
                 .latest_validator_set
                 .as_ref()
                 .expect("Validator set must exist."),
+        }
+    }
+
+    pub fn get_pivot_decision(&self) -> Option<PivotBlockDecision> {
+        match self.latest_ledger_info.ledger_info().pivot() {
+            Some(p) => Some(p.clone()),
+            None => None,
         }
     }
 }

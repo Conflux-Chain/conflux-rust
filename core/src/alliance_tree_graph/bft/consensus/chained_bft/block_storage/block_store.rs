@@ -26,8 +26,9 @@ use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer
 use futures::executor::block_on;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_types::crypto_proxies::ValidatorSet;
-use libra_types::crypto_proxies::{
-    LedgerInfoWithSignatures, ValidatorVerifier,
+use libra_types::{
+    block_info::PivotBlockDecision,
+    crypto_proxies::{LedgerInfoWithSignatures, ValidatorVerifier},
 };
 use std::{
     collections::{vec_deque::VecDeque, HashMap},
@@ -74,10 +75,15 @@ impl<T: Payload> BlockStore<T> {
     ) -> Self
     {
         let highest_tc = initial_data.highest_timeout_certificate();
-        let (root, /* root_executed_trees, */ blocks, quorum_certs) =
-            initial_data.take();
+        let (
+            root,
+            root_executed_pivot,
+            /* root_executed_trees, */ blocks,
+            quorum_certs,
+        ) = initial_data.take();
         let inner = Arc::new(RwLock::new(Self::build_block_tree(
             root,
+            root_executed_pivot,
             //root_executed_trees,
             blocks,
             quorum_certs,
@@ -94,6 +100,7 @@ impl<T: Payload> BlockStore<T> {
 
     fn build_block_tree(
         root: (Block<T>, QuorumCert, QuorumCert),
+        root_executed_pivot: Option<PivotBlockDecision>,
         //root_executed_trees: ExecutedTrees,
         blocks: Vec<Block<T>>,
         quorum_certs: Vec<QuorumCert>,
@@ -108,7 +115,8 @@ impl<T: Payload> BlockStore<T> {
             //vec![], /* not used */
             //root_executed_trees,
             root_qc.certified_block().next_validator_set().cloned(),
-            None,
+            root_executed_pivot,
+            true /* pivot_updated */, // It doesn't matter to set true or false.
         );
 
         let executed_root_block = ExecutedBlock::new(root_block, root_output);
@@ -135,11 +143,13 @@ impl<T: Payload> BlockStore<T> {
                 .clone();
                 */
 
+            let last_pivot = tree
+                .get_block(&block.parent_id())
+                .expect("Parent block must exist")
+                .executed_pivot();
+
             let output = state_computer
-                .compute(
-                    &block, /* , &parent_trees,
-                            * tree.root().executed_trees() */
-                )
+                .compute(&block, last_pivot)
                 .expect("fail to rebuild scratchpad");
 
             // if this block is certified, ensure we agree with the
@@ -210,6 +220,7 @@ impl<T: Payload> BlockStore<T> {
     pub async fn rebuild(
         &self,
         root: (Block<T>, QuorumCert, QuorumCert),
+        root_executed_pivot: Option<PivotBlockDecision>,
         //root_executed_trees: ExecutedTrees,
         blocks: Vec<Block<T>>,
         quorum_certs: Vec<QuorumCert>,
@@ -222,6 +233,7 @@ impl<T: Payload> BlockStore<T> {
             self.highest_timeout_cert().map(|tc| tc.as_ref().clone());
         let tree = Self::build_block_tree(
             root,
+            root_executed_pivot,
             //root_executed_trees,
             blocks,
             quorum_certs,
@@ -300,7 +312,8 @@ impl<T: Payload> BlockStore<T> {
                 //vec![],
                 //parent_block.output().executed_trees().clone(),
                 parent_block.output().validators().clone(),
-                None,
+                parent_block.executed_pivot(),
+                false, /* pivot_updated */
             )
         } else {
             //let parent_trees = parent_block.executed_trees().clone();
@@ -310,6 +323,7 @@ impl<T: Payload> BlockStore<T> {
             self.state_computer
                 .compute(
                     &block, /* , &parent_trees, self.root().executed_trees() */
+                    parent_block.executed_pivot(),
                 )
                 .with_context(|| {
                     format!("Execution failure for block {}", block)

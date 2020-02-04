@@ -80,6 +80,7 @@ impl QuorumCert {
             ledger_info.epoch() + 1,
             0,
             genesis_id,
+            ledger_info.pivot().map(|p| p.clone()),
             ledger_info.transaction_accumulator_hash(),
             ledger_info.version(),
             ledger_info.timestamp_usecs(),

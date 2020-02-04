@@ -201,11 +201,16 @@ impl<T: Payload> BlockStore<T> {
             */
         counters::STATE_SYNC_DURATION_S
             .observe_duration(pre_sync_instance.elapsed());
-        let (root, /* root_executed_trees, */ blocks, quorum_certs) =
-            self.storage.start().take();
+        let (
+            root,
+            root_executed_pivot,
+            /* root_executed_trees, */ blocks,
+            quorum_certs,
+        ) = self.storage.start().take();
         debug!("{}Sync to{} {}", Fg(Blue), Fg(Reset), root.0);
         self.rebuild(
             root,
+            root_executed_pivot,
             /* root_executed_trees, */ blocks,
             quorum_certs,
         )

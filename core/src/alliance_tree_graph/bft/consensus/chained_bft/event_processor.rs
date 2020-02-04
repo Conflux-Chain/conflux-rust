@@ -192,6 +192,15 @@ where
         };
         //let mut network = self.network.clone();
         //network.broadcast_proposal(proposal_msg).await;
+
+        let self_author = AccountAddress::new(
+            self.network.protocol_handler.own_node_hash.into(),
+        );
+        self.broadcast(&proposal_msg, &self_author);
+        self.network
+            .protocol_handler
+            .network_task
+            .process_proposal(self_author, proposal_msg);
         counters::PROPOSALS_COUNT.inc();
     }
 
@@ -760,7 +769,10 @@ where
 
         let vote = self
             .safety_rules
-            .construct_and_sign_vote(&vote_proposal)
+            .construct_and_sign_vote(
+                &vote_proposal,
+                executed_block.executed_pivot(),
+            )
             .with_context(|| {
                 format!("{}Rejected{} {}", Fg(Red), Fg(Reset), block)
             })?;
