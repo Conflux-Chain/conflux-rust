@@ -365,6 +365,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
         fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
+        fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;
     }
 }
 

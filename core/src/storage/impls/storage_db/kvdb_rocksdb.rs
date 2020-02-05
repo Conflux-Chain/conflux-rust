@@ -37,6 +37,12 @@ impl KeyValueDbTrait for KvdbRocksdb {
     fn put(
         &self, key: &[u8], value: &[u8],
     ) -> Result<Option<Option<Box<[u8]>>>> {
+        if let Some(p) = *CRASH_EXIT_PROBABILITY.lock() {
+            if thread_rng().gen_bool(p) {
+                info!("exit before db put");
+                std::process::exit(*CRASH_EXIT_CODE.lock());
+            }
+        }
         let mut transaction = self.kvdb.transaction();
         transaction.put(self.col, key, value);
         self.kvdb.write(transaction)?;
@@ -126,9 +132,13 @@ impl KeyValueDbTraitTransactional for KvdbRocksdb {
 impl DeltaDbTrait for KvdbRocksdb {}
 
 use super::super::{
-    super::storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
+    super::{
+        super::test_context::*,
+        storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
+    },
     errors::*,
 };
 use kvdb::DBTransaction;
 use kvdb_rocksdb::Database;
+use rand::{thread_rng, Rng};
 use std::{any::Any, sync::Arc};

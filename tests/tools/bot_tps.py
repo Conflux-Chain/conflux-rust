@@ -117,7 +117,7 @@ def load_boot_nodes():
 
 
 def new_client(rpc_url):
-    return RpcClient(node=get_simple_rpc_proxy(rpc_url, 3, 10))
+    return RpcClient(node=get_simple_rpc_proxy(rpc_url, timeout=10))
 
 
 def work(faucet_addr, faucet_priv_key_hex, rpc_urls: list, num_threads: int, num_receivers: int):
