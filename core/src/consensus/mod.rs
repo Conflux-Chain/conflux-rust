@@ -240,10 +240,18 @@ impl ConsensusGraph {
     ) -> bool
     {
         let parent_index =
-            *inner.hash_to_arena_indices.get(parent_hash).unwrap();
+            *inner.hash_to_arena_indices.get(parent_hash).expect(
+                "parent_hash is the pivot chain tip,\
+                 so should still exist in ConsensusInner",
+            );
         let referee_indices: Vec<_> = referees
             .iter()
-            .map(|h| *inner.hash_to_arena_indices.get(h).unwrap())
+            .map(|h| {
+                *inner
+                    .hash_to_arena_indices
+                    .get(h)
+                    .expect("Checked by the caller")
+            })
             .collect();
         inner.check_mining_adaptive_block(
             parent_index,
