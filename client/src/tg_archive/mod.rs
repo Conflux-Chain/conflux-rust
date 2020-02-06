@@ -6,7 +6,6 @@ use super::{
     http::Server as HttpServer, tcp::Server as TcpServer, TESTNET_VERSION,
 };
 pub use crate::configuration::Configuration;
-use blockgen::TGBlockGenerator;
 use executable_helpers::helpers::setup_executable;
 use libra_config::config::{ConsensusKeyPair, NodeConfig, RoleType};
 use libra_crypto::secp256k1::Secp256k1PrivateKey;
@@ -29,6 +28,7 @@ use cfxcore::{
             },
             executor::Executor,
         },
+        blockgen::TGBlockGenerator,
         consensus::TreeGraphConsensus,
     },
     block_data_manager::BlockDataManager,
@@ -38,7 +38,7 @@ use cfxcore::{
     sync::{request_manager::RequestManager, SyncPhaseType},
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     vm_factory::VmFactory,
-    ConsensusGraph, LightProvider, SynchronizationGraph,
+    LightProvider, SharedSynchronizationService, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use ctrlc::CtrlC;
@@ -68,7 +68,7 @@ pub struct TgArchiveClientHandle {
     // pub rpc_http_server: Option<HttpServer>,
     pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
-    pub sync: Arc<SynchronizationService>,
+    pub sync: SharedSynchronizationService,
     pub txgen: Arc<TransactionGenerator>,
     pub txgen_join_handle: Option<thread::JoinHandle<()>>,
     pub blockgen: Arc<TGBlockGenerator>,
@@ -231,16 +231,17 @@ impl TgArchiveClient {
         ));
         light_provider.clone().register(network.clone()).unwrap();
 
-        let initial_sync_phase = SyncPhaseType::CatchUpRecoverBlockFromDB;
-        let sync = Arc::new(SynchronizationService::new(
-            false,
-            network.clone(),
-            sync_graph.clone(),
-            protocol_config,
-            conf.state_sync_config(),
-            initial_sync_phase,
-            light_provider,
-        ));
+        let initial_sync_phase = SyncPhaseType::CatchUpSyncBlock;
+        let sync =
+            SharedSynchronizationService::new(SynchronizationService::new(
+                false,
+                network.clone(),
+                sync_graph.clone(),
+                protocol_config,
+                conf.state_sync_config(),
+                initial_sync_phase,
+                light_provider,
+            ));
         sync.register().unwrap();
 
         let tg_config_path = match conf.raw_conf.tg_config_path.as_ref() {
@@ -266,7 +267,7 @@ impl TgArchiveClient {
             keccak(network.net_key_pair().expect("Error node key").public());
         let consensus_provider = Self::setup_tg_environment(
             &mut config,
-            tg_consensus.clone(),
+            sync.clone(),
             network.clone(),
             own_node_hash,
             sync.get_request_manager(),
@@ -301,8 +302,8 @@ impl TgArchiveClient {
             data_man.clone(),
             txpool.clone(),
             sync.clone(),
-            txgen.clone(),
-            special_txgen,
+            //txgen.clone(),
+            //special_txgen,
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));
@@ -476,7 +477,7 @@ impl TgArchiveClient {
     }
 
     fn setup_tg_environment(
-        node_config: &mut NodeConfig, tg_consensus: Arc<TreeGraphConsensus>,
+        node_config: &mut NodeConfig, tg_sync: SharedSynchronizationService,
         network: Arc<NetworkService>, own_node_hash: H256,
         request_manager: Arc<RequestManager>,
     ) -> Option<Box<dyn ConsensusProvider>>
@@ -522,7 +523,7 @@ impl TgArchiveClient {
         // Initialize and start consensus.
         instant = Instant::now();
         let mut consensus_provider =
-            make_consensus_provider(node_config, executor, tg_consensus);
+            make_consensus_provider(node_config, executor, tg_sync);
         consensus_provider
             .start(network, own_node_hash, request_manager)
             .expect("Failed to start consensus. Can't proceed.");

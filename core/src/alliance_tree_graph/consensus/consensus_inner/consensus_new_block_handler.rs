@@ -12,16 +12,18 @@ use super::super::{
 };
 
 use crate::{
+    alliance_tree_graph::blockgen::TGBlockGenerator,
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     parameters::{consensus::*, consensus_internal::*},
     statistics::SharedStatistics,
     sync::delta::CHECKPOINT_DUMP_MANAGER,
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::BitSetLike;
 use libra_types::block_info::PivotBlockDecision;
-use primitives::{BlockHeader, SignedTransaction};
+use primitives::{Block, BlockHeader, SignedTransaction};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -277,6 +279,48 @@ impl ConsensusNewBlockHandler {
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
     }
 
+    fn generate_block(
+        &self, inner: &mut ConsensusGraphInner, parent: H256,
+        referees: Vec<H256>,
+    ) -> Block
+    {
+        let parent_height = self
+            .data_man
+            .block_header_by_hash(&parent)
+            .expect("parent header exists")
+            .height();
+        let deferred_height = if parent_height > DEFERRED_STATE_EPOCH_COUNT - 1
+        {
+            parent_height - DEFERRED_STATE_EPOCH_COUNT + 1
+        } else {
+            0
+        };
+        let deferred_epoch_hash = inner
+            .epoch_hash(deferred_height)
+            .expect("should be a valid epoch_height");
+        let deferred_exec_commitment =
+            self.executor.wait_for_result(deferred_epoch_hash);
+        let deferred_state_root = deferred_exec_commitment
+            .state_root_with_aux_info
+            .state_root
+            .compute_state_root_hash();
+        let deferred_receipt_root =
+            deferred_exec_commitment.receipts_root.clone();
+        let deferred_logs_bloom_hash =
+            deferred_exec_commitment.logs_bloom_hash.clone();
+        // TODO: pack some transactions
+        TGBlockGenerator::assemble_new_block(
+            &self.data_man,
+            parent,
+            referees,
+            deferred_state_root,
+            deferred_receipt_root,
+            deferred_logs_bloom_hash,
+            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            vec![], /* transactions */
+        )
+    }
+
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
     ) {
@@ -348,20 +392,79 @@ impl ConsensusNewBlockHandler {
         &self, inner: &mut ConsensusGraphInner,
         pivot_decision: &PivotBlockDecision,
         callback: NewCandidatePivotCallbackType,
-    )
+    ) -> bool
     {
         inner.new_candidate_pivot(
             &pivot_decision.block_hash,
             &pivot_decision.parent_hash,
             pivot_decision.height,
             callback,
-        );
+        )
+    }
+
+    pub fn on_next_selected_pivot_block(
+        &self, inner: &mut ConsensusGraphInner, last_pivot_hash: Option<&H256>,
+        callback: NextSelectedPivotCallbackType,
+    ) -> Option<Block>
+    {
+        let last_pivot_hash = if let Some(p) = last_pivot_hash {
+            *p
+        } else {
+            inner.data_man.true_genesis.hash()
+        };
+
+        let arena_index = *inner
+            .hash_to_arena_indices
+            .get(&last_pivot_hash)
+            .expect("must exist");
+        if inner.arena[arena_index].children.is_empty() {
+            let block = self.generate_block(
+                inner,
+                last_pivot_hash,
+                inner.terminal_hashes.iter().cloned().collect(),
+            );
+            inner
+                .next_selected_pivot_waiting_list
+                .insert(block.hash(), callback);
+            Some(block)
+        } else {
+            assert!(inner.candidate_pivot_tree.contains(arena_index));
+            let mut next_pivot = NULL;
+            // Find a non-selected child with maximum block hash.
+            for child in &inner.arena[arena_index].children {
+                if (next_pivot == NULL
+                    || inner.arena[*child].hash > inner.arena[next_pivot].hash)
+                    && !inner.candidate_pivot_tree.contains(*child)
+                {
+                    next_pivot = *child;
+                }
+            }
+            if next_pivot == NULL {
+                // FIXME: maybe we should send error back
+                let block = self.generate_block(
+                    inner,
+                    last_pivot_hash,
+                    inner.terminal_hashes.iter().cloned().collect(),
+                );
+                inner
+                    .next_selected_pivot_waiting_list
+                    .insert(block.hash(), callback);
+                Some(block)
+            } else {
+                callback.send(Ok(PivotBlockDecision {
+                    height: inner.arena[next_pivot].height,
+                    block_hash: inner.arena[next_pivot].hash,
+                    parent_hash: last_pivot_hash,
+                }));
+                None
+            }
+        }
     }
 
     pub fn on_commit(
-        &self, inner: &mut ConsensusGraphInner, committable_blocks: &Vec<H256>,
+        &self, inner: &mut ConsensusGraphInner, block_hashes: &Vec<H256>,
     ) {
-        for block_hash in committable_blocks {
+        for block_hash in block_hashes {
             inner.commit(block_hash);
 
             // Note that after the checkpoint (if happens), the

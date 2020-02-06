@@ -11,8 +11,6 @@ struct TreeNode {
     /// This is the parent index of current tree node.
     #[allow(dead_code)]
     parent: usize,
-    /// This is the height of current tree node.  
-    height: u64,
     /// This are the indices of children of current tree node.
     children: Vec<usize>,
 }
@@ -24,7 +22,7 @@ pub struct CandidatePivotTree {
 }
 
 impl CandidatePivotTree {
-    pub fn new(root: usize, height: u64) -> Self {
+    pub fn new(root: usize) -> Self {
         let mut pivot_tree = Self {
             arena: Slab::new(),
             consensus_indices_mapping: HashMap::new(),
@@ -33,7 +31,6 @@ impl CandidatePivotTree {
 
         let me = pivot_tree.arena.insert(TreeNode {
             parent: NULL,
-            height,
             children: Vec::new(),
         });
         pivot_tree.consensus_indices_mapping.insert(root, me);
@@ -42,11 +39,9 @@ impl CandidatePivotTree {
         pivot_tree
     }
 
-    pub fn height(&self, consensus_index: usize) -> u64 {
+    pub fn contains(&self, consensus_index: usize) -> bool {
         self.consensus_indices_mapping
-            .get(&consensus_index)
-            .map(|arena_index| self.arena[*arena_index].height)
-            .unwrap_or(NULLU64)
+            .contains_key(&consensus_index)
     }
 
     pub fn add_leaf(&mut self, parent: usize, leaf: usize) -> bool {
@@ -57,10 +52,8 @@ impl CandidatePivotTree {
             return false;
         }
         let parent_index = self.consensus_indices_mapping[&parent];
-        let parent_height = self.arena[parent_index].height;
         let me = self.arena.insert(TreeNode {
             parent: parent_index,
-            height: parent_height + 1,
             children: Vec::new(),
         });
         self.arena[parent_index].children.push(me);

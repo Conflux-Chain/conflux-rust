@@ -13,7 +13,10 @@ use super::consensus::consensus_inner::{
 };
 
 use crate::{
-    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    block_data_manager::{
+        BlockDataManager, BlockExecutionResultWithEpoch,
+        EpochExecutionCommitment,
+    },
     bytes::Bytes,
     consensus::{BestInformation, ConsensusGraphTrait},
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
@@ -38,7 +41,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    EpochId, EpochNumber, SignedTransaction, TransactionAddress,
+    Block, EpochId, EpochNumber, SignedTransaction, TransactionAddress,
 };
 use rayon::prelude::*;
 use std::{any::Any, cmp::Reverse, collections::HashSet, sync::Arc};
@@ -194,16 +197,6 @@ impl TreeGraphConsensus {
         })
     }
 
-    pub fn get_next_selected_pivot_block(
-        &self, last_pivot_hash: Option<&H256>,
-        callback: NextSelectedPivotCallbackType,
-    )
-    {
-        self.inner
-            .write()
-            .get_next_selected_pivot_block(last_pivot_hash, callback)
-    }
-
     /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
     /// blocks
     pub fn gas_price(&self) -> Option<U256> {
@@ -353,19 +346,32 @@ impl TreeGraphConsensus {
     pub fn on_new_candidate_pivot(
         &self, pivot_decision: &PivotBlockDecision, _peer_id: Option<PeerId>,
         callback: NewCandidatePivotCallbackType,
-    )
+    ) -> bool
     {
         let inner = &mut *self.inner.write();
         self.new_block_handler.on_new_candidate_pivot(
             inner,
             pivot_decision,
             callback,
-        );
+        )
     }
 
-    pub fn on_commit(&self, committable_blocks: &Vec<H256>) {
+    pub fn on_next_selected_pivot_block(
+        &self, last_pivot_hash: Option<&H256>,
+        callback: NextSelectedPivotCallbackType,
+    ) -> Option<Block>
+    {
         let inner = &mut *self.inner.write();
-        self.new_block_handler.on_commit(inner, committable_blocks);
+        self.new_block_handler.on_next_selected_pivot_block(
+            inner,
+            last_pivot_hash,
+            callback,
+        )
+    }
+
+    pub fn on_commit(&self, block_hashes: &Vec<H256>) {
+        let inner = &mut *self.inner.write();
+        self.new_block_handler.on_commit(inner, block_hashes);
     }
 
     pub fn get_transaction_receipt_and_block_info(

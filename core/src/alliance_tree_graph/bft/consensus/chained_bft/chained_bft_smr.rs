@@ -30,7 +30,7 @@ use crate::{
         },
         consensus::TreeGraphConsensus,
     },
-    sync::request_manager::RequestManager,
+    sync::{request_manager::RequestManager, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use libra_types::crypto_proxies::EpochInfo;
@@ -189,7 +189,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>, own_node_hash: H256,
         request_manager: Arc<RequestManager>,
-        tg_consensus: Arc<TreeGraphConsensus>,
+        tg_sync: SharedSynchronizationService,
     ) -> Result<()>
     {
         let mut initial_setup = self
@@ -251,7 +251,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             state_computer,
             self.storage.clone(),
             safety_rules_manager,
-            tg_consensus,
+            tg_sync,
         );
 
         // Step 2

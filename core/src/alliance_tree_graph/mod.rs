@@ -3,5 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 pub mod bft;
+pub mod blockgen;
 pub mod consensus;
 pub mod hsb_sync_protocol;

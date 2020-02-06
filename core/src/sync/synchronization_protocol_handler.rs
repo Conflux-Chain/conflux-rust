@@ -1255,7 +1255,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_missing_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
         hashes: Vec<H256>,
-    )
+    ) -> Result<(), Error>
     {
         // FIXME: This is a naive strategy. Need to
         // make it more sophisticated.
@@ -1266,6 +1266,7 @@ impl SynchronizationProtocolHandler {
             self.request_manager
                 .request_compact_blocks(io, peer_id, hashes);
         }
+        Ok(())
     }
 
     pub fn request_blocks(

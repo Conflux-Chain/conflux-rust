@@ -31,7 +31,7 @@ use crate::{
         },
         consensus::TreeGraphConsensus,
     },
-    sync::request_manager::RequestManager,
+    sync::{request_manager::RequestManager, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use libradb::LibraDB;
@@ -54,14 +54,14 @@ pub struct ChainedBftProvider {
     smr: ChainedBftSMR<Vec<SignedTransaction>>,
     txn_transformer: TxnTransformerProxy,
     state_computer: Arc<dyn StateComputer<Payload = Vec<SignedTransaction>>>,
-    tg_consensus: Arc<TreeGraphConsensus>,
+    tg_sync: SharedSynchronizationService,
 }
 
 impl ChainedBftProvider {
     pub fn new(
         node_config: &mut NodeConfig, executor: Arc<Executor>,
         /* synchronizer_client: Arc<StateSyncClient>, */
-        tg_consensus: Arc<TreeGraphConsensus>,
+        tg_sync: SharedSynchronizationService,
     ) -> Self
     {
         let runtime = runtime::Builder::new()
@@ -85,7 +85,7 @@ impl ChainedBftProvider {
 
         let state_computer = Arc::new(ExecutionProxy::new(
             executor, /* , synchronizer_client.clone()) */
-            tg_consensus.clone(),
+            tg_sync.clone(),
         ));
         let smr = ChainedBftSMR::new(
             initial_setup,
@@ -98,7 +98,7 @@ impl ChainedBftProvider {
             smr,
             txn_transformer,
             state_computer,
-            tg_consensus,
+            tg_sync,
         }
     }
 
@@ -134,7 +134,7 @@ impl ConsensusProvider for ChainedBftProvider {
             network,
             own_node_hash,
             request_manager,
-            self.tg_consensus.clone(),
+            self.tg_sync.clone(),
         )
     }
 
