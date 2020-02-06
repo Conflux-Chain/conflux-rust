@@ -301,7 +301,7 @@ class ConfluxTracing(ConfluxTestFramework):
             start_timeout=10,
             blockgen_timeout=0.25,
             snapshot_timeout=5.0,
-            db_crash_timeout=2,
+            db_crash_timeout=10,
             replay=False,
             snapshot_file=None,
             txs_file=None):
@@ -391,6 +391,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 chosen_peer = alive_peer_indices[random.randint(
                     1, len(alive_peer_indices) - 1)]
                 self.log.info("enable db crash {}".format(chosen_peer))
+                self.nodes[chosen_peer].save_node_db()
                 self.nodes[chosen_peer].set_db_crash(CRASH_EXIT_PROBABILITY, CRASH_EXIT_CODE)
         except Exception as e:
             self.log.info('got exception[{}] during db crash'.format(repr(e)))

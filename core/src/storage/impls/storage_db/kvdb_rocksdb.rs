@@ -29,6 +29,7 @@ impl KeyValueDbTypes for KvdbRocksdb {
 
 impl KeyValueDbTrait for KvdbRocksdb {
     fn delete(&self, key: &[u8]) -> Result<Option<Option<Box<[u8]>>>> {
+        random_crash_if_enabled("rocksdb delete");
         let mut transaction = self.kvdb.transaction();
         transaction.delete(self.col, key);
         Ok(None)
@@ -37,12 +38,7 @@ impl KeyValueDbTrait for KvdbRocksdb {
     fn put(
         &self, key: &[u8], value: &[u8],
     ) -> Result<Option<Option<Box<[u8]>>>> {
-        if let Some(p) = *CRASH_EXIT_PROBABILITY.lock() {
-            if thread_rng().gen_bool(p) {
-                info!("exit before db put");
-                std::process::exit(*CRASH_EXIT_CODE.lock());
-            }
-        }
+        random_crash_if_enabled("rocksdb put");
         let mut transaction = self.kvdb.transaction();
         transaction.put(self.col, key, value);
         self.kvdb.write(transaction)?;
@@ -78,6 +74,7 @@ impl KeyValueDbTraitOwnedRead for KvdbRocksDbTransaction {
 
 impl KeyValueDbTransactionTrait for KvdbRocksDbTransaction {
     fn commit(&mut self, db: &dyn Any) -> Result<()> {
+        random_crash_if_enabled("rocksdb commit");
         match db.downcast_ref::<KvdbRocksdb>() {
             Some(as_kvdb_rocksdb) => {
                 let wrapped_ops = DBTransaction {
@@ -140,5 +137,4 @@ use super::super::{
 };
 use kvdb::DBTransaction;
 use kvdb_rocksdb::Database;
-use rand::{thread_rng, Rng};
 use std::{any::Any, sync::Arc};
