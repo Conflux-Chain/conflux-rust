@@ -66,6 +66,8 @@ threadpool = "1.0"
 toml = "0.4"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 zip = "*"
+tokio = { version = "0.2.11", features = ["time"] }
+tokio-timer = "0.2.13"
 
 [dev-dependencies]
 criterion = "0.2"

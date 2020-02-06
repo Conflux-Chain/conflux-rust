@@ -13,8 +13,6 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use crate::light_protocol::Error;
-
 pub enum ItemOrWaker<T> {
     Item(T),
     Waker(Waker),

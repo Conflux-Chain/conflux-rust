@@ -8,7 +8,6 @@ use cfx_types::Bloom;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use std::task::Waker;
 use std::future::Future;
 
 use crate::{
