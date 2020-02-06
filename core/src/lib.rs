@@ -88,3 +88,12 @@ pub use parameters::{
     block as block_parameters, consensus as consensus_parameters,
     sync as sync_parameters, WORKER_COMPUTATION_PARALLELISM,
 };
+
+pub mod test_context {
+    use parking_lot::Mutex;
+    lazy_static! {
+        pub static ref CRASH_EXIT_CODE: Mutex<i32> = Mutex::new(100);
+        pub static ref CRASH_EXIT_PROBABILITY: Mutex<Option<f64>> =
+            Mutex::new(None);
+    }
+}

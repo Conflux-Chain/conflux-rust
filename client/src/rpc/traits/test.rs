@@ -104,4 +104,9 @@ pub trait TestRpc {
     fn send_usable_genesis_accounts(
         &self, account_start_index: usize,
     ) -> RpcResult<Bytes>;
+
+    #[rpc(name = "set_db_crash")]
+    fn set_db_crash(
+        &self, crash_probability: f64, crash_exit_code: i32,
+    ) -> RpcResult<()>;
 }
