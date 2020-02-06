@@ -206,13 +206,26 @@ impl RpcImpl {
     }
 
     #[allow(unused_variables)]
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        self.light
-            .get_logs(filter.into())
-            .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
-            .map_err(|e| format!("{}", e))
-            .map_err(RpcError::invalid_params)
+
+        // we clone `self.light` so that the async block keep no reference to `self`
+        // otherwise we would have lifetime conflicts
+        let light = self.light.clone();
+
+        // let fut : Future<Item = RpcAccount, Error = RpcError> = async {
+        let fut = async move {
+            let res = light.get_logs(filter.into()).await;
+
+            let logs = res.map_err(|e| format!("{}", e))
+               .map_err(RpcError::invalid_params)?;
+
+            Ok(logs.into_iter().map(RpcLog::from).collect())
+        };
+
+        let boxed: std::pin::Pin<Box<dyn std::future::Future<Output=Result<Vec<_>, _>> + std::marker::Send>> = fut.boxed();
+
+        Box::new(boxed.compat())
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
@@ -405,7 +418,7 @@ impl Cfx for CfxHandler {
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;

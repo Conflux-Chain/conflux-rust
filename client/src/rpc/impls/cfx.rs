@@ -527,7 +527,7 @@ impl RpcImpl {
             .map_err(RpcError::invalid_params)
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs({:?})", filter);
         let mut filter: Filter = filter.into();
         // If max_limit is set, the value in `filter` will be modified to
@@ -538,11 +538,13 @@ impl RpcImpl {
                 filter.limit = Some(max_limit);
             }
         }
-        self.consensus
+        let res = self.consensus
             .logs(filter)
             .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)
-            .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
+            .map(|logs| logs.iter().cloned().map(RpcLog::from).collect());
+
+        future::result(res).boxed()
     }
 
     fn estimate_gas(
@@ -620,7 +622,7 @@ impl Cfx for CfxHandler {
             fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;

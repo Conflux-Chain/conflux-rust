@@ -22,7 +22,7 @@ use crate::{
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
-use futures::{future, stream, Future, Stream};
+use futures::{future, stream, Future, Stream, StreamExt, FutureExt};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -438,7 +438,7 @@ impl QueryService {
 
     fn get_filter_epochs(
         &self, filter: &Filter,
-    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool>), FilterError> {
+    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError> {
         match &filter.block_hashes {
             None => {
                 let from_epoch = self
@@ -484,7 +484,11 @@ impl QueryService {
         }
     }
 
-    pub fn get_logs(
+    // pub fn matching_logs_stream(&self) -> impl Stream<Item = LocalizedLogEntry> {
+    //     stream::empty()
+    // }
+
+    pub async fn get_logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         debug!("get_logs filter = {:?}", filter);
@@ -495,78 +499,93 @@ impl QueryService {
 
         // construct blooms for matching epochs
         let blooms = filter.bloom_possibilities();
-        let bloom_match = |block_log_bloom: &Bloom| {
+        // // let bloom_match : Box<dyn for<'b> Fn(&'b Bloom) -> bool> = Box::new(|block_log_bloom: &Bloom| {
+
+        let bloom_match = move |block_log_bloom: &Bloom| {
             blooms
                 .iter()
                 .any(|bloom| block_log_bloom.contains_bloom(bloom))
         };
 
-        // set maximum to number of logs returned
-        let limit = filter.limit.unwrap_or(::std::usize::MAX) as u64;
+        // let bloom_match : Arc<Box<dyn Fn(&_) -> bool + Send + Sync>> = Arc::new(Box::new(bloom_match));
 
-        /*
+        // set maximum to number of logs returned
+        let limit = filter.limit.unwrap_or(::std::usize::MAX);
+
         // construct a stream object for log filtering
         // we first retrieve the epoch blooms and try to match against them. for
         // matching epochs, we retrieve the corresponding receipts and find the
         // matching entries. finally, for each matching entry, we retrieve the
         // block transactions so that we can add the tx hash. each of these is
         // verified in the corresponding sync handler.
-        let mut stream =
+        let stream =
             // process epochs one by one
-            stream::iter_ok::<_, Error>(epochs)
+            stream::iter(epochs)
+            // Stream<u64>
 
             // retrieve blooms
-            .map(|epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
+            .map(move |epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
+        //     // Stream<Future<(u64, Bloom)>>
 
-            // we first request blooms for up to `LOG_FILTERING_LOOKAHEAD`
-            // epochs and then wait for them and process them one by one
-            // NOTE: we wrap our future in a future because we don't want to wait for the actual value yet
-            .map(future::ok)
+        // //     // we first request blooms for up to `LOG_FILTERING_LOOKAHEAD`
+        // //     // epochs and then wait for them and process them one by one
+        // //     // NOTE: we wrap our future in a future because we don't want to wait for the actual value yet
+        // //     .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+        //     // Stream<(u64, Bloom)>
+        //     // .and_then(|x| x)
 
-            // find the epochs that match
-            .filter_map(|(epoch, bloom)| {
-                    debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
+        // //     // find the epochs that match
+            .filter_map(move |(epoch, bloom)| {
+                debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
 
-                    match bloom_match(&bloom) {
-                        true => Some(epoch),
-                        false => None,
-                    }
-                },
-            )
+                match bloom_match(&bloom) {
+                    true => future::ready(Some(epoch)),
+                    false => future::ready(None),
+                }
 
-            // retrieve receipts
+                // Some(epoch)
+            })
+            // .filter_map(closure)
+            // Stream<u64>
+
+        //     // retrieve receipts
             .map(|epoch| self.retrieve_receipts(epoch).map(move |receipts| (epoch, receipts)))
+            // Stream<Future<(u64, Receipts)>>
 
-            // we first request receipts for up to `LOG_FILTERING_LOOKAHEAD`
-            // epochs and then wait for them and process them one by one
-            .map(future::ok)
+        //     // we first request receipts for up to `LOG_FILTERING_LOOKAHEAD`
+        //     // epochs and then wait for them and process them one by one
+        //     .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // Stream<(u64, Receipts)>
+        //     .and_then(|x| x)
 
-            // filter logs in epoch
-            .and_then(|(epoch, receipts)| {
+        //     // filter logs in epoch
+            .map(|(epoch, receipts)| {
                 debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
-                let logs = self.filter_epoch_receipts(epoch, receipts, filter.clone())?;
-                Ok(stream::iter_ok(logs))
+                let logs = self.filter_epoch_receipts(epoch, receipts, filter.clone()).unwrap(); // TODO!!!! handle error here
+                // Ok(stream::iter(logs))
+                stream::iter(logs)
             })
+            // Stream<Stream<Log>>
 
-            // Stream<Stream<Log>> -> Stream<Log>
+        // //     // Stream<Stream<Log>> -> Stream<Log>
             .flatten()
+        //     // Stream<Log>
 
-            .filter(|log| {
-                block_filter(log.block_hash)
-            })
+            .filter(move |log| future::ready(block_filter(log.block_hash)))
+        //     // Stream<Log>
 
-            // retrieve block txs
+        // //     // retrieve block txs
             .map(|log| self.retrieve_block_txs(log.block_hash).map(move |txs| (log, txs)))
+        //     // Stream<Future<(Log, Vec<SignedTransaction>)>>
 
-            // we first request txs for up to `LOG_FILTERING_LOOKAHEAD`
-            // blocks and then wait for them and process them one by one
-            .map(future::ok)
+        // //     // we first request txs for up to `LOG_FILTERING_LOOKAHEAD`
+        // //     // blocks and then wait for them and process them one by one
+        // //     .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+        //     // Stream<(Log, Vec<SignedTransaction>)>
+        // //     .and_then(|x| x)
 
             .map(|(mut log, txs)| {
                 debug!("processing log = {:?} txs = {:?}", log, txs);
@@ -580,26 +599,32 @@ impl QueryService {
                 log.transaction_hash = txs[log.transaction_index].hash();
                 log
             })
+        //     // Stream<Log>
 
-            // limit number of entries we need
-            .take(limit);
+        // //     // limit number of entries we need
+            .take(limit)
+        //     // Stream<Log>
 
-        // NOTE: eventually, we might want to extend our RPC with futures and
-        // return the async stream directly. for now, we're offering a sync API
-        // based on polling.
-        // TODO(thegaram): review this
-        let mut matching = vec![];
+            .collect();
+            // Future<Iterator<Log>>
 
-        loop {
-            match poll_stream(&mut stream) {
-                Ok(None) => break,
-                Ok(Some(x)) => matching.push(x),
-                Err(e) => return Err(FilterError::Custom(format!("{}", e))),
-            }
-        }
-        */
+        // // NOTE: eventually, we might want to extend our RPC with futures and
+        // // return the async stream directly. for now, we're offering a sync API
+        // // based on polling.
+        // // TODO(thegaram): review this
+        // let mut matching = vec![];
 
-        let mut matching = vec![];
+        // // loop {
+        // //     match poll_stream(&mut stream) {
+        // //         Ok(None) => break,
+        // //         Ok(Some(x)) => matching.push(x),
+        // //         Err(e) => return Err(FilterError::Custom(format!("{}", e))),
+        // //     }
+        // // }
+
+        let mut matching: Vec<_> = stream.await;
+
+        // let mut matching = vec![];
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)

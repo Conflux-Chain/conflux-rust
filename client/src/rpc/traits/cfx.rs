@@ -134,7 +134,7 @@ pub trait Cfx {
 
     /// Returns logs matching the filter provided.
     #[rpc(name = "cfx_getLogs")]
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
 
     //        /// Estimate gas needed for execution of given contract.
     //        #[rpc(name = "cfx_estimateGas")]
