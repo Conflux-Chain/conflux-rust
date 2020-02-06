@@ -1287,7 +1287,11 @@ impl SynchronizationProtocolHandler {
             return true;
         }
 
-        if let Some(height) = self.graph.block_height_by_hash(hash) {
+        if let Some(height) = self
+            .graph
+            .block_by_hash(hash)
+            .map(|block| block.block_header.height())
+        {
             let best_height = self.graph.consensus.best_epoch_number();
             if height > best_height
                 || best_height - height <= LOCAL_BLOCK_INFO_QUERY_THRESHOLD
