@@ -19,8 +19,9 @@ from test_framework.util import (
 )
 
 class RpcClient:
-    def __init__(self, node=None):
+    def __init__(self, node=None, auto_restart=False):
         self.node = node
+        self.auto_restart = auto_restart
 
         # epoch definitions
         self.EPOCH_EARLIEST = "earliest"

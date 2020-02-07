@@ -19,7 +19,7 @@ use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
-    ConsensusGraph, PeerInfo, SharedConsensusGraph,
+    test_context::*, ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
@@ -624,6 +624,18 @@ impl RpcImpl {
         let sync_graph_states = STATE_EXPOSER.sync_graph.lock().retrieve();
         Ok(SyncGraphStates::new(sync_graph_states))
     }
+
+    pub fn set_db_crash(
+        &self, crash_probability: f64, crash_exit_code: i32,
+    ) -> RpcResult<()> {
+        if crash_probability == 0.0 {
+            *CRASH_EXIT_PROBABILITY.lock() = None;
+        } else {
+            *CRASH_EXIT_PROBABILITY.lock() = Some(crash_probability);
+        }
+        *CRASH_EXIT_CODE.lock() = crash_exit_code;
+        Ok(())
+    }
 }
 
 #[allow(dead_code)]
@@ -696,6 +708,7 @@ impl TestRpc for TestRpcImpl {
             fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
+            fn save_node_db(&self) -> RpcResult<()>;
         }
 
         target self.rpc_impl {
@@ -709,6 +722,7 @@ impl TestRpc for TestRpcImpl {
             fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
             fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
             fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
+            fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;
         }
     }
 }

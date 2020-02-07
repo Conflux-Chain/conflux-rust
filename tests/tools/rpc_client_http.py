@@ -29,7 +29,7 @@ if sys.argv[1].lower().startswith("http://"):
     method_name = sys.argv[2]
     method_args = sys.argv[3:]
 
-node=get_simple_rpc_proxy(rpc_url, 3)
+node=get_simple_rpc_proxy(rpc_url)
 method_args = ["\"" + arg + "\"" for arg in method_args]
 rpc = "node.{}({})".format(method_name, ", ".join(method_args))
 print(json.dumps(eval(rpc), indent=4))

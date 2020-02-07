@@ -218,6 +218,34 @@ impl ConsensusGraph {
         self.executor.wait_for_result(best_state_block);
     }
 
+    /// Determine whether the next mined block should have adaptive weight or
+    /// not
+    pub fn check_mining_adaptive_block(
+        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
+        referees: &Vec<H256>, difficulty: &U256,
+    ) -> bool
+    {
+        let parent_index =
+            *inner.hash_to_arena_indices.get(parent_hash).expect(
+                "parent_hash is the pivot chain tip,\
+                 so should still exist in ConsensusInner",
+            );
+        let referee_indices: Vec<_> = referees
+            .iter()
+            .map(|h| {
+                *inner
+                    .hash_to_arena_indices
+                    .get(h)
+                    .expect("Checked by the caller")
+            })
+            .collect();
+        inner.check_mining_adaptive_block(
+            parent_index,
+            referee_indices,
+            *difficulty,
+        )
+    }
+
     /// Convert EpochNumber to height based on the current ConsensusGraph
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,
