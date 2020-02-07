@@ -627,8 +627,6 @@ where
             self.network.protocol_handler.own_node_hash.into(),
         );
 
-        debug!("vote recipients: {:?}", &recipients);
-        debug!("self author: {}", self_author);
         let mut vote_to_self = false;
         for peer_address in recipients {
             if self_author == peer_address {
@@ -645,13 +643,16 @@ where
             }
         }
 
-        debug!("vote_to_self {}", vote_to_self);
-
         if vote_to_self {
-            self.network
+            let res = self
+                .network
                 .protocol_handler
                 .network_task
-                .process_vote(self_author, vote_msg);
+                .process_vote(self_author, vote_msg)
+                .await;
+            if res.is_err() {
+                warn!("Error processing vote: {:?}", res);
+            }
         }
         //self.network.send_vote(vote_msg, recipients).await;
     }
