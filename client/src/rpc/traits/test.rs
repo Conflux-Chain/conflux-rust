@@ -109,4 +109,7 @@ pub trait TestRpc {
     fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()>;
+
+    #[rpc(name = "save_node_db")]
+    fn save_node_db(&self) -> RpcResult<()>;
 }

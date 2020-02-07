@@ -1487,9 +1487,6 @@ impl ConsensusNewBlockHandler {
     /// This function is only invoked from recover_graph_from_db with
     /// header_only being false.
     pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
-        if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
-            return;
-        }
         // FIXME: this line doesn't exactly match its purpose.
         // FIXME: Is it the checkpoint or synced snapshot or could it be
         // anything else?
@@ -1524,6 +1521,10 @@ impl ConsensusNewBlockHandler {
                     .pivot_chain
                     .push(inner.arena[inner.pivot_chain[pivot_index]].hash);
             }
+        }
+
+        if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
+            return;
         }
         for pivot_index in start_pivot_index + 1
             ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1

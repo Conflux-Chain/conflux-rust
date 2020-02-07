@@ -642,6 +642,7 @@ impl TestRpc for TestRpcImpl {
             fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
+            fn save_node_db(&self) -> RpcResult<()>;
         }
 
         target self.rpc_impl {
