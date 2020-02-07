@@ -575,8 +575,7 @@ impl RpcImpl {
             .ok_or(RpcError::invalid_params("No state_valid"))?;
         Ok((status.to_db_status(), state_valid))
     }
-    
-    
+
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()> {
