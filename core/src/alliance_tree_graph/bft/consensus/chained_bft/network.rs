@@ -285,6 +285,11 @@ impl<T: Payload> NetworkTask<T> {
     ) -> anyhow::Result<()> {
         let proposal = ProposalUncheckedSignatures(proposal);
         if proposal.epoch() != self.epoch() {
+            debug!(
+                "Different epoch in proposal: proposal epoch {}, self epoch {}",
+                proposal.epoch(),
+                self.epoch()
+            );
             return self
                 .different_epoch_tx
                 .push(peer_id, (proposal.epoch(), peer_id));

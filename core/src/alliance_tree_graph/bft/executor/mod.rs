@@ -279,13 +279,14 @@ impl Executor {
         );
 
         ensure!(
-            transactions.len() <= 1,
-            "One block can at most contain 1 transactions for proposal."
+            transactions.len() <= 2,
+            "One block can at most contain 1 user transaction for proposal."
         );
         let mut vm_outputs = Vec::new();
         for transaction in transactions {
             // Execute the transaction
             match transaction {
+                Transaction::BlockMetadata(_data) => {}
                 Transaction::UserTransaction(trans) => {
                     let trans = trans.check_signature()?;
                     let payload = trans.payload();

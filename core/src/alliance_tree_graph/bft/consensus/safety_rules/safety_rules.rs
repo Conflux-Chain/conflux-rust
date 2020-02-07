@@ -147,6 +147,7 @@ impl<T: Payload> TSafetyRules<T> for SafetyRules<T> {
             });
         }
 
+        /*
         let new_tree = vote_proposal
             .accumulator_extension_proof()
             .verify(
@@ -158,6 +159,7 @@ impl<T: Payload> TSafetyRules<T> for SafetyRules<T> {
             .map_err(|e| Error::InvalidAccumulatorExtension {
                 error: format!("{}", e),
             })?;
+        */
 
         self.persistent_storage
             .set_last_voted_round(proposed_block.round())?;
@@ -165,8 +167,8 @@ impl<T: Payload> TSafetyRules<T> for SafetyRules<T> {
         Ok(Vote::new(
             VoteData::new(
                 proposed_block.gen_block_info(
-                    new_tree.root_hash(),
-                    new_tree.version(),
+                    HashValue::zero(), //new_tree.root_hash(),
+                    0,                 //new_tree.version(),
                     pivot,
                     vote_proposal.next_validator_set().cloned(),
                 ),

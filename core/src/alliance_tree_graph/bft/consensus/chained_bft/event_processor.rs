@@ -197,10 +197,15 @@ where
             self.network.protocol_handler.own_node_hash.into(),
         );
         self.broadcast(&proposal_msg, &self_author);
-        self.network
+        let res = self
+            .network
             .protocol_handler
             .network_task
-            .process_proposal(self_author, proposal_msg);
+            .process_proposal(self_author, proposal_msg)
+            .await;
+        if res.is_err() {
+            warn!("Error processing proposal: {:?}", res);
+        }
         counters::PROPOSALS_COUNT.inc();
     }
 

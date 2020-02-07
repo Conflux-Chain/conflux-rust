@@ -904,7 +904,10 @@ impl ConsensusGraphInner {
         }
         let parent_arena_index = self.hash_to_arena_indices[parent_hash];
         let arena_index = self.hash_to_arena_indices[block_hash];
-        debug!("index={:?} parent_index={:?}", arena_index, parent_arena_index);
+        debug!(
+            "index={:?} parent_index={:?}",
+            arena_index, parent_arena_index
+        );
         if self.arena[arena_index].parent != parent_arena_index {
             return false;
         }

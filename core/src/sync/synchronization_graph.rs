@@ -1430,11 +1430,12 @@ impl SynchronizationGraph {
         // skip check for consortium currently
         debug!("is_consortium={:?}", self.is_consortium());
         let verification_passed = if need_to_verify {
-            self.is_consortium() || !(self.parent_or_referees_invalid(header)
-                || self
-                    .verification_config
-                    .verify_header_params(header)
-                    .is_err())
+            self.is_consortium()
+                || !(self.parent_or_referees_invalid(header)
+                    || self
+                        .verification_config
+                        .verify_header_params(header)
+                        .is_err())
         } else {
             if !bench_mode && !self.is_consortium() {
                 self.verification_config
