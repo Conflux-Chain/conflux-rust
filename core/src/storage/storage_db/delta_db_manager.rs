@@ -25,8 +25,8 @@ pub trait DeltaDbManagerTrait {
     fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String;
     fn get_delta_db_path(&self, delta_db_name: &str) -> String;
 
-    // Scan snapshot dir, remove extra files and return the list of missing
-    // snapshots.
+    // Scan delta db dir, remove extra files and return the list of missing
+    // snapshots for which the delta db is missing.
     fn scan_persist_state(
         &self, snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
     ) -> Result<(Vec<EpochId>, HashMap<EpochId, Self::DeltaDb>)> {
@@ -46,8 +46,8 @@ pub trait DeltaDbManagerTrait {
         }
         let mut delta_mpts = HashMap::new();
 
-        // Scan the snapshot dir. Remove extra files, and return the list of
-        // missing snapshots.
+        // Scan the delta db dir. Remove extra files, and return the list of
+        // snapshots for which the delta db is missing.
         for entry in fs::read_dir(self.get_delta_db_dir())? {
             let entry = entry?;
             let path = entry.path();
