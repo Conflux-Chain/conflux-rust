@@ -309,6 +309,7 @@ impl<T: Payload> NetworkTask<T> {
     pub async fn process_vote(
         &self, peer_id: AccountAddress, vote_msg: VoteMsg,
     ) -> anyhow::Result<()> {
+        debug!("process_vote");
         ensure!(
             vote_msg.vote().author() == peer_id,
             "vote received must be from the sending peer"

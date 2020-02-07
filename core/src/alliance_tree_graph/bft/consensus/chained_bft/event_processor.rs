@@ -612,7 +612,7 @@ where
         let recipients = self
             .proposer_election
             .get_valid_proposers(proposal_round + 1);
-        debug!("{}Voted: {} {}", Fg(Green), Fg(Reset), vote);
+        debug!("Voted: {}", vote);
 
         // Safety invariant: The parent block must be present in the block store
         // and the replica only votes for blocks with round greater than
@@ -623,7 +623,36 @@ where
             .map_or(false, |parent_block| parent_block.round()
                 < proposal_round));
         let vote_msg = VoteMsg::new(vote, self.gen_sync_info());
-        self.network.send_message(recipients, &vote_msg);
+        let self_author = AccountAddress::new(
+            self.network.protocol_handler.own_node_hash.into(),
+        );
+
+        debug!("vote recipients: {:?}", &recipients);
+        debug!("self author: {}", self_author);
+        let mut vote_to_self = false;
+        for peer_address in recipients {
+            if self_author == peer_address {
+                vote_to_self = true;
+            } else {
+                let peer_hash =
+                    H256::from_slice(peer_address.to_vec().as_slice());
+                if let Some(peer) =
+                    self.network.protocol_handler.peers.get(&peer_hash)
+                {
+                    let peer_id = peer.read().get_id();
+                    self.network.send_message_with_peer_id(peer_id, &vote_msg);
+                }
+            }
+        }
+
+        debug!("vote_to_self {}", vote_to_self);
+
+        if vote_to_self {
+            self.network
+                .protocol_handler
+                .network_task
+                .process_vote(self_author, vote_msg);
+        }
         //self.network.send_vote(vote_msg, recipients).await;
     }
 
