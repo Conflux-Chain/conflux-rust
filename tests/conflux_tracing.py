@@ -10,13 +10,13 @@ import rlp
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.blocktools import create_block_with_nonce
-from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
 NUM_TX_PER_BLOCK = 10
+CRASH_EXIT_CODE = 100
+CRASH_EXIT_PROBABILITY = 0.01
 
 
 class Timer(threading.Timer):
@@ -301,6 +301,7 @@ class ConfluxTracing(ConfluxTestFramework):
             start_timeout=10,
             blockgen_timeout=0.25,
             snapshot_timeout=5.0,
+            db_crash_timeout=2,
             replay=False,
             snapshot_file=None,
             txs_file=None):
@@ -311,6 +312,7 @@ class ConfluxTracing(ConfluxTestFramework):
         self._start_timeout = start_timeout
         self._blockgen_timeout = blockgen_timeout
         self._snapshot_timeout = snapshot_timeout
+        self._db_crash_timeout = db_crash_timeout
         self.num_nodes = nodes
         self._replay = replay
         self._snapshot_file = snapshot_file
@@ -372,6 +374,26 @@ class ConfluxTracing(ConfluxTestFramework):
                 self.log.info("stopped {}".format(chosen_peer))
         except Exception as e:
             self.log.info('got exception[{}] during crash'.format(repr(e)))
+            self.persist_snapshot()
+            raise e
+
+    def _enable_db_crash(self):
+        try:
+            with self._peer_lock:
+                alive_peer_indices = self._retrieve_alive_peers(
+                    ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
+                normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
+                catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
+                alive_peer_indices = normal_peers + catch_up_peers
+                if len(alive_peer_indices) <= 3:
+                    return
+                # We need peer[0] to run forever as a reference
+                chosen_peer = alive_peer_indices[random.randint(
+                    1, len(alive_peer_indices) - 1)]
+                self.log.info("enable db crash {}".format(chosen_peer))
+                self.nodes[chosen_peer].set_db_crash(CRASH_EXIT_PROBABILITY, CRASH_EXIT_CODE)
+        except Exception as e:
+            self.log.info('got exception[{}] during db crash'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -446,7 +468,7 @@ class ConfluxTracing(ConfluxTestFramework):
         }
 
     def setup_nodes(self):
-        self.add_nodes(self.num_nodes)
+        self.add_nodes(self.num_nodes, auto_recovery=True)
         if self.options.archive:
             self.start_nodes()
         else:
@@ -495,6 +517,7 @@ class ConfluxTracing(ConfluxTestFramework):
         start_timer = Timer(self._start_timeout, self._random_start)
         blockgen_timer = Timer(self._blockgen_timeout, self._generate_block)
         snapshot_timer = Timer(self._snapshot_timeout, self._retrieve_snapshot)
+        db_crash_timer = Timer(self._db_crash_timeout, self._enable_db_crash)
 
         self._snapshots = [Snapshot(i, genesis_hash) for i in range(len(self.nodes))]
         self._peer_nonce = [0] * len(self.nodes)
@@ -504,6 +527,7 @@ class ConfluxTracing(ConfluxTestFramework):
         start_timer.start()
         blockgen_timer.start()
         snapshot_timer.start()
+        db_crash_timer.start()
 
         # TODO: we may make it run forever
         time.sleep(200000)
@@ -512,6 +536,7 @@ class ConfluxTracing(ConfluxTestFramework):
         start_timer.cancel()
         blockgen_timer.cancel()
         snapshot_timer.cancel()
+        db_crash_timer.cancel()
 
         # wait for timer exit
         time.sleep(20)

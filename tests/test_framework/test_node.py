@@ -34,7 +34,7 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None):
+                 rpcport=None, auto_recovery=False):
         self.index = index
         self.datadir = datadir
         self.stdout_dir = os.path.join(self.datadir, "stdout")
@@ -42,6 +42,7 @@ class TestNode:
         self.log = os.path.join(self.datadir, "node" + str(index) + ".log")
         self.remote = remote
         self.rpchost = rpchost
+        self.auto_recovery = auto_recovery
         if remote:
             self.ip = ip
             self.user = user
@@ -90,7 +91,6 @@ class TestNode:
                     self.user, self.ip)
                 print(self.ip, self.index, subprocess.Popen(
                     cli_kill, shell=True).wait())
-
 
     def __getattr__(self, name):
         """Dispatches any unrecognised messages to the RPC connection."""
@@ -158,7 +158,7 @@ class TestNode:
             try:
                 self.rpc = get_simple_rpc_proxy(
                     rpc_url(self.index, self.rpchost, self.rpcport),
-                    self.index,
+                    node=self,
                     timeout=self.rpc_timeout)
                 self.rpc.cfx_getBestBlockHash()
                 # If the call to get_best_block_hash() succeeds then the RPC connection is up

@@ -489,8 +489,8 @@ def get_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT, coveragedi
     return coverage.AuthServiceProxyWrapper(proxy, coverage_logfile)
 
 
-def get_simple_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
-    return SimpleRpcProxy(url, timeout)
+def get_simple_rpc_proxy(url, node=None, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
+    return SimpleRpcProxy(url, timeout, node)
 
 
 def p2p_port(n):

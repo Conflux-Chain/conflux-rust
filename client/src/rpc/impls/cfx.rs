@@ -21,8 +21,8 @@ use cfx_types::{H160, H256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
-    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    test_context::*, PeerInfo, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use network::{
@@ -575,6 +575,19 @@ impl RpcImpl {
             .ok_or(RpcError::invalid_params("No state_valid"))?;
         Ok((status.to_db_status(), state_valid))
     }
+    
+    
+    pub fn set_db_crash(
+        &self, crash_probability: f64, crash_exit_code: i32,
+    ) -> RpcResult<()> {
+        if crash_probability == 0.0 {
+            *CRASH_EXIT_PROBABILITY.lock() = None;
+        } else {
+            *CRASH_EXIT_PROBABILITY.lock() = Some(crash_probability);
+        }
+        *CRASH_EXIT_CODE.lock() = crash_exit_code;
+        Ok(())
+    }
 }
 
 #[allow(dead_code)]
@@ -661,6 +674,7 @@ impl TestRpc for TestRpcImpl {
             fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
             fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
             fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
+            fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;
         }
     }
 }

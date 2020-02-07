@@ -32,8 +32,7 @@ class MessageTest(ConfluxTestFramework):
 
         # Start rpc connection
         self.rpc = get_simple_rpc_proxy(
-            "http://127.0.0.1:12537",
-            1)
+            "http://127.0.0.1:12537")
         challenge = random.randint(0, 2**32-1)
         signature = self.rpc.getnodeid(list(int_to_bytes(challenge)))
         node_id, x, y = convert_to_nodeid(signature, challenge)

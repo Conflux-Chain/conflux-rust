@@ -293,7 +293,7 @@ class ConfluxTestFramework:
         self.add_nodes(self.num_nodes, binary=binary)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, rpchost=None, binary=None):
+    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
@@ -307,6 +307,7 @@ class ConfluxTestFramework:
                     rpchost=rpchost,
                     rpc_timeout=self.rpc_timewait,
                     confluxd=binary[i],
+                    auto_recovery=auto_recovery,
                 ))
 
     def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None):

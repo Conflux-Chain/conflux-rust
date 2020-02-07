@@ -5,7 +5,7 @@
 #![allow(unused)]
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration},
+    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     cache_manager::CacheManager,
     consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
@@ -181,6 +181,7 @@ fn main() {
         beta,
         h_ratio,
         era_epoch_count,
+        DbType::Sqlite,
     );
 
     let mut hashes = Vec::new();
