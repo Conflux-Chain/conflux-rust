@@ -1070,9 +1070,13 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// Determine whether the next mined block should have adaptive weight or
     /// not
     fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &Vec<H256>, difficulty: &U256,
+        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
     ) -> bool {
         let mut inner = self.inner.write();
+        // referees are retrieved before locking inner, so we need to
+        // filter out the blocks that should be removed by possible
+        // checkpoint making that happens before we acquire the inner lock
+        referees.retain(|h| inner.hash_to_arena_indices.contains_key(h));
         let parent_index =
             *inner.hash_to_arena_indices.get(parent_hash).unwrap();
         let referee_indices: Vec<_> = referees
