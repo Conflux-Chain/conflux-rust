@@ -18,9 +18,12 @@ use libra_types::{
 };
 //use state_synchronizer::StateSyncClient;
 use super::super::executor::{Executor, ProcessedVMOutput};
-use crate::alliance_tree_graph::{
-    consensus::TreeGraphConsensus,
-    hsb_sync_protocol::sync_protocol::{PeerState, Peers},
+use crate::{
+    alliance_tree_graph::{
+        consensus::TreeGraphConsensus,
+        hsb_sync_protocol::sync_protocol::{PeerState, Peers},
+    },
+    sync::SharedSynchronizationService,
 };
 use futures::{channel::oneshot, executor::block_on};
 use libra_types::block_info::PivotBlockDecision;
@@ -36,20 +39,20 @@ use std::{
 pub struct ExecutionProxy {
     executor: Arc<Executor>,
     //synchronizer: Arc<StateSyncClient>,
-    tg_consensus: Arc<TreeGraphConsensus>,
+    tg_sync: SharedSynchronizationService,
     peers: Arc<Peers<PeerState, H256>>,
 }
 
 impl ExecutionProxy {
     pub fn new(
         executor: Arc<Executor>, /* , synchronizer: Arc<StateSyncClient> */
-        tg_consensus: Arc<TreeGraphConsensus>,
+        tg_sync: SharedSynchronizationService,
     ) -> Self
     {
         Self {
             executor,
             //synchronizer,
-            tg_consensus,
+            tg_sync,
             peers: Arc::new(Peers::default()),
         }
     }
@@ -103,8 +106,7 @@ impl StateComputer for ExecutionProxy {
                 .get(&peer_hash)
                 .map(|peer_state| peer_state.read().get_id());
             let (callback, cb_receiver) = oneshot::channel();
-            self.tg_consensus
-                .on_new_candidate_pivot(p, peer_id, callback);
+            self.tg_sync.on_new_candidate_pivot(p, peer_id, callback);
             let response = block_on(async move { cb_receiver.await? });
             let valid_pivot_decision = match response {
                 Ok(res) => res,
@@ -149,7 +151,7 @@ impl StateComputer for ExecutionProxy {
                 committed_blocks.push(p.block_hash);
             }
         }
-        self.tg_consensus.on_commit(&committed_blocks);
+        self.tg_sync.on_commit_blocks(&committed_blocks);
 
         self.executor
             .commit_blocks(committable_blocks, finality_proof)?;

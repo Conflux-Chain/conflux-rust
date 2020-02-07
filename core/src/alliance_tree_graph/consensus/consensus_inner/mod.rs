@@ -183,7 +183,7 @@ impl ConsensusGraphInner {
             sequence_number_of_block_entrance: 0,
             last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
-            candidate_pivot_tree: CandidatePivotTree::new(NULL, NULLU64),
+            candidate_pivot_tree: CandidatePivotTree::new(NULL),
             state_boundary_height: cur_era_stable_height,
             next_selected_pivot_waiting_list: HashMap::new(),
             new_candidate_pivot_waiting_list: HashMap::new(),
@@ -208,10 +208,8 @@ impl ConsensusGraphInner {
             ordered_executable_epoch_blocks: vec![genesis_arena_index],
         });
 
-        inner.candidate_pivot_tree = CandidatePivotTree::new(
-            genesis_arena_index,
-            cur_era_genesis_height,
-        );
+        inner.candidate_pivot_tree =
+            CandidatePivotTree::new(genesis_arena_index);
 
         inner
     }
@@ -443,7 +441,7 @@ impl ConsensusGraphInner {
             height: block_header.height(),
             past_num_blocks: 0,
             parent,
-            era_block: NULL,
+            era_block: self.get_era_genesis_block_with_parent(parent, 0),
             children: Vec::new(),
             referees: referees.clone(),
             referrers: Vec::new(),
@@ -897,6 +895,7 @@ impl ConsensusGraphInner {
     pub fn validate_and_add_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
     ) -> bool {
+        debug!("validate_and_add_candidate_pivot block={:?} parent={:?} height={:?}", block_hash, parent_hash, height);
         if !self.hash_to_arena_indices.contains_key(parent_hash) {
             return false;
         }
@@ -904,10 +903,12 @@ impl ConsensusGraphInner {
             return false;
         }
         let parent_arena_index = self.hash_to_arena_indices[parent_hash];
-        let parent_height =
-            self.candidate_pivot_tree.height(parent_arena_index);
         let arena_index = self.hash_to_arena_indices[block_hash];
-        if parent_height == NULLU64 || parent_height + 1 != height {
+        debug!("index={:?} parent_index={:?}", arena_index, parent_arena_index);
+        if self.arena[arena_index].parent != parent_arena_index {
+            return false;
+        }
+        if !self.candidate_pivot_tree.contains(parent_arena_index) {
             return false;
         }
 
@@ -918,17 +919,19 @@ impl ConsensusGraphInner {
     pub fn new_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
         callback: NewCandidatePivotCallbackType,
-    )
+    ) -> bool
     {
         if !self.hash_to_arena_indices.contains_key(block_hash) {
             self.new_candidate_pivot_waiting_list
                 .insert(*block_hash, callback);
+            false
         } else {
             callback.send(Ok(self.validate_and_add_candidate_pivot(
                 block_hash,
                 parent_hash,
                 height,
             )));
+            true
         }
     }
 
@@ -963,50 +966,5 @@ impl ConsensusGraphInner {
             self.arena[arena_index].height,
         );
         self.new_pivot(arena_index);
-    }
-
-    pub fn get_next_selected_pivot_block(
-        &mut self, last_pivot_hash: Option<&H256>,
-        callback: NextSelectedPivotCallbackType,
-    )
-    {
-        let last_pivot_hash = if let Some(p) = last_pivot_hash {
-            *p
-        } else {
-            self.data_man.true_genesis.hash()
-        };
-
-        let arena_index = *self
-            .hash_to_arena_indices
-            .get(&last_pivot_hash)
-            .expect("must exist");
-        // FIXME: the logic here is not correctly implemented yet.
-        // FIXME: we may use children instead of referees.
-        if self.arena[arena_index].referees.is_empty() {
-            // TODO: call generate block function
-            self.next_selected_pivot_waiting_list
-                .insert(H256::zero(), callback);
-        } else {
-            let height = self.candidate_pivot_tree.height(arena_index);
-            assert!(height != NULLU64);
-            let mut next_pivot = NULL;
-            for referrer in &self.arena[arena_index].referrers {
-                if (next_pivot == NULL
-                    || self.arena[*referrer].hash > self.arena[next_pivot].hash)
-                    && self.candidate_pivot_tree.height(*referrer) == NULLU64
-                {
-                    next_pivot = *referrer;
-                }
-            }
-            if next_pivot == NULL {
-                // TODO: send error back
-            } else {
-                callback.send(Ok(PivotBlockDecision {
-                    height: height + 1,
-                    block_hash: self.arena[next_pivot].hash,
-                    parent_hash: last_pivot_hash,
-                }));
-            }
-        }
     }
 }

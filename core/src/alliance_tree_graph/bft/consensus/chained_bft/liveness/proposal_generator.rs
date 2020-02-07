@@ -16,9 +16,12 @@ use super::super::super::{
 };
 use anyhow::{bail, ensure, format_err};
 //use libra_logger::prelude::*;
-use crate::alliance_tree_graph::{
-    bft::consensus::state_replication::TxnTransformer,
-    consensus::TreeGraphConsensus,
+use crate::{
+    alliance_tree_graph::{
+        bft::consensus::state_replication::TxnTransformer,
+        consensus::TreeGraphConsensus,
+    },
+    sync::SharedSynchronizationService,
 };
 use futures::channel::oneshot;
 use keylib::KeyPair;
@@ -62,8 +65,8 @@ pub struct ProposalGenerator<TT, T> {
     max_block_size: u64,
     // Last round that a proposal was generated
     last_round_generated: Mutex<Round>,
-    // TreeGraph consensus graph.
-    tg_consensus: Arc<TreeGraphConsensus>,
+    // TreeGraph synchronization service.
+    tg_sync: SharedSynchronizationService,
     key_pair: KeyPair,
 }
 
@@ -76,7 +79,7 @@ where
         author: Author,
         block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
         txn_transformer: TT, time_service: Arc<dyn TimeService>,
-        max_block_size: u64, tg_consensus: Arc<TreeGraphConsensus>,
+        max_block_size: u64, tg_sync: SharedSynchronizationService,
         key_pair: KeyPair,
     ) -> Self
     {
@@ -87,7 +90,7 @@ where
             time_service,
             max_block_size,
             last_round_generated: Mutex::new(0),
-            tg_consensus,
+            tg_sync,
             key_pair,
         }
     }
@@ -248,7 +251,7 @@ where
             } else {
                 None
             };
-        self.tg_consensus
+        self.tg_sync
             .get_next_selected_pivot_block(last_pivot_hash, callback);
 
         let response = cb_receiver.await?;

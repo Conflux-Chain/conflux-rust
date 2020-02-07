@@ -20,7 +20,7 @@ use crate::{
         consensus::TreeGraphConsensus,
         hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol,
     },
-    sync::request_manager::RequestManager,
+    sync::{request_manager::RequestManager, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use libra_types::transaction::SignedTransaction;
@@ -50,7 +50,7 @@ pub fn make_consensus_provider(
      *network_receiver: ConsensusNetworkEvents, */
     executor: Arc<Executor>,
     /* state_sync_client: Arc<StateSyncClient>, */
-    tg_consensus: Arc<TreeGraphConsensus>,
+    tg_sync: SharedSynchronizationService,
 ) -> Box<dyn ConsensusProvider>
 {
     Box::new(ChainedBftProvider::new(
@@ -59,7 +59,7 @@ pub fn make_consensus_provider(
          *network_receiver, */
         executor,
         /* state_sync_client, */
-        tg_consensus,
+        tg_sync,
     ))
 }
 

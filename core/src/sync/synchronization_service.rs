@@ -6,16 +6,28 @@ use super::{
     Error, SharedSynchronizationGraph, SynchronizationProtocolHandler,
 };
 use crate::{
+    alliance_tree_graph::consensus::{
+        consensus_inner::{
+            NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
+        },
+        TreeGraphConsensus,
+    },
+    consensus::ConsensusGraphTrait,
     light_protocol::Provider as LightProvider,
-    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
+    parameters::{
+        consensus::DEFERRED_STATE_EPOCH_COUNT,
+        sync::SYNCHRONIZATION_PROTOCOL_VERSION,
+    },
     sync::{
         request_manager::RequestManager, synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
         StateSyncConfiguration, SynchronizationPhaseTrait,
     },
+    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
 };
 use cfx_types::H256;
-use network::{NetworkService, ProtocolId};
+use libra_types::block_info::PivotBlockDecision;
+use network::{NetworkService, PeerId, ProtocolId};
 use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
 
@@ -95,6 +107,61 @@ impl SynchronizationService {
         let hash = block.hash();
         self.protocol_handler.on_mined_block(block);
         self.relay_blocks(vec![hash]);
+    }
+
+    pub fn on_commit_blocks(&self, block_hashes: &Vec<H256>) {
+        let sync_graph = self.get_synchronization_graph();
+        let tg_consensus = sync_graph
+            .consensus
+            .as_any()
+            .downcast_ref::<TreeGraphConsensus>()
+            .expect("downcast to TreeGraphConsensus should success");
+        tg_consensus.on_commit(block_hashes);
+    }
+
+    pub fn get_next_selected_pivot_block(
+        &self, last_pivot_hash: Option<&H256>,
+        callback: NextSelectedPivotCallbackType,
+    )
+    {
+        let sync_graph = self.get_synchronization_graph();
+        let tg_consensus = sync_graph
+            .consensus
+            .as_any()
+            .downcast_ref::<TreeGraphConsensus>()
+            .expect("downcast to TreeGraphConsensus should success");
+        if let Some(block) =
+            tg_consensus.on_next_selected_pivot_block(last_pivot_hash, callback)
+        {
+            self.on_mined_block(block);
+        }
+    }
+
+    pub fn on_new_candidate_pivot(
+        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
+        callback: NewCandidatePivotCallbackType,
+    )
+    {
+        let sync_graph = self.get_synchronization_graph();
+        let tg_consensus = sync_graph
+            .consensus
+            .as_any()
+            .downcast_ref::<TreeGraphConsensus>()
+            .expect("downcast to TreeGraphConsensus should success");
+        if !tg_consensus.on_new_candidate_pivot(
+            pivot_decision,
+            peer_id,
+            callback,
+        ) {
+            // TODO: request block from peers
+            let _res = self.network.with_context(self.protocol, |io| {
+                self.protocol_handler.request_missing_blocks(
+                    io,
+                    peer_id,
+                    vec![pivot_decision.block_hash],
+                )
+            });
+        }
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {

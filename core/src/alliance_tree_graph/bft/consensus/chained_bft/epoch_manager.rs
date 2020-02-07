@@ -37,12 +37,12 @@ use libra_types::{
 //use network::proto::ConsensusMsg_oneof;
 //use network::validator_network::{ConsensusNetworkSender, Event};
 use super::super::safety_rules::SafetyRulesManager;
-use crate::alliance_tree_graph::{
-    bft::consensus::{
+use crate::{
+    alliance_tree_graph::bft::consensus::{
         chained_bft::network::NetworkSender,
         state_replication::{StateComputer, TxnTransformer},
     },
-    consensus::TreeGraphConsensus,
+    sync::SharedSynchronizationService,
 };
 use futures::executor::block_on;
 use libra_types::validator_change::ValidatorChangeProof;
@@ -65,7 +65,7 @@ pub struct EpochManager<TT, T> {
     state_computer: Arc<dyn StateComputer<Payload = T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     safety_rules_manager: SafetyRulesManager<T>,
-    tg_consensus: Arc<TreeGraphConsensus>,
+    tg_sync: SharedSynchronizationService,
 }
 
 impl<TT, T> EpochManager<TT, T>
@@ -84,7 +84,7 @@ where
         state_computer: Arc<dyn StateComputer<Payload = T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         safety_rules_manager: SafetyRulesManager<T>,
-        tg_consensus: Arc<TreeGraphConsensus>,
+        tg_sync: SharedSynchronizationService,
     ) -> Self
     {
         Self {
@@ -98,7 +98,7 @@ where
             state_computer,
             storage,
             safety_rules_manager,
-            tg_consensus,
+            tg_sync,
         }
     }
 
@@ -257,7 +257,7 @@ where
             self.txn_transformer.clone(),
             self.time_service.clone(),
             self.config.max_block_size,
-            self.tg_consensus.clone(),
+            self.tg_sync.clone(),
             network_sender
                 .network
                 .net_key_pair()
