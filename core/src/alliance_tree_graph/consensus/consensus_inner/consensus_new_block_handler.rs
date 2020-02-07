@@ -359,6 +359,7 @@ impl ConsensusNewBlockHandler {
         if let Some(callback) =
             inner.next_selected_pivot_waiting_list.remove(&hash)
         {
+            debug!("next_selected_pivot call back");
             callback.send(Ok(PivotBlockDecision {
                 height: block_header.height(),
                 block_hash: hash,

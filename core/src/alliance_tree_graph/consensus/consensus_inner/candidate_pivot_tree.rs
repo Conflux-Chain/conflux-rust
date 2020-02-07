@@ -45,6 +45,7 @@ impl CandidatePivotTree {
     }
 
     pub fn add_leaf(&mut self, parent: usize, leaf: usize) -> bool {
+        debug!("add_leaf parent={:?} leaf={:?}", parent, leaf);
         if !self.consensus_indices_mapping.contains_key(&parent) {
             return false;
         }
@@ -52,12 +53,14 @@ impl CandidatePivotTree {
             return false;
         }
         let parent_index = self.consensus_indices_mapping[&parent];
+        debug!("parent_index={:?}", parent_index);
         let me = self.arena.insert(TreeNode {
             parent: parent_index,
             children: Vec::new(),
         });
         self.arena[parent_index].children.push(me);
         self.consensus_indices_mapping.insert(leaf, me);
+        debug!("add success");
         true
     }
 

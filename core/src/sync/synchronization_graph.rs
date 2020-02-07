@@ -1409,7 +1409,7 @@ impl SynchronizationGraph {
                 < self.consensus.current_era_genesis_seq_num()
                 || info.get_instance_id() == self.data_man.get_instance_id();
             if already_processed {
-                if need_to_verify {
+                if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
                     VerificationConfig::compute_header_pow_quality(header);
@@ -1427,14 +1427,16 @@ impl SynchronizationGraph {
             return (true, Vec::new());
         }
 
+        // skip check for consortium currently
+        debug!("is_consortium={:?}", self.is_consortium());
         let verification_passed = if need_to_verify {
-            !(self.parent_or_referees_invalid(header)
+            self.is_consortium() || !(self.parent_or_referees_invalid(header)
                 || self
                     .verification_config
                     .verify_header_params(header)
                     .is_err())
         } else {
-            if !bench_mode {
+            if !bench_mode && !self.is_consortium() {
                 self.verification_config
                     .verify_pow(header)
                     .expect("local mined block should pass this check!");

@@ -441,7 +441,7 @@ impl ConsensusGraphInner {
             height: block_header.height(),
             past_num_blocks: 0,
             parent,
-            era_block: NULL,
+            era_block: self.get_era_genesis_block_with_parent(parent, 0),
             children: Vec::new(),
             referees: referees.clone(),
             referrers: Vec::new(),
@@ -895,6 +895,7 @@ impl ConsensusGraphInner {
     pub fn validate_and_add_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
     ) -> bool {
+        debug!("validate_and_add_candidate_pivot block={:?} parent={:?} height={:?}", block_hash, parent_hash, height);
         if !self.hash_to_arena_indices.contains_key(parent_hash) {
             return false;
         }
@@ -903,6 +904,7 @@ impl ConsensusGraphInner {
         }
         let parent_arena_index = self.hash_to_arena_indices[parent_hash];
         let arena_index = self.hash_to_arena_indices[block_hash];
+        debug!("index={:?} parent_index={:?}", arena_index, parent_arena_index);
         if self.arena[arena_index].parent != parent_arena_index {
             return false;
         }
