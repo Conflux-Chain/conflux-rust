@@ -27,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
+    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
     BlockTxs, Receipts,
 };
 
@@ -60,7 +60,7 @@ pub struct TxInfos {
     sync_manager: SyncManager<H256, MissingTxInfo>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, ItemOrWaker<TxInfoValidated>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingItem<TxInfoValidated>>>>,
 }
 
 impl TxInfos {
@@ -176,21 +176,12 @@ impl TxInfos {
             let hash = tx.hash();
             let address = TransactionAddress { block_hash, index };
 
-            let mut verified = self.verified.write();
+            self.verified
+                .write()
+                .entry(hash)
+                .or_insert(PendingItem::pending())
+                .set((tx, receipt, address));
 
-            match verified.get(&hash) {
-                None => {
-                    // TODO: this is fishy
-                },
-                Some(ItemOrWaker::Item(i)) => {
-                    // TODO: check if matching
-                }
-                Some(ItemOrWaker::Waker(w)) => {
-                    w.clone().wake();
-                }
-            }
-
-            verified.insert(hash, ItemOrWaker::Item((tx, receipt, address)));
             self.sync_manager.remove_in_flight(&hash);
         }
 

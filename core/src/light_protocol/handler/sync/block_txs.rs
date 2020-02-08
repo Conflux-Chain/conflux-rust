@@ -27,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
+    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
     Txs,
 };
 
@@ -55,7 +55,7 @@ pub struct BlockTxs {
     txs: Arc<Txs>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, ItemOrWaker<Vec<SignedTransaction>>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingItem<Vec<SignedTransaction>>>>>,
 }
 
 impl BlockTxs {
@@ -132,23 +132,13 @@ impl BlockTxs {
         self.validate_block_txs(hash, &block_txs)?;
 
         // store block bodies by block hash
-        let mut verified = self.verified.write();
+        self.verified
+            .write()
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .set(block_txs);
 
-        match verified.get(&hash) {
-            None => {
-                // TODO: this is fishy
-            },
-            Some(ItemOrWaker::Item(i)) => {
-                // TODO: check if matching
-            }
-            Some(ItemOrWaker::Waker(w)) => {
-                w.clone().wake();
-            }
-        }
-
-        verified.insert(hash, ItemOrWaker::Item(block_txs));
         self.sync_manager.remove_in_flight(&hash);
-
         Ok(())
     }
 

@@ -26,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{KeyOrdered, SyncManager, ItemOrWaker, FutureItem},
+    common::{KeyOrdered, SyncManager, PendingItem, FutureItem},
     witnesses::Witnesses,
 };
 
@@ -48,7 +48,7 @@ pub struct Blooms {
     sync_manager: SyncManager<u64, MissingBloom>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, ItemOrWaker<Bloom>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<Bloom>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -86,7 +86,7 @@ impl Blooms {
     pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom>
     {
         if epoch == 0 {
-            self.verified.write().insert(0, ItemOrWaker::Item(Bloom::zero()));
+            self.verified.write().insert(0, PendingItem::ready(Bloom::zero()));
         }
 
         // TODO!!
@@ -124,23 +124,13 @@ impl Blooms {
         self.validate_bloom(epoch, bloom)?;
 
         // store bloom by epoch
-        let mut verified = self.verified.write();
+        self.verified
+            .write()
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .set(bloom);
 
-        match verified.get(&epoch) {
-            None => {
-                // TODO: this is fishy
-            },
-            Some(ItemOrWaker::Item(i)) => {
-                // TODO: check if matching
-            }
-            Some(ItemOrWaker::Waker(w)) => {
-                w.clone().wake();
-            }
-        }
-
-        verified.insert(epoch, ItemOrWaker::Item(bloom));
         self.sync_manager.remove_in_flight(&epoch);
-
         Ok(())
     }
 

@@ -25,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
+    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
     state_roots::StateRoots,
 };
 
@@ -63,7 +63,7 @@ pub struct StateEntries {
     sync_manager: SyncManager<StateKey, MissingStateEntry>,
 
     // state entries received from full node
-    verified: Arc<RwLock<LruCache<StateKey, ItemOrWaker<StateEntry>>>>,
+    verified: Arc<RwLock<LruCache<StateKey, PendingItem<StateEntry>>>>,
 }
 
 impl StateEntries {
@@ -140,21 +140,12 @@ impl StateEntries {
         self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
 
         // store state entry by state key
-        let mut verified = self.verified.write();
+        self.verified
+            .write()
+            .entry(key.clone())
+            .or_insert(PendingItem::pending())
+            .set(entry);
 
-        match verified.get(&key) {
-            None => {
-                // TODO: this is fishy
-            },
-            Some(ItemOrWaker::Item(i)) => {
-                // TODO: check if matching
-            }
-            Some(ItemOrWaker::Waker(w)) => {
-                w.clone().wake();
-            }
-        }
-
-        verified.insert(key.clone(), ItemOrWaker::Item(entry));
         self.sync_manager.remove_in_flight(&key);
 
         Ok(())

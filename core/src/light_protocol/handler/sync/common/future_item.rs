@@ -13,19 +13,60 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-pub enum ItemOrWaker<T> {
-    Item(T),
-    Waker(Waker),
+pub enum PendingItem<T> {
+    Ready(T),
+    Pending(Vec<Waker>),
+}
+
+impl<T> PendingItem<T> {
+    pub fn pending() -> PendingItem<T> {
+        Self::Pending(vec![])
+    }
+
+    pub fn ready(item: T) -> PendingItem<T> {
+        Self::Ready(item)
+    }
+
+    pub fn set(&mut self, item: T) {
+        match self {
+            Self::Ready(old) => {
+                // TODO: check if same
+            }
+            Self::Pending(ws) => {
+                // let mut wakers = Vec::<Waker>::new();
+                // std::mem::swap(ws, &mut wakers);
+                let ws = std::mem::replace(ws, Vec::<Waker>::new());
+
+                *self = Self::Ready(item);
+
+                for w in ws {
+                    w.wake_by_ref();
+                }
+            }
+        }
+    }
+}
+
+impl<T> PendingItem<T> where T: Clone {
+    fn poll(&mut self, ctx: &mut Context) -> Poll<T> {
+        match self {
+            Self::Ready(item) => Poll::Ready(item.clone()),
+            Self::Pending(ws) => {
+                ws.push(ctx.waker().clone());
+                Poll::Pending
+            }
+        }
+    }
 }
 
 pub struct FutureItem<K, V> {
     key: K,
-    verified: Arc<RwLock<LruCache<K, ItemOrWaker<V>>>>,
+    verified: Arc<RwLock<LruCache<K, PendingItem<V>>>>,
 }
 
 impl<K, V> FutureItem<K, V> {
     pub fn new(
-        key: K, verified: Arc<RwLock<LruCache<K, ItemOrWaker<V>>>>,
+        key: K, verified: Arc<RwLock<LruCache<K, PendingItem<V>>>>,
     ) -> FutureItem<K, V> {
         FutureItem { key, verified }
     }
@@ -38,15 +79,11 @@ where
 {
     type Output = V;
 
-    fn poll(mut self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
-        let mut verified = self.verified.write();
-
-        match verified.get(&self.key) {
-            Some(ItemOrWaker::Item(i)) => Poll::Ready(i.clone()),
-            _ => {
-                verified.insert(self.key.clone(), ItemOrWaker::Waker(context.waker().clone()));
-                Poll::Pending
-            }
-        }
+    fn poll(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<Self::Output> {
+        self.verified
+            .write()
+            .entry(self.key.clone())
+            .or_insert(PendingItem::pending())
+            .poll(ctx)
     }
 }

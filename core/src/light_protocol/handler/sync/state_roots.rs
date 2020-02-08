@@ -25,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem},
+    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
     witnesses::Witnesses,
 };
 
@@ -46,7 +46,7 @@ pub struct StateRoots {
     sync_manager: SyncManager<u64, MissingStateRoot>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, ItemOrWaker<StateRoot>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<StateRoot>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -85,7 +85,7 @@ impl StateRoots {
     #[inline]
     pub fn state_root_of(&self, epoch: u64) -> Option<StateRoot> {
         match self.verified.write().get(&epoch) {
-            Some(ItemOrWaker::Item(i)) => Some(i.clone()),
+            Some(PendingItem::Ready(i)) => Some(i.clone()),
             _ => None,
         }
     }
@@ -134,23 +134,13 @@ impl StateRoots {
         self.validate_state_root(epoch, &state_root)?;
 
         // store state root by epoch
-        let mut verified = self.verified.write();
+        self.verified
+            .write()
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .set(state_root);
 
-        match verified.get(&epoch) {
-            None => {
-                // TODO: this is fishy
-            },
-            Some(ItemOrWaker::Item(i)) => {
-                // TODO: check if matching
-            }
-            Some(ItemOrWaker::Waker(w)) => {
-                w.clone().wake();
-            }
-        }
-
-        verified.insert(epoch, ItemOrWaker::Item(state_root));
         self.sync_manager.remove_in_flight(&epoch);
-
         Ok(())
     }
 

@@ -25,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{KeyOrdered, SyncManager, ItemOrWaker, FutureItem},
+    common::{KeyOrdered, SyncManager, PendingItem, FutureItem},
     witnesses::Witnesses,
 };
 
@@ -47,7 +47,7 @@ pub struct Receipts {
     sync_manager: SyncManager<u64, MissingReceipts>,
 
     // epoch receipts received from full node
-    verified: Arc<RwLock<LruCache<u64, ItemOrWaker<Vec<Vec<Receipt>>>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<Vec<Vec<Receipt>>>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -85,7 +85,7 @@ impl Receipts {
     pub fn request(&self, epoch: u64) -> impl Future<Output = Vec<Vec<Receipt>>>
     {
         if epoch == 0 {
-            self.verified.write().insert(0, ItemOrWaker::Item(vec![]));
+            self.verified.write().insert(0, PendingItem::ready(vec![]));
         }
 
         // TODO!!
@@ -123,23 +123,13 @@ impl Receipts {
         self.validate_receipts(epoch, &receipts)?;
 
         // store receipts by epoch
-        let mut verified = self.verified.write();
+        self.verified
+            .write()
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .set(receipts);
 
-        match verified.get(&epoch) {
-            None => {
-                // TODO: this is fishy
-            },
-            Some(ItemOrWaker::Item(i)) => {
-                // TODO: check if matching
-            }
-            Some(ItemOrWaker::Waker(w)) => {
-                w.clone().wake();
-            }
-        }
-
-        verified.insert(epoch, ItemOrWaker::Item(receipts));
         self.sync_manager.remove_in_flight(&epoch);
-
         Ok(())
     }
 

@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-use super::common::{SyncManager, TimeOrdered, ItemOrWaker, FutureItem};
+use super::common::{SyncManager, TimeOrdered, PendingItem, FutureItem};
 
 #[derive(Debug)]
 struct Statistics {
@@ -45,7 +45,7 @@ pub struct Txs {
     sync_manager: SyncManager<H256, MissingTx>,
 
     // txs received from full node
-    verified: Arc<RwLock<LruCache<H256, ItemOrWaker<SignedTransaction>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingItem<SignedTransaction>>>>,
 }
 
 impl Txs {
@@ -114,26 +114,13 @@ impl Txs {
         let hash = tx.hash();
         self.validate_tx(&tx)?;
 
-        let mut verified = self.verified.write();
+        self.verified
+            .write()
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .set(tx);
 
-        match verified.get(&hash) {
-            None => {
-                info!("txs::validate_and_store::A");
-                // TODO: this is fishy
-            },
-            Some(ItemOrWaker::Item(i)) => {
-                info!("txs::validate_and_store::B");
-                // TODO: check if matching
-            }
-            Some(ItemOrWaker::Waker(w)) => {
-                info!("txs::validate_and_store::C");
-                w.clone().wake();
-            }
-        }
-
-        verified.insert(hash, ItemOrWaker::Item(tx));
         self.sync_manager.remove_in_flight(&hash);
-
         Ok(())
     }
 
