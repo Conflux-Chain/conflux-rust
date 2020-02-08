@@ -198,7 +198,7 @@ impl BlockStatus {
         }
     }
 
-    fn to_db_status(&self) -> u8 { *self as u8 }
+    pub fn to_db_status(&self) -> u8 { *self as u8 }
 }
 
 /// The checkpoint information stored in the database

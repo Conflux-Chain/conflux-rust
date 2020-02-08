@@ -565,6 +565,15 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
         assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
         assert not t.failed, "connect_sample_nodes failed."
 
+
+def assert_blocks_valid(nodes, blocks):
+    for node in nodes:
+        for block in blocks:
+            r = node.get_block_status(block)
+            assert_equal(r[0], 0)  # block status is valid
+            assert_equal(r[1], True)  # state_valid is True
+
+
 class ConnectThread(threading.Thread):
     def __init__(self, nodes, a, peers, latencies, log, min_peers=3, daemon=True):
         threading.Thread.__init__(self, daemon=daemon)

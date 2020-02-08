@@ -20,10 +20,10 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["generate_tx"] = "true"
         # Every node generates 1 tx every second
         self.conf_parameters["generate_tx_period_us"] = "100000"
-        self.conf_parameters["log_level"] = "\"debug\""
+        self.conf_parameters["log_level"] = "\"trace\""
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["era_checkpoint_gap"] = "150"
-        self.conf_parameters["snapshot_epoch_count"] = "50"
+        self.conf_parameters["dev_snapshot_epoch_count"] = "50"
 
     def setup_nodes(self):
         self.add_nodes(self.num_nodes)

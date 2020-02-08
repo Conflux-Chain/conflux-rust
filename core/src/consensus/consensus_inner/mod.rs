@@ -700,11 +700,20 @@ impl ConsensusGraphInner {
     fn find_first_with_trusted_blame_starting_from(
         &self, pivot_index: usize, blame_bound: Option<u32>,
     ) -> Option<usize> {
+        trace!(
+            "find_first_with_trusted_blame_starting_from pivot_index={:?}",
+            pivot_index
+        );
         let mut cur_pivot_index = pivot_index;
         while cur_pivot_index < self.pivot_chain.len() {
             let arena_index = self.pivot_chain[cur_pivot_index];
             let blame_ratio =
                 self.compute_blame_ratio(arena_index, blame_bound);
+            trace!(
+                "blame_ratio for {:?} is {}",
+                self.arena[arena_index].hash,
+                blame_ratio
+            );
             if blame_ratio < MAX_BLAME_RATIO_FOR_TRUST {
                 return Some(cur_pivot_index);
             }
@@ -2606,6 +2615,10 @@ impl ConsensusGraphInner {
         let arena_index_opt = self.hash_to_arena_indices.get(checkpoint_hash);
         // checkpoint has changed, wait for next checkpoint
         if arena_index_opt.is_none() {
+            debug!(
+                "get_trusted_blame_block: block {:?} not in consensus",
+                checkpoint_hash
+            );
             return None;
         }
         let arena_index = *arena_index_opt.unwrap();
@@ -2615,6 +2628,10 @@ impl ConsensusGraphInner {
         if pivot_index >= self.pivot_chain.len()
             || self.pivot_chain[pivot_index] != arena_index
         {
+            debug!(
+                "get_trusted_blame_block: block {:?} not on pivot chain",
+                checkpoint_hash
+            );
             return None;
         }
         self.find_first_index_with_correct_state_of(
@@ -2622,6 +2639,16 @@ impl ConsensusGraphInner {
             None, /* blame_bound */
         )
         .and_then(|index| Some(self.arena[self.pivot_chain[index]].hash))
+    }
+
+    /// Find a trusted blame block for snapshot full sync
+    pub fn get_trusted_blame_block_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<H256> {
+        self.get_trusted_blame_block(
+            snapshot_epoch_id,
+            self.data_man.get_snapshot_blame_plus_depth(),
+        )
     }
 
     /// Return the epoch that we are going to sync the state
@@ -2816,5 +2843,11 @@ impl ConsensusGraphInner {
         } else {
             error!("Fail to recover state_valid");
         }
+    }
+
+    pub fn block_node(&self, block_hash: &H256) -> Option<&ConsensusGraphNode> {
+        self.hash_to_arena_indices
+            .get(block_hash)
+            .and_then(|arena_index| self.arena.get(*arena_index))
     }
 }

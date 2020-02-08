@@ -4,20 +4,22 @@
 
 use delegate::delegate;
 
+use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        Status as RpcStatus, SyncGraphStates, Transaction as RpcTransaction,
-        H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
-        U256 as RpcU256, U64 as RpcU64,
+        SendTxRequest, Status as RpcStatus, SyncGraphStates,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
+    block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
     test_context::*, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -27,11 +29,10 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{SignedTransaction, TransactionWithSignature};
+use primitives::{filter::Filter, SignedTransaction, TransactionWithSignature};
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-
-use super::common::RpcImpl as CommonImpl;
+use txgen::TransactionGenerator;
 
 #[derive(Default)]
 pub struct RpcImplConfiguration {
@@ -46,11 +47,6 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
-use crate::rpc::types::SendTxRequest;
-use cfxcore::block_data_manager::BlockExecutionResultWithEpoch;
-use primitives::filter::Filter;
-use txgen::TransactionGenerator;
-
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
@@ -559,6 +555,27 @@ impl RpcImpl {
         Ok(SyncGraphStates::new(sync_graph_states))
     }
 
+    /// Return (block_info.status, state_valid)
+    /// Return Error if either field is missing
+    pub fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)> {
+        let status = self
+            .consensus
+            .data_man
+            .local_block_info_from_db(&block_hash)
+            .ok_or(RpcError::invalid_params("No block status"))?
+            .get_status();
+        let state_valid = self
+            .consensus
+            .inner
+            .read()
+            .block_node(&block_hash)
+            .ok_or(RpcError::invalid_params("No block in consensus"))?
+            .data
+            .state_valid
+            .ok_or(RpcError::invalid_params("No state_valid"))?;
+        Ok((status.to_db_status(), state_valid))
+    }
+
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()> {
@@ -655,6 +672,7 @@ impl TestRpc for TestRpcImpl {
             fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
             fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
             fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
+            fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
             fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
             fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;
         }
