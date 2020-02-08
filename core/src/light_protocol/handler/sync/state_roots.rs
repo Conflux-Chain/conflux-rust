@@ -7,8 +7,7 @@ extern crate lru_time_cache;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::StateRoot;
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
@@ -25,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     witnesses::Witnesses,
 };
 
@@ -91,8 +90,9 @@ impl StateRoots {
     }
 
     #[inline]
-    pub fn request_now(&self, io: &dyn NetworkContext, epoch: u64) -> impl Future<Output = StateRoot>
-    {
+    pub fn request_now(
+        &self, io: &dyn NetworkContext, epoch: u64,
+    ) -> impl Future<Output = StateRoot> {
         // TODO!!
         if !self.verified.read().contains_key(&epoch) {
             let missing = std::iter::once(MissingStateRoot::new(epoch));

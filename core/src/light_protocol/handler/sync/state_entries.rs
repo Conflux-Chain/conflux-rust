@@ -6,8 +6,7 @@ extern crate lru_time_cache;
 
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
@@ -25,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     state_roots::StateRoots,
 };
 
@@ -98,8 +97,7 @@ impl StateEntries {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Output = StateEntry>
-    {
+    ) -> impl Future<Output = StateEntry> {
         let key = StateKey { epoch, key };
 
         // TODO!!

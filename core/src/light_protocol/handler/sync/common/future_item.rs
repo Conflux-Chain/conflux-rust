@@ -6,10 +6,11 @@ extern crate lru_time_cache;
 
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::{hash::Hash, sync::Arc};
 use std::{
     future::Future,
+    hash::Hash,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
 
@@ -19,21 +20,18 @@ pub enum PendingItem<T> {
 }
 
 impl<T> PendingItem<T> {
-    pub fn pending() -> PendingItem<T> {
-        Self::Pending(vec![])
-    }
+    pub fn pending() -> PendingItem<T> { Self::Pending(vec![]) }
 
-    pub fn ready(item: T) -> PendingItem<T> {
-        Self::Ready(item)
-    }
+    pub fn ready(item: T) -> PendingItem<T> { Self::Ready(item) }
 }
 
 impl<T> PendingItem<T> {
     pub fn set(&mut self, item: T) {
         match self {
             Self::Ready(_old) => {
-                // FIXME: we might want to check if old == item and raise an error if not.
-                // This, however, would require the that T : Eq.
+                // FIXME: we might want to check if old == item and raise an
+                // error if not. This, however, would require
+                // the that T : Eq.
             }
             Self::Pending(ws) => {
                 // move `ws` out
@@ -51,7 +49,9 @@ impl<T> PendingItem<T> {
     }
 }
 
-impl<T> PendingItem<T> where T: Clone {
+impl<T> PendingItem<T>
+where T: Clone
+{
     fn poll(&mut self, ctx: &mut Context) -> Poll<T> {
         match self {
             Self::Ready(item) => Poll::Ready(item.clone()),

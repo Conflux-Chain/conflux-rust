@@ -8,8 +8,7 @@ use cfx_types::H256;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Block, SignedTransaction};
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -27,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     Txs,
 };
 
@@ -90,8 +89,9 @@ impl BlockTxs {
     }
 
     #[inline]
-    pub fn request(&self, hash: H256) -> impl Future<Output = Vec<SignedTransaction>>
-    {
+    pub fn request(
+        &self, hash: H256,
+    ) -> impl Future<Output = Vec<SignedTransaction>> {
         // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);

@@ -7,8 +7,7 @@ extern crate lru_time_cache;
 use cfx_types::Bloom;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     hash::keccak,
@@ -26,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{KeyOrdered, SyncManager, PendingItem, FutureItem},
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
 
@@ -83,10 +82,11 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom>
-    {
+    pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom> {
         if epoch == 0 {
-            self.verified.write().insert(0, PendingItem::ready(Bloom::zero()));
+            self.verified
+                .write()
+                .insert(0, PendingItem::ready(Bloom::zero()));
         }
 
         // TODO!!

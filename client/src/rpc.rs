@@ -194,7 +194,7 @@ where
 }
 
 pub fn start_http(
-    conf: HttpConfiguration, handler: MetaIoHandler<Metadata>
+    conf: HttpConfiguration, handler: MetaIoHandler<Metadata>,
 ) -> Result<Option<HttpServer>, String> {
     if !conf.enabled {
         return Ok(None);

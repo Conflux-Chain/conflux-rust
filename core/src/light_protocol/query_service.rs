@@ -7,9 +7,7 @@ extern crate futures;
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{
-            FullPeerFilter, LedgerInfo,
-        },
+        common::{FullPeerFilter, LedgerInfo},
         message::msgid,
         Error, Handler as LightHandler, LIGHT_PROTOCOL_ID,
         LIGHT_PROTOCOL_VERSION,
@@ -22,14 +20,14 @@ use crate::{
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
-use futures::{future, stream, StreamExt, FutureExt, TryFutureExt};
+use futures::{future, stream, FutureExt, StreamExt, TryFutureExt};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, EpochNumber, Receipt, SignedTransaction, StateRoot, StorageKey,
     TransactionAddress,
 };
-use std::{collections::BTreeSet, sync::Arc, time::Duration, future::Future};
+use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
 type TxInfo = (
     SignedTransaction,
@@ -39,7 +37,9 @@ type TxInfo = (
     Option<H256>, /* maybe_state_root */
 );
 
-async fn with_timeout<T>(dur: Duration, msg: String, fut: impl Future<Output=T> + Send + Sync) -> Result<T, String> {
+async fn with_timeout<T>(
+    dur: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
+) -> Result<T, String> {
     // convert `fut` into futures@0.1
     let fut = fut.unit_error().boxed().compat();
 
@@ -111,26 +111,38 @@ impl QueryService {
         trace!("retrieve_state_root epoch = {}", epoch);
 
         // https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving state root for epoch {}", epoch);
+        let msg =
+            format!("Timeout while retrieving state root for epoch {}", epoch);
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
+            msg,            /* error */
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
-        ).await.unwrap() // TODO
+        )
+        .await
+        .unwrap() // TODO
     }
 
-    async fn retrieve_state_entry(&self, epoch: u64, key: Vec<u8>) -> Option<Vec<u8>> {
+    async fn retrieve_state_entry(
+        &self, epoch: u64, key: Vec<u8>,
+    ) -> Option<Vec<u8>> {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
         // https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key);
+        let msg = format!(
+            "Timeout while retrieving state entry for epoch {} with key {:?}",
+            epoch, key
+        );
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
-            self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key)),
-        ).await.unwrap() // TODO
+            msg,            /* error */
+            self.with_io(|io| {
+                self.handler.state_entries.request_now(io, epoch, key)
+            }),
+        )
+        .await
+        .unwrap() // TODO
     }
 
     async fn retrieve_bloom(&self, epoch: u64) -> Bloom {
@@ -141,38 +153,48 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
+            msg,            /* error */
             self.handler.blooms.request(epoch),
-        ).await.unwrap() // TODO
+        )
+        .await
+        .unwrap() // TODO
     }
 
     async fn retrieve_receipts(&self, epoch: u64) -> Vec<Vec<Receipt>> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
         // https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving receipts for epoch {}", epoch);
+        let msg =
+            format!("Timeout while retrieving receipts for epoch {}", epoch);
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
+            msg,            /* error */
             self.handler.receipts.request(epoch),
-        ).await.unwrap() // TODO
+        )
+        .await
+        .unwrap() // TODO
     }
 
     async fn retrieve_block_txs(&self, hash: H256) -> Vec<SignedTransaction> {
         trace!("retrieve_block_txs hash = {:?}", hash);
 
         // https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving block txs for block {}", hash);
+        let msg =
+            format!("Timeout while retrieving block txs for block {}", hash);
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
+            msg,            /* error */
             self.handler.block_txs.request(hash),
-        ).await.unwrap() // TODO
+        )
+        .await
+        .unwrap() // TODO
     }
 
-    async fn retrieve_tx_info(&self, hash: H256) -> (SignedTransaction, Receipt, TransactionAddress) {
+    async fn retrieve_tx_info(
+        &self, hash: H256,
+    ) -> (SignedTransaction, Receipt, TransactionAddress) {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         // https://github.com/rust-lang/rust/issues/64960
@@ -180,9 +202,11 @@ impl QueryService {
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
+            msg,            /* error */
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
-        ).await.unwrap() // TODO
+        )
+        .await
+        .unwrap() // TODO
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
@@ -197,8 +221,9 @@ impl QueryService {
         .to_key_bytes()
     }
 
-    async fn retrieve_account(&self, epoch: u64, address: H160) -> Result<Option<Account>, Error>
-    {
+    async fn retrieve_account(
+        &self, epoch: u64, address: H160,
+    ) -> Result<Option<Account>, Error> {
         trace!(
             "retrieve_account epoch = {}, address = {:?}",
             epoch,
@@ -208,7 +233,8 @@ impl QueryService {
         // trigger state root request but don't wait for result
         // TODO: figure out a better way
         // let mut f = self.retrieve_state_root(epoch).boxed().as_mut();
-        let _ = self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
+        let _ =
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
         let key = Self::account_key(&address);
         let entry = self.retrieve_state_entry(epoch, key).await;
@@ -219,8 +245,9 @@ impl QueryService {
         }
     }
 
-    async fn retrieve_code(&self, epoch: u64, address: H160, code_hash: H256) -> Option<Vec<u8>>
-    {
+    async fn retrieve_code(
+        &self, epoch: u64, address: H160, code_hash: H256,
+    ) -> Option<Vec<u8>> {
         trace!(
             "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
             epoch,
@@ -232,7 +259,9 @@ impl QueryService {
         self.retrieve_state_entry(epoch, key).await
     }
 
-    pub async fn get_account(&self, epoch: EpochNumber, address: H160) -> Result<Option<Account>, String> {
+    pub async fn get_account(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<Account>, String> {
         info!("get_account epoch={:?} address={:?}", epoch, address);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
@@ -242,7 +271,8 @@ impl QueryService {
 
         // TODO: make whole function async
         // TODO: handle errors
-        self.retrieve_account(epoch, address).await
+        self.retrieve_account(epoch, address)
+            .await
             .map_err(|e| format!("{}", e))
 
         // return Err(String::from("err during get_account"));
@@ -259,15 +289,19 @@ impl QueryService {
         };
 
         // TODO: handle errors
-        let acc = self.retrieve_account(epoch, address).await
+        let acc = self
+            .retrieve_account(epoch, address)
+            .await
             .map_err(|e| format!("Unable to retrieve account: {:?}", e))?;
 
         let code_hash = match acc {
             Some(acc) => acc.code_hash,
-            None => return Err(format!(
-                "Account {:?} (number={:?}) does not exist",
-                address, epoch,
-            )),
+            None => {
+                return Err(format!(
+                    "Account {:?} (number={:?}) does not exist",
+                    address, epoch,
+                ))
+            }
         };
 
         Ok(self.retrieve_code(epoch, address, code_hash).await)
@@ -325,13 +359,16 @@ impl QueryService {
         info!("get_tx hash={:?}", hash);
 
         // https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving transaction with hash {}", hash);
+        let msg =
+            format!("Timeout while retrieving transaction with hash {}", hash);
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            msg, /* error */
+            msg,            /* error */
             self.with_io(|io| self.handler.txs.request_now(io, hash)),
-        ).await.unwrap() // TODO
+        )
+        .await
+        .unwrap() // TODO
     }
 
     /// Apply filter to all logs within a receipt.
@@ -457,7 +494,8 @@ impl QueryService {
 
     fn get_filter_epochs(
         &self, filter: &Filter,
-    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError> {
+    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError>
+    {
         match &filter.block_hashes {
             None => {
                 let from_epoch = self
@@ -503,8 +541,8 @@ impl QueryService {
         }
     }
 
-    // pub fn matching_logs_stream(&self) -> impl Stream<Item = LocalizedLogEntry> {
-    //     stream::empty()
+    // pub fn matching_logs_stream(&self) -> impl Stream<Item =
+    // LocalizedLogEntry> {     stream::empty()
     // }
 
     pub async fn get_logs(
@@ -605,7 +643,7 @@ impl QueryService {
             // Stream<LocalizedLogEntry>
 
             .collect();
-            // Future<Iterator<LocalizedLogEntry>>
+        // Future<Iterator<LocalizedLogEntry>>
 
         let mut matching: Vec<_> = stream.await;
         matching.reverse();

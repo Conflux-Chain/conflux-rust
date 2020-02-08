@@ -8,8 +8,7 @@ use cfx_types::H256;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::SignedTransaction;
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
@@ -25,7 +24,7 @@ use crate::{
     },
 };
 
-use super::common::{SyncManager, TimeOrdered, PendingItem, FutureItem};
+use super::common::{FutureItem, PendingItem, SyncManager, TimeOrdered};
 
 #[derive(Debug)]
 struct Statistics {
@@ -74,8 +73,9 @@ impl Txs {
     }
 
     #[inline]
-    pub fn request_now(&self, io: &dyn NetworkContext, hash: H256) -> impl Future<Output = SignedTransaction>
-    {
+    pub fn request_now(
+        &self, io: &dyn NetworkContext, hash: H256,
+    ) -> impl Future<Output = SignedTransaction> {
         // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTx::new(hash));

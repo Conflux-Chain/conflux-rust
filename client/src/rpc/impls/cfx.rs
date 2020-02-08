@@ -22,8 +22,10 @@ use cfxcore::{
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use jsonrpc_core::{Error as RpcError, Result as RpcResult, BoxFuture};
-use jsonrpc_core::futures::future::{self, Future};
+use jsonrpc_core::{
+    futures::future::{self, Future},
+    BoxFuture, Error as RpcError, Result as RpcResult,
+};
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -79,7 +81,8 @@ impl RpcImpl {
             address, epoch_number
         );
 
-        let res = self.consensus
+        let res = self
+            .consensus
             .get_code(address, epoch_number.into())
             .map(Bytes::new)
             .map_err(RpcError::invalid_params);
@@ -97,7 +100,8 @@ impl RpcImpl {
             address, num
         );
 
-        let res = self.consensus
+        let res = self
+            .consensus
             .get_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params);
@@ -115,7 +119,8 @@ impl RpcImpl {
             address, num
         );
 
-        let res = self.consensus
+        let res = self
+            .consensus
             .get_bank_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params);
@@ -133,7 +138,8 @@ impl RpcImpl {
             address, num
         );
 
-        let res = self.consensus
+        let res = self
+            .consensus
             .get_storage_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params);
@@ -151,7 +157,8 @@ impl RpcImpl {
             "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
             address, epoch_num
         );
-        let res = self.consensus
+        let res = self
+            .consensus
             .get_account(address, epoch_num.into())
             .map(|acc| RpcAccount::new(acc))
             .map_err(|err| {
@@ -284,10 +291,7 @@ impl RpcImpl {
                 Some(RpcReceipt::new(transaction.clone(), receipt, tx_address)),
             )))
         } else if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-            Ok(Some(RpcTransaction::from_signed(
-                &transaction,
-                None,
-            )))
+            Ok(Some(RpcTransaction::from_signed(&transaction, None)))
         } else {
             Ok(None)
         };
@@ -538,7 +542,8 @@ impl RpcImpl {
                 filter.limit = Some(max_limit);
             }
         }
-        let res = self.consensus
+        let res = self
+            .consensus
             .logs(filter)
             .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)

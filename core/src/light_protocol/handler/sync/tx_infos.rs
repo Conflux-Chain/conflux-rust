@@ -8,8 +8,7 @@ use cfx_types::H256;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Receipt, SignedTransaction, TransactionAddress};
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -27,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{SyncManager, TimeOrdered, PendingItem, FutureItem},
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     BlockTxs, Receipts,
 };
 
@@ -96,8 +95,9 @@ impl TxInfos {
     }
 
     #[inline]
-    pub fn request_now(&self, io: &dyn NetworkContext, hash: H256) -> impl Future<Output = TxInfoValidated>
-    {
+    pub fn request_now(
+        &self, io: &dyn NetworkContext, hash: H256,
+    ) -> impl Future<Output = TxInfoValidated> {
         // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTxInfo::new(hash));

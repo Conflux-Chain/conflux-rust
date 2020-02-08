@@ -8,7 +8,7 @@ use super::super::types::{
     H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
-use jsonrpc_core::{Result as RpcResult, BoxFuture};
+use jsonrpc_core::{BoxFuture, Result as RpcResult};
 use jsonrpc_derive::rpc;
 
 /// Cfx rpc interface.

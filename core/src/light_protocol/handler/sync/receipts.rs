@@ -6,8 +6,7 @@ extern crate lru_time_cache;
 
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::sync::Arc;
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
@@ -25,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    common::{KeyOrdered, SyncManager, PendingItem, FutureItem},
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
 
@@ -82,8 +81,9 @@ impl Receipts {
     }
 
     #[inline]
-    pub fn request(&self, epoch: u64) -> impl Future<Output = Vec<Vec<Receipt>>>
-    {
+    pub fn request(
+        &self, epoch: u64,
+    ) -> impl Future<Output = Vec<Vec<Receipt>>> {
         if epoch == 0 {
             self.verified.write().insert(0, PendingItem::ready(vec![]));
         }
