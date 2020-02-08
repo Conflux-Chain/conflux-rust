@@ -22,14 +22,14 @@ use crate::{
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
-use futures::{future, stream, Stream, StreamExt, FutureExt};
+use futures::{future, stream, StreamExt, FutureExt, TryFutureExt};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, EpochNumber, Receipt, SignedTransaction, StateRoot, StorageKey,
     TransactionAddress,
 };
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc, time::Duration, future::Future};
 
 type TxInfo = (
     SignedTransaction,
@@ -39,9 +39,8 @@ type TxInfo = (
     Option<H256>, /* maybe_state_root */
 );
 
-async fn with_timeout<T>(dur: std::time::Duration, msg: String, fut: impl std::future::Future<Output=T> + Send + Sync) -> Result<T, String> {
+async fn with_timeout<T>(dur: Duration, msg: String, fut: impl Future<Output=T> + Send + Sync) -> Result<T, String> {
     // convert `fut` into futures@0.1
-    use futures::future::{FutureExt, TryFutureExt};
     let fut = fut.unit_error().boxed().compat();
 
     // set timeout
@@ -208,7 +207,7 @@ impl QueryService {
 
         // trigger state root request but don't wait for result
         // TODO: figure out a better way
-        // let _ = self.retrieve_state_root(epoch);
+        // let mut f = self.retrieve_state_root(epoch).boxed().as_mut();
         let _ = self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
         let key = Self::account_key(&address);

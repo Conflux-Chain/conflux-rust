@@ -26,19 +26,23 @@ impl<T> PendingItem<T> {
     pub fn ready(item: T) -> PendingItem<T> {
         Self::Ready(item)
     }
+}
 
+impl<T> PendingItem<T> {
     pub fn set(&mut self, item: T) {
         match self {
-            Self::Ready(old) => {
-                // TODO: check if same
+            Self::Ready(_old) => {
+                // FIXME: we might want to check if old == item and raise an error if not.
+                // This, however, would require the that T : Eq.
             }
             Self::Pending(ws) => {
-                // let mut wakers = Vec::<Waker>::new();
-                // std::mem::swap(ws, &mut wakers);
+                // move `ws` out
                 let ws = std::mem::replace(ws, Vec::<Waker>::new());
 
+                // transform `self`
                 *self = Self::Ready(item);
 
+                // notify waiting futures
                 for w in ws {
                     w.wake_by_ref();
                 }
