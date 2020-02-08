@@ -589,7 +589,6 @@ impl State {
                 maybe_existing_merkle_root.unwrap(),
                 merkle_root
             );
-            debug_assert!(false);
             assert_eq!(
                 maybe_existing_merkle_root,
                 Some(*merkle_root),

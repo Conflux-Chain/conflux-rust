@@ -49,6 +49,8 @@ pub struct ConsensusInnerConfig {
     pub heavy_block_difficulty_ratio: u64,
     // The timer block ratio in timer chain algorithm
     pub timer_chain_block_difficulty_ratio: u64,
+    // The timer chain beta ratio
+    pub timer_chain_beta: u64,
     // The number of epochs per era. Each era is a potential checkpoint
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
@@ -321,6 +323,8 @@ pub struct ConsensusGraphInner {
     pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     // The longest timer chain block indexes
     pub timer_chain: Vec<usize>,
+    // The accumulative LCA of timer_chain for consecutive
+    pub timer_chain_accumulative_lca: Vec<usize>,
     // The set of *graph* tips in the TreeGraph.
     terminal_hashes: HashSet<H256>,
     // The ``current'' era_genesis block index. It will start being the
@@ -435,6 +439,7 @@ impl ConsensusGraphInner {
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
             timer_chain: Vec::new(),
+            timer_chain_accumulative_lca: Vec::new(),
             terminal_hashes: Default::default(),
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
@@ -1523,7 +1528,12 @@ impl ConsensusGraphInner {
         }
 
         let mut timer_longest_difficulty = 0;
-        let mut longest_referee = NULL;
+        let mut longest_referee = parent;
+        if parent != NULL {
+            timer_longest_difficulty = self.arena[parent]
+                .timer_longest_difficulty
+                + self.get_timer_difficulty(parent);
+        }
         for referee in &referees {
             self.terminal_hashes.remove(&self.arena[*referee].hash);
             let timer_difficulty = self.arena[*referee]
@@ -2638,6 +2648,12 @@ impl ConsensusGraphInner {
         if !self.arena[me].is_timer {
             return false;
         }
+        info!(
+            "me {} height {} genesis height {}",
+            me,
+            self.arena[me].timer_chain_height,
+            self.cur_era_genesis_timer_chain_height
+        );
         let timer_chain_index = (self.arena[me].timer_chain_height
             - self.cur_era_genesis_timer_chain_height)
             as usize;
@@ -2646,30 +2662,34 @@ impl ConsensusGraphInner {
     }
 
     fn compute_timer_chain_tuple(
-        &self, me: usize, anticone_barrier_opt: Option<&BitSet>,
-    ) -> (u64, HashMap<usize, u64>, Vec<usize>) {
-        let empty_barrier = BitSet::new();
-        let anticone_barrier = if let Some(a) = anticone_barrier_opt {
+        &self, me: usize, anticone_opt: Option<&BitSet>,
+    ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>) {
+        let empty_set = BitSet::new();
+        let anticone = if let Some(a) = anticone_opt {
             a
         } else {
-            &empty_barrier
+            &empty_set
         };
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
-        let mut i = me;
+        let mut i = self.arena[me].last_timer_block_arena_index;
         while i != NULL && !self.is_on_timer_chain(i) {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
             i = self.arena[i].last_timer_block_arena_index;
         }
         tmp_chain.reverse();
-        let mut fork_at = 0;
-        let mut fork_at_index = 0;
+        let fork_at;
+        let fork_at_index;
         if i != NULL {
             fork_at = self.arena[i].timer_chain_height;
-            assert!(fork_at >= self.cur_era_genesis_height);
-            fork_at_index =
-                (fork_at - self.cur_era_genesis_height) as usize + 1;
+            assert!(fork_at >= self.cur_era_genesis_timer_chain_height);
+            fork_at_index = (fork_at - self.cur_era_genesis_timer_chain_height)
+                as usize
+                + 1;
+        } else {
+            fork_at = self.cur_era_genesis_timer_chain_height;
+            fork_at_index = 0;
         }
 
         // Now we need to update the timer_chain_height field of the remaining
@@ -2684,18 +2704,25 @@ impl ConsensusGraphInner {
         }
         while let Some(x) = queue.pop_front() {
             visited.insert(x);
-            for referer in &self.arena[x].referrers {
-                if anticone_barrier.contains(*referer as u32) {
+            let concatenated =
+                [&self.arena[x].children[..], &self.arena[x].referrers[..]]
+                    .concat();
+            for succ in concatenated {
+                // Test whether this is inside the anticone.
+                if anticone.contains(succ as u32) {
                     continue;
                 }
-                if !visited.contains(referer) {
-                    queue.push_back(*referer);
+                if !visited.contains(&succ) {
+                    queue.push_back(succ);
                 }
             }
         }
         let mut counter = HashMap::new();
         for x in &visited {
             let mut cnt = 0;
+            if visited.contains(&self.arena[*x].parent) {
+                cnt = 1;
+            }
             for referee in &self.arena[*x].referees {
                 if visited.contains(referee) {
                     cnt += 1;
@@ -2703,54 +2730,130 @@ impl ConsensusGraphInner {
             }
             counter.insert(*x, cnt);
         }
-        visited.clear();
         if i == NULL {
             queue.push_back(self.cur_era_genesis_block_arena_index);
+            info!(
+                "start at genesis {}",
+                self.cur_era_genesis_block_arena_index
+            );
         } else {
             queue.push_back(self.timer_chain[fork_at_index - 1]);
+            info!(
+                "start at {} chain height {}",
+                self.timer_chain[fork_at_index - 1],
+                fork_at
+            );
         }
         let mut res = HashMap::new();
         while let Some(x) = queue.pop_front() {
+            info!("exploring {}", x);
             let mut timer_chain_height = 0;
-            for referee in &self.arena[x].referees {
-                let height =
-                    if self.arena[*referee].timer_chain_height < fork_at {
-                        self.arena[*referee].timer_chain_height
-                    } else {
-                        *res.get(referee).unwrap()
-                    };
+            let mut preds = self.arena[x].referees.clone();
+            if self.arena[x].parent != NULL {
+                preds.push(self.arena[x].parent);
+            }
+            for pred in &preds {
+                info!(
+                    "referee {} height {} cur_era_genesis_block_arena_index {}",
+                    pred,
+                    self.arena[*pred].timer_chain_height,
+                    self.cur_era_genesis_block_arena_index
+                );
+                let height = if let Some(v) = res.get(pred) {
+                    *v
+                } else {
+                    self.arena[*pred].timer_chain_height
+                };
                 if height > timer_chain_height {
                     timer_chain_height = height;
                 }
             }
             if tmp_chain_set.contains(&x) {
                 timer_chain_height += 1;
+                info!(
+                    "timer chain block {}! height inc to {}",
+                    x, timer_chain_height
+                );
             }
+            info!("res {} height {}", x, timer_chain_height);
             res.insert(x, timer_chain_height);
-
-            for referer in &self.arena[x].referrers {
-                if anticone_barrier.contains(*referer as u32) {
+            let concatenated =
+                [&self.arena[x].children[..], &self.arena[x].referrers[..]]
+                    .concat();
+            for succ in concatenated {
+                if !visited.contains(&succ) {
                     continue;
                 }
-                let cnt = counter.get(referer).unwrap() - 1;
+                let cnt = counter.get(&succ).unwrap() - 1;
+                info!("link {} succ {} cnt {}", x, succ, cnt);
                 if cnt == 0 {
-                    queue.push_back(*referer);
+                    queue.push_back(succ);
                 }
-                counter.insert(*referer, cnt);
+                counter.insert(succ, cnt);
             }
         }
-        (fork_at, res, tmp_chain)
+
+        // We compute the accumulative lca list after this
+        let mut tmp_lca = Vec::new();
+        if tmp_chain.len() > self.inner_conf.timer_chain_beta as usize {
+            let mut last_lca = if fork_at_index == 0 {
+                self.cur_era_genesis_block_arena_index
+            } else {
+                self.timer_chain[fork_at_index - 1]
+            };
+            for i in 0..(tmp_chain.len()
+                - (self.inner_conf.timer_chain_beta as usize))
+            {
+                if fork_at_index + i + 1
+                    < self.inner_conf.timer_chain_beta as usize
+                {
+                    tmp_lca.push(self.cur_era_genesis_block_arena_index)
+                } else {
+                    let mut lca = tmp_chain[i];
+                    for j in 0..i {
+                        lca = self.lca(lca, tmp_chain[j]);
+                    }
+                    for j in (fork_at_index + i + 1
+                        - self.inner_conf.timer_chain_beta as usize)
+                        ..fork_at_index
+                    {
+                        lca = self.lca(lca, self.timer_chain[j]);
+                    }
+                    if self.arena[last_lca].height < self.arena[lca].height {
+                        last_lca = lca;
+                    }
+                    tmp_lca.push(lca);
+                }
+            }
+        }
+
+        (fork_at, res, tmp_lca, tmp_chain)
     }
 
     pub fn update_timer_chain(&mut self, me: usize) {
-        let (fork_at, res, tmp_chain) =
+        let (fork_at, res, extra_lca, tmp_chain) =
             self.compute_timer_chain_tuple(me, None);
 
-        let fork_at_index = (fork_at - self.cur_era_genesis_height) as usize;
+        let fork_at_index =
+            (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
         self.timer_chain.resize(fork_at_index + tmp_chain.len(), 0);
+        let new_chain_lca_size = if self.timer_chain.len()
+            > self.inner_conf.timer_chain_beta as usize
+        {
+            self.timer_chain.len() - self.inner_conf.timer_chain_beta as usize
+        } else {
+            0
+        };
+        self.timer_chain_accumulative_lca
+            .resize(new_chain_lca_size, 0);
         for i in 0..tmp_chain.len() {
             self.timer_chain[fork_at_index + i] = tmp_chain[i];
         }
+        for i in 0..extra_lca.len() {
+            self.timer_chain_accumulative_lca
+                [new_chain_lca_size - extra_lca.len() + i] = extra_lca[i];
+        }
+        assert!(res.contains_key(&me));
         for (k, v) in res {
             self.arena[k].timer_chain_height = v;
         }

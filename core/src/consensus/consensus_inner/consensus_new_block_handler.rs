@@ -252,6 +252,13 @@ impl ConsensusNewBlockHandler {
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
             inner.terminal_hashes.remove(&inner.arena[me].hash);
+            // FIXME: We should change this after finish the full timer chain
+            // implementation
+            if !new_era_block_arena_index_set
+                .contains(&inner.arena[me].last_timer_block_arena_index)
+            {
+                inner.arena[me].last_timer_block_arena_index = NULL;
+            }
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
@@ -270,6 +277,43 @@ impl ConsensusNewBlockHandler {
                 inner.data_man.remove_epoch_execution_context(&hash);
             }
         }
+        // FIXME: We may need to consider the case where timer chain block is
+        // outside
+        let mut timer_chain_truncate = 0;
+        while timer_chain_truncate < inner.timer_chain.len()
+            && new_era_block_arena_index_set
+                .contains(&inner.timer_chain[timer_chain_truncate])
+        {
+            timer_chain_truncate += 1;
+        }
+        inner.cur_era_genesis_timer_chain_height += timer_chain_truncate as u64;
+        for i in 0..(inner.timer_chain.len() - timer_chain_truncate) {
+            inner.timer_chain[i] = inner.timer_chain[i + timer_chain_truncate];
+            if i + timer_chain_truncate
+                < inner.timer_chain_accumulative_lca.len()
+            {
+                inner.timer_chain_accumulative_lca[i] = inner
+                    .timer_chain_accumulative_lca[i + timer_chain_truncate];
+            }
+        }
+        inner
+            .timer_chain
+            .resize(inner.timer_chain.len() - timer_chain_truncate, 0);
+        if inner.timer_chain_accumulative_lca.len() > timer_chain_truncate {
+            inner.timer_chain_accumulative_lca.resize(
+                inner.timer_chain_accumulative_lca.len() - timer_chain_truncate,
+                0,
+            );
+        } else {
+            inner.timer_chain_accumulative_lca.clear();
+        }
+        for i in 0..(inner.inner_conf.timer_chain_beta as usize - 1) {
+            if i < inner.timer_chain_accumulative_lca.len() {
+                inner.timer_chain_accumulative_lca[i] =
+                    new_era_block_arena_index;
+            }
+        }
+
         assert!(new_era_pivot_index < inner.pivot_chain.len());
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
         inner.pivot_chain_metadata =
@@ -372,7 +416,9 @@ impl ConsensusNewBlockHandler {
         anticone
     }
 
-    fn compute_anticone(inner: &mut ConsensusGraphInner, me: usize) -> BitSet {
+    fn compute_anticone(
+        inner: &mut ConsensusGraphInner, me: usize,
+    ) -> (BitSet, BitSet) {
         let parent = inner.arena[me].parent;
         debug_assert!(parent != NULL);
         debug_assert!(inner.arena[me].children.is_empty());
@@ -448,7 +494,7 @@ impl ConsensusNewBlockHandler {
             anticone.len()
         );
 
-        anticone_barrier
+        (anticone, anticone_barrier)
     }
 
     fn check_correct_parent_brutal(
@@ -963,9 +1009,11 @@ impl ConsensusNewBlockHandler {
     // The second is a map that overwrites timer_chain_height values after the
     // fork height.
     fn compute_timer_chain_tuple(
-        inner: &ConsensusGraphInner, me: usize, anticone_barrier: &BitSet,
-    ) -> (u64, HashMap<usize, u64>) {
-        (0, HashMap::new())
+        inner: &ConsensusGraphInner, me: usize, anticone: &BitSet,
+    ) -> (u64, HashMap<usize, u64>, Vec<usize>) {
+        let (fork_at, height_map, extra_lca, _) =
+            inner.compute_timer_chain_tuple(me, Some(anticone));
+        (fork_at, height_map, extra_lca)
     }
 
     /// The top level function invoked by ConsensusGraph to insert a new block.
@@ -1029,13 +1077,11 @@ impl ConsensusNewBlockHandler {
                     )
         };
 
-        let anticone_barrier =
+        let (anticone, anticone_barrier) =
             ConsensusNewBlockHandler::compute_anticone(inner, me);
         let timer_chain_tuple =
             ConsensusNewBlockHandler::compute_timer_chain_tuple(
-                inner,
-                me,
-                &anticone_barrier,
+                inner, me, &anticone,
             );
 
         let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
@@ -1114,36 +1160,36 @@ impl ConsensusNewBlockHandler {
         let mut fork_at =
             inner.pivot_index_to_height(inner.pivot_chain.len() + 1);
         let old_pivot_chain_len = inner.pivot_chain.len();
+
+        // Now we are going to maintain the timer chain.
+        let diff = inner.arena[me].timer_longest_difficulty
+            + inner.get_timer_difficulty(me);
+        if inner.arena[me].is_timer
+            && ConsensusGraphInner::is_heavier(
+                (diff, &inner.arena[me].hash),
+                (
+                    inner.best_timer_chain_difficulty,
+                    &inner.best_timer_chain_hash,
+                ),
+            )
+        {
+            inner.best_timer_chain_difficulty = diff;
+            inner.best_timer_chain_hash = inner.arena[me].hash.clone();
+            inner.update_timer_chain(me);
+        } else {
+            let mut timer_chain_height = 0;
+            for referee in &inner.arena[me].referees {
+                if inner.arena[*referee].timer_chain_height > timer_chain_height
+                {
+                    timer_chain_height =
+                        inner.arena[*referee].timer_chain_height;
+                }
+            }
+            inner.arena[me].timer_chain_height = timer_chain_height;
+        }
+
         if fully_valid && !pending {
             meter.aggregate_total_weight_in_past(my_weight);
-
-            // Now we are going to maintain the timer chain.
-            let diff = inner.arena[me].timer_longest_difficulty
-                + inner.get_timer_difficulty(me);
-            if inner.arena[me].is_timer
-                && ConsensusGraphInner::is_heavier(
-                    (diff, &inner.arena[me].hash),
-                    (
-                        inner.best_timer_chain_difficulty,
-                        &inner.best_timer_chain_hash,
-                    ),
-                )
-            {
-                inner.best_timer_chain_difficulty = diff;
-                inner.best_timer_chain_hash = inner.arena[me].hash.clone();
-                inner.update_timer_chain(me);
-            } else {
-                let mut timer_chain_height = 0;
-                for referee in &inner.arena[me].referees {
-                    if inner.arena[*referee].timer_chain_height
-                        > timer_chain_height
-                    {
-                        timer_chain_height =
-                            inner.arena[*referee].timer_chain_height;
-                    }
-                }
-                inner.arena[me].timer_chain_height = timer_chain_height;
-            }
 
             let last = inner.pivot_chain.last().cloned().unwrap();
             if inner.arena[me].parent == last {

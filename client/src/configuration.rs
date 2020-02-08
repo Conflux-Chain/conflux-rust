@@ -93,6 +93,7 @@ build_config! {
         (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
@@ -334,6 +335,7 @@ impl Configuration {
                 timer_chain_block_difficulty_ratio: self
                     .raw_conf
                     .timer_chain_block_difficulty_ratio,
+                timer_chain_beta: self.raw_conf.timer_chain_beta,
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
                 enable_optimistic_execution,
