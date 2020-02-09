@@ -71,6 +71,7 @@ tokio-timer = "0.2.13"
 [dev-dependencies]
 criterion = "0.2"
 primitives = { path = "../primitives", features = ["test_no_account_length_check"] }
+tokio = { version = "0.2.11", features = ["time"] }
 
 [features]
 default = ["primitives"]

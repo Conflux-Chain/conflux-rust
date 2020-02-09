@@ -92,3 +92,57 @@ where
             .poll(ctx)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{FutureItem, PendingItem};
+    use futures::future::join3;
+    use lru_time_cache::LruCache;
+    use parking_lot::RwLock;
+    use std::{sync::Arc, time::Duration};
+    use tokio::{runtime::Runtime, time::delay_for};
+
+    #[test]
+    fn test_concurrent_access() {
+        const KEY: u64 = 1;
+        const VALUE: u64 = 2;
+        const DELAY: u64 = 10;
+
+        let cache = LruCache::<u64, PendingItem<u64>>::with_capacity(1);
+        let verified = Arc::new(RwLock::new(cache));
+
+        // we will simulate 3 concurrent accesses to the same item
+        let item1 = FutureItem::new(KEY, verified.clone());
+        let item2 = FutureItem::new(KEY, verified.clone());
+        let item3 = FutureItem::new(KEY, verified.clone());
+
+        // request item once
+        let fut1 = async move { item1.await };
+
+        // request item, wait, then request again
+        let fut2 = async move {
+            let res2 = item2.await;
+            delay_for(Duration::from_millis(2 * DELAY)).await;
+            let res3 = item3.await;
+            (res2, res3)
+        };
+
+        // wait, then provide item
+        let fut3 = async move {
+            delay_for(Duration::from_millis(DELAY)).await;
+
+            verified
+                .write()
+                .entry(KEY)
+                .or_insert(PendingItem::pending())
+                .set(VALUE);
+        };
+
+        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let (res1, (res2, res3), _) = runtime.block_on(join3(fut1, fut2, fut3));
+
+        assert_eq!(res1, VALUE);
+        assert_eq!(res2, VALUE);
+        assert_eq!(res3, VALUE);
+    }
+}
