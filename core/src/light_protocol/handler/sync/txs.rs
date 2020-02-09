@@ -76,7 +76,6 @@ impl Txs {
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
     ) -> impl Future<Output = SignedTransaction> {
-        // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTx::new(hash));
 

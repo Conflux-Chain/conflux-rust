@@ -56,9 +56,6 @@ itertools = "0.8"
 order-stat = "0.1"
 futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }
-tokio = "0.1.22"
-tokio-timer = "0.2.13"
-tokio-compat = "0.1.4"
 throttling = { path = "../util/throttling" }
 
 [dev-dependencies]

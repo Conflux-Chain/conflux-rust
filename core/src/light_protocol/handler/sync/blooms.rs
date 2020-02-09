@@ -89,7 +89,6 @@ impl Blooms {
                 .insert(0, PendingItem::ready(Bloom::zero()));
         }
 
-        // TODO!!
         if !self.verified.read().contains_key(&epoch) {
             let missing = MissingBloom::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));

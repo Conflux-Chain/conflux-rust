@@ -37,14 +37,17 @@ type TxInfo = (
     Option<H256>, /* maybe_state_root */
 );
 
+// As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
+// Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
+// As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
 async fn with_timeout<T>(
-    dur: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
+    d: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
 ) -> Result<T, String> {
     // convert `fut` into futures@0.1
     let fut = fut.unit_error().boxed().compat();
 
     // set timeout
-    let with_timeout = tokio_timer::Timeout::new(fut, dur);
+    let with_timeout = tokio_timer::Timeout::new(fut, d);
 
     // convert back to std::future
     use futures::compat::Future01CompatExt;
@@ -102,15 +105,18 @@ impl QueryService {
     }
 
     fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
-        let res: Result<T, String> =
-            self.network.with_context(LIGHT_PROTOCOL_ID, |io| f(io));
-        res.unwrap()
+        self.network
+            .with_context(LIGHT_PROTOCOL_ID, |io| f(io))
+            .expect("Unable to access network service")
     }
 
+    #[allow(dead_code)]
     async fn retrieve_state_root(&self, epoch: u64) -> StateRoot {
         trace!("retrieve_state_root epoch = {}", epoch);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving state root for epoch {}", epoch);
 
@@ -128,7 +134,9 @@ impl QueryService {
     ) -> Option<Vec<u8>> {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg = format!(
             "Timeout while retrieving state entry for epoch {} with key {:?}",
             epoch, key
@@ -148,7 +156,9 @@ impl QueryService {
     async fn retrieve_bloom(&self, epoch: u64) -> Bloom {
         trace!("retrieve_bloom epoch = {}", epoch);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg = format!("Timeout while retrieving bloom for epoch {}", epoch);
 
         with_timeout(
@@ -163,7 +173,9 @@ impl QueryService {
     async fn retrieve_receipts(&self, epoch: u64) -> Vec<Vec<Receipt>> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving receipts for epoch {}", epoch);
 
@@ -179,7 +191,9 @@ impl QueryService {
     async fn retrieve_block_txs(&self, hash: H256) -> Vec<SignedTransaction> {
         trace!("retrieve_block_txs hash = {:?}", hash);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving block txs for block {}", hash);
 
@@ -197,7 +211,9 @@ impl QueryService {
     ) -> (SignedTransaction, Receipt, TransactionAddress) {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg = format!("Timeout while retrieving tx info for tx {}", hash);
 
         with_timeout(
@@ -231,8 +247,7 @@ impl QueryService {
         );
 
         // trigger state root request but don't wait for result
-        // TODO: figure out a better way
-        // let mut f = self.retrieve_state_root(epoch).boxed().as_mut();
+        // FIXME: is there a better way?
         let _ =
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
@@ -269,13 +284,9 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        // TODO: make whole function async
-        // TODO: handle errors
         self.retrieve_account(epoch, address)
             .await
             .map_err(|e| format!("{}", e))
-
-        // return Err(String::from("err during get_account"));
     }
 
     pub async fn get_code(
@@ -288,14 +299,13 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        // TODO: handle errors
-        let acc = self
+        let account = self
             .retrieve_account(epoch, address)
             .await
             .map_err(|e| format!("Unable to retrieve account: {:?}", e))?;
 
-        let code_hash = match acc {
-            Some(acc) => acc.code_hash,
+        let code_hash = match account {
+            Some(account) => account.code_hash,
             None => {
                 return Err(format!(
                     "Account {:?} (number={:?}) does not exist",
@@ -310,9 +320,9 @@ impl QueryService {
     pub async fn get_tx_info(&self, hash: H256) -> TxInfo {
         info!("get_tx_info hash={:?}", hash);
 
-        // TODO: make whole function async
-        // TODO: handle errors
-        // TODO: what if it doesn't exist?
+        // Note: if a transaction does not exist, we fail with timeout, as
+        //       peers cannot provide non-existence proofs for transactions.
+        // FIXME: is there a better way?
         let (tx, receipt, address) = self.retrieve_tx_info(hash).await;
 
         let hash = address.block_hash;
@@ -358,7 +368,9 @@ impl QueryService {
     pub async fn get_tx(&self, hash: H256) -> SignedTransaction {
         info!("get_tx hash={:?}", hash);
 
-        // https://github.com/rust-lang/rust/issues/64960
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving transaction with hash {}", hash);
 
@@ -541,10 +553,6 @@ impl QueryService {
         }
     }
 
-    // pub fn matching_logs_stream(&self) -> impl Stream<Item =
-    // LocalizedLogEntry> {     stream::empty()
-    // }
-
     pub async fn get_logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
@@ -557,6 +565,9 @@ impl QueryService {
         // construct blooms for matching epochs
         let blooms = filter.bloom_possibilities();
 
+        // The returned future will outlive this method (`get_logs`). Thus, we
+        // need to move `blooms` into `bloom_match` and `bloom_match` into the
+        // future.
         let bloom_match = move |block_log_bloom: &Bloom| {
             blooms
                 .iter()
@@ -575,14 +586,14 @@ impl QueryService {
         let stream =
             // process epochs one by one
             stream::iter(epochs)
-            // Stream<u64>
+            // --> Stream<u64>
 
             // retrieve blooms
-            .map(move |epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
-            // Stream<Future<(u64, Bloom)>>
+            .map(|epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
+            // --> Stream<Future<(u64, Bloom)>>
 
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            // Stream<(u64, Bloom)>
+            // --> Stream<(u64, Bloom)>
 
             // find the epochs that match
             .filter_map(move |(epoch, bloom)| {
@@ -593,14 +604,14 @@ impl QueryService {
                     false => future::ready(None),
                 }
             })
-            // Stream<u64>
+            // --> Stream<u64>
 
             // retrieve receipts
             .map(|epoch| self.retrieve_receipts(epoch).map(move |receipts| (epoch, receipts)))
-            // Stream<Future<(u64, Receipts)>>
+            // --> Stream<Future<(u64, Receipts)>>
 
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            // Stream<(u64, Vec<Vec<Receipt>>)>
+            // --> Stream<(u64, Vec<Vec<Receipt>>)>
 
             // filter logs in epoch
             .map(|(epoch, receipts)| {
@@ -609,20 +620,20 @@ impl QueryService {
                 // Ok(stream::iter(logs))
                 stream::iter(logs)
             })
-            // Stream<Stream<LocalizedLogEntry>>
+            // --> Stream<Stream<LocalizedLogEntry>>
 
             .flatten()
-            // Stream<LocalizedLogEntry>
+            // --> Stream<LocalizedLogEntry>
 
             .filter(move |log| future::ready(block_filter(log.block_hash)))
-            // Stream<LocalizedLogEntry>
+            // --> Stream<LocalizedLogEntry>
 
             // retrieve block txs
             .map(|log| self.retrieve_block_txs(log.block_hash).map(move |txs| (log, txs)))
-            // Stream<Future<(LocalizedLogEntry, Vec<SignedTransaction>)>>
+            // --> Stream<Future<(LocalizedLogEntry, Vec<SignedTransaction>)>>
 
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            // Stream<(LocalizedLogEntry, Vec<SignedTransaction>)>
+            // --> Stream<(LocalizedLogEntry, Vec<SignedTransaction>)>
 
             .map(|(mut log, txs)| {
                 debug!("processing log = {:?} txs = {:?}", log, txs);
@@ -636,11 +647,11 @@ impl QueryService {
                 log.transaction_hash = txs[log.transaction_index].hash();
                 log
             })
-            // Stream<LocalizedLogEntry>
+            // --> Stream<LocalizedLogEntry>
 
             // limit number of entries we need
             .take(limit)
-            // Stream<LocalizedLogEntry>
+            // --> Stream<LocalizedLogEntry>
 
             .collect();
         // Future<Iterator<LocalizedLogEntry>>

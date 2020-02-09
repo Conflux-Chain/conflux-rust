@@ -26,12 +26,13 @@ impl<T> PendingItem<T> {
 }
 
 impl<T> PendingItem<T> {
+    // NOTE: `set` has to be called in a thread-safe environment
     pub fn set(&mut self, item: T) {
         match self {
             Self::Ready(_old) => {
                 // FIXME: we might want to check if old == item and raise an
-                // error if not. This, however, would require
-                // the that T : Eq.
+                // error if not. This, however, would require that T : Eq.
+                // This should not happen unless there are deep chain reorgs.
             }
             Self::Pending(ws) => {
                 // move `ws` out
@@ -42,20 +43,20 @@ impl<T> PendingItem<T> {
 
                 // notify waiting futures
                 for w in ws {
-                    w.wake_by_ref();
+                    w.wake();
                 }
             }
         }
     }
 }
 
-impl<T> PendingItem<T>
-where T: Clone
-{
+impl<T: Clone> PendingItem<T> {
+    // NOTE: `poll` has to be called in a thread-safe environment
     fn poll(&mut self, ctx: &mut Context) -> Poll<T> {
         match self {
             Self::Ready(item) => Poll::Ready(item.clone()),
             Self::Pending(ws) => {
+                // FIXME: is it safe to keep old wakers?
                 ws.push(ctx.waker().clone());
                 Poll::Pending
             }

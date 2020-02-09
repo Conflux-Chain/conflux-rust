@@ -100,7 +100,6 @@ impl StateEntries {
     ) -> impl Future<Output = StateEntry> {
         let key = StateKey { epoch, key };
 
-        // TODO!!
         if !self.verified.read().contains_key(&key) {
             let missing = std::iter::once(MissingStateEntry::new(key.clone()));
 

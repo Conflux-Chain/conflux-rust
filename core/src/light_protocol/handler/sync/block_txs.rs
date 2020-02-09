@@ -4,12 +4,10 @@
 
 extern crate lru_time_cache;
 
-use cfx_types::H256;
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use primitives::{Block, SignedTransaction};
-use std::{future::Future, sync::Arc};
-
+use super::{
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    Txs,
+};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
@@ -24,11 +22,11 @@ use crate::{
         MAX_BLOCK_TXS_IN_FLIGHT,
     },
 };
-
-use super::{
-    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    Txs,
-};
+use cfx_types::H256;
+use lru_time_cache::LruCache;
+use parking_lot::RwLock;
+use primitives::{Block, SignedTransaction};
+use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {
@@ -92,7 +90,6 @@ impl BlockTxs {
     pub fn request(
         &self, hash: H256,
     ) -> impl Future<Output = Vec<SignedTransaction>> {
-        // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));

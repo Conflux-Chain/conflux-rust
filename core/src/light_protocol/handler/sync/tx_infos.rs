@@ -98,7 +98,6 @@ impl TxInfos {
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
     ) -> impl Future<Output = TxInfoValidated> {
-        // TODO!!
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTxInfo::new(hash));
 

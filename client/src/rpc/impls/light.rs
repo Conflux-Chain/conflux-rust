@@ -2,36 +2,30 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use delegate::delegate;
-use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-
-use futures::future::{FutureExt, TryFutureExt};
-
-use cfx_types::{H160, H256, U256};
-use cfxcore::{LightQueryService, PeerInfo};
-use primitives::{Account, TransactionWithSignature};
-
-use network::{
-    node_table::{Node, NodeId},
-    throttling, SessionDetails, UpdateNodeOperation,
-};
-
+use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        Status as RpcStatus, SyncGraphStates, Transaction as RpcTransaction,
-        H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
-        U256 as RpcU256, U64 as RpcU64,
+        SendTxRequest, Status as RpcStatus, SyncGraphStates,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
-
-use super::common::RpcImpl as CommonImpl;
-use crate::rpc::types::SendTxRequest;
+use cfx_types::{H160, H256, U256};
+use cfxcore::{LightQueryService, PeerInfo};
+use delegate::delegate;
+use futures::future::{FutureExt, TryFutureExt};
+use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
+use network::{
+    node_table::{Node, NodeId},
+    throttling, SessionDetails, UpdateNodeOperation,
+};
+use primitives::{Account, TransactionWithSignature};
 use rlp::Encodable;
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 pub struct RpcImpl {
     // helper API for retrieving verified information from peers
@@ -51,17 +45,16 @@ impl RpcImpl {
             address, epoch
         );
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
-        // let fut : Future<Item = RpcAccount, Error = RpcError> = async {
         let fut = async move {
-            let account = light.get_account(epoch, address).await;
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
 
-            let maybe_acc = account.map_err(RpcError::invalid_params)?;
-
-            Ok(RpcAccount::new(maybe_acc.unwrap_or(
+            Ok(RpcAccount::new(account.unwrap_or(
                 Account::new_empty_with_balance(
                     &address,
                     &U256::zero(), /* balance */
@@ -84,16 +77,16 @@ impl RpcImpl {
             address, epoch
         );
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light.get_account(epoch, address).await;
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
 
-            let maybe_acc = account.map_err(RpcError::invalid_params)?;
-
-            Ok(maybe_acc
+            Ok(account
                 .map(|account| account.balance.into())
                 .unwrap_or_default())
         };
@@ -112,16 +105,16 @@ impl RpcImpl {
             address, epoch
         );
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light.get_account(epoch, address).await;
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
 
-            let maybe_acc = account.map_err(RpcError::invalid_params)?;
-
-            Ok(maybe_acc
+            Ok(account
                 .map(|account| account.bank_balance.into())
                 .unwrap_or_default())
         };
@@ -140,16 +133,16 @@ impl RpcImpl {
             address, epoch
         );
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
-            let account = light.get_account(epoch, address).await;
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
 
-            let maybe_acc = account.map_err(RpcError::invalid_params)?;
-
-            Ok(maybe_acc
+            Ok(account
                 .map(|account| account.storage_balance.into())
                 .unwrap_or_default())
         };
@@ -176,11 +169,9 @@ impl RpcImpl {
             address, epoch
         );
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
-        // let fut : Future<Item = RpcAccount, Error = RpcError> = async {
         let fut = async move {
             light
                 .get_code(epoch, address)
@@ -205,33 +196,25 @@ impl RpcImpl {
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs({:?})", filter);
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
-        // let fut : Future<Item = RpcAccount, Error = RpcError> = async {
         let fut = async move {
-            let res = light.get_logs(filter.into()).await;
-
-            let logs = res
+            let logs = light
+                .get_logs(filter.into())
+                .await
                 .map_err(|e| format!("{}", e))
                 .map_err(RpcError::invalid_params)?;
 
             Ok(logs.into_iter().map(RpcLog::from).collect())
         };
 
-        let boxed: std::pin::Pin<
-            Box<
-                dyn std::future::Future<Output = Result<Vec<_>, _>>
-                    + std::marker::Send,
-            >,
-        > = fut.boxed();
-
-        Box::new(boxed.compat())
+        Box::new(fut.boxed().compat())
     }
 
-    fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
-        info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
+    fn send_tx_helper(
+        light: Arc<LightQueryService>, raw: Bytes,
+    ) -> RpcResult<RpcH256> {
         let raw: Vec<u8> = raw.into_vec();
 
         // decode tx so that we have its hash
@@ -246,10 +229,15 @@ impl RpcImpl {
         // light nodes would track those txs and maintain their statuses
         // for future queries
 
-        match /* success = */ self.light.send_raw_tx(raw) {
+        match /* success = */ light.send_raw_tx(raw) {
             true => Ok(tx.hash().into()),
             false => Err(RpcError::invalid_params("Unable to relay tx")),
         }
+    }
+
+    fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
+        info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
+        Self::send_tx_helper(self.light.clone(), raw)
     }
 
     fn send_transaction(
@@ -257,44 +245,28 @@ impl RpcImpl {
     ) -> BoxFuture<RpcH256> {
         info!("RPC Request: send_transaction, tx = {:?}", tx);
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
             if tx.nonce.is_none() {
                 // TODO(thegaram): consider adding a light node specific tx pool
                 // to track the nonce
-                // let nonce = self
-                //     .light
-                //     .get_account(
-                //         EpochNumber::LatestState.into_primitive(),
-                //         tx.from.clone().into(),
-                //     )
-                //     .map_err(|e| {
-                //         RpcError::invalid_params(format!(
-                //             "failed to send transaction: {:?}",
-                //             e
-                //         ))
-                //     })?
-                //     .map(|a| a.nonce)
-                //     .unwrap_or(U256::zero());
 
-                let account = light
-                    .get_account(
-                        EpochNumber::LatestState.into_primitive(),
-                        tx.from.clone().into(),
-                    )
-                    .await;
+                let address = tx.from.clone().into();
+                let epoch = EpochNumber::LatestState.into_primitive();
 
-                let maybe_acc = account.map_err(|e| {
-                    RpcError::invalid_params(format!(
-                        "failed to send transaction: {:?}",
-                        e
-                    ))
-                })?;
-
-                let nonce = maybe_acc.map(|a| a.nonce).unwrap_or(U256::zero());
+                let nonce = light
+                    .get_account(epoch, address)
+                    .await
+                    .map_err(|e| {
+                        RpcError::invalid_params(format!(
+                            "failed to send transaction: {:?}",
+                            e
+                        ))
+                    })?
+                    .map(|a| a.nonce)
+                    .unwrap_or(U256::zero());
 
                 tx.nonce.replace(nonce.into());
                 debug!("after loading nonce in latest state, tx = {:?}", tx);
@@ -307,28 +279,7 @@ impl RpcImpl {
                 ))
             })?;
 
-            // self.send_raw_transaction(Bytes::new(tx.rlp_bytes()))
-            // TODO!!!!!!!!!!!!!!!!!!!!!!!
-            let raw = Bytes::new(tx.rlp_bytes());
-            info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
-            let raw: Vec<u8> = raw.into_vec();
-
-            // decode tx so that we have its hash
-            // this way we also avoid spamming peers with invalid txs
-            let tx: TransactionWithSignature = rlp::decode(&raw.clone())
-                .map_err(|e| format!("Failed to decode tx: {:?}", e))
-                .map_err(RpcError::invalid_params)?;
-
-            debug!("Deserialized tx: {:?}", tx);
-
-            // TODO(thegaram): consider adding a light node specific tx pool;
-            // light nodes would track those txs and maintain their statuses
-            // for future queries
-
-            match /* success = */ light.send_raw_tx(raw) {
-                true => Ok(tx.hash().into()),
-                false => Err(RpcError::invalid_params("Unable to relay tx")),
-            }
+            Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };
 
         Box::new(fut.boxed().compat())
@@ -341,8 +292,7 @@ impl RpcImpl {
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {
@@ -359,8 +309,7 @@ impl RpcImpl {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
 
-        // we clone `self.light` so that the async block keep no reference to
-        // `self` otherwise we would have lifetime conflicts
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
 
         let fut = async move {

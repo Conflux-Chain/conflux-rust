@@ -88,7 +88,6 @@ impl Receipts {
             self.verified.write().insert(0, PendingItem::ready(vec![]));
         }
 
-        // TODO!!
         if !self.verified.read().contains_key(&epoch) {
             let missing = MissingReceipts::new(epoch);
             self.sync_manager.insert_waiting(std::iter::once(missing));
