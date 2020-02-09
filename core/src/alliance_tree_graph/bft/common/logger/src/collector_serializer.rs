@@ -91,6 +91,7 @@ impl<'a, C: KVCategorizer> Serializer for CollectorSerializer<'a, C> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,3 +295,4 @@ mod tests {
         do_test(&TestCategorizer, i().chain(n()), n());
     }
 }
+*/

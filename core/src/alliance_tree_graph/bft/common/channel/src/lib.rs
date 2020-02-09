@@ -19,16 +19,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(test)]
-mod test;
+//#[cfg(test)]
+//mod test;
 
 pub mod libra_channel;
-#[cfg(test)]
-mod libra_channel_test;
+//#[cfg(test)]
+//mod libra_channel_test;
 
 pub mod message_queues;
-#[cfg(test)]
-mod message_queues_test;
+//#[cfg(test)]
+//mod message_queues_test;
 
 const MAX_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
 

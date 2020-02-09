@@ -3,8 +3,8 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod unit_tests;
+//#[cfg(test)]
+//mod unit_tests;
 
 mod growing_subset;
 mod repeat_vec;

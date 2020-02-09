@@ -51,6 +51,7 @@ impl Iterator for FixedDelay {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,3 +79,4 @@ mod tests {
         assert_eq!(result, Err("not 5"));
     }
 }
+*/
