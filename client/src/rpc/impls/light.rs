@@ -4,6 +4,7 @@
 
 use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
+    impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -344,7 +345,6 @@ macro_rules! not_supported {
     };
 }
 
-#[allow(dead_code)]
 pub struct CfxHandler {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
@@ -390,7 +390,6 @@ impl Cfx for CfxHandler {
     }
 }
 
-#[allow(dead_code)]
 pub struct TestRpcImpl {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
@@ -437,7 +436,6 @@ impl TestRpc for TestRpcImpl {
     }
 }
 
-#[allow(dead_code)]
 pub struct DebugRpcImpl {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,

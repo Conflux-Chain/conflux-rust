@@ -4,8 +4,8 @@
 
 use delegate::delegate;
 
-use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
+    impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -50,6 +50,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
+
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,

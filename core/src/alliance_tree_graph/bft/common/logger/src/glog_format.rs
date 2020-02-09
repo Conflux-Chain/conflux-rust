@@ -155,6 +155,7 @@ impl OnelineMetadata {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::GlogFormat;
@@ -264,3 +265,4 @@ mod tests {
         );
     }
 }
+*/

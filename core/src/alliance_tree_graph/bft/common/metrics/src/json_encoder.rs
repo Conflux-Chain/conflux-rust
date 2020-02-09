@@ -113,6 +113,7 @@ fn flatten_metric_with_labels(name: &str, metric: &Metric) -> String {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,3 +197,4 @@ mod tests {
         assert_eq!(v, expected_v);
     }
 }
+*/
