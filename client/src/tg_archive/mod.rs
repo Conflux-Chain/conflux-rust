@@ -15,9 +15,9 @@ use libradb::LibraDB;
 use crate::rpc::{
     extractor::RpcExtractor,
     impls::{
-        cfx::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
+        alliance::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
     },
-    setup_debug_rpc_apis, setup_public_rpc_apis,
+    setup_debug_rpc_apis_alliance, setup_public_rpc_apis_alliance,
 };
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
@@ -63,9 +63,9 @@ use txgen::{
 };
 
 pub struct TgArchiveClientHandle {
-    // pub debug_rpc_http_server: Option<HttpServer>,
-    // pub rpc_tcp_server: Option<TcpServer>,
-    // pub rpc_http_server: Option<HttpServer>,
+    pub debug_rpc_http_server: Option<HttpServer>,
+    pub rpc_tcp_server: Option<TcpServer>,
+    pub rpc_http_server: Option<HttpServer>,
     pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
     pub sync: SharedSynchronizationService,
@@ -74,7 +74,7 @@ pub struct TgArchiveClientHandle {
     pub blockgen: Arc<TGBlockGenerator>,
     pub secret_store: Arc<SecretStore>,
     pub block_data_manager: Weak<BlockDataManager>,
-    // pub runtime: Runtime,
+    pub runtime: Runtime,
 }
 
 impl TgArchiveClientHandle {
@@ -86,9 +86,9 @@ impl TgArchiveClientHandle {
             self.blockgen,
             Box::new((
                 self.tg_consensus_provider,
-                // self.debug_rpc_http_server,
-                // self.rpc_tcp_server,
-                // self.rpc_http_server,
+                self.debug_rpc_http_server,
+                self.rpc_tcp_server,
+                self.rpc_http_server,
                 self.txpool,
                 self.sync,
                 self.txgen,
@@ -379,19 +379,18 @@ impl TgArchiveClient {
             None
         };
 
-        /*
         let rpc_impl = Arc::new(RpcImpl::new(
-            consensus.clone(),
+            tg_consensus.clone(),
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
-            txgen.clone(),
+            // txgen.clone(),
             conf.rpc_impl_config(),
         ));
 
         let common_impl = Arc::new(CommonImpl::new(
             exit,
-            consensus.clone(),
+            tg_consensus.clone(),
             network,
             txpool.clone(),
         ));
@@ -406,10 +405,10 @@ impl TgArchiveClient {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_debug_rpc_apis(
+            setup_debug_rpc_apis_alliance(
                 common_impl.clone(),
                 rpc_impl.clone(),
-                None,
+                None, /* pubsub */
                 &conf,
             ),
         )?;
@@ -428,14 +427,14 @@ impl TgArchiveClient {
                 conf.raw_conf.jsonrpc_tcp_port,
             ),
             if conf.is_test_or_dev_mode() {
-                setup_debug_rpc_apis(
+                setup_debug_rpc_apis_alliance(
                     common_impl.clone(),
                     rpc_impl.clone(),
                     Some(pubsub),
                     &conf,
                 )
             } else {
-                setup_public_rpc_apis(
+                setup_public_rpc_apis_alliance(
                     common_impl.clone(),
                     rpc_impl.clone(),
                     Some(pubsub),
@@ -453,18 +452,27 @@ impl TgArchiveClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.is_test_or_dev_mode() {
-                setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
+                setup_debug_rpc_apis_alliance(
+                    common_impl,
+                    rpc_impl,
+                    None, /* pubsub */
+                    &conf,
+                )
             } else {
-                setup_public_rpc_apis(common_impl, rpc_impl, None, &conf)
+                setup_public_rpc_apis_alliance(
+                    common_impl,
+                    rpc_impl,
+                    None, /* pubsub */
+                    &conf,
+                )
             },
         )?;
-        */
 
         Ok(TgArchiveClientHandle {
             block_data_manager: Arc::downgrade(&data_man),
-            // debug_rpc_http_server,
-            // rpc_http_server,
-            // rpc_tcp_server,
+            debug_rpc_http_server,
+            rpc_http_server,
+            rpc_tcp_server,
             txpool,
             txgen,
             txgen_join_handle: txgen_handle,
@@ -472,7 +480,7 @@ impl TgArchiveClient {
             tg_consensus_provider: consensus_provider,
             secret_store,
             sync,
-            // runtime,
+            runtime,
         })
     }
 
@@ -501,7 +509,6 @@ impl TgArchiveClient {
         let executor = Arc::new(Executor::new(node_config, libra_db.clone()));
         debug!("Executor setup in {} ms", instant.elapsed().as_millis());
 
-        /*
         let metrics_port = node_config.debug_interface.metrics_server_port;
         let metric_host = node_config.debug_interface.address.clone();
         thread::spawn(move || {
@@ -517,9 +524,7 @@ impl TgArchiveClient {
                 true,
             )
         });
-        */
 
-        let mut consensus = None;
         // Initialize and start consensus.
         instant = Instant::now();
         let mut consensus_provider =
@@ -527,10 +532,9 @@ impl TgArchiveClient {
         consensus_provider
             .start(network, own_node_hash, request_manager)
             .expect("Failed to start consensus. Can't proceed.");
-        consensus = Some(consensus_provider);
         debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
-        consensus
+        Some(consensus_provider)
     }
 
     /// Use a Weak pointer to ensure that other Arc pointers are released

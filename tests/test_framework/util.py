@@ -259,6 +259,15 @@ def initialize_datadir(dirname, n, conf_parameters):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
+    os.makedirs(os.path.join(datadir, 'tg_config'))
+    os.makedirs(os.path.join(datadir, 'opt'))
+    with open(os.path.join(datadir, 'tg_config', 'tg_config.conf'), 'w') as f:
+        local_conf = {
+            "role": "\"validator\""
+        }
+        f.write("[base]\n")
+        for k in local_conf:
+            f.write("{}={}\n".format(k, local_conf[k]))
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {"port": str(p2p_port(n)),
@@ -277,6 +286,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
                         "metrics_enabled": "true",
                         # "block_db_type": "\'sqlite\'"
+                        "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]

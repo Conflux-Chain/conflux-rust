@@ -210,14 +210,9 @@ impl RpcImpl {
     }
 
     pub fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
         info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
 
-        consensus_graph
+        self.consensus
             .get_block_hashes_by_epoch(num.into())
             .map_err(RpcError::invalid_params)
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
@@ -315,13 +310,8 @@ impl RpcImpl {
     }
 
     pub fn get_block_count(&self) -> RpcResult<u64> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
         info!("RPC Request: get_block_count()");
-        let count = consensus_graph.block_count();
+        let count = self.consensus.block_count();
         info!("RPC Response: get_block_count={}", count);
         Ok(count)
     }
@@ -405,16 +395,11 @@ impl RpcImpl {
     }
 
     pub fn get_status(&self) -> RpcResult<RpcStatus> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-        let best_hash = consensus_graph.best_block_hash();
-        let block_number = consensus_graph.block_count();
+        let best_hash = self.consensus.best_block_hash();
+        let block_number = self.consensus.block_count();
         let tx_count = self.tx_pool.total_unpacked();
         if let Some(epoch_number) =
-            consensus_graph.get_block_epoch_number(&best_hash)
+            self.consensus.get_block_epoch_number(&best_hash)
         {
             Ok(RpcStatus {
                 best_hash: RpcH256::from(best_hash),
