@@ -203,7 +203,6 @@ impl RpcImpl {
             let logs = light
                 .get_logs(filter.into())
                 .await
-                .map_err(|e| format!("{}", e))
                 .map_err(RpcError::invalid_params)?;
 
             Ok(logs.into_iter().map(RpcLog::from).collect())
@@ -292,7 +291,11 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let tx = light.get_tx(hash.into()).await;
+            let tx = light
+                .get_tx(hash.into())
+                .await
+                .map_err(RpcError::invalid_params)?;
+
             Ok(Some(RpcTransaction::from_signed(&tx, None)))
         };
 
@@ -309,8 +312,10 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let (tx, receipt, address, maybe_epoch, maybe_state_root) =
-                light.get_tx_info(hash).await;
+            let (tx, receipt, address, maybe_epoch, maybe_state_root) = light
+                .get_tx_info(hash)
+                .await
+                .map_err(RpcError::invalid_params)?;
 
             let mut receipt = RpcReceipt::new(tx, receipt, address);
             receipt.set_epoch_number(maybe_epoch);

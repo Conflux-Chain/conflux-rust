@@ -9,8 +9,7 @@ use crate::{
     light_protocol::{
         common::{FullPeerFilter, LedgerInfo},
         message::msgid,
-        Error, Handler as LightHandler, LIGHT_PROTOCOL_ID,
-        LIGHT_PROTOCOL_VERSION,
+        Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     network::{NetworkContext, NetworkService},
     parameters::{
@@ -20,7 +19,10 @@ use crate::{
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
-use futures::{future, stream, FutureExt, StreamExt, TryFutureExt};
+use futures::{
+    future::{self, Either},
+    stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -111,7 +113,9 @@ impl QueryService {
     }
 
     #[allow(dead_code)]
-    async fn retrieve_state_root(&self, epoch: u64) -> StateRoot {
+    async fn retrieve_state_root(
+        &self, epoch: u64,
+    ) -> Result<StateRoot, String> {
         trace!("retrieve_state_root epoch = {}", epoch);
 
         // We cannot await in scope that contains call to format!
@@ -126,12 +130,11 @@ impl QueryService {
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
         )
         .await
-        .unwrap() // TODO
     }
 
     async fn retrieve_state_entry(
         &self, epoch: u64, key: Vec<u8>,
-    ) -> Option<Vec<u8>> {
+    ) -> Result<Option<Vec<u8>>, String> {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
         // We cannot await in scope that contains call to format!
@@ -150,10 +153,9 @@ impl QueryService {
             }),
         )
         .await
-        .unwrap() // TODO
     }
 
-    async fn retrieve_bloom(&self, epoch: u64) -> Bloom {
+    async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
         trace!("retrieve_bloom epoch = {}", epoch);
 
         // We cannot await in scope that contains call to format!
@@ -167,10 +169,12 @@ impl QueryService {
             self.handler.blooms.request(epoch),
         )
         .await
-        .unwrap() // TODO
+        .map(|bloom| (epoch, bloom))
     }
 
-    async fn retrieve_receipts(&self, epoch: u64) -> Vec<Vec<Receipt>> {
+    async fn retrieve_receipts(
+        &self, epoch: u64,
+    ) -> Result<(u64, Vec<Vec<Receipt>>), String> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
         // We cannot await in scope that contains call to format!
@@ -185,11 +189,14 @@ impl QueryService {
             self.handler.receipts.request(epoch),
         )
         .await
-        .unwrap() // TODO
+        .map(|receipts| (epoch, receipts))
     }
 
-    async fn retrieve_block_txs(&self, hash: H256) -> Vec<SignedTransaction> {
-        trace!("retrieve_block_txs hash = {:?}", hash);
+    async fn retrieve_block_txs(
+        &self, log: LocalizedLogEntry,
+    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), String> {
+        trace!("retrieve_block_txs log = {:?}", log);
+        let hash = log.block_hash;
 
         // We cannot await in scope that contains call to format!
         // This is likely to be fixed in a future compiler version.
@@ -203,12 +210,12 @@ impl QueryService {
             self.handler.block_txs.request(hash),
         )
         .await
-        .unwrap() // TODO
+        .map(|block_txs| (log, block_txs))
     }
 
     async fn retrieve_tx_info(
         &self, hash: H256,
-    ) -> (SignedTransaction, Receipt, TransactionAddress) {
+    ) -> Result<(SignedTransaction, Receipt, TransactionAddress), String> {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         // We cannot await in scope that contains call to format!
@@ -222,7 +229,6 @@ impl QueryService {
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
         .await
-        .unwrap() // TODO
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
@@ -239,7 +245,7 @@ impl QueryService {
 
     async fn retrieve_account(
         &self, epoch: u64, address: H160,
-    ) -> Result<Option<Account>, Error> {
+    ) -> Result<Option<Account>, String> {
         trace!(
             "retrieve_account epoch = {}, address = {:?}",
             epoch,
@@ -252,17 +258,19 @@ impl QueryService {
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
         let key = Self::account_key(&address);
-        let entry = self.retrieve_state_entry(epoch, key).await;
 
-        match entry {
-            Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
-            None => Ok(None),
-        }
+        let entry = match self.retrieve_state_entry(epoch, key).await? {
+            None => return Ok(None),
+            Some(entry) => entry,
+        };
+
+        let account = rlp::decode(&entry[..]).map_err(|e| format!("{}", e))?;
+        Ok(Some(account))
     }
 
     async fn retrieve_code(
         &self, epoch: u64, address: H160, code_hash: H256,
-    ) -> Option<Vec<u8>> {
+    ) -> Result<Option<Vec<u8>>, String> {
         trace!(
             "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
             epoch,
@@ -284,9 +292,7 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        self.retrieve_account(epoch, address)
-            .await
-            .map_err(|e| format!("{}", e))
+        self.retrieve_account(epoch, address).await
     }
 
     pub async fn get_code(
@@ -314,16 +320,16 @@ impl QueryService {
             }
         };
 
-        Ok(self.retrieve_code(epoch, address, code_hash).await)
+        self.retrieve_code(epoch, address, code_hash).await
     }
 
-    pub async fn get_tx_info(&self, hash: H256) -> TxInfo {
+    pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
         info!("get_tx_info hash={:?}", hash);
 
         // Note: if a transaction does not exist, we fail with timeout, as
         //       peers cannot provide non-existence proofs for transactions.
         // FIXME: is there a better way?
-        let (tx, receipt, address) = self.retrieve_tx_info(hash).await;
+        let (tx, receipt, address) = self.retrieve_tx_info(hash).await?;
 
         let hash = address.block_hash;
         let epoch = self.consensus.get_block_epoch_number(&hash);
@@ -332,7 +338,7 @@ impl QueryService {
             .and_then(|e| self.handler.witnesses.root_hashes_of(e))
             .map(|(state_root, _, _)| state_root);
 
-        (tx, receipt, address, epoch, root)
+        Ok((tx, receipt, address, epoch, root))
     }
 
     /// Relay raw transaction to all peers.
@@ -365,7 +371,9 @@ impl QueryService {
         success
     }
 
-    pub async fn get_tx(&self, hash: H256) -> SignedTransaction {
+    pub async fn get_tx(
+        &self, hash: H256,
+    ) -> Result<SignedTransaction, String> {
         info!("get_tx hash={:?}", hash);
 
         // We cannot await in scope that contains call to format!
@@ -380,7 +388,6 @@ impl QueryService {
             self.with_io(|io| self.handler.txs.request_now(io, hash)),
         )
         .await
-        .unwrap() // TODO
     }
 
     /// Apply filter to all logs within a receipt.
@@ -445,9 +452,12 @@ impl QueryService {
     /// Apply filter to all receipts within an epoch.
     fn filter_epoch_receipts(
         &self, epoch: u64, mut receipts: Vec<Vec<Receipt>>, filter: Filter,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, Error> {
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, String> {
         // get epoch blocks in execution order
-        let mut hashes: Vec<H256> = self.ledger.block_hashes_in(epoch)?;
+        let mut hashes = self
+            .ledger
+            .block_hashes_in(epoch)
+            .map_err(|e| format!("{}", e))?;
 
         // process epoch receipts in reverse order
         receipts.reverse();
@@ -555,11 +565,14 @@ impl QueryService {
 
     pub async fn get_logs(
         &self, filter: Filter,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+    ) -> Result<Vec<LocalizedLogEntry>, String> {
         debug!("get_logs filter = {:?}", filter);
 
         // find epochs and blocks to match against
-        let (epochs, block_filter) = self.get_filter_epochs(&filter)?;
+        let (epochs, block_filter) = self
+            .get_filter_epochs(&filter)
+            .map_err(|e| format!("{}", e))?;
+
         debug!("Executing filter on epochs {:?}", epochs);
 
         // construct blooms for matching epochs
@@ -583,59 +596,77 @@ impl QueryService {
         // matching entries. finally, for each matching entry, we retrieve the
         // block transactions so that we can add the tx hash. each of these is
         // verified in the corresponding sync handler.
+
+        // NOTE: in the type annotations below, we use these conventions:
+        //    Stream<T> = futures::stream::Stream<Item = T>
+        // TryStream<T> = futures::stream::TryStream<Ok = T, Error = String>
+        // TryFuture<T> = futures::future::TryFuture<Ok = T, Error = String>
         let stream =
             // process epochs one by one
             stream::iter(epochs)
             // --> Stream<u64>
 
             // retrieve blooms
-            .map(|epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
-            // --> Stream<Future<(u64, Bloom)>>
+            .map(|epoch| self.retrieve_bloom(epoch))
+            // --> Stream<TryFuture<(u64, Bloom)>>
 
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            // --> Stream<(u64, Bloom)>
+            // --> TryStream<(u64, Bloom)>
 
             // find the epochs that match
-            .filter_map(move |(epoch, bloom)| {
+            .try_filter_map(move |(epoch, bloom)| {
                 debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
 
                 match bloom_match(&bloom) {
-                    true => future::ready(Some(epoch)),
-                    false => future::ready(None),
+                    true => future::ready(Ok(Some(epoch))),
+                    false => future::ready(Ok(None)),
                 }
             })
-            // --> Stream<u64>
+            // --> TryStream<u64>
 
             // retrieve receipts
-            .map(|epoch| self.retrieve_receipts(epoch).map(move |receipts| (epoch, receipts)))
-            // --> Stream<Future<(u64, Receipts)>>
+            .map(|res| match res {
+                Err(e) => Either::Left(future::err(e)),
+                Ok(epoch) => Either::Right(self.retrieve_receipts(epoch)),
+            })
+            // --> Stream<TryFuture<(u64, Vec<Vec<Receipt>>)>>
 
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            // --> Stream<(u64, Vec<Vec<Receipt>>)>
+            // --> TryStream<(u64, Vec<Vec<Receipt>>)>
 
             // filter logs in epoch
-            .map(|(epoch, receipts)| {
-                debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
-                let logs = self.filter_epoch_receipts(epoch, receipts, filter.clone()).unwrap(); // TODO!!!! handle error here
-                // Ok(stream::iter(logs))
-                stream::iter(logs)
+            .map(|res| match res {
+                Err(e) => Err(e),
+                Ok((epoch, receipts)) => {
+                    debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
+
+                    let logs = self
+                        .filter_epoch_receipts(epoch, receipts, filter.clone())?
+                        .map(|log| Ok(log));
+
+                    Ok(stream::iter(logs))
+                }
             })
-            // --> Stream<Stream<LocalizedLogEntry>>
+            // --> TryStream<TryStream<LocalizedLogEntry>>
 
-            .flatten()
-            // --> Stream<LocalizedLogEntry>
+            .try_flatten()
+            // --> TryStream<LocalizedLogEntry>
 
-            .filter(move |log| future::ready(block_filter(log.block_hash)))
-            // --> Stream<LocalizedLogEntry>
+            // apply block filter
+            .try_filter(move |log| future::ready(block_filter(log.block_hash)))
+            // --> TryStream<LocalizedLogEntry>
 
             // retrieve block txs
-            .map(|log| self.retrieve_block_txs(log.block_hash).map(move |txs| (log, txs)))
-            // --> Stream<Future<(LocalizedLogEntry, Vec<SignedTransaction>)>>
+            .map(|res| match res {
+                Err(e) => Either::Left(future::err(e)),
+                Ok(log) => Either::Right(self.retrieve_block_txs(log)),
+            })
+            // --> Stream<TryFuture<(LocalizedLogEntry, Vec<SignedTransaction>)>>
 
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            // --> Stream<(LocalizedLogEntry, Vec<SignedTransaction>)>
+            // --> TryStream<(LocalizedLogEntry, Vec<SignedTransaction>)>
 
-            .map(|(mut log, txs)| {
+            .map_ok(|(mut log, txs)| {
                 debug!("processing log = {:?} txs = {:?}", log, txs);
 
                 // at this point, we're trying to retrieve a block tx based on verified
@@ -647,16 +678,16 @@ impl QueryService {
                 log.transaction_hash = txs[log.transaction_index].hash();
                 log
             })
-            // --> Stream<LocalizedLogEntry>
+            // --> TryStream<LocalizedLogEntry>
 
             // limit number of entries we need
             .take(limit)
-            // --> Stream<LocalizedLogEntry>
+            // --> TryStream<LocalizedLogEntry>
 
-            .collect();
-        // Future<Iterator<LocalizedLogEntry>>
+            .try_collect();
+        // --> TryFuture<Vec<LocalizedLogEntry>>
 
-        let mut matching: Vec<_> = stream.await;
+        let mut matching: Vec<_> = stream.await?;
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)
