@@ -89,6 +89,7 @@ impl Cfx for CfxHandler {
     delegate! {
         target self.common {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
+            fn best_block_hash(&self) -> RpcResult<RpcH256>;
         }
 
         /*target self.rpc_impl {
@@ -96,7 +97,6 @@ impl Cfx for CfxHandler {
     }
 
     not_supported! {
-        fn best_block_hash(&self) -> RpcResult<RpcH256>;
         fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> RpcResult<RpcBlock>;
         fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
         fn block_by_hash(&self, hash: RpcH256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
