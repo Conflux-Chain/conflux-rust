@@ -238,6 +238,13 @@ impl ConsensusNewBlockHandler {
                 .data
                 .blockset_in_own_view_of_epoch
                 .retain(|v| new_era_block_arena_index_set.contains(v));
+            // FIXME: We should change this after finish the full timer chain
+            // implementation
+            if !new_era_block_arena_index_set
+                .contains(&inner.arena[me].last_timer_block_arena_index)
+            {
+                inner.arena[me].last_timer_block_arena_index = NULL;
+            }
         }
         // reassign the parent for outside era blocks
         for v in new_era_legacy_block_arena_index_set {
@@ -252,13 +259,6 @@ impl ConsensusNewBlockHandler {
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
             inner.terminal_hashes.remove(&inner.arena[me].hash);
-            // FIXME: We should change this after finish the full timer chain
-            // implementation
-            if !new_era_block_arena_index_set
-                .contains(&inner.arena[me].last_timer_block_arena_index)
-            {
-                inner.arena[me].last_timer_block_arena_index = NULL;
-            }
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
@@ -281,7 +281,7 @@ impl ConsensusNewBlockHandler {
         // outside
         let mut timer_chain_truncate = 0;
         while timer_chain_truncate < inner.timer_chain.len()
-            && new_era_block_arena_index_set
+            && !new_era_block_arena_index_set
                 .contains(&inner.timer_chain[timer_chain_truncate])
         {
             timer_chain_truncate += 1;

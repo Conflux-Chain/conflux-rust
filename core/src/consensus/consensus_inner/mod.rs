@@ -2648,12 +2648,12 @@ impl ConsensusGraphInner {
         if !self.arena[me].is_timer {
             return false;
         }
-        info!(
-            "me {} height {} genesis height {}",
-            me,
-            self.arena[me].timer_chain_height,
-            self.cur_era_genesis_timer_chain_height
-        );
+        //        info!(
+        //            "me {} height {} genesis height {}",
+        //            me,
+        //            self.arena[me].timer_chain_height,
+        //            self.cur_era_genesis_timer_chain_height
+        //        );
         let timer_chain_index = (self.arena[me].timer_chain_height
             - self.cur_era_genesis_timer_chain_height)
             as usize;
@@ -2672,6 +2672,10 @@ impl ConsensusGraphInner {
         };
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
+        if self.arena[me].is_timer {
+            tmp_chain.push(me);
+            tmp_chain_set.insert(me);
+        }
         let mut i = self.arena[me].last_timer_block_arena_index;
         while i != NULL && !self.is_on_timer_chain(i) {
             tmp_chain.push(i);
@@ -2682,114 +2686,132 @@ impl ConsensusGraphInner {
         let fork_at;
         let fork_at_index;
         if i != NULL {
-            fork_at = self.arena[i].timer_chain_height;
+            fork_at = self.arena[i].timer_chain_height + 1;
             assert!(fork_at >= self.cur_era_genesis_timer_chain_height);
-            fork_at_index = (fork_at - self.cur_era_genesis_timer_chain_height)
-                as usize
-                + 1;
+            fork_at_index =
+                (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
         } else {
             fork_at = self.cur_era_genesis_timer_chain_height;
             fork_at_index = 0;
         }
 
-        // Now we need to update the timer_chain_height field of the remaining
-        // blocks with topological sort
-        let mut queue = VecDeque::new();
-        let mut visited = HashSet::new();
-        visited.clear();
-        if i == NULL {
-            queue.push_back(self.cur_era_genesis_block_arena_index);
-        } else {
-            queue.push_back(self.timer_chain[fork_at_index - 1]);
-        }
-        while let Some(x) = queue.pop_front() {
-            visited.insert(x);
-            let concatenated =
-                [&self.arena[x].children[..], &self.arena[x].referrers[..]]
-                    .concat();
-            for succ in concatenated {
-                // Test whether this is inside the anticone.
-                if anticone.contains(succ as u32) {
-                    continue;
-                }
-                if !visited.contains(&succ) {
-                    queue.push_back(succ);
-                }
-            }
-        }
-        let mut counter = HashMap::new();
-        for x in &visited {
-            let mut cnt = 0;
-            if visited.contains(&self.arena[*x].parent) {
-                cnt = 1;
-            }
-            for referee in &self.arena[*x].referees {
-                if visited.contains(referee) {
-                    cnt += 1;
-                }
-            }
-            counter.insert(*x, cnt);
-        }
-        if i == NULL {
-            queue.push_back(self.cur_era_genesis_block_arena_index);
-            info!(
-                "start at genesis {}",
-                self.cur_era_genesis_block_arena_index
-            );
-        } else {
-            queue.push_back(self.timer_chain[fork_at_index - 1]);
-            info!(
-                "start at {} chain height {}",
-                self.timer_chain[fork_at_index - 1],
-                fork_at
-            );
-        }
         let mut res = HashMap::new();
-        while let Some(x) = queue.pop_front() {
-            info!("exploring {}", x);
-            let mut timer_chain_height = 0;
-            let mut preds = self.arena[x].referees.clone();
-            if self.arena[x].parent != NULL {
-                preds.push(self.arena[x].parent);
+        if fork_at_index == self.timer_chain.len() {
+            // Extending the newest timer chain, simple case
+            res.insert(me, fork_at);
+        } else {
+            info!("New block {} not extending timer chain (len = {}), fork at {}, index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
+            // Now we need to update the timer_chain_height field of the
+            // remaining blocks with topological sort
+            let mut queue = VecDeque::new();
+            let mut visited = BitSet::new();
+            visited.clear();
+            if i == NULL {
+                queue.push_back(self.cur_era_genesis_block_arena_index);
+            } else {
+                queue.push_back(self.timer_chain[fork_at_index - 1]);
             }
-            for pred in &preds {
-                info!(
-                    "referee {} height {} cur_era_genesis_block_arena_index {}",
-                    pred,
-                    self.arena[*pred].timer_chain_height,
-                    self.cur_era_genesis_block_arena_index
-                );
-                let height = if let Some(v) = res.get(pred) {
-                    *v
-                } else {
-                    self.arena[*pred].timer_chain_height
-                };
-                if height > timer_chain_height {
-                    timer_chain_height = height;
+            while let Some(x) = queue.pop_front() {
+                visited.add(x as u32);
+                for child in &self.arena[x].children {
+                    if anticone.contains(*child as u32) {
+                        continue;
+                    }
+                    if !visited.contains(*child as u32) {
+                        queue.push_back(*child);
+                    }
+                }
+                for referer in &self.arena[x].referrers {
+                    if anticone.contains(*referer as u32) {
+                        continue;
+                    }
+                    if !visited.contains(*referer as u32) {
+                        queue.push_back(*referer);
+                    }
                 }
             }
-            if tmp_chain_set.contains(&x) {
-                timer_chain_height += 1;
-                info!(
-                    "timer chain block {}! height inc to {}",
-                    x, timer_chain_height
-                );
+            let mut counter = HashMap::new();
+            for x in &visited {
+                let mut cnt = 0;
+                if visited.contains(self.arena[x as usize].parent as u32) {
+                    cnt = 1;
+                }
+                for referee in &self.arena[x as usize].referees {
+                    if visited.contains(*referee as u32) {
+                        cnt += 1;
+                    }
+                }
+                counter.insert(x as usize, cnt);
             }
-            info!("res {} height {}", x, timer_chain_height);
-            res.insert(x, timer_chain_height);
-            let concatenated =
-                [&self.arena[x].children[..], &self.arena[x].referrers[..]]
-                    .concat();
-            for succ in concatenated {
-                if !visited.contains(&succ) {
-                    continue;
+            if i == NULL {
+                queue.push_back(self.cur_era_genesis_block_arena_index);
+            //            info!(
+            //                "start at genesis {}",
+            //                self.cur_era_genesis_block_arena_index
+            //            );
+            } else {
+                queue.push_back(self.timer_chain[fork_at_index - 1]);
+                //            info!(
+                //                "start at {} chain height {}",
+                //                self.timer_chain[fork_at_index - 1],
+                //                fork_at
+                //            );
+            }
+            while let Some(x) = queue.pop_front() {
+                // info!("exploring {}", x);
+                let mut timer_chain_height = 0;
+                let mut preds = self.arena[x].referees.clone();
+                if self.arena[x].parent != NULL {
+                    preds.push(self.arena[x].parent);
                 }
-                let cnt = counter.get(&succ).unwrap() - 1;
-                info!("link {} succ {} cnt {}", x, succ, cnt);
-                if cnt == 0 {
-                    queue.push_back(succ);
+                for pred in &preds {
+                    //                info!(
+                    //                    "referee {} height {}
+                    // cur_era_genesis_block_arena_index {}",
+                    //                    pred,
+                    //                    self.arena[*pred].timer_chain_height,
+                    //                    self.cur_era_genesis_block_arena_index
+                    //                );
+                    let height = if let Some(v) = res.get(pred) {
+                        *v
+                    } else {
+                        self.arena[*pred].timer_chain_height
+                    };
+                    if height > timer_chain_height {
+                        timer_chain_height = height;
+                    }
                 }
-                counter.insert(succ, cnt);
+                if tmp_chain_set.contains(&x) {
+                    timer_chain_height += 1;
+                    //                info!(
+                    //                    "timer chain block {}! height inc to
+                    // {}",                    x,
+                    // timer_chain_height                );
+                }
+                // info!("res {} height {}", x, timer_chain_height);
+                res.insert(x, timer_chain_height);
+                for child in &self.arena[x].children {
+                    if !visited.contains(*child as u32) {
+                        continue;
+                    }
+                    let cnt = counter.get(child).unwrap() - 1;
+                    // info!("link {} succ {} cnt {}", x, *child, cnt);
+                    if cnt == 0 {
+                        queue.push_back(*child);
+                    }
+                    counter.insert(*child, cnt);
+                }
+                for referer in &self.arena[x].referrers {
+                    if !visited.contains(*referer as u32) {
+                        continue;
+                    }
+                    let cnt = counter.get(referer).unwrap() - 1;
+                    // info!("link {} succ {} cnt {}", x, *referer, cnt);
+                    if cnt == 0 {
+                        queue.push_back(*referer);
+                    }
+                    counter.insert(*referer, cnt);
+                }
             }
         }
 
