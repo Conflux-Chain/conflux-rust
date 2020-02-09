@@ -46,6 +46,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_statistics(&self) -> &SharedStatistics;
 
+    fn block_count(&self) -> u64;
+
     fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, String>;
