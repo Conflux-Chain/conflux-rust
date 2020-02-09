@@ -455,15 +455,7 @@ where Message: Send + Sync + 'static
                 }
             }
             IoMessage::UpdateStreamRegistration { handler_id, token } => {
-                // We should release handlers lock before `update_stream` to
-                // avoid the deadlock between `handlers` and `session` within
-                // `kill_connection`
-                let maybe_arc_handler = self
-                    .handlers
-                    .read()
-                    .get(handler_id)
-                    .map(|handler| handler.clone());
-                if let Some(handler) = maybe_arc_handler {
+                if let Some(handler) = self.handlers.read().get(handler_id) {
                     handler.update_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
