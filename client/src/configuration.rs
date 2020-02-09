@@ -83,8 +83,6 @@ build_config! {
         (rocksdb_disable_wal, (bool), false)
 
         // Genesis section.
-        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
-        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
@@ -322,12 +320,6 @@ impl Configuration {
                 .debug_dump_dir_invalid_state_root
                 .clone(),
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: self
-                    .raw_conf
-                    .adaptive_weight_alpha_num,
-                adaptive_weight_alpha_den: self
-                    .raw_conf
-                    .adaptive_weight_alpha_den,
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
                     .raw_conf

@@ -111,8 +111,6 @@ pub struct Block {
     pub difficulty: U256,
     /// Referee hashes
     pub referee_hashes: Vec<H256>,
-    /// Stable
-    pub stable: Option<bool>,
     /// Adaptive
     pub adaptive: bool,
     /// Nonce of the block
@@ -211,8 +209,6 @@ impl Block {
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
-            // PrimitiveBlock does not contain this information
-            stable: consensus_inner.is_stable(&block_hash),
             adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header

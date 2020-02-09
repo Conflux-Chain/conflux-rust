@@ -453,7 +453,7 @@ impl ConsensusExecutor {
                                 // Check with the spec!
                                 anticone_difficulty +=
                                     U512::from(U256::from(inner.block_weight(
-                                        a_index, false, /* inclusive */
+                                        a_index
                                     )));
                             }
                         };

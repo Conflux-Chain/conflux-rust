@@ -154,7 +154,7 @@ impl ConfirmationMeter {
     {
         // Compute w_1
         let idx = g_inner.get_pivot_block_arena_index(epoch_num);
-        let w_1 = g_inner.block_weight(idx, false /* inclusive */);
+        let w_1 = g_inner.block_weight(idx);
 
         // Compute w_2
         let parent = g_inner.arena[idx].parent;
@@ -165,8 +165,7 @@ impl ConfirmationMeter {
                 continue;
             }
 
-            let child_weight =
-                g_inner.block_weight(*child, false /* inclusive */);
+            let child_weight = g_inner.block_weight(*child);
             if child_weight > max_weight {
                 max_weight = child_weight;
             }

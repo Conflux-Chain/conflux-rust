@@ -73,8 +73,8 @@ pub fn create_simple_block(
 
 /// This method is only used in tests and benchmarks.
 pub fn initialize_synchronization_graph(
-    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64, tcr: u64,
-    tcb: u64, era_epoch_count: u64, dbtype: DbType,
+    db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
+    dbtype: DbType,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
 {
     let ledger_db = db::open_database(
@@ -153,8 +153,6 @@ pub fn initialize_synchronization_graph(
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: alpha_num,
-                adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
                 timer_chain_block_difficulty_ratio: tcr,

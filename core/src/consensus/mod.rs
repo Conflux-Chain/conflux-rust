@@ -604,7 +604,7 @@ impl ConsensusGraph {
                     &self.confirmation_meter,
                     hash,
                     &block.block_header,
-                    Some(&block.transactions),
+                    Some(block.transactions.clone()),
                 );
             } else {
                 // This `ignore_body` case will only be used when
@@ -680,7 +680,6 @@ impl ConsensusGraph {
                             past_era_weight: inner.arena[*arena_index]
                                 .past_era_weight(),
                             era_block_hash,
-                            stable: inner.arena[*arena_index].stable(),
                             adaptive: inner.arena[*arena_index].adaptive(),
                         },
                     )

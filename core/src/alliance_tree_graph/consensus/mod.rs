@@ -630,7 +630,6 @@ impl TreeGraphConsensus {
                             past_era_weight: inner.arena[*arena_index]
                                 .past_era_weight(),
                             era_block_hash,
-                            stable: inner.arena[*arena_index].stable(),
                             adaptive: inner.arena[*arena_index].adaptive(),
                         },
                     )
