@@ -92,6 +92,9 @@ pub trait TestRpc {
         timestamp: u64, adaptive: bool,
     ) -> RpcResult<H256>;
 
+    #[rpc(name = "get_block_status")]
+    fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
+
     #[rpc(name = "gettransactionreceipt")]
     fn get_transaction_receipt(
         &self, tx_hash: H256,

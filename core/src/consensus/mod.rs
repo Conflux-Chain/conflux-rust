@@ -113,7 +113,7 @@ pub struct BestInformation {
 pub struct ConsensusGraph {
     pub inner: Arc<RwLock<ConsensusGraphInner>>,
     pub txpool: SharedTransactionPool,
-    data_man: Arc<BlockDataManager>,
+    pub data_man: Arc<BlockDataManager>,
     executor: Arc<ConsensusExecutor>,
     statistics: SharedStatistics,
     pub new_block_handler: ConsensusNewBlockHandler,
@@ -130,6 +130,9 @@ pub struct ConsensusGraph {
     /// We use `Mutex` here because other thread will only modify it once and
     /// after that only current thread will operate this map.
     pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    /// The epoch id of the remotely synchronized state.
+    /// This is always `None` for archive nodes.
+    pub synced_epoch_id: Mutex<Option<EpochId>>,
 }
 
 impl ConsensusGraph {
@@ -171,6 +174,7 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Default::default(),
+            synced_epoch_id: Default::default(),
         };
         graph.update_best_info();
         graph
@@ -1029,10 +1033,9 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Option<H256> {
-        self.inner.read().get_trusted_blame_block(
-            snapshot_epoch_id,
-            self.data_man.get_snapshot_blame_plus_depth(),
-        )
+        self.inner
+            .read()
+            .get_trusted_blame_block_for_snapshot(snapshot_epoch_id)
     }
 
     /// Return the epoch that we are going to sync the state

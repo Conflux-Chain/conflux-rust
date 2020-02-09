@@ -238,9 +238,9 @@ pub struct SynchronizationProtocolHandler {
     // state sync for any checkpoint
     pub state_sync: Arc<SnapshotChunkSync>,
 
-    /// The epoch id of the remotely synchronized state and the trusted block
-    /// whose blame includes it. This is always `None` for archive nodes.
-    pub synced_epoch_id_and_blame_block: Mutex<Option<(EpochId, H256)>>,
+    /// The epoch id of the remotely synchronized state.
+    /// This is always `None` for archive nodes.
+    pub synced_epoch_id: Mutex<Option<(EpochId)>>,
 
     // provider for serving light protocol queries
     light_provider: Arc<LightProvider>,
@@ -318,7 +318,7 @@ impl SynchronizationProtocolHandler {
                 SyncHandlerWorkType::LocalMessage,
             ),
             state_sync,
-            synced_epoch_id_and_blame_block: Default::default(),
+            synced_epoch_id: Default::default(),
             light_provider,
         }
     }
