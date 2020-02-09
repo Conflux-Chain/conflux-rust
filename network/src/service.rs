@@ -392,13 +392,14 @@ impl DelayedQueue {
 
     fn send_delayed_messages(&self, network_service: &NetworkServiceInner) {
         let context = self.queue.lock().pop().unwrap();
-        match context.session.write().send_packet(
+        let r = context.session.write().send_packet(
             &context.io,
             Some(context.protocol),
             session::PACKET_USER,
             context.msg,
             context.priority,
-        ) {
+        );
+        match r {
             Ok(_) => {}
             Err(Error(ErrorKind::Expired, _)) => {
                 // If a connection is set expired, it should have been killed
