@@ -412,6 +412,7 @@ impl TestRpc for TestRpcImpl {
             fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
+            fn save_node_db(&self) -> RpcResult<()>;
         }
     }
 
@@ -425,7 +426,9 @@ impl TestRpc for TestRpcImpl {
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
-        fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
+        fn send_usable_genesis_accounts(&self, account_start_index: usize) -> RpcResult<Bytes>;
+        fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
+        fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;
     }
 }
 

@@ -489,8 +489,8 @@ def get_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT, coveragedi
     return coverage.AuthServiceProxyWrapper(proxy, coverage_logfile)
 
 
-def get_simple_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
-    return SimpleRpcProxy(url, timeout)
+def get_simple_rpc_proxy(url, node=None, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
+    return SimpleRpcProxy(url, timeout, node)
 
 
 def p2p_port(n):
@@ -564,6 +564,15 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
         t.join(timeout)
         assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
         assert not t.failed, "connect_sample_nodes failed."
+
+
+def assert_blocks_valid(nodes, blocks):
+    for node in nodes:
+        for block in blocks:
+            r = node.get_block_status(block)
+            assert_equal(r[0], 0)  # block status is valid
+            assert_equal(r[1], True)  # state_valid is True
+
 
 class ConnectThread(threading.Thread):
     def __init__(self, nodes, a, peers, latencies, log, min_peers=3, daemon=True):

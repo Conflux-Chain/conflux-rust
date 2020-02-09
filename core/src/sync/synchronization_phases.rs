@@ -316,39 +316,16 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
         sync_handler: &SynchronizationProtocolHandler,
     ) -> SyncPhaseType
     {
-        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         if self.has_state.load(AtomicOrdering::SeqCst) {
-            if epoch_to_sync != sync_handler.graph.data_man.true_genesis.hash()
-            {
-                // TODO Implement a mechanism to ensure the expect
-                let trusted_blame_block = sync_handler
-                    .graph
-                    .consensus
-                    .get_trusted_blame_block(&epoch_to_sync)
-                    .expect(
-                        "It's ensured that a trusted blame block can be found for \
-                     a stable epoch_to_sync",
-                    );
-                // Set trusted_blame_block to ensure that state_valid
-                // can be passed to Block-related phases
-                *sync_handler
-                    .graph
-                    .consensus
-                    .synced_epoch_id_and_blame_block
-                    .lock() = Some((epoch_to_sync, trusted_blame_block));
-            }
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
+        let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
         self.state_sync
             .update_status(epoch_to_sync, io, sync_handler);
         if self.state_sync.status() == Status::Completed {
             self.state_sync.restore_execution_state(sync_handler);
-            *sync_handler
-                .graph
-                .consensus
-                .synced_epoch_id_and_blame_block
-                .lock() =
-                Some((epoch_to_sync, self.state_sync.trusted_blame_block()));
+            *sync_handler.graph.consensus.synced_epoch_id.lock() =
+                Some(epoch_to_sync);
             SyncPhaseType::CatchUpRecoverBlockFromDB
         } else {
             self.phase_type()
@@ -371,6 +348,17 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             info!("CatchUpCheckpointPhase: commitment for epoch {:?} exists, skip state sync. \
                 commitment={:?}", epoch_to_sync, commitment);
             self.has_state.store(true, AtomicOrdering::SeqCst);
+
+            // TODO Here has_state could mean we have the snapshot of the state
+            // or the last snapshot and the delta mpt. We only need to specially
+            // handle the case of snapshot-only state where we
+            // cannot compute state_valid because we do not have a
+            // valid state root.
+            if epoch_to_sync != sync_handler.graph.data_man.true_genesis.hash()
+            {
+                *sync_handler.graph.consensus.synced_epoch_id.lock() =
+                    Some(epoch_to_sync);
+            }
             return;
         }
 
@@ -452,9 +440,19 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // already in disk and we didn't sync it from peer.
             // In both cases, we should set `state_availability_boundary` to
             // `[cur_era_stable_height, cur_era_stable_height]`.
-            if let Some((epoch_synced, trusted_blame_block)) =
-                &*self.graph.consensus.synced_epoch_id_and_blame_block.lock()
+            if let Some(epoch_synced) =
+                &*self.graph.consensus.synced_epoch_id.lock()
             {
+                // TODO Implement a mechanism to ensure the expect.
+                // We need `for_snapshot` because the blocks within the next
+                // snapshot do not have correct state_root
+                // locally.
+                let trusted_blame_block = old_consensus_inner
+                    .get_trusted_blame_block_for_snapshot(&epoch_synced)
+                    .expect(
+                        "It's ensured that a trusted blame block can be found for \
+                     a stable epoch_to_sync",
+                    );
                 let epoch_synced_height = self
                     .graph
                     .data_man
@@ -477,7 +475,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     self.graph.consensus.pivot_block_state_valid_map.lock();
                 let mut cur = *old_consensus_inner
                     .hash_to_arena_indices
-                    .get(trusted_blame_block)
+                    .get(&trusted_blame_block)
                     .unwrap();
                 while cur != NULL {
                     let blame = self

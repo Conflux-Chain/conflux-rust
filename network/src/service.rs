@@ -321,6 +321,12 @@ impl NetworkService {
         );
         Some(peer)
     }
+
+    pub fn save_node_db(&self) {
+        if let Some(inner) = &self.inner {
+            inner.node_db.write().save();
+        }
+    }
 }
 
 type SharedSession = Arc<RwLock<Session>>;
@@ -351,7 +357,6 @@ struct ProtocolTimer {
 
 /// The inner implementation of NetworkService. Note that all accesses to the
 /// RWLocks of the fields have to follow the defined order to avoid race
-#[allow(dead_code)]
 pub struct NetworkServiceInner {
     pub sessions: SessionManager,
     pub metadata: HostMetadata,
@@ -366,7 +371,6 @@ pub struct NetworkServiceInner {
     timer_counter: RwLock<usize>,
     pub node_db: RwLock<NodeDatabase>,
     reserved_nodes: RwLock<HashSet<NodeId>>,
-    nodes: RwLock<HashMap<NodeId, NodeEntry>>,
     dropped_nodes: RwLock<HashSet<StreamToken>>,
 
     /// Delayed message queue and corresponding latency
@@ -545,7 +549,6 @@ impl NetworkServiceInner {
                 config.subnet_quota,
             )),
             reserved_nodes: RwLock::new(HashSet::new()),
-            nodes: RwLock::new(HashMap::new()),
             dropped_nodes: RwLock::new(HashSet::new()),
             delayed_queue: None,
         };

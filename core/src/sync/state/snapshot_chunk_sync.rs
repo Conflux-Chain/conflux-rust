@@ -705,11 +705,17 @@ impl SnapshotChunkSync {
                 .unwrap()
                 .height()
         };
+        let mut snapshot_state_root = state_root_vec[offset].clone();
+        // This delta_root is the intermediate_delta_root of the new snapshot,
+        // and this field will be used to fill new state_root in
+        // get_state_trees_for_next_epoch
+        snapshot_state_root.intermediate_delta_root =
+            state_root_vec[offset].delta_root;
 
         Some((
             offset,
             StateRootWithAuxInfo {
-                state_root: state_root_vec[offset].clone(),
+                state_root: snapshot_state_root,
                 aux_info: StateRootAuxInfo {
                     // FIXME: we should not commit the EpochExecutionCommitment
                     // FIXME: for the synced snapshot because it's fake.
@@ -717,6 +723,7 @@ impl SnapshotChunkSync {
                     // to know. We put the
                     // parent_snapshot_merkle_root here.
                     snapshot_epoch_id: state_root_vec[offset - 1].snapshot_root,
+                    // This field will not be used
                     delta_mpt_key_padding: StorageKey::delta_mpt_padding(
                         &state_root_vec[offset].snapshot_root,
                         &state_root_vec[offset].intermediate_delta_root,
