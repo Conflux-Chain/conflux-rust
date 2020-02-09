@@ -92,6 +92,9 @@ pub trait TestRpc {
         timestamp: u64, adaptive: bool,
     ) -> RpcResult<H256>;
 
+    #[rpc(name = "get_block_status")]
+    fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
+
     #[rpc(name = "gettransactionreceipt")]
     fn get_transaction_receipt(
         &self, tx_hash: H256,
@@ -104,4 +107,12 @@ pub trait TestRpc {
     fn send_usable_genesis_accounts(
         &self, account_start_index: usize,
     ) -> RpcResult<Bytes>;
+
+    #[rpc(name = "set_db_crash")]
+    fn set_db_crash(
+        &self, crash_probability: f64, crash_exit_code: i32,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "save_node_db")]
+    fn save_node_db(&self) -> RpcResult<()>;
 }

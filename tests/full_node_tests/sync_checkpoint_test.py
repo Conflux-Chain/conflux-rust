@@ -8,7 +8,7 @@ from jsonrpcclient.exceptions import ReceivedErrorResponseError
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal
+from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal, assert_blocks_valid
 from conflux.rpc import RpcClient
 
 class SyncCheckpointTests(ConfluxTestFramework):
@@ -47,9 +47,12 @@ class SyncCheckpointTests(ConfluxTestFramework):
         # Generate checkpoint on node[0]
         archive_node_client = RpcClient(self.nodes[0])
         self.genesis_nonce = archive_node_client.get_nonce(archive_node_client.GENESIS_ADDR)
-        for _ in range(num_blocks):
+        blocks_in_era = []
+        for i in range(num_blocks):
             txs = self._generate_txs(0, random.randint(5, 10))
-            archive_node_client.generate_block_with_fake_txs(txs)
+            block_hash = archive_node_client.generate_block_with_fake_txs(txs)
+            if i >= snapshot_epoch:
+                blocks_in_era.append(block_hash)
         sync_blocks(self.nodes[:-1])
 
         # Start node[full_node_index] as full node to sync checkpoint
@@ -93,6 +96,11 @@ class SyncCheckpointTests(ConfluxTestFramework):
             full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(i))
             archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(i))
             assert_equal(full_balance, archive_balance)
+
+        # Blocks within execution defer (5 epochs) and reward_defer (12 epochs) do not have state_valid
+        available_blocks = blocks_in_era[:-17]
+        assert_blocks_valid(self.nodes[:-1], available_blocks)
+        assert_blocks_valid(self.nodes[-1:], available_blocks)
 
 
 if __name__ == "__main__":

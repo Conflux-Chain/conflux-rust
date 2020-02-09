@@ -934,7 +934,7 @@ impl StorageManager {
                 )?;
             }
 
-            let (missing_snapshots, delta_dbs) = self
+            let (missing_delta_db_snapshots, delta_dbs) = self
                 .delta_db_manager
                 .scan_persist_state(snapshot_info_map)?;
 
@@ -952,12 +952,25 @@ impl StorageManager {
                 );
             }
 
-            for snapshot_epoch_id in missing_snapshots {
+            for snapshot_epoch_id in missing_delta_db_snapshots {
                 if snapshot_epoch_id == NULL_EPOCH {
                     continue;
                 }
+                // Do not remove a snapshot which has intermediate delta mpt,
+                // because it could be a freshly made snapshot
+                // before the previous shutdown. A freshly made
+                // snapshot does not have delta db yet.
+                if let Some(snapshot_info) =
+                    snapshot_info_map.get(&snapshot_epoch_id)
+                {
+                    if delta_mpts
+                        .contains_key(&snapshot_info.parent_snapshot_epoch_id)
+                    {
+                        continue;
+                    }
+                }
                 error!(
-                    "Missing delta mpt for snapshot {:?}",
+                    "Missing intermediate mpt and delta mpt for snapshot {:?}",
                     snapshot_epoch_id
                 );
                 snapshot_info_map.remove(&snapshot_epoch_id);

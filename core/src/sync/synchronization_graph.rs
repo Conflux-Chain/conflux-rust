@@ -1190,7 +1190,7 @@ impl SynchronizationGraph {
     }
 
     pub fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &Vec<H256>, difficulty: &U256,
+        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
     ) -> bool {
         if !self.is_consortium() {
             self.consensus.check_mining_adaptive_block(
@@ -1203,6 +1203,7 @@ impl SynchronizationGraph {
         }
     }
 
+    /// Return None if `hash` is not in sync graph
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
         if !self.contains_block_header(hash) {
             // Only return headers in sync graph
@@ -1213,16 +1214,20 @@ impl SynchronizationGraph {
             .map(|header_ref| header_ref.as_ref().clone())
     }
 
+    /// Return None if `hash` is not in sync graph
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         self.block_header_by_hash(hash)
             .map(|header| header.height())
     }
 
+    /// Return None if `hash` is not in sync graph
     pub fn block_timestamp_by_hash(&self, hash: &H256) -> Option<u64> {
         self.block_header_by_hash(hash)
             .map(|header| header.timestamp())
     }
 
+    /// TODO Be more specific about which functions only return in-memory data
+    /// and which can return the in-database data
     pub fn block_by_hash(&self, hash: &H256) -> Option<Arc<Block>> {
         self.data_man.block_by_hash(hash, true /* update_cache */)
     }

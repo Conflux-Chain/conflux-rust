@@ -113,7 +113,7 @@ pub struct BestInformation {
 pub struct ConsensusGraph {
     pub inner: Arc<RwLock<ConsensusGraphInner>>,
     pub txpool: SharedTransactionPool,
-    data_man: Arc<BlockDataManager>,
+    pub data_man: Arc<BlockDataManager>,
     executor: Arc<ConsensusExecutor>,
     statistics: SharedStatistics,
     pub new_block_handler: ConsensusNewBlockHandler,
@@ -130,6 +130,9 @@ pub struct ConsensusGraph {
     /// We use `Mutex` here because other thread will only modify it once and
     /// after that only current thread will operate this map.
     pub pivot_block_state_valid_map: Mutex<HashMap<H256, bool>>,
+    /// The epoch id of the remotely synchronized state.
+    /// This is always `None` for archive nodes.
+    pub synced_epoch_id: Mutex<Option<EpochId>>,
 }
 
 impl ConsensusGraph {
@@ -171,6 +174,7 @@ impl ConsensusGraph {
             best_info: RwLock::new(Arc::new(Default::default())),
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Default::default(),
+            synced_epoch_id: Default::default(),
         };
         graph.update_best_info();
         graph
@@ -216,6 +220,34 @@ impl ConsensusGraph {
         let best_state_block =
             self.inner.read_recursive().best_state_block_hash();
         self.executor.wait_for_result(best_state_block);
+    }
+
+    /// Determine whether the next mined block should have adaptive weight or
+    /// not
+    pub fn check_mining_adaptive_block(
+        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
+        referees: &Vec<H256>, difficulty: &U256,
+    ) -> bool
+    {
+        let parent_index =
+            *inner.hash_to_arena_indices.get(parent_hash).expect(
+                "parent_hash is the pivot chain tip,\
+                 so should still exist in ConsensusInner",
+            );
+        let referee_indices: Vec<_> = referees
+            .iter()
+            .map(|h| {
+                *inner
+                    .hash_to_arena_indices
+                    .get(h)
+                    .expect("Checked by the caller")
+            })
+            .collect();
+        inner.check_mining_adaptive_block(
+            parent_index,
+            referee_indices,
+            *difficulty,
+        )
     }
 
     /// Convert EpochNumber to height based on the current ConsensusGraph
@@ -1001,10 +1033,9 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Option<H256> {
-        self.inner.read().get_trusted_blame_block(
-            snapshot_epoch_id,
-            self.data_man.get_snapshot_blame_plus_depth(),
-        )
+        self.inner
+            .read()
+            .get_trusted_blame_block_for_snapshot(snapshot_epoch_id)
     }
 
     /// Return the epoch that we are going to sync the state
@@ -1042,9 +1073,13 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// Determine whether the next mined block should have adaptive weight or
     /// not
     fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &Vec<H256>, difficulty: &U256,
+        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
     ) -> bool {
         let mut inner = self.inner.write();
+        // referees are retrieved before locking inner, so we need to
+        // filter out the blocks that should be removed by possible
+        // checkpoint making that happens before we acquire the inner lock
+        referees.retain(|h| inner.hash_to_arena_indices.contains_key(h));
         let parent_index =
             *inner.hash_to_arena_indices.get(parent_hash).unwrap();
         let referee_indices: Vec<_> = referees

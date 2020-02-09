@@ -797,6 +797,7 @@ where ValueType::Type:
     fn put_impl(
         &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
+        random_crash_if_enabled("sqlite put");
         let (connection, statements) = self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -819,6 +820,7 @@ where ValueType::Type:
     fn put_with_number_key_impl(
         &mut self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
+        random_crash_if_enabled("sqlite put_with_number_key");
         let (connection, statements) = self.destructure_mut();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -849,6 +851,7 @@ where ValueType::Type:
     fn delete_impl(
         &self, key: &[u8],
     ) -> Result<Option<Option<Self::ValueType>>> {
+        random_crash_if_enabled("sqlite delete");
         let (connection, statements) = self.destructure();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -874,6 +877,7 @@ where ValueType::Type:
     fn delete_with_number_key_impl(
         &self, key: i64,
     ) -> Result<Option<Option<Self::ValueType>>> {
+        random_crash_if_enabled("sqlite delete_with_number_key");
         let (connection, statements) = self.destructure();
         match connection {
             None => Err(Error::from(ErrorKind::DbNotExist)),
@@ -1234,6 +1238,7 @@ use super::{
     },
     sqlite::*,
 };
+use crate::test_context::random_crash_if_enabled;
 use sqlite::{Connection, Statement};
 use std::{
     any::Any,

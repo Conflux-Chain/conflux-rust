@@ -821,7 +821,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
     }
 
     fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &Vec<H256>, difficulty: &U256,
+        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
     ) -> bool {
         true
     }
