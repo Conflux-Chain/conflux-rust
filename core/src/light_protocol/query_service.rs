@@ -7,12 +7,9 @@ extern crate futures;
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{
-            poll_future, poll_stream, with_timeout, FullPeerFilter, LedgerInfo,
-        },
+        common::{FullPeerFilter, LedgerInfo},
         message::msgid,
-        Error, Handler as LightHandler, LIGHT_PROTOCOL_ID,
-        LIGHT_PROTOCOL_VERSION,
+        Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     network::{NetworkContext, NetworkService},
     parameters::{
@@ -22,14 +19,17 @@ use crate::{
     sync::SynchronizationGraph,
 };
 use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
-use futures::{future, stream, Future, Stream};
+use futures::{
+    future::{self, Either},
+    stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+};
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, EpochNumber, Receipt, SignedTransaction, StateRoot, StorageKey,
     TransactionAddress,
 };
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
 type TxInfo = (
     SignedTransaction,
@@ -38,6 +38,26 @@ type TxInfo = (
     Option<u64>,  /* maybe_epoch */
     Option<H256>, /* maybe_state_root */
 );
+
+// As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
+// Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
+// As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
+async fn with_timeout<T>(
+    d: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
+) -> Result<T, String> {
+    // convert `fut` into futures@0.1
+    let fut = fut.unit_error().boxed().compat();
+
+    // set timeout
+    let with_timeout = tokio_timer::Timeout::new(fut, d);
+
+    // convert back to std::future
+    use futures::compat::Future01CompatExt;
+    let with_timeout = with_timeout.compat();
+
+    // set error message
+    with_timeout.await.map_err(|_| msg)
+}
 
 pub struct QueryService {
     // shared consensus graph
@@ -87,84 +107,128 @@ impl QueryService {
     }
 
     fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
-        let res: Result<T, Error> =
-            self.network.with_context(LIGHT_PROTOCOL_ID, |io| Ok(f(io)));
-        res.unwrap()
+        self.network
+            .with_context(LIGHT_PROTOCOL_ID, |io| f(io))
+            .expect("Unable to access network service")
     }
 
-    fn retrieve_state_root<'a>(
-        &'a self, epoch: u64,
-    ) -> impl Future<Item = StateRoot, Error = Error> + 'a {
+    #[allow(dead_code)]
+    async fn retrieve_state_root(
+        &self, epoch: u64,
+    ) -> Result<StateRoot, String> {
         trace!("retrieve_state_root epoch = {}", epoch);
 
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg =
+            format!("Timeout while retrieving state root for epoch {}", epoch);
+
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving state root for epoch {}", epoch), /* error */
+            msg,            /* error */
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
         )
+        .await
     }
 
-    fn retrieve_state_entry<'a>(
-        &'a self, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Item = Option<Vec<u8>>, Error = Error> + 'a {
+    async fn retrieve_state_entry(
+        &self, epoch: u64, key: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, String> {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg = format!(
+            "Timeout while retrieving state entry for epoch {} with key {:?}",
+            epoch, key
+        );
+
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key), /* error */
-            self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key.clone()))
+            msg,            /* error */
+            self.with_io(|io| {
+                self.handler.state_entries.request_now(io, epoch, key)
+            }),
         )
+        .await
     }
 
-    fn retrieve_bloom<'a>(
-        &'a self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> + 'a {
+    async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
         trace!("retrieve_bloom epoch = {}", epoch);
 
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg = format!("Timeout while retrieving bloom for epoch {}", epoch);
+
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving bloom for epoch {}", epoch), /* error */
+            msg,            /* error */
             self.handler.blooms.request(epoch),
         )
+        .await
+        .map(|bloom| (epoch, bloom))
     }
 
-    fn retrieve_receipts<'a>(
-        &'a self, epoch: u64,
-    ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> + 'a {
+    async fn retrieve_receipts(
+        &self, epoch: u64,
+    ) -> Result<(u64, Vec<Vec<Receipt>>), String> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg =
+            format!("Timeout while retrieving receipts for epoch {}", epoch);
+
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving receipts for epoch {}", epoch), /* error */
+            msg,            /* error */
             self.handler.receipts.request(epoch),
         )
+        .await
+        .map(|receipts| (epoch, receipts))
     }
 
-    fn retrieve_block_txs<'a>(
-        &'a self, hash: H256,
-    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> + 'a {
-        trace!("retrieve_block_txs hash = {:?}", hash);
+    async fn retrieve_block_txs(
+        &self, log: LocalizedLogEntry,
+    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), String> {
+        trace!("retrieve_block_txs log = {:?}", log);
+        let hash = log.block_hash;
+
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg =
+            format!("Timeout while retrieving block txs for block {}", hash);
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving block txs for block {}", hash), /* error */
+            msg,            /* error */
             self.handler.block_txs.request(hash),
         )
+        .await
+        .map(|block_txs| (log, block_txs))
     }
 
-    fn retrieve_tx_info<'a>(
-        &'a self, hash: H256,
-    ) -> impl Future<
-        Item = (SignedTransaction, Receipt, TransactionAddress),
-        Error = Error,
-    > + 'a {
+    async fn retrieve_tx_info(
+        &self, hash: H256,
+    ) -> Result<(SignedTransaction, Receipt, TransactionAddress), String> {
         trace!("retrieve_tx_info hash = {:?}", hash);
+
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg = format!("Timeout while retrieving tx info for tx {}", hash);
 
         with_timeout(
             *MAX_POLL_TIME, /* timeout */
-            format!("Timeout while retrieving tx info for tx {}", hash), /* error */
+            msg,            /* error */
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
+        .await
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
@@ -179,31 +243,34 @@ impl QueryService {
         .to_key_bytes()
     }
 
-    fn retrieve_account<'a>(
-        &'a self, epoch: u64, address: H160,
-    ) -> impl Future<Item = Option<Account>, Error = String> + 'a {
+    async fn retrieve_account(
+        &self, epoch: u64, address: H160,
+    ) -> Result<Option<Account>, String> {
         trace!(
             "retrieve_account epoch = {}, address = {:?}",
             epoch,
             address
         );
 
-        // FIXME: We don't need the state root when we don't verify the
-        // retrieved content. FIXME: but can we rule out the need for
-        // verification in the context?
-        self.retrieve_state_root(epoch)
-            .map(move |_root| Self::account_key(&address))
-            .and_then(move |key| self.retrieve_state_entry(epoch, key))
-            .and_then(|entry| match entry {
-                Some(entry) => Ok(Some(rlp::decode(&entry[..])?)),
-                None => Ok(None),
-            })
-            .map_err(|e| format!("{}", e))
+        // trigger state root request but don't wait for result
+        // FIXME: is there a better way?
+        let _ =
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
+
+        let key = Self::account_key(&address);
+
+        let entry = match self.retrieve_state_entry(epoch, key).await? {
+            None => return Ok(None),
+            Some(entry) => entry,
+        };
+
+        let account = rlp::decode(&entry[..]).map_err(|e| format!("{}", e))?;
+        Ok(Some(account))
     }
 
-    fn retrieve_code<'a>(
-        &'a self, epoch: u64, address: H160, code_hash: H256,
-    ) -> impl Future<Item = Option<Vec<u8>>, Error = String> + 'a {
+    async fn retrieve_code(
+        &self, epoch: u64, address: H160, code_hash: H256,
+    ) -> Result<Option<Vec<u8>>, String> {
         trace!(
             "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
             epoch,
@@ -211,16 +278,11 @@ impl QueryService {
             code_hash
         );
 
-        // FIXME: We don't need the state root when we don't verify the
-        // retrieved content. FIXME: but can we rule out the need for
-        // verification in the context?
-        self.retrieve_state_root(epoch)
-            .map(move |_root| Self::code_key(&address, &code_hash))
-            .and_then(move |key| self.retrieve_state_entry(epoch, key))
-            .map_err(|e| format!("{}", e))
+        let key = Self::code_key(&address, &code_hash);
+        self.retrieve_state_entry(epoch, key).await
     }
 
-    pub fn get_account(
+    pub async fn get_account(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Account>, String> {
         info!("get_account epoch={:?} address={:?}", epoch, address);
@@ -230,16 +292,10 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        match poll_future(&mut self.retrieve_account(epoch, address)) {
-            Ok(account) => Ok(account),
-            Err(e) => {
-                warn!("Error while retrieving account: {}", e);
-                Err(format!("{}", e))
-            }
-        }
+        self.retrieve_account(epoch, address).await
     }
 
-    pub fn get_code(
+    pub async fn get_code(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Vec<u8>>, String> {
         info!("get_code epoch={:?} address={:?}", epoch, address);
@@ -249,49 +305,40 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        let mut code = self
+        let account = self
             .retrieve_account(epoch, address)
-            .and_then(move |acc| match acc {
-                Some(acc) => Ok(acc.code_hash),
-                None => Err(format!(
+            .await
+            .map_err(|e| format!("Unable to retrieve account: {:?}", e))?;
+
+        let code_hash = match account {
+            Some(account) => account.code_hash,
+            None => {
+                return Err(format!(
                     "Account {:?} (number={:?}) does not exist",
                     address, epoch,
-                )),
-            })
-            .and_then(move |hash| self.retrieve_code(epoch, address, hash));
-
-        match poll_future(&mut code) {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                warn!("Error while retrieving code: {}", e);
-                Err(e)
+                ))
             }
-        }
+        };
+
+        self.retrieve_code(epoch, address, code_hash).await
     }
 
-    pub fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
+    pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
         info!("get_tx_info hash={:?}", hash);
 
-        let mut info = self.retrieve_tx_info(hash).map(|info| {
-            let (tx, receipt, address) = info;
+        // Note: if a transaction does not exist, we fail with timeout, as
+        //       peers cannot provide non-existence proofs for transactions.
+        // FIXME: is there a better way?
+        let (tx, receipt, address) = self.retrieve_tx_info(hash).await?;
 
-            let hash = address.block_hash;
-            let epoch = self.consensus.get_block_epoch_number(&hash);
+        let hash = address.block_hash;
+        let epoch = self.consensus.get_block_epoch_number(&hash);
 
-            let root = epoch
-                .and_then(|e| self.handler.witnesses.root_hashes_of(e))
-                .map(|(state_root, _, _)| state_root);
+        let root = epoch
+            .and_then(|e| self.handler.witnesses.root_hashes_of(e))
+            .map(|(state_root, _, _)| state_root);
 
-            (tx, receipt, address, epoch, root)
-        });
-
-        match poll_future(&mut info) {
-            Ok(info) => Ok(info),
-            Err(e) => {
-                warn!("Error while retrieving tx info: {}", e);
-                Err(format!("{}", e))
-            }
-        }
+        Ok((tx, receipt, address, epoch, root))
     }
 
     /// Relay raw transaction to all peers.
@@ -324,28 +371,23 @@ impl QueryService {
         success
     }
 
-    pub fn get_tx(&self, hash: H256) -> Result<SignedTransaction, String> {
+    pub async fn get_tx(
+        &self, hash: H256,
+    ) -> Result<SignedTransaction, String> {
         info!("get_tx hash={:?}", hash);
 
-        let mut tx = future::ok(hash).and_then(|hash| {
-            trace!("hash = {:?}", hash);
+        // We cannot await in scope that contains call to format!
+        // This is likely to be fixed in a future compiler version.
+        // See: https://github.com/rust-lang/rust/issues/64960
+        let msg =
+            format!("Timeout while retrieving transaction with hash {}", hash);
 
-            let tx = self.with_io(|io| self.handler.txs.request_now(io, hash));
-
-            with_timeout(
-                *MAX_POLL_TIME,                                  /* timeout */
-                format!("Timeout while retrieving tx {}", hash), /* error */
-                tx,
-            )
-        });
-
-        match poll_future(&mut tx) {
-            Ok(tx) => Ok(tx),
-            Err(e) => {
-                warn!("Error while retrieving tx: {}", e);
-                Err(format!("{}", e))
-            }
-        }
+        with_timeout(
+            *MAX_POLL_TIME, /* timeout */
+            msg,            /* error */
+            self.with_io(|io| self.handler.txs.request_now(io, hash)),
+        )
+        .await
     }
 
     /// Apply filter to all logs within a receipt.
@@ -410,9 +452,12 @@ impl QueryService {
     /// Apply filter to all receipts within an epoch.
     fn filter_epoch_receipts(
         &self, epoch: u64, mut receipts: Vec<Vec<Receipt>>, filter: Filter,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, Error> {
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry>, String> {
         // get epoch blocks in execution order
-        let mut hashes: Vec<H256> = self.ledger.block_hashes_in(epoch)?;
+        let mut hashes = self
+            .ledger
+            .block_hashes_in(epoch)
+            .map_err(|e| format!("{}", e))?;
 
         // process epoch receipts in reverse order
         receipts.reverse();
@@ -471,7 +516,8 @@ impl QueryService {
 
     fn get_filter_epochs(
         &self, filter: &Filter,
-    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool>), FilterError> {
+    ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError>
+    {
         match &filter.block_hashes {
             None => {
                 let from_epoch = self
@@ -517,25 +563,32 @@ impl QueryService {
         }
     }
 
-    pub fn get_logs(
+    pub async fn get_logs(
         &self, filter: Filter,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+    ) -> Result<Vec<LocalizedLogEntry>, String> {
         debug!("get_logs filter = {:?}", filter);
 
         // find epochs and blocks to match against
-        let (epochs, block_filter) = self.get_filter_epochs(&filter)?;
+        let (epochs, block_filter) = self
+            .get_filter_epochs(&filter)
+            .map_err(|e| format!("{}", e))?;
+
         debug!("Executing filter on epochs {:?}", epochs);
 
         // construct blooms for matching epochs
         let blooms = filter.bloom_possibilities();
-        let bloom_match = |block_log_bloom: &Bloom| {
+
+        // The returned future will outlive this method (`get_logs`). Thus, we
+        // need to move `blooms` into `bloom_match` and `bloom_match` into the
+        // future.
+        let bloom_match = move |block_log_bloom: &Bloom| {
             blooms
                 .iter()
                 .any(|bloom| block_log_bloom.contains_bloom(bloom))
         };
 
         // set maximum to number of logs returned
-        let limit = filter.limit.unwrap_or(::std::usize::MAX) as u64;
+        let limit = filter.limit.unwrap_or(::std::usize::MAX);
 
         // construct a stream object for log filtering
         // we first retrieve the epoch blooms and try to match against them. for
@@ -543,64 +596,77 @@ impl QueryService {
         // matching entries. finally, for each matching entry, we retrieve the
         // block transactions so that we can add the tx hash. each of these is
         // verified in the corresponding sync handler.
-        let mut stream =
+
+        // NOTE: in the type annotations below, we use these conventions:
+        //    Stream<T> = futures::stream::Stream<Item = T>
+        // TryStream<T> = futures::stream::TryStream<Ok = T, Error = String>
+        // TryFuture<T> = futures::future::TryFuture<Ok = T, Error = String>
+        let stream =
             // process epochs one by one
-            stream::iter_ok::<_, Error>(epochs)
+            stream::iter(epochs)
+            // --> Stream<u64>
 
             // retrieve blooms
-            .map(|epoch| self.retrieve_bloom(epoch).map(move |bloom| (epoch, bloom)))
+            .map(|epoch| self.retrieve_bloom(epoch))
+            // --> Stream<TryFuture<(u64, Bloom)>>
 
-            // we first request blooms for up to `LOG_FILTERING_LOOKAHEAD`
-            // epochs and then wait for them and process them one by one
-            // NOTE: we wrap our future in a future because we don't want to wait for the actual value yet
-            .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // --> TryStream<(u64, Bloom)>
 
             // find the epochs that match
-            .filter_map(|(epoch, bloom)| {
-                    debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
+            .try_filter_map(move |(epoch, bloom)| {
+                debug!("Matching epoch {:?} bloom = {:?}", epoch, bloom);
 
-                    match bloom_match(&bloom) {
-                        true => Some(epoch),
-                        false => None,
-                    }
-                },
-            )
+                match bloom_match(&bloom) {
+                    true => future::ready(Ok(Some(epoch))),
+                    false => future::ready(Ok(None)),
+                }
+            })
+            // --> TryStream<u64>
 
             // retrieve receipts
-            .map(|epoch| self.retrieve_receipts(epoch).map(move |receipts| (epoch, receipts)))
+            .map(|res| match res {
+                Err(e) => Either::Left(future::err(e)),
+                Ok(epoch) => Either::Right(self.retrieve_receipts(epoch)),
+            })
+            // --> Stream<TryFuture<(u64, Vec<Vec<Receipt>>)>>
 
-            // we first request receipts for up to `LOG_FILTERING_LOOKAHEAD`
-            // epochs and then wait for them and process them one by one
-            .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // --> TryStream<(u64, Vec<Vec<Receipt>>)>
 
             // filter logs in epoch
-            .and_then(|(epoch, receipts)| {
-                debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
-                let logs = self.filter_epoch_receipts(epoch, receipts, filter.clone())?;
-                Ok(stream::iter_ok(logs))
-            })
+            .map(|res| match res {
+                Err(e) => Err(e),
+                Ok((epoch, receipts)) => {
+                    debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
 
-            // Stream<Stream<Log>> -> Stream<Log>
-            .flatten()
+                    let logs = self
+                        .filter_epoch_receipts(epoch, receipts, filter.clone())?
+                        .map(|log| Ok(log));
 
-            .filter(|log| {
-                block_filter(log.block_hash)
+                    Ok(stream::iter(logs))
+                }
             })
+            // --> TryStream<TryStream<LocalizedLogEntry>>
+
+            .try_flatten()
+            // --> TryStream<LocalizedLogEntry>
+
+            // apply block filter
+            .try_filter(move |log| future::ready(block_filter(log.block_hash)))
+            // --> TryStream<LocalizedLogEntry>
 
             // retrieve block txs
-            .map(|log| self.retrieve_block_txs(log.block_hash).map(move |txs| (log, txs)))
+            .map(|res| match res {
+                Err(e) => Either::Left(future::err(e)),
+                Ok(log) => Either::Right(self.retrieve_block_txs(log)),
+            })
+            // --> Stream<TryFuture<(LocalizedLogEntry, Vec<SignedTransaction>)>>
 
-            // we first request txs for up to `LOG_FILTERING_LOOKAHEAD`
-            // blocks and then wait for them and process them one by one
-            .map(future::ok)
             .buffered(LOG_FILTERING_LOOKAHEAD)
-            .and_then(|x| x)
+            // --> TryStream<(LocalizedLogEntry, Vec<SignedTransaction>)>
 
-            .map(|(mut log, txs)| {
+            .map_ok(|(mut log, txs)| {
                 debug!("processing log = {:?} txs = {:?}", log, txs);
 
                 // at this point, we're trying to retrieve a block tx based on verified
@@ -612,24 +678,16 @@ impl QueryService {
                 log.transaction_hash = txs[log.transaction_index].hash();
                 log
             })
+            // --> TryStream<LocalizedLogEntry>
 
             // limit number of entries we need
-            .take(limit);
+            .take(limit)
+            // --> TryStream<LocalizedLogEntry>
 
-        // NOTE: eventually, we might want to extend our RPC with futures and
-        // return the async stream directly. for now, we're offering a sync API
-        // based on polling.
-        // TODO(thegaram): review this
-        let mut matching = vec![];
+            .try_collect();
+        // --> TryFuture<Vec<LocalizedLogEntry>>
 
-        loop {
-            match poll_stream(&mut stream) {
-                Ok(None) => break,
-                Ok(Some(x)) => matching.push(x),
-                Err(e) => return Err(FilterError::Custom(format!("{}", e))),
-            }
-        }
-
+        let mut matching: Vec<_> = stream.await?;
         matching.reverse();
         debug!("Collected matching logs = {:?}", matching);
         Ok(matching)

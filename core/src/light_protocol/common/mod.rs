@@ -4,14 +4,10 @@
 
 mod ledger_info;
 mod peers;
-mod poll;
-mod timeout;
 mod unique_id;
 
 pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
-pub use poll::{poll_future, poll_stream};
-pub use timeout::{with_timeout, Timeout};
 pub use unique_id::UniqueId;
 
 use std::cmp;

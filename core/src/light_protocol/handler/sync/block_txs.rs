@@ -2,16 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
-use cfx_types::H256;
-use futures::Future;
-use lru_time_cache::LruCache;
-use parking_lot::RwLock;
-use primitives::{Block, SignedTransaction};
-use std::sync::Arc;
-
+use super::{
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    Txs,
+};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
@@ -26,11 +22,11 @@ use crate::{
         MAX_BLOCK_TXS_IN_FLIGHT,
     },
 };
-
-use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
-    Txs,
-};
+use cfx_types::H256;
+use lru_time_cache::LruCache;
+use parking_lot::RwLock;
+use primitives::{Block, SignedTransaction};
+use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
 struct Statistics {
@@ -56,7 +52,7 @@ pub struct BlockTxs {
     txs: Arc<Txs>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, Vec<SignedTransaction>>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingItem<Vec<SignedTransaction>>>>>,
 }
 
 impl BlockTxs {
@@ -93,7 +89,7 @@ impl BlockTxs {
     #[inline]
     pub fn request(
         &self, hash: H256,
-    ) -> impl Future<Item = Vec<SignedTransaction>, Error = Error> {
+    ) -> impl Future<Output = Vec<SignedTransaction>> {
         if !self.verified.read().contains_key(&hash) {
             let missing = MissingBlockTxs::new(hash);
             self.sync_manager.insert_waiting(std::iter::once(missing));
@@ -133,9 +129,13 @@ impl BlockTxs {
         self.validate_block_txs(hash, &block_txs)?;
 
         // store block bodies by block hash
-        self.verified.write().insert(hash, block_txs);
-        self.sync_manager.remove_in_flight(&hash);
+        self.verified
+            .write()
+            .entry(hash)
+            .or_insert(PendingItem::pending())
+            .set(block_txs);
 
+        self.sync_manager.remove_in_flight(&hash);
         Ok(())
     }
 

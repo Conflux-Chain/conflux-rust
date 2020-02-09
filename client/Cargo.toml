@@ -54,7 +54,8 @@ transient-hashmap = "0.4"
 rand_xorshift = "0.1.1"
 itertools = "0.8"
 order-stat = "0.1"
-futures = "0.1"
+futures01 = "0.1"
+futures = { version = "0.3.3", features = ["compat"] }
 throttling = { path = "../util/throttling" }
 
 [dev-dependencies]

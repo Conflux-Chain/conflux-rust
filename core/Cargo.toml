@@ -20,7 +20,7 @@ ethkey = { path = "../accounts/ethkey" }
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
-futures = "0.1"
+futures = "0.3.3"
 heapsize = "0.4"
 hibitset = { path = "../util/hibitset" }
 io = { path = "../util/io" }
@@ -66,10 +66,12 @@ threadpool = "1.0"
 toml = "0.4"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 zip = "*"
+tokio-timer = "0.2.13"
 
 [dev-dependencies]
 criterion = "0.2"
 primitives = { path = "../primitives", features = ["test_no_account_length_check"] }
+tokio = { version = "0.2.11", features = ["time"] }
 
 [features]
 default = ["primitives"]

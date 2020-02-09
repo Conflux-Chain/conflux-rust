@@ -8,7 +8,7 @@ use super::super::types::{
     H520 as RpcH520, U128 as RpcU128,
 };
 use crate::rpc::types::SendTxRequest;
-use jsonrpc_core::Result as RpcResult;
+use jsonrpc_core::{BoxFuture, Result as RpcResult};
 use jsonrpc_derive::rpc;
 use network::{
     node_table::{Node, NodeId},
@@ -72,7 +72,7 @@ pub trait DebugRpc {
     #[rpc(name = "send_transaction")]
     fn send_transaction(
         &self, tx: SendTxRequest, password: Option<String>,
-    ) -> RpcResult<RpcH256>;
+    ) -> BoxFuture<RpcH256>;
 
     /// Returns accounts list.
     #[rpc(name = "accounts")]

@@ -2,15 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
 use cfx_types::H256;
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Receipt, SignedTransaction, TransactionAddress};
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     consensus::ConsensusGraph,
@@ -28,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     BlockTxs, Receipts,
 };
 
@@ -61,7 +59,7 @@ pub struct TxInfos {
     sync_manager: SyncManager<H256, MissingTxInfo>,
 
     // block txs received from full node
-    verified: Arc<RwLock<LruCache<H256, TxInfoValidated>>>,
+    verified: Arc<RwLock<LruCache<H256, PendingItem<TxInfoValidated>>>>,
 }
 
 impl TxInfos {
@@ -99,7 +97,7 @@ impl TxInfos {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, hash: H256,
-    ) -> impl Future<Item = TxInfoValidated, Error = Error> {
+    ) -> impl Future<Output = TxInfoValidated> {
         if !self.verified.read().contains_key(&hash) {
             let missing = std::iter::once(MissingTxInfo::new(hash));
 
@@ -176,7 +174,13 @@ impl TxInfos {
         for (index, (tx, receipt)) in items.enumerate() {
             let hash = tx.hash();
             let address = TransactionAddress { block_hash, index };
-            self.verified.write().insert(hash, (tx, receipt, address));
+
+            self.verified
+                .write()
+                .entry(hash)
+                .or_insert(PendingItem::pending())
+                .set((tx, receipt, address));
+
             self.sync_manager.remove_in_flight(&hash);
         }
 

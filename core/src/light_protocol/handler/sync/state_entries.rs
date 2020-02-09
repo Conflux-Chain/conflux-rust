@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
@@ -26,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, SyncManager, TimeOrdered},
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     state_roots::StateRoots,
 };
 
@@ -64,7 +62,7 @@ pub struct StateEntries {
     sync_manager: SyncManager<StateKey, MissingStateEntry>,
 
     // state entries received from full node
-    verified: Arc<RwLock<LruCache<StateKey, StateEntry>>>,
+    verified: Arc<RwLock<LruCache<StateKey, PendingItem<StateEntry>>>>,
 }
 
 impl StateEntries {
@@ -99,7 +97,7 @@ impl StateEntries {
     #[inline]
     pub fn request_now(
         &self, io: &dyn NetworkContext, epoch: u64, key: Vec<u8>,
-    ) -> impl Future<Item = StateEntry, Error = Error> {
+    ) -> impl Future<Output = StateEntry> {
         let key = StateKey { epoch, key };
 
         if !self.verified.read().contains_key(&key) {
@@ -139,7 +137,12 @@ impl StateEntries {
         self.validate_state_entry(key.epoch, &key.key, &entry, proof)?;
 
         // store state entry by state key
-        self.verified.write().insert(key.clone(), entry);
+        self.verified
+            .write()
+            .entry(key.clone())
+            .or_insert(PendingItem::pending())
+            .set(entry);
+
         self.sync_manager.remove_in_flight(&key);
 
         Ok(())

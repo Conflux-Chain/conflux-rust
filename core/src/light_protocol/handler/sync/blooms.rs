@@ -2,14 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
 use cfx_types::Bloom;
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     hash::keccak,
@@ -27,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, KeyOrdered, SyncManager},
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
 
@@ -49,7 +47,7 @@ pub struct Blooms {
     sync_manager: SyncManager<u64, MissingBloom>,
 
     // bloom filters received from full node
-    verified: Arc<RwLock<LruCache<u64, Bloom>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<Bloom>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -84,11 +82,11 @@ impl Blooms {
     }
 
     #[inline]
-    pub fn request(
-        &self, epoch: u64,
-    ) -> impl Future<Item = Bloom, Error = Error> {
+    pub fn request(&self, epoch: u64) -> impl Future<Output = Bloom> {
         if epoch == 0 {
-            self.verified.write().insert(0, Bloom::zero());
+            self.verified
+                .write()
+                .insert(0, PendingItem::ready(Bloom::zero()));
         }
 
         if !self.verified.read().contains_key(&epoch) {
@@ -125,9 +123,13 @@ impl Blooms {
         self.validate_bloom(epoch, bloom)?;
 
         // store bloom by epoch
-        self.verified.write().insert(epoch, bloom);
-        self.sync_manager.remove_in_flight(&epoch);
+        self.verified
+            .write()
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .set(bloom);
 
+        self.sync_manager.remove_in_flight(&epoch);
         Ok(())
     }
 

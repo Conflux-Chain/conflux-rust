@@ -227,13 +227,13 @@ impl NetworkService {
     }
 
     /// Executes action in the network context
-    pub fn with_context<F, R, E: std::convert::From<String>>(
+    pub fn with_context<F, R>(
         &self, protocol: ProtocolId, action: F,
-    ) -> Result<R, E>
-    where F: FnOnce(&NetworkContext) -> Result<R, E> {
+    ) -> Result<R, String>
+    where F: FnOnce(&NetworkContext) -> R {
         let io = IoContext::new(self.io_service.as_ref().unwrap().channel(), 0);
         match self.inner {
-            Some(ref inner) => inner.with_context(protocol, &io, action),
+            Some(ref inner) => Ok(inner.with_context(protocol, &io, action)),
             None => Err("Network service not started yet!".to_owned().into()),
         }
     }
@@ -1148,12 +1148,12 @@ impl NetworkServiceInner {
         }
     }
 
-    pub fn with_context<F, R, E>(
+    pub fn with_context<F, R>(
         &self, protocol: ProtocolId, io: &IoContext<NetworkIoMessage>,
         action: F,
-    ) -> Result<R, E>
+    ) -> R
     where
-        F: FnOnce(&NetworkContext) -> Result<R, E>,
+        F: FnOnce(&NetworkContext) -> R,
     {
         let context = NetworkContext::new(io, protocol, self);
         action(&context)

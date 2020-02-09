@@ -24,7 +24,10 @@ use cfxcore::{
     test_context::*, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
-use jsonrpc_core::{Error as RpcError, Result as RpcResult};
+use jsonrpc_core::{
+    futures::future::{Future, IntoFuture},
+    BoxFuture, Error as RpcError, Result as RpcResult,
+};
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -66,7 +69,7 @@ impl RpcImpl {
 
     fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
+    ) -> BoxFuture<Bytes> {
         let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
         let address: H160 = addr.into();
         info!(
@@ -78,11 +81,13 @@ impl RpcImpl {
             .get_code(address, epoch_number.into())
             .map(Bytes::new)
             .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
     }
 
     fn balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256> {
+    ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
@@ -94,11 +99,13 @@ impl RpcImpl {
             .get_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
     }
 
     fn bank_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256> {
+    ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
@@ -110,11 +117,13 @@ impl RpcImpl {
             .get_bank_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
     }
 
     fn storage_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256> {
+    ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
@@ -126,24 +135,28 @@ impl RpcImpl {
             .get_storage_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
     }
 
     /// Return account related states of the given account
     fn account(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<RpcAccount> {
+    ) -> BoxFuture<RpcAccount> {
         let address: H160 = address.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+
         info!(
             "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
             address, epoch_num
         );
+
         self.consensus
             .get_account(address, epoch_num.into())
             .map(|acc| RpcAccount::new(acc))
-            .map_err(|err| {
-                RpcError::invalid_params(format!("Error: {:?}", err))
-            })
+            .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
     }
 
     /// Returns interest rate of the given epoch
@@ -201,11 +214,9 @@ impl RpcImpl {
         }
     }
 
-    fn send_transaction(
+    fn prepare_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
-    ) -> RpcResult<RpcH256> {
-        info!("RPC Request: send_transaction, tx = {:?}", tx);
-
+    ) -> RpcResult<TransactionWithSignature> {
         if tx.nonce.is_none() {
             let nonce = self
                 .consensus
@@ -233,7 +244,18 @@ impl RpcImpl {
             ))
         })?;
 
-        self.send_transaction_with_signature(tx)
+        Ok(tx)
+    }
+
+    fn send_transaction(
+        &self, tx: SendTxRequest, password: Option<String>,
+    ) -> BoxFuture<RpcH256> {
+        info!("RPC Request: send_transaction, tx = {:?}", tx);
+
+        self.prepare_transaction(tx, password)
+            .and_then(|tx| self.send_transaction_with_signature(tx))
+            .into_future()
+            .boxed()
     }
 
     fn send_usable_genesis_accounts(
@@ -250,34 +272,26 @@ impl RpcImpl {
 
     pub fn transaction_by_hash(
         &self, hash: RpcH256,
-    ) -> RpcResult<Option<RpcTransaction>> {
+    ) -> BoxFuture<Option<RpcTransaction>> {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
-        if let Some((transaction, receipt, tx_address)) =
-            self.consensus.get_transaction_info_by_hash(&hash)
-        {
-            Ok(Some(RpcTransaction::from_signed(
-                &transaction,
-                Some(RpcReceipt::new(transaction.clone(), receipt, tx_address)),
-            )))
-        } else {
-            if let Some(transaction) = self.tx_pool.get_transaction(&hash) {
-                return Ok(Some(RpcTransaction::from_signed(
-                    &transaction,
-                    None,
-                )));
-            }
-
-            Ok(None)
+        if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
+            let (tx, receipt, tx_addr) = info;
+            let rpc_receipt = RpcReceipt::new(tx.clone(), receipt, tx_addr);
+            let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
+            return Ok(Some(rpc_tx)).into_future().boxed();
         }
+
+        if let Some(tx) = self.tx_pool.get_transaction(&hash) {
+            let rpc_tx = RpcTransaction::from_signed(&tx, None);
+            return Ok(Some(rpc_tx)).into_future().boxed();
+        }
+
+        Ok(None).into_future().boxed()
     }
 
-    fn transaction_receipt(
-        &self, tx_hash: RpcH256,
-    ) -> RpcResult<Option<RpcReceipt>> {
-        let hash: H256 = tx_hash.into();
-        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+    fn prepare_receipt(&self, hash: H256) -> RpcResult<Option<RpcReceipt>> {
         // Get a consistent view from ConsensusInner
         let maybe_results =
             self.consensus.get_transaction_receipt_and_block_info(&hash);
@@ -317,6 +331,14 @@ impl RpcImpl {
         rpc_receipt.set_epoch_number(Some(epoch_number));
         rpc_receipt.set_state_root(state_root.into());
         Ok(Some(rpc_receipt))
+    }
+
+    fn transaction_receipt(
+        &self, tx_hash: RpcH256,
+    ) -> BoxFuture<Option<RpcReceipt>> {
+        let hash: H256 = tx_hash.into();
+        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        self.prepare_receipt(hash).into_future().boxed()
     }
 
     fn generate(
@@ -498,9 +520,10 @@ impl RpcImpl {
             .map_err(RpcError::invalid_params)
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs({:?})", filter);
         let mut filter: Filter = filter.into();
+
         // If max_limit is set, the value in `filter` will be modified to
         // satisfy this limitation to avoid loading too many blocks
         // TODO Should the response indicates that the filter is modified?
@@ -509,11 +532,14 @@ impl RpcImpl {
                 filter.limit = Some(max_limit);
             }
         }
+
         self.consensus
             .logs(filter)
             .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)
             .map(|logs| logs.iter().cloned().map(RpcLog::from).collect())
+            .into_future()
+            .boxed()
     }
 
     fn estimate_gas(
@@ -615,19 +641,19 @@ impl Cfx for CfxHandler {
         }
 
         target self.rpc_impl {
-            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> RpcResult<Bytes>;
-            fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcAccount>;
+            fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
+            fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
-            fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
-            fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
-            fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
+            fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
+            fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }
     }
 }
@@ -713,7 +739,7 @@ impl DebugRpc for DebugRpcImpl {
             fn current_sync_phase(&self) -> RpcResult<String>;
             fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
-            fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<RpcH256>;
+            fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
         }
     }
 }
