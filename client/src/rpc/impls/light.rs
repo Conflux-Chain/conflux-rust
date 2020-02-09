@@ -4,7 +4,6 @@
 
 use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
-    impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
