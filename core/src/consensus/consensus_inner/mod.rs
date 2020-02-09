@@ -1419,12 +1419,10 @@ impl ConsensusGraphInner {
 
             let weight_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
-                false,
                 graph_era_stable_genesis,
             );
             let weight_era_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
-                false,
                 era_genesis,
             );
             let past_weight = self.arena[parent].past_weight
@@ -2373,10 +2371,8 @@ impl ConsensusGraphInner {
     /// my_hash.
     /// FIXME: check inclusive parameter and its usage
     fn total_weight_in_own_epoch(
-        &self, blockset_in_own_epoch: &Vec<usize>, _inclusive: bool,
-        genesis: usize,
-    ) -> i128
-    {
+        &self, blockset_in_own_epoch: &Vec<usize>, genesis: usize,
+    ) -> i128 {
         let gen_arena_index = if genesis != NULL {
             genesis
         } else {

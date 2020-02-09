@@ -1599,7 +1599,7 @@ impl ConsensusNewBlockHandler {
                 } else {
                     if block_status == BlockStatus::Pending {
                         inner.arena[me].data.pending = true;
-                        //                        
+                        //
                         // ConsensusNewBlockHandler::
                         // try_clear_blockset_in_own_view_of_epoch(
                         //                            inner, me,
