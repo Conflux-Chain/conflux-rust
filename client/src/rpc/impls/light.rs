@@ -259,12 +259,8 @@ impl RpcImpl {
                 let nonce = light
                     .get_account(epoch, address)
                     .await
-                    .map_err(|e| {
-                        RpcError::invalid_params(format!(
-                            "failed to send transaction: {:?}",
-                            e
-                        ))
-                    })?
+                    .map_err(|e| format!("failed to send transaction: {:?}", e))
+                    .map_err(RpcError::invalid_params)?
                     .map(|a| a.nonce)
                     .unwrap_or(U256::zero());
 

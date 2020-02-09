@@ -115,7 +115,7 @@ impl QueryService {
         trace!("retrieve_state_root epoch = {}", epoch);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving state root for epoch {}", epoch);
@@ -135,7 +135,7 @@ impl QueryService {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg = format!(
             "Timeout while retrieving state entry for epoch {} with key {:?}",
@@ -157,7 +157,7 @@ impl QueryService {
         trace!("retrieve_bloom epoch = {}", epoch);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg = format!("Timeout while retrieving bloom for epoch {}", epoch);
 
@@ -174,7 +174,7 @@ impl QueryService {
         trace!("retrieve_receipts epoch = {}", epoch);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving receipts for epoch {}", epoch);
@@ -192,7 +192,7 @@ impl QueryService {
         trace!("retrieve_block_txs hash = {:?}", hash);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving block txs for block {}", hash);
@@ -212,7 +212,7 @@ impl QueryService {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg = format!("Timeout while retrieving tx info for tx {}", hash);
 
@@ -369,7 +369,7 @@ impl QueryService {
         info!("get_tx hash={:?}", hash);
 
         // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in future compiler version.
+        // This is likely to be fixed in a future compiler version.
         // See: https://github.com/rust-lang/rust/issues/64960
         let msg =
             format!("Timeout while retrieving transaction with hash {}", hash);
