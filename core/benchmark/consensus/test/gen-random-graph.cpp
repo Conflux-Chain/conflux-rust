@@ -124,6 +124,27 @@ void process(int n, int g) {
                 best_last_timer = last_timer[pred];
         }
     }
+    // Avoid same timer chain length with different header
+    for (int i = 0; i < refs[n].size(); i++) {
+        int pred = refs[n][i];
+        int w = longest_timer_weight[pred];
+        if (is_timer[pred] && is_valid[pred]) w += 1;
+        if (w == longest_weight) {
+            longest_weight = w;
+            if (is_timer[pred] && is_valid[pred]) {
+                if (pred != best_last_timer) {
+                    parent[n] = -1;
+                    return;
+                }
+            }
+            else {
+                if (last_timer[pred] != best_last_timer) {
+                    parent[n] = -1;
+                    return;
+                }
+            }
+        }
+    }
     longest_timer_weight[n] = longest_weight;
     last_timer[n] = best_last_timer;
     std::vector<int> timer_chain_vec;

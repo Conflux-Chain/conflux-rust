@@ -92,7 +92,7 @@ fn initialize_logger(log_file: &str, log_level: LevelFilter) {
 fn check_results(
     start: usize, end: usize, consensus: Arc<ConsensusGraph>,
     hashes: &Vec<H256>, valid_indices: &HashMap<usize, i32>,
-    stable_indices: &HashMap<usize, i32>,
+    timer_indices: &HashMap<usize, i32>,
     adaptive_indices: &HashMap<usize, i32>,
 )
 {
@@ -116,19 +116,17 @@ fn check_results(
         if valid != -1 {
             assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
         }
-        //        let stable0 =
-        // consensus.inner.read().is_stable(&hashes[i]).unwrap();
-        //        let stable_v = *stable_indices.get(&i).unwrap();
-        //        if !invalid && stable_v != -1 {
-        //            let stable1 = (stable_v == 1);
-        //            assert!(
-        //                stable0 == stable1,
-        //                "Block {} stable status: Consensus graph {} != actual
-        // {}",                i,
-        //                stable0,
-        //                stable1
-        //            );
-        //        }
+        let timer0 = consensus.inner.read().is_timer_block(&hashes[i]).unwrap();
+        let timer_v = *timer_indices.get(&i).unwrap();
+        if !invalid && timer_v != -1 {
+            let timer1 = (timer_v == 1);
+            assert!(
+                timer0 == timer1,
+                "Block {} stable status: Consensus graph {} != actual {}", i,
+                timer0,
+                timer1
+            );
+        }
         let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
         let adaptive_v = *adaptive_indices.get(&i).unwrap();
         if !invalid && adaptive_v != -1 {
@@ -145,7 +143,7 @@ fn check_results(
 }
 
 fn main() {
-    // initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
+    initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
 
     let args: Vec<String> = env::args().collect();
     let mut input_file = "./seq.in";
@@ -160,9 +158,9 @@ fn main() {
     let mut lines = content.split('\n');
     let line = lines.next().unwrap();
     let mut tokens = line.split_whitespace();
-    let _alpha_num = u64::from_str(tokens.next().unwrap())
+    let timer_ratio = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
-    let _alpha_den = u64::from_str(tokens.next().unwrap())
+    let timer_beta = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
     let beta = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
@@ -171,16 +169,16 @@ fn main() {
     let era_epoch_count = u64::from_str(tokens.next().unwrap())
         .expect("Cannot parse the input file!");
     println!(
-        "beta = {} h = {} era_epoch_count = {}",
-        beta, h_ratio, era_epoch_count
+        "timer_ratio = {}, timer_beta = {}, beta = {} h = {} era_epoch_count = {}",
+        timer_ratio, timer_beta, beta, h_ratio, era_epoch_count
     );
 
     let (sync, consensus, genesis_block) = initialize_synchronization_graph(
         db_dir,
         beta,
         h_ratio,
-        180,
-        330,
+        timer_ratio,
+        timer_beta,
         era_epoch_count,
         DbType::Sqlite,
     );

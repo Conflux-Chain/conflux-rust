@@ -568,6 +568,7 @@ impl ConsensusNewBlockHandler {
         let mut valid = true;
         let parent = inner.arena[me].parent;
         let force_confirm_height = inner.arena[force_confirm].height;
+        debug!("force confirm {} height {}", force_confirm, force_confirm_height);
 
         let mut weight_delta = HashMap::new();
 
@@ -587,6 +588,7 @@ impl ConsensusNewBlockHandler {
         {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
+            debug!("checking lca {}", lca);
             // If it is outside the era, we will skip!
             if lca == NULL || inner.arena[lca].height < force_confirm_height {
                 continue;
@@ -605,6 +607,7 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
+            debug!("checking lca {} fork {} fork_weight {} pivot_weight {}", lca, fork, fork_subtree_weight, pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
@@ -1077,6 +1080,10 @@ impl ConsensusNewBlockHandler {
         queue: &mut VecDeque<usize>,
     )
     {
+        debug!(
+            "Start activating block in ConsensusGraph: index = {:?} hash={:?}",
+            me, inner.arena[me].hash
+        );
         let parent = inner.arena[me].parent;
         let has_transactions = transactions.is_some();
         // Update terminal hashes for mining
@@ -1526,8 +1533,8 @@ impl ConsensusNewBlockHandler {
             has_transactions,
         );
         debug!(
-            "Finish activating block in ConsensusGraph: hash={:?}",
-            inner.arena[me].hash
+            "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
+            me, inner.arena[me].hash
         );
     }
 
@@ -1590,7 +1597,12 @@ impl ConsensusNewBlockHandler {
                                 0
                             }
                     };
-                    inner.invalid_block_queue.push((-(timer as i128), me));
+                    // We are not going to delay partial invalid blocks in the bench mode
+                    if self.conf.bench_mode {
+                        inner.invalid_block_queue.push((0, me));
+                    } else {
+                        inner.invalid_block_queue.push((-(timer as i128), me));
+                    }
                     inner.arena[me].data.active_cnt = NULL;
                     debug!(
                         "Block {} (hash = {}) is partially invalid, all of its future will be non-active till timer height {}",
@@ -1623,36 +1635,35 @@ impl ConsensusNewBlockHandler {
                         transactions,
                         &mut queue,
                     );
-
-                    // Now we are going to check all invalid blocks in the delay
-                    // queue Activate them if the timer is
-                    // up
-                    let timer = if let Some(x) = inner.timer_chain.last() {
-                        inner.arena[*x].timer_chain_height
-                    } else {
-                        inner.cur_era_genesis_timer_chain_height
-                    };
-                    loop {
-                        if let Some((t, _)) = inner.invalid_block_queue.peek() {
-                            if timer < (-*t) as u64 {
-                                break;
-                            }
-                        } else {
+                }
+                // Now we are going to check all invalid blocks in the delay
+                // queue Activate them if the timer is
+                // up
+                let timer = if let Some(x) = inner.timer_chain.last() {
+                    inner.arena[*x].timer_chain_height
+                } else {
+                    inner.cur_era_genesis_timer_chain_height
+                };
+                loop {
+                    if let Some((t, _)) = inner.invalid_block_queue.peek() {
+                        if timer < (-*t) as u64 {
                             break;
                         }
-                        let (_, x) = inner.invalid_block_queue.pop().unwrap();
-                        assert!(inner.arena[me].data.active_cnt == NULL);
-                        inner.arena[me].data.active_cnt = 0;
-                        let transactions =
-                            inner.transaction_caches.remove(&me).unwrap();
-                        self.activate_block(
-                            inner,
-                            x,
-                            meter,
-                            transactions,
-                            &mut queue,
-                        );
+                    } else {
+                        break;
                     }
+                    let (_, x) = inner.invalid_block_queue.pop().unwrap();
+                    assert!(inner.arena[me].data.active_cnt == NULL);
+                    inner.arena[me].data.active_cnt = 0;
+                    let transactions =
+                        inner.transaction_caches.remove(&me).unwrap();
+                    self.activate_block(
+                        inner,
+                        x,
+                        meter,
+                        transactions,
+                        &mut queue,
+                    );
                 }
             }
         } else {

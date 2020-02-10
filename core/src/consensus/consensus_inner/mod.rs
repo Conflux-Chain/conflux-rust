@@ -2003,11 +2003,11 @@ impl ConsensusGraphInner {
         }
     }
 
-    //    pub fn is_stable(&self, block_hash: &H256) -> Option<bool> {
-    //        self.hash_to_arena_indices
-    //            .get(block_hash)
-    //            .and_then(|index| Some(self.arena[*index].stable))
-    //    }
+    pub fn is_timer_block(&self, block_hash: &H256) -> Option<bool> {
+        self.hash_to_arena_indices
+            .get(block_hash)
+            .and_then(|index| Some(self.arena[*index].is_timer))
+    }
 
     pub fn is_adaptive(&self, block_hash: &H256) -> Option<bool> {
         self.hash_to_arena_indices
