@@ -144,13 +144,12 @@ impl ConsensusConfig {
             self.consensus_keypair.save_config(&path)?;
         }
 
-        /*
         if self.consensus_peers_file.as_os_str().is_empty() {
             self.consensus_peers_file = PathBuf::from(CONSENSUS_PEERS_DEFAULT);
         }
         let path = root_dir.full_path(&self.consensus_peers_file);
         self.consensus_peers.save_config(path)?;
-        */
+
         Ok(())
     }
 
