@@ -1169,11 +1169,10 @@ impl ConsensusGraphInner {
         let parent = self.arena[pivot].parent;
         // This indicates `pivot` is partial_invalid and for partial invalid
         // block we don't need to calculate and store the blockset
-        if parent != NULL
-        /* && self.arena[parent].data.partial_invalid */
-        {
-            return;
-        }
+//        if parent != NULL && self.arena[parent].data.partial_invalid
+//        {
+//            return;
+//        }
         if parent != NULL {
             let last = *self.pivot_chain.last().unwrap();
             let lca = self.lca(last, parent);

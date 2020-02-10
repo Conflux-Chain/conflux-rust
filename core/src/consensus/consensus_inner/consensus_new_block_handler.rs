@@ -568,7 +568,7 @@ impl ConsensusNewBlockHandler {
         let mut valid = true;
         let parent = inner.arena[me].parent;
         let force_confirm_height = inner.arena[force_confirm].height;
-        debug!("force confirm {} height {}", force_confirm, force_confirm_height);
+//        debug!("force confirm {} height {}", force_confirm, force_confirm_height);
 
         let mut weight_delta = HashMap::new();
 
@@ -582,13 +582,29 @@ impl ConsensusNewBlockHandler {
             inner.weight_tree.path_apply(*index, -delta);
         }
 
+//        debug!("BLOCKSET {:?} len {}", inner.arena[me].data.blockset_in_own_view_of_epoch, inner.arena[me].data.blockset_in_own_view_of_epoch.len());
+
+        // FIXME: Because now we allow partial invalid blocks as parent, we need to consider more for block candidates.
+        // This may cause a performance issue and we should consider another optimized strategy.
+        let mut candidate;
+        let candidate_iter = if inner.arena[parent].data.partial_invalid {
+            candidate = inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
+            let mut p = parent;
+            while p != NULL && inner.arena[p].data.partial_invalid {
+                candidate.extend(inner.arena[p].data.blockset_in_own_view_of_epoch.iter());
+                p = inner.arena[p].parent;
+            }
+            candidate.iter()
+        } else {
+            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
+        };
         // Check the pivot selection decision.
         for consensus_arena_index_in_epoch in
-            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
+            candidate_iter
         {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
-            debug!("checking lca {}", lca);
+//            debug!("checking lca {}", lca);
             // If it is outside the era, we will skip!
             if lca == NULL || inner.arena[lca].height < force_confirm_height {
                 continue;
@@ -607,7 +623,7 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
-            debug!("checking lca {} fork {} fork_weight {} pivot_weight {}", lca, fork, fork_subtree_weight, pivot_subtree_weight);
+//            debug!("checking lca {} fork {} fork_weight {} pivot_weight {}", lca, fork, fork_subtree_weight, pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
@@ -1231,9 +1247,10 @@ impl ConsensusNewBlockHandler {
             }
         };
         debug!(
-            "Forked at height {}, fork parent block {}",
+            "Forked at height {}, fork parent block {} index {}",
             fork_at,
-            &inner.arena[inner.get_pivot_block_arena_index(fork_at - 1)].hash
+            &inner.arena[inner.get_pivot_block_arena_index(fork_at - 1)].hash,
+            parent,
         );
 
         // Now compute last_pivot_in_block and update pivot_metadata.

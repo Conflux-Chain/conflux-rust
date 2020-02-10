@@ -179,14 +179,14 @@ void process(int n, int g) {
         int largest_child = -1;
         int largest_weight = -1;
         for (int i = 0; i < children[current].size(); i++)
-            if (consider[children[current][i]] && is_valid[children[current][i]] && subtree_weight[children[current][i]] > largest_weight) {
+            if (consider[children[current][i]] && subtree_weight[children[current][i]] > largest_weight) {
                 largest_child = children[current][i];
                 largest_weight = subtree_weight[children[current][i]];
             }
         // We want to avoid to have equal weights!!!
         int cnt = 0;
         for (int i = 0; i < children[current].size(); i++)
-            if (consider[children[current][i]] && is_valid[children[current][i]] && subtree_weight[children[current][i]] == largest_weight) {
+            if (consider[children[current][i]] && subtree_weight[children[current][i]] == largest_weight) {
                 cnt ++;
             }
         if (cnt > 1) {

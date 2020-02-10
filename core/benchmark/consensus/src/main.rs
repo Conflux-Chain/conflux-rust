@@ -143,7 +143,7 @@ fn check_results(
 }
 
 fn main() {
-    initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
+//    initialize_logger("./__consensus_bench.log", LevelFilter::Debug);
 
     let args: Vec<String> = env::args().collect();
     let mut input_file = "./seq.in";
