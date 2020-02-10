@@ -208,7 +208,7 @@ void process(int n, int g) {
         int current = tmp[i].second;
         int current_timer = get_past_timer(current);
         assert(current_timer <= best_timer);
-        if (best_timer - current_timer > TIMER_BETA)
+        if (best_timer - current_timer >= TIMER_BETA)
             if (2 * subtree_weight[current] - subtree_weight[last] + weight[last] < BETA) {
                 is_adaptive[n] = 1;
                 break;
@@ -359,8 +359,12 @@ int main(int argc, char* argv[]) {
             else
                 p_table[i][j] = p_table[p_table[i][j-1]][j-1];
 
-        if (rand() % TIMER_RATIO == 0) {
+        if (weight[i] >= TIMER_RATIO) {
             is_timer[i] = 1;
+        } else {
+            if (rand() % TIMER_RATIO == 0) {
+                is_timer[i] = 1;
+            }
         }
 
         height[i] = height[parent[i]] + 1;

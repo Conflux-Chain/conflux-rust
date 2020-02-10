@@ -24,19 +24,9 @@ if os.name == 'posix':
     GREY = ('\033[0m', '\033[1;30m')
 
 TEST_INPUT = [
-    "stable-case1.in",
-    "stable-case2.in",
-    "stable-case3.in",
-    "stable-case4.in",
-    "partial-invalid-case1.in",
-    "partial-invalid-case2.in",
-    "adaptive-case1.in",
-    "adaptive-case2.in",
-    "adaptive-case3.in",
-    "adaptive-case4.in",
-    "era-case1.in",
-    "era-case2.in",
-    "era-case3.in"]
+        "partial-invalid-case1.in",
+        "adaptive-case1.in"
+        ]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
 cur_dir = os.getcwd()

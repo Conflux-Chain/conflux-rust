@@ -927,7 +927,7 @@ impl ConsensusGraphInner {
                 let w = 2 * subtree_weight[parent]
                     - subtree_weight[grandparent]
                     + self.block_weight(grandparent);
-                if w > adjusted_beta {
+                if w < adjusted_beta {
                     adaptive = true;
                     break;
                 }
@@ -1002,6 +1002,9 @@ impl ConsensusGraphInner {
 
         let adaptive = if best != force_confirm_height {
             parent = self.ancestor_at(parent, best);
+            debug!("checking start at height {} index {}", best, parent);
+            debug!("timer_mid {} timer_me {}", self.get_timer_tick(parent, timer_chain_tuple), timer_me);
+            debug!("timer_height {}", self.arena[parent].timer_chain_height);
 
             let a = self
                 .adaptive_tree
@@ -2500,7 +2503,7 @@ impl ConsensusGraphInner {
             // Extending the newest timer chain, simple case
             res.insert(me, fork_at);
         } else {
-            info!("New block {} not extending timer chain (len = {}), fork at {}, index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
+            debug!("New block {} not extending timer chain (len = {}), fork at {}, index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
             // Now we need to update the timer_chain_height field of the
             // remaining blocks with topological sort
             let mut queue = VecDeque::new();
@@ -2545,57 +2548,35 @@ impl ConsensusGraphInner {
             }
             if i == NULL {
                 queue.push_back(self.cur_era_genesis_block_arena_index);
-            //            info!(
-            //                "start at genesis {}",
-            //                self.cur_era_genesis_block_arena_index
-            //            );
             } else {
                 queue.push_back(self.timer_chain[fork_at_index - 1]);
-                //            info!(
-                //                "start at {} chain height {}",
-                //                self.timer_chain[fork_at_index - 1],
-                //                fork_at
-                //            );
             }
             while let Some(x) = queue.pop_front() {
-                // info!("exploring {}", x);
                 let mut timer_chain_height = 0;
                 let mut preds = self.arena[x].referees.clone();
                 if self.arena[x].parent != NULL {
                     preds.push(self.arena[x].parent);
                 }
                 for pred in &preds {
-                    //                info!(
-                    //                    "referee {} height {}
-                    // cur_era_genesis_block_arena_index {}",
-                    //                    pred,
-                    //                    self.arena[*pred].timer_chain_height,
-                    //                    self.cur_era_genesis_block_arena_index
-                    //                );
-                    let height = if let Some(v) = res.get(pred) {
+                    let mut height = if let Some(v) = res.get(pred) {
                         *v
                     } else {
                         self.arena[*pred].timer_chain_height
                     };
+                    if tmp_chain_set.contains(pred) || ((fork_at_index != 0) && (*pred == self.timer_chain[fork_at_index - 1])) {
+                        height += 1;
+                    }
                     if height > timer_chain_height {
                         timer_chain_height = height;
                     }
                 }
-                if tmp_chain_set.contains(&x) {
-                    timer_chain_height += 1;
-                    //                info!(
-                    //                    "timer chain block {}! height inc to
-                    // {}",                    x,
-                    // timer_chain_height                );
-                }
-                // info!("res {} height {}", x, timer_chain_height);
+//              debug!("res {} height {}", x, timer_chain_height);
                 res.insert(x, timer_chain_height);
                 for child in &self.arena[x].children {
                     if !visited.contains(*child as u32) {
                         continue;
                     }
                     let cnt = counter.get(child).unwrap() - 1;
-                    // info!("link {} succ {} cnt {}", x, *child, cnt);
                     if cnt == 0 {
                         queue.push_back(*child);
                     }
@@ -2606,7 +2587,6 @@ impl ConsensusGraphInner {
                         continue;
                     }
                     let cnt = counter.get(referer).unwrap() - 1;
-                    // info!("link {} succ {} cnt {}", x, *referer, cnt);
                     if cnt == 0 {
                         queue.push_back(*referer);
                     }

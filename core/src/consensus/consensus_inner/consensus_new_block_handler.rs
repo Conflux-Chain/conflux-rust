@@ -29,6 +29,7 @@ use std::{
     io::Write,
     sync::Arc,
 };
+use std::slice::Iter;
 
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,
@@ -508,8 +509,8 @@ impl ConsensusNewBlockHandler {
     }
 
     fn check_correct_parent_brutal(
-        inner: &mut ConsensusGraphInner, me: usize, subtree_weight: &Vec<i128>,
-        force_confirm: usize,
+        inner: &ConsensusGraphInner, me: usize, subtree_weight: &Vec<i128>,
+        force_confirm: usize, checking_candidate: Iter<usize>,
     ) -> bool
     {
         let mut valid = true;
@@ -518,7 +519,7 @@ impl ConsensusNewBlockHandler {
 
         // Check the pivot selection decision.
         for consensus_arena_index_in_epoch in
-            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
+            checking_candidate
         {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
@@ -557,16 +558,32 @@ impl ConsensusNewBlockHandler {
         weight_tuple: Option<&Vec<i128>>, force_confirm: usize,
     ) -> bool
     {
+        let parent = inner.arena[me].parent;
+        // FIXME: Because now we allow partial invalid blocks as parent, we need to consider more for block candidates.
+        // This may cause a performance issue and we should consider another optimized strategy.
+        let mut candidate;
+        let candidate_iter = if inner.arena[parent].data.partial_invalid {
+            candidate = inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
+            let mut p = parent;
+            while p != NULL && inner.arena[p].data.partial_invalid {
+                candidate.extend(inner.arena[p].data.blockset_in_own_view_of_epoch.iter());
+                p = inner.arena[p].parent;
+            }
+            candidate.iter()
+        } else {
+            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
+        };
+
         if let Some(subtree_weight) = weight_tuple {
             return ConsensusNewBlockHandler::check_correct_parent_brutal(
                 inner,
                 me,
                 subtree_weight,
                 force_confirm,
+                candidate_iter,
             );
         }
         let mut valid = true;
-        let parent = inner.arena[me].parent;
         let force_confirm_height = inner.arena[force_confirm].height;
 //        debug!("force confirm {} height {}", force_confirm, force_confirm_height);
 
@@ -583,21 +600,6 @@ impl ConsensusNewBlockHandler {
         }
 
 //        debug!("BLOCKSET {:?} len {}", inner.arena[me].data.blockset_in_own_view_of_epoch, inner.arena[me].data.blockset_in_own_view_of_epoch.len());
-
-        // FIXME: Because now we allow partial invalid blocks as parent, we need to consider more for block candidates.
-        // This may cause a performance issue and we should consider another optimized strategy.
-        let mut candidate;
-        let candidate_iter = if inner.arena[parent].data.partial_invalid {
-            candidate = inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
-            let mut p = parent;
-            while p != NULL && inner.arena[p].data.partial_invalid {
-                candidate.extend(inner.arena[p].data.blockset_in_own_view_of_epoch.iter());
-                p = inner.arena[p].parent;
-            }
-            candidate.iter()
-        } else {
-            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
-        };
         // Check the pivot selection decision.
         for consensus_arena_index_in_epoch in
             candidate_iter
@@ -1134,12 +1136,20 @@ impl ConsensusNewBlockHandler {
             inner.best_timer_chain_hash = inner.arena[me].hash.clone();
             inner.update_timer_chain(me);
         } else {
-            let mut timer_chain_height = 0;
+            let mut timer_chain_height = inner.arena[parent].timer_chain_height;
+            if inner.arena[parent].is_timer && !inner.arena[parent].data.partial_invalid {
+                timer_chain_height += 1;
+            }
             for referee in &inner.arena[me].referees {
-                if inner.arena[*referee].timer_chain_height > timer_chain_height
+                let timer_bit = if inner.arena[*referee].is_timer && !inner.arena[*referee].data.partial_invalid {
+                    1
+                } else {
+                    0
+                };
+                if inner.arena[*referee].timer_chain_height + timer_bit > timer_chain_height
                 {
                     timer_chain_height =
-                        inner.arena[*referee].timer_chain_height;
+                        inner.arena[*referee].timer_chain_height + timer_bit;
                 }
             }
             inner.arena[me].timer_chain_height = timer_chain_height;
