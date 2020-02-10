@@ -39,9 +39,9 @@ bool consider[MAXN + 1];
 int compute_lca(int a, int b) {
     if (height[a] < height[b])
         return compute_lca(b, a);
-    unsigned x = height[a] - height[b];
+    int x = height[a] - height[b];
     int a1 = a;
-    for (unsigned i = LOGN - 1; i >=0; i--) {
+    for (int i = LOGN - 1; i >=0; i--) {
         if ((x & (1 << i)) != 0)
             a1 = p_table[a1][i];
     }
@@ -89,15 +89,17 @@ int get_past_timer(int v) {
     if (past_timer[v] != -1) {
         return past_timer[v];
     }
-    int res = 0;
+    past_timer[v] = 0;
     for (int i = 0; i < refs[v].size(); i++) {
-        res += get_past_timer(refs[v][i]);
-        if (is_timer_chain[refs[v][i]]) {
+        int res = get_past_timer(refs[v][i]);
+        if (is_timer_chain[refs[v][i]] && is_valid[refs[v][i]]) {
             res += 1;
         }
+        if (past_timer[v] < res) {
+            past_timer[v] = res;
+        }
     }
-    past_timer[v] = res;
-    return res;
+    return past_timer[v];
 }
 
 void process(int n, int g) {
@@ -137,12 +139,14 @@ void process(int n, int g) {
 
     // Compute the force confirm position
     int force_confirm = 0;
-    for (int i = TIMER_BETA; i < timer_chain_vec.size() - TIMER_BETA + 1; i++) {
-        int lca = timer_chain_vec[i];
-        for (int j = i + 1; j < i + TIMER_BETA; j++)
-            lca = compute_lca(lca, timer_chain_vec[j]);
-        if (height[lca] > height[force_confirm])
-            force_confirm = lca;
+    if (timer_chain_vec.size() > TIMER_BETA) {
+        for (int i = TIMER_BETA; i < timer_chain_vec.size() - TIMER_BETA + 1; i++) {
+            int lca = timer_chain_vec[i];
+            for (int j = i + 1; j < i + TIMER_BETA; j++)
+                lca = compute_lca(lca, timer_chain_vec[j]);
+            if (height[lca] > height[force_confirm])
+                force_confirm = lca;
+        }
     }
 
     int last = -1;
@@ -234,7 +238,12 @@ int main(int argc, char* argv[]) {
     longest_timer_weight[0] = 0;
     last_timer[0] = -1;
 
-    unsigned seed = (unsigned) time(NULL) * getpid();
+    unsigned seed;
+    char* seed_env = getenv("SEED");
+    if (seed_env != NULL)
+        seed = atoi(seed_env);
+    else
+        seed = (unsigned) time(NULL) * getpid();
     // unsigned seed = 448648640;
     srand( seed );
     fprintf(stdout, "Random Seed: %u\n", seed);
