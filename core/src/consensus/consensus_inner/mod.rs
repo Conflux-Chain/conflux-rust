@@ -2635,7 +2635,11 @@ impl ConsensusGraphInner {
             let mut last_lca = if fork_at_index == 0 {
                 self.cur_era_genesis_block_arena_index
             } else {
-                self.timer_chain[fork_at_index - 1]
+                // This is guaranteed to be inside the bound because: 1) fork_at
+                // + tmp_chain.len() cannot be longer than the current
+                // maintained longest timer chain. 2) tmp_chain.len() is greater
+                // than timer_chain_beta.
+                self.timer_chain_accumulative_lca[fork_at_index - 1]
             };
             for i in 0..(tmp_chain.len()
                 - (self.inner_conf.timer_chain_beta as usize))
@@ -2658,7 +2662,7 @@ impl ConsensusGraphInner {
                     if self.arena[last_lca].height < self.arena[lca].height {
                         last_lca = lca;
                     }
-                    tmp_lca.push(lca);
+                    tmp_lca.push(last_lca);
                 }
             }
         }
@@ -2707,7 +2711,17 @@ impl ConsensusGraphInner {
                 for i in s..(e - 1) {
                     lca = self.lca(lca, self.timer_chain[i]);
                 }
-                self.timer_chain_accumulative_lca.push(lca);
+                let last_lca =
+                    if let Some(x) = self.timer_chain_accumulative_lca.last() {
+                        *x
+                    } else {
+                        self.cur_era_genesis_block_arena_index
+                    };
+                if self.arena[last_lca].height < self.arena[lca].height {
+                    self.timer_chain_accumulative_lca.push(lca);
+                } else {
+                    self.timer_chain_accumulative_lca.push(last_lca);
+                }
                 assert_eq!(
                     self.timer_chain_accumulative_lca.len(),
                     self.timer_chain.len()
