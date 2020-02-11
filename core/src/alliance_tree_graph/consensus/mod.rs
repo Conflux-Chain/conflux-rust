@@ -133,7 +133,7 @@ impl TreeGraphConsensus {
             txpool.clone(),
             data_man.clone(),
             vm,
-            inner.clone(),
+            conf.inner_conf.clone(),
             conf.bench_mode,
         );
 
@@ -612,6 +612,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
     fn on_new_block(
         &self, hash: &H256, _ignore_body: bool, update_best_info: bool,
     ) {
+        debug!("enter on new_block hash={:?}", hash);
         let notify_tx_pool = update_best_info;
         let mut update_best_info = update_best_info;
         let _timer =

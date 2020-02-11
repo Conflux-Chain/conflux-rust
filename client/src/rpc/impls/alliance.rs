@@ -8,7 +8,7 @@ use crate::rpc::{
     impls::{cfx::RpcImplConfiguration, common::RpcImpl as CommonImpl},
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
         SendTxRequest, Status as RpcStatus, SyncGraphStates,
@@ -21,6 +21,7 @@ use cfxcore::{
     alliance_tree_graph::{
         blockgen::TGBlockGenerator, consensus::TreeGraphConsensus,
     },
+    state_exposer::STATE_EXPOSER,
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
@@ -30,7 +31,6 @@ use network::{
     throttling, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{SignedTransaction, TransactionWithSignature};
-use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 pub struct RpcImpl {
@@ -59,19 +59,26 @@ impl RpcImpl {
             config,
         }
     }
-}
 
-// macro for reducing boilerplate for unsupported methods
-macro_rules! not_supported {
-    () => {};
-    ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> $ret:ty )? ; $($tail:tt)* ) => {
-        #[allow(unused_variables)]
-        fn $fn ( &self $(, $name : $type)* ) $( -> $ret )? {
-            Err(RpcError::method_not_found())
-        }
+    fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates> {
+        let consensus_graph_states =
+            STATE_EXPOSER.consensus_graph.lock().retrieve();
+        Ok(ConsensusGraphStates::new(consensus_graph_states))
+    }
 
-        not_supported!($($tail)*);
-    };
+    fn sync_graph_state(&self) -> RpcResult<SyncGraphStates> {
+        let sync_graph_states = STATE_EXPOSER.sync_graph.lock().retrieve();
+        Ok(SyncGraphStates::new(sync_graph_states))
+    }
+
+    fn bft_state(&self) -> RpcResult<BFTStates> {
+        let bft_states = STATE_EXPOSER.bft.lock().retrieve();
+        Ok(BFTStates::new(bft_states))
+    }
+
+    fn current_sync_phase(&self) -> RpcResult<String> {
+        Ok(self.sync.current_sync_phase().name().into())
+    }
 }
 
 pub struct CfxHandler {
@@ -198,15 +205,15 @@ impl DebugRpc for DebugRpcImpl {
             fn sign(&self, data: Bytes, address: RpcH160, password: Option<String>) -> RpcResult<RpcH520>;
         }
 
-        /*target self.rpc_impl {
-        }*/
+        target self.rpc_impl {
+            fn current_sync_phase(&self) -> RpcResult<String>;
+            fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
+            fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
+            fn bft_state(&self) -> RpcResult<BFTStates>;
+        }
     }
 
     not_supported! {
         fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<RpcH256>;
-
-        fn current_sync_phase(&self) -> RpcResult<String>;
-        fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
-        fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
     }
 }

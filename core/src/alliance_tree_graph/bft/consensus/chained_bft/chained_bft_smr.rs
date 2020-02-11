@@ -57,6 +57,8 @@ pub struct ChainedBftSMRConfig {
     pub max_block_size: u64,
     /// Validator's PeerId / Account Address
     pub author: Author,
+    /// Whether to expose inner state.
+    pub enable_state_expose: bool,
 }
 
 impl ChainedBftSMRConfig {
@@ -76,6 +78,7 @@ impl ChainedBftSMRConfig {
             contiguous_rounds: cfg.contiguous_rounds,
             max_block_size: cfg.max_block_size,
             author: node_cfg.validator_network.as_ref().unwrap().peer_id,
+            enable_state_expose: node_cfg.enable_state_expose,
         }
     }
 }

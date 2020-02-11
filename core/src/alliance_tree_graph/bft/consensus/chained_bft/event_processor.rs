@@ -32,8 +32,11 @@ use super::super::{
         WaitingSuccess,
     },
 };
-use crate::alliance_tree_graph::hsb_sync_protocol::{
-    sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
+use crate::{
+    alliance_tree_graph::hsb_sync_protocol::{
+        sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
+    },
+    state_exposer::{BFTCommitEvent, STATE_EXPOSER},
 };
 use anyhow::{ensure, format_err, Context};
 use cfx_types::H256;
@@ -96,6 +99,7 @@ pub struct EventProcessor<TT, T> {
     // Cache of the last sent vote message.
     last_vote_sent: Option<(Vote, Round)>,
     validators: Arc<ValidatorVerifier>,
+    enable_state_expose: bool,
 }
 
 impl<TT, T> EventProcessor<TT, T>
@@ -112,6 +116,7 @@ where
         txn_transformer: TT, network: Arc<NetworkSender<T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         time_service: Arc<dyn TimeService>, validators: Arc<ValidatorVerifier>,
+        enable_state_expose: bool,
     ) -> Self
     {
         counters::BLOCK_RETRIEVAL_COUNT.get();
@@ -133,6 +138,7 @@ where
             time_service,
             last_vote_sent,
             validators,
+            enable_state_expose,
         }
     }
 
@@ -966,6 +972,15 @@ where
                     error!("Failed to notify mempool: {:?}", e);
                 }
                 */
+            }
+            if self.enable_state_expose {
+                STATE_EXPOSER.bft.lock().bft_events.push(BFTCommitEvent {
+                    epoch: committed.block().epoch(),
+                    commit: committed.block().id().to_string(),
+                    round: committed.block().round(),
+                    parent: committed.block().parent_id().to_string(),
+                    timestamp: committed.block().timestamp_usecs(),
+                })
             }
         }
         if finality_proof.ledger_info().next_validator_set().is_some() {

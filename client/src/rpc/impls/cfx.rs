@@ -8,12 +8,13 @@ use crate::rpc::{
     impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
-        EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, Status as RpcStatus, SyncGraphStates,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
+        sign_call, Account as RpcAccount, BFTStates, BlameInfo,
+        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
+        ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
+        Receipt as RpcReceipt, SendTxRequest, Status as RpcStatus,
+        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+        U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -785,5 +786,9 @@ impl DebugRpc for DebugRpcImpl {
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<RpcH256>;
         }
+    }
+
+    not_supported! {
+        fn bft_state(&self) -> RpcResult<BFTStates>;
     }
 }

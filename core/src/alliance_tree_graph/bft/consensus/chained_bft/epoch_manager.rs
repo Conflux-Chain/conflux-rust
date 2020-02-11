@@ -284,6 +284,7 @@ where
             self.storage.clone(),
             self.time_service.clone(),
             validators,
+            self.config.enable_state_expose,
         )
     }
 }

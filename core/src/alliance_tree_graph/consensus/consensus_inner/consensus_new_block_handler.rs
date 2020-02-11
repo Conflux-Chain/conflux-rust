@@ -65,8 +65,6 @@ impl ConsensusNewBlockHandler {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
         let new_era_stable_height =
             new_era_height + inner.inner_conf.era_epoch_count;
-        let stable_era_genesis =
-            inner.get_pivot_block_arena_index(new_era_stable_height);
 
         // In transaction-execution phases (`RecoverBlockFromDb` or `Normal`),
         // ensure all blocks on the pivot chain before stable_era_genesis
@@ -359,7 +357,7 @@ impl ConsensusNewBlockHandler {
         if let Some(callback) =
             inner.next_selected_pivot_waiting_list.remove(&hash)
         {
-            debug!("next_selected_pivot call back");
+            debug!("next_selected_pivot callback for block={:?}", hash);
             callback.send(Ok(PivotBlockDecision {
                 height: block_header.height(),
                 block_hash: hash,
@@ -370,6 +368,7 @@ impl ConsensusNewBlockHandler {
         if let Some(callback) =
             inner.new_candidate_pivot_waiting_list.remove(&hash)
         {
+            debug!("new_candidate_pivot callback for block={:?}", hash);
             let height = block_header.height();
             callback.send(Ok(inner.validate_and_add_candidate_pivot(
                 &hash,
@@ -485,16 +484,17 @@ impl ConsensusNewBlockHandler {
                     inner.cur_era_genesis_height
                 );
 
-                let stable_era_genesis_arena_index = inner.ancestor_at(
-                    pivot_arena_index,
-                    inner.cur_era_stable_height,
-                );
                 // FIXME: fill correct value of `will_execute`
                 ConsensusNewBlockHandler::make_checkpoint_at(
                     inner,
                     new_checkpoint_era_genesis,
                     true, /* will_execute */
                     &self.executor,
+                );
+
+                let stable_era_genesis_arena_index = inner.ancestor_at(
+                    pivot_arena_index,
+                    inner.cur_era_stable_height,
                 );
                 info!(
                     "New checkpoint formed at block {} stable block {} height {}",

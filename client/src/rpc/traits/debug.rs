@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
+    BFTStates, Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
     Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
     H520 as RpcH520, U128 as RpcU128,
 };
@@ -68,6 +68,9 @@ pub trait DebugRpc {
 
     #[rpc(name = "sync_graph_state")]
     fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
+
+    #[rpc(name = "bft_state")]
+    fn bft_state(&self) -> RpcResult<BFTStates>;
 
     #[rpc(name = "send_transaction")]
     fn send_transaction(
