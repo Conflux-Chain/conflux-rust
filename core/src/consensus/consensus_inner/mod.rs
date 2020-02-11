@@ -950,7 +950,14 @@ impl ConsensusGraphInner {
         difficulty: i128,
     ) -> bool
     {
+        let mut parent = parent_0;
         let force_confirm = self.compute_force_confirm(timer_chain_tuple);
+        let force_confirm_height = self.arena[force_confirm].height;
+        // This may happen if we are forced to generate at a position choosing incorrect parent.
+        // We should return false here.
+        if self.arena[parent].height < force_confirm_height || self.ancestor_at(parent, force_confirm_height) != force_confirm {
+            return false;
+        }
         if let Some(subtree_weight) = weight_tuple {
             return self.adaptive_weight_impl_brutal(
                 parent_0,
@@ -960,7 +967,6 @@ impl ConsensusGraphInner {
                 difficulty,
             );
         }
-        let mut parent = parent_0;
 
         let mut weight_delta = HashMap::new();
 
@@ -978,7 +984,6 @@ impl ConsensusGraphInner {
             self.adaptive_tree.path_apply(*index, -*delta * 2);
         }
 
-        let force_confirm_height = self.arena[force_confirm].height;
         let timer_me = self.get_best_timer_tick(timer_chain_tuple);
         let adjusted_beta = self.inner_conf.timer_chain_beta;
 
