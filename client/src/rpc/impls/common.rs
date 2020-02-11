@@ -628,7 +628,7 @@ impl RpcImpl {
     pub fn sign(
         &self, data: Bytes, address: RpcH160, password: Option<String>,
     ) -> RpcResult<RpcH520> {
-        let message = self.eth_data_hash(data.0);
+        let message = eth_data_hash(data.0);
         let password = password.map(Password::from);
         let signature =
             match self.accounts.sign(address.into(), password, message) {
@@ -641,14 +641,18 @@ impl RpcImpl {
         Ok(RpcH520(signature.into()))
     }
 
-    /// Returns a eth_sign-compatible hash of data to sign.
-    /// The data is prepended with special message to prevent
-    /// malicious DApps from using the function to sign forged transactions.
-    fn eth_data_hash(&self, mut data: Vec<u8>) -> H256 {
-        let mut message_data =
-            format!("\x19Ethereum Signed Message:\n{}", data.len())
-                .into_bytes();
-        message_data.append(&mut data);
-        keccak(message_data)
+    pub fn save_node_db(&self) -> RpcResult<()> {
+        self.network.save_node_db();
+        Ok(())
     }
+}
+
+/// Returns a eth_sign-compatible hash of data to sign.
+/// The data is prepended with special message to prevent
+/// malicious DApps from using the function to sign forged transactions.
+fn eth_data_hash(mut data: Vec<u8>) -> H256 {
+    let mut message_data =
+        format!("\x19Ethereum Signed Message:\n{}", data.len()).into_bytes();
+    message_data.append(&mut data);
+    keccak(message_data)
 }

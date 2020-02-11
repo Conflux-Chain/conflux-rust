@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
 extern crate lru_time_cache;
 
-use futures::Future;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
@@ -26,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    common::{FutureItem, KeyOrdered, SyncManager},
+    common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
 
@@ -48,7 +46,7 @@ pub struct Receipts {
     sync_manager: SyncManager<u64, MissingReceipts>,
 
     // epoch receipts received from full node
-    verified: Arc<RwLock<LruCache<u64, Vec<Vec<Receipt>>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<Vec<Vec<Receipt>>>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -85,9 +83,9 @@ impl Receipts {
     #[inline]
     pub fn request(
         &self, epoch: u64,
-    ) -> impl Future<Item = Vec<Vec<Receipt>>, Error = Error> {
+    ) -> impl Future<Output = Vec<Vec<Receipt>>> {
         if epoch == 0 {
-            self.verified.write().insert(0, vec![]);
+            self.verified.write().insert(0, PendingItem::ready(vec![]));
         }
 
         if !self.verified.read().contains_key(&epoch) {
@@ -124,9 +122,13 @@ impl Receipts {
         self.validate_receipts(epoch, &receipts)?;
 
         // store receipts by epoch
-        self.verified.write().insert(epoch, receipts);
-        self.sync_manager.remove_in_flight(&epoch);
+        self.verified
+            .write()
+            .entry(epoch)
+            .or_insert(PendingItem::pending())
+            .set(receipts);
 
+        self.sync_manager.remove_in_flight(&epoch);
         Ok(())
     }
 

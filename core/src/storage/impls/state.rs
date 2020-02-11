@@ -582,6 +582,7 @@ impl State {
         let maybe_existing_merkle_root =
             self.delta_trie.get_merkle_root_by_epoch_id(&epoch_id)?;
         if maybe_existing_merkle_root.is_some() {
+            // TODO This may happen for genesis when we restart
             error!(
                 "Overwriting computed state for epoch {:?}, \
                  committed merkle root {:?}, new merkle root {:?}",

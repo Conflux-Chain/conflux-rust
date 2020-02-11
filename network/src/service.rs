@@ -227,13 +227,13 @@ impl NetworkService {
     }
 
     /// Executes action in the network context
-    pub fn with_context<F, R, E: std::convert::From<String>>(
+    pub fn with_context<F, R>(
         &self, protocol: ProtocolId, action: F,
-    ) -> Result<R, E>
-    where F: FnOnce(&NetworkContext) -> Result<R, E> {
+    ) -> Result<R, String>
+    where F: FnOnce(&NetworkContext) -> R {
         let io = IoContext::new(self.io_service.as_ref().unwrap().channel(), 0);
         match self.inner {
-            Some(ref inner) => inner.with_context(protocol, &io, action),
+            Some(ref inner) => Ok(inner.with_context(protocol, &io, action)),
             None => Err("Network service not started yet!".to_owned().into()),
         }
     }
@@ -321,6 +321,12 @@ impl NetworkService {
         );
         Some(peer)
     }
+
+    pub fn save_node_db(&self) {
+        if let Some(inner) = &self.inner {
+            inner.node_db.write().save();
+        }
+    }
 }
 
 type SharedSession = Arc<RwLock<Session>>;
@@ -351,7 +357,6 @@ struct ProtocolTimer {
 
 /// The inner implementation of NetworkService. Note that all accesses to the
 /// RWLocks of the fields have to follow the defined order to avoid race
-#[allow(dead_code)]
 pub struct NetworkServiceInner {
     pub sessions: SessionManager,
     pub metadata: HostMetadata,
@@ -366,7 +371,6 @@ pub struct NetworkServiceInner {
     timer_counter: RwLock<usize>,
     pub node_db: RwLock<NodeDatabase>,
     reserved_nodes: RwLock<HashSet<NodeId>>,
-    nodes: RwLock<HashMap<NodeId, NodeEntry>>,
     dropped_nodes: RwLock<HashSet<StreamToken>>,
 
     /// Delayed message queue and corresponding latency
@@ -388,13 +392,14 @@ impl DelayedQueue {
 
     fn send_delayed_messages(&self, network_service: &NetworkServiceInner) {
         let context = self.queue.lock().pop().unwrap();
-        match context.session.write().send_packet(
+        let r = context.session.write().send_packet(
             &context.io,
             Some(context.protocol),
             session::PACKET_USER,
             context.msg,
             context.priority,
-        ) {
+        );
+        match r {
             Ok(_) => {}
             Err(Error(ErrorKind::Expired, _)) => {
                 // If a connection is set expired, it should have been killed
@@ -545,7 +550,6 @@ impl NetworkServiceInner {
                 config.subnet_quota,
             )),
             reserved_nodes: RwLock::new(HashSet::new()),
-            nodes: RwLock::new(HashMap::new()),
             dropped_nodes: RwLock::new(HashSet::new()),
             delayed_queue: None,
         };
@@ -1145,12 +1149,12 @@ impl NetworkServiceInner {
         }
     }
 
-    pub fn with_context<F, R, E>(
+    pub fn with_context<F, R>(
         &self, protocol: ProtocolId, io: &IoContext<NetworkIoMessage>,
         action: F,
-    ) -> Result<R, E>
+    ) -> R
     where
-        F: FnOnce(&NetworkContext) -> Result<R, E>,
+        F: FnOnce(&NetworkContext) -> R,
     {
         let context = NetworkContext::new(io, protocol, self);
         action(&context)

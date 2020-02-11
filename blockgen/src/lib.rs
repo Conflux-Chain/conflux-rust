@@ -169,7 +169,7 @@ impl BlockGenerator {
 
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
-        &self, parent_hash: H256, referee: Vec<H256>, blame: u32,
+        &self, parent_hash: H256, mut referees: Vec<H256>, blame: u32,
         deferred_state_root: H256, deferred_receipts_root: H256,
         deferred_logs_bloom_hash: H256, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
@@ -183,16 +183,21 @@ impl BlockGenerator {
             self.graph.block_timestamp_by_hash(&parent_hash).unwrap();
 
         trace!("{} txs packed", transactions.len());
-
+        let mut consensus_inner = self.graph.consensus.inner.write();
+        // referees are retrieved before locking inner, so we need to
+        // filter out the blocks that should be removed by possible
+        // checkpoint making that happens before we acquire the inner lock
+        referees
+            .retain(|h| consensus_inner.hash_to_arena_indices.contains_key(h));
         let mut expected_difficulty =
-            self.graph.expected_difficulty(&parent_hash);
+            consensus_inner.expected_difficulty(&parent_hash);
         let adaptive = if let Some(x) = adaptive_opt {
             x
         } else {
             self.graph.check_mining_adaptive_block(
-                &mut *self.graph.consensus.inner.write(),
+                &mut *consensus_inner,
                 &parent_hash,
-                &referee,
+                &referees,
                 &expected_difficulty,
             )
         };
@@ -224,7 +229,7 @@ impl BlockGenerator {
             .with_deferred_logs_bloom_hash(deferred_logs_bloom_hash)
             .with_difficulty(expected_difficulty)
             .with_adaptive(adaptive)
-            .with_referee_hashes(referee)
+            .with_referee_hashes(referees)
             .with_nonce(0)
             .with_gas_limit(block_gas_limit)
             .build();
