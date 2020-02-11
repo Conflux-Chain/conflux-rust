@@ -165,7 +165,8 @@ void process(int n, int g) {
             int lca = timer_chain_vec[i];
             for (int j = i + 1; j < i + TIMER_BETA; j++)
                 lca = compute_lca(lca, timer_chain_vec[j]);
-            if (height[lca] > height[force_confirm])
+            // Because we are doing it in the reverse way, we will prioritize old ones, it includes equal sign here.
+            if (height[lca] >= height[force_confirm])
                 force_confirm = lca;
         }
     }
@@ -244,6 +245,18 @@ int main(int argc, char* argv[]) {
         MAX_GAP = atoi(argv[8]);
     }
 
+    unsigned seed;
+    char* seed_env = getenv("SEED");
+    if (seed_env != NULL)
+        seed = atoi(seed_env);
+    else
+        seed = (unsigned) time(NULL) * getpid();
+    // unsigned seed = 448648640;
+    srand( seed );
+    fprintf(stdout, "Random Seed: %u\n", seed);
+
+back_track:
+
     // Initialize genesis
     refs[0].clear();
     children[0].clear();
@@ -259,16 +272,6 @@ int main(int argc, char* argv[]) {
     longest_timer_weight[0] = 0;
     last_timer[0] = -1;
 
-    unsigned seed;
-    char* seed_env = getenv("SEED");
-    if (seed_env != NULL)
-        seed = atoi(seed_env);
-    else
-        seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 448648640;
-    srand( seed );
-    fprintf(stdout, "Random Seed: %u\n", seed);
-
     // Initialize the first M blocks for each branch
     for (int i = 1; i <= M; i++) {
         refs[i].clear();
@@ -281,6 +284,7 @@ int main(int argc, char* argv[]) {
             p_table[i][j] = -1;
         is_valid[i] = 1;
         is_timer[i] = 0;
+        groups[i - 1].clear();
         groups[i - 1].push_back(0);
         groups[i - 1].push_back(i);
         for (int j = 0; j < M; j++)
@@ -299,6 +303,7 @@ int main(int argc, char* argv[]) {
     // Randomly generate the remaining blocks
     for (int i = M + 1; i <= N; i++) {
         int g;
+        int retry_cnt = 0;
         do {
             g = rand() % M;
             int last_bidx = groups[g][groups[g].size() - 1];
@@ -334,7 +339,14 @@ int main(int argc, char* argv[]) {
                 }
             }
             process(i, g);
-        } while (parent[i] == -1);
+            retry_cnt ++;
+        } while ((parent[i] == -1) && (retry_cnt < 100));
+        children[i].clear();
+
+        if (retry_cnt >= 100) {
+            fprintf(stdout, "Back Tracking...\n");
+            goto back_track;
+        }
 
         is_valid[i] = 1;
 
