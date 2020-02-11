@@ -30,6 +30,7 @@ TEST_INPUT = [
         "partial-invalid-case4.in",
         "partial-invalid-case5.in",
         "crash-case1.in",
+        "crash-case2.in",
         "adaptive-case1.in",
         "adaptive-case2.in",
         "adaptive-case3.in",

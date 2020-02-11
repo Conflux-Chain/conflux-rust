@@ -1169,9 +1169,9 @@ impl ConsensusNewBlockHandler {
         meter.aggregate_total_weight_in_past(my_weight);
         let force_confirm = inner.compute_force_confirm(None);
         let force_height = inner.arena[force_confirm].height;
-        let force_lca = inner.lca(force_confirm, me);
-
         let last = inner.pivot_chain.last().cloned().unwrap();
+        let force_lca = inner.lca(force_confirm, last);
+
         if force_lca == force_confirm && inner.arena[me].parent == last {
             inner.pivot_chain.push(me);
             inner.set_epoch_number_in_epoch(
@@ -1214,9 +1214,10 @@ impl ConsensusNewBlockHandler {
             }
             if pivot_changed {
                 // The new subtree is heavier, update pivot chain
-                for discarded_idx in inner
-                    .pivot_chain
-                    .split_off(inner.height_to_pivot_index(fork_at))
+                let fork_pivot_index = inner.height_to_pivot_index(fork_at);
+                assert!(fork_pivot_index < inner.pivot_chain.len());
+                for discarded_idx in
+                    inner.pivot_chain.split_off(fork_pivot_index)
                 {
                     // Reset the epoch_number of the discarded fork
                     inner.reset_epoch_number_in_epoch(discarded_idx);
