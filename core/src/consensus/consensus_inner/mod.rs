@@ -2457,15 +2457,20 @@ impl ConsensusGraphInner {
         }
     }
 
-    fn is_on_timer_chain(&self, me: usize) -> bool {
+    fn get_timer_chain_index(&self, me: usize) -> usize {
         if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
-            return false;
+            return NULL;
         }
         let timer_chain_index = (self.arena[me].timer_chain_height
             - self.cur_era_genesis_timer_chain_height)
             as usize;
-        self.timer_chain.len() > timer_chain_index
-            && self.timer_chain[timer_chain_index] == me
+        debug!("timer_chain_index {} timer_chain {:?}", timer_chain_index, self.timer_chain);
+        if self.timer_chain.len() > timer_chain_index
+            && self.timer_chain[timer_chain_index] == me {
+            timer_chain_index
+        } else {
+            NULL
+        }
     }
 
     fn compute_timer_chain_tuple(
@@ -2480,7 +2485,8 @@ impl ConsensusGraphInner {
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
         let mut i = self.arena[me].last_timer_block_arena_index;
-        while i != NULL && !self.is_on_timer_chain(i) {
+        while i != NULL && self.get_timer_chain_index(i) != NULL {
+            debug!("last timer block arena index: {}", i);
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
             i = self.arena[i].last_timer_block_arena_index;
@@ -2563,7 +2569,7 @@ impl ConsensusGraphInner {
                     } else {
                         self.arena[*pred].timer_chain_height
                     };
-                    if tmp_chain_set.contains(pred) || ((fork_at_index != 0) && (*pred == self.timer_chain[fork_at_index - 1])) {
+                    if tmp_chain_set.contains(pred) || self.get_timer_chain_index(*pred) < fork_at_index {
                         height += 1;
                     }
                     if height > timer_chain_height {
@@ -2657,6 +2663,7 @@ impl ConsensusGraphInner {
         }
         assert!(res.contains_key(&me));
         for (k, v) in res {
+            debug!("setting {} to timer height {}", k, v);
             self.arena[k].timer_chain_height = v;
         }
         if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
@@ -2680,6 +2687,7 @@ impl ConsensusGraphInner {
                 );
             }
         }
+        debug!("Timer change updated to {:?}", self.timer_chain);
     }
 
     /// This function force the pivot chain to follow our previous stable
