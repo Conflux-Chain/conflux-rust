@@ -122,7 +122,7 @@ fn check_results(
             let timer1 = (timer_v == 1);
             assert!(
                 timer0 == timer1,
-                "Block {} stable status: Consensus graph {} != actual {}",
+                "Block {} timer status: Consensus graph {} != actual {}",
                 i,
                 timer0,
                 timer1

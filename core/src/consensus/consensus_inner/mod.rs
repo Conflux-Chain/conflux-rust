@@ -953,9 +953,11 @@ impl ConsensusGraphInner {
         let mut parent = parent_0;
         let force_confirm = self.compute_force_confirm(timer_chain_tuple);
         let force_confirm_height = self.arena[force_confirm].height;
-        // This may happen if we are forced to generate at a position choosing incorrect parent.
-        // We should return false here.
-        if self.arena[parent].height < force_confirm_height || self.ancestor_at(parent, force_confirm_height) != force_confirm {
+        // This may happen if we are forced to generate at a position choosing
+        // incorrect parent. We should return false here.
+        if self.arena[parent].height < force_confirm_height
+            || self.ancestor_at(parent, force_confirm_height) != force_confirm
+        {
             return false;
         }
         if let Some(subtree_weight) = weight_tuple {
@@ -1326,15 +1328,19 @@ impl ConsensusGraphInner {
         )>,
     ) -> usize
     {
-        if let Some((fork_at, _, extra_lca, _)) = timer_chain_tuple_opt {
-            let fork_at_index =
-                (*fork_at - self.cur_era_genesis_timer_chain_height) as usize;
+        if let Some((fork_at, _, extra_lca, tmp_chain)) = timer_chain_tuple_opt
+        {
+            // debug!("fork at {:?} acc_lca {:?} extra_lca {:?}", *fork_at,
+            // self.timer_chain_accumulative_lca, extra_lca);
+            let fork_end_index =
+                (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
+                    + tmp_chain.len();
             let acc_lca_ref = extra_lca;
             if let Some(x) = acc_lca_ref.last() {
                 *x
-            } else if fork_at_index > self.inner_conf.timer_chain_beta as usize
+            } else if fork_end_index > self.inner_conf.timer_chain_beta as usize
             {
-                self.timer_chain_accumulative_lca[fork_at_index
+                self.timer_chain_accumulative_lca[fork_end_index
                     - self.inner_conf.timer_chain_beta as usize
                     - 1]
             } else {
@@ -2496,10 +2502,12 @@ impl ConsensusGraphInner {
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
         let mut i = self.arena[me].last_timer_block_arena_index;
+        debug!("me {} last timer {}", me, i);
         while i != NULL && self.get_timer_chain_index(i) == NULL {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
             i = self.arena[i].last_timer_block_arena_index;
+            debug!("me {} last timer {}", me, i);
         }
         tmp_chain.reverse();
         let fork_at;

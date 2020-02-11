@@ -609,7 +609,7 @@ impl ConsensusNewBlockHandler {
         for consensus_arena_index_in_epoch in candidate_iter {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
-            //            debug!("checking lca {}", lca);
+            // debug!("checking lca {}", lca);
             // If it is outside the era, we will skip!
             if lca == NULL || inner.arena[lca].height < force_confirm_height {
                 continue;
@@ -628,9 +628,8 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
-            //            debug!("checking lca {} fork {} fork_weight {}
-            // pivot_weight {}", lca, fork, fork_subtree_weight,
-            // pivot_subtree_weight);
+            // debug!("checking lca {} fork {} fork_weight {} pivot_weight {}",
+            // lca, fork, fork_subtree_weight, pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
@@ -1073,6 +1072,10 @@ impl ConsensusNewBlockHandler {
 
             let force_confirm =
                 inner.compute_force_confirm(Some(&timer_chain_tuple));
+            debug!(
+                "force confirm point is {} in the past view of {}",
+                force_confirm, me
+            );
             fully_valid = self.check_block_full_validity(
                 me,
                 inner,
@@ -1143,8 +1146,7 @@ impl ConsensusNewBlockHandler {
             inner.update_timer_chain(me);
         } else {
             let mut timer_chain_height = inner.arena[parent].timer_chain_height;
-            if inner.get_timer_chain_index(parent) != NULL
-            {
+            if inner.get_timer_chain_index(parent) != NULL {
                 timer_chain_height += 1;
             }
             for referee in &inner.arena[me].referees {
