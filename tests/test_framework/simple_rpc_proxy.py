@@ -36,22 +36,22 @@ class RpcCaller:
             node = self.node
             if node is not None and node.auto_recovery:
                 # wait to ensure that the process has completely exited
-                time.sleep(0.01)
+                time.sleep(0.1)
                 return_code = node.process.poll()
                 # TODO Parameterize return_code
                 # -11 means segfault, which may be triggered if rocksdb is not properly dropped.
                 # 100 is our random db crash exit code.
                 if return_code in [-11, 100]:
+                    print(node.index, "recover from exit code", return_code, "during calling", self.method)
                     # TODO Handle extra_args
                     node.start(stdout=node.stdout, stderr=node.stderr)
                     node.wait_for_rpc_connection()
                     node.wait_for_nodeid()
-                    node.wait_for_recovery("NormalSyncPhase", 10)
+                    node.wait_for_recovery("NormalSyncPhase", 30)
                     response = self.client.send(request, timeout=self.timeout)
                     return response.data.result
                 else:
-                    if return_code is not None:
-                        print(node.index, "exit with code", return_code, "during calling", self.method)
+                    print(node.index, "exit with code", return_code, "during calling", self.method)
                     raise e
             else:
                 raise e
