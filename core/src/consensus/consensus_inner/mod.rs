@@ -992,6 +992,7 @@ impl ConsensusGraphInner {
             let p = self.ancestor_at(parent, mid);
             let timer_mid = self.get_timer_tick(p, timer_chain_tuple);
             assert!(timer_me >= timer_mid);
+            debug!("testing {} timer {}", p, timer_mid);
             if timer_me - timer_mid >= adjusted_beta {
                 best = mid;
                 low = mid + 1;
@@ -1003,7 +1004,11 @@ impl ConsensusGraphInner {
         let adaptive = if best != force_confirm_height {
             parent = self.ancestor_at(parent, best);
             debug!("checking start at height {} index {}", best, parent);
-            debug!("timer_mid {} timer_me {}", self.get_timer_tick(parent, timer_chain_tuple), timer_me);
+            debug!(
+                "timer_mid {} timer_me {}",
+                self.get_timer_tick(parent, timer_chain_tuple),
+                timer_me
+            );
             debug!("timer_height {}", self.arena[parent].timer_chain_height);
 
             let a = self
@@ -1172,10 +1177,10 @@ impl ConsensusGraphInner {
         let parent = self.arena[pivot].parent;
         // This indicates `pivot` is partial_invalid and for partial invalid
         // block we don't need to calculate and store the blockset
-//        if parent != NULL && self.arena[parent].data.partial_invalid
-//        {
-//            return;
-//        }
+        //        if parent != NULL && self.arena[parent].data.partial_invalid
+        //        {
+        //            return;
+        //        }
         if parent != NULL {
             let last = *self.pivot_chain.last().unwrap();
             let lca = self.lca(last, parent);
@@ -1322,10 +1327,11 @@ impl ConsensusGraphInner {
             let acc_lca_ref = extra_lca;
             if let Some(x) = acc_lca_ref.last() {
                 *x
-            } else if fork_at_index > 0
-                && fork_at_index <= self.timer_chain_accumulative_lca.len()
+            } else if fork_at_index > self.inner_conf.timer_chain_beta as usize
             {
-                self.timer_chain_accumulative_lca[fork_at_index - 1]
+                self.timer_chain_accumulative_lca[fork_at_index
+                    - self.inner_conf.timer_chain_beta as usize
+                    - 1]
             } else {
                 self.cur_era_genesis_block_arena_index
             }
@@ -2464,9 +2470,9 @@ impl ConsensusGraphInner {
         let timer_chain_index = (self.arena[me].timer_chain_height
             - self.cur_era_genesis_timer_chain_height)
             as usize;
-        debug!("timer_chain_index {} timer_chain {:?}", timer_chain_index, self.timer_chain);
         if self.timer_chain.len() > timer_chain_index
-            && self.timer_chain[timer_chain_index] == me {
+            && self.timer_chain[timer_chain_index] == me
+        {
             timer_chain_index
         } else {
             NULL
@@ -2485,8 +2491,7 @@ impl ConsensusGraphInner {
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
         let mut i = self.arena[me].last_timer_block_arena_index;
-        while i != NULL && self.get_timer_chain_index(i) != NULL {
-            debug!("last timer block arena index: {}", i);
+        while i != NULL && self.get_timer_chain_index(i) == NULL {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
             i = self.arena[i].last_timer_block_arena_index;
@@ -2569,14 +2574,15 @@ impl ConsensusGraphInner {
                     } else {
                         self.arena[*pred].timer_chain_height
                     };
-                    if tmp_chain_set.contains(pred) || self.get_timer_chain_index(*pred) < fork_at_index {
+                    if tmp_chain_set.contains(pred)
+                        || self.get_timer_chain_index(*pred) < fork_at_index
+                    {
                         height += 1;
                     }
                     if height > timer_chain_height {
                         timer_chain_height = height;
                     }
                 }
-//              debug!("res {} height {}", x, timer_chain_height);
                 res.insert(x, timer_chain_height);
                 for child in &self.arena[x].children {
                     if !visited.contains(*child as u32) {
@@ -2663,7 +2669,7 @@ impl ConsensusGraphInner {
         }
         assert!(res.contains_key(&me));
         for (k, v) in res {
-            debug!("setting {} to timer height {}", k, v);
+            // debug!("setting {} to timer height {}", k, v);
             self.arena[k].timer_chain_height = v;
         }
         if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
@@ -2685,9 +2691,17 @@ impl ConsensusGraphInner {
                     self.timer_chain.len()
                         - self.inner_conf.timer_chain_beta as usize
                 );
+            } else if self.timer_chain.len()
+                > self.inner_conf.timer_chain_beta as usize
+            {
+                self.timer_chain_accumulative_lca
+                    .push(self.cur_era_genesis_block_arena_index);
             }
         }
-        debug!("Timer change updated to {:?}", self.timer_chain);
+        debug!(
+            "Timer chain updated to {:?} accumulated lca {:?}",
+            self.timer_chain, self.timer_chain_accumulative_lca
+        );
     }
 
     /// This function force the pivot chain to follow our previous stable

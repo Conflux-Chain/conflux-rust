@@ -27,9 +27,9 @@ use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet, VecDeque},
     io::Write,
+    slice::Iter,
     sync::Arc,
 };
-use std::slice::Iter;
 
 pub struct ConsensusNewBlockHandler {
     conf: ConsensusConfig,
@@ -518,9 +518,7 @@ impl ConsensusNewBlockHandler {
         let force_confirm_height = inner.arena[force_confirm].height;
 
         // Check the pivot selection decision.
-        for consensus_arena_index_in_epoch in
-            checking_candidate
-        {
+        for consensus_arena_index_in_epoch in checking_candidate {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
             // If it is outside current era, we will skip!
@@ -559,14 +557,18 @@ impl ConsensusNewBlockHandler {
     ) -> bool
     {
         let parent = inner.arena[me].parent;
-        // FIXME: Because now we allow partial invalid blocks as parent, we need to consider more for block candidates.
-        // This may cause a performance issue and we should consider another optimized strategy.
+        // FIXME: Because now we allow partial invalid blocks as parent, we need
+        // to consider more for block candidates. This may cause a
+        // performance issue and we should consider another optimized strategy.
         let mut candidate;
         let candidate_iter = if inner.arena[parent].data.partial_invalid {
-            candidate = inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
+            candidate =
+                inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
             let mut p = parent;
             while p != NULL && inner.arena[p].data.partial_invalid {
-                candidate.extend(inner.arena[p].data.blockset_in_own_view_of_epoch.iter());
+                candidate.extend(
+                    inner.arena[p].data.blockset_in_own_view_of_epoch.iter(),
+                );
                 p = inner.arena[p].parent;
             }
             candidate.iter()
@@ -585,7 +587,8 @@ impl ConsensusNewBlockHandler {
         }
         let mut valid = true;
         let force_confirm_height = inner.arena[force_confirm].height;
-//        debug!("force confirm {} height {}", force_confirm, force_confirm_height);
+        //        debug!("force confirm {} height {}", force_confirm,
+        // force_confirm_height);
 
         let mut weight_delta = HashMap::new();
 
@@ -599,14 +602,14 @@ impl ConsensusNewBlockHandler {
             inner.weight_tree.path_apply(*index, -delta);
         }
 
-//        debug!("BLOCKSET {:?} len {}", inner.arena[me].data.blockset_in_own_view_of_epoch, inner.arena[me].data.blockset_in_own_view_of_epoch.len());
+        //        debug!("BLOCKSET {:?} len {}",
+        // inner.arena[me].data.blockset_in_own_view_of_epoch,
+        // inner.arena[me].data.blockset_in_own_view_of_epoch.len());
         // Check the pivot selection decision.
-        for consensus_arena_index_in_epoch in
-            candidate_iter
-        {
+        for consensus_arena_index_in_epoch in candidate_iter {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
-//            debug!("checking lca {}", lca);
+            //            debug!("checking lca {}", lca);
             // If it is outside the era, we will skip!
             if lca == NULL || inner.arena[lca].height < force_confirm_height {
                 continue;
@@ -625,7 +628,9 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
-//            debug!("checking lca {} fork {} fork_weight {} pivot_weight {}", lca, fork, fork_subtree_weight, pivot_subtree_weight);
+            //            debug!("checking lca {} fork {} fork_weight {}
+            // pivot_weight {}", lca, fork, fork_subtree_weight,
+            // pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
@@ -1037,6 +1042,7 @@ impl ConsensusNewBlockHandler {
         } else {
             inner.arena[longest_referee].last_timer_block_arena_index
         };
+        debug!("For Block {} Last timer arena index {} longest referee from {} diff {}", me, last_timer_block_arena_index, longest_referee, me);
         inner.arena[me].timer_longest_difficulty = timer_longest_difficulty;
         inner.arena[me].last_timer_block_arena_index =
             last_timer_block_arena_index;
@@ -1137,16 +1143,21 @@ impl ConsensusNewBlockHandler {
             inner.update_timer_chain(me);
         } else {
             let mut timer_chain_height = inner.arena[parent].timer_chain_height;
-            if inner.arena[parent].is_timer && !inner.arena[parent].data.partial_invalid {
+            if inner.arena[parent].is_timer
+                && !inner.arena[parent].data.partial_invalid
+            {
                 timer_chain_height += 1;
             }
             for referee in &inner.arena[me].referees {
-                let timer_bit = if inner.arena[*referee].is_timer && !inner.arena[*referee].data.partial_invalid {
+                let timer_bit = if inner.arena[*referee].is_timer
+                    && !inner.arena[*referee].data.partial_invalid
+                {
                     1
                 } else {
                     0
                 };
-                if inner.arena[*referee].timer_chain_height + timer_bit > timer_chain_height
+                if inner.arena[*referee].timer_chain_height + timer_bit
+                    > timer_chain_height
                 {
                     timer_chain_height =
                         inner.arena[*referee].timer_chain_height + timer_bit;
@@ -1624,7 +1635,8 @@ impl ConsensusNewBlockHandler {
                                 0
                             }
                     };
-                    // We are not going to delay partial invalid blocks in the bench mode
+                    // We are not going to delay partial invalid blocks in the
+                    // bench mode
                     if self.conf.bench_mode {
                         inner.invalid_block_queue.push((0, me));
                     } else {
