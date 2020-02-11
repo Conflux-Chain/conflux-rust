@@ -1143,14 +1143,12 @@ impl ConsensusNewBlockHandler {
             inner.update_timer_chain(me);
         } else {
             let mut timer_chain_height = inner.arena[parent].timer_chain_height;
-            if inner.arena[parent].is_timer
-                && !inner.arena[parent].data.partial_invalid
+            if inner.get_timer_chain_index(parent) != NULL
             {
                 timer_chain_height += 1;
             }
             for referee in &inner.arena[me].referees {
-                let timer_bit = if inner.arena[*referee].is_timer
-                    && !inner.arena[*referee].data.partial_invalid
+                let timer_bit = if inner.get_timer_chain_index(*referee) != NULL
                 {
                     1
                 } else {
