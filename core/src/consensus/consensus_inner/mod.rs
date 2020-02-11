@@ -1339,8 +1339,7 @@ impl ConsensusGraphInner {
     {
         if let Some((fork_at, _, extra_lca, tmp_chain)) = timer_chain_tuple_opt
         {
-            // debug!("fork at {:?} acc_lca {:?} extra_lca {:?}", *fork_at,
-            // self.timer_chain_accumulative_lca, extra_lca);
+            // debug!("fork at {:?} tmp_chain {:?}, acc_lca {:?} extra_lca {:?}", *fork_at, tmp_chain, self.timer_chain_accumulative_lca, extra_lca);
             let fork_end_index =
                 (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
                     + tmp_chain.len();
@@ -2650,7 +2649,13 @@ impl ConsensusGraphInner {
                     tmp_lca.push(self.cur_era_genesis_block_arena_index)
                 } else {
                     let mut lca = tmp_chain[i];
-                    for j in 0..i {
+                    // We only go over timer_chain_beta elements to compute lca
+                    let s = if i < self.inner_conf.timer_chain_beta as usize - 1 {
+                        0
+                    } else {
+                        i + 1 - self.inner_conf.timer_chain_beta as usize
+                    };
+                    for j in s..i {
                         lca = self.lca(lca, tmp_chain[j]);
                     }
                     for j in (fork_at_index + i + 1
