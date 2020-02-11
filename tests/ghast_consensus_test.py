@@ -25,7 +25,8 @@ if os.name == 'posix':
 
 TEST_INPUT = [
         "partial-invalid-case1.in",
-        "adaptive-case1.in"
+        "adaptive-case1.in",
+        "adaptive-case2.in"
         ]
 
 test_dir = os.path.dirname(os.path.realpath(__file__))
