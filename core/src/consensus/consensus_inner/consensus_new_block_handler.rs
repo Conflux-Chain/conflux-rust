@@ -1189,10 +1189,6 @@ impl ConsensusNewBlockHandler {
                 fork_at = inner.arena[force_lca].height + 1;
                 new = inner.ancestor_at(force_confirm, fork_at);
                 pivot_changed = true;
-            } else if inner.arena[lca].height < inner.cur_era_stable_height {
-                debug!("Fork point is past stable block, do not switch pivot chain");
-                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
-                new = NULL;
             } else {
                 fork_at = inner.arena[lca].height + 1;
                 let prev = inner.get_pivot_block_arena_index(fork_at);

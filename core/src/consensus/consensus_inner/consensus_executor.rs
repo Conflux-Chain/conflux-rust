@@ -332,8 +332,8 @@ impl ConsensusExecutor {
                 {
                     debug!(
                         "wait_and_compute_state_valid_locked, idx = {}, \
-                         height = {}, era stable height = {}",
-                        pivot_arena_index, height, inner.cur_era_stable_height
+                         height = {}, era genesis height = {}",
+                        pivot_arena_index, height, inner.cur_era_genesis_height
                     );
                     self.wait_and_compute_state_valid_locked(
                         pivot_arena_index,

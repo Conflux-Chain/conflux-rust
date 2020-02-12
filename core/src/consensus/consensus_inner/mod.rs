@@ -2845,7 +2845,7 @@ impl ConsensusGraphInner {
 
     /// FIXME Use snapshot-related information when we can sync snapshot states.
     /// Return the latest height that a snapshot should be available.
-    fn latest_snapshot_height(&self) -> u64 { self.cur_era_stable_height }
+    fn latest_snapshot_height(&self) -> u64 { self.cur_era_genesis_height }
 
     fn collect_defer_blocks_missing_execution_commitments(
         &self, me: usize,
