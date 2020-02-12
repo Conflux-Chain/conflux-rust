@@ -25,7 +25,7 @@ use cfxcore::{
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use jsonrpc_core::{Error as RpcError, Result as RpcResult};
+use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -111,17 +111,17 @@ impl Cfx for CfxHandler {
         fn gas_price(&self) -> RpcResult<RpcU256>;
         fn transaction_count(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
 
-        fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcAccount>;
-        fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-        fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-        fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
+        fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+        fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+        fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
-        fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Bytes>;
+        fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
         fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-        fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+        fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
         fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
-        fn transaction_by_hash(&self, hash: RpcH256) -> RpcResult<Option<RpcTransaction>>;
-        fn transaction_receipt(&self, tx_hash: RpcH256) -> RpcResult<Option<RpcReceipt>>;
+        fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
+        fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
 
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
@@ -214,6 +214,6 @@ impl DebugRpc for DebugRpcImpl {
     }
 
     not_supported! {
-        fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> RpcResult<RpcH256>;
+        fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
     }
 }

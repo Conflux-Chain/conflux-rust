@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use futures::{future::poll_fn, Async, Future};
+use futures01::{future::poll_fn, Async, Future};
 use jsonrpc_core::{
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,
     RpcMethod,

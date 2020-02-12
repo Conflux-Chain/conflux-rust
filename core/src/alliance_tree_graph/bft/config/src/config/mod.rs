@@ -15,6 +15,8 @@ use std::{
 use thiserror::Error;
 use toml;
 
+use log::*;
+
 mod admission_control_config;
 pub use admission_control_config::*;
 mod consensus_config;
@@ -208,6 +210,7 @@ impl NodeConfig {
         let public_key = keypair.as_ref().unwrap().public().clone();
 
         let input_dir = RootPath::new(input_path);
+        info!("BFT config root path: {:?}", &input_dir);
         config.consensus.load(&input_dir, keypair)?;
         let validator_set =
             config.consensus.consensus_peers.get_validator_set();

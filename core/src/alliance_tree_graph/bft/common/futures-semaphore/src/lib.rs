@@ -150,6 +150,7 @@ impl Future for PermitFuture {
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -245,3 +246,4 @@ mod test {
         }
     }
 }
+*/

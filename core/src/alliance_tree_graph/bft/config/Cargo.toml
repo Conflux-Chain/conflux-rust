@@ -10,6 +10,7 @@ publish = false
 edition = "2018"
 
 [dependencies]
+log = "0.4"
 anyhow = "1.0"
 get_if_addrs = { version = "0.5.3", default-features = false }
 hex = { version = "0.3.2", default-features = false }

@@ -190,6 +190,7 @@ fn path_from_byte_slice(bytes: &[u8]) -> Option<String> {
     None
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,3 +219,4 @@ mod tests {
         );
     }
 }
+*/

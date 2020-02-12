@@ -8,7 +8,7 @@ use super::super::types::{
     H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
-use jsonrpc_core::Result as RpcResult;
+use jsonrpc_core::{BoxFuture, Result as RpcResult};
 use jsonrpc_derive::rpc;
 
 /// Cfx rpc interface.
@@ -44,25 +44,25 @@ pub trait Cfx {
     #[rpc(name = "cfx_getBalance")]
     fn balance(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256>;
+    ) -> BoxFuture<RpcU256>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBankBalance")]
     fn bank_balance(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256>;
+    ) -> BoxFuture<RpcU256>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStorageBalance")]
     fn storage_balance(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256>;
+    ) -> BoxFuture<RpcU256>;
 
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<Bytes>;
+    ) -> BoxFuture<Bytes>;
 
     //        /// Returns content of the storage at given address.
     //        #[rpc(name = "cfx_getStorageAt")]
@@ -134,7 +134,7 @@ pub trait Cfx {
 
     /// Returns logs matching the filter provided.
     #[rpc(name = "cfx_getLogs")]
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>>;
+    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
 
     //        /// Estimate gas needed for execution of given contract.
     //        #[rpc(name = "cfx_estimateGas")]
@@ -145,7 +145,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getTransactionByHash")]
     fn transaction_by_hash(
         &self, tx_hash: RpcH256,
-    ) -> RpcResult<Option<Transaction>>;
+    ) -> BoxFuture<Option<Transaction>>;
 
     #[rpc(name = "cfx_estimateGas")]
     fn estimate_gas(
@@ -160,13 +160,13 @@ pub trait Cfx {
     #[rpc(name = "cfx_getTransactionReceipt")]
     fn transaction_receipt(
         &self, tx_hash: RpcH256,
-    ) -> RpcResult<Option<RpcReceipt>>;
+    ) -> BoxFuture<Option<RpcReceipt>>;
 
     /// Return account related states of the given account
     #[rpc(name = "cfx_getAccount")]
     fn account(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<RpcAccount>;
+    ) -> BoxFuture<RpcAccount>;
 
     /// Returns interest rate of the given epoch
     #[rpc(name = "cfx_getInterestRate")]

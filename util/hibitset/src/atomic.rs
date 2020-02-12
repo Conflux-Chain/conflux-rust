@@ -421,5 +421,4 @@ mod atomic_set_test {
         set.clear();
         assert_eq!((&set).iter().count(), 0);
     }
-
 }

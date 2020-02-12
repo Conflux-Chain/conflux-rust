@@ -63,6 +63,7 @@ impl KVCategorizer for ErrorCategorizer {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,3 +78,4 @@ mod tests {
         }
     }
 }
+*/

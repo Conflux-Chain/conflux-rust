@@ -19,8 +19,8 @@ pub use service_metrics::ServiceMetrics;
 mod op_counters;
 pub use op_counters::{DurationHistogram, OpMetrics};
 
-#[cfg(test)]
-mod unit_tests;
+//#[cfg(test)]
+//mod unit_tests;
 
 // Re-export counter types from prometheus crate
 pub use prometheus::{
