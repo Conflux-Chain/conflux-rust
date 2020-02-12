@@ -115,7 +115,7 @@ build_config! {
         (port, (Option<u16>), Some(32323))
 
         // Network parameters section.
-        (blocks_request_timeout_ms, (u64), 30_000)
+        (blocks_request_timeout_ms, (u64), 60_000)
         (check_request_period_ms, (u64), 1000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (data_propagate_enabled, (bool), false)
@@ -124,7 +124,7 @@ build_config! {
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
-        (headers_request_timeout_ms, (u64), 10_000)
+        (headers_request_timeout_ms, (u64), 30_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (min_peers_propagation, (usize), 8)
         (max_inflight_request_count, (u64), 64)
@@ -132,9 +132,9 @@ build_config! {
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
-        (snapshot_candidate_request_timeout_ms, (u64), 10_000)
+        (snapshot_candidate_request_timeout_ms, (u64), 30_000)
         (snapshot_chunk_request_timeout_ms, (u64), 30_000)
-        (snapshot_manifest_request_timeout_ms, (u64), 10_000)
+        (snapshot_manifest_request_timeout_ms, (u64), 30_000)
         (throttling_conf, (Option<String>), None)
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
@@ -179,7 +179,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (is_consortium, (bool), false)
-        (ledger_cache_size, (Option<usize>), Some(2048))
+        (ledger_cache_size, (Option<usize>), Some(1024))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (max_download_state_peers, (usize), 8)
     }

@@ -83,7 +83,7 @@ impl<
     /// introduces copies for committing.
     // TODO(yz): log the dirty size to monitor if other component produces too
     // many.
-    pub const MAX_DIRTY_AND_TEMPORARY_TRIE_NODES: u32 = 200_000;
+    pub const MAX_DIRTY_AND_TEMPORARY_TRIE_NODES: u32 = 2_000_000;
     /// If we do not swap out any node onto disk, the maximum tolerable nodes is
     /// about 27.6M, where there is about 4.6M leaf nodes. The total memory
     /// consumption is about (27.6 * 192 - 4.6 * 64) MB ~= 5GB. It can hold new
@@ -93,7 +93,7 @@ impl<
     /// leaf node. This assumption is for delta_trie.
     pub const MAX_TRIE_NODES_MEM_ONLY: u32 = 27_600_000;
     pub const R_LFU_FACTOR: f64 = 4.0;
-    pub const START_CAPACITY: u32 = 1_000_000;
+    pub const START_CAPACITY: u32 = 2_000_000;
 }
 
 impl<

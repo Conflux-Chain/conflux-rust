@@ -210,6 +210,8 @@ impl TransactionGenerator {
             balance_map.insert(address.clone(), balance.unwrap());
             address_secret_pair.insert(address, secret);
         }
+        // State cache can be large
+        drop(state);
 
         info!("Start Generating Workload");
         let start_time = Instant::now();
