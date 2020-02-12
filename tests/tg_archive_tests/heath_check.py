@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+from test_framework.util import *
+from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
+from conflux.rpc import RpcClient
 import random
 import threading
 import json
@@ -12,10 +16,6 @@ import os
 import time
 
 sys.path.insert(1, os.path.dirname(sys.path[0]))
-from conflux.rpc import RpcClient
-from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import *
-from test_framework.util import *
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
 NUM_TX_PER_BLOCK = 10
@@ -77,7 +77,8 @@ class StartEvent(EventBase):
         node.start()
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
-        node.wait_for_recovery(["NormalSyncPhase", "CatchUpSyncBlockPhase"], wait_time=100000)
+        node.wait_for_recovery(
+            ["NormalSyncPhase", "CatchUpSyncBlockPhase"], wait_time=100000)
 
     def name(self):
         return self._name
@@ -253,14 +254,14 @@ class BFTCommit(object):
         self.parent = json_data['parent']
         self.timestamp = json_data['timestamp']
         self.received_timestamp = time.time()
-    
+
     def __eq__(self, other):
         return self.epoch == other.epoch and \
             self.commit == other.commit and \
             self.round == other.round and \
             self.parent == other.parent and \
             self.timestamp == other.timestamp
-    
+
     def __str__(self):
         return "BFTCommit(\
                 epoch={}, \
@@ -274,6 +275,7 @@ class BFTCommit(object):
             self.parent,
             self.timestamp)
 
+
 class BFTSnashot(object):
     def __init__(self, peer_id):
         self.peer_id = peer_id
@@ -281,7 +283,7 @@ class BFTSnashot(object):
         self.last_commited = None
         self.round_verified = set()
         self.round_unverified = set()
-    
+
     def add_event(self, json_data):
         bft_commit = BFTCommit(json_data)
         self.last_commited = bft_commit
@@ -408,7 +410,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                 alive_peer_indices = self._retrieve_alive_peers(
                     ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
                 normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
-                catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
+                catch_up_peers = alive_peer_indices.get(
+                    'CatchUpSyncBlockPhase', [])
                 if (len(normal_peers) - 1) * 2 <= len(self.nodes):
                     return
                 alive_peer_indices = normal_peers + catch_up_peers
@@ -418,7 +421,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                 self.log.info("stopping {}".format(chosen_peer))
                 # retrieve new ready blocks before stopping it
                 new_blocks = self.nodes[chosen_peer].sync_graph_state()
-                self._snapshots[chosen_peer].new_blocks(new_blocks['readyBlockVec'])
+                self._snapshots[chosen_peer].new_blocks(
+                    new_blocks['readyBlockVec'])
                 self.stop_node(chosen_peer)
                 self._stopped_peers.append(chosen_peer)
                 self._snapshots[chosen_peer].stop()
@@ -434,7 +438,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                 alive_peer_indices = self._retrieve_alive_peers(
                     ["NormalSyncPhase", "CatchUpSyncBlockPhase"])
                 normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
-                catch_up_peers = alive_peer_indices.get('CatchUpSyncBlockPhase', [])
+                catch_up_peers = alive_peer_indices.get(
+                    'CatchUpSyncBlockPhase', [])
                 alive_peer_indices = normal_peers + catch_up_peers
                 if len(alive_peer_indices) <= 3:
                     return
@@ -443,7 +448,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                     1, len(alive_peer_indices) - 1)]
                 self.log.info("enable db crash {}".format(chosen_peer))
                 self.nodes[chosen_peer].save_node_db()
-                self.nodes[chosen_peer].set_db_crash(CRASH_EXIT_PROBABILITY, CRASH_EXIT_CODE)
+                self.nodes[chosen_peer].set_db_crash(
+                    CRASH_EXIT_PROBABILITY, CRASH_EXIT_CODE)
         except Exception as e:
             self.log.info('got exception[{}] during db crash'.format(repr(e)))
             self.persist_snapshot()
@@ -457,7 +463,8 @@ class TreeGraphTracing(ConfluxTestFramework):
             tx_gas = client.DEFAULT_TX_GAS
             nonce = self._peer_nonce[peer]
             self._peer_nonce[peer] = nonce + 1
-            tx = client.new_tx(receiver=addr, nonce=nonce, value=0, gas=tx_gas, data=b'')
+            tx = client.new_tx(receiver=addr, nonce=nonce,
+                               value=0, gas=tx_gas, data=b'')
             txs.append(tx)
         return txs
 
@@ -467,21 +474,28 @@ class TreeGraphTracing(ConfluxTestFramework):
         """
         try:
             with self._peer_lock:
-                alive_peer_indices = self._retrieve_alive_peers(["NormalSyncPhase"])
-                alive_peer_indices = alive_peer_indices.get('NormalSyncPhase', [])
+                alive_peer_indices = self._retrieve_alive_peers(
+                    ["NormalSyncPhase"])
+                alive_peer_indices = alive_peer_indices.get(
+                    'NormalSyncPhase', [])
                 if self.options.archive:
                     assert len(alive_peer_indices) * \
-                        2 > self.num_nodes, "alive[{}] total[{}]".format(len(alive_peer_indices), self.num_nodes)
+                        2 > self.num_nodes, "alive[{}] total[{}]".format(
+                            len(alive_peer_indices), self.num_nodes)
                 chosen_peer = alive_peer_indices[random.randint(
                     0, len(alive_peer_indices) - 1)]
                 txs = self._generate_txs(chosen_peer, NUM_TX_PER_BLOCK)
                 if random.randint(1, 100) <= 40:
                     # this will generate a partial invalid block
-                    block_hash = RpcClient(self.nodes[chosen_peer]).generate_block_with_fake_txs(txs, True)
+                    block_hash = RpcClient(
+                        self.nodes[chosen_peer]).generate_block_with_fake_txs(txs, True)
                 else:
-                    block_hash = RpcClient(self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
-                self._block_txs[block_hash] = eth_utils.encode_hex(rlp.encode(txs))
-                self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
+                    block_hash = RpcClient(
+                        self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
+                self._block_txs[block_hash] = eth_utils.encode_hex(
+                    rlp.encode(txs))
+                self.log.info("peer[%d] generate block[%s]",
+                              chosen_peer, block_hash)
         except Exception as e:
             self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()
@@ -527,7 +541,7 @@ class TreeGraphTracing(ConfluxTestFramework):
         }
 
     def setup_nodes(self):
-        self.add_nodes(self.num_nodes, auto_recovery=True)
+        self.add_nodes(self.num_nodes, auto_recovery=True, is_consortium=True)
         for i in range(0, self.num_nodes):
             self.start_node(i, extra_args=["--tg_archive"], phase_to_wait=None)
 
@@ -560,10 +574,12 @@ class TreeGraphTracing(ConfluxTestFramework):
             fp.write(json.dumps(self._block_txs))
         self.log.info("txs saved to txs.json")
         for (index, snapshot) in enumerate(self._snapshots):
-            self.log.info('saving snapshot {} to snapshot_{}.json'.format(index, index))
+            self.log.info(
+                'saving snapshot {} to snapshot_{}.json'.format(index, index))
             with open('snapshot_{}.json'.format(index), 'w') as fp:
                 fp.write(json.dumps(snapshot.to_json()))
-            self.log.info('snapshot {} saved to snapshot_{}.json'.format(index, index))
+            self.log.info(
+                'snapshot {} saved to snapshot_{}.json'.format(index, index))
 
     def run_test(self):
         if self._replay:
@@ -576,7 +592,8 @@ class TreeGraphTracing(ConfluxTestFramework):
         snapshot_timer = Timer(self._snapshot_timeout, self._retrieve_snapshot)
         # db_crash_timer = Timer(self._db_crash_timeout, self._enable_db_crash)
 
-        self._snapshots = [Snapshot(i, genesis_hash) for i in range(len(self.nodes))]
+        self._snapshots = [Snapshot(i, genesis_hash)
+                           for i in range(len(self.nodes))]
         self._peer_nonce = [0] * len(self.nodes)
         # self.setup_balance()
 
@@ -668,7 +685,8 @@ class ExecutionStatusPredicate(Predicate):
 
     def verify_snapshots(self, snapshots, hashes):
         for h in hashes:
-            blocks = [snapshot.consensus.exec_status_unverified[h] for snapshot in snapshots]
+            blocks = [snapshot.consensus.exec_status_unverified[h]
+                      for snapshot in snapshots]
             self.verify_blocks(blocks)
             for (snapshot, block) in zip(snapshots, blocks):
                 snapshot.consensus.exec_status_verified[h] = block
@@ -687,13 +705,15 @@ class ExecutionStatusPredicate(Predicate):
         verifiable_hashes_with_stopped = None
         alive_snapshots = []
         for (i, snapshot) in enumerate(snapshots):
-            unverified_hashes = set(snapshot.consensus.exec_status_unverified.keys())
+            unverified_hashes = set(
+                snapshot.consensus.exec_status_unverified.keys())
             for h in unverified_hashes.intersection(verified_hashes):
                 assert verified[h] == snapshot.consensus.exec_status_unverified[h]
                 snapshot.consensus.exec_status_verified[h] = verified[h]
                 del snapshot.consensus.exec_status_unverified[h]
             if verifiable_hashes_with_stopped is None:
-                verifiable_hashes_with_stopped = copy.deepcopy(unverified_hashes)
+                verifiable_hashes_with_stopped = copy.deepcopy(
+                    unverified_hashes)
             else:
                 verifiable_hashes_with_stopped &= unverified_hashes
             if i not in stopped_peers:
@@ -719,18 +739,62 @@ class BFTLivenessPredicate(Predicate):
                 continue
             now = time.time()
             if now - snapshot.bft.last_commited.received_timestamp > self.timeout:
-                assert False, "peer[{}] bft commit timeout".format(snapshot.peer_id)
+                assert False, "peer[{}] bft commit timeout".format(
+                    snapshot.peer_id)
 
 
 class BFTCommitPredicatePredicate(Predicate):
     def __init__(self):
         super().__init__()
 
-    def __call__(self, snapshots, stopped_peers):
-        for (i, snapshot) in enumerate(snapshots):
-            if i in stopped_peers:
-                continue
+    def verify_commits(self, round, commits):
+        for i in range(1, len(commits)):
+            assert commits[0] == commits[i], 'round[{}] mismatch'.format(round)
 
+    def verify_snapshots(self, snapshots, rounds):
+        for round in rounds:
+            commits = [snapshot.bft.round_to_commit[round]
+                       for snapshot in snapshots]
+            self.verify_commits(round, commits)
+            for snapshot in snapshots:
+                snapshot.bft.round_unverified.remove(round)
+                snapshot.bft.round_verified.add(round)
+
+    def __call__(self, snapshots, stopped_peers):
+        verified = {}
+        for (i, snapshot) in enumerate(snapshots):
+            for round in snapshot.bft.round_verified:
+                if round in verified:
+                    assert verified[round] == snapshot.bft.round_to_commit[round], "mismatch verified round[{}]".format(
+                        round)
+                else:
+                    verified[round] = snapshot.bft.round_to_commit[round]
+        round_verified = set(verified.keys())
+        round_verifiable = None
+        round_verifiable_with_stopped = None
+        alive_snapshots = []
+        for (i, snapshot) in enumerate(snapshots):
+            round_unverified = snapshot.bft.round_unverified.intersection(
+                round_verified)
+            for round in round_unverified:
+                assert snapshot.bft.round_to_commit[round] == verified[round]
+                snapshot.bft.round_verified.add(round)
+                snapshot.bft.round_unverified.remove(round)
+            if round_verifiable_with_stopped is None:
+                round_verifiable_with_stopped = copy.deepcopy(
+                    snapshot.bft.round_unverified)
+            else:
+                round_verifiable_with_stopped &= snapshot.bft.round_unverified
+            if i not in stopped_peers:
+                alive_snapshots.append(snapshot)
+                if round_verifiable is None:
+                    round_verifiable = copy.deepcopy(
+                        snapshot.bft.round_unverified)
+                else:
+                    round_verifiable &= snapshot.bft.round_unverified
+        self.verify_snapshots(snapshots, round_verifiable_with_stopped)
+        round_verifiable -= round_verifiable_with_stopped
+        self.verify_snapshots(alive_snapshots, round_verifiable)
 
 
 def parse_args():

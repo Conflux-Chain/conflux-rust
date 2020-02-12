@@ -4,15 +4,16 @@
 
 extern crate env_logger;
 extern crate ethkey;
+extern crate keccak_hash;
+extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
-use anyhow::Result;
 use docopt::Docopt;
 use ethkey::{Error as EthkeyError, Generator, Public, Random};
 use keccak_hash::keccak;
 use log::*;
-use rustc_hex::{FromHexError, ToHex};
+use rustc_hex::FromHexError;
 use serde::Deserialize;
 use std::{
     env,
@@ -22,6 +23,7 @@ use std::{
     num::ParseIntError,
     path::PathBuf,
     process,
+    result::Result,
     str::FromStr,
     writeln,
 };
