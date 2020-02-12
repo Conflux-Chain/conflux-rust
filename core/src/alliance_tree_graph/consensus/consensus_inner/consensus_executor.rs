@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::{debug::*, ConsensusGraphInner};
+use super::super::{debug::*, ConsensusGraphInner, ConsensusInnerConfig};
 use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
@@ -10,6 +10,7 @@ use crate::{
     executive::{ExecutionError, Executive},
     machine::new_machine_with_builtin,
     state::{CleanupMode, State},
+    state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     statedb::StateDb,
     storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
     vm::{Env, Spec},
@@ -145,13 +146,13 @@ pub struct ConsensusExecutor {
 impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory, _consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        bench_mode: bool,
+        vm: VmFactory, conf: ConsensusInnerConfig, bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
+            conf,
             vm,
         ));
         let (sender, receiver) = channel();
@@ -368,18 +369,20 @@ impl ConsensusExecutor {
 pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
+    conf: ConsensusInnerConfig,
     pub vm: VmFactory,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory,
+        conf: ConsensusInnerConfig, vm: VmFactory,
     ) -> Self
     {
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
+            conf,
             vm,
         }
     }
@@ -575,7 +578,25 @@ impl ConsensusExecutionHandler {
         let epoch_execution_commitment = self
             .data_man
             .get_epoch_execution_commitment(&epoch_hash)
-            .unwrap();
+            .expect("EpochExecutionCommitment should exist");
+
+        if self.conf.enable_state_expose {
+            STATE_EXPOSER
+                .consensus_graph
+                .lock()
+                .block_execution_state_vec
+                .push(ConsensusGraphBlockExecutionState {
+                    block_hash: *epoch_hash,
+                    deferred_state_root: state_root
+                        .state_root
+                        .compute_state_root_hash(),
+                    deferred_receipt_root: epoch_execution_commitment
+                        .receipts_root,
+                    deferred_logs_bloom_hash: epoch_execution_commitment
+                        .logs_bloom_hash,
+                    state_valid: true,
+                })
+        }
         debug!(
             "compute_epoch: epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
             epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,

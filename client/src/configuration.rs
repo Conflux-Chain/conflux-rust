@@ -314,11 +314,6 @@ impl Configuration {
     }
 
     pub fn tg_consensus_config(&self) -> TreeGraphConsensusConfig {
-        let enable_optimistic_execution = if DEFERRED_STATE_EPOCH_COUNT <= 1 {
-            false
-        } else {
-            self.raw_conf.enable_optimistic_execution
-        };
         TreeGraphConsensusConfig {
             debug_dump_dir_invalid_state_root: self
                 .raw_conf

@@ -80,6 +80,8 @@ pub struct NodeConfig {
     pub test: Option<TestConfig>,
     #[serde(default)]
     pub validator_network: Option<NetworkConfig>,
+    #[serde(default)]
+    pub enable_state_expose: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -176,6 +178,7 @@ impl NodeConfig {
                 None
             },
             //vm_config: self.vm_config.clone(),
+            enable_state_expose: false,
         }
     }
 

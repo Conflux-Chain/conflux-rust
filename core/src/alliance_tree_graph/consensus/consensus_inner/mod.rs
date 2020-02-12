@@ -131,6 +131,7 @@ pub struct ConsensusGraphInner {
         HashMap<H256, NewCandidatePivotCallbackType>,
 }
 
+#[derive(Debug)]
 pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,
@@ -296,7 +297,6 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    #[allow(dead_code)]
     fn get_era_genesis_block_with_parent(
         &self, parent: usize, offset: u64,
     ) -> usize {
@@ -450,17 +450,18 @@ impl ConsensusGraphInner {
         });
         self.hash_to_arena_indices.insert(hash, index);
 
+        self.inclusive_weight_tree.make_tree(index);
+
         if parent != NULL {
             self.terminal_hashes.remove(&self.arena[parent].hash);
             self.arena[parent].children.push(index);
+            self.inclusive_weight_tree.link(parent, index);
         }
 
         self.terminal_hashes.insert(hash);
         for referee in referees {
             self.arena[referee].referrers.push(index);
         }
-
-        self.inclusive_weight_tree.make_tree(index);
 
         debug!(
             "Block {} inserted into Consensus with index={}",

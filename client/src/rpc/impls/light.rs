@@ -6,7 +6,7 @@ use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
         SendTxRequest, Status as RpcStatus, SyncGraphStates,
@@ -331,19 +331,6 @@ impl RpcImpl {
     }
 }
 
-// macro for reducing boilerplate for unsupported methods
-macro_rules! not_supported {
-    () => {};
-    ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> $ret:ty )? ; $($tail:tt)* ) => {
-        #[allow(unused_variables)]
-        fn $fn ( &self $(, $name : $type)* ) $( -> $ret )? {
-            Err(RpcError::method_not_found())
-        }
-
-        not_supported!($($tail)*);
-    };
-}
-
 pub struct CfxHandler {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
@@ -391,12 +378,14 @@ impl Cfx for CfxHandler {
 
 pub struct TestRpcImpl {
     common: Arc<CommonImpl>,
-    rpc_impl: Arc<RpcImpl>,
+    // rpc_impl: Arc<RpcImpl>,
 }
 
 impl TestRpcImpl {
-    pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
-        TestRpcImpl { common, rpc_impl }
+    pub fn new(common: Arc<CommonImpl>, _rpc_impl: Arc<RpcImpl>) -> Self {
+        TestRpcImpl {
+            common, /* , rpc_impl */
+        }
     }
 }
 
@@ -474,5 +463,6 @@ impl DebugRpc for DebugRpcImpl {
         fn current_sync_phase(&self) -> RpcResult<String>;
         fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
         fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
+        fn bft_state(&self) -> RpcResult<BFTStates>;
     }
 }
