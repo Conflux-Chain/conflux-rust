@@ -73,10 +73,10 @@ impl ConsensusNewBlockHandler {
         let stable_era_genesis =
             inner.get_pivot_block_arena_index(new_era_stable_height);
 
-        // FIXME: I am not sure whether this code still works in the new timer chain checkpoint mechanism
-        // (`RecoverBlockFromDb` or `Normal`), ensure all blocks on the
-        // pivot chain before stable_era_genesis have state_valid
-        // computed
+        // FIXME: I am not sure whether this code still works in the new timer
+        // chain checkpoint mechanism (`RecoverBlockFromDb` or
+        // `Normal`), ensure all blocks on the pivot chain before
+        // stable_era_genesis have state_valid computed
         if will_execute {
             // Make sure state execution is finished before setting lower_bound
             // to the new_checkpoint_era_genesis.
@@ -1012,7 +1012,6 @@ impl ConsensusNewBlockHandler {
         } else {
             inner.arena[longest_referee].last_timer_block_arena_index
         };
-        debug!("For Block {} Last timer arena index {} longest referee from {} diff {}", me, last_timer_block_arena_index, longest_referee, me);
         inner.arena[me].timer_longest_difficulty = timer_longest_difficulty;
         inner.arena[me].last_timer_block_arena_index =
             last_timer_block_arena_index;
@@ -1025,6 +1024,10 @@ impl ConsensusNewBlockHandler {
             );
         inner.arena[me].data.force_confirm =
             inner.compute_force_confirm(Some(&timer_chain_tuple));
+        debug!(
+            "Force confirm point is {} in the past view of block index={}",
+            inner.arena[me].data.force_confirm, me
+        );
 
         let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
             Some(inner.compute_subtree_weights(me, &anticone_barrier))
@@ -1043,10 +1046,6 @@ impl ConsensusNewBlockHandler {
                 &timer_chain_tuple,
             );
 
-            debug!(
-                "force confirm point is {} in the past view of {}",
-                inner.arena[me].data.force_confirm, me
-            );
             fully_valid = self.check_block_full_validity(
                 me,
                 inner,

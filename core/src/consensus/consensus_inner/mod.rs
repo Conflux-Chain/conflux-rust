@@ -1010,7 +1010,6 @@ impl ConsensusGraphInner {
             let p = self.ancestor_at(parent, mid);
             let timer_mid = self.get_timer_tick(p, timer_chain_tuple);
             assert!(timer_me >= timer_mid);
-            debug!("testing {} timer {}", p, timer_mid);
             if timer_me - timer_mid >= adjusted_beta {
                 best = mid;
                 low = mid + 1;
@@ -1021,13 +1020,6 @@ impl ConsensusGraphInner {
 
         let adaptive = if best != force_confirm_height {
             parent = self.ancestor_at(parent, best);
-            debug!("checking start at height {} index {}", best, parent);
-            debug!(
-                "timer_mid {} timer_me {}",
-                self.get_timer_tick(parent, timer_chain_tuple),
-                timer_me
-            );
-            debug!("timer_height {}", self.arena[parent].timer_chain_height);
 
             let a = self
                 .adaptive_tree
@@ -1340,9 +1332,6 @@ impl ConsensusGraphInner {
     {
         if let Some((fork_at, _, extra_lca, tmp_chain)) = timer_chain_tuple_opt
         {
-            // debug!("fork at {:?} tmp_chain {:?}, acc_lca {:?} extra_lca
-            // {:?}", *fork_at, tmp_chain, self.timer_chain_accumulative_lca,
-            // extra_lca);
             let fork_end_index =
                 (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
                     + tmp_chain.len();
@@ -2507,12 +2496,10 @@ impl ConsensusGraphInner {
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
         let mut i = self.arena[me].last_timer_block_arena_index;
-        debug!("me {} last timer {}", me, i);
         while i != NULL && self.get_timer_chain_index(i) == NULL {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
             i = self.arena[i].last_timer_block_arena_index;
-            debug!("me {} last timer {}", me, i);
         }
         tmp_chain.reverse();
         let fork_at;
@@ -2532,7 +2519,7 @@ impl ConsensusGraphInner {
             // Extending the newest timer chain, simple case
             res.insert(me, fork_at);
         } else {
-            debug!("New block {} not extending timer chain (len = {}), fork at {}, index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
+            debug!("New block {} not extending timer chain (len = {}), fork at timer chain height {}, timer chain index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
             // Now we need to update the timer_chain_height field of the
             // remaining blocks with topological sort
             let mut queue = VecDeque::new();
@@ -2698,7 +2685,6 @@ impl ConsensusGraphInner {
         }
         assert!(res.contains_key(&me));
         for (k, v) in res {
-            // debug!("setting {} to timer height {}", k, v);
             self.arena[k].timer_chain_height = v;
         }
         if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
