@@ -182,6 +182,10 @@ impl DatabaseConfig {
     pub fn memory_budget_per_col(&self) -> usize {
         self.memory_budget() / self.columns.unwrap_or(1) as usize
     }
+
+    pub fn memory_budget_mb(&self) -> usize {
+        self.memory_budget.unwrap_or(DB_DEFAULT_MEMORY_BUDGET_MB)
+    }
 }
 
 impl Default for DatabaseConfig {
@@ -220,7 +224,7 @@ fn col_config(
     opts.optimize_level_style_compaction(config.memory_budget_per_col() as i32);
     opts.set_target_file_size_base(config.compaction.initial_file_size);
     opts.set_write_buffer_size(config.memory_budget_per_col() as u64 / 2);
-    opts.set_block_cache_size_mb(config.memory_budget() as u64 / 3);
+    opts.set_block_cache_size_mb(config.memory_budget_mb() as u64 / 3);
 
     Ok(opts)
 }
