@@ -885,6 +885,7 @@ impl ConsensusNewBlockHandler {
         let mut visited = BitSet::new();
         let mut queue = VecDeque::new();
         queue.push_back(new_genesis_block_arena_index);
+        visited.add(new_genesis_block_arena_index as u32);
         while let Some(x) = queue.pop_front() {
             for child in &inner.arena[x].children {
                 if !visited.contains(*child as u32) {
@@ -903,8 +904,7 @@ impl ConsensusNewBlockHandler {
             inner.arena[new_genesis_block_arena_index].timer_chain_height;
         let start_timer_chain_index = (start_timer_chain_height
             - inner.cur_era_genesis_timer_chain_height)
-            as usize
-            + 1;
+            as usize;
         for i in start_timer_chain_index..inner.timer_chain.len() {
             if !visited.contains(inner.timer_chain[i] as u32) {
                 return inner.cur_era_genesis_block_arena_index;
