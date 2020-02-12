@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+sys.path.insert(1, os.path.dirname(sys.path[0]))
 from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
@@ -15,7 +16,6 @@ import sys
 import os
 import time
 
-sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
 NUM_TX_PER_BLOCK = 10
