@@ -58,99 +58,6 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    /// recompute past_weight under stable_genesis
-    fn recompute_stable_past_weight(
-        inner: &mut ConsensusGraphInner, stable_genesis: usize,
-    ) {
-        let mut stable_genesis_subtree =
-            BitSet::with_capacity(inner.arena.len() as u32);
-        let mut queue = VecDeque::new();
-        stable_genesis_subtree.add(stable_genesis as u32);
-        queue.push_back(stable_genesis);
-        while let Some(x) = queue.pop_front() {
-            for child in &inner.arena[x].children {
-                if inner.arena[*child].data.active_cnt != 0 {
-                    continue;
-                }
-                queue.push_back(*child);
-                stable_genesis_subtree.add(*child as u32);
-            }
-        }
-
-        let mut stack = Vec::new();
-        let mut visited = BitSet::with_capacity(inner.arena.capacity() as u32);
-        stack.push((0, inner.cur_era_genesis_block_arena_index, Vec::new()));
-        while let Some((state, me, mut blockset)) = stack.pop() {
-            if state == 0 {
-                // compute blockset_in_own_view_of_epoch first
-                if !inner.arena[me].data.blockset_cleared {
-                    for index in
-                        &inner.arena[me].data.blockset_in_own_view_of_epoch
-                    {
-                        if !visited.contains(*index as u32) {
-                            visited.add(*index as u32);
-                            blockset.push(*index);
-                        }
-                    }
-                } else {
-                    let mut queue = VecDeque::new();
-                    for referee in &inner.arena[me].referees {
-                        if !visited.contains(*referee as u32) {
-                            visited.add(*referee as u32);
-                            queue.push_back(*referee);
-                        }
-                    }
-                    while let Some(index) = queue.pop_front() {
-                        blockset.push(index);
-                        let parent = inner.arena[index].parent;
-                        if !visited.contains(parent as u32) {
-                            visited.add(parent as u32);
-                            queue.push_back(parent);
-                        }
-                        for referee in &inner.arena[index].referees {
-                            if !visited.contains(*referee as u32) {
-                                visited.add(*referee as u32);
-                                queue.push_back(*referee);
-                            }
-                        }
-                    }
-                }
-
-                // compute past_weight
-                if stable_genesis_subtree.contains(me as u32) {
-                    let parent = inner.arena[me].parent;
-                    if stable_genesis_subtree.contains(parent as u32) {
-                        inner.arena[me].past_weight = inner.arena[parent]
-                            .past_weight
-                            + inner.block_weight(parent);
-                    } else {
-                        inner.arena[me].past_weight = 0;
-                    }
-
-                    for index in &blockset {
-                        if stable_genesis_subtree.contains(*index as u32) {
-                            inner.arena[me].past_weight +=
-                                inner.block_weight(*index);
-                        }
-                    }
-                }
-
-                stack.push((1, me, blockset));
-                visited.add(me as u32);
-                for child in &inner.arena[me].children {
-                    if inner.arena[*child].data.active_cnt == 0 {
-                        stack.push((0, *child, Vec::new()));
-                    }
-                }
-            } else {
-                visited.remove(me as u32);
-                for index in blockset {
-                    visited.remove(index as u32);
-                }
-            }
-        }
-    }
-
     /// Note that there is an important assumption: the timer chain must have no
     /// block in the anticone of new_era_block_arena_index. If this is not
     /// true, it cannot become a checkpoint block
@@ -185,7 +92,6 @@ impl ConsensusNewBlockHandler {
         queue.push_back(new_era_block_arena_index);
         new_era_block_arena_index_set.insert(new_era_block_arena_index);
         while let Some(x) = queue.pop_front() {
-            inner.arena[x].past_weight = 0;
             for child in &inner.arena[x].children {
                 if !new_era_block_arena_index_set.contains(child) {
                     queue.push_back(*child);
@@ -212,11 +118,6 @@ impl ConsensusNewBlockHandler {
             new_era_block_arena_index_set
                 .difference(&new_era_genesis_subtree)
                 .collect();
-
-        ConsensusNewBlockHandler::recompute_stable_past_weight(
-            inner,
-            stable_era_genesis,
-        );
 
         // Now we topologically sort the blocks outside the era
         let mut outside_block_arena_indices = HashSet::new();

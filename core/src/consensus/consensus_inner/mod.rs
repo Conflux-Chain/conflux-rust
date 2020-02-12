@@ -375,8 +375,7 @@ pub struct ConsensusGraphNode {
     pub height: u64,
     is_heavy: bool,
     difficulty: U256,
-    /// The total weight of its past set (exclude itself)
-    past_weight: i128,
+    /// The total weight of its past set in the era (exclude itself)
     past_num_blocks: u64,
     /// The total weight of its past set in its own era
     past_era_weight: i128,
@@ -1285,7 +1284,6 @@ impl ConsensusGraphInner {
             height: block_header.height(),
             is_heavy: true,
             difficulty: *block_header.difficulty(),
-            past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             is_timer: false,
@@ -1411,7 +1409,6 @@ impl ConsensusGraphInner {
             height: my_height,
             is_heavy,
             difficulty: *block_header.difficulty(),
-            past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             is_timer,
@@ -1443,20 +1440,11 @@ impl ConsensusGraphInner {
 
         if parent != NULL {
             let era_genesis = self.get_era_genesis_block_with_parent(parent, 0);
-            let graph_era_stable_genesis =
-                self.ancestor_at(parent, self.cur_era_stable_height);
 
-            let weight_in_my_epoch = self.total_weight_in_own_epoch(
-                &self.arena[index].data.blockset_in_own_view_of_epoch,
-                graph_era_stable_genesis,
-            );
             let weight_era_in_my_epoch = self.total_weight_in_own_epoch(
                 &self.arena[index].data.blockset_in_own_view_of_epoch,
                 era_genesis,
             );
-            let past_weight = self.arena[parent].past_weight
-                + self.block_weight(parent)
-                + weight_in_my_epoch;
             let past_num_blocks = self.arena[parent].past_num_blocks
                 + self.arena[index].data.ordered_executable_epoch_blocks.len()
                     as u64;
@@ -1477,14 +1465,13 @@ impl ConsensusGraphInner {
                 true, /* persistent to db */
             );
 
-            self.arena[index].past_weight = past_weight;
             self.arena[index].past_num_blocks = past_num_blocks;
             self.arena[index].past_era_weight = past_era_weight;
         }
 
         debug!(
-            "Block {} inserted into Consensus with index={} past_weight={}",
-            hash, index, self.arena[index].past_weight
+            "Block {} inserted into Consensus with index={} past_era_weight={}",
+            hash, index, self.arena[index].past_era_weight
         );
 
         (index, self.hash_to_arena_indices.len())

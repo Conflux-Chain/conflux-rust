@@ -173,7 +173,8 @@ impl ConfirmationMeter {
         let w_2 = max_weight;
 
         // Compute w_3
-        let w_3 = g_inner.arena[idx].past_weight;
+        // FIXME: This was past_weight, we should revisit this later
+        let w_3 = g_inner.arena[idx].past_era_weight;
 
         // Compute d
         let d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
