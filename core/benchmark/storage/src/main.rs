@@ -37,8 +37,10 @@ const SYSTEM_ACCOUNT_SECRET_BYTES: &str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
 lazy_static! {
     static ref SYSTEM_ACCOUNT_SECRET: Secret = {
-        Secret::from_slice(&hexstr_to_h256(&SYSTEM_ACCOUNT_SECRET_BYTES))
-            .unwrap()
+        Secret::from_slice(
+            hexstr_to_h256(&SYSTEM_ACCOUNT_SECRET_BYTES).as_ref(),
+        )
+        .unwrap()
     };
 }
 
@@ -682,7 +684,9 @@ impl<RequestT: FIFOConsumerRequestTrait> FIFOConsumerThread<RequestT> {
 
     pub fn new_arc<ResultT: ResultTrait>(
         consumer_results: Arc<Mutex<FIFOConsumerResult<ResultT>>>,
-        mut processor: Box<FnMut(RequestT) -> (usize, ResultT) + Send + Sync>,
+        mut processor: Box<
+            dyn FnMut(RequestT) -> (usize, ResultT) + Send + Sync,
+        >,
     ) -> Arc<Mutex<FIFOConsumerThread<RequestT>>>
     {
         let (sender, receiver) = mpsc::sync_channel(10_000);
@@ -1520,7 +1524,7 @@ fn tx_extract<U: TxExtractor, T: Deref<Target = U> + Sync + Send + 'static>(
                 }
 
                 let mut to_parse = buffer.as_slice();
-                'parse: loop {
+                '_parse: loop {
                     // Try to parse rlp.
                     let payload_info_result = Rlp::new(to_parse).payload_info();
                     if payload_info_result.is_err() {
@@ -1589,41 +1593,20 @@ impl Drop for TxReplayer {
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
 
-    pub fn new(db_dir: &str, reset_db: bool) -> TxReplayer {
+    pub fn new(
+        conflux_data_dir: &str, reset_db: bool,
+    ) -> errors::Result<TxReplayer> {
         if reset_db {
-            match fs::remove_dir_all(db_dir) {
-                Ok(_) => {},
-                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {},
+            match fs::remove_dir_all(conflux_data_dir) {
+                Ok(_) => {}
+                Err(ref e) if e.kind() == io::ErrorKind::NotFound => {}
                 e @ Err(_) => e.unwrap(),
             }
         }
 
-        let db_config = db::db_config(
-            Path::new(db_dir),
-            None,
-            db::DatabaseCompactionProfile::SSD,
-            cfxcore::db::NUM_COLUMNS.clone(),
-        );
-
-        let db = db::open_database(db_dir, &db_config).unwrap();
-
         let storage_manager = Arc::new(StorageManager::new(
-            db,
-            StorageConfiguration {
-                //cache_start_size: 10_000,
-                cache_start_size:
-                    cfxcore::storage::defaults::DEFAULT_CACHE_START_SIZE,
-                //cache_size: 10_000,
-                cache_size: cfxcore::storage::defaults::DEFAULT_CACHE_SIZE,
-                //idle_size: 10_000,
-                idle_size: cfxcore::storage::defaults::DEFAULT_IDLE_SIZE,
-                //node_map_size: 10_000,
-                node_map_size:
-                    cfxcore::storage::defaults::DEFAULT_NODE_MAP_SIZE,
-                recent_lfu_factor:
-                    cfxcore::storage::defaults::DEFAULT_RECENT_LFU_FACTOR,
-            },
-        ));
+            StorageConfiguration::new_default(conflux_data_dir.to_string()),
+        )?);
 
         let exit: Arc<(Mutex<bool>, Condvar)> = Default::default();
 
@@ -1645,15 +1628,15 @@ impl TxReplayer {
             }
         });
 
-        TxReplayer {
+        Ok(TxReplayer {
             storage_manager,
             tx_counts: Cell::new(0),
             ops_counts: Cell::new(0),
             exit,
-        }
+        })
     }
 
-    pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> H256 {
+    pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> CfxH256 {
         warn!("Committing block at tx {}, ops {}.", txs, ops);
 
         let storage = latest_state.get_storage_mut();
@@ -1663,23 +1646,43 @@ impl TxReplayer {
         state_root
     }
 
-    pub fn add_tx<'a>(
-        &'a self, tx: RealizedEthTx, latest_state: &mut StateDb<'a>,
-        last_state_root: &mut H256,
+    pub fn add_tx(
+        &self, tx: RealizedEthTx, latest_state: &mut StateDb,
+        last_state_root: &mut CfxH256,
     )
     {
         if let Some(sender) = tx.sender {
-            let maybe_account = latest_state.get_account(&sender).unwrap();
+            let maybe_account = latest_state
+                .get_account(
+                    // Transmute between different version of ethereum-types
+                    // because conflux use a newer version
+                    unsafe { std::mem::transmute(&sender) },
+                )
+                .unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
             match maybe_account {
                 Some(mut account) => {
                     account.balance = account
                         .balance
-                        .overflowing_sub(tx.amount_wei + tx.tx_fee_wei)
+                        .overflowing_sub(
+                            // Transmute between different version of
+                            // ethereum-types because conflux use a newer
+                            // version
+                            unsafe {
+                                std::mem::transmute(
+                                    tx.amount_wei + tx.tx_fee_wei,
+                                )
+                            },
+                        )
                         .0;
                     latest_state
                         .set::<Account>(
-                            &StorageKey::new_account_key(&sender),
+                            StorageKey::new_account_key(
+                                // Transmute between different version of
+                                // ethereum-types because conflux use a newer
+                                // version
+                                unsafe { std::mem::transmute(&sender) },
+                            ),
                             &account,
                         )
                         .unwrap();
@@ -1691,24 +1694,52 @@ impl TxReplayer {
             }
         }
         if let Some(receiver) = tx.receiver {
-            let maybe_account = latest_state.get_account(&receiver).unwrap();
+            let maybe_account = latest_state
+                .get_account(
+                    // Transmute between different version of
+                    // ethereum-types because conflux use a newer
+                    // version
+                    unsafe { std::mem::transmute(&receiver) },
+                )
+                .unwrap();
             let mut account;
             match maybe_account {
                 Some(account_) => {
                     account = account_;
-                    account.balance =
-                        account.balance.overflowing_add(tx.amount_wei).0;
+                    account.balance = account
+                        .balance
+                        .overflowing_add(
+                            // Transmute between different version of
+                            // ethereum-types because conflux use a newer
+                            // version
+                            unsafe { std::mem::transmute(tx.amount_wei) },
+                        )
+                        .0;
                 }
                 _ => {
                     account = Account::new_empty_with_balance(
-                        &receiver,
-                        &tx.amount_wei, /* balance */
+                        // Transmute between different version of
+                        // ethereum-types because conflux use a newer
+                        // version
+                        unsafe { std::mem::transmute(&receiver) },
+                        // Transmute between different version of
+                        // ethereum-types because conflux use a newer
+                        // version
+                        unsafe { std::mem::transmute(&tx.amount_wei) }, /* balance */
                         &0.into(), /* nonce */
                     );
                 }
             }
             latest_state
-                .set::<Account>(&latest_state.account_key(&receiver), &account)
+                .set::<Account>(
+                    StorageKey::new_account_key(
+                        // Transmute between different version of
+                        // ethereum-types because conflux use a newer
+                        // version
+                        unsafe { std::mem::transmute(&receiver) },
+                    ),
+                    &account,
+                )
                 .unwrap();
             self.ops_counts.set(self.ops_counts.get() + 2);
         }
@@ -1722,9 +1753,11 @@ impl TxReplayer {
             );
             *latest_state = StateDb::new(
                 self.storage_manager
-                    .get_state_for_next_epoch(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
-                        last_state_root,
-                    ))
+                    .get_state_for_next_epoch(
+                        StateIndex::new_for_test_only_delta_mpt(
+                            last_state_root,
+                        ),
+                    )
                     .unwrap()
                     .unwrap(),
             );
@@ -1734,9 +1767,9 @@ impl TxReplayer {
 
 fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let tx_replayer = TxReplayer::new(
-        matches.value_of("storage_db_dir").unwrap(),
+        matches.value_of("conflux_data_dir").unwrap(),
         matches.occurrences_of("reset_db") > 0,
-    );
+    )?;
 
     let txs_to_process = match matches.value_of("txs_to_process") {
         None => None,
@@ -1752,7 +1785,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let mut last_state_root;
 
     if matches.occurrences_of("reset_db") > 0 {
-        last_state_root = H256::default();
+        last_state_root = CfxH256::default();
         latest_state = StateDb::new(
             tx_replayer.storage_manager.get_state_for_genesis_write(),
         );
@@ -1761,7 +1794,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             hexstr_to_h256(&matches.value_of("last_state_root").unwrap());
         let true_state_root = tx_replayer
             .storage_manager
-            .get_state_no_commit(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
+            .get_state_no_commit(StateIndex::new_for_test_only_delta_mpt(
                 &last_state_root,
             ))
             .unwrap()
@@ -1772,9 +1805,9 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
         latest_state = StateDb::new(
             tx_replayer
                 .storage_manager
-                .get_state_for_next_epoch(SnapshotAndEpochIdRef::new_for_test_only_delta_mpt(
-                    &last_state_root,
-                ))
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_test_only_delta_mpt(&last_state_root),
+                )
                 .unwrap()
                 .unwrap(),
         );
@@ -1835,7 +1868,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                 }
 
                 let mut to_parse = buffer.as_slice();
-                'parse: loop {
+                '_parse: loop {
                     // Try to parse rlp.
                     let payload_info_result = Rlp::new(to_parse).payload_info();
                     if payload_info_result.is_err() {
@@ -1948,9 +1981,9 @@ fn main() -> errors::Result<()> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("storage_db_dir")
-                .value_name("storage db dir")
-                .help("storage db dir")
+            Arg::with_name("conflux_data_dir")
+                .value_name("Conflux data dir")
+                .help("Conflux data dir")
                 .short("d")
                 .takes_value(true),
         )
@@ -2025,11 +2058,12 @@ fn main() -> errors::Result<()> {
     }
 }
 
+use cfx_types::{hexstr_to_h256, H256 as CfxH256};
 use cfxcore::{
     statedb::StateDb,
     storage::{
-        state_manager::StorageConfiguration, SnapshotAndEpochIdRef,
-        StorageManager, StorageManagerTrait, StorageTrait,
+        state::StateTrait, StateIndex, StorageConfiguration, StorageManager,
+        StorageManagerTrait,
     },
 };
 use clap::{App, Arg, ArgMatches};
@@ -2050,7 +2084,7 @@ use heapsize::HeapSizeOf;
 use lazy_static::*;
 use log::*;
 use parking_lot::{Condvar, Mutex};
-use primitives::Account;
+use primitives::{Account, StorageKey};
 use rlp::{Decodable, *};
 use std::{
     cell::Cell,
@@ -2061,7 +2095,6 @@ use std::{
     marker::{Send, Sync},
     mem,
     ops::{Deref, Shr},
-    path::Path,
     slice,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -2071,4 +2104,3 @@ use std::{
     time::Duration,
     vec::Vec,
 };
-use cfx_types::hexstr_to_h256;
