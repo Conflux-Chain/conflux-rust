@@ -1339,7 +1339,7 @@ impl ConsensusNewBlockHandler {
             ConsensusNewBlockHandler::make_checkpoint_at(
                 inner,
                 new_checkpoint_era_genesis,
-                has_transactions,
+                has_transactions && !self.conf.bench_mode,
                 &self.executor,
             );
             let stable_era_genesis_arena_index =
