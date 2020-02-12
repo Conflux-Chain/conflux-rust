@@ -69,6 +69,8 @@ pub struct ConsensusGraphNodeData {
     /// A normal block which referenced directly or indirectly will have a
     /// positive counter
     active_cnt: usize,
+    /// This records the force confirm point in the past view of this block.
+    force_confirm: usize,
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
@@ -104,6 +106,7 @@ impl ConsensusGraphNodeData {
             partial_invalid: false,
             pending: false,
             active_cnt,
+            force_confirm: NULL,
             blockset_in_own_view_of_epoch: Default::default(),
             ordered_executable_epoch_blocks: Default::default(),
             blockset_cleared: false,
@@ -1873,6 +1876,11 @@ impl ConsensusGraphInner {
         self.cur_era_genesis_height + self.pivot_chain.len() as u64 - 1
     }
 
+    pub fn best_timer_chain_height(&self) -> u64 {
+        self.cur_era_genesis_timer_chain_height + self.timer_chain.len() as u64
+            - 1
+    }
+
     fn get_arena_index_from_epoch_number(
         &self, epoch_number: u64,
     ) -> Result<usize, String> {
@@ -2832,7 +2840,7 @@ impl ConsensusGraphInner {
 
     /// FIXME Use snapshot-related information when we can sync snapshot states.
     /// Return the latest height that a snapshot should be available.
-    fn latest_snapshot_height(&self) -> u64 { self.cur_era_genesis_height }
+    fn latest_snapshot_height(&self) -> u64 { self.cur_era_stable_height }
 
     fn collect_defer_blocks_missing_execution_commitments(
         &self, me: usize,
