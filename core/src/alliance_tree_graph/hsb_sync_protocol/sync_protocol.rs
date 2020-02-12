@@ -375,6 +375,7 @@ fn handle_message<'a, M, P>(
     ctx: &Context<P>, msg: &'a [u8],
 ) -> Result<(), Error>
 where M: Deserialize<'a> + Handleable<P> + Message {
+    let msg = &msg[0..msg.len() - 1];
     let msg: M = lcs::from_bytes(msg)?;
 
     let msg_id = msg.msg_id();

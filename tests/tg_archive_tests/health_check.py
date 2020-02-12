@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-sys.path.insert(1, os.path.dirname(sys.path[0]))
-from test_framework.util import *
-from test_framework.mininode import *
-from test_framework.test_framework import ConfluxTestFramework
-from conflux.rpc import RpcClient
 import random
 import threading
 import json
@@ -15,6 +10,13 @@ import rlp
 import sys
 import os
 import time
+
+sys.path.insert(1, os.path.dirname(sys.path[0]))
+
+from conflux.rpc import RpcClient
+from test_framework.util import *
+from test_framework.mininode import *
+from test_framework.test_framework import ConfluxTestFramework
 
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
