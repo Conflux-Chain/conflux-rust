@@ -1216,17 +1216,6 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        // Now we can safely return
-        //        if !fully_valid || pending {
-        //            self.persist_terminal_and_block_info(
-        //                inner,
-        //                me,
-        //                block_status,
-        //                transactions.is_some(),
-        //            );
-        //            return;
-        //        }
-
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
                 let fork_at_pivot_index = inner.height_to_pivot_index(fork_at);
