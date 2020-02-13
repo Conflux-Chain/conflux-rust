@@ -737,7 +737,7 @@ class BFTLivenessPredicate(Predicate):
 
     def __call__(self, snapshots, stopped_peers):
         for (i, snapshot) in enumerate(snapshots):
-            if i in stopped_peers:
+            if i in stopped_peers or snapshot.bft.last_commited is None:
                 continue
             now = time.time()
             if now - snapshot.bft.last_commited.received_timestamp > self.timeout:

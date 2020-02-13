@@ -375,9 +375,7 @@ fn handle_message<'a, M, P>(
     ctx: &Context<P>, msg: &'a [u8],
 ) -> Result<(), Error>
 where M: Deserialize<'a> + Handleable<P> + Message {
-    let msg = &msg[0..msg.len() - 1];
     let msg: M = lcs::from_bytes(msg)?;
-
     let msg_id = msg.msg_id();
     let msg_name = msg.msg_name();
     let req_id = msg.get_request_id();
@@ -419,7 +417,8 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
         let msg_id = raw[len - 1];
         debug!("on_message: peer={:?}, msgid={:?}", peer, msg_id);
 
-        self.dispatch_message(io, peer, msg_id.into(), raw)
+        let msg = &raw[0..raw.len() - 1];
+        self.dispatch_message(io, peer, msg_id.into(), msg)
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
     }
 

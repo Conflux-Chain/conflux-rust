@@ -41,7 +41,7 @@ impl<P: Payload> Handleable<P> for ProposalUncheckedSignatures<P> {
                 &ctx.manager.network_task.epoch_info.read().unwrap().verifier,
             )?
             .verify_well_formed()?;
-        debug!("Received proposal {:?}", proposal);
+
         ctx.manager
             .network_task
             .proposal_tx

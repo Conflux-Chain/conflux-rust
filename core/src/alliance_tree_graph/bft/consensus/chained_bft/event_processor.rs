@@ -482,11 +482,13 @@ where
         let self_author = AccountAddress::new(
             self.network.protocol_handler.own_node_hash.into(),
         );
+
         self.broadcast(&timeout_vote_msg, &self_author);
         self.network
             .protocol_handler
             .network_task
-            .process_vote(self_author, timeout_vote_msg);
+            .process_vote(self_author, timeout_vote_msg)
+            .await;
         //self.network.broadcast_vote(timeout_vote_msg).await
     }
 
