@@ -147,10 +147,12 @@ impl StateComputer for ExecutionProxy {
 
         let mut committed_blocks = Vec::new();
         for (_, output) in &committable_blocks {
-            if let Some(p) = output.pivot_block.as_ref() {
+            if output.pivot_updated {
+                let p = output.pivot_block.as_ref().unwrap();
                 committed_blocks.push(p.block_hash);
             }
         }
+
         self.tg_sync.on_commit_blocks(&committed_blocks);
 
         self.executor
