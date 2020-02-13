@@ -20,14 +20,16 @@ use block_retrieval::BlockRetrievalRpcRequest;
 use block_retrieval_response::BlockRetrievalRpcResponse;
 use libra_types::validator_change::ValidatorChangeProof;
 
+// FIXME: A temporary workaround by avoiding msg_id overlapping
+// with SynchronizationProtocolHandler msg_id.
 build_msgid! {
-    PROPOSAL = 0x00
-    VOTE = 0x01
-    SYNC_INFO = 0x02
-    BLOCK_RETRIEVAL = 0x03
-    BLOCK_RETRIEVAL_RESPONSE = 0x4
-    EPOCH_CHANGE = 0x5
-    EPOCH_RETRIEVAL = 0x6
+    PROPOSAL = 0x50
+    VOTE = 0x51
+    SYNC_INFO = 0x52
+    BLOCK_RETRIEVAL = 0x53
+    BLOCK_RETRIEVAL_RESPONSE = 0x54
+    EPOCH_CHANGE = 0x55
+    EPOCH_RETRIEVAL = 0x56
     INVALID = 0xff
 }
 
