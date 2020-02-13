@@ -40,7 +40,9 @@ class GHASTTest(ConfluxTestFramework):
 
         self.log.info("Sync two nodes")
         connect_nodes(self.nodes, 0, 1)
-        sync_blocks(self.nodes)
+        wait_until(lambda: self.nodes[1].getblockcount() >= 3, timeout = 10)
+        self.log.info("Node0 block count " + str(self.nodes[0].getblockcount()))
+        self.log.info("Node1 block count " + str(self.nodes[1].getblockcount()))
 
         self.log.info("Generating a block without referencing partial invalid blocks")
 
@@ -50,8 +52,9 @@ class GHASTTest(ConfluxTestFramework):
         assert(len(block_b1['refereeHashes']) == 0)
 
         self.log.info("Sync two nodes")
-        connect_nodes(self.nodes, 0, 1)
-        sync_blocks(self.nodes)
+        connect_nodes(self.nodes, 1, 0)
+        wait_until(lambda: self.nodes[0].getblockcount() >= 6, timeout = 40)
+        wait_until(lambda: self.nodes[1].getblockcount() >= 4, timeout = 40)
 
         timer_cnt = 0
         diff = int(block_b1['difficulty'], 16)
