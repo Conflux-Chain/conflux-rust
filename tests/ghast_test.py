@@ -11,20 +11,25 @@ INITIAL_DIFFICULTY = 2000
 class GHASTTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 1
-        self.conf_parameters["adaptive_weight_beta"] = 1
+        self.num_nodes = 2
+        self.conf_parameters["timer_chain_beta"] = 20
         self.conf_parameters["initial_difficulty"] = INITIAL_DIFFICULTY
 
     def setup_network(self):
         self.setup_nodes()
 
     def run_test(self):
+        connect_nodes(self.nodes, 0, 1)
         client0 = RpcClient(self.nodes[0])
         genesis = client0.best_block_hash()
         # print(client0.block_by_hash(genesis))
 
         a = self.nodes[0].generatefixedblock(genesis, [], 0, False, INITIAL_DIFFICULTY)
+        b = self.node
         block_a = client0.block_by_hash(a)
+        diff = int(block_a['difficulty'], 16)
+        powq = int(block_a['powQuality'], 16)
+        print(diff, " ", powq, " ", diff * 3)
         assert(block_a['stable'] == True)
         b = self.nodes[0].generatefixedblock(a, [], 0, False, INITIAL_DIFFICULTY)
         c = self.nodes[0].generatefixedblock(genesis, [], 0, False, INITIAL_DIFFICULTY)
