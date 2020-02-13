@@ -1585,8 +1585,7 @@ impl ConsensusNewBlockHandler {
                     } else {
                         inner.arena[last_index].timer_chain_height
                             + inner.inner_conf.timer_chain_beta
-                            + if inner.arena[last_index].is_timer
-                                && !inner.arena[last_index].data.partial_invalid
+                            + if inner.get_timer_chain_index(last_index) != NULL
                             {
                                 1
                             } else {
@@ -1637,7 +1636,7 @@ impl ConsensusNewBlockHandler {
                 // queue Activate them if the timer is
                 // up
                 let timer = if let Some(x) = inner.timer_chain.last() {
-                    inner.arena[*x].timer_chain_height
+                    inner.arena[*x].timer_chain_height + 1
                 } else {
                     inner.cur_era_genesis_timer_chain_height
                 };
@@ -1650,10 +1649,10 @@ impl ConsensusNewBlockHandler {
                         break;
                     }
                     let (_, x) = inner.invalid_block_queue.pop().unwrap();
-                    assert!(inner.arena[me].data.active_cnt == NULL);
-                    inner.arena[me].data.active_cnt = 0;
+                    assert!(inner.arena[x].data.active_cnt == NULL);
+                    inner.arena[x].data.active_cnt = 0;
                     let transactions =
-                        inner.transaction_caches.remove(&me).unwrap();
+                        inner.transaction_caches.remove(&x).unwrap();
                     self.activate_block(
                         inner,
                         x,
