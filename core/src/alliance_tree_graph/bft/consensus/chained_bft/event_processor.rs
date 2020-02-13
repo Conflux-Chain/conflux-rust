@@ -476,6 +476,7 @@ where
         let self_author = AccountAddress::new(
             self.network.protocol_handler.own_node_hash.into(),
         );
+
         self.broadcast(&timeout_vote_msg, &self_author);
         self.network
             .protocol_handler
