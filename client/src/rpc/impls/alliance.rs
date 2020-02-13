@@ -18,45 +18,41 @@ use crate::rpc::{
 };
 use cfx_types::H256;
 use cfxcore::{
-    alliance_tree_graph::{
-        blockgen::TGBlockGenerator, consensus::TreeGraphConsensus,
-    },
-    state_exposer::STATE_EXPOSER,
-    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    alliance_tree_graph::blockgen::TGBlockGenerator,
+    state_exposer::STATE_EXPOSER, PeerInfo, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{SignedTransaction, TransactionWithSignature};
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use txgen::SharedTransactionGenerator;
 
 pub struct RpcImpl {
-    config: RpcImplConfiguration,
+    //config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
-    block_gen: Arc<TGBlockGenerator>,
-    tx_pool: SharedTransactionPool,
-    // tx_gen: Arc<TransactionGenerator>,
+    /* block_gen: Arc<TGBlockGenerator>,
+     *tx_pool: SharedTransactionPool,
+     * tx_gen: SharedTransactionGenerator, */
 }
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
-        /* tx_gen: Arc<TransactionGenerator>, */
-        config: RpcImplConfiguration,
+        _block_gen: Arc<TGBlockGenerator>, _tx_pool: SharedTransactionPool,
+        _tx_gen: SharedTransactionGenerator, _config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
             consensus,
             sync,
-            block_gen,
-            tx_pool,
-            // tx_gen,
-            config,
+            /*block_gen,
+             *tx_pool,
+             *tx_gen,
+             *config, */
         }
     }
 
@@ -83,12 +79,14 @@ impl RpcImpl {
 
 pub struct CfxHandler {
     common: Arc<CommonImpl>,
-    rpc_impl: Arc<RpcImpl>,
+    //rpc_impl: Arc<RpcImpl>,
 }
 
 impl CfxHandler {
-    pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
-        CfxHandler { common, rpc_impl }
+    pub fn new(common: Arc<CommonImpl>, _rpc_impl: Arc<RpcImpl>) -> Self {
+        CfxHandler {
+            common, /* , rpc_impl */
+        }
     }
 }
 
@@ -130,12 +128,14 @@ impl Cfx for CfxHandler {
 
 pub struct TestRpcImpl {
     common: Arc<CommonImpl>,
-    rpc_impl: Arc<RpcImpl>,
+    //rpc_impl: Arc<RpcImpl>,
 }
 
 impl TestRpcImpl {
-    pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
-        TestRpcImpl { common, rpc_impl }
+    pub fn new(common: Arc<CommonImpl>, _rpc_impl: Arc<RpcImpl>) -> Self {
+        TestRpcImpl {
+            common, /* , rpc_impl */
+        }
     }
 }
 

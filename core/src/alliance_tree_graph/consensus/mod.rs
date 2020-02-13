@@ -13,10 +13,7 @@ use super::consensus::consensus_inner::{
 };
 
 use crate::{
-    block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch,
-        EpochExecutionCommitment,
-    },
+    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::{BestInformation, ConsensusGraphTrait},
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
@@ -26,12 +23,10 @@ use crate::{
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
-    sync::Error,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, Bloom, H256, U256};
-use futures::channel::oneshot;
 use libra_types::block_info::PivotBlockDecision;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::PeerId;
@@ -797,7 +792,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
     }
 
     fn get_trusted_blame_block_for_snapshot(
-        &self, snapshot_epoch_id: &EpochId,
+        &self, _snapshot_epoch_id: &EpochId,
     ) -> Option<H256> {
         None
     }
@@ -807,12 +802,12 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
         self.inner.read().get_to_sync_epoch_id()
     }
 
-    fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
+    fn get_trusted_blame_block(&self, _stable_hash: &H256) -> Option<H256> {
         None
     }
 
     fn first_trusted_header_starting_from(
-        &self, height: u64, blame_bound: Option<u32>,
+        &self, _height: u64, _blame_bound: Option<u32>,
     ) -> Option<u64> {
         None
     }
@@ -822,8 +817,10 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
     }
 
     fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
-    ) -> bool {
+        &self, _parent_hash: &H256, _referees: &mut Vec<H256>,
+        _difficulty: &U256,
+    ) -> bool
+    {
         true
     }
 

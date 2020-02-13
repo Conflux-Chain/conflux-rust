@@ -6,13 +6,12 @@ use super::{
     consensus_types::{block::Block, executed_block::ExecutedBlock},
 };
 use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::{
-    HotStuffSynchronizationProtocol, PeerState, Peers,
+    PeerState, Peers,
 };
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
-use crate::{
-    alliance_tree_graph::consensus::TreeGraphConsensus,
-    sync::{request_manager::RequestManager, SharedSynchronizationService},
+use crate::sync::{
+    request_manager::RequestManager, SharedSynchronizationService,
 };
 use cfx_types::H256;
 use libra_types::{
@@ -21,7 +20,6 @@ use libra_types::{
     transaction::SignedTransaction,
 };
 use network::NetworkService;
-use primitives::TransactionWithSignature;
 use std::sync::Arc;
 
 pub trait TxnTransformer: Send + Sync + Clone + 'static {

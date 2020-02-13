@@ -36,42 +36,32 @@ use crate::{
     errors::LibraDbError,
     ledger_counters::LedgerCounters,
     ledger_store::LedgerStore,
-    pruner::Pruner,
     schema::*,
-    system_store::SystemStore,
     transaction_store::TransactionStore,
 };
 use anyhow::{bail, ensure, Result};
-use itertools::{izip, zip_eq};
 use lazy_static::lazy_static;
-use libra_crypto::hash::{CryptoHash, HashValue};
+use libra_crypto::hash::HashValue;
 use libra_metrics::OpMetrics;
 use libra_types::{
     access_path::AccessPath,
     account_address::AccountAddress,
-    account_config::AccountResource,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
     contract_event::EventWithProof,
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
     get_with_proof::{RequestItem, ResponseItem},
-    proof::{
-        AccountStateProof, AccumulatorConsistencyProof, EventProof,
-        SparseMerkleProof, TransactionListProof, TransactionProof,
-    },
+    proof::{AccumulatorConsistencyProof, SparseMerkleProof},
     transaction::{
-        TransactionInfo, TransactionListWithProof, TransactionToCommit,
-        TransactionWithProof, Version,
+        TransactionListWithProof, TransactionToCommit, TransactionWithProof,
+        Version,
     },
 };
-use num_traits::real::Real;
 use prometheus::{IntCounter, IntGauge, IntGaugeVec};
 use schemadb::{
     ColumnFamilyOptions, ColumnFamilyOptionsMap, DB, DEFAULT_CF_NAME,
 };
-use std::{
-    convert::TryInto, iter::Iterator, path::Path, sync::Arc, time::Instant,
-};
-use storage_proto::{StartupInfo, TreeState};
+use std::{iter::Iterator, path::Path, sync::Arc, time::Instant};
+use storage_proto::StartupInfo;
 
 lazy_static! {
     static ref OP_COUNTER: OpMetrics = OpMetrics::new_and_registered("storage");
@@ -98,7 +88,7 @@ lazy_static! {
     ).unwrap();
 }
 
-const MAX_LIMIT: u64 = 1000;
+// const MAX_LIMIT: u64 = 1000;
 const MAX_REQUEST_ITEMS: u64 = 100;
 
 // TODO: Either implement an iteration API to allow a very old client to loop
@@ -123,13 +113,13 @@ pub struct LibraDB {
     db: Arc<DB>,
     ledger_store: LedgerStore,
     transaction_store: TransactionStore,
-    system_store: SystemStore,
-    pruner: Pruner,
+    /* system_store: SystemStore,
+     * pruner: Pruner, */
 }
 
 impl LibraDB {
     /// Config parameter for the pruner.
-    const NUM_HISTORICAL_VERSIONS_TO_KEEP: u64 = 1_000_000;
+    //const NUM_HISTORICAL_VERSIONS_TO_KEEP: u64 = 1_000_000;
 
     /// This creates an empty LibraDB instance on disk or opens one if it
     /// already exists.
@@ -180,11 +170,11 @@ impl LibraDB {
             db: Arc::clone(&db),
             ledger_store: LedgerStore::new(Arc::clone(&db)),
             transaction_store: TransactionStore::new(Arc::clone(&db)),
-            system_store: SystemStore::new(Arc::clone(&db)),
+            /* system_store: SystemStore::new(Arc::clone(&db)),
             pruner: Pruner::new(
                 Arc::clone(&db),
                 Self::NUM_HISTORICAL_VERSIONS_TO_KEEP,
-            ),
+            ),*/
         }
     }
 
@@ -193,8 +183,8 @@ impl LibraDB {
     /// Returns the account state corresponding to the given version and account
     /// address with proof based on `ledger_version`
     fn get_account_state_with_proof(
-        &self, address: AccountAddress, version: Version,
-        ledger_version: Version,
+        &self, _address: AccountAddress, _version: Version,
+        _ledger_version: Version,
     ) -> Result<AccountStateWithProof>
     {
         /*
@@ -233,8 +223,8 @@ impl LibraDB {
     /// emitted after `start_event_seq_num`. Otherwise, it will return up to
     /// `limit` events in the reverse order. Both cases are inclusive.
     fn get_events_by_query_path(
-        &self, query_path: &AccessPath, start_seq_num: u64, ascending: bool,
-        limit: u64, ledger_version: Version,
+        &self, _query_path: &AccessPath, _start_seq_num: u64, _ascending: bool,
+        _limit: u64, _ledger_version: Version,
     ) -> Result<(Vec<EventWithProof>, AccountStateWithProof)>
     {
         /*
@@ -337,6 +327,7 @@ impl LibraDB {
     }
 
     /// Gets the latest version number available in the ledger.
+    #[allow(dead_code)]
     fn get_latest_version(&self) -> Result<Version> {
         Ok(self
             .ledger_store
@@ -370,7 +361,7 @@ impl LibraDB {
         }
 
         // Persist.
-        let (sealed_cs, counters) =
+        let (sealed_cs, _counters) =
             self.seal_change_set(/* first_version, num_txns, */ 0, 0, cs)?;
         self.commit(sealed_cs)?;
         // Once everything is successfully persisted, update the latest
@@ -474,9 +465,10 @@ impl LibraDB {
     }
     */
 
+    #[allow(dead_code)]
     fn save_transactions_impl(
-        &self, txns_to_commit: &[TransactionToCommit], first_version: u64,
-        mut cs: &mut ChangeSet,
+        &self, _txns_to_commit: &[TransactionToCommit], _first_version: u64,
+        mut _cs: &mut ChangeSet,
     ) -> Result<HashValue>
     {
         /*
@@ -696,7 +688,7 @@ impl LibraDB {
     ///
     /// This is used by libra core (executor) internally.
     pub fn get_account_state_with_proof_by_version(
-        &self, address: AccountAddress, version: Version,
+        &self, _address: AccountAddress, _version: Version,
     ) -> Result<(Option<AccountStateBlob>, SparseMerkleProof)> {
         /*
         self.state_store
@@ -708,7 +700,7 @@ impl LibraDB {
     /// Given an account address, returns the latest account state. `None` if
     /// the account does not exist.
     pub fn get_latest_account_state(
-        &self, address: AccountAddress,
+        &self, _address: AccountAddress,
     ) -> Result<Option<AccountStateBlob>> {
         /*
         let ledger_info_with_sigs = self.ledger_store.get_latest_ledger_info()?;
@@ -803,8 +795,8 @@ impl LibraDB {
     ///
     /// This is used by the State Synchronizer module internally.
     pub fn get_transactions(
-        &self, start_version: Version, limit: u64, ledger_version: Version,
-        fetch_events: bool,
+        &self, _start_version: Version, _limit: u64, _ledger_version: Version,
+        _fetch_events: bool,
     ) -> Result<TransactionListWithProof>
     {
         /*
@@ -854,7 +846,7 @@ impl LibraDB {
     // ===================================
     /// Gets an iterator which can yield all accounts in the state tree.
     pub fn get_account_iter(
-        &self, version: Version,
+        &self, _version: Version,
     ) -> Result<
         Box<dyn Iterator<Item = Result<(HashValue, AccountStateBlob)>> + Send>,
     > {
@@ -868,7 +860,7 @@ impl LibraDB {
     /// Specifically, counter increases are added to current counter values and
     /// converted to DB alternations.
     fn seal_change_set(
-        &self, _first_version: Version, _num_txns: Version, mut cs: ChangeSet,
+        &self, _first_version: Version, _num_txns: Version, cs: ChangeSet,
     ) -> Result<(SealedChangeSet, Option<LedgerCounters>)> {
         /*
         // Avoid reading base counter values when not necessary.
@@ -916,7 +908,7 @@ impl LibraDB {
     }
 
     fn get_transaction_with_proof(
-        &self, version: Version, ledger_version: Version, fetch_events: bool,
+        &self, _version: Version, _ledger_version: Version, _fetch_events: bool,
     ) -> Result<TransactionWithProof> {
         /*
         let proof = {
@@ -946,6 +938,7 @@ impl LibraDB {
 }
 
 // Convert requested range and order to a range in ascending order.
+#[allow(dead_code)]
 fn get_first_seq_num_and_limit(
     ascending: bool, cursor: u64, limit: u64,
 ) -> Result<(u64, u64)> {

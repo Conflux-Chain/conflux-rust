@@ -80,7 +80,6 @@ impl<Sig: RawSignature> From<Sig> for SignatureWrapper<Sig> {
 // types that do not go through the instantiated polymorphic structures
 // below is banned.
 
-use libra_crypto::ed25519::*;
 use std::{collections::BTreeMap, fmt};
 
 // used in chained_bft::consensus_types::block_test

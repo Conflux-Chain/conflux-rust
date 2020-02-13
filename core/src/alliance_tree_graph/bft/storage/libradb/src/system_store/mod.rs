@@ -20,12 +20,14 @@ pub(crate) struct SystemStore {
 }
 
 impl SystemStore {
+    #[allow(dead_code)]
     pub fn new(db: Arc<DB>) -> Self { Self { db } }
 
     /// Increase ledger counters.
     ///
     /// The base values are read out of db, to which the `diff` is combined to,
     /// and the result is stored to the db, keyed by `last_version`.
+    #[allow(dead_code)]
     pub fn bump_ledger_counters(
         &self, first_version: Version, last_version: Version,
         bumps: LedgerCounterBumps, batch: &mut SchemaBatch,

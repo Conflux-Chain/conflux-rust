@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::{
-        NetworkPeersConfig, PersistableConfig, RootPath, SafetyRulesConfig,
-    },
+    config::{PersistableConfig, RootPath, SafetyRulesConfig},
     keys::{self, KeyPair},
     utils,
 };

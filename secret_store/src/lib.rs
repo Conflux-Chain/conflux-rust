@@ -4,11 +4,9 @@
 
 extern crate ethkey as keylib;
 extern crate parking_lot;
-extern crate rustc_hex;
 
 use keylib::KeyPair;
 use parking_lot::RwLock;
-use rustc_hex::ToHex;
 use std::{collections::HashMap, sync::Arc};
 
 pub struct StoreInner {

@@ -21,7 +21,7 @@ use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parity_bytes::ToPretty;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use primitives::{
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,

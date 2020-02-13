@@ -47,6 +47,7 @@ impl TransactionStore {
     }
 
     /// Get signed transaction given `version`
+    #[allow(dead_code)]
     pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
         self.db.get::<TransactionSchema>(&version)?.ok_or_else(|| {
             LibraDbError::NotFound(format!("Txn {}", version)).into()
@@ -54,6 +55,7 @@ impl TransactionStore {
     }
 
     /// Save signed transaction at `version`
+    #[allow(dead_code)]
     pub fn put_transaction(
         &self, version: Version, transaction: &Transaction, cs: &mut ChangeSet,
     ) -> Result<()> {

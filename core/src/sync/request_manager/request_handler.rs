@@ -8,7 +8,6 @@ use crate::{
         Error, ErrorKind,
     },
 };
-use bytes::Bytes;
 use futures::channel::oneshot;
 use network::{NetworkContext, PeerId, UpdateNodeOperation};
 use parking_lot::Mutex;
@@ -408,8 +407,10 @@ pub trait Request: Send + Debug + AsAny + Message {
 
     /// This is for RPC request. Set the notification handle for the request.
     fn set_response_notification(
-        &mut self, res_tx: oneshot::Sender<Result<Box<dyn RpcResponse>, Error>>,
-    ) {
+        &mut self,
+        _res_tx: oneshot::Sender<Result<Box<dyn RpcResponse>, Error>>,
+    )
+    {
     }
 }
 
@@ -449,7 +450,7 @@ impl RequestMessage {
     }
 
     pub fn downcast_mut<T: Request + Any>(
-        &mut self, io: &dyn NetworkContext, request_manager: &RequestManager,
+        &mut self, _io: &dyn NetworkContext, _request_manager: &RequestManager,
     ) -> Result<&mut T, Error> {
         match self.request.as_any_mut().downcast_mut::<T>() {
             Some(req) => Ok(req),

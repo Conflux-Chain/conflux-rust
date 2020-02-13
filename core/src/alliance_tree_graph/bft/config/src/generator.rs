@@ -4,13 +4,9 @@
 //! Convenience structs and functions for generating a random set of Libra ndoes
 //! without the genesis.blob.
 
-use crate::{
-    config::{
-        ConsensusPeerInfo, ConsensusPeersConfig, NetworkPeersConfig,
-        NodeConfig, OnDiskStorageConfig, SafetyRulesBackend, SeedPeersConfig,
-        VMPublishingOption,
-    },
-    utils,
+use crate::config::{
+    ConsensusPeerInfo, ConsensusPeersConfig, NodeConfig, OnDiskStorageConfig,
+    SafetyRulesBackend,
 };
 use rand::{rngs::StdRng, SeedableRng};
 
@@ -18,7 +14,6 @@ pub fn validator_swarm(
     template: &NodeConfig, nodes: usize, seed: [u8; 32], randomize_ports: bool,
 ) -> Vec<NodeConfig> {
     let mut rng = StdRng::from_seed(seed);
-    let mut network_peers = NetworkPeersConfig::default();
     let mut consensus_peers = ConsensusPeersConfig::default();
     let mut configs = Vec::new();
 

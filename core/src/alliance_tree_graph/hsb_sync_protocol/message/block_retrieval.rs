@@ -17,13 +17,11 @@ use crate::{
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
-use bytes::Bytes;
 use cfx_types::H256;
 use futures::channel::oneshot;
 use libra_types::account_address::AccountAddress;
-use primitives::TransactionWithSignature;
 use serde::{Deserialize, Serialize};
-use std::{any::Any, sync::Arc, time::Duration};
+use std::{any::Any, time::Duration};
 
 //#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,7 +44,9 @@ impl AsAny for BlockRetrievalRpcRequest {
 }
 
 impl Request for BlockRetrievalRpcRequest {
-    fn timeout(&self, conf: &ProtocolConfiguration) -> Duration { self.timeout }
+    fn timeout(&self, _conf: &ProtocolConfiguration) -> Duration {
+        self.timeout
+    }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
         let mut inflight_keys = inflight_keys.write(self.msg_id());
@@ -69,14 +69,16 @@ impl Request for BlockRetrievalRpcRequest {
     fn notify_empty(&mut self) {
         let res_tx = self.response_tx.take();
         if let Some(tx) = res_tx {
-            tx.send(Err(ErrorKind::RpcCancelledByEmpty.into()));
+            tx.send(Err(ErrorKind::RpcCancelledByEmpty.into()))
+                .expect("send ResponseTX EmptyError should succeed");
         }
     }
 
     fn notify_timeout(&mut self) {
         let res_tx = self.response_tx.take();
         if let Some(tx) = res_tx {
-            tx.send(Err(ErrorKind::RpcTimeout.into()));
+            tx.send(Err(ErrorKind::RpcTimeout.into()))
+                .expect("send ResponseTX TimeoutError should succeed");
         }
     }
 

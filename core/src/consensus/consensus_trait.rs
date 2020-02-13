@@ -8,13 +8,10 @@ use crate::{
     transaction_pool::SharedTransactionPool,
 };
 
-use cfx_types::{Bloom, H160, H256, U256};
+use cfx_types::{H256, U256};
 use primitives::{
-    epoch::BlockHashOrEpochNumber,
-    filter::{Filter, FilterError},
-    log_entry::{LocalizedLogEntry, LogEntry},
-    receipt::Receipt,
-    Account, EpochId, EpochNumber, SignedTransaction, TransactionAddress,
+    receipt::Receipt, EpochId, EpochNumber, SignedTransaction,
+    TransactionAddress,
 };
 use std::{any::Any, sync::Arc};
 

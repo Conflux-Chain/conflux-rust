@@ -344,7 +344,6 @@ impl Executor {
 
                     vm_outputs.push(output);
                 }
-                _ => bail!("Wrong transaction type"),
             }
         }
 
@@ -374,7 +373,7 @@ impl Executor {
     /// Commits a block and all its ancestors in a batch manner. Returns
     /// `Ok(())` if successful.
     pub fn commit_blocks(
-        &self, blocks: Vec<(Vec<Transaction>, Arc<ProcessedVMOutput>)>,
+        &self, _blocks: Vec<(Vec<Transaction>, Arc<ProcessedVMOutput>)>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<()>
     {

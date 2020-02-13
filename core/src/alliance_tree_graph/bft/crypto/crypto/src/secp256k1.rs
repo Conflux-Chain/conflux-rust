@@ -5,8 +5,8 @@
 //! # Examples
 
 use crate::{traits::*, HashValue};
-use anyhow::{anyhow, Result};
-use cfx_types::{H256, H512, H520};
+use anyhow::Result;
+use cfx_types::{H256, H520};
 use core::convert::TryFrom;
 use ethkey::{
     Generator, Public, Random as EthkeyRandom, Secret,
@@ -158,7 +158,7 @@ impl SigningKey for Secp256k1PrivateKey {
 }
 
 impl Uniform for Secp256k1PrivateKey {
-    fn generate_for_testing<R>(rng: &mut R) -> Self
+    fn generate_for_testing<R>(_rng: &mut R) -> Self
     where R: ::rand::SeedableRng + ::rand::RngCore + ::rand::CryptoRng {
         let key_pair = EthkeyRandom
             .generate()

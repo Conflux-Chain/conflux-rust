@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::sync::Arc;
-
 use cfx_types::{Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,

@@ -7,10 +7,7 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
-    block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch, BlockStatus,
-        LocalBlockInfo,
-    },
+    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
     sync::Error,
@@ -21,7 +18,6 @@ use futures::channel::oneshot;
 use hibitset::BitSet;
 use libra_types::block_info::PivotBlockDecision;
 use link_cut_tree::SizeMinLinkCutTree;
-use network::PeerId;
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, EpochId, TransactionAddress,
@@ -930,11 +926,13 @@ impl ConsensusGraphInner {
                 .insert(*block_hash, callback);
             false
         } else {
-            callback.send(Ok(self.validate_and_add_candidate_pivot(
-                block_hash,
-                parent_hash,
-                height,
-            )));
+            callback
+                .send(Ok(self.validate_and_add_candidate_pivot(
+                    block_hash,
+                    parent_hash,
+                    height,
+                )))
+                .expect("send new candidate pivot should succeed");
             true
         }
     }

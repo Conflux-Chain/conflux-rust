@@ -32,12 +32,7 @@ use super::super::{
         WaitingSuccess,
     },
 };
-use crate::{
-    alliance_tree_graph::hsb_sync_protocol::{
-        sync_protocol::HotStuffSynchronizationProtocol, HSB_PROTOCOL_ID,
-    },
-    state_exposer::{BFTCommitEvent, STATE_EXPOSER},
-};
+use crate::state_exposer::{BFTCommitEvent, STATE_EXPOSER};
 use anyhow::{ensure, format_err, Context};
 use cfx_types::H256;
 use libra_crypto::hash::TransactionAccumulatorHasher;
@@ -53,11 +48,10 @@ use mirai_annotations::{
 };
 //use network::proto::{ConsensusMsg, ConsensusMsg_oneof};
 use crate::message::Message;
-use network::{NetworkService, PeerId};
 
 use super::super::chained_bft::network::IncomingBlockRetrievalRequest;
 
-use super::super::safety_rules::{ConsensusState, TSafetyRules};
+use super::super::safety_rules::TSafetyRules;
 
 //use std::convert::TryInto;
 use crate::alliance_tree_graph::{
@@ -92,7 +86,7 @@ pub struct EventProcessor<TT, T> {
     proposer_election: Box<dyn ProposerElection<T> + Send + Sync>,
     proposal_generator: ProposalGenerator<TT, T>,
     safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
-    txn_transformer: TT,
+    //txn_transformer: TT,
     network: Arc<NetworkSender<T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     time_service: Arc<dyn TimeService>,
@@ -113,7 +107,7 @@ where
         proposer_election: Box<dyn ProposerElection<T> + Send + Sync>,
         proposal_generator: ProposalGenerator<TT, T>,
         safety_rules: Box<dyn TSafetyRules<T> + Send + Sync>,
-        txn_transformer: TT, network: Arc<NetworkSender<T>>,
+        _txn_transformer: TT, network: Arc<NetworkSender<T>>,
         storage: Arc<dyn PersistentStorage<T>>,
         time_service: Arc<dyn TimeService>, validators: Arc<ValidatorVerifier>,
         enable_state_expose: bool,
@@ -132,7 +126,7 @@ where
             proposer_election,
             proposal_generator,
             safety_rules,
-            txn_transformer,
+            //txn_transformer,
             network,
             storage,
             time_service,
@@ -486,7 +480,9 @@ where
         self.network
             .protocol_handler
             .network_task
-            .process_vote(self_author, timeout_vote_msg);
+            .process_vote(self_author, timeout_vote_msg)
+            .await
+            .expect("call process_vote success");
         //self.network.broadcast_vote(timeout_vote_msg).await
     }
 
@@ -778,7 +774,7 @@ where
             block.round(),
         );
 
-        let parent_block = self
+        let _parent_block = self
             .block_store
             .get_block(executed_block.parent_id())
             .ok_or_else(|| {
@@ -961,7 +957,7 @@ where
             {
                 counters::CREATION_TO_COMMIT_S.observe_duration(time_to_commit);
             }
-            if let Some(payload) = committed.payload() {
+            if let Some(_payload) = committed.payload() {
                 /*
                 let compute_result = committed.compute_result();
                 if let Err(e) = self
@@ -998,7 +994,9 @@ where
             self.network
                 .protocol_handler
                 .network_task
-                .process_epoch_change(self_author, message);
+                .process_epoch_change(self_author, message)
+                .await
+                .expect("call process_epoch_change success");
         }
     }
 

@@ -22,23 +22,17 @@ use crate::{
         bft::consensus::chained_bft::network::NetworkSender,
         hsb_sync_protocol::{
             message::block_retrieval_response::BlockRetrievalRpcResponse,
-            sync_protocol::{
-                HotStuffSynchronizationProtocol, PeerState, Peers, RpcResponse,
-            },
-            HSB_PROTOCOL_ID,
+            sync_protocol::RpcResponse, HSB_PROTOCOL_ID,
         },
     },
-    sync::{
-        request_manager::{Request, RequestManager},
-        Error, ErrorKind,
-    },
+    sync::{request_manager::Request, Error, ErrorKind},
 };
 use cfx_types::H256;
 use futures::channel::oneshot;
 use io::IoContext;
 use libra_types::validator_change::ValidatorChangeProof;
 use mirai_annotations::checked_precondition;
-use network::{service::NetworkContext, NetworkService, PeerId};
+use network::{service::NetworkContext, PeerId};
 use rand::{prelude::*, Rng};
 use std::{
     clone::Clone,
@@ -97,7 +91,7 @@ impl<T: Payload> BlockStore<T> {
     /// If gap is large, performs state sync using process_highest_commit_cert
     /// Inserts sync_info.quorum_cert into block store as the last step
     pub async fn sync_to(
-        &self, sync_info: &SyncInfo, mut retriever: BlockRetriever<T>,
+        &self, sync_info: &SyncInfo, retriever: BlockRetriever<T>,
     ) -> anyhow::Result<()> {
         /*
         self.process_highest_commit_cert(
@@ -163,6 +157,7 @@ impl<T: Payload> BlockStore<T> {
     /// we could restart if we crash in the middle of the sync.
     /// 3. We prune the old tree and replace with a new tree built with the
     /// 3-chain.
+    #[allow(dead_code)]
     async fn process_highest_commit_cert(
         &self, highest_commit_cert: QuorumCert,
         retriever: &mut BlockRetriever<T>,
@@ -230,7 +225,8 @@ impl<T: Payload> BlockStore<T> {
                         vec![highest_commit_cert.ledger_info().clone()],
                         /* more = */ false,
                     ),
-                );
+                )
+                .await?;
         }
         Ok(())
     }

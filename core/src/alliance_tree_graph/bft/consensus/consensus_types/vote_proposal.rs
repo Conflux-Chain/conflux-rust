@@ -5,9 +5,7 @@ use super::{
     accumulator_extension_proof::AccumulatorExtensionProof, block::Block,
 };
 use libra_crypto::hash::TransactionAccumulatorHasher;
-use libra_types::{
-    block_info::PivotBlockDecision, crypto_proxies::ValidatorSet,
-};
+use libra_types::crypto_proxies::ValidatorSet;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 

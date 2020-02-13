@@ -5,14 +5,9 @@ use super::super::counters;
 use anyhow::ensure;
 //use bytes::Bytes;
 use super::super::consensus_types::{
-    block_retrieval::{
-        BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,
-    },
-    common::{Author, Payload},
-    epoch_retrieval::EpochRetrievalRequest,
-    proposal_msg::ProposalMsg,
-    sync_info::SyncInfo,
-    vote_msg::VoteMsg,
+    block_retrieval::BlockRetrievalRequest, common::Payload,
+    epoch_retrieval::EpochRetrievalRequest, proposal_msg::ProposalMsg,
+    sync_info::SyncInfo, vote_msg::VoteMsg,
 };
 use channel::{self, libra_channel, message_queues::QueueStyle};
 use network::{NetworkService, PeerId};
@@ -22,7 +17,6 @@ use libra_types::{
     account_address::AccountAddress,
     crypto_proxies::{
         EpochInfo, LedgerInfoWithSignatures, ValidatorChangeProof,
-        ValidatorVerifier,
     },
 };
 /*
@@ -47,9 +41,7 @@ use cfx_types::H256;
 use libra_logger::prelude::{security_log, SecurityEvent};
 use std::{
     cmp::Ordering,
-    convert::TryFrom,
     sync::{Arc, RwLock},
-    time::Duration,
 };
 
 pub struct NetworkSender<P> {
@@ -218,7 +210,7 @@ impl<T: Payload> NetworkTask<T> {
 
     pub fn epoch(&self) -> u64 { self.epoch_info.read().unwrap().epoch }
 
-    pub async fn start(mut self) {
+    pub async fn start(self) {
         /*
         use ConsensusMsg_oneof::*;
         while let Some(Ok(message)) = self.all_events.next().await {

@@ -38,7 +38,7 @@ pub fn setup_metrics(peer_id: PeerId, node_config: &NodeConfig) {
 
 pub fn setup_executable(
     config: Option<&Path>,
-    no_logging: bool,
+    _no_logging: bool,
     keypair: Option<ConsensusKeyPair>,
     //) -> (NodeConfig, Option<GlobalLoggerGuard>) {
 ) -> NodeConfig
@@ -64,6 +64,7 @@ pub fn setup_executable(
     config
 }
 
+#[allow(dead_code)]
 fn set_default_global_logger(
     is_logging_disabled: bool, logger_config: &LoggerConfig,
 ) -> Option<GlobalLoggerGuard> {

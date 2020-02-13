@@ -2,27 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    config::{PersistableConfig, RoleType, RootPath},
+    config::{RoleType, RootPath},
     keys::{self, KeyPair},
     utils,
 };
-use anyhow::{anyhow, ensure, Result};
+use anyhow::Result;
 use libra_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
     x25519::{X25519StaticPrivateKey, X25519StaticPublicKey},
-    Uniform, ValidKey,
 };
 use libra_types::PeerId;
 use parity_multiaddr::Multiaddr;
-use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap, convert::TryFrom, path::PathBuf, string::ToString,
-};
+use std::{collections::HashMap, string::ToString};
 
-const NETWORK_KEYPAIRS_DEFAULT: &str = "network.keys.toml";
-const NETWORK_PEERS_DEFAULT: &str = "network_peers.config.toml";
-const SEED_PEERS_DEFAULT: &str = "seed_peers.toml";
+// const NETWORK_KEYPAIRS_DEFAULT: &str = "network.keys.toml";
+// const NETWORK_PEERS_DEFAULT: &str = "network_peers.config.toml";
+// const SEED_PEERS_DEFAULT: &str = "seed_peers.toml";
 
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Clone))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
@@ -121,7 +117,7 @@ impl NetworkConfig {
     }
 
     pub fn load(
-        &mut self, root_dir: &RootPath, _network_role: RoleType,
+        &mut self, _root_dir: &RootPath, _network_role: RoleType,
         peer_id: PeerId,
     ) -> Result<()>
     {
@@ -170,11 +166,12 @@ impl NetworkConfig {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn default_path(&self, config_path: &str) -> String {
         format!("{}.{}", self.peer_id.to_string(), config_path)
     }
 
-    pub fn save(&mut self, root_dir: &RootPath) -> Result<()> {
+    pub fn save(&mut self, _root_dir: &RootPath) -> Result<()> {
         /*
         if self.is_permissioned {
             if self.network_keypairs_file.as_os_str().is_empty() {

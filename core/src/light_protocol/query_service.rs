@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::{ConsensusGraphTrait, SharedConsensusGraph},
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerFilter, LedgerInfo},
         message::msgid,

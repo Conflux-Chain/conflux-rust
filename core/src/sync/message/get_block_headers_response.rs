@@ -233,7 +233,8 @@ impl GetBlockHeadersResponse {
         if ctx.manager.need_requesting_blocks() {
             // request missing blocks
             ctx.manager
-                .request_missing_blocks(ctx.io, chosen_peer, hashes);
+                .request_missing_blocks(ctx.io, chosen_peer, hashes)
+                .ok();
 
             // relay if necessary
             ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();

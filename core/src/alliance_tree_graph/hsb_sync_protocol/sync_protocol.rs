@@ -37,11 +37,8 @@ use io::TimerToken;
 use keccak_hash::keccak;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
-use primitives::TransactionWithSignature;
 use serde::Deserialize;
-use std::{
-    any::Any, cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc,
-};
+use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 
 #[derive(Default)]
 pub struct PeerState {
@@ -344,7 +341,7 @@ pub fn handle_serialized_message<P>(
 where P: Payload {
     match id {
         msgid::PROPOSAL => {
-            let msg: ProposalMsg<P> = lcs::from_bytes(msg)?;
+            let msg: ProposalMsg<P> = lcs::from_bytes(&msg[0..msg.len() - 1])?;
             let msg_id = msg.msg_id();
             let msg_name = msg.msg_name();
             let req_id = msg.get_request_id();
