@@ -67,11 +67,9 @@ impl ConsensusNewBlockHandler {
     )
     {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
-        let new_era_stable_height =
-            new_era_height + inner.inner_conf.era_epoch_count;
 
         let stable_era_genesis =
-            inner.get_pivot_block_arena_index(new_era_stable_height);
+            inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
 
         // FIXME: I am not sure whether this code still works in the new timer
         // chain checkpoint mechanism (`RecoverBlockFromDb` or
@@ -861,7 +859,7 @@ impl ConsensusNewBlockHandler {
             inner.cur_era_genesis_height + inner.inner_conf.era_epoch_count;
         // We cannot move beyond the stable block/height
         if new_genesis_height + inner.inner_conf.era_epoch_count
-            >= inner.cur_era_stable_height
+            > inner.cur_era_stable_height
         {
             return inner.cur_era_genesis_block_arena_index;
         }
