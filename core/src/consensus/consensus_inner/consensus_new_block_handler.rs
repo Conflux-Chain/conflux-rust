@@ -834,7 +834,7 @@ impl ConsensusNewBlockHandler {
             inner.cur_era_stable_height + inner.inner_conf.era_epoch_count;
         // We make sure there is an additional era before the best for moving it
         if new_stable_height + inner.inner_conf.era_epoch_count
-            >= inner.best_epoch_number()
+            > inner.best_epoch_number()
         {
             return inner.cur_era_stable_height;
         }

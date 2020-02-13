@@ -17,8 +17,9 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.num_nodes = 3
         self.conf_parameters = {
             "dev_snapshot_epoch_count": "10",
+            "timer_chain_block_difficulty_ratio": "2",
+            "timer_chain_beta": "6",
             "era_epoch_count": "50",
-            "era_checkpoint_gap": "50",
             "chunk_size_byte": "1000",
             "log_level": '"debug"',
         }

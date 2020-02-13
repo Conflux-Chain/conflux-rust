@@ -13,7 +13,7 @@ INITIAL_DIFFICULTY = 1000
 class GHASTTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 1
+        self.num_nodes = 2
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = TIMER_RATIO
         self.conf_parameters["timer_chain_beta"] = TIMER_BETA
         self.conf_parameters["initial_difficulty"] = INITIAL_DIFFICULTY
@@ -23,6 +23,7 @@ class GHASTTest(ConfluxTestFramework):
 
     def run_test(self):
         client0 = RpcClient(self.nodes[0])
+        client1 = RpcClient(self.nodes[1])
         genesis = client0.best_block_hash()
 
         self.log.info("Generating two initial blocks")
@@ -37,12 +38,20 @@ class GHASTTest(ConfluxTestFramework):
         invalid = self.nodes[0].generatefixedblock(genesis, [a2], 0, False, INITIAL_DIFFICULTY)
         invalid2 = self.nodes[0].generatefixedblock(a2, [invalid], 0, False, INITIAL_DIFFICULTY)
 
+        self.log.info("Sync two nodes")
+        connect_nodes(self.nodes, 0, 1)
+        sync_blocks(self.nodes)
+
         self.log.info("Generating a block without referencing partial invalid blocks")
 
-        b1 = client0.generate_block()
-        block_b1 = client0.block_by_hash(b1)
+        b1 = client1.generate_block()
+        block_b1 = client1.block_by_hash(b1)
         assert(block_b1['parentHash'] == a2)
         assert(len(block_b1['refereeHashes']) == 0)
+
+        self.log.info("Sync two nodes")
+        connect_nodes(self.nodes, 0, 1)
+        sync_blocks(self.nodes)
 
         timer_cnt = 0
         diff = int(block_b1['difficulty'], 16)
@@ -63,10 +72,14 @@ class GHASTTest(ConfluxTestFramework):
                 timer_cnt += 1
                 self.log.info("Timer increased to " + str(timer_cnt))
 
+        self.log.info("Sync two nodes")
+        connect_nodes(self.nodes, 0, 1)
+        sync_blocks(self.nodes)
+
         self.log.info("Node1 generating a block to reference two partial invalid blocks")
 
-        b2 = client0.generate_block()
-        block_b2 = client0.block_by_hash(b2)
+        b2 = client1.generate_block()
+        block_b2 = client1.block_by_hash(b2)
         assert(len(block_b2['refereeHashes']) > 0)
         assert(block_b2['refereeHashes'][0] == invalid2)
 
