@@ -20,7 +20,7 @@ ethkey = { path = "../accounts/ethkey" }
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
-futures = "0.3.3"
+futures = {version="0.3.3", features = ["compat"]}
 heapsize = "0.4"
 hibitset = { path = "../util/hibitset" }
 io = { path = "../util/io" }
