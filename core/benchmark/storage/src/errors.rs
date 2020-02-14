@@ -10,6 +10,7 @@ error_chain! {
         RlpDecodeError(::rlp::DecoderError);
         SerdeError(::serde_json::error::Error);
         EthKeyError(::ethkey::Error);
+        ConfluxStorageError(::cfxcore::storage::Error);
     }
 
     errors {
