@@ -32,9 +32,14 @@ use crate::{
     },
 };
 
+use crate::alliance_tree_graph::{
+    bft::consensus::consensus_types::epoch_retrieval::EpochRetrievalRequest,
+    hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+};
 use cfx_types::H256;
 use io::TimerToken;
 use keccak_hash::keccak;
+use libra_types::validator_change::ValidatorChangeProof;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -362,6 +367,15 @@ where P: Payload {
         msgid::SYNC_INFO => handle_message::<SyncInfo, P>(ctx, msg)?,
         msgid::BLOCK_RETRIEVAL => {
             handle_message::<BlockRetrievalRpcRequest, P>(ctx, msg)?
+        }
+        msgid::BLOCK_RETRIEVAL_RESPONSE => {
+            handle_message::<BlockRetrievalRpcResponse<P>, P>(ctx, msg)?
+        }
+        msgid::EPOCH_RETRIEVAL => {
+            handle_message::<EpochRetrievalRequest, P>(ctx, msg)?
+        }
+        msgid::EPOCH_CHANGE => {
+            handle_message::<ValidatorChangeProof, P>(ctx, msg)?
         }
         _ => return Ok(false),
     }

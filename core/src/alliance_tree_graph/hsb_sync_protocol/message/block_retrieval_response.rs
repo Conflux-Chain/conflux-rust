@@ -16,9 +16,12 @@ use crate::{
 use serde::Serialize;
 use std::any::Any;
 
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockRetrievalRpcResponse<P> {
     pub request_id: RequestId,
+    #[serde(bound(
+        deserialize = "BlockRetrievalResponse<P>: Deserialize<'de>"
+    ))]
     pub response: BlockRetrievalResponse<P>,
 }
 
