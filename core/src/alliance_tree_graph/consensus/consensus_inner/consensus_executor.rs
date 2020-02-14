@@ -353,6 +353,7 @@ impl ConsensusExecutor {
                 None,
                 false,
             ));
+            start_chain_index += 1;
         }
 
         let epoch_execution_result = self.wait_for_result(block_hash);

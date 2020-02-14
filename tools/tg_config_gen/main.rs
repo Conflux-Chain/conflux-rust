@@ -148,12 +148,12 @@ where
             let mut private_key_str = String::new();
             writeln!(&mut private_key_str, "{:?}", private_key.to_hex())?;
             let private_key_str = private_key_str.replace("\"", "");
-            private_key_file.write(private_key_str.as_str().as_bytes())?;
+            private_key_file.write_all(private_key_str.as_str().as_bytes())?;
 
             let mut public_key_str = String::new();
             writeln!(&mut public_key_str, "{:?}", public_key)?;
             let public_key_str = &public_key_str[2..];
-            public_key_file.write(public_key_str.as_bytes())?;
+            public_key_file.write_all(public_key_str.as_bytes())?;
 
             if i > 0 {
                 writeln!(peer_config_file, "")?;
@@ -166,14 +166,14 @@ where
             writeln!(&mut peer_hash_str, "{:?}", peer_str)?;
             let peer_hash_str = peer_hash_str.replacen("\"", "[", 1);
             let peer_hash_str = peer_hash_str.replacen("\"", "]", 1);
-            peer_config_file.write(peer_hash_str.as_str().as_bytes())?;
+            peer_config_file.write_all(peer_hash_str.as_str().as_bytes())?;
 
             let mut pubkey_str = String::new();
             write!(&mut pubkey_str, "{:?}", public_key)?;
             let pubkey_str = &pubkey_str[2..];
             let mut peer_pubkey_str = String::new();
             writeln!(&mut peer_pubkey_str, "c = {:?}", pubkey_str)?;
-            peer_config_file.write(peer_pubkey_str.as_str().as_bytes())?;
+            peer_config_file.write_all(peer_pubkey_str.as_str().as_bytes())?;
         }
         Ok("Ok".into())
     } else if args.cmd_frompub {
@@ -200,14 +200,14 @@ where
             writeln!(&mut peer_hash_str, "{:?}", peer_str)?;
             let peer_hash_str = peer_hash_str.replacen("\"", "[", 1);
             let peer_hash_str = peer_hash_str.replacen("\"", "]", 1);
-            peer_config_file.write(peer_hash_str.as_str().as_bytes())?;
+            peer_config_file.write_all(peer_hash_str.as_str().as_bytes())?;
 
             let mut pubkey_str = String::new();
             write!(&mut pubkey_str, "{:?}", public_key)?;
             let pubkey_str = &pubkey_str[2..];
             let mut peer_pubkey_str = String::new();
             writeln!(&mut peer_pubkey_str, "c = {:?}", pubkey_str)?;
-            peer_config_file.write(peer_pubkey_str.as_str().as_bytes())?;
+            peer_config_file.write_all(peer_pubkey_str.as_str().as_bytes())?;
 
             line_num += 1;
         }
