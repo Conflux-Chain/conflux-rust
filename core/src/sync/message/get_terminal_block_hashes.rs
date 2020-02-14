@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::ConsensusGraphTrait,
     message::RequestId,
     sync::{
         message::{Context, GetTerminalBlockHashesResponse, Handleable},

@@ -17,10 +17,7 @@ use super::super::super::{
 use anyhow::{bail, ensure, format_err};
 //use libra_logger::prelude::*;
 use crate::{
-    alliance_tree_graph::{
-        bft::consensus::state_replication::TxnTransformer,
-        consensus::TreeGraphConsensus,
-    },
+    alliance_tree_graph::bft::consensus::state_replication::TxnTransformer,
     sync::SharedSynchronizationService,
 };
 use futures::channel::oneshot;
@@ -29,7 +26,7 @@ use libra_types::{
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     language_storage::TypeTag,
-    transaction::{ChangeSet, RawTransaction, SignedTransaction},
+    transaction::{ChangeSet, RawTransaction},
     write_set::WriteSet,
 };
 use std::{
@@ -62,7 +59,7 @@ pub struct ProposalGenerator<TT, T> {
     // Time service to generate block timestamps
     time_service: Arc<dyn TimeService>,
     // Max number of transactions to be added to a proposed block.
-    max_block_size: u64,
+    // max_block_size: u64,
     // Last round that a proposal was generated
     last_round_generated: Mutex<Round>,
     // TreeGraph synchronization service.
@@ -79,7 +76,7 @@ where
         author: Author,
         block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
         txn_transformer: TT, time_service: Arc<dyn TimeService>,
-        max_block_size: u64, tg_sync: SharedSynchronizationService,
+        _max_block_size: u64, tg_sync: SharedSynchronizationService,
         key_pair: KeyPair,
     ) -> Self
     {
@@ -88,7 +85,7 @@ where
             block_store,
             txn_transformer,
             time_service,
-            max_block_size,
+            //max_block_size,
             last_round_generated: Mutex::new(0),
             tg_sync,
             key_pair,

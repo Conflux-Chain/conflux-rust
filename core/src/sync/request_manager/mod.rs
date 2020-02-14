@@ -27,7 +27,6 @@ pub use request_handler::{
     AsAny, Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
 use std::{
-    any::TypeId,
     cmp::Ordering,
     collections::{binary_heap::BinaryHeap, HashSet},
     sync::Arc,

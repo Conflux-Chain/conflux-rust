@@ -9,22 +9,17 @@ use crate::{
     errors::LibraDbError,
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
-        transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
 };
 use anyhow::{bail, ensure, format_err, Result};
 use arc_swap::ArcSwap;
-use itertools::Itertools;
-use libra_crypto::{
-    hash::{CryptoHash, TransactionAccumulatorHasher},
-    HashValue,
-};
+use libra_crypto::HashValue;
 use libra_types::{
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorSet},
     proof::{
-        position::Position, AccumulatorConsistencyProof,
-        TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
+        AccumulatorConsistencyProof, TransactionAccumulatorProof,
+        TransactionAccumulatorRangeProof,
     },
     transaction::{TransactionInfo, Version},
 };
@@ -209,6 +204,7 @@ impl LedgerStore {
     }
 
     /// Get transaction info given `version`
+    #[allow(dead_code)]
     pub fn get_transaction_info(
         &self, version: Version,
     ) -> Result<TransactionInfo> {
@@ -243,6 +239,7 @@ impl LedgerStore {
 
     /// Get transaction info at `version` with proof towards root of ledger at
     /// `ledger_version`.
+    #[allow(dead_code)]
     pub fn get_transaction_info_with_proof(
         &self, version: Version, ledger_version: Version,
     ) -> Result<(TransactionInfo, TransactionAccumulatorProof)> {
@@ -254,8 +251,9 @@ impl LedgerStore {
 
     /// Get proof for transaction at `version` towards root of ledger at
     /// `ledger_version`.
+    #[allow(dead_code)]
     pub fn get_transaction_proof(
-        &self, version: Version, ledger_version: Version,
+        &self, _version: Version, _ledger_version: Version,
     ) -> Result<TransactionAccumulatorProof> {
         //Accumulator::get_proof(self, ledger_version + 1 /* num_leaves */,
         // version)
@@ -264,9 +262,10 @@ impl LedgerStore {
 
     /// Get proof for `num_txns` consecutive transactions starting from
     /// `start_version` towards root of ledger at `ledger_version`.
+    #[allow(dead_code)]
     pub fn get_transaction_range_proof(
-        &self, start_version: Option<Version>, num_txns: u64,
-        ledger_version: Version,
+        &self, _start_version: Option<Version>, _num_txns: u64,
+        _ledger_version: Version,
     ) -> Result<TransactionAccumulatorRangeProof>
     {
         /*
@@ -283,7 +282,7 @@ impl LedgerStore {
     /// Gets proof that shows the ledger at `ledger_version` is consistent with
     /// the ledger at `client_known_version`.
     pub fn get_consistency_proof(
-        &self, client_known_version: Version, ledger_version: Version,
+        &self, _client_known_version: Version, _ledger_version: Version,
     ) -> Result<AccumulatorConsistencyProof> {
         //Accumulator::get_consistency_proof(self, ledger_version + 1,
         // client_known_version + 1)
@@ -292,9 +291,10 @@ impl LedgerStore {
 
     /// Write `txn_infos` to `batch`. Assigned `first_version` to the the
     /// version number of the first transaction, and so on.
+    #[allow(dead_code)]
     pub fn put_transaction_infos(
-        &self, first_version: u64, txn_infos: &[TransactionInfo],
-        cs: &mut ChangeSet,
+        &self, _first_version: u64, _txn_infos: &[TransactionInfo],
+        _cs: &mut ChangeSet,
     ) -> Result<HashValue>
     {
         /*
@@ -326,7 +326,7 @@ impl LedgerStore {
         cs: &mut ChangeSet,
     ) -> Result<()>
     {
-        let ledger_info = ledger_info_with_sigs.ledger_info();
+        let _ledger_info = ledger_info_with_sigs.ledger_info();
 
         /*
         if ledger_info.next_validator_set().is_some() {
@@ -344,8 +344,9 @@ impl LedgerStore {
 
     /// From left to right, get frozen subtree root hashes of the transaction
     /// accumulator.
+    #[allow(dead_code)]
     pub fn get_ledger_frozen_subtree_hashes(
-        &self, version: Version,
+        &self, _version: Version,
     ) -> Result<Vec<HashValue>> {
         //Accumulator::get_frozen_subtree_hashes(self, version + 1)
         bail!("error");

@@ -8,7 +8,6 @@ use super::{
 };
 use crate::{
     block_data_manager::BlockStatus,
-    consensus::ConsensusGraphTrait,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
     parameters::sync::*,
@@ -240,7 +239,7 @@ pub struct SynchronizationProtocolHandler {
 
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
-    pub synced_epoch_id: Mutex<Option<(EpochId)>>,
+    pub synced_epoch_id: Mutex<Option<EpochId>>,
 
     // provider for serving light protocol queries
     light_provider: Arc<LightProvider>,
@@ -1178,7 +1177,8 @@ impl SynchronizationProtocolHandler {
             io,
             chosen_peer,
             missed_body_block_hashes.into_iter().collect(),
-        );
+        )
+        .ok();
 
         // relay if necessary
         self.relay_blocks(io, need_to_relay.into_iter().collect())

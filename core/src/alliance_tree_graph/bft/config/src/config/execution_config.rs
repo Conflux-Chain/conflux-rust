@@ -3,12 +3,11 @@
 
 use crate::{config::RootPath, utils};
 use anyhow::Result;
-use libra_crypto::secp256k1::Secp256k1PublicKey;
 use libra_types::{
     contract_event::ContractEvent,
     crypto_proxies::ValidatorSet,
     language_storage::TypeTag,
-    transaction::{ChangeSet, RawTransaction, Transaction},
+    transaction::{ChangeSet, Transaction},
     write_set::WriteSet,
 };
 use serde::{Deserialize, Serialize};

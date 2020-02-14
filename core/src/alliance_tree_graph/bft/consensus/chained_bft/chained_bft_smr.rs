@@ -23,12 +23,9 @@ use libra_config::config::{ConsensusProposerType, NodeConfig};
 //use libra_logger::prelude::*;
 use super::super::safety_rules::SafetyRulesManager;
 use crate::{
-    alliance_tree_graph::{
-        bft::consensus::{
-            chained_bft::network::NetworkSender,
-            state_replication::{StateComputer, TxnTransformer},
-        },
-        consensus::TreeGraphConsensus,
+    alliance_tree_graph::bft::consensus::{
+        chained_bft::network::NetworkSender,
+        state_replication::{StateComputer, TxnTransformer},
     },
     sync::{request_manager::RequestManager, SharedSynchronizationService},
 };

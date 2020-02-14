@@ -7,7 +7,7 @@ use super::{
 };
 pub use crate::configuration::Configuration;
 use executable_helpers::helpers::setup_executable;
-use libra_config::config::{ConsensusKeyPair, NodeConfig, RoleType};
+use libra_config::config::{ConsensusKeyPair, NodeConfig};
 use libra_crypto::secp256k1::Secp256k1PrivateKey;
 use libra_metrics::metric_server;
 use libradb::LibraDB;
@@ -289,7 +289,7 @@ impl TgArchiveClient {
             network.net_key_pair().ok(),
         ));
 
-        let special_txgen =
+        let _special_txgen =
             Arc::new(Mutex::new(SpecialTransactionGenerator::new(
                 network.net_key_pair().unwrap(),
                 &public_to_address(secret_store.get_keypair(0).public()),
@@ -384,7 +384,7 @@ impl TgArchiveClient {
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
-            // txgen.clone(),
+            txgen.clone(),
             conf.rpc_impl_config(),
         ));
 

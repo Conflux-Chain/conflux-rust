@@ -8,23 +8,16 @@ use libra_config::config::NodeConfig;
 
 use super::chained_bft::chained_bft_consensus_provider::ChainedBftProvider;
 //use executor::Executor;
-use grpcio::EnvBuilder;
 //use state_synchronizer::StateSyncClient;
 use network::NetworkService;
 use std::sync::Arc;
 //use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use super::super::executor::Executor;
-use crate::{
-    alliance_tree_graph::{
-        consensus::TreeGraphConsensus,
-        hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol,
-    },
-    sync::{request_manager::RequestManager, SharedSynchronizationService},
+use crate::sync::{
+    request_manager::RequestManager, SharedSynchronizationService,
 };
 use cfx_types::H256;
-use libra_types::transaction::SignedTransaction;
-use primitives::TransactionWithSignature;
 
 /// Public interface to a consensus protocol.
 pub trait ConsensusProvider {

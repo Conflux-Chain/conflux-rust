@@ -55,12 +55,14 @@ impl InnerLedgerCounters {
         }
     }
 
+    #[allow(dead_code)]
     fn raw_key(counter: LedgerCounter) -> u16 {
         counter
             .to_u16()
             .expect("LedgerCounter should convert to u16.")
     }
 
+    #[allow(dead_code)]
     fn get(&self, counter: LedgerCounter) -> usize {
         self.counters
             .get(&Self::raw_key(counter))
@@ -68,10 +70,12 @@ impl InnerLedgerCounters {
             .unwrap_or(0)
     }
 
+    #[allow(dead_code)]
     fn inc(&mut self, counter: LedgerCounter, by: usize) -> &mut Self {
         self.raw_inc(Self::raw_key(counter), by)
     }
 
+    #[allow(dead_code)]
     fn raw_inc(&mut self, key: u16, by: usize) -> &mut Self {
         let value = self.counters.entry(key).or_insert(0);
         *value += by;
@@ -97,6 +101,7 @@ impl LedgerCounterBumps {
     ///
     /// If a bump has not already been recorded for the counter, assumes current
     /// value of 0.
+    #[allow(dead_code)]
     pub fn bump(&mut self, counter: LedgerCounter, by: usize) -> &mut Self {
         self.bumps.inc(counter, by);
 
@@ -120,6 +125,7 @@ pub(crate) struct LedgerCounters {
 
 impl LedgerCounters {
     /// Constructs a new empty counter set.
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             counters: InnerLedgerCounters::new(),
@@ -127,6 +133,7 @@ impl LedgerCounters {
     }
 
     /// Bump each counter in `bumps` with the value in `bumps`.
+    #[allow(dead_code)]
     pub fn bump(&mut self, bumps: LedgerCounterBumps) -> &mut Self {
         for (key, value) in bumps.bumps.counters.into_iter() {
             self.counters.raw_inc(key, value);
@@ -136,6 +143,7 @@ impl LedgerCounters {
     }
 
     /// Bump Prometheus counters.
+    #[allow(dead_code)]
     pub fn bump_op_counters(&self) {
         for counter in LedgerCounter::iter() {
             OP_COUNTER.set(counter.as_ref(), self.get(counter));
@@ -146,6 +154,7 @@ impl LedgerCounters {
     }
 
     /// Get the value of `counter`.
+    #[allow(dead_code)]
     pub fn get(&self, counter: LedgerCounter) -> usize {
         self.counters.get(counter)
     }

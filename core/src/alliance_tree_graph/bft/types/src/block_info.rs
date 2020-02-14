@@ -14,7 +14,7 @@ use libra_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::TryFrom,
     fmt::{Display, Formatter},
 };
 

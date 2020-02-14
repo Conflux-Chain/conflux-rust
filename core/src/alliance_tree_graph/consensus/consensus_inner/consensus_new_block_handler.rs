@@ -23,7 +23,7 @@ use crate::{
 use cfx_types::H256;
 use hibitset::BitSetLike;
 use libra_types::block_info::PivotBlockDecision;
-use primitives::{Block, BlockHeader, SignedTransaction};
+use primitives::{Block, BlockHeader};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -358,11 +358,13 @@ impl ConsensusNewBlockHandler {
             inner.next_selected_pivot_waiting_list.remove(&hash)
         {
             debug!("next_selected_pivot callback for block={:?}", hash);
-            callback.send(Ok(PivotBlockDecision {
-                height: block_header.height(),
-                block_hash: hash,
-                parent_hash: *block_header.parent_hash(),
-            }));
+            callback
+                .send(Ok(PivotBlockDecision {
+                    height: block_header.height(),
+                    block_hash: hash,
+                    parent_hash: *block_header.parent_hash(),
+                }))
+                .expect("send pivot block decision back should succeed");
         }
 
         if let Some(callback) =
@@ -370,11 +372,13 @@ impl ConsensusNewBlockHandler {
         {
             debug!("new_candidate_pivot callback for block={:?}", hash);
             let height = block_header.height();
-            callback.send(Ok(inner.validate_and_add_candidate_pivot(
-                &hash,
-                parent_hash,
-                height,
-            )));
+            callback
+                .send(Ok(inner.validate_and_add_candidate_pivot(
+                    &hash,
+                    parent_hash,
+                    height,
+                )))
+                .expect("send new candidate pivot back should succeed");
         }
 
         // FIXME: fill the correctly value of `persist_terminal`.
@@ -451,11 +455,13 @@ impl ConsensusNewBlockHandler {
                     .insert(block.hash(), callback);
                 Some(block)
             } else {
-                callback.send(Ok(PivotBlockDecision {
-                    height: inner.arena[next_pivot].height,
-                    block_hash: inner.arena[next_pivot].hash,
-                    parent_hash: last_pivot_hash,
-                }));
+                callback
+                    .send(Ok(PivotBlockDecision {
+                        height: inner.arena[next_pivot].height,
+                        block_hash: inner.arena[next_pivot].hash,
+                        parent_hash: last_pivot_hash,
+                    }))
+                    .expect("send pivot block decision back should succeed");
                 None
             }
         }

@@ -3,7 +3,6 @@
 
 use anyhow::{ensure, Result};
 use keccak_hash::keccak;
-use libra_types::PeerId;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -219,7 +218,7 @@ impl NodeConfig {
 
         let mut network = NetworkConfig::default();
         let peer_id = AccountAddress::new(keccak(public_key.public()).into());
-        network.load(&input_dir, RoleType::Validator, peer_id);
+        network.load(&input_dir, RoleType::Validator, peer_id)?;
         config.validator_network = Some(network);
         /*
         if let Some(network) = &mut config.validator_network {
@@ -287,7 +286,7 @@ impl NodeConfig {
         config
     }
 
-    fn random_internal(&mut self, rng: &mut StdRng) {
+    fn random_internal(&mut self, _rng: &mut StdRng) {
         /*
         let mut test = TestConfig::new_with_temp_dir();
 

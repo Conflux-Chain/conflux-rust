@@ -17,9 +17,7 @@ use crate::{
 use anyhow::{bail, ensure, format_err, Error, Result};
 use ethkey::{verify_public, Secret, Signature};
 use libra_crypto::{
-    ed25519::*,
     hash::{CryptoHash, CryptoHasher, EventAccumulatorHasher},
-    traits::*,
     HashValue,
 };
 use libra_crypto_derive::CryptoHasher;

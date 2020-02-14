@@ -13,9 +13,8 @@ use crate::{
     message::RequestId,
     sync::{request_manager::AsAny, Error},
 };
-use libra_types::account_address::AccountAddress;
-use serde::{Deserialize, Serialize};
-use std::{any::Any, sync::Arc};
+use serde::Serialize;
+use std::any::Any;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockRetrievalRpcResponse<P> {
@@ -42,10 +41,11 @@ impl<P: Payload> Handleable<P> for BlockRetrievalRpcResponse<P> {
             ctx.io,
             &ctx.manager.request_manager,
         ) {
-            Ok(mut req) => {
+            Ok(req) => {
                 let res_tx = req.response_tx.take();
                 if let Some(tx) = res_tx {
-                    tx.send(Ok(Box::new(self)));
+                    tx.send(Ok(Box::new(self)))
+                        .expect("send response tx should succeed");
                 }
             }
             Err(e) => {

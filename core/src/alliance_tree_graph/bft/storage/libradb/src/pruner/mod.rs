@@ -9,11 +9,10 @@ use crate::OP_COUNTER;
 use anyhow::Result;
 use libra_logger::prelude::*;
 use libra_types::transaction::Version;
-use schemadb::{ReadOptions, SchemaBatch, SchemaIterator, DB};
+use schemadb::DB;
 #[cfg(test)]
 use std::thread::sleep;
 use std::{
-    iter::Peekable,
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc::{channel, Receiver, Sender},
@@ -49,6 +48,7 @@ pub(crate) struct Pruner {
 
 impl Pruner {
     /// Creates a worker thread that waits on a channel for pruning commands.
+    #[allow(dead_code)]
     pub fn new(db: Arc<DB>, num_historical_versions_to_keep: u64) -> Self {
         let (command_sender, command_receiver) = channel();
         let worker_progress = Arc::new(AtomicU64::new(0));
@@ -71,6 +71,7 @@ impl Pruner {
     }
 
     /// Sends pruning command to the worker thread when necessary.
+    #[allow(dead_code)]
     pub fn wake(&self, latest_version: Version) {
         if latest_version > self.num_historical_versions_to_keep {
             let least_readable_version =
@@ -132,6 +133,7 @@ enum Command {
     Prune { least_readable_version: Version },
 }
 
+#[allow(dead_code)]
 struct Worker {
     db: Arc<DB>,
     command_receiver: Receiver<Command>,
@@ -149,8 +151,10 @@ struct Worker {
 }
 
 impl Worker {
+    #[allow(unused_variables)]
     const MAX_VERSIONS_TO_PRUNE_PER_BATCH: usize = 100;
 
+    #[allow(dead_code)]
     fn new(
         db: Arc<DB>, command_receiver: Receiver<Command>,
         least_readable_version: Arc<AtomicU64>,
@@ -167,6 +171,7 @@ impl Worker {
         }
     }
 
+    #[allow(dead_code)]
     fn work_loop(mut self) {
         while self.receive_commands() {
             // Process a reasonably small batch of work before trying to receive
@@ -212,6 +217,7 @@ impl Worker {
     ///
     /// Returns `false` if `Command::Quit` is received, to break the outer loop
     /// and let `work_loop()` return.
+    #[allow(dead_code)]
     fn receive_commands(&mut self) -> bool {
         loop {
             let command = if self.blocking_recv {
@@ -257,6 +263,7 @@ impl Worker {
     /// We issue (range) deletes on the index only periodically instead of after
     /// every pruning batch to avoid sending too many deletions to the DB,
     /// which takes disk space and slows it down.
+    #[allow(dead_code)]
     fn maybe_purge_index(&mut self) -> Result<()> {
         const MIN_INTERVAL: Duration = Duration::from_secs(60);
         const MIN_VERSIONS: u64 = 60000;
@@ -346,9 +353,10 @@ impl<'a> Iterator for StaleNodeIndicesByVersionIterator<'a> {
 }
 */
 
+#[allow(dead_code)]
 pub fn prune_state(
-    db: Arc<DB>, least_readable_version: Version,
-    target_least_readable_version: Version, max_versions: usize,
+    _db: Arc<DB>, _least_readable_version: Version,
+    _target_least_readable_version: Version, _max_versions: usize,
 ) -> Result<Version>
 {
     /*

@@ -12,18 +12,13 @@ use crate::{
         },
         TreeGraphConsensus,
     },
-    consensus::ConsensusGraphTrait,
     light_protocol::Provider as LightProvider,
-    parameters::{
-        consensus::DEFERRED_STATE_EPOCH_COUNT,
-        sync::SYNCHRONIZATION_PROTOCOL_VERSION,
-    },
+    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
         request_manager::RequestManager, synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
         StateSyncConfiguration, SynchronizationPhaseTrait,
     },
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
 };
 use cfx_types::H256;
 use libra_types::block_info::PivotBlockDecision;

@@ -17,7 +17,6 @@ use super::super::{
     },
     counters,
 };
-use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 //use crate::state_replication::{StateComputer, TxnManager};
 use super::super::{
     consensus_types::{
@@ -45,8 +44,6 @@ use crate::{
     sync::SharedSynchronizationService,
 };
 use futures::executor::block_on;
-use libra_types::validator_change::ValidatorChangeProof;
-use network::NetworkService;
 use std::{
     cmp::Ordering,
     sync::{Arc, RwLock},

@@ -7,9 +7,7 @@ use anyhow::{Error, Result};
 use libra_crypto::ed25519::compat::generate_keypair as generate_ed25519_keypair;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_crypto::x25519::compat::generate_keypair as generate_x25519_keypair;
-use libra_crypto::{
-    ed25519::*, x25519::X25519StaticPublicKey, ValidKey, VerifyingKey,
-};
+use libra_crypto::VerifyingKey;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};

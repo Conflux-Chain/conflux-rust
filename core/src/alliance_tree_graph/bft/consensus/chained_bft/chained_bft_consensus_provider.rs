@@ -9,7 +9,6 @@ use super::super::{
     consensus_provider::ConsensusProvider,
     state_replication::StateMachineReplication,
 };
-use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::HotStuffSynchronizationProtocol;
 use anyhow::Result;
 //use executor::Executor;
 use libra_config::config::NodeConfig;
@@ -22,21 +21,14 @@ use super::super::safety_rules::SafetyRulesManagerConfig;
 //use state_synchronizer::StateSyncClient;
 use super::super::super::executor::Executor;
 use crate::{
-    alliance_tree_graph::{
-        bft::consensus::{
-            state_computer::ExecutionProxy,
-            state_replication::{
-                StateComputer, TxnTransformer, TxnTransformerProxy,
-            },
-        },
-        consensus::TreeGraphConsensus,
+    alliance_tree_graph::bft::consensus::{
+        state_computer::ExecutionProxy,
+        state_replication::{StateComputer, TxnTransformerProxy},
     },
     sync::{request_manager::RequestManager, SharedSynchronizationService},
 };
 use cfx_types::H256;
-use libradb::LibraDB;
 use network::NetworkService;
-use primitives::TransactionWithSignature;
 use std::sync::Arc;
 use tokio::runtime;
 //use vm_runtime::LibraVM;

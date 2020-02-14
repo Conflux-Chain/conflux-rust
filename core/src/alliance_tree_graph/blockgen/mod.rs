@@ -7,35 +7,21 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    alliance_tree_graph::consensus::TreeGraphConsensus,
-    block_parameters::*,
-    miner::{
-        stratum::{Options as StratumOption, Stratum},
-        work_notify::NotifyWork,
-    },
-    pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    BlockDataManager, ConsensusGraphTrait, SharedSynchronizationService,
-    SharedTransactionPool,
+    block_parameters::*, pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
+    BlockDataManager, SharedSynchronizationService, SharedTransactionPool,
 };
 use cfx_types::{Address, H256, U256};
-use lazy_static::lazy_static;
-use log::{debug, trace, warn};
-use metrics::{Gauge, GaugeUsize};
-use parking_lot::{Mutex, RwLock};
+use log::trace;
+//use metrics::{Gauge, GaugeUsize};
+use parking_lot::RwLock;
 use primitives::*;
-use std::{
-    cmp::max,
-    collections::HashSet,
-    sync::{mpsc, Arc},
-    thread, time,
-};
+use std::{cmp::max, sync::Arc, thread, time};
 use time::{Duration, SystemTime, UNIX_EPOCH};
 //use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
 
 pub struct TGBlockGenerator {
     pub pow_config: ProofOfWorkConfig,
-    mining_author: Address,
+    // mining_author: Address,
     data_man: Arc<BlockDataManager>,
     txpool: SharedTransactionPool,
     //txgen: SharedTransactionGenerator,
@@ -50,12 +36,12 @@ impl TGBlockGenerator {
         data_man: Arc<BlockDataManager>, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, /* txgen: SharedTransactionGenerator, */
         /* special_txgen: Arc<Mutex<SpecialTransactionGenerator>>, */
-        pow_config: ProofOfWorkConfig, mining_author: Address,
+        pow_config: ProofOfWorkConfig, _mining_author: Address,
     ) -> Self
     {
         TGBlockGenerator {
             pow_config,
-            mining_author,
+            // mining_author,
             data_man,
             txpool,
             // txgen,
@@ -151,8 +137,8 @@ impl TGBlockGenerator {
 
     /// Generate a block with transactions in the pool
     pub fn generate_block(
-        &self, num_txs: usize, block_size_limit: usize,
-        additional_transactions: Vec<Arc<SignedTransaction>>,
+        &self, _num_txs: usize, _block_size_limit: usize,
+        _additional_transactions: Vec<Arc<SignedTransaction>>,
     ) -> H256
     {
         // TODO: finish this function

@@ -8,31 +8,19 @@ use super::{
 };
 use anyhow::{bail, ensure, Result};
 use cfx_types::H256;
-use libra_logger::prelude::*;
 use libra_types::{
-    account_config,
-    crypto_proxies::{
-        LedgerInfoWithSignatures, ValidatorChangeProof, ValidatorSet,
-    },
+    crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
     transaction::{SignedTransaction, Transaction},
 };
 //use state_synchronizer::StateSyncClient;
 use super::super::executor::{Executor, ProcessedVMOutput};
 use crate::{
-    alliance_tree_graph::{
-        consensus::TreeGraphConsensus,
-        hsb_sync_protocol::sync_protocol::{PeerState, Peers},
-    },
+    alliance_tree_graph::hsb_sync_protocol::sync_protocol::{PeerState, Peers},
     sync::SharedSynchronizationService,
 };
 use futures::{channel::oneshot, executor::block_on};
 use libra_types::block_info::PivotBlockDecision;
-use serde::{Deserialize, Serialize};
-use std::{
-    convert::TryFrom,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Instant};
 
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
@@ -168,7 +156,7 @@ impl StateComputer for ExecutionProxy {
     }
 
     /// Synchronize to a commit that not present locally.
-    async fn sync_to(&self, target: LedgerInfoWithSignatures) -> Result<()> {
+    async fn sync_to(&self, _target: LedgerInfoWithSignatures) -> Result<()> {
         /*
         counters::STATE_SYNC_COUNT.inc();
         self.synchronizer.sync_to(target).await

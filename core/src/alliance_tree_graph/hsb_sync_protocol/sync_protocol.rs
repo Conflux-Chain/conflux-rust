@@ -42,11 +42,8 @@ use keccak_hash::keccak;
 use libra_types::validator_change::ValidatorChangeProof;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
-use primitives::TransactionWithSignature;
 use serde::Deserialize;
-use std::{
-    any::Any, cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc,
-};
+use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 
 #[derive(Default)]
 pub struct PeerState {

@@ -4,9 +4,7 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
-    consensus::{
-        ConsensusGraphInner, ConsensusGraphTrait, SharedConsensusGraph,
-    },
+    consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
     pow::ProofOfWorkConfig,

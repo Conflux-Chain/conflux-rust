@@ -23,7 +23,6 @@ use libra_crypto::HashValue;
 
 use super::super::super::super::executor::ProcessedVMOutput;
 use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
-use futures::executor::block_on;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_types::crypto_proxies::ValidatorSet;
 use libra_types::{

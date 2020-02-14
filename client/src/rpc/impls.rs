@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
-
 // macro for reducing boilerplate for unsupported methods
 #[macro_use]
 macro_rules! not_supported {

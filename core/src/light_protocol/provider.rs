@@ -11,7 +11,7 @@ use cfx_types::H256;
 use primitives::{SignedTransaction, TransactionWithSignature};
 
 use crate::{
-    consensus::{ConsensusGraphTrait, SharedConsensusGraph},
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{LedgerInfo, LightPeerState, Peers},
         handle_error,
