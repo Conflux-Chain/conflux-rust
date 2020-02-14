@@ -18,6 +18,8 @@ class P2PTest(ConfluxTestFramework):
         # Every node generates 1 tx every second
         self.conf_parameters["generate_tx_period_us"] = "100000"
         self.conf_parameters["log_level"] = "\"debug\""
+        self.stop_probability = 0.02
+        self.clean_probability = 0.5
 
     def setup_network(self):
         self.setup_nodes()
@@ -37,10 +39,7 @@ class P2PTest(ConfluxTestFramework):
             client.send_tx(tx)
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
-            if random.random() <= 0.01:
-                self.log.info("stop %s", chosen_peer)
-                self.stop_node(chosen_peer)
-                self.start_node(chosen_peer, wait_time=120, phase_to_wait=("NormalSyncPhase"))
+            self.maybe_restart_node(chosen_peer, self.stop_probability, self.clean_probability)
             self.log.debug("%d try to generate", chosen_peer)
             block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(1000)
             self.log.info("%d generate block %s", chosen_peer, block_hash)
