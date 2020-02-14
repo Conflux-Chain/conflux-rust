@@ -140,9 +140,9 @@ fn main() -> Result<(), String> {
             .map_err(|e| format!("failed to start full client: {:?}", e))?;
         FullClient::run_until_closed(exit, client_handle);
     } else {
-        info!("Starting full client...");
+        info!("Starting archive client...");
         let client_handle = ArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start full client: {:?}", e))?;
+            .map_err(|e| format!("failed to start archive client: {:?}", e))?;
         ArchiveClient::run_until_closed(exit, client_handle);
     }
 

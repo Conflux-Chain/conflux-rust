@@ -5,9 +5,7 @@
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{
-            max_of_collection, FullPeerFilter, FullPeerState, Peers, UniqueId,
-        },
+        common::{max_of_collection, FullPeerFilter, FullPeerState, Peers},
         handler::sync::headers::Headers,
         message::{msgid, GetBlockHashesByEpoch},
         Error,
@@ -19,6 +17,7 @@ use crate::{
         MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
         NUM_WAITING_HEADERS_THRESHOLD,
     },
+    UniqueId,
 };
 use parking_lot::RwLock;
 use std::{

@@ -10,7 +10,7 @@ use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         message::{msgid, GetStateEntries, StateEntryWithKey, StateKey},
         Error, ErrorKind,
     },
@@ -21,6 +21,7 @@ use crate::{
         STATE_ENTRY_REQUEST_BATCH_SIZE, STATE_ENTRY_REQUEST_TIMEOUT,
     },
     storage::StateProof,
+    UniqueId,
 };
 
 use super::{

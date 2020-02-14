@@ -17,7 +17,7 @@ use primitives::BlockHeader;
 
 use crate::{
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         message::{msgid, GetBlockHeaders},
         Error,
     },
@@ -28,6 +28,7 @@ use crate::{
         MAX_HEADERS_IN_FLIGHT,
     },
     sync::SynchronizationGraph,
+    UniqueId,
 };
 
 use super::common::{HasKey, SyncManager};
