@@ -2640,7 +2640,7 @@ impl ConsensusGraphInner {
     /// Return the epoch that we are going to sync the state
     pub fn get_to_sync_epoch_id(&self) -> EpochId {
         let height_to_sync = self.latest_snapshot_height();
-        // The height_to_sync is within the range of `self.pivit_chain`.
+        // The height_to_sync is within the range of `self.pivot_chain`.
         let epoch_to_sync = self.arena
             [self.pivot_chain[self.height_to_pivot_index(height_to_sync)]]
         .hash;

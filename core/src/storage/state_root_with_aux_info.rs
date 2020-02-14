@@ -54,6 +54,24 @@ impl StateRootWithAuxInfo {
     }
 }
 
+pub trait StateRootWithAuxInfoToFromRlpBytes {
+    fn to_rlp_bytes(&self) -> Vec<u8>;
+    fn from_rlp_bytes(
+        bytes: &[u8],
+    ) -> Result<StateRootWithAuxInfo, super::impls::errors::Error>;
+}
+
+// Only used by storage benchmark due to incompatibility of rlp crate version.
+impl StateRootWithAuxInfoToFromRlpBytes for StateRootWithAuxInfo {
+    fn to_rlp_bytes(&self) -> Vec<u8> { self.rlp_bytes() }
+
+    fn from_rlp_bytes(
+        bytes: &[u8],
+    ) -> Result<Self, super::impls::errors::Error> {
+        Ok(Self::decode(&Rlp::new(bytes))?)
+    }
+}
+
 impl From<(&StateRoot, &StateRootAuxInfo)> for StateRootWithAuxInfo {
     fn from(x: (&StateRoot, &StateRootAuxInfo)) -> Self {
         Self {

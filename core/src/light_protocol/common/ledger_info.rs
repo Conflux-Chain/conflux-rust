@@ -149,7 +149,7 @@ impl LedgerInfo {
     #[inline]
     pub fn state_root_of(&self, epoch: u64) -> Result<StateRoot, Error> {
         match self.state_of(epoch)?.get_state_root() {
-            Ok(Some(root)) => Ok(root.state_root),
+            Ok(root) => Ok(root.state_root),
             _ => Err(ErrorKind::InternalError.into()),
         }
     }
