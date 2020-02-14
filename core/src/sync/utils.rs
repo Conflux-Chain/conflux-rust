@@ -3,9 +3,7 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
-    parameters::{
-        consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
-    },
+    parameters::WORKER_COMPUTATION_PARALLELISM,
     pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
@@ -158,7 +156,6 @@ pub fn initialize_synchronization_graph(
                 timer_chain_block_difficulty_ratio: tcr,
                 timer_chain_beta: tcb,
                 era_epoch_count,
-                era_checkpoint_gap: ERA_DEFAULT_CHECKPOINT_GAP,
                 enable_optimistic_execution: false,
                 enable_state_expose: false,
             },

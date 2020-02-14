@@ -16,8 +16,6 @@ pub mod consensus {
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
     pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
-    // FIXME: We should use finality to determine the checkpoint moment instead.
-    pub const ERA_DEFAULT_CHECKPOINT_GAP: u64 = 50000;
 
     pub const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10000;
 

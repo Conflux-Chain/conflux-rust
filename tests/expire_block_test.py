@@ -13,7 +13,6 @@ class ExpireBlockTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.conf_parameters["log_level"] = '"debug"'
         self.conf_parameters["era_epoch_count"] = "100"
-        self.conf_parameters["era_checkpoint_gap"] = "100"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
         self.num_nodes = 2
 

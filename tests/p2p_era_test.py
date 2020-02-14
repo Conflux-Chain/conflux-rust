@@ -19,7 +19,6 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["generate_tx_period_us"] = "100000"
         self.conf_parameters["log_level"] = "\"debug\""
         self.conf_parameters["era_epoch_count"] = "50"
-        self.conf_parameters["era_checkpoint_gap"] = "150"
 
     def setup_network(self):
         self.setup_nodes()

@@ -20,7 +20,6 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.num_nodes = 8
         self.conf_parameters["log_level"] = "\"debug\""
         self.conf_parameters["era_epoch_count"] = "150"
-        self.conf_parameters["era_checkpoint_gap"] = "150"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
 
     def setup_network(self):

@@ -88,7 +88,6 @@ build_config! {
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
-        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -329,7 +328,6 @@ impl Configuration {
                     .timer_chain_block_difficulty_ratio,
                 timer_chain_beta: self.raw_conf.timer_chain_beta,
                 era_epoch_count: self.raw_conf.era_epoch_count,
-                era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
             },
