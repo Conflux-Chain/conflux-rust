@@ -132,7 +132,7 @@ impl Default for ConsensusGraphPivotData {
     }
 }
 
-/// [Implementation details of Eras and Checkpoints]
+/// [Implementation details of Eras, Timer chain and Checkpoints]
 ///
 /// Era in Conflux is defined based on the height of a block. Every
 /// epoch_block_count height corresponds to one era. For example, if
@@ -141,87 +141,100 @@ impl Default for ConsensusGraphPivotData {
 /// genesis blocks of the following era. Note that it is possible to have
 /// multiple era genesis blocks for one era period. Eventually, only
 /// one era genesis block and its subtree will become dominant and all other
-/// genesis blocks together with their subtrees will be discarded.
+/// genesis blocks together with their subtrees will be discarded. The
+/// definition of Era enables Conflux to form checkpoints at the stabilized
+/// era genesis blocks.
 ///
-/// The definition of Era enables Conflux to form checkpoints at the stabilized
-/// era genesis blocks. To do that, we had the following modifications to the
-/// original GHAST algorithm. First of all, full nodes will validate the parent
-/// edge choice of each block but only *with in* its EraGenesis subtree. For
-/// example, for a block at height 100100 (era_epoch_count = 50000), its
-/// EraGenesis corresponds to its ancestor block at the height 100000 and
-/// its LastEraGenesis corresponds to its ancestor block at the height 50000.
-/// The anticone cut point for reward calculation will also stay within one era.
-/// Also the adaptive rule in GHAST is modified as well (described below) to
-/// reflect the era boundary.
+/// Implementation details of the Timer chain
+///
+/// Timer chain contains special blocks whose PoW qualities are significantly
+/// higher than normal blocks. The goal of timer chain is to enable a slowly
+/// growing longest chain to indicate the time elapsed between two blocks.
+/// Timer chain also provides a force confirmation rule which will enable us
+/// to safely form the checkpoint.
+///
+/// Any block whose PoW quality is timer_chain_beta times higher than its
+/// supposed difficulty is *timer block*. The longest chain of timer blocks
+/// (counting both parent edges and reference edges) is the timer chain. When
+/// timer_chain_beta is large enough, malicious attackers can neither control
+/// the timer chain nor stop its growth. We use Timer(G) to denote the number of
+/// timer chain blocks in G. We use TimerDis(b_1, b_2) to denote
+/// Timer(Past(B_1)) - Timer(Past(B_2)). In case that b_2 \in Future(b_1),
+/// TimerDis(b_1, b_2) is a good indicator about how long it has past between
+/// the generation of the two blocks.
+///
+/// A block b in G is considered force-confirm if 1) there are *consecutively*
+/// timer_chain_beta timer chain blocks under the subtree of b and 2) there are
+/// at least timer_chain_beta blocks after these blocks (not necessarily in the
+/// subtree of b). Force-confirm rule overrides any GHAST weight rule, i.e.,
+/// new blocks will always be generated under b.
+///
 ///
 /// Implementation details of the GHAST algorithm
 ///
 /// Conflux uses the Greedy Heaviest Adaptive SubTree (GHAST) algorithm to
 /// select a chain from the genesis block to one of the leaf blocks as the pivot
-/// chain. For each block b, GHAST algorithm computes two values: stable and
-/// adaptive. Let's take stable as an example:
+/// chain. For each block b, GHAST algorithm computes it is adaptive
 ///
 /// 1   B = Past(b)
-/// 2   a = b.parent
-/// 3   stable = True
-/// 4   Let f(x) = PastW(b) - PastW(x.parent) - x.parent.weight
-/// 5   Let g(x) = SubTW(B, x)
-/// 6   while a != EraGenesis do
-/// 7       if f(a) > beta and g(a) / f(a) < alpha then
-/// 8           stable = False
-/// 9       a = a.parent
-///
-/// To efficiently compute stable, we maintain a link-cut tree called
-/// stable_tree.
-///
-/// Assume alpha = n / d, then g(a) / f(a) < n / d
-///   => d * g(a) < n * f(a)
-///   => d * SubTW(B, x) < n * (PastW(b) - PastW(x.parent) - x.parent.weight)
-///   => d * SubTW(B, x) + n * PastW(x.parent) + n * x.parent.weight < n *
-/// PastW(b)
-///
-/// Note that for a given block b, PastW(b) is a constant,
-/// so in order to calculate stable, it is sufficient to calculate
-/// argmin{d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent)}.
-/// Therefore, in the stable_tree, the value for x is
-/// d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent).
-///
-/// adaptive could be computed in a similar manner:
-///
-/// 1   B = Past(b)
-/// 2   a = b.parent
-/// 3   Let f(x) = SubTW(B, x.parent)
-/// 4   Let g(x) = SubStableTW(B, x)
-/// 5   adaptive = False
-/// 6   while a != EraGenesis do
-/// 7       if f(a) > beta and g(a) / f(a) < alpha then
+/// 2   f is the force confirm point of b in the view of Past(b)
+/// 3   a = b.parent
+/// 4   adaptive = False
+/// 5   Let f(x) = 2 * SubTW(B, x) - SubTW(B, x.parent) + x.parent.weight
+/// 6   Let g(x) = adaptive_weight_beta * b.diff
+/// 7   while a != force_confirm do
+/// 8       if TimerDis(x, b) >= timer_chain_beta and f(x) < g(x) then
 /// 8           adaptive = True
 /// 9       a = a.parent
-///10   let f1(x) = InclusiveSubTW(B, x.parent)
-///11   let g1(x) = InclusiveSubTW(B, x)
-///12   while a != LastEraGenesis do
-///13       if f1(a) > beta and g1(a) / f1(a) < alpha then
-///14           adaptive = True
-///15       a = a.parent
 ///
-/// The only difference is that when maintaining g(x) * d - f(x) * n, we need to
+/// To efficiently compute adaptive, we maintain a link-cut tree called
+/// adaptive_weight_tree. The value for x in the link-cut-tree is
+/// 2 * SubTW(B, x) + x.parent.weight - SubTW(B, x.parent). Note that we need to
 /// do special caterpillar update in the Link-Cut-Tree, i.e., given a node X, we
 /// need to update the values of all of those nodes A such that A is the child
 /// of one of the node in the path from Genesis to X.
 ///
-/// Note that when computing stable we only consider the view under the single
-/// current era, while when computing adaptive we consider both the current and
-/// the last eras. The reason is as follows. Here we are going to handle split
-/// attack and balance attack. The split attack requires stable detection since
-/// it requires information about non-past. And it also requires attacker to
-/// keep creating unstable situations along with graph growing, therefore it
-/// can be detected in the current latest era. In contrast, balance attack may
-/// only require subtree information, so it mainly needs to detect adaptive. And
-/// balance attack may incurs adaptive case only once, which could be just
-/// before the beginning of the latest current era, to generate two balanced era
-/// subtrees, while these two era trees themselves can look healthy. Therefore,
-/// to handle balance attack, we also need to consider adaptive situation in the
-/// last/previous era.
+/// For an adaptive block, its weights will be calculated in a special way. If
+/// its PoW quality is adaptive_heavy_weight_ratio times higher than the normal
+/// difficulty, its weight will be adaptive_heavy_weight_ratio instead of one.
+/// Otherwise, the weight will be zero. The goal of adaptive weight is to deal
+/// with potential liveness attacks that balance two subtrees. Note that when
+/// computing adaptive we only consider the nodes after force_confirm.
+///
+/// [Implementation details of partial invalid blocks]
+///
+/// One block may become partial invalid because 1) it chooses incorrect parent
+/// or 2) it generates an adaptive block when it should not. In normal
+/// situations, we should verify every block we receive and determine whether it
+/// is partial invalid or not. For a partial invalid block b, it will not
+/// receive any reward. Normal nodes will also refrain from *directly or
+/// indirectly* referencing b until TimerDis(*b*, new_block) is greater than or
+/// equal to timer_dis_delta. Normal nodes essentially ignores partial invalid
+/// blocks for a while. We implement this via our active_cnt field. Last but not
+/// least, we exclude *partial invalid* blocks from the timer chain
+/// consideration. They are not timer blocks!
+///
+/// [Implementation details of checkpoints]
+///
+/// Our consensus engine will form a checkpoint pair (a, b) given a DAG state G
+/// if:
+///
+/// 1) b is force confirmed in G
+/// 2) a is force confirmed in Past(b)
+///
+/// Now we are safe to remove all blocks that are not in Future(a). For those
+/// blocks that are in the Future(a) but not in Subtree(a), we can also redirect
+/// a as their parents. We call *a* the cur_era_genesis_block and *b* the
+/// cur_era_stable_block.
+///
+/// We no longer need to check the partial invalid block which does not
+/// referencing b (directly and indirectly), because such block would never go
+/// into the timer chain. Our assumption is that the timer chain will not reorg
+/// on a length greater than timer_chain_beta. For those blocks which
+/// referencing *b* but also not under the subtree of a, they are by default
+/// partial invalid. We can ignore them as well. Therefore *a* can be treated as
+/// a new genesis block. We are going to check the possibility of making
+/// checkpoints only at the era boundary.
 
 /// [Introduction of blaming mechanism]
 ///

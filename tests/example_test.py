@@ -35,7 +35,6 @@ class ExampleTest(ConfluxTestFramework):
         sync_blocks(self.nodes[0:2])
         assert (self.nodes[0].getblockcount() == 6)
         assert (self.nodes[1].getblockcount() == 6)
-        assert (False)
 
 
 if __name__ == '__main__':
