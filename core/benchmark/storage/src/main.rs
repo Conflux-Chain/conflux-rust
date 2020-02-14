@@ -1579,6 +1579,8 @@ struct TxReplayer {
     storage_manager: Arc<StorageManager>,
     tx_counts: Cell<u64>,
     ops_counts: Cell<u64>,
+    block_height: Cell<i64>,
+    commit_log: KvdbSqlite<Box<[u8]>>,
 
     exit: Arc<(Mutex<bool>, Condvar)>,
 }
@@ -1604,9 +1606,10 @@ impl TxReplayer {
             }
         }
 
-        let storage_manager = Arc::new(StorageManager::new(
-            StorageConfiguration::new_default(conflux_data_dir.to_string()),
-        )?);
+        let storage_manager =
+            Arc::new(StorageManager::new(StorageConfiguration::new_default(
+                conflux_data_dir.to_string() + "/",
+            ))?);
 
         let exit: Arc<(Mutex<bool>, Condvar)> = Default::default();
 
@@ -1628,28 +1631,50 @@ impl TxReplayer {
             }
         });
 
+        let commit_log_path = conflux_data_dir.to_string() + "/commit_log";
+
         Ok(TxReplayer {
             storage_manager,
             tx_counts: Cell::new(0),
             ops_counts: Cell::new(0),
+            block_height: Cell::new(0),
+            commit_log: KvdbSqlite::open_or_create(
+                commit_log_path,
+                Arc::new(KvdbSqliteStatements::make_statements(
+                    &["state_root_with_aux_info"],
+                    &["BLOB"],
+                    "commit_log",
+                    true,
+                )?),
+            )?
+            .1,
             exit,
         })
     }
 
-    pub fn commit(latest_state: &mut StateDb, txs: u64, ops: u64) -> CfxH256 {
-        warn!("Committing block at tx {}, ops {}.", txs, ops);
+    pub fn commit(
+        &self, latest_state: &mut StateDb, txs: u64, ops: u64,
+    ) -> errors::Result<StateRootWithAuxInfo> {
+        warn!("Committing epoch at tx {}, ops {}.", txs, ops);
 
         let storage = latest_state.get_storage_mut();
-        let state_root =
-            storage.compute_state_root().unwrap().state_root.delta_root;
-        storage.commit(state_root).unwrap();
-        state_root
+        let state_root_with_aux = storage.compute_state_root().unwrap();
+        let epoch_id = state_root_with_aux.state_root.delta_root;
+        storage.commit(epoch_id).unwrap();
+        let block_height = self.block_height.get();
+        self.block_height.set(block_height + 1);
+        self.commit_log.put_with_number_key(
+            block_height,
+            &state_root_with_aux.to_rlp_bytes(),
+        )?;
+
+        Ok(state_root_with_aux)
     }
 
     pub fn add_tx(
         &self, tx: RealizedEthTx, latest_state: &mut StateDb,
-        last_state_root: &mut CfxH256,
-    )
+        last_state_root: &mut StateRootWithAuxInfo,
+    ) -> errors::Result<()>
     {
         if let Some(sender) = tx.sender {
             let maybe_account = latest_state
@@ -1746,22 +1771,27 @@ impl TxReplayer {
 
         self.tx_counts.set(self.tx_counts.get() + 1);
         if self.tx_counts.get() % Self::EPOCH_TXS == 0 {
-            *last_state_root = Self::commit(
+            *last_state_root = self.commit(
                 latest_state,
                 self.tx_counts.get(),
                 self.ops_counts.get(),
-            );
+            )?;
             *latest_state = StateDb::new(
                 self.storage_manager
-                    .get_state_for_next_epoch(
-                        StateIndex::new_for_test_only_delta_mpt(
-                            last_state_root,
-                        ),
-                    )
+                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                        &last_state_root.state_root.delta_root,
+                        &last_state_root,
+                        self.block_height.get() as u64,
+                        self.storage_manager
+                            .get_storage_manager()
+                            .get_snapshot_epoch_count(),
+                    ))
                     .unwrap()
                     .unwrap(),
             );
         }
+
+        Ok(())
     }
 }
 
@@ -1785,32 +1815,47 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let mut last_state_root;
 
     if matches.occurrences_of("reset_db") > 0 {
-        last_state_root = CfxH256::default();
+        last_state_root = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
         latest_state = StateDb::new(
             tx_replayer.storage_manager.get_state_for_genesis_write(),
         );
     } else {
-        last_state_root =
-            hexstr_to_h256(&matches.value_of("last_state_root").unwrap());
-        let true_state_root = tx_replayer
-            .storage_manager
-            .get_state_no_commit(StateIndex::new_for_test_only_delta_mpt(
-                &last_state_root,
-            ))
-            .unwrap()
-            .unwrap()
-            .compute_state_root()
-            .unwrap();
-        assert_eq!(true_state_root.state_root.delta_root, last_state_root);
-        latest_state = StateDb::new(
-            tx_replayer
-                .storage_manager
-                .get_state_for_next_epoch(
-                    StateIndex::new_for_test_only_delta_mpt(&last_state_root),
-                )
-                .unwrap()
-                .unwrap(),
-        );
+        match matches.value_of("last_epoch_number") {
+            None => {
+                last_state_root =
+                    StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
+                latest_state = StateDb::new(
+                    tx_replayer.storage_manager.get_state_for_genesis_write(),
+                );
+            }
+            Some(state_to_load) => {
+                let block_height = state_to_load.parse::<i64>()?;
+                tx_replayer.block_height.set(block_height);
+                last_state_root = StateRootWithAuxInfo::from_rlp_bytes(
+                    &tx_replayer
+                        .commit_log
+                        .get_with_number_key(block_height)?
+                        .unwrap(),
+                )?;
+                latest_state = StateDb::new(
+                    tx_replayer
+                        .storage_manager
+                        .get_state_for_next_epoch(
+                            StateIndex::new_for_next_epoch(
+                                &last_state_root.state_root.delta_root,
+                                &last_state_root,
+                                block_height as u64,
+                                tx_replayer
+                                    .storage_manager
+                                    .get_storage_manager()
+                                    .get_snapshot_epoch_count(),
+                            ),
+                        )
+                        .unwrap()
+                        .unwrap(),
+                );
+            }
+        }
     }
 
     // Load block RLP from file.
@@ -1910,7 +1955,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                         tx,
                         &mut latest_state,
                         &mut last_state_root,
-                    );
+                    )?;
                 }
             }
             Err(err) => {
@@ -1925,11 +1970,11 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
             }
         }
     }
-    last_state_root = TxReplayer::commit(
+    last_state_root = tx_replayer.commit(
         &mut latest_state,
         tx_replayer.tx_counts.get(),
         tx_replayer.ops_counts.get(),
-    );
+    )?;
     warn!("tx replay last state_root = {:?}", last_state_root);
     Ok(())
 }
@@ -1995,10 +2040,10 @@ fn main() -> errors::Result<()> {
                 .takes_value(false),
         )
         .arg(
-            Arg::with_name("last_state_root")
-                .value_name("last state root")
-                .help("last state root from previous tx replay")
-                .short("r")
+            Arg::with_name("last_epoch_number")
+                .value_name("last epoch number")
+                .help("last epoch number from previous tx replay")
+                .short("h")
                 .takes_value(true),
         )
         .arg(
@@ -2058,12 +2103,15 @@ fn main() -> errors::Result<()> {
     }
 }
 
-use cfx_types::{hexstr_to_h256, H256 as CfxH256};
+use cfx_types::hexstr_to_h256;
 use cfxcore::{
     statedb::StateDb,
     storage::{
-        state::StateTrait, StateIndex, StorageConfiguration, StorageManager,
-        StorageManagerTrait,
+        state::StateTrait,
+        storage_db::key_value_db::{KeyValueDbTrait, KeyValueDbTraitRead},
+        KvdbSqlite, KvdbSqliteStatements, StateIndex, StateRootWithAuxInfo,
+        StateRootWithAuxInfoToFromRlpBytes, StorageConfiguration,
+        StorageManager, StorageManagerTrait,
     },
 };
 use clap::{App, Arg, ArgMatches};
@@ -2084,7 +2132,7 @@ use heapsize::HeapSizeOf;
 use lazy_static::*;
 use log::*;
 use parking_lot::{Condvar, Mutex};
-use primitives::{Account, StorageKey};
+use primitives::{Account, StorageKey, MERKLE_NULL_NODE};
 use rlp::{Decodable, *};
 use std::{
     cell::Cell,
