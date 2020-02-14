@@ -13,7 +13,7 @@ use crate::{
     message::RequestId,
     sync::{request_manager::AsAny, Error},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

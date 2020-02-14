@@ -2,8 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::message::msgid;
-use crate::alliance_tree_graph::hsb_sync_protocol::message::msgid as hsb_msgid;
+use crate::{
+    alliance_tree_graph::hsb_sync_protocol::message::msgid as hsb_msgid,
+    sync::message::msgid,
+};
 use cfx_types::H256;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashSet;
