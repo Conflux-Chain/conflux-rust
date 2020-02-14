@@ -18,7 +18,8 @@ function check_build {
     pushd $ROOT_DIR > /dev/null
 
     local result
-    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run`
+    result=`cargo build --release && cargo test --release --all --no-run && cargo bench --all --no-run \
+    && ( cd core/benchmark/storage && RUSTFLAGS="" cargo build --release )`
     local exit_code=$?
 
     popd > /dev/null
