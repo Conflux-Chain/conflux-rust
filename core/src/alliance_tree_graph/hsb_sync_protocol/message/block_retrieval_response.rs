@@ -17,9 +17,12 @@ use libra_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, sync::Arc};
 
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct BlockRetrievalRpcResponse<P> {
     pub request_id: RequestId,
+    #[serde(bound(
+        deserialize = "BlockRetrievalResponse<P>: Deserialize<'de>"
+    ))]
     pub response: BlockRetrievalResponse<P>,
 }
 
