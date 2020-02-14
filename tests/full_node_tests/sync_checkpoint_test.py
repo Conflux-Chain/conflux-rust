@@ -44,7 +44,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
     def run_test(self):
         num_blocks = 200
-        snapshot_epoch = 100
+        snapshot_epoch = 150
 
         # Generate checkpoint on node[0]
         archive_node_client = RpcClient(self.nodes[0])

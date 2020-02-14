@@ -1282,6 +1282,28 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        let block_status = if inner.arena[me].data.pending {
+            BlockStatus::Pending
+        } else if inner.arena[me].data.partial_invalid {
+            BlockStatus::PartialInvalid
+        } else {
+            BlockStatus::Valid
+        };
+
+        if fork_at <= inner.cur_era_stable_height && !self.conf.bench_mode {
+            self.persist_terminal_and_block_info(
+                inner,
+                me,
+                block_status,
+                has_transactions,
+            );
+            debug!(
+                "Finish activating block in ConsensusGraph: index={:?} hash={:?}, block is earlier than stable, skip execution.",
+                me, inner.arena[me].hash
+            );
+            return;
+        }
+
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
                 let fork_at_pivot_index = inner.height_to_pivot_index(fork_at);
@@ -1513,13 +1535,6 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let block_status = if inner.arena[me].data.pending {
-            BlockStatus::Pending
-        } else if inner.arena[me].data.partial_invalid {
-            BlockStatus::PartialInvalid
-        } else {
-            BlockStatus::Valid
-        };
         self.persist_terminal_and_block_info(
             inner,
             me,
