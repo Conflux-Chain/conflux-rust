@@ -913,9 +913,11 @@ impl ConsensusGraphInner {
         )>,
     ) -> u64
     {
-        if let Some((_, m, _, _)) = timer_chain_tuple {
+        if let Some((fork_at, m, _, c)) = timer_chain_tuple {
             if let Some(t) = m.get(&me) {
                 return *t;
+            } else {
+                assert!(self.arena[me].timer_chain_height <= *fork_at);
             }
         }
         return self.arena[me].timer_chain_height;
@@ -2538,17 +2540,19 @@ impl ConsensusGraphInner {
             visited.clear();
             if i == NULL {
                 queue.push_back(self.cur_era_genesis_block_arena_index);
+                visited.add(self.cur_era_genesis_block_arena_index as u32);
             } else {
                 queue.push_back(self.timer_chain[fork_at_index - 1]);
+                visited.add(self.timer_chain[fork_at_index - 1] as u32);
             }
             while let Some(x) = queue.pop_front() {
-                visited.add(x as u32);
                 for child in &self.arena[x].children {
                     if anticone.contains(*child as u32) {
                         continue;
                     }
                     if !visited.contains(*child as u32) {
                         queue.push_back(*child);
+                        visited.add(*child as u32);
                     }
                 }
                 for referer in &self.arena[x].referrers {
@@ -2557,14 +2561,17 @@ impl ConsensusGraphInner {
                     }
                     if !visited.contains(*referer as u32) {
                         queue.push_back(*referer);
+                        visited.add(*referer as u32);
                     }
                 }
             }
             let mut counter = HashMap::new();
             for x in &visited {
                 let mut cnt = 0;
-                if visited.contains(self.arena[x as usize].parent as u32) {
-                    cnt = 1;
+                if self.arena[x as usize].parent != NULL {
+                    if visited.contains(self.arena[x as usize].parent as u32) {
+                        cnt = 1;
+                    }
                 }
                 for referee in &self.arena[x as usize].referees {
                     if visited.contains(*referee as u32) {
@@ -2652,15 +2659,31 @@ impl ConsensusGraphInner {
                         i + 1 - self.inner_conf.timer_chain_beta as usize
                     };
                     for j in s..i {
+                        // Note that we may have timer_chain blocks that are
+                        // outside the genesis tree temporarily.
+                        // Therefore we have to deal with the case that lca
+                        // becomes NULL
+                        if lca == NULL {
+                            break;
+                        }
                         lca = self.lca(lca, tmp_chain[j]);
                     }
                     for j in (fork_at_index + i + 1
                         - self.inner_conf.timer_chain_beta as usize)
                         ..fork_at_index
                     {
+                        // Note that we may have timer_chain blocks that are
+                        // outside the genesis tree temporarily.
+                        // Therefore we have to deal with the case that lca
+                        // becomes NULL
+                        if lca == NULL {
+                            break;
+                        }
                         lca = self.lca(lca, self.timer_chain[j]);
                     }
-                    if self.arena[last_lca].height < self.arena[lca].height {
+                    if lca != NULL
+                        && self.arena[last_lca].height < self.arena[lca].height
+                    {
                         last_lca = lca;
                     }
                     tmp_lca.push(last_lca);
@@ -2709,6 +2732,13 @@ impl ConsensusGraphInner {
                     - self.inner_conf.timer_chain_beta as usize;
                 let mut lca = self.timer_chain[e - 1];
                 for i in s..(e - 1) {
+                    // Note that we may have timer_chain blocks that are outside
+                    // the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca becomes
+                    // NULL
+                    if lca == NULL {
+                        break;
+                    }
                     lca = self.lca(lca, self.timer_chain[i]);
                 }
                 let last_lca =
@@ -2717,7 +2747,9 @@ impl ConsensusGraphInner {
                     } else {
                         self.cur_era_genesis_block_arena_index
                     };
-                if self.arena[last_lca].height < self.arena[lca].height {
+                if lca != NULL
+                    && self.arena[last_lca].height < self.arena[lca].height
+                {
                     self.timer_chain_accumulative_lca.push(lca);
                 } else {
                     self.timer_chain_accumulative_lca.push(last_lca);

@@ -162,7 +162,7 @@ impl ConsensusNewBlockHandler {
                 inner.split_root(me);
             }
             if !new_era_block_arena_index_set.contains(&parent) {
-                parent = new_era_block_arena_index;
+                parent = NULL;
             }
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
@@ -187,6 +187,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        // Now we truncate the timer chain that are outside the genesis.
         let mut timer_chain_truncate = 0;
         while timer_chain_truncate < inner.timer_chain.len()
             && !new_era_block_arena_index_set
@@ -219,8 +220,12 @@ impl ConsensusNewBlockHandler {
         } else {
             inner.timer_chain_accumulative_lca.clear();
         }
-        for i in 0..(inner.inner_conf.timer_chain_beta as usize - 1) {
-            if i < inner.timer_chain_accumulative_lca.len() {
+        // Move LCA to new genesis if necessary!
+        for i in 0..inner.timer_chain_accumulative_lca.len() {
+            if i < inner.inner_conf.timer_chain_beta as usize - 1
+                || !new_era_genesis_subtree
+                    .contains(&inner.timer_chain_accumulative_lca[i])
+            {
                 inner.timer_chain_accumulative_lca[i] =
                     new_era_block_arena_index;
             }
@@ -1016,29 +1021,33 @@ impl ConsensusNewBlockHandler {
         inner.arena[me].last_timer_block_arena_index =
             last_timer_block_arena_index;
 
-        let (anticone, anticone_barrier) =
-            ConsensusNewBlockHandler::compute_anticone(inner, me);
-        let timer_chain_tuple =
-            ConsensusNewBlockHandler::compute_timer_chain_tuple(
-                inner, me, &anticone,
-            );
         inner.arena[me].data.force_confirm =
-            inner.compute_force_confirm(Some(&timer_chain_tuple));
-        debug!(
-            "Force confirm point is {} in the past view of block index={}",
-            inner.arena[me].data.force_confirm, me
-        );
-
-        let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP {
-            Some(inner.compute_subtree_weights(me, &anticone_barrier))
-        } else {
-            None
-        };
-
-        self.update_lcts_initial(inner, me);
+            inner.cur_era_genesis_block_arena_index;
 
         let mut fully_valid = true;
+
         if !pending {
+            let (anticone, anticone_barrier) =
+                ConsensusNewBlockHandler::compute_anticone(inner, me);
+            let timer_chain_tuple =
+                ConsensusNewBlockHandler::compute_timer_chain_tuple(
+                    inner, me, &anticone,
+                );
+
+            inner.arena[me].data.force_confirm =
+                inner.compute_force_confirm(Some(&timer_chain_tuple));
+            debug!(
+                "Force confirm point is {} in the past view of block index={}",
+                inner.arena[me].data.force_confirm, me
+            );
+
+            let weight_tuple = if anticone_barrier.len() >= ANTICONE_BARRIER_CAP
+            {
+                Some(inner.compute_subtree_weights(me, &anticone_barrier))
+            } else {
+                None
+            };
+
             let adaptive = inner.adaptive_weight(
                 me,
                 &anticone_barrier,
@@ -1595,6 +1604,7 @@ impl ConsensusNewBlockHandler {
 
         let me = self.insert_block_initial(inner, &block_header);
         inner.transaction_caches.insert(me, transactions);
+        self.update_lcts_initial(inner, me);
 
         if inner.arena[me].data.active_cnt == 0 {
             let mut queue: VecDeque<usize> = VecDeque::new();
