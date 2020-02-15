@@ -181,7 +181,7 @@ impl Default for ConsensusGraphPivotData {
 /// 5   Let f(x) = 2 * SubTW(B, x) - SubTW(B, x.parent) + x.parent.weight
 /// 6   Let g(x) = adaptive_weight_beta * b.diff
 /// 7   while a != force_confirm do
-/// 8       if TimerDis(x, b) >= timer_chain_beta and f(x) < g(x) then
+/// 8       if TimerDis(a, b) >= timer_chain_beta and f(a) < g(a) then
 /// 8           adaptive = True
 /// 9       a = a.parent
 ///
