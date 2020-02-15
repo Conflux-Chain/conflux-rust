@@ -166,6 +166,7 @@ impl ConsensusNewBlockHandler {
             }
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
+            inner.terminal_hashes.remove(&inner.arena[me].hash);
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
