@@ -1269,7 +1269,7 @@ impl ConsensusGraphInner {
             .hash_to_arena_indices
             .get(block_header.parent_hash())
             .cloned()
-            .unwrap_or(self.cur_era_genesis_block_arena_index);
+            .unwrap_or(NULL);
 
         let mut referees: Vec<usize> = Vec::new();
         for hash in block_header.referee_hashes().iter() {
@@ -1278,9 +1278,7 @@ impl ConsensusGraphInner {
             }
         }
 
-        if parent == self.cur_era_genesis_block_arena_index
-            && referees.is_empty()
-        {
+        if parent == NULL && referees.is_empty() {
             self.old_era_block_set.lock().push_back(hash);
             return sn;
         }
