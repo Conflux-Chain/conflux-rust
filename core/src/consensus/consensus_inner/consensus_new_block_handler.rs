@@ -254,18 +254,19 @@ impl ConsensusNewBlockHandler {
         }
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
-        let next_era_arena_index =
-            inner.pivot_chain[inner.inner_conf.era_epoch_count as usize];
-        let next_era_hash = inner.arena[next_era_arena_index].hash.clone();
+        let stable_era_arena_index =
+            inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
+        let stable_era_hash = inner.arena[stable_era_arena_index].hash.clone();
 
         // This must be true given our checkpoint rule!
         for (_, x) in &inner.invalid_block_queue {
             assert!(new_era_block_arena_index_set.contains(x))
         }
 
-        inner
-            .data_man
-            .set_cur_consensus_era_genesis_hash(&cur_era_hash, &next_era_hash);
+        inner.data_man.set_cur_consensus_era_genesis_hash(
+            &cur_era_hash,
+            &stable_era_hash,
+        );
     }
 
     pub fn compute_anticone_bruteforce(
@@ -1344,7 +1345,18 @@ impl ConsensusNewBlockHandler {
             0,
         );
 
-        inner.cur_era_stable_height = self.should_move_stable_height(inner);
+        let new_stable_height = self.should_move_stable_height(inner);
+        if inner.cur_era_stable_height != new_stable_height {
+            inner.cur_era_stable_height = new_stable_height;
+            let stable_arena_index =
+                inner.get_pivot_block_arena_index(new_stable_height);
+            let genesis_hash =
+                &inner.arena[inner.cur_era_genesis_block_arena_index].hash;
+            let stable_hash = &inner.arena[stable_arena_index].hash;
+            inner
+                .data_man
+                .set_cur_consensus_era_genesis_hash(genesis_hash, stable_hash);
+        }
 
         let new_era_height = inner.arena[new_pivot_era_block].height;
         let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
