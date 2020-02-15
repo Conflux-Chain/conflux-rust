@@ -913,7 +913,7 @@ impl ConsensusGraphInner {
         )>,
     ) -> u64
     {
-        if let Some((fork_at, m, _, c)) = timer_chain_tuple {
+        if let Some((fork_at, m, _, _)) = timer_chain_tuple {
             if let Some(t) = m.get(&me) {
                 return *t;
             } else {
