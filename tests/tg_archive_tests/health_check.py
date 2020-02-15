@@ -816,7 +816,7 @@ if __name__ == "__main__":
             snapshot_timeout=args.snapshot_timeout)
         conflux_tracing.add_predicate(ExecutionStatusPredicate())
         conflux_tracing.add_predicate(BFTCommitPredicatePredicate())
-        conflux_tracing.add_predicate(BFTLivenessPredicate(10))
+        conflux_tracing.add_predicate(BFTLivenessPredicate(30))
         conflux_tracing.main()
     elif args.cmd == 'replay':
         conflux_tracing = TreeGraphTracing(
