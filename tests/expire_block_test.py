@@ -12,6 +12,9 @@ class ExpireBlockTest(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.conf_parameters["log_level"] = '"debug"'
+        self.conf_parameters["adaptive_weight_beta"] = "1"
+        self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
+        self.conf_parameters["timer_chain_beta"] = "8"
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
         self.num_nodes = 2
