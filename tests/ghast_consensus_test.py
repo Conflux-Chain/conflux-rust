@@ -32,6 +32,7 @@ TEST_INPUT = [
         "crash-case1.in",
         "crash-case2.in",
         "era-case1.in",
+        "era-case2.in",
         "adaptive-case1.in",
         "adaptive-case2.in",
         "adaptive-case3.in",
