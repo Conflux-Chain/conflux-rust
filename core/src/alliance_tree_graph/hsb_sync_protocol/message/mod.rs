@@ -10,7 +10,7 @@ pub mod proposal;
 pub mod sync_info;
 pub mod vote;
 
-use crate::message::{Message, MsgId};
+use crate::message::{Message, MsgId, RequestId};
 
 use crate::alliance_tree_graph::bft::consensus::consensus_types::{
     common::Payload, epoch_retrieval::EpochRetrievalRequest,
@@ -67,10 +67,35 @@ macro_rules! build_msg_impl_with_serde_serialization_generic {
     };
 }
 
+macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
+    ($name:ident, $msg:expr, $name_str:literal) => {
+        impl Message for $name {
+            fn msg_id(&self) -> MsgId { $msg }
+
+            fn msg_name(&self) -> &'static str { $name_str }
+
+            fn get_request_id(&self) -> Option<RequestId> {
+                Some(self.request_id)
+            }
+
+            fn set_request_id(&mut self, id: RequestId) {
+                self.request_id = id;
+            }
+
+            fn encode(&self) -> Vec<u8> {
+                let mut encoded =
+                    lcs::to_bytes(self).expect("Failed to serialize.");
+                encoded.push(self.msg_id());
+                encoded
+            }
+        }
+    };
+}
+
 build_msg_impl_with_serde_serialization_generic! {ProposalMsg, msgid::PROPOSAL, "ProposalMessage"}
 build_msg_impl_with_serde_serialization_generic! {BlockRetrievalRpcResponse, msgid::BLOCK_RETRIEVAL_RESPONSE, "BlockRetrievalResponseMessage"}
 build_msg_impl_with_serde_serialization! {VoteMsg, msgid::VOTE, "VoteMessage"}
 build_msg_impl_with_serde_serialization! {SyncInfo, msgid::SYNC_INFO, "SyncInfoMessage"}
-build_msg_impl_with_serde_serialization! {BlockRetrievalRpcRequest, msgid::BLOCK_RETRIEVAL, "BlockRetrievalMessage"}
 build_msg_impl_with_serde_serialization! {ValidatorChangeProof, msgid::EPOCH_CHANGE, "EpochChangeMessage"}
 build_msg_impl_with_serde_serialization! {EpochRetrievalRequest, msgid::EPOCH_RETRIEVAL, "EpochRetrievalMessage"}
+build_msg_impl_with_request_id_and_serde_serialization! {BlockRetrievalRpcRequest, msgid::BLOCK_RETRIEVAL, "BlockRetrievalMessage"}

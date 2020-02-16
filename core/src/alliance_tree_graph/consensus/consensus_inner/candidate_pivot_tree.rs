@@ -46,12 +46,23 @@ impl CandidatePivotTree {
 
     pub fn add_leaf(&mut self, parent: usize, leaf: usize) -> bool {
         if !self.consensus_indices_mapping.contains_key(&parent) {
+            debug!("Invalid pivot proposal: parent not in tree mapping");
             return false;
         }
-        if self.consensus_indices_mapping.contains_key(&leaf) {
-            return false;
-        }
+
         let parent_index = self.consensus_indices_mapping[&parent];
+
+        if let Some(leaf_index) = self.consensus_indices_mapping.get(&leaf) {
+            if self.arena[*leaf_index].parent == parent_index
+                && self.arena[parent_index].children.contains(leaf_index)
+            {
+                return true;
+            } else {
+                warn!("Should not change parent-child relation.");
+                return false;
+            }
+        }
+
         let me = self.arena.insert(TreeNode {
             parent: parent_index,
             children: Vec::new(),

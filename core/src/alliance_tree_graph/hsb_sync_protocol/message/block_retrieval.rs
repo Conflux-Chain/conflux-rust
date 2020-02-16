@@ -93,7 +93,11 @@ impl<P: Payload> Handleable<P> for BlockRetrievalRpcRequest {
     fn handle(self, ctx: &Context<P>) -> Result<(), Error> {
         let peer_address = AccountAddress::new(ctx.peer_hash.into());
         let req = self.request;
-        debug!("Received block retrieval request {}", req);
+        debug!(
+            "Received block retrieval request [block id: {}, request_id: {}]",
+            req.block_id(),
+            self.request_id
+        );
         let req_with_callback = IncomingBlockRetrievalRequest {
             req,
             peer_id: ctx.peer,

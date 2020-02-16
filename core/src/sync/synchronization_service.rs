@@ -150,10 +150,11 @@ impl SynchronizationService {
         ) {
             // TODO: request block from peers
             let _res = self.network.with_context(self.protocol, |io| {
-                self.protocol_handler.request_missing_blocks(
+                self.protocol_handler.request_block_headers(
                     io,
                     peer_id,
                     vec![pivot_decision.block_hash],
+                    true, /* ignore_db */
                 )
             });
         }
