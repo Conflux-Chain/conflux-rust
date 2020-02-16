@@ -422,8 +422,13 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // consensus graph.
             old_sync_inner.data_man.initialize_instance_id();
 
-            let (cur_era_genesis_hash, _cur_era_genesis_height) =
+            let (cur_era_genesis_hash, cur_era_genesis_height) =
                 old_sync_inner.get_genesis_hash_and_height_in_current_era();
+
+            let (cur_era_stable_hash, cur_era_stable_height) =
+                old_sync_inner.get_stable_hash_and_height_in_current_era();
+
+            debug!("Build new consensus graph for sync-recovery with identified genesis {} height {} stable block {} height {}", cur_era_genesis_hash, cur_era_genesis_height, cur_era_stable_hash, cur_era_stable_height);
 
             // TODO: Make sure that the checkpoint will not change between the
             // end of CatchUpCheckpointPhase and the start of
@@ -434,6 +439,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 self.graph.data_man.clone(),
                 old_consensus_inner.inner_conf.clone(),
                 &cur_era_genesis_hash,
+                &cur_era_stable_hash,
             );
             // For archive node, this will be `None`.
             // For full node, this is `None` when the state of checkpoint is

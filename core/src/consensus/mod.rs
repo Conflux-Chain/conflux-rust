@@ -143,6 +143,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        era_stable_block_hash: &H256,
     ) -> Self
     {
         let inner =
@@ -151,6 +152,7 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
+                era_stable_block_hash,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -195,6 +197,7 @@ impl ConsensusGraph {
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
+        let stable_hash = data_man.get_cur_consensus_era_stable_hash();
         ConsensusGraph::with_era_genesis(
             conf,
             vm,
@@ -203,6 +206,7 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
+            &stable_hash,
         )
     }
 

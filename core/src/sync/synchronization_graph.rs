@@ -193,6 +193,12 @@ impl SynchronizationGraphInner {
         )
     }
 
+    pub fn get_stable_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        let stable_hash = self.data_man.get_cur_consensus_era_stable_hash();
+        let index = *self.hash_to_arena_indices.get(&stable_hash).unwrap();
+        (stable_hash, self.arena[index].block_header.height())
+    }
+
     fn try_clear_old_era_blocks(&mut self) {
         let max_num_of_cleared_blocks = 2;
         let mut num_cleared = 0;

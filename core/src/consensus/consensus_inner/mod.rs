@@ -432,17 +432,17 @@ impl ConsensusGraphInner {
     pub fn with_era_genesis(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
+        cur_era_stable_block_hash: &H256,
     ) -> Self
     {
         let genesis_block_header = data_man
             .block_header_by_hash(cur_era_genesis_block_hash)
             .expect("genesis block header should exist here");
         let cur_era_genesis_height = genesis_block_header.height();
-        let cur_era_stable_height = if cur_era_genesis_height == 0 {
-            0
-        } else {
-            cur_era_genesis_height + inner_conf.era_epoch_count
-        };
+        let stable_block_header = data_man
+            .block_header_by_hash(cur_era_stable_block_hash)
+            .expect("stable genesis block header should exist here");
+        let cur_era_stable_height = stable_block_header.height();
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
