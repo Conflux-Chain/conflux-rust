@@ -11,6 +11,8 @@ struct TreeNode {
     /// This is the parent index of current tree node.
     #[allow(dead_code)]
     parent: usize,
+    /// This is the corresponding consensus graph index
+    consensus_index: usize,
     /// This are the indices of children of current tree node.
     children: Vec<usize>,
 }
@@ -31,6 +33,7 @@ impl CandidatePivotTree {
 
         let me = pivot_tree.arena.insert(TreeNode {
             parent: NULL,
+            consensus_index: root,
             children: Vec::new(),
         });
         pivot_tree.consensus_indices_mapping.insert(root, me);
@@ -65,6 +68,7 @@ impl CandidatePivotTree {
 
         let me = self.arena.insert(TreeNode {
             parent: parent_index,
+            consensus_index: leaf,
             children: Vec::new(),
         });
         self.arena[parent_index].children.push(me);
@@ -94,6 +98,8 @@ impl CandidatePivotTree {
             }
         }
         for index in exclude {
+            self.consensus_indices_mapping
+                .remove(&self.arena[index].consensus_index);
             self.arena.remove(index);
         }
         self.arena[me].parent = NULL;
