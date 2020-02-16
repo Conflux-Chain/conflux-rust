@@ -1235,10 +1235,6 @@ impl ConsensusGraphInner {
     fn insert_referee_if_not_duplicate(
         &self, referees: &mut Vec<usize>, me: usize,
     ) {
-        // We do not insert current genesis
-        if self.cur_era_genesis_block_arena_index == me {
-            return;
-        }
         // TODO: maybe consider a more vigorous mechanism
         let mut found = false;
         for i in 0..referees.len() {
@@ -1313,7 +1309,7 @@ impl ConsensusGraphInner {
         for referee in referees {
             self.arena[referee].referrers.push(index);
         }
-        if parent != self.cur_era_genesis_block_arena_index {
+        if parent != NULL {
             self.arena[parent].children.push(index);
         }
 
