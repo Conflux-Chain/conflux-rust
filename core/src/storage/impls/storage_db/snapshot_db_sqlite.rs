@@ -275,25 +275,34 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
     // FIXME: use a mechanism with rate limit.
     fn direct_merge(&mut self) -> Result<MerkleHash> {
+        debug!("direct_merge begins.");
         self.apply_update_to_kvdb()?;
 
         let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
+
+        self.start_mpt_merge_transaction()?;
+        // TODO: what about multi-threading node load?
         let mut mpt_to_modify = self.open_snapshot_mpt_owned()?;
+
         let mut mpt_merger = MptMerger::new(
             None,
             &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
         );
-        mpt_merger.merge_insertion_deletion_separated(
+        let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?,
             set_keys_iter.iter_range(&[], None)?,
-        )
+        )?;
+        self.commit_mpt_merge_transaction()?;
+
+        Ok(snapshot_root)
     }
 
     fn copy_and_merge(
         &mut self, old_snapshot_db: &mut SnapshotDbSqlite,
     ) -> Result<MerkleHash> {
+        debug!("copy_and_merge begins.");
         let mut kv_iter = old_snapshot_db.snapshot_kv_iterator();
         let mut iter = kv_iter.iter_range(&[], None)?;
         while let Ok(kv_item) = iter.next() {
@@ -309,16 +318,21 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;
         let mut delete_keys_iter =
             self.dumped_delta_kv_delete_keys_iterator()?;
+        self.start_mpt_merge_transaction()?;
+        // TODO: what about multi-threading node load?
         let mut base_mpt = old_snapshot_db.open_snapshot_mpt_owned()?;
         let mut save_as_mpt = self.open_snapshot_mpt_owned()?;
         let mut mpt_merger = MptMerger::new(
             Some(&mut base_mpt as &mut dyn SnapshotMptTraitReadAndIterate),
             &mut save_as_mpt as &mut dyn SnapshotMptTraitRw,
         );
-        mpt_merger.merge_insertion_deletion_separated(
+        let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?,
             set_keys_iter.iter_range(&[], None)?,
-        )
+        )?;
+        self.commit_mpt_merge_transaction()?;
+
+        Ok(snapshot_root)
     }
 }
 
@@ -382,19 +396,29 @@ impl SnapshotDbSqlite {
     pub fn dump_delta_mpt(
         &mut self, delta_mpt: &DeltaMptIterator,
     ) -> Result<()> {
-        // Safe to unwrap since we are not on a NULL snapshot.
-        let connections = self.maybe_db_connections.as_mut().unwrap();
-        <DeltaMptDumperSetDb as SingleWriterImplFamily>::FamilyRepresentative::create_table(
-            connections,
-            &SNAPSHOT_DB_STATEMENTS.delta_mpt_set_keys_statements,
-        )?;
-        <DeltaMptDumperDeleteDb as SingleWriterImplFamily>::FamilyRepresentative::create_table(
-            connections,
-            &SNAPSHOT_DB_STATEMENTS.delta_mpt_delete_keys_statements,
-        )?;
+        debug!("dump_delta_mpt starts");
+        // Create tables.
+        {
+            // Safe to unwrap since we are not on a NULL snapshot.
+            let connections = self.maybe_db_connections.as_mut().unwrap();
+            <DeltaMptDumperSetDb as SingleWriterImplFamily>::FamilyRepresentative::create_table(
+                connections,
+                &SNAPSHOT_DB_STATEMENTS.delta_mpt_set_keys_statements,
+            )?;
+            <DeltaMptDumperDeleteDb as SingleWriterImplFamily>::FamilyRepresentative::create_table(
+                connections,
+                &SNAPSHOT_DB_STATEMENTS.delta_mpt_delete_keys_statements,
+            )?;
+        }
 
         // Dump code.
-        delta_mpt.iterate(&mut DeltaMptMergeDumperSqlite { connections })
+        self.start_mpt_merge_transaction()?;
+        delta_mpt.iterate(&mut DeltaMptMergeDumperSqlite {
+            connections: self.maybe_db_connections.as_mut().unwrap(),
+        })?;
+        self.commit_mpt_merge_transaction()?;
+
+        Ok(())
     }
 
     /// Dropping is optional, because these tables are necessary to provide
@@ -438,6 +462,24 @@ impl SnapshotDbSqlite {
                     SQLITE_NO_PARAM,
                 )?
                 .finish_ignore_rows()?;
+        }
+        Ok(())
+    }
+
+    fn start_mpt_merge_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("BEGIN IMMEDIATE", SQLITE_NO_PARAM)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn commit_mpt_merge_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
+            }
         }
         Ok(())
     }
@@ -495,6 +537,7 @@ impl KvdbSqliteShardedDestructureTrait for DeltaMptDumperDeleteDb<'_> {
 
 impl<'a> KVInserter<(Vec<u8>, Box<[u8]>)> for DeltaMptMergeDumperSqlite<'a> {
     fn push(&mut self, x: (Vec<u8>, Box<[u8]>)) -> Result<()> {
+        // TODO: what about multi-threading put?
         let (mpt_key, value) = x;
         let snapshot_key =
             StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
