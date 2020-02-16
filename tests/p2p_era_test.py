@@ -19,8 +19,8 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["generate_tx_period_us"] = "100000"
         self.conf_parameters["log_level"] = "\"debug\""
         self.conf_parameters["adaptive_weight_beta"] = "1"
-        self.conf_parameters["timer_chain_block_difficulty_ratio"] = "2"
-        self.conf_parameters["timer_chain_beta"] = "6"
+        self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
+        self.conf_parameters["timer_chain_beta"] = "15"
         self.conf_parameters["era_epoch_count"] = "50"
 
     def setup_network(self):
