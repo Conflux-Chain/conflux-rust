@@ -1581,6 +1581,8 @@ struct TxReplayer {
     ops_counts: Cell<u64>,
     block_height: Cell<i64>,
     commit_log: KvdbSqlite<Box<[u8]>>,
+    commit_log_vec: Mutex<Vec<StateRootWithAuxInfo>>,
+    state_availability_boundary: RwLock<StateAvailabilityBoundary>,
 
     exit: Arc<(Mutex<bool>, Condvar)>,
 }
@@ -1594,6 +1596,7 @@ impl Drop for TxReplayer {
 
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
+    const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
 
     pub fn new(
         conflux_data_dir: &str, reset_db: bool,
@@ -1606,10 +1609,13 @@ impl TxReplayer {
             }
         }
 
+        let mut storage_configuration = StorageConfiguration::new_default(
+            conflux_data_dir.to_string() + "/",
+        );
+        storage_configuration.consensus_param.snapshot_epoch_count =
+            Self::SNAPSHOT_EPOCHS_CAPACITY;
         let storage_manager =
-            Arc::new(StorageManager::new(StorageConfiguration::new_default(
-                conflux_data_dir.to_string() + "/",
-            ))?);
+            Arc::new(StorageManager::new(storage_configuration)?);
 
         let exit: Arc<(Mutex<bool>, Condvar)> = Default::default();
 
@@ -1648,6 +1654,16 @@ impl TxReplayer {
                 )?),
             )?
             .1,
+            commit_log_vec: Default::default(),
+            state_availability_boundary: RwLock::new(
+                StateAvailabilityBoundary {
+                    pivot_chain: vec![],
+                    synced_state_height: 0,
+                    lower_bound: 0,
+                    upper_bound: 0,
+                    optimistic_executed_height: None,
+                },
+            ),
             exit,
         })
     }
@@ -1662,11 +1678,35 @@ impl TxReplayer {
         let epoch_id = state_root_with_aux.state_root.delta_root;
         storage.commit(epoch_id).unwrap();
         let block_height = self.block_height.get();
+        {
+            let mut state_availability_boundary_mut =
+                self.state_availability_boundary.write();
+            state_availability_boundary_mut.upper_bound = block_height as u64;
+            state_availability_boundary_mut.pivot_chain.push(epoch_id);
+        }
+        let confirmation_lag = 20;
+        if block_height > confirmation_lag {
+            let confirmed_height = (block_height - confirmation_lag) as u64;
+            let commit_log_vec_locked = self.commit_log_vec.lock();
+            let confirmed_epoch_state_root =
+                &commit_log_vec_locked[(confirmed_height - 1) as usize];
+            let confirmed_epoch_hash =
+                &confirmed_epoch_state_root.state_root.delta_root;
+            self.storage_manager
+                .get_storage_manager()
+                .maintain_snapshots_pivot_chain_confirmed(
+                    confirmed_height,
+                    confirmed_epoch_hash,
+                    confirmed_epoch_state_root,
+                    &self.state_availability_boundary,
+                )?;
+        }
         self.block_height.set(block_height + 1);
         self.commit_log.put_with_number_key(
             block_height,
             &state_root_with_aux.to_rlp_bytes(),
         )?;
+        self.commit_log_vec.lock().push(state_root_with_aux.clone());
 
         Ok(state_root_with_aux)
     }
@@ -2105,6 +2145,7 @@ fn main() -> errors::Result<()> {
 
 use cfx_types::hexstr_to_h256;
 use cfxcore::{
+    block_data_manager::StateAvailabilityBoundary,
     statedb::StateDb,
     storage::{
         state::StateTrait,
@@ -2131,7 +2172,7 @@ use ethkey::{public_to_address, Secret};
 use heapsize::HeapSizeOf;
 use lazy_static::*;
 use log::*;
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 use primitives::{Account, StorageKey, MERKLE_NULL_NODE};
 use rlp::{Decodable, *};
 use std::{
