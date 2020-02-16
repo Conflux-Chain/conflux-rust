@@ -894,9 +894,11 @@ impl ConsensusGraphInner {
     ) -> bool {
         debug!("validate_and_add_candidate_pivot block={:?} parent={:?} height={:?}", block_hash, parent_hash, height);
         if !self.hash_to_arena_indices.contains_key(parent_hash) {
+            debug!("Invalid pivot proposal: parent hash not exist");
             return false;
         }
         if !self.hash_to_arena_indices.contains_key(block_hash) {
+            debug!("Invalid pivot proposal: block hash not exist");
             return false;
         }
         let parent_arena_index = self.hash_to_arena_indices[parent_hash];
@@ -906,9 +908,11 @@ impl ConsensusGraphInner {
             arena_index, parent_arena_index
         );
         if self.arena[arena_index].parent != parent_arena_index {
+            debug!("Invalid pivot proposal: parent wrong");
             return false;
         }
         if !self.candidate_pivot_tree.contains(parent_arena_index) {
+            debug!("Invalid pivot proposal: parent not exist in tree");
             return false;
         }
 

@@ -46,6 +46,7 @@ impl CandidatePivotTree {
 
     pub fn add_leaf(&mut self, parent: usize, leaf: usize) -> bool {
         if !self.consensus_indices_mapping.contains_key(&parent) {
+            debug!("Invalid pivot proposal: parent not in tree mapping");
             return false;
         }
 
