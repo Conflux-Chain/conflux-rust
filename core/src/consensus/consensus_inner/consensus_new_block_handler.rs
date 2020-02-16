@@ -966,6 +966,12 @@ impl ConsensusNewBlockHandler {
                         inner.cur_era_stable_height,
                     )
         };
+        if outside_stable_tree {
+            debug!(
+                "Block {} index {} is outside stable tree!",
+                inner.arena[me].hash, me
+            );
+        }
         let stable_genesis_in_past = {
             let mut last_pivot_in_past = if parent != NULL {
                 inner.arena[parent].height
@@ -980,6 +986,13 @@ impl ConsensusNewBlockHandler {
             }
             last_pivot_in_past >= inner.cur_era_stable_height
         };
+
+        if !stable_genesis_in_past {
+            debug!(
+                "Block {} index {} not in future of the stable genesis!",
+                inner.arena[me].hash, me
+            )
+        }
 
         let pending = outside_stable_tree && !stable_genesis_in_past;
 
