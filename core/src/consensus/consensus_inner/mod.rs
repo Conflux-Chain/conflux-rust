@@ -151,8 +151,8 @@ impl Default for ConsensusGraphPivotData {
 /// Timer chain also provides a force confirmation rule which will enable us
 /// to safely form the checkpoint.
 ///
-/// Any block whose PoW quality is timer_chain_beta times higher than its
-/// supposed difficulty is *timer block*. The longest chain of timer blocks
+/// Any block whose PoW quality is timer_chain_block_difficulty_ratio times higher
+/// than its supposed difficulty is *timer block*. The longest chain of timer blocks
 /// (counting both parent edges and reference edges) is the timer chain. When
 /// timer_chain_beta is large enough, malicious attackers can neither control
 /// the timer chain nor stop its growth. We use Timer(G) to denote the number of
