@@ -12,8 +12,6 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use lazy_static::lazy_static;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, convert::TryInto};
 
@@ -75,7 +73,7 @@ pub fn account_struct_tag() -> StructTag {
 /// This is not how the Account is represented in the VM but it's a convenient
 /// representation.
 #[derive(Debug, Default, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct AccountResource {
     authentication_key: ByteArray,
     balance: u64,

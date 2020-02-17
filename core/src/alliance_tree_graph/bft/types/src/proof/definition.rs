@@ -3,10 +3,6 @@
 
 //! This module has definition of various proofs.
 
-#[cfg(test)]
-#[path = "unit_tests/proof_proto_conversion_test.rs"]
-mod proof_proto_conversion_test;
-
 use super::{
     position::Position, verify_transaction_info, MerkleTreeInternalNode,
     SparseMerkleInternalNode, SparseMerkleLeafNode,
@@ -27,8 +23,6 @@ use libra_crypto::{
     },
     HashValue,
 };
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::{TryFrom, TryInto},
@@ -719,7 +713,7 @@ impl SparseMerkleRangeProof {
 /// `TransactionInfo` object, and the `TransactionInfo` object that is supposed
 /// to match the `Transaction`.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct TransactionProof {
     /// The accumulator proof from ledger info root to leaf that authenticates
     /// the hash of the `TransactionInfo` object.
@@ -832,7 +826,7 @@ impl From<TransactionProof> for crate::proto::types::TransactionProof {
 /// `TransactionInfo`, the `TransactionInfo` object and the `SparseMerkleProof`
 /// from state root to the account.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct AccountStateProof {
     /// The accumulator proof from ledger info root to leaf that authenticates
     /// the hash of the `TransactionInfo` object.
@@ -956,7 +950,7 @@ impl From<AccountStateProof> for crate::proto::types::AccountStateProof {
 /// the `TransactionInfo` object and the `AccumulatorProof` from event
 /// accumulator root to the event.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct EventProof {
     /// The accumulator proof from ledger info root to leaf that authenticates
     /// the hash of the `TransactionInfo` object.
@@ -1073,7 +1067,7 @@ impl From<EventProof> for crate::proto::types::EventProof {
 
 /// The complete proof used to authenticate a list of consecutive transactions.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct TransactionListProof {
     /// The accumulator range proof from ledger info root to leaves that
     /// authenticates the hashes of all `TransactionInfo` objects.

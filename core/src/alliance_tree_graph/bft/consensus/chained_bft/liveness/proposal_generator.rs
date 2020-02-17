@@ -34,10 +34,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(test)]
-#[path = "proposal_generator_test.rs"]
-mod proposal_generator_test;
-
 /// ProposalGenerator is responsible for generating the proposed block on
 /// demand: it's typically used by a validator that believes it's a valid
 /// candidate for serving as a proposer at a given round.

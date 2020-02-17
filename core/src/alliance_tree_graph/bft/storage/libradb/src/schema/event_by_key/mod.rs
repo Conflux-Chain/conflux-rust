@@ -72,6 +72,3 @@ impl ValueCodec<EventByKeySchema> for Value {
         Ok((version, index))
     }
 }
-
-#[cfg(test)]
-mod test;

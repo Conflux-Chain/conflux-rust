@@ -52,8 +52,6 @@ use anyhow::{Error, Result};
 use lazy_static::lazy_static;
 use libra_crypto::hash::{CryptoHash, HashValue};
 use mirai_annotations::*;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use radix_trie::TrieKey;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -196,7 +194,7 @@ lazy_static! {
 #[derive(
     Clone, Eq, PartialEq, Default, Hash, Serialize, Deserialize, Ord, PartialOrd,
 )]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct AccessPath {
     pub address: AccountAddress,
     pub path: Vec<u8>,

@@ -23,8 +23,6 @@ use libra_crypto::HashValue;
 
 use super::super::super::super::executor::ProcessedVMOutput;
 use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
-#[cfg(any(test, feature = "fuzzing"))]
-use libra_types::crypto_proxies::ValidatorSet;
 use libra_types::{
     block_info::PivotBlockDecision,
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorVerifier},
@@ -34,10 +32,6 @@ use std::{
     sync::{Arc, RwLock},
 };
 use termion::color::*;
-
-#[cfg(test)]
-#[path = "block_store_test.rs"]
-mod block_store_test;
 
 #[path = "sync_manager.rs"]
 pub mod sync_manager;
@@ -483,61 +477,4 @@ impl<T: Payload> BlockReader for BlockStore<T> {
     fn highest_timeout_cert(&self) -> Option<Arc<TimeoutCertificate>> {
         self.inner.read().unwrap().highest_timeout_cert()
     }
-}
-
-#[cfg(any(test, feature = "fuzzing"))]
-impl<T: Payload> BlockStore<T> {
-    /// Returns the number of blocks in the tree
-    pub(crate) fn len(&self) -> usize { self.inner.read().unwrap().len() }
-
-    /// Returns the number of child links in the tree
-    pub(crate) fn child_links(&self) -> usize {
-        self.inner.read().unwrap().child_links()
-    }
-
-    /// The number of pruned blocks that are still available in memory
-    pub(super) fn pruned_blocks_in_mem(&self) -> usize {
-        self.inner.read().unwrap().pruned_blocks_in_mem()
-    }
-
-    /// Helper to insert vote and qc
-    /// Can't be used in production, because production insertion potentially
-    /// requires state sync
-    pub fn insert_vote_and_qc(
-        &self, vote: &Vote, validator_verifier: &ValidatorVerifier,
-    ) -> VoteReceptionResult {
-        let r = self.insert_vote(vote, validator_verifier);
-        if let VoteReceptionResult::NewQuorumCertificate(ref qc) = r {
-            self.insert_single_quorum_cert(qc.as_ref().clone()).unwrap();
-        }
-        r
-    }
-
-    /*
-    /// Helper function to insert the block with the qc together
-    pub fn insert_block_with_qc(
-        &self, block: Block<T>,
-    ) -> anyhow::Result<Arc<ExecutedBlock<T>>> {
-        self.insert_single_quorum_cert(block.quorum_cert().clone())?;
-        Ok(self.execute_and_insert_block(block)?)
-    }
-
-    /// Helper function to insert a reconfiguration block
-    pub fn insert_reconfiguration_block(
-        &self, block: Block<T>,
-    ) -> anyhow::Result<Arc<ExecutedBlock<T>>> {
-        self.insert_single_quorum_cert(block.quorum_cert().clone())?;
-        let executed_block = self.execute_block(block)?;
-        let mut output = executed_block.output().as_ref().clone();
-        output.set_validators(ValidatorSet::new(vec![]));
-        Ok(self
-            .inner
-            .write()
-            .unwrap()
-            .insert_block(ExecutedBlock::new(
-                executed_block.block().clone(),
-                output,
-            ))?)
-    }
-    */
 }

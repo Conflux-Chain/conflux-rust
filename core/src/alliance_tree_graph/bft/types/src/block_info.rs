@@ -10,8 +10,6 @@ use cfx_types::H256;
 use libra_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]
 use libra_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
@@ -23,6 +21,7 @@ use std::{
 pub type Round = u64;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+
 pub struct PivotBlockDecision {
     pub height: u64,
     pub block_hash: H256,
@@ -70,7 +69,7 @@ impl From<PivotBlockDecision> for crate::proto::types::PivotBlockDecision {
 /// without having access to the block or its execution output state. It
 /// assumes that the block is the last block executed within the ledger.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct BlockInfo {
     /// Epoch number corresponds to the set of validators that are active for
     /// this block.

@@ -42,6 +42,3 @@ impl ValueCodec<TransactionSchema> for Transaction {
         lcs::from_bytes(data).map_err(Into::into)
     }
 }
-
-#[cfg(test)]
-mod test;

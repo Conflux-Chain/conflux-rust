@@ -6,8 +6,6 @@ use anyhow::Result;
 use libra_config::config::PersistableConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-#[cfg(test)]
-use tempfile::NamedTempFile;
 
 /// SafetyRules needs an abstract storage interface to act as a common utility
 /// for storing persistent data to local disk, cloud, secrets managers, or even
@@ -150,27 +148,4 @@ impl PersistentStorage for OnDiskStorage {
         self.internal_data.save_config(self.file_path.clone())?;
         Ok(())
     }
-}
-
-#[test]
-fn test_on_disk_storage() {
-    let file_path =
-        NamedTempFile::new().unwrap().into_temp_path().to_path_buf();
-    let mut storage: Box<dyn PersistentStorage> =
-        OnDiskStorage::default_storage(file_path.clone()).unwrap();
-    assert_eq!(storage.epoch(), 1);
-    assert_eq!(storage.last_voted_round(), 0);
-    assert_eq!(storage.preferred_round(), 0);
-    storage.set_epoch(9).unwrap();
-    storage.set_last_voted_round(8).unwrap();
-    storage.set_preferred_round(1).unwrap();
-    assert_eq!(storage.epoch(), 9);
-    assert_eq!(storage.last_voted_round(), 8);
-    assert_eq!(storage.preferred_round(), 1);
-
-    let storage: Box<dyn PersistentStorage> =
-        OnDiskStorage::default_storage(file_path).unwrap();
-    assert_eq!(storage.epoch(), 9);
-    assert_eq!(storage.last_voted_round(), 8);
-    assert_eq!(storage.preferred_round(), 1);
 }

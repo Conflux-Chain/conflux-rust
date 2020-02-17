@@ -65,6 +65,3 @@ impl ValueCodec<TransactionByAccountSchema> for Version {
         Ok((&data[..]).read_u64::<BigEndian>()?)
     }
 }
-
-#[cfg(test)]
-mod test;

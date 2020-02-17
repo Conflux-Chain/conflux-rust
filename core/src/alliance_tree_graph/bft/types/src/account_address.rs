@@ -10,8 +10,6 @@ use libra_crypto::{
     HashValue, VerifyingKey,
 };
 use libra_crypto_derive::CryptoHasher;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use rand::{rngs::OsRng, Rng};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use std::{convert::TryFrom, fmt, str::FromStr};
@@ -27,7 +25,7 @@ const LIBRA_NETWORK_ID_SHORT: &str = "lb";
 #[derive(
     Ord, PartialOrd, Eq, PartialEq, Hash, Default, Clone, Copy, CryptoHasher,
 )]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct AccountAddress([u8; ADDRESS_LENGTH]);
 
 impl AccountAddress {

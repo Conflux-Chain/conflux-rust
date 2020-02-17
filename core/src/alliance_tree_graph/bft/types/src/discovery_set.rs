@@ -12,8 +12,6 @@ use crate::{
 };
 use anyhow::Result;
 use lazy_static::lazy_static;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{iter::IntoIterator, ops::Deref, vec};
 
@@ -45,7 +43,7 @@ pub(crate) fn discovery_set_path() -> Vec<u8> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct DiscoverySet(Vec<DiscoveryInfo>);
 
 impl DiscoverySet {

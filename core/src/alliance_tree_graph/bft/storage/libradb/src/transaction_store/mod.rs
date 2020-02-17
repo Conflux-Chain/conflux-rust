@@ -70,6 +70,3 @@ impl TransactionStore {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod test;

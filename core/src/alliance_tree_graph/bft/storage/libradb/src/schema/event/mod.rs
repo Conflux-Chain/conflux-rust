@@ -65,6 +65,3 @@ impl SeekKeyCodec<EventSchema> for Version {
         Ok(self.to_be_bytes().to_vec())
     }
 }
-
-#[cfg(test)]
-mod test;

@@ -110,11 +110,6 @@ impl<T: Payload> ChainedBftSMR<T> {
         }
     }
 
-    #[cfg(test)]
-    pub fn block_store(&self) -> Option<Arc<BlockStore<T>>> {
-        self.block_store.clone()
-    }
-
     fn start_event_processing<TT: TxnTransformer<Payload = T>>(
         executor: Handle, mut epoch_manager: EpochManager<TT, T>,
         mut event_processor: EventProcessor<TT, T>,

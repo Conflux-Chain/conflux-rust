@@ -55,6 +55,3 @@ impl ValueCodec<TransactionInfoSchema> for TransactionInfo {
         libra_types::proto::types::TransactionInfo::decode(data)?.try_into()
     }
 }
-
-#[cfg(test)]
-mod test;

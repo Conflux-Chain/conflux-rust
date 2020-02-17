@@ -110,10 +110,10 @@ impl CandidatePivotTree {
 #[cfg(test)]
 mod tests {
     use super::CandidatePivotTree;
-    use crate::parameters::consensus::NULL;
 
+    #[test]
     fn test_add_leaf() {
-        let pivot_tree = CandidatePivotTree::new(0);
+        let mut pivot_tree = CandidatePivotTree::new(0);
 
         assert_eq!(pivot_tree.root_index, 0);
         assert_eq!(pivot_tree.arena.len(), 1);
@@ -126,24 +126,38 @@ mod tests {
         assert_eq!(pivot_tree.consensus_indices_mapping.len(), 1);
 
         // add valid leaf
-        assert!(pivot_tree.add_leaf(0, 1));
+        assert!(pivot_tree.add_leaf(0, 2));
         assert_eq!(pivot_tree.root_index, 0);
         assert_eq!(pivot_tree.arena.len(), 2);
         assert_eq!(pivot_tree.consensus_indices_mapping.len(), 2);
 
-        // add existing node
-        assert!(!pivot_tree.add_leaf(0, 1));
+        // add valid leaf
+        assert!(pivot_tree.add_leaf(0, 1));
         assert_eq!(pivot_tree.root_index, 0);
-        assert_eq!(pivot_tree.arena.len(), 2);
-        assert_eq!(pivot_tree.consensus_indices_mapping.len(), 2);
+        assert_eq!(pivot_tree.arena.len(), 3);
+        assert_eq!(pivot_tree.consensus_indices_mapping.len(), 3);
+
+        // add existing node
+        assert!(pivot_tree.add_leaf(0, 1));
+        assert_eq!(pivot_tree.root_index, 0);
+        assert_eq!(pivot_tree.arena.len(), 3);
+        assert_eq!(pivot_tree.consensus_indices_mapping.len(), 3);
+
+        // add existing node and change parent
+        assert!(!pivot_tree.add_leaf(2, 1));
+        assert_eq!(pivot_tree.root_index, 0);
+        assert_eq!(pivot_tree.arena.len(), 3);
+        assert_eq!(pivot_tree.consensus_indices_mapping.len(), 3);
 
         assert!(pivot_tree.contains(0));
         assert!(pivot_tree.contains(1));
-        assert!(!pivot_tree.contains(2));
+        assert!(pivot_tree.contains(2));
+        assert!(!pivot_tree.contains(3));
     }
 
+    #[test]
     fn test_make_root() {
-        let pivot_tree = CandidatePivotTree::new(0);
+        let mut pivot_tree = CandidatePivotTree::new(0);
 
         assert_eq!(pivot_tree.root_index, 0);
         assert!(pivot_tree.add_leaf(0, 1));

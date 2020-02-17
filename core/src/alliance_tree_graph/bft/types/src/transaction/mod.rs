@@ -21,8 +21,6 @@ use libra_crypto::{
     HashValue,
 };
 use libra_crypto_derive::CryptoHasher;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{de, ser, Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -493,7 +491,7 @@ impl From<SignatureCheckedTransaction>
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct TransactionWithProof {
     pub version: Version,
     pub transaction: Transaction,
@@ -747,7 +745,7 @@ impl From<TransactionInfo> for crate::proto::types::TransactionInfo {
 /// consists of the transaction as well as the execution result of this
 /// transaction.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, CryptoHasher)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct TransactionInfo {
     /// The hash of this transaction.
     transaction_hash: HashValue,
@@ -1102,7 +1100,6 @@ impl From<TransactionListWithProof>
 /// We suppress the clippy warning here as we would expect most of the
 /// transaction to be user transaction.
 #[allow(clippy::large_enum_variant)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, CryptoHasher)]
 pub enum Transaction {
     /// Transaction submitted by the user. e.g: P2P payment transaction,

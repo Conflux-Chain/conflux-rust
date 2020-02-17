@@ -21,10 +21,6 @@ use std::{
     sync::Arc,
 };
 
-#[cfg(test)]
-#[path = "pending_votes_test.rs"]
-mod pending_votes_test;
-
 struct LastVoteInfo {
     li_digest: HashValue,
     round: Round,

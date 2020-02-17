@@ -50,6 +50,3 @@ impl ValueCodec<EpochByVersionSchema> for u64 {
         Ok((&data[..]).read_u64::<BigEndian>()?)
     }
 }
-
-#[cfg(test)]
-mod test;

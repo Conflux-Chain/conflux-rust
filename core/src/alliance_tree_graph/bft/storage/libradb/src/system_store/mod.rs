@@ -58,6 +58,3 @@ impl SystemStore {
         Ok(counters)
     }
 }
-
-#[cfg(test)]
-mod test;

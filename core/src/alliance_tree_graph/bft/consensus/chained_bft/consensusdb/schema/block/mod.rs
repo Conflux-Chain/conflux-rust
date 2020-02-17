@@ -68,6 +68,3 @@ impl<T: Payload> ValueCodec<BlockSchema<T>> for SchemaBlock<T> {
         Ok(SchemaBlock(lcs::from_bytes(data)?))
     }
 }
-
-#[cfg(test)]
-mod test;

@@ -57,6 +57,3 @@ impl ValueCodec<EventAccumulatorSchema> for HashValue {
 
     fn decode_value(data: &[u8]) -> Result<Self> { Self::from_slice(data) }
 }
-
-#[cfg(test)]
-mod test;

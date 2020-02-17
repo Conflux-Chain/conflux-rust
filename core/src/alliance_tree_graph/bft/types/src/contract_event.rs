@@ -11,8 +11,6 @@ use libra_crypto::{
     HashValue,
 };
 use libra_crypto_derive::CryptoHasher;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -114,7 +112,7 @@ impl From<ContractEvent> for crate::proto::types::Event {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct EventWithProof {
     pub transaction_version: u64, // Should be `Version`
     pub event_index: u64,

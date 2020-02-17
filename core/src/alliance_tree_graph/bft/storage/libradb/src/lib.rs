@@ -14,9 +14,6 @@
 extern crate prometheus;
 #[macro_use]
 extern crate log;
-// Used in this and other crates for testing.
-#[cfg(any(test, feature = "fuzzing"))]
-pub mod test_helper;
 
 pub mod errors;
 pub mod schema;
@@ -27,9 +24,6 @@ mod ledger_store;
 mod pruner;
 mod system_store;
 mod transaction_store;
-
-#[cfg(test)]
-mod libradb_test;
 
 use crate::{
     change_set::{ChangeSet, SealedChangeSet},

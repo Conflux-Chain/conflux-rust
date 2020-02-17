@@ -259,29 +259,6 @@ impl<T> RepeatVec<T> {
     fn binary_search(&self, at: usize) -> Result<usize, usize> {
         self.items.binary_search_by_key(&at, |(start, _)| *start)
     }
-
-    /// Check and assert the internal invariants for this RepeatVec.
-    #[cfg(test)]
-    pub(crate) fn assert_invariants(&self) {
-        for window in self.items.windows(2) {
-            let (idx1, idx2) = match window {
-                [(idx1, _), (idx2, _)] => (*idx1, *idx2),
-                _ => panic!("wrong window size"),
-            };
-            assert!(idx1 < idx2, "no zero-length elements");
-        }
-        match self.items.last() {
-            Some(&(idx, _)) => {
-                assert!(
-                    idx < self.len,
-                    "length must be greater than last element's start"
-                );
-            }
-            None => {
-                assert_eq!(self.len, 0, "empty RepeatVec");
-            }
-        }
-    }
 }
 
 // Note that RepeatVec cannot implement `std::ops::Index<usize>` because the

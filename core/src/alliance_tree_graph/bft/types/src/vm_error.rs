@@ -5,10 +5,6 @@
 
 use anyhow::{Error, Result};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest::prelude::*;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{de, ser};
 use std::{convert::TryFrom, fmt};
 
@@ -45,8 +41,6 @@ pub static EXECUTION_STATUS_MAX_CODE: u64 = 4999;
 /// A `VMStatus` is represented as a required major status that is semantic
 /// coupled with with an optional sub status and message.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct VMStatus {
     /// The major status, e.g. ABORTED, OUT_OF_GAS, etc.
     pub major_status: StatusCode,

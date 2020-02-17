@@ -6,10 +6,3 @@ pub(crate) mod pacemaker;
 pub(crate) mod proposal_generator;
 pub(crate) mod proposer_election;
 pub(crate) mod rotating_proposer_election;
-
-#[cfg(test)]
-mod multi_proposer_test;
-#[cfg(test)]
-mod pacemaker_test;
-#[cfg(test)]
-mod rotating_proposer_test;
