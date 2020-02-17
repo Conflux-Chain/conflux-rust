@@ -151,15 +151,15 @@ impl Default for ConsensusGraphPivotData {
 /// Timer chain also provides a force confirmation rule which will enable us
 /// to safely form the checkpoint.
 ///
-/// Any block whose PoW quality is timer_chain_block_difficulty_ratio times higher
-/// than its supposed difficulty is *timer block*. The longest chain of timer blocks
-/// (counting both parent edges and reference edges) is the timer chain. When
-/// timer_chain_beta is large enough, malicious attackers can neither control
-/// the timer chain nor stop its growth. We use Timer(G) to denote the number of
-/// timer chain blocks in G. We use TimerDis(b_1, b_2) to denote
-/// Timer(Past(B_1)) - Timer(Past(B_2)). In case that b_2 \in Future(b_1),
-/// TimerDis(b_1, b_2) is a good indicator about how long it has past between
-/// the generation of the two blocks.
+/// Any block whose PoW quality is timer_chain_block_difficulty_ratio times
+/// higher than its supposed difficulty is *timer block*. The longest chain of
+/// timer blocks (counting both parent edges and reference edges) is the timer
+/// chain. When timer_chain_beta is large enough, malicious attackers can
+/// neither control the timer chain nor stop its growth. We use Timer(G) to
+/// denote the number of timer chain blocks in G. We use TimerDis(b_1, b_2) to
+/// denote Timer(Past(B_1)) - Timer(Past(B_2)). In case that b_2 \in
+/// Future(b_1), TimerDis(b_1, b_2) is a good indicator about how long it has
+/// past between the generation of the two blocks.
 ///
 /// A block b in G is considered force-confirm if 1) there are *consecutively*
 /// timer_chain_beta timer chain blocks under the subtree of b and 2) there are
