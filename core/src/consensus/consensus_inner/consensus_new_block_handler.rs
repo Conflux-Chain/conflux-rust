@@ -509,10 +509,10 @@ impl ConsensusNewBlockHandler {
         for index in anticone_barrier {
             let delta = inner.weight_tree.get(index as usize);
             weight_delta.insert(index as usize, delta);
-            debug!(
-                "Weight delta block {} index {} delta {}",
-                inner.arena[index as usize].hash, index, delta
-            );
+            //            debug!(
+            //                "Weight delta block {} index {} delta {}",
+            //                inner.arena[index as usize].hash, index, delta
+            //            );
         }
 
         // Remove weight contribution of anticone
@@ -533,7 +533,7 @@ impl ConsensusNewBlockHandler {
                 continue;
             }
             if lca == parent {
-                debug!("Block invalid (index = {}), referenced block {} index {} is in the subtree of parent block {} index {}!", me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent);
+                trace!("Block invalid (index = {}), referenced block {} index {} is in the subtree of parent block {} index {}!", me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent);
                 valid = false;
                 break;
             }
@@ -553,28 +553,28 @@ impl ConsensusNewBlockHandler {
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
             ) {
-                debug!("Block invalid (index = {}), referenced block {} index {} fork is heavier than the parent block {} index {} fork! Ref fork block {} weight {}, parent fork block {} weight {}!",
+                trace!("Block invalid (index = {}), referenced block {} index {} fork is heavier than the parent block {} index {} fork! Ref fork block {} weight {}, parent fork block {} weight {}!",
                        me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent,
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
-                let tmp = *consensus_arena_index_in_epoch;
-                let mut q = VecDeque::new();
-                q.push_back(tmp);
-                while let Some(v) = q.pop_front() {
-                    let w = inner.weight_tree.get(v);
-                    debug!(
-                        "Subtree block {} index {} weight {}",
-                        inner.arena[v].hash, v, w
-                    );
-                    if w != 0 {
-                        for child in &inner.arena[v].children {
-                            q.push_back(*child);
-                        }
-                    }
-                }
+                //                let tmp = *consensus_arena_index_in_epoch;
+                //                let mut q = VecDeque::new();
+                //                q.push_back(tmp);
+                //                while let Some(v) = q.pop_front() {
+                //                    let w = inner.weight_tree.get(v);
+                //                    debug!(
+                //                        "Subtree block {} index {} weight {}",
+                //                        inner.arena[v].hash, v, w
+                //                    );
+                //                    if w != 0 {
+                //                        for child in &inner.arena[v].children
+                // {                            
+                // q.push_back(*child);                        }
+                //                    }
+                //                }
                 valid = false;
                 break;
             } else {
-                debug!("Pass one validity check, block index = {}. Referenced block {} index {} fork is not heavier than the parent block {} index {} fork. Ref fork block {} weight {}, parent fork block {} weight {}!",
+                trace!("Pass one validity check, block index = {}. Referenced block {} index {} fork is not heavier than the parent block {} index {} fork. Ref fork block {} weight {}, parent fork block {} weight {}!",
                        me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent,
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
             }
@@ -981,25 +981,7 @@ impl ConsensusNewBlockHandler {
         &self, inner: &mut ConsensusGraphInner, me: usize,
     ) -> BlockStatus {
         let parent = inner.arena[me].parent;
-        let outside_stable_tree = {
-            if inner.arena[me].height > inner.cur_era_stable_height {
-                // It's pending if it has a different stable block or is before
-                // our stable block or we are still recovering
-                let me_stable_arena_index =
-                    inner.ancestor_at(parent, inner.cur_era_stable_height);
-                inner.arena[me_stable_arena_index].hash
-                    != inner.cur_era_stable_block_hash
-            } else {
-                true
-            }
-        };
-        if outside_stable_tree {
-            debug!(
-                "Block {} index {} is outside the current stable tree!",
-                inner.arena[me].hash, me
-            );
-        }
-        let stable_genesis_in_past = {
+        let pending = {
             if let Some(f) = inner.initial_stable_future.as_mut() {
                 let mut in_future = false;
                 if inner.arena[me].hash == inner.cur_era_stable_block_hash {
@@ -1019,10 +1001,10 @@ impl ConsensusNewBlockHandler {
                 if in_future {
                     f.add(me as u32);
                 }
-                in_future
+                !in_future
             } else {
                 let mut last_pivot_in_past = if parent != NULL {
-                    inner.arena[parent].height
+                    inner.arena[parent].last_pivot_in_past
                 } else {
                     inner.cur_era_genesis_height
                 };
@@ -1032,18 +1014,9 @@ impl ConsensusNewBlockHandler {
                         inner.arena[*referee].last_pivot_in_past,
                     );
                 }
-                last_pivot_in_past >= inner.cur_era_stable_height
+                last_pivot_in_past < inner.cur_era_stable_height
             }
         };
-
-        if !stable_genesis_in_past {
-            debug!(
-                "Block {} index {} not in future of the stable genesis!",
-                inner.arena[me].hash, me
-            )
-        }
-
-        let pending = outside_stable_tree && !stable_genesis_in_past;
 
         // Because the following computation relies on all previous blocks being
         // active, We have to delay it till now
