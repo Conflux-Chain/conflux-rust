@@ -195,8 +195,15 @@ impl SynchronizationGraphInner {
 
     pub fn get_stable_hash_and_height_in_current_era(&self) -> (H256, u64) {
         let stable_hash = self.data_man.get_cur_consensus_era_stable_hash();
-        let index = *self.hash_to_arena_indices.get(&stable_hash).unwrap();
-        (stable_hash, self.arena[index].block_header.height())
+        // The stable block may not be in the sync-graph when this function is
+        // invoked during the synchronization phase, let's query the
+        // data from data manager
+        let height = self
+            .data_man
+            .block_header_by_hash(&stable_hash)
+            .expect("stable block must exist in data manager")
+            .height();
+        (stable_hash, height)
     }
 
     fn try_clear_old_era_blocks(&mut self) {

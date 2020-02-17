@@ -507,8 +507,12 @@ impl ConsensusNewBlockHandler {
         let mut weight_delta = HashMap::new();
 
         for index in anticone_barrier {
-            weight_delta
-                .insert(index as usize, inner.weight_tree.get(index as usize));
+            let delta = inner.weight_tree.get(index as usize);
+            weight_delta.insert(index as usize, delta);
+            debug!(
+                "Weight delta block {} index {} delta {}",
+                inner.arena[index as usize].hash, index, delta
+            );
         }
 
         // Remove weight contribution of anticone
@@ -552,6 +556,21 @@ impl ConsensusNewBlockHandler {
                 debug!("Block invalid (index = {}), referenced block {} index {} fork is heavier than the parent block {} index {} fork! Ref fork block {} weight {}, parent fork block {} weight {}!",
                        me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent,
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
+                let tmp = *consensus_arena_index_in_epoch;
+                let mut q = VecDeque::new();
+                q.push_back(tmp);
+                while let Some(v) = q.pop_front() {
+                    let w = inner.weight_tree.get(v);
+                    debug!(
+                        "Subtree block {} index {} weight {}",
+                        inner.arena[v].hash, v, w
+                    );
+                    if w != 0 {
+                        for child in &inner.arena[v].children {
+                            q.push_back(*child);
+                        }
+                    }
+                }
                 valid = false;
                 break;
             } else {
@@ -963,36 +982,58 @@ impl ConsensusNewBlockHandler {
     ) -> BlockStatus {
         let parent = inner.arena[me].parent;
         let outside_stable_tree = {
-            // It's pending if it has a different stable block or is before our
-            // stable block or we are still recovering
-            let me_stable_arena_index =
-                inner.ancestor_at(parent, inner.cur_era_stable_height);
-            (inner.pivot_chain.len() as u64 - 1) + inner.cur_era_genesis_height
-                < inner.cur_era_stable_height
-                || me_stable_arena_index
-                    != inner.get_pivot_block_arena_index(
-                        inner.cur_era_stable_height,
-                    )
+            if inner.arena[me].height > inner.cur_era_stable_height {
+                // It's pending if it has a different stable block or is before
+                // our stable block or we are still recovering
+                let me_stable_arena_index =
+                    inner.ancestor_at(parent, inner.cur_era_stable_height);
+                inner.arena[me_stable_arena_index].hash
+                    != inner.cur_era_stable_block_hash
+            } else {
+                true
+            }
         };
         if outside_stable_tree {
             debug!(
-                "Block {} index {} is outside stable tree!",
+                "Block {} index {} is outside the current stable tree!",
                 inner.arena[me].hash, me
             );
         }
         let stable_genesis_in_past = {
-            let mut last_pivot_in_past = if parent != NULL {
-                inner.arena[parent].height
+            if let Some(f) = inner.initial_stable_future.as_mut() {
+                let mut in_future = false;
+                if inner.arena[me].hash == inner.cur_era_stable_block_hash {
+                    in_future = true;
+                }
+                if parent != NULL && f.contains(parent as u32) {
+                    in_future = true;
+                }
+                if !in_future {
+                    for referee in &inner.arena[me].referees {
+                        if f.contains(*referee as u32) {
+                            in_future = true;
+                            break;
+                        }
+                    }
+                }
+                if in_future {
+                    f.add(me as u32);
+                }
+                in_future
             } else {
-                inner.cur_era_genesis_height
-            };
-            for referee in &inner.arena[me].referees {
-                last_pivot_in_past = max(
-                    last_pivot_in_past,
-                    inner.arena[*referee].last_pivot_in_past,
-                );
+                let mut last_pivot_in_past = if parent != NULL {
+                    inner.arena[parent].height
+                } else {
+                    inner.cur_era_genesis_height
+                };
+                for referee in &inner.arena[me].referees {
+                    last_pivot_in_past = max(
+                        last_pivot_in_past,
+                        inner.arena[*referee].last_pivot_in_past,
+                    );
+                }
+                last_pivot_in_past >= inner.cur_era_stable_height
             }
-            last_pivot_in_past >= inner.cur_era_stable_height
         };
 
         if !stable_genesis_in_past {
@@ -1375,17 +1416,27 @@ impl ConsensusNewBlockHandler {
             0,
         );
 
-        let new_stable_height = self.should_move_stable_height(inner);
-        if inner.cur_era_stable_height != new_stable_height {
-            inner.cur_era_stable_height = new_stable_height;
-            let stable_arena_index =
-                inner.get_pivot_block_arena_index(new_stable_height);
-            let genesis_hash =
-                &inner.arena[inner.cur_era_genesis_block_arena_index].hash;
-            let stable_hash = &inner.arena[stable_arena_index].hash;
-            inner
-                .data_man
-                .set_cur_consensus_era_genesis_hash(genesis_hash, stable_hash);
+        if inner.best_epoch_number() > inner.cur_era_stable_height
+            && inner.arena
+                [inner.get_pivot_block_arena_index(inner.cur_era_stable_height)]
+            .hash
+                == inner.cur_era_stable_block_hash
+        {
+            let new_stable_height = self.should_move_stable_height(inner);
+            if inner.cur_era_stable_height != new_stable_height {
+                inner.cur_era_stable_height = new_stable_height;
+                let stable_arena_index =
+                    inner.get_pivot_block_arena_index(new_stable_height);
+                let genesis_hash =
+                    &inner.arena[inner.cur_era_genesis_block_arena_index].hash;
+                let stable_hash = &inner.arena[stable_arena_index].hash;
+                inner.cur_era_stable_block_hash = stable_hash.clone();
+                inner.data_man.set_cur_consensus_era_genesis_hash(
+                    genesis_hash,
+                    stable_hash,
+                );
+                inner.initial_stable_future = None;
+            }
         }
 
         let new_era_height = inner.arena[new_pivot_era_block].height;

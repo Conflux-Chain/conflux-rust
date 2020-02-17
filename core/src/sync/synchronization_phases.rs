@@ -422,8 +422,12 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             // consensus graph.
             old_sync_inner.data_man.initialize_instance_id();
 
+            debug!("old_sync_inner reinitialized!");
+
             let (cur_era_genesis_hash, cur_era_genesis_height) =
                 old_sync_inner.get_genesis_hash_and_height_in_current_era();
+
+            debug!("genesis info FETCH!");
 
             let (cur_era_stable_hash, cur_era_stable_height) =
                 old_sync_inner.get_stable_hash_and_height_in_current_era();

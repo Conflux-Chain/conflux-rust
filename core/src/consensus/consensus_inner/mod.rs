@@ -352,6 +352,14 @@ pub struct ConsensusGraphInner {
     // The height of the ``stable'' era block, unless from the start, it is
     // always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
+    // If this value is not none, then we are still expecting the initial
+    // stable block to come. This value would equal to the expected hash of
+    // the block.
+    cur_era_stable_block_hash: H256,
+    // If this value is not none, then we are manually maintain the future set
+    // of the expected stable block. We have to do this because during the
+    // initial stage it may not be always on the pivot chain.
+    initial_stable_future: Option<BitSet>,
     // The timer chain height of the ``current'' era_genesis block
     cur_era_genesis_timer_chain_height: u64,
     // The best timer chain difficulty and hash in the current graph
@@ -457,6 +465,8 @@ impl ConsensusGraphInner {
             cur_era_stable_height,
             // Timer chain height is an internal number. We always start from
             // zero.
+            cur_era_stable_block_hash: cur_era_genesis_block_hash.clone(),
+            initial_stable_future: Some(BitSet::new()),
             cur_era_genesis_timer_chain_height: 0,
             best_timer_chain_difficulty: 0,
             best_timer_chain_hash: Default::default(),
