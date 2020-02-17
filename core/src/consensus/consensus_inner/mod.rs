@@ -465,7 +465,7 @@ impl ConsensusGraphInner {
             cur_era_stable_height,
             // Timer chain height is an internal number. We always start from
             // zero.
-            cur_era_stable_block_hash: cur_era_genesis_block_hash.clone(),
+            cur_era_stable_block_hash: cur_era_stable_block_hash.clone(),
             initial_stable_future: Some(BitSet::new()),
             cur_era_genesis_timer_chain_height: 0,
             best_timer_chain_difficulty: 0,

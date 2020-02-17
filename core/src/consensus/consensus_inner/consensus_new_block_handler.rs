@@ -980,6 +980,10 @@ impl ConsensusNewBlockHandler {
     fn preactivate_block(
         &self, inner: &mut ConsensusGraphInner, me: usize,
     ) -> BlockStatus {
+        debug!(
+            "Start to preactivate block {} index = {}",
+            inner.arena[me].hash, me
+        );
         let parent = inner.arena[me].parent;
         let pending = {
             if let Some(f) = inner.initial_stable_future.as_mut() {
@@ -1103,6 +1107,10 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        debug!(
+            "Finish preactivation block {} index = {}",
+            inner.arena[me].hash, me
+        );
         let block_status = if pending {
             BlockStatus::Pending
         } else if fully_valid {
