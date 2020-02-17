@@ -947,9 +947,7 @@ impl ConsensusGraphInner {
         assert!(parent == self.best_epoch_arena_index());
         self.pivot_chain.push(pivot_arena_index);
         self.pivot_chain_metadata.push(Default::default());
-        self.compute_metadata(
-            self.arena[pivot_arena_index].height - self.cur_era_genesis_height,
-        );
+        self.compute_metadata(self.arena[pivot_arena_index].height);
     }
 
     pub fn commit(&mut self, block_hash: &H256) {
