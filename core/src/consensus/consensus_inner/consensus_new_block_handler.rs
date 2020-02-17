@@ -567,7 +567,7 @@ impl ConsensusNewBlockHandler {
                 //                    );
                 //                    if w != 0 {
                 //                        for child in &inner.arena[v].children
-                // {                            
+                // {
                 // q.push_back(*child);                        }
                 //                    }
                 //                }

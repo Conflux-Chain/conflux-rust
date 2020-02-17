@@ -491,6 +491,12 @@ impl ConsensusGraphInner {
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
         let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
+        if cur_era_genesis_block_hash == cur_era_stable_block_hash {
+            inner
+                .initial_stable_future
+                .unwrap()
+                .add(genesis_arena_index as u32);
+        }
         if genesis_block_header.height() == 0 {
             inner.arena[genesis_arena_index].data.state_valid = Some(true);
         }
