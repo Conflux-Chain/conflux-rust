@@ -494,6 +494,7 @@ impl ConsensusGraphInner {
         if cur_era_genesis_block_hash == cur_era_stable_block_hash {
             inner
                 .initial_stable_future
+                .as_mut()
                 .unwrap()
                 .add(genesis_arena_index as u32);
         }
