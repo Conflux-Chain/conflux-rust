@@ -7,8 +7,6 @@ use num_derive::ToPrimitive;
 use num_traits::ToPrimitive;
 use prometheus::IntGaugeVec;
 #[cfg(test)]
-use proptest::{collection::hash_map, prelude::*};
-#[cfg(test)]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -107,14 +105,6 @@ impl LedgerCounterBumps {
 
         self
     }
-
-    /// Get the current value of the bump of `counter`.
-    ///
-    /// Defaults to 0.
-    #[cfg(test)]
-    pub fn get(&mut self, counter: LedgerCounter) -> usize {
-        self.bumps.get(counter)
-    }
 }
 
 /// Represents ledger counter values at a certain version.
@@ -157,30 +147,6 @@ impl LedgerCounters {
     #[allow(dead_code)]
     pub fn get(&self, counter: LedgerCounter) -> usize {
         self.counters.get(counter)
-    }
-}
-
-#[cfg(test)]
-prop_compose! {
-    pub(crate) fn ledger_counters_strategy()(
-        counters_map in hash_map(any::<LedgerCounter>(), any::<usize>(), 0..3)
-    ) -> LedgerCounters {
-        let mut counters = InnerLedgerCounters::new();
-        for (counter, value) in counters_map {
-            counters.inc(counter, value);
-        }
-
-        LedgerCounters { counters }
-    }
-}
-
-#[cfg(test)]
-impl Arbitrary for LedgerCounters {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        ledger_counters_strategy().boxed()
     }
 }
 

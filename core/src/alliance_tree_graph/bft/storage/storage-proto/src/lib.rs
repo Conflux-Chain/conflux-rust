@@ -41,14 +41,10 @@ use libra_types::{
     proof::SparseMerkleProof,
     transaction::{TransactionListWithProof, TransactionToCommit, Version},
 };
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest::prelude::*;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetLatestStateRootResponse {
     pub version: Version,
     pub state_root_hash: HashValue,
@@ -96,7 +92,7 @@ impl Into<(Version, HashValue)> for GetLatestStateRootResponse {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetLatestAccountStateRequest {
     pub address: AccountAddress,
 }
@@ -129,7 +125,7 @@ impl From<GetLatestAccountStateRequest>
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetLatestAccountStateResponse {
     pub account_state_blob: Option<AccountStateBlob>,
 }
@@ -169,7 +165,7 @@ impl From<GetLatestAccountStateResponse>
 /// Helper to construct and parse
 /// [`proto::storage::GetAccountStateWithProofByVersionRequest`]
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetAccountStateWithProofByVersionRequest {
     /// The access path to query with.
     pub address: AccountAddress,
@@ -214,7 +210,7 @@ impl From<GetAccountStateWithProofByVersionRequest>
 /// Helper to construct and parse
 /// [`proto::storage::GetAccountStateWithProofByVersionResponse`]
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetAccountStateWithProofByVersionResponse {
     /// The account state blob requested.
     pub account_state_blob: Option<AccountStateBlob>,
@@ -279,7 +275,7 @@ impl Into<(Option<AccountStateBlob>, SparseMerkleProof)>
 
 /// Helper to construct and parse [`proto::storage::SaveTransactionsRequest`]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct SaveTransactionsRequest {
     pub txns_to_commit: Vec<TransactionToCommit>,
     pub first_version: Version,
@@ -348,7 +344,7 @@ impl From<SaveTransactionsRequest>
 
 /// Helper to construct and parse [`proto::storage::GetTransactionsRequest`]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetTransactionsRequest {
     pub start_version: Version,
     pub batch_size: u64,
@@ -404,7 +400,7 @@ impl From<GetTransactionsRequest>
 
 /// Helper to construct and parse [`proto::storage::GetTransactionsResponse`]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetTransactionsResponse {
     pub txn_list_with_proof: TransactionListWithProof,
 }
@@ -446,7 +442,7 @@ impl From<GetTransactionsResponse>
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct TreeState {
     pub version: Version,
     pub ledger_frozen_subtree_hashes: Vec<HashValue>,
@@ -553,54 +549,6 @@ impl StartupInfo {
     }
 }
 
-#[cfg(any(test, feature = "fuzzing"))]
-fn arb_startup_info() -> impl Strategy<Value = StartupInfo> {
-    any::<LedgerInfoWithSignatures>()
-        .prop_flat_map(|latest_ledger_info| {
-            let latest_validator_set_strategy = if latest_ledger_info
-                .ledger_info()
-                .next_validator_set()
-                .is_some()
-            {
-                Just(None).boxed()
-            } else {
-                any::<ValidatorSet>().prop_map(Some).boxed()
-            };
-
-            (
-                Just(latest_ledger_info),
-                latest_validator_set_strategy,
-                any::<TreeState>(),
-                any::<Option<TreeState>>(),
-            )
-        })
-        .prop_map(
-            |(
-                latest_ledger_info,
-                latest_validator_set,
-                committed_tree_state,
-                synced_tree_state,
-            )| {
-                StartupInfo::new(
-                    latest_ledger_info,
-                    latest_validator_set,
-                    //committed_tree_state,
-                    synced_tree_state,
-                )
-            },
-        )
-}
-
-#[cfg(any(test, feature = "fuzzing"))]
-impl Arbitrary for StartupInfo {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        arb_startup_info().boxed()
-    }
-}
-
 impl TryFrom<crate::proto::storage::StartupInfo> for StartupInfo {
     type Error = Error;
 
@@ -658,7 +606,7 @@ impl From<StartupInfo> for crate::proto::storage::StartupInfo {
 
 /// Helper to construct and parse [`proto::storage::GetStartupInfoResponse`]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetStartupInfoResponse {
     pub info: Option<StartupInfo>,
 }
@@ -690,7 +638,7 @@ impl From<GetStartupInfoResponse>
 /// Helper to construct and parse
 /// [`proto::storage::GetEpochChangeLedgerInfosRequest`]
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct GetEpochChangeLedgerInfosRequest {
     pub start_epoch: u64,
     pub end_epoch: u64,
@@ -734,7 +682,7 @@ impl From<GetEpochChangeLedgerInfosRequest>
 
 /// Helper to construct and parse [`proto::storage::BackupAccountStateRequest`]
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct BackupAccountStateRequest {
     /// The version of state to backup.
     pub version: Version,
@@ -771,7 +719,7 @@ impl From<BackupAccountStateRequest>
 
 /// Helper to construct and parse [`proto::storage::BackupAccountStateResponse`]
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct BackupAccountStateResponse {
     /// The hashed account address
     pub account_key: HashValue,
@@ -832,6 +780,3 @@ impl Into<(HashValue, AccountStateBlob)> for BackupAccountStateResponse {
 pub mod prelude {
     pub use super::*;
 }
-
-#[cfg(test)]
-mod tests;

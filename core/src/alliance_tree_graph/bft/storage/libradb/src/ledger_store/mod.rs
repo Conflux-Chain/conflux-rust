@@ -352,8 +352,3 @@ impl LedgerStore {
         bail!("error");
     }
 }
-
-#[cfg(test)]
-mod ledger_info_test;
-#[cfg(test)]
-mod transaction_info_test;

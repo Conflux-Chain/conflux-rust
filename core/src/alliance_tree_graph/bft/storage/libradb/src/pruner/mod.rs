@@ -10,8 +10,6 @@ use anyhow::Result;
 use libra_logger::prelude::*;
 use libra_types::transaction::Version;
 use schemadb::DB;
-#[cfg(test)]
-use std::thread::sleep;
 use std::{
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -84,32 +82,6 @@ impl Pruner {
                 })
                 .expect("Receiver should not destruct prematurely.");
         }
-    }
-
-    /// (For tests only.) Notifies the worker thread and waits for it to finish
-    /// its job by polling an internal counter.
-    #[cfg(test)]
-    pub fn wake_and_wait(&self, latest_version: Version) -> Result<()> {
-        self.wake(latest_version);
-
-        if latest_version > self.num_historical_versions_to_keep {
-            let least_readable_version =
-                latest_version - self.num_historical_versions_to_keep;
-            // Assuming no big pruning chunks will be issued by a test.
-            const TIMEOUT: Duration = Duration::from_secs(10);
-            let end = Instant::now() + TIMEOUT;
-
-            while Instant::now() < end {
-                if self.worker_progress.load(Ordering::Relaxed)
-                    >= least_readable_version
-                {
-                    return Ok(());
-                }
-                sleep(Duration::from_millis(1));
-            }
-            anyhow::bail!("Timeout waiting for pruner worker.");
-        }
-        Ok(())
     }
 }
 
@@ -386,6 +358,3 @@ pub fn prune_state(
     */
     Ok(0)
 }
-
-#[cfg(test)]
-mod test;

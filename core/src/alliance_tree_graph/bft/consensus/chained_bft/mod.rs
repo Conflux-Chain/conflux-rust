@@ -11,14 +11,6 @@ pub mod network;
 pub mod epoch_manager;
 pub mod persistent_storage;
 
-#[cfg(test)]
-mod chained_bft_smr_test;
-#[cfg(test)]
-mod network_tests;
-
-#[cfg(any(test, feature = "fuzzing"))]
-mod test_utils;
-
 mod liveness;
 
 mod event_processor;

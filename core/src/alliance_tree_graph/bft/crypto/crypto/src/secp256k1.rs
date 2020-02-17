@@ -371,7 +371,6 @@ pub mod compat {
     #[cfg(feature = "fuzzing")]
     use proptest::{prelude::*, strategy::Strategy};
 
-    #[cfg(any(test, feature = "cloneable-private-keys"))]
     impl Clone for Secp256k1PrivateKey {
         fn clone(&self) -> Self {
             let serialized: &[u8] = &(self.to_bytes());

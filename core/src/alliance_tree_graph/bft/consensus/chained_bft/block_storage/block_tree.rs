@@ -424,34 +424,3 @@ where T: Serialize + Default + Debug + PartialEq
         self.id_to_block.keys().cloned().collect()
     }
 }
-
-#[cfg(any(test, feature = "fuzzing"))]
-impl<T> BlockTree<T>
-where T: Serialize + Default + Debug + PartialEq
-{
-    /// Returns the number of blocks in the tree
-    pub(super) fn len(&self) -> usize {
-        // BFS over the tree to find the number of blocks in the tree.
-        let mut res = 0;
-        let mut to_visit = Vec::new();
-        to_visit.push(self.linkable_root());
-        while let Some(block) = to_visit.pop() {
-            res += 1;
-            for child_id in block.children() {
-                to_visit.push(
-                    self.get_linkable_block(child_id)
-                        .expect("Child must exist in the tree"),
-                );
-            }
-        }
-        res
-    }
-
-    /// Returns the number of child links in the tree
-    pub(super) fn child_links(&self) -> usize { self.len() - 1 }
-
-    /// The number of pruned blocks that are still available in memory
-    pub(super) fn pruned_blocks_in_mem(&self) -> usize {
-        self.pruned_block_ids.len()
-    }
-}

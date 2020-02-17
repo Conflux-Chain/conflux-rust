@@ -1,8 +1,6 @@
 // Copyright (c) The Libra Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(test)]
-mod consensusdb_test;
 mod schema;
 
 use super::super::consensus_types::{

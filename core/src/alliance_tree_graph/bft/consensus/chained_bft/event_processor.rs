@@ -67,14 +67,6 @@ use std::{
 };
 use termion::color::*;
 
-#[cfg(test)]
-#[path = "event_processor_test.rs"]
-mod event_processor_test;
-
-#[cfg(any(feature = "fuzzing", test))]
-#[path = "event_processor_fuzzing.rs"]
-pub mod event_processor_fuzzing;
-
 /// Consensus SMR is working in an event based fashion: EventProcessor is
 /// responsible for processing the individual events (e.g., process_new_round,
 /// process_proposal, process_vote, etc.). It is exposing the async processing
@@ -1053,12 +1045,6 @@ where
                 "Can not jump start a pacemaker from existing certificates.",
             );
         self.process_new_round_event(new_round_event).await;
-    }
-
-    /// Inspect the current consensus state.
-    #[cfg(test)]
-    pub fn consensus_state(&self) -> ConsensusState {
-        self.safety_rules.consensus_state()
     }
 
     pub fn block_store(&self) -> Arc<BlockStore<T>> { self.block_store.clone() }

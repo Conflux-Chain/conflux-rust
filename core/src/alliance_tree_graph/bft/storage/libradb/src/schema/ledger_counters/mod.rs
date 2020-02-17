@@ -49,6 +49,3 @@ impl ValueCodec<LedgerCountersSchema> for LedgerCounters {
         lcs::from_bytes(data).map_err(Into::into)
     }
 }
-
-#[cfg(test)]
-mod test;

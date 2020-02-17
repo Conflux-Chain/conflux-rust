@@ -12,8 +12,6 @@ use crate::{
 use anyhow::{Error, Result};
 use lazy_static::lazy_static;
 use libra_crypto::VerifyingKey;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::{TryFrom, TryInto},
@@ -52,7 +50,7 @@ pub(crate) fn validator_set_path() -> Vec<u8> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct ValidatorSet<PublicKey>(Vec<ValidatorPublicKeys<PublicKey>>);
 
 impl<PublicKey> fmt::Display for ValidatorSet<PublicKey> {

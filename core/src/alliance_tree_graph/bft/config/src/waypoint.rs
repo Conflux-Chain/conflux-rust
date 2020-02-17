@@ -158,6 +158,7 @@ mod test {
                 1,
                 10,
                 HashValue::random(),
+                None,
                 HashValue::random(),
                 123,
                 1000,

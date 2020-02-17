@@ -54,6 +54,3 @@ impl ValueCodec<LedgerInfoSchema> for LedgerInfoWithSignatures {
             .try_into()
     }
 }
-
-#[cfg(test)]
-mod test;

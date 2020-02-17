@@ -88,7 +88,7 @@ impl<PrivateKey: SigningKey + Uniform> ValidatorSigner<PrivateKey> {
 pub mod proptests {
     use super::*;
     #[cfg(test)]
-    use libra_crypto::ed25519::*;
+    use libra_crypto::secp256k1::*;
     use proptest::{prelude::*, sample, strategy::LazyJust};
 
     #[allow(clippy::redundant_closure)]

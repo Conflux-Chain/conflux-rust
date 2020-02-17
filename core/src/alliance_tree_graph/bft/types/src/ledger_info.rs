@@ -14,8 +14,6 @@ use libra_crypto::{
     HashValue, *,
 };
 use libra_crypto_derive::CryptoHasher;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -42,7 +40,7 @@ use std::{
 /// committed if B gets 2f+1 votes. It sets `consensus_data_hash` to represent B
 /// so that if those 2f+1 votes are gathered a QC is formed on B.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, CryptoHasher)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct LedgerInfo {
     commit_info: BlockInfo,
 
@@ -304,7 +302,7 @@ mod tests {
         ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
         validator_signer::ValidatorSigner,
     };
-    use libra_crypto::{ed25519::*, HashValue};
+    use libra_crypto::{secp256k1::*, HashValue};
     use std::collections::BTreeMap;
 
     #[test]

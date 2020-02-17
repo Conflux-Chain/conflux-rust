@@ -35,6 +35,3 @@ impl ValueCodec<QCSchema> for QuorumCert {
 
     fn decode_value(data: &[u8]) -> Result<Self> { Ok(lcs::from_bytes(data)?) }
 }
-
-#[cfg(test)]
-mod test;

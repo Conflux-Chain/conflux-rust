@@ -14,10 +14,6 @@ use libra_crypto::{
     HashValue,
 };
 use libra_crypto_derive::CryptoHasher;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest::{arbitrary::Arbitrary, prelude::*};
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -114,25 +110,7 @@ impl CryptoHash for AccountStateBlob {
     }
 }
 
-#[cfg(any(test, feature = "fuzzing"))]
-prop_compose! {
-    pub fn account_state_blob_strategy()(account_resource in any::<AccountResource>()) -> AccountStateBlob {
-        AccountStateBlob::from(account_resource)
-    }
-}
-
-#[cfg(any(test, feature = "fuzzing"))]
-impl Arbitrary for AccountStateBlob {
-    type Parameters = ();
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        account_state_blob_strategy().boxed()
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct AccountStateWithProof {
     /// The transaction version at which this account state is seen.
     pub version: Version,
@@ -221,6 +199,3 @@ impl From<AccountStateWithProof>
         }
     }
 }
-
-#[cfg(test)]
-mod account_state_blob_test;

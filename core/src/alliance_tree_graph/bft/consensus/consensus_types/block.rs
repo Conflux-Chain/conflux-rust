@@ -27,14 +27,6 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-#[path = "block_test_utils.rs"]
-#[cfg(any(test, feature = "fuzzing"))]
-pub mod block_test_utils;
-
-#[cfg(test)]
-#[path = "block_test.rs"]
-pub mod block_test;
-
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 /// Block has the core data of a consensus block that should be persistent when
 /// necessary. Each block must know the id of its parent and keep the
@@ -124,11 +116,6 @@ where T: PartialEq
 impl<T> Block<T>
 where T: Default + PartialEq + Serialize
 {
-    #[cfg(any(test, feature = "fuzzing"))]
-    pub fn make_genesis_block() -> Self {
-        Self::make_genesis_block_from_ledger_info(&LedgerInfo::genesis())
-    }
-
     /// Construct new genesis block for next epoch deterministically from the
     /// end-epoch LedgerInfo We carry over most fields except round and
     /// block id

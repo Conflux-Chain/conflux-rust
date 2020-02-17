@@ -9,8 +9,6 @@ use crate::{
 use anyhow::{Error, Result};
 use libra_crypto::hash::{CryptoHash, CryptoHasher, HashValue};
 use libra_crypto_derive::CryptoHasher;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -80,8 +78,6 @@ impl ResourceKey {
     Ord,
     CryptoHasher,
 )]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
-#[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct ModuleId {
     address: AccountAddress,
     name: Identifier,

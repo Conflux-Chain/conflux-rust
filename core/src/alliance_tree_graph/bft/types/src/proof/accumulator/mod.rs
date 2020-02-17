@@ -12,9 +12,6 @@
 //! the tree we will obtain a new accumulator instance and the old one remains
 //! unchanged.
 
-#[cfg(test)]
-mod accumulator_test;
-
 use super::MerkleTreeInternalNode;
 use crate::proof::definition::{LeafCount, MAX_ACCUMULATOR_LEAVES};
 use anyhow::{ensure, format_err, Result};

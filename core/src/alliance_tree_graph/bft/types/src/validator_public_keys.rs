@@ -3,13 +3,7 @@
 
 use crate::account_address::AccountAddress;
 use anyhow::{Error, Result};
-#[cfg(any(test, feature = "fuzzing"))]
-use libra_crypto::ed25519::compat::generate_keypair as generate_ed25519_keypair;
-#[cfg(any(test, feature = "fuzzing"))]
-use libra_crypto::x25519::compat::generate_keypair as generate_x25519_keypair;
 use libra_crypto::VerifyingKey;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{convert::TryFrom, fmt};
 
@@ -20,7 +14,7 @@ use std::{convert::TryFrom, fmt};
 /// channels of communication between validators.  The validators and
 /// their public keys and voting power may or may not change between epochs.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+
 pub struct ValidatorPublicKeys<PublicKey> {
     // The validator's account address. AccountAddresses are initially derived
     // from the account auth pubkey; however, the auth key can be rotated,
