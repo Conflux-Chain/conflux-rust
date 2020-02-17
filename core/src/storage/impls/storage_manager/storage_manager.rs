@@ -627,10 +627,13 @@ impl StorageManager {
 
         debug!(
             "maintain_snapshots_pivot_chain_confirmed: confirmed_height {}, \
-             confirmed_epoch_id {:?}, confirmed_intermediate_height {}, \
+             confirmed_epoch_id {:?}, confirmed_intermediate_id {:?}, \
+             confirmed_snapshot_id {:?}, confirmed_intermediate_height {}, \
              confirmed_snapshot_height {}, first_available_state_height {}",
             confirmed_height,
             confirmed_epoch_id,
+            confirmed_state_root.aux_info.intermediate_epoch_id,
+            confirmed_state_root.aux_info.snapshot_epoch_id,
             confirmed_intermediate_height,
             confirmed_snapshot_height,
             first_available_state_height,
@@ -686,11 +689,24 @@ impl StorageManager {
                                 .intermediate_epoch_id,
                         )
                     {
+                        debug!(
+                            "remove mismatch intermediate snapshot: {:?}",
+                            snapshot_info.get_epoch_id_at_height(
+                                confirmed_intermediate_height
+                            )
+                        );
                         non_pivot_snapshots_to_remove
                             .insert(snapshot_epoch_id.clone());
                     }
                 }
             }
+
+            debug!(
+                "finished scanning for lower snapshots: \
+                 old_pivot_snapshots_to_remove {:?}, \
+                 non_pivot_snapshots_to_remove {:?}",
+                old_pivot_snapshots_to_remove, non_pivot_snapshots_to_remove
+            );
 
             // Check snapshots which has height >= confirmed_height
             for snapshot_info in &*current_snapshots {
@@ -701,6 +717,11 @@ impl StorageManager {
                         // confirmed_epoch's
                         // subtree.
                         if path_epoch_id != confirmed_epoch_id {
+                            debug!(
+                                "remove non-subtree snapshot {:?}, got {:?}, expected {:?}",
+                                snapshot_info.get_snapshot_epoch_id(),
+                                path_epoch_id, confirmed_epoch_id,
+                            );
                             non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );
@@ -713,6 +734,11 @@ impl StorageManager {
                         if non_pivot_snapshots_to_remove
                             .contains(&snapshot_info.parent_snapshot_epoch_id)
                         {
+                            debug!(
+                                "remove non-subtree deep snapshot {:?}, parent_snapshot_epoch_id {:?}",
+                                snapshot_info.get_snapshot_epoch_id(),
+                                snapshot_info.parent_snapshot_epoch_id
+                            );
                             non_pivot_snapshots_to_remove.insert(
                                 snapshot_info.get_snapshot_epoch_id().clone(),
                             );

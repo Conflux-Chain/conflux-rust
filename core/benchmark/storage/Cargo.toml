@@ -7,35 +7,51 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-clap = "2.32"
 cfx-types = { path = "../../../cfx_types" }
 cfxcore = { path = "../../../core" }
+clap = "2.32"
 db = { path = "../../../db" }
-kvdb = "0.1.1"
 env_logger = "0.6"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethkey = { package = "ethkey", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethcore_types = { package = "common-types", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethjson = { package = "ethjson", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
-ethereum-types = "0.7"
+ethereum-types = "0.4"
 heapsize = "0.4"
+kvdb = "0.1.1"
 lazy_static = "1.3"
 log = "0.4"
 parking_lot = "0.10"
 primitives = { path = "../../../primitives" }
-rlp = { version = "0.3.0", features = ["ethereum"] }
+rlp = { version = "0.3.0", feature = ["ethereum"] }
 serde_json = "1.0"
 
 [patch.'https://github.com/paritytech/parity-ethereum']
-
 # The upstream ethkey uses the master branch of rust-secp256k1,
-# causing conflicts between different versions of rand.  Patch to make
-# sure only one version is chosen.
+# causing conflicts between different versions of rand.
+# Patch doesn't seem to work since the package name of rust-secp256k1 has changed,
+# Cargo thinks it's an error in Cargo.toml of ethkey before considering the patch.
+# The only solution is to patch ethkey.
+# However it also doesn't work because in its Cargo.toml the package is defined by
+# the git path, so the only possible place to patch is inside the git path.
+#eth-secp256k1 = { package = "parity-secp256k1", git = "https://github.com/paritytech/rust-secp256k1" }
+# The current version doesn't work because of upgrades.
+#ethkey = { path = "../../../accounts/ethkey" }
+# This also don't work because cargo scans the whole git and aborted due to lack of Cargo.toml in one dir.
+#ethkey = { package = "ethkey", git = "https://github.com/Conflux-Chain/conflux-rust", commit = "026304" }
 
-ethkey = { path = "../../../accounts/ethkey" }
+[patch.crates-io]
+parity-snappy = { path = "parity-snappy/rust-snappy" }
+bzip2-sys = { git = "https://github.com/alexcrichton/bzip2-rs.git", commit = "a8ee5cb4" }
 
-[dev-dependencies]
+[patch.'https://github.com/paritytech/rust-secp256k1']
+# There was a package name change, bit it's not possible to redirect eth-secp256k1 to "parity-secp256k1"
+#eth-secp256k1 = { package = "parity-secp256k1", git = "https://github.com/paritytech/rust-secp256k1" }
+# The line below register an independent "eth-secp256k1" which directs to crates-io.
+eth-secp256k1 = "0.5.7"
+
+#[dev-dependencies]
 
 [workspace]
 # Note: try to list it in the top level workspace and to exclude it from cfxcore.

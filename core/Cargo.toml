@@ -10,7 +10,6 @@ edition = "2018"
 grpcio = { version = "=0.5.0-alpha.4", default-features = false }
 num-derive = { version = "0.2.5", default-features = false }
 num-traits = { version = "0.2.8", default-features = false }
-futures = "0.3.3"
 anyhow = "1.0"
 bit-set = "0.4"
 bn = { git = "https://github.com/paritytech/bn", default-features = false }
@@ -29,6 +28,7 @@ ethkey = { path = "../accounts/ethkey" }
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
+futures = { version = "0.3.3", features = ["compat"] }
 heapsize = "0.4"
 hibitset = { path = "../util/hibitset" }
 keccak-hash = "0.3.0"
