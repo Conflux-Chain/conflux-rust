@@ -9,7 +9,7 @@ use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler, ConsensusGraphInner,
     ConsensusInnerConfig, NewCandidatePivotCallbackType,
-    NextSelectedPivotCallbackType,
+    NextSelectedPivotCallbackType, SetPivotChainCallbackType,
 };
 
 use crate::{
@@ -369,6 +369,20 @@ impl TreeGraphConsensus {
         self.new_block_handler.on_commit(inner, block_hashes);
     }
 
+    pub fn set_pivot_chain(
+        &self, block_hash: &H256, callback: SetPivotChainCallbackType,
+    ) {
+        let inner = &mut *self.inner.write();
+        if inner.hash_to_arena_indices.contains_key(block_hash) {
+            self.new_block_handler.set_pivot_chain(inner, block_hash);
+            callback
+                .send(Ok(()))
+                .expect("send set pivot chain result back should succeed");
+        } else {
+            inner.set_pivot_chain_callback = Some((*block_hash, callback));
+        }
+    }
+
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
     ) -> Option<(BlockExecutionResultWithEpoch, TransactionAddress, H256)> {
@@ -623,12 +637,19 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
             let inner = &mut *self.inner.write();
             self.new_block_handler.on_new_block(inner, &block_header);
 
-            // Reset pivot chain according to checkpoint information during
-            // recovery
-            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                inner.set_pivot_to_stable(hash);
+            // Reset pivot chain according to bft commits
+            if inner.set_pivot_chain_callback.is_some()
+                && *hash == inner.set_pivot_chain_callback.as_ref().unwrap().0
+            {
+                let (pivot_hash, callback) =
+                    inner.set_pivot_chain_callback.take().unwrap();
+                self.new_block_handler.set_pivot_chain(inner, &pivot_hash);
+                callback
+                    .send(Ok(()))
+                    .expect("send set pivot chain result back should succeed");
                 update_best_info = true;
             }
+
             *self.latest_inserted_block.lock() = *hash;
 
             if inner.inner_conf.enable_state_expose {
