@@ -332,7 +332,7 @@ impl ConsensusNewBlockHandler {
         for (i, node) in inner.arena.iter() {
             if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
-                && node.data.active_cnt == 0
+                && node.data.activated
             {
                 anticone.add(i as u32);
             }
@@ -1143,6 +1143,7 @@ impl ConsensusNewBlockHandler {
             inner.terminal_hashes.remove(&inner.arena[*referee].hash);
         }
 
+        inner.arena[me].data.activated = true;
         let my_weight = self.update_lcts_finalize(inner, me);
         let mut extend_pivot = false;
         let mut pivot_changed = false;
@@ -1255,7 +1256,7 @@ impl ConsensusNewBlockHandler {
                         let mut heaviest = NULL;
                         let mut heaviest_weight = 0;
                         for index in &inner.arena[u].children {
-                            if inner.arena[*index].data.active_cnt != 0 {
+                            if !inner.arena[*index].data.activated {
                                 continue;
                             }
                             let weight = inner.weight_tree.get(*index);

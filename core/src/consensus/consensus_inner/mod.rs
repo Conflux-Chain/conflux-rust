@@ -67,6 +67,7 @@ pub struct ConsensusGraphNodeData {
     /// A normal block which referenced directly or indirectly will have a
     /// positive counter
     active_cnt: usize,
+    activated: bool,
     /// This records the force confirm point in the past view of this block.
     force_confirm: usize,
     /// The indices set of the blocks in the epoch when the current
@@ -104,6 +105,7 @@ impl ConsensusGraphNodeData {
             partial_invalid: false,
             pending: false,
             active_cnt,
+            activated: false,
             force_confirm: NULL,
             blockset_in_own_view_of_epoch: Default::default(),
             ordered_executable_epoch_blocks: Default::default(),
@@ -502,6 +504,7 @@ impl ConsensusGraphInner {
             inner.arena[genesis_arena_index].data.state_valid = Some(true);
         }
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
+        inner.arena[genesis_arena_index].data.activated = true;
         let genesis_block_weight = genesis_block_header.difficulty().low_u128();
         inner
             .weight_tree
@@ -1321,6 +1324,7 @@ impl ConsensusGraphInner {
             data: ConsensusGraphNodeData::new(NULLU64, sn, 0),
         });
         self.arena[index].data.pending = true;
+        self.arena[index].data.activated = true;
         self.hash_to_arena_indices.insert(hash, index);
 
         let referees = self.arena[index].referees.clone();
@@ -1408,13 +1412,13 @@ impl ConsensusGraphInner {
         }
 
         let mut active_cnt =
-            if parent != NULL && self.arena[parent].data.active_cnt > 0 {
+            if parent != NULL && !self.arena[parent].data.activated {
                 1
             } else {
                 0
             };
         for referee in &referees {
-            if self.arena[*referee].data.active_cnt > 0 {
+            if !self.arena[*referee].data.activated {
                 active_cnt += 1;
             }
         }
@@ -1503,7 +1507,7 @@ impl ConsensusGraphInner {
         while let Some(index) = queue.pop_front() {
             for child in &self.arena[index].children {
                 if !visited.contains(*child as u32)
-                    && self.arena[*child].data.active_cnt == 0
+                    && self.arena[*child].data.activated
                 {
                     visited.add(*child as u32);
                     queue.push_back(*child);
@@ -1511,7 +1515,7 @@ impl ConsensusGraphInner {
             }
             for referrer in &self.arena[index].referrers {
                 if !visited.contains(*referrer as u32)
-                    && self.arena[*referrer].data.active_cnt == 0
+                    && self.arena[*referrer].data.activated
                 {
                     visited.add(*referrer as u32);
                     queue.push_back(*referrer);
@@ -2109,7 +2113,7 @@ impl ConsensusGraphInner {
         //        if self.arena[me].data.partial_invalid && !inclusive {
         //            return 0 as i128;
         //        }
-        if self.arena[me].data.active_cnt != 0 {
+        if !self.arena[me].data.activated {
             return 0 as i128;
         }
         let is_heavy = self.arena[me].is_heavy;
