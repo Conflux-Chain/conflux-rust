@@ -86,7 +86,6 @@ libra-proptest-helpers = { path = "src/alliance_tree_graph/bft/common/proptest-h
 libra-tools = { path = "src/alliance_tree_graph/bft/common/tools" }
 libra-metrics = { path = "src/alliance_tree_graph/bft/common/metrics" }
 channel = { path = "src/alliance_tree_graph/bft/common/channel" }
-debug-interface = { path = "src/alliance_tree_graph/bft/common/debug-interface" }
 futures-semaphore = { path = "src/alliance_tree_graph/bft/common/futures-semaphore" }
 libra-prost-ext = { path = "src/alliance_tree_graph/bft/common/prost-ext" }
 scratchpad = { path = "src/alliance_tree_graph/bft/storage/scratchpad" }

@@ -62,7 +62,6 @@ libra-tools = { path = "core/src/alliance_tree_graph/bft/common/tools" }
 libra-logger = { path = "core/src/alliance_tree_graph/bft/common/logger" }
 libra-metrics = { path = "core/src/alliance_tree_graph/bft/common/metrics" }
 channel = { path = "core/src/alliance_tree_graph/bft/common/channel" }
-debug-interface = { path = "core/src/alliance_tree_graph/bft/common/debug-interface" }
 futures-semaphore = { path = "core/src/alliance_tree_graph/bft/common/futures-semaphore" }
 libra-prost-ext = { path = "core/src/alliance_tree_graph/bft/common/prost-ext" }
 schemadb = { path = "core/src/alliance_tree_graph/bft/storage/schemadb" }

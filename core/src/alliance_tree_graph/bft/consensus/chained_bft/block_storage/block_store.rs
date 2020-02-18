@@ -16,7 +16,6 @@ use super::super::super::{
     counters,
 };
 use anyhow::{bail, ensure, format_err, Context};
-use debug_interface::event;
 //use executor::{ExecutedTrees, ProcessedVMOutput};
 use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
@@ -201,11 +200,13 @@ impl<T: Payload> BlockStore<T> {
 
         counters::LAST_COMMITTED_ROUND.set(block_to_commit.round() as i64);
         debug!("{}Committed{} {}", Fg(Blue), Fg(Reset), *block_to_commit);
+        /*
         event!("committed",
             "block_id": block_to_commit.id().short_str(),
             "round": block_to_commit.round(),
             "parent_id": block_to_commit.parent_id().short_str(),
         );
+        */
         self.prune_tree(block_to_commit.id());
         Ok(blocks_to_commit)
     }
