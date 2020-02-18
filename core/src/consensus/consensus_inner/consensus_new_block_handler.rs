@@ -179,7 +179,7 @@ impl ConsensusNewBlockHandler {
                 old_era_block_set.push_back(hash);
                 inner.hash_to_arena_indices.remove(&hash);
                 inner.terminal_hashes.remove(&hash);
-                inner.arena.remove(index);
+                // inner.arena.remove(index);
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitment(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
@@ -509,10 +509,10 @@ impl ConsensusNewBlockHandler {
         for index in anticone_barrier {
             let delta = inner.weight_tree.get(index as usize);
             weight_delta.insert(index as usize, delta);
-            //            debug!(
-            //                "Weight delta block {} index {} delta {}",
-            //                inner.arena[index as usize].hash, index, delta
-            //            );
+            debug!(
+                "Weight delta block {} index {} delta {}",
+                inner.arena[index as usize].hash, index, delta
+            );
         }
 
         // Remove weight contribution of anticone
@@ -533,7 +533,7 @@ impl ConsensusNewBlockHandler {
                 continue;
             }
             if lca == parent {
-                trace!("Block invalid (index = {}), referenced block {} index {} is in the subtree of parent block {} index {}!", me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent);
+                debug!("Block invalid (index = {}), referenced block {} index {} is in the subtree of parent block {} index {}!", me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent);
                 valid = false;
                 break;
             }
@@ -547,34 +547,34 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
+            if me == 1634 || me == 678 {
+                let tmp = fork;
+                let mut q = VecDeque::new();
+                q.push_back(tmp);
+                while let Some(v) = q.pop_front() {
+                    let w = inner.weight_tree.get(v);
+                    debug!("Subtree block {} index {} weight {}", inner.arena[v].hash, v, w);
+                    if w != 0 {
+                        for child in &inner.arena[v].children {
+                            q.push_back(*child);
+                        }
+                    }
+                }
+            }
+
             // debug!("checking lca {} fork {} fork_weight {} pivot_weight {}",
             // lca, fork, fork_subtree_weight, pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
             ) {
-                trace!("Block invalid (index = {}), referenced block {} index {} fork is heavier than the parent block {} index {} fork! Ref fork block {} weight {}, parent fork block {} weight {}!",
+                debug!("Block invalid (index = {}), referenced block {} index {} fork is heavier than the parent block {} index {} fork! Ref fork block {} weight {}, parent fork block {} weight {}!",
                        me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent,
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
-                //                let tmp = *consensus_arena_index_in_epoch;
-                //                let mut q = VecDeque::new();
-                //                q.push_back(tmp);
-                //                while let Some(v) = q.pop_front() {
-                //                    let w = inner.weight_tree.get(v);
-                //                    debug!(
-                //                        "Subtree block {} index {} weight {}",
-                //                        inner.arena[v].hash, v, w
-                //                    );
-                //                    if w != 0 {
-                //                        for child in &inner.arena[v].children
-                // {
-                // q.push_back(*child);                        }
-                //                    }
-                //                }
                 valid = false;
                 break;
             } else {
-                trace!("Pass one validity check, block index = {}. Referenced block {} index {} fork is not heavier than the parent block {} index {} fork. Ref fork block {} weight {}, parent fork block {} weight {}!",
+                debug!("Pass one validity check, block index = {}. Referenced block {} index {} fork is not heavier than the parent block {} index {} fork. Ref fork block {} weight {}, parent fork block {} weight {}!",
                        me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent,
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
             }

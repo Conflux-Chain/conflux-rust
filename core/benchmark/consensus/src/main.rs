@@ -97,6 +97,7 @@ fn check_results(
     adaptive_indices: &HashMap<usize, i32>,
 )
 {
+    let mut pending_cnt = 0;
     for i in start..end {
         let pending = consensus.inner.read().is_pending(&hashes[i]);
         if pending == None {
@@ -104,7 +105,7 @@ fn check_results(
             continue;
         }
         if let Some(true) = pending {
-            println!("Block {} is pending, skip the checking!", i);
+            pending_cnt += 1;
             continue;
         }
         let partial_invalid = consensus
@@ -115,7 +116,7 @@ fn check_results(
         let valid = *valid_indices.get(&i).unwrap();
         let invalid = (valid == 0);
         if valid != -1 {
-            assert!(partial_invalid == invalid, "Block {} partial invalid status: Consensus graph {} != actual {}", i, partial_invalid, invalid);
+            assert!(partial_invalid == invalid, "Block {} {} partial invalid status: Consensus graph {} != actual {}", i, hashes[i], partial_invalid, invalid);
         }
         let timer0 = consensus.inner.read().is_timer_block(&hashes[i]).unwrap();
         let timer_v = *timer_indices.get(&i).unwrap();
@@ -123,8 +124,9 @@ fn check_results(
             let timer1 = (timer_v == 1);
             assert!(
                 timer0 == timer1,
-                "Block {} timer status: Consensus graph {} != actual {}",
+                "Block {} {} timer status: Consensus graph {} != actual {}",
                 i,
+                hashes[i],
                 timer0,
                 timer1
             );
@@ -135,13 +137,15 @@ fn check_results(
             let adaptive1 = (adaptive_v == 1);
             assert!(
                 adaptive0 == adaptive1,
-                "Block {} adaptive status: Consensus graph {} != actual {}",
+                "Block {} {} adaptive status: Consensus graph {} != actual {}",
                 i,
+                hashes[i],
                 adaptive0,
                 adaptive1
             );
         }
     }
+    println!("There are {} blocks pending, skipped checking.", pending_cnt);
 }
 
 fn main() {

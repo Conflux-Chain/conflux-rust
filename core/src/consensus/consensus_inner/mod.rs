@@ -1293,7 +1293,7 @@ impl ConsensusGraphInner {
 
         if parent == NULL && referees.is_empty() {
             self.old_era_block_set.lock().push_back(hash);
-            return sn;
+            // return sn;
         }
 
         // actually, we only need these fields: `parent`, `referees`,
@@ -1320,6 +1320,7 @@ impl ConsensusGraphInner {
             referrers: Vec::new(),
             data: ConsensusGraphNodeData::new(NULLU64, sn, 0),
         });
+        self.arena[index].data.pending = true;
         self.hash_to_arena_indices.insert(hash, index);
 
         let referees = self.arena[index].referees.clone();
