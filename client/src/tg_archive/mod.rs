@@ -218,7 +218,7 @@ impl TgArchiveClient {
 
         let network = {
             let mut network = NetworkService::new(network_config);
-            network.start().unwrap();
+            network.start_io_service().unwrap();
             Arc::new(network)
         };
 

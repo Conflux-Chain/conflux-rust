@@ -57,7 +57,7 @@ const CHECK_SESSIONS: TimerToken = SYS_TIMER + 9;
 const HANDLER_TIMER: TimerToken = LAST_SESSION + 256;
 const STOP_NET_POLL: TimerToken = HANDLER_TIMER + 1;
 
-pub const DEFAULT_HOUSEKEEPING_TIMEOUT: Duration = Duration::from_secs(1);
+pub const DEFAULT_HOUSEKEEPING_TIMEOUT: Duration = Duration::from_secs(2);
 // for DISCOVERY_REFRESH TimerToken
 pub const DEFAULT_DISCOVERY_REFRESH_TIMEOUT: Duration =
     Duration::from_secs(120);
@@ -134,6 +134,7 @@ impl<'a> UdpIoContext<'a> {
 pub struct NetworkService {
     pub io_service: Option<IoService<NetworkIoMessage>>,
     pub inner: Option<Arc<NetworkServiceInner>>,
+    network_poll: Arc<Poll>,
     config: NetworkConfiguration,
 }
 
@@ -142,15 +143,55 @@ impl NetworkService {
         NetworkService {
             io_service: None,
             inner: None,
+            network_poll: Arc::new(Poll::new().unwrap()),
             config,
         }
     }
 
+    pub fn start_io_service(&mut self) -> Result<(), Error> {
+        let raw_io_service =
+            IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
+        self.io_service = Some(raw_io_service);
+
+        if self.inner.is_none() {
+            if self.config.test_mode {
+                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
+            }
+
+            let inner = Arc::new(match self.config.test_mode {
+                true => NetworkServiceInner::new_with_latency(&self.config)?,
+                false => NetworkServiceInner::new(&self.config)?,
+            });
+            self.io_service
+                .as_ref()
+                .unwrap()
+                .register_handler(inner.clone())?;
+            self.inner = Some(inner);
+        }
+        Ok(())
+    }
+
+    pub fn start_network_poll(&self) -> Result<(), Error> {
+        let handler = self.inner.as_ref().unwrap().clone();
+        let main_event_loop_channel =
+            self.io_service.as_ref().unwrap().channel();
+        self.io_service
+            .as_ref()
+            .expect("Already set")
+            .start_network_poll(
+                self.network_poll.clone(),
+                handler,
+                main_event_loop_channel,
+                MAX_SESSIONS,
+                STOP_NET_POLL,
+            );
+        Ok(())
+    }
+
     /// Create and start the event loop inside the NetworkService
     pub fn start(&mut self) -> Result<(), Error> {
-        let network_poll = Arc::new(Poll::new().unwrap());
         let raw_io_service =
-            IoService::<NetworkIoMessage>::start(network_poll.clone())?;
+            IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
         self.io_service = Some(raw_io_service);
 
         if self.inner.is_none() {
@@ -176,7 +217,7 @@ impl NetworkService {
             .as_ref()
             .expect("Already set")
             .start_network_poll(
-                network_poll,
+                self.network_poll.clone(),
                 handler,
                 main_event_loop_channel,
                 MAX_SESSIONS,

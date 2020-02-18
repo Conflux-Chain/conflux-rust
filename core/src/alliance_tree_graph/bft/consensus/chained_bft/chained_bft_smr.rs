@@ -221,6 +221,8 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
                 network_task,
                 state_computer.get_peers(),
             ));
+        protocol_handler.clone().register(network.clone()).unwrap();
+        network.start_network_poll().unwrap();
 
         let safety_rules_manager_config = initial_setup
             .safety_rules_manager_config
@@ -264,7 +266,6 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             network_receiver,
         );
 
-        protocol_handler.clone().register(network.clone()).unwrap();
         debug!("Chained BFT SMR started.");
         Ok(())
     }

@@ -434,6 +434,7 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
     }
 
     fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
+        info!("hsb on_peer_connected: {}", peer);
         let new_originated = io.get_peer_connection_origin(peer);
         if new_originated.is_none() {
             debug!("Peer does not exist when just connected");

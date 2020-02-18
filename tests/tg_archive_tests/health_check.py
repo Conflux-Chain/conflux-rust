@@ -320,6 +320,7 @@ class Snapshot(object):
         self.event_list.append(StopEvent())
 
     def start(self):
+        self.bft.last_commited = None
         self.event_list.append(StartEvent())
 
     def new_commits(self, commits):
