@@ -22,6 +22,7 @@ use libra_crypto::HashValue;
 
 use super::super::super::super::executor::ProcessedVMOutput;
 use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
+use futures::{channel::oneshot, executor::block_on};
 use libra_types::{
     block_info::PivotBlockDecision,
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorVerifier},
@@ -73,6 +74,16 @@ impl<T: Payload> BlockStore<T> {
             /* root_executed_trees, */ blocks,
             quorum_certs,
         ) = initial_data.take();
+
+        if root_executed_pivot.is_some() {
+            let root_pivot = &root_executed_pivot.as_ref().unwrap().block_hash;
+            let (callback, cb_receiver) = oneshot::channel();
+            state_computer
+                .recover_tree_graph_from_pivot_block(root_pivot, callback);
+            let response = block_on(async move { cb_receiver.await? });
+            response.expect("Failed to recover tree graph");
+        }
+
         let inner = Arc::new(RwLock::new(Self::build_block_tree(
             root,
             root_executed_pivot,

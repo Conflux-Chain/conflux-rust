@@ -10,8 +10,9 @@ use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::{
 };
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
-use crate::sync::{
-    request_manager::RequestManager, SharedSynchronizationService,
+use crate::{
+    alliance_tree_graph::consensus::consensus_inner::SetPivotChainCallbackType,
+    sync::{request_manager::RequestManager, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use libra_types::{
@@ -90,6 +91,10 @@ pub trait StateComputer: Send + Sync {
         finality_proof: LedgerInfoWithSignatures,
         //synced_trees: &ExecutedTrees,
     ) -> Result<()>;
+
+    fn recover_tree_graph_from_pivot_block(
+        &self, block_hash: &H256, callback: SetPivotChainCallbackType,
+    );
 
     /// Best effort state synchronization to the given target LedgerInfo.
     /// In case of success (`Result::Ok`) the LI of storage is at the given

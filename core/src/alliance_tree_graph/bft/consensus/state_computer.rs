@@ -15,7 +15,10 @@ use libra_types::{
 //use state_synchronizer::StateSyncClient;
 use super::super::executor::{Executor, ProcessedVMOutput};
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::sync_protocol::{PeerState, Peers},
+    alliance_tree_graph::{
+        consensus::consensus_inner::SetPivotChainCallbackType,
+        hsb_sync_protocol::sync_protocol::{PeerState, Peers},
+    },
     sync::SharedSynchronizationService,
 };
 use futures::{channel::oneshot, executor::block_on};
@@ -106,6 +109,12 @@ impl StateComputer for ExecutionProxy {
         }
         // FIXME: Check whether new membership is valid.
         Ok(output)
+    }
+
+    fn recover_tree_graph_from_pivot_block(
+        &self, block_hash: &H256, callback: SetPivotChainCallbackType,
+    ) {
+        self.tg_sync.set_pivot_chain(block_hash, callback);
     }
 
     /// Send a successful commit. A future is fulfilled when the state is
