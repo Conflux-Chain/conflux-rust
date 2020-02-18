@@ -227,7 +227,9 @@ impl ConfirmationMeter {
                 .pivot_index_to_height(g_inner.pivot_chain.len())
                 - DEFERRED_STATE_EPOCH_COUNT;
             let mut count = 0;
-            while epoch_num > 0 && count < MAX_NUM_MAINTAINED_RISK {
+            while epoch_num > g_inner.cur_era_genesis_height
+                && count < MAX_NUM_MAINTAINED_RISK
+            {
                 let w_4 = self.get_total_weight_in_past();
                 let risk = self.confirmation_risk(g_inner, w_0, w_4, epoch_num);
                 if risk <= MIN_MAINTAINED_RISK {
@@ -239,7 +241,7 @@ impl ConfirmationMeter {
             }
 
             if risks.is_empty() {
-                epoch_num = 0;
+                epoch_num = g_inner.cur_era_genesis_height;
             } else {
                 epoch_num += 1;
             }

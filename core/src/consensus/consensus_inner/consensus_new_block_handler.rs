@@ -1396,6 +1396,7 @@ impl ConsensusNewBlockHandler {
             *inner.pivot_chain.last().unwrap(),
             0,
         );
+        let new_era_height = inner.arena[new_pivot_era_block].height;
 
         if inner.best_epoch_number() > inner.cur_era_stable_height
             && inner.arena
@@ -1420,35 +1421,46 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let new_era_height = inner.arena[new_pivot_era_block].height;
-        let new_checkpoint_era_genesis = self.should_form_checkpoint_at(inner);
-        if new_checkpoint_era_genesis != inner.cur_era_genesis_block_arena_index
+        // We are only going to check the checkpoint movement after the stable
+        // is on the pivot chain (will not always be true during the recovery).
+        // The code inside assumes this assumption.
+        if inner.cur_era_stable_height < inner.best_epoch_number()
+            && inner.arena
+                [inner.get_pivot_block_arena_index(inner.cur_era_stable_height)]
+            .hash
+                == inner.cur_era_stable_block_hash
         {
-            info!(
-                "Working on new checkpoint, old checkpoint block {} height {}",
-                &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
-                inner.cur_era_genesis_height
-            );
+            let new_checkpoint_era_genesis =
+                self.should_form_checkpoint_at(inner);
+            if new_checkpoint_era_genesis
+                != inner.cur_era_genesis_block_arena_index
+            {
+                info!(
+                    "Working on new checkpoint, old checkpoint block {} height {}",
+                    &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                    inner.cur_era_genesis_height
+                );
 
-            ConsensusNewBlockHandler::make_checkpoint_at(
-                inner,
-                new_checkpoint_era_genesis,
-                has_transactions && !self.conf.bench_mode,
-                &self.executor,
-            );
-            let stable_era_genesis_arena_index =
-                inner.ancestor_at(me, inner.cur_era_stable_height);
-            meter.reset_for_checkpoint(
-                inner.weight_tree.get(stable_era_genesis_arena_index),
-                inner.cur_era_stable_height,
-            );
-            meter.update_confirmation_risks(inner);
-            info!(
-                "New checkpoint formed at block {} stable block {} height {}",
-                &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
-                &inner.arena[stable_era_genesis_arena_index].hash,
-                inner.cur_era_genesis_height
-            );
+                ConsensusNewBlockHandler::make_checkpoint_at(
+                    inner,
+                    new_checkpoint_era_genesis,
+                    has_transactions && !self.conf.bench_mode,
+                    &self.executor,
+                );
+                let stable_era_genesis_arena_index =
+                    inner.ancestor_at(me, inner.cur_era_stable_height);
+                meter.reset_for_checkpoint(
+                    inner.weight_tree.get(stable_era_genesis_arena_index),
+                    inner.cur_era_stable_height,
+                );
+                meter.update_confirmation_risks(inner);
+                info!(
+                    "New checkpoint formed at block {} stable block {} height {}",
+                    &inner.arena[inner.cur_era_genesis_block_arena_index].hash,
+                    &inner.arena[stable_era_genesis_arena_index].hash,
+                    inner.cur_era_genesis_height
+                );
+            }
         }
         // FIXME: we need a function to compute the deferred epoch
         // FIXME: number. the current codebase may not be

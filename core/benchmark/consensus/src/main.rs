@@ -19,6 +19,7 @@ use cfxcore::{
         utils::{
             create_simple_block, create_simple_block_impl,
             initialize_synchronization_graph,
+            initialize_synchronization_graph_with_data_manager,
         },
         SynchronizationGraph,
     },
@@ -176,15 +177,16 @@ fn main() {
         timer_ratio, timer_beta, beta, h_ratio, era_epoch_count
     );
 
-    let (sync, consensus, genesis_block) = initialize_synchronization_graph(
-        db_dir,
-        beta,
-        h_ratio,
-        timer_ratio,
-        timer_beta,
-        era_epoch_count,
-        DbType::Sqlite,
-    );
+    let (sync, consensus, data_man, genesis_block) =
+        initialize_synchronization_graph(
+            db_dir,
+            beta,
+            h_ratio,
+            timer_ratio,
+            timer_beta,
+            era_epoch_count,
+            DbType::Sqlite,
+        );
 
     let mut hashes = Vec::new();
     hashes.push(genesis_block.hash());
@@ -195,6 +197,8 @@ fn main() {
     let mut valid_indices = HashMap::new();
     let mut stable_indices = HashMap::new();
     let mut adaptive_indices = HashMap::new();
+    let mut blocks = Vec::new();
+    blocks.push((*genesis_block).clone());
     let mut check_batch_size = era_epoch_count as usize;
     let mut last_checked = 1;
 
@@ -258,6 +262,7 @@ fn main() {
             false, // insert_to_consensus
             true,  // persistent
         );
+        blocks.push(new_block.clone());
         sync.insert_block(
             new_block, false, /* need_to_verify */
             false, /* persistent */
@@ -336,4 +341,68 @@ fn main() {
         "Elapsed {}",
         start_time.elapsed().unwrap().as_millis() as f64 / 1_000.0
     );
+
+    let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
+    let stable_hash = data_man.get_cur_consensus_era_stable_hash();
+
+    if genesis_hash == genesis_block.block_header.hash() {
+        println!("No checkpoint created, test finished!");
+        return;
+    }
+
+    data_man.initialize_instance_id();
+
+    let (sync_n, consensus_n) =
+        initialize_synchronization_graph_with_data_manager(
+            data_man,
+            beta,
+            h_ratio,
+            timer_ratio,
+            timer_beta,
+            era_epoch_count,
+        );
+
+    println!("Checkpoint generated in the process. Going to test the last checkpoint recovery, genesis hash {} stable hash {}.", genesis_hash, stable_hash);
+    let mut encounter_genesis = false;
+    let mut genesis_idx = 0;
+    for i in 0..blocks.len() {
+        if blocks[i].block_header.hash() == genesis_hash {
+            encounter_genesis = true;
+            genesis_idx = i;
+            println!(
+                "Going to check the recovery phase with genesis at index {}",
+                i
+            );
+        }
+        if encounter_genesis == false {
+            continue;
+        }
+        if genesis_idx != i {
+            let mut b = blocks[i].clone();
+            let h = b.hash();
+            consensus_n.on_new_block(&h, true, false);
+        }
+    }
+
+    println!("Waiting for the last phase being processed again...");
+    while consensus_n.get_processed_block_count()
+        != blocks.len() - genesis_idx - 1
+    {
+        println!(
+            "Processed count {} / {}",
+            consensus_n.get_processed_block_count(),
+            blocks.len() - genesis_idx - 1
+        );
+        thread::sleep(time::Duration::from_millis(100));
+    }
+    check_results(
+        genesis_idx + 1,
+        blocks.len(),
+        consensus_n.clone(),
+        &hashes,
+        &valid_indices,
+        &stable_indices,
+        &adaptive_indices,
+    );
+    println!("Done!");
 }

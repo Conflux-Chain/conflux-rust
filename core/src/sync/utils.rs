@@ -69,12 +69,9 @@ pub fn create_simple_block(
     )
 }
 
-/// This method is only used in tests and benchmarks.
-pub fn initialize_synchronization_graph(
-    db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
-    dbtype: DbType,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
-{
+pub fn initialize_data_manager(
+    db_dir: &str, dbtype: DbType,
+) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
         &db::db_config(
@@ -126,7 +123,14 @@ pub fn initialize_synchronization_graph(
             dbtype,
         ),
     ));
+    (data_man, genesis_block)
+}
 
+pub fn initialize_synchronization_graph_with_data_manager(
+    data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
+    era_epoch_count: u64,
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
+{
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),
         data_man.clone(),
@@ -178,5 +182,30 @@ pub fn initialize_synchronization_graph(
         false,
     ));
 
-    (sync, consensus, genesis_block)
+    (sync, consensus)
+}
+
+/// This method is only used in tests and benchmarks.
+pub fn initialize_synchronization_graph(
+    db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
+    dbtype: DbType,
+) -> (
+    Arc<SynchronizationGraph>,
+    Arc<ConsensusGraph>,
+    Arc<BlockDataManager>,
+    Arc<Block>,
+)
+{
+    let (data_man, genesis_block) = initialize_data_manager(db_dir, dbtype);
+
+    let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
+        data_man.clone(),
+        beta,
+        h,
+        tcr,
+        tcb,
+        era_epoch_count,
+    );
+
+    (sync, consensus, data_man, genesis_block)
 }
