@@ -398,6 +398,10 @@ impl ConsensusNewBlockHandler {
         callback: NewCandidatePivotCallbackType,
     ) -> bool
     {
+        debug!(
+            "on_next_selected_pivot_block, pivot_decision={:?}",
+            pivot_decision
+        );
         inner.new_candidate_pivot(
             &pivot_decision.block_hash,
             &pivot_decision.parent_hash,
@@ -411,6 +415,10 @@ impl ConsensusNewBlockHandler {
         callback: NextSelectedPivotCallbackType,
     ) -> Option<Block>
     {
+        debug!(
+            "on_next_selected_pivot_block, last_pivot_hash={:?}",
+            last_pivot_hash
+        );
         let last_pivot_hash = if let Some(p) = last_pivot_hash {
             *p
         } else {
@@ -470,6 +478,7 @@ impl ConsensusNewBlockHandler {
     pub fn on_commit(
         &self, inner: &mut ConsensusGraphInner, block_hashes: &Vec<H256>,
     ) {
+        debug!("on_commit: block_hashes={:?}", block_hashes);
         for block_hash in block_hashes {
             inner.commit(block_hash);
 
@@ -530,6 +539,13 @@ impl ConsensusNewBlockHandler {
         }
     }
 
+    pub fn set_pivot_chain(
+        &self, inner: &mut ConsensusGraphInner, block_hash: &H256,
+    ) {
+        inner.set_to_pivot(block_hash);
+        self.construct_pivot_state(inner);
+    }
+
     /// construct_pivot_state() rebuild pivot chain state info from db
     /// avoiding intermediate redundant computation triggered by
     /// on_new_block().
@@ -540,6 +556,11 @@ impl ConsensusNewBlockHandler {
         let start_pivot_index = (inner.state_boundary_height
             - inner.cur_era_genesis_height)
             as usize;
+        debug!(
+            "construct_pivot_state from [{}] to [{}]",
+            start_pivot_index,
+            inner.pivot_chain.len() - 1
+        );
         let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory.

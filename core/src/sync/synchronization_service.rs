@@ -9,6 +9,7 @@ use crate::{
     alliance_tree_graph::consensus::{
         consensus_inner::{
             NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
+            SetPivotChainCallbackType,
         },
         TreeGraphConsensus,
     },
@@ -158,6 +159,18 @@ impl SynchronizationService {
                 )
             });
         }
+    }
+
+    pub fn set_pivot_chain(
+        &self, block_hash: &H256, callback: SetPivotChainCallbackType,
+    ) {
+        let sync_graph = self.get_synchronization_graph();
+        let tg_consensus = sync_graph
+            .consensus
+            .as_any()
+            .downcast_ref::<TreeGraphConsensus>()
+            .expect("downcast to TreeGraphConsensus should success");
+        tg_consensus.set_pivot_chain(block_hash, callback);
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {

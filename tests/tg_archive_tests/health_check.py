@@ -414,6 +414,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                 normal_peers = alive_peer_indices.get('NormalSyncPhase', [])
                 catch_up_peers = alive_peer_indices.get(
                     'CatchUpSyncBlockPhase', [])
+                if len(self._stopped_peers):
+                    return
                 if (len(normal_peers) - 1) * 2 <= len(self.nodes):
                     return
                 alive_peer_indices = normal_peers + catch_up_peers
@@ -425,7 +427,7 @@ class TreeGraphTracing(ConfluxTestFramework):
                 new_blocks = self.nodes[chosen_peer].sync_graph_state()
                 self._snapshots[chosen_peer].new_blocks(
                     new_blocks['readyBlockVec'])
-                self.stop_node(chosen_peer)
+                self.stop_node(chosen_peer, kill=True)
                 self._stopped_peers.append(chosen_peer)
                 self._snapshots[chosen_peer].stop()
                 self.log.info("stopped {}".format(chosen_peer))
@@ -588,7 +590,7 @@ class TreeGraphTracing(ConfluxTestFramework):
             self.replay(self._snapshot_file)
             return
         genesis_hash = self.nodes[0].best_block_hash()
-        # crash_timer = Timer(self._crash_timeout, self._random_crash)
+        crash_timer = Timer(self._crash_timeout, self._random_crash)
         start_timer = Timer(self._start_timeout, self._random_start)
         # blockgen_timer = Timer(self._blockgen_timeout, self._generate_block)
         snapshot_timer = Timer(self._snapshot_timeout, self._retrieve_snapshot)
@@ -599,7 +601,7 @@ class TreeGraphTracing(ConfluxTestFramework):
         self._peer_nonce = [0] * len(self.nodes)
         # self.setup_balance()
 
-        # crash_timer.start()
+        crash_timer.start()
         start_timer.start()
         # blockgen_timer.start()
         snapshot_timer.start()

@@ -31,6 +31,7 @@ use std::{
 pub type NextSelectedPivotCallbackType =
     oneshot::Sender<Result<PivotBlockDecision, Error>>;
 pub type NewCandidatePivotCallbackType = oneshot::Sender<Result<bool, Error>>;
+pub type SetPivotChainCallbackType = oneshot::Sender<Result<(), Error>>;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
@@ -125,6 +126,7 @@ pub struct ConsensusGraphInner {
         HashMap<H256, NextSelectedPivotCallbackType>,
     pub new_candidate_pivot_waiting_list:
         HashMap<H256, NewCandidatePivotCallbackType>,
+    pub set_pivot_chain_callback: Option<(H256, SetPivotChainCallbackType)>,
 }
 
 #[derive(Debug)]
@@ -184,6 +186,7 @@ impl ConsensusGraphInner {
             state_boundary_height: cur_era_stable_height,
             next_selected_pivot_waiting_list: HashMap::new(),
             new_candidate_pivot_waiting_list: HashMap::new(),
+            set_pivot_chain_callback: None,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -823,31 +826,6 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// This function force the pivot chain to follow our previous stable
-    /// genesis choice. It assumes that the era_genesis_block should be the
-    /// ancestor of stable_block, and the past of stable_block should have
-    /// been inserted into consensus.
-    pub fn set_pivot_to_stable(&mut self, stable: &H256) {
-        let stable_index = *self
-            .hash_to_arena_indices
-            .get(stable)
-            .expect("Era stable genesis inserted");
-        self.pivot_chain.clear();
-        self.pastset.clear();
-        let mut pivot = stable_index;
-        while pivot != NULL {
-            self.pivot_chain.push(pivot);
-            pivot = self.arena[pivot].parent;
-        }
-        self.pivot_chain.reverse();
-        debug!(
-            "set_pivot_to_stable: stable={:?}, chain_len={}",
-            stable,
-            self.pivot_chain.len()
-        );
-        self.compute_metadata(self.cur_era_genesis_height);
-    }
-
     pub fn total_processed_block_count(&self) -> u64 {
         self.sequence_number_of_block_entrance
     }
@@ -926,6 +904,10 @@ impl ConsensusGraphInner {
     ) -> bool
     {
         if !self.hash_to_arena_indices.contains_key(block_hash) {
+            debug!(
+                "new_candidate_pivot due to invalid block_hash={:?}",
+                block_hash
+            );
             self.new_candidate_pivot_waiting_list
                 .insert(*block_hash, callback);
             false
@@ -956,11 +938,6 @@ impl ConsensusGraphInner {
         let parent_arena_index = self.arena[arena_index].parent;
         assert!(*self.pivot_chain.last().unwrap() == parent_arena_index);
         self.candidate_pivot_tree.make_root(arena_index);
-        // FIXIME: we may have to reassign the parent?
-        // self.arena[last].children.push(arena_index);
-        // self.arena[arena_index].parent = Some(last);
-        // self.inclusive_weight_tree.link(arena_index, last);
-        // self.arena[arena_index].height = self.arena[last].height + 1;
         self.data_man.insert_epoch_block_hash_to_db(
             self.arena[arena_index].height,
             block_hash,
@@ -970,5 +947,27 @@ impl ConsensusGraphInner {
             self.arena[arena_index].height,
         );
         self.new_pivot(arena_index);
+    }
+
+    pub fn set_to_pivot(&mut self, block_hash: &H256) {
+        let arena_index = *self
+            .hash_to_arena_indices
+            .get(block_hash)
+            .expect("block_hash should inserted");
+        self.pivot_chain.clear();
+        self.pastset.clear();
+        let mut pivot = arena_index;
+        while pivot != NULL {
+            self.pivot_chain.push(pivot);
+            pivot = self.arena[pivot].parent;
+        }
+        self.pivot_chain.reverse();
+        self.compute_metadata(self.cur_era_genesis_height);
+        self.candidate_pivot_tree = CandidatePivotTree::new(arena_index);
+        debug!(
+            "set pivot chain to block[{:?}], pivot_chain_len={:?}",
+            block_hash,
+            self.pivot_chain.len()
+        );
     }
 }
