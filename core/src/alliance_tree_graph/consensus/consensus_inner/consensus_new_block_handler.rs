@@ -399,7 +399,7 @@ impl ConsensusNewBlockHandler {
     ) -> bool
     {
         debug!(
-            "on_next_selected_pivot_block, pivot_decision={:?}",
+            "on_new_candidate_pivot, pivot_decision={:?}",
             pivot_decision
         );
         inner.new_candidate_pivot(
@@ -435,6 +435,7 @@ impl ConsensusNewBlockHandler {
                 last_pivot_hash,
                 inner.terminal_hashes.iter().cloned().collect(),
             );
+            debug!("inser to next_selected_pivot_waiting_list block={:?}", block.hash());
             inner
                 .next_selected_pivot_waiting_list
                 .insert(block.hash(), callback);
@@ -458,6 +459,7 @@ impl ConsensusNewBlockHandler {
                     last_pivot_hash,
                     inner.terminal_hashes.iter().cloned().collect(),
                 );
+                debug!("inser to next_selected_pivot_waiting_list block={:?}", block.hash());
                 inner
                     .next_selected_pivot_waiting_list
                     .insert(block.hash(), callback);
