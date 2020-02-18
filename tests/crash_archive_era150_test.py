@@ -60,9 +60,11 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
 
         for i in range(1, self.num_nodes):
             self.stop_node(i)
+        self.log.info("Stopped all other nodes except node 0")
         self.nodes[0].add_p2p_connection(P2PInterface())
         network_thread_start()
         self.nodes[0].p2p.wait_for_status()
+        self.log.info("p2p connection to node 0 connected")
         gas_price = 1
         value = 1
         receiver_sk, _ = ec_random_keys()
