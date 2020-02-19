@@ -127,18 +127,50 @@ impl<T: Payload> BlockStore<T> {
     ) -> anyhow::Result<()> {
         let mut pending = vec![];
         let mut retrieve_qc = qc.clone();
+        // FIXME: how to handle the case where epoch is different?
+        assert_eq!(self.root().epoch(), retrieve_qc.certified_block().epoch());
+        let block_batch_size = 1024 as u64;
+
         loop {
             if self.block_exists(retrieve_qc.certified_block().id()) {
                 break;
             }
-            let mut blocks =
-                retriever.retrieve_block_for_qc(&retrieve_qc, 1).await?;
-            // retrieve_block_for_qc guarantees that blocks has exactly 1
-            // element
-            let block = blocks.remove(0);
-            retrieve_qc = block.quorum_cert().clone();
-            pending.push(block);
+
+            // To this point, it means we have to fetch
+            // retrieve_qc.certified_block()
+            let min_round = self.root().round();
+            let max_round = retrieve_qc.certified_block().round();
+            let round_gap = if max_round > min_round {
+                max_round - min_round
+            } else {
+                0
+            };
+
+            let mut to_fetch_block_count =
+                std::cmp::min(round_gap, block_batch_size);
+            if to_fetch_block_count == 0 {
+                to_fetch_block_count = 1;
+            }
+
+            let blocks = retriever
+                .retrieve_block_for_qc(&retrieve_qc, to_fetch_block_count)
+                .await?;
+
+            let mut done = false;
+            for block in blocks {
+                if self.block_exists(block.id()) {
+                    done = true;
+                    break;
+                }
+                retrieve_qc = block.quorum_cert().clone();
+                pending.push(block);
+            }
+
+            if done {
+                break;
+            }
         }
+
         // insert the qc <- block pair
         while let Some(block) = pending.pop() {
             let block_qc = block.quorum_cert().clone();
@@ -416,10 +448,12 @@ const RETRIEVAL_MAX_EXP: u32 = 4;
 
 /// Returns exponentially increasing timeout with
 /// limit of RETRIEVAL_INITIAL_TIMEOUT*(2^RETRIEVAL_MAX_EXP)
-fn retrieval_timeout(deadline: &Instant, attempt: u32) -> Option<Duration> {
+fn retrieval_timeout(_deadline: &Instant, attempt: u32) -> Option<Duration> {
     assert!(attempt > 0, "retrieval_timeout attempt can't be 0");
     let exp = RETRIEVAL_MAX_EXP.min(attempt - 1); // [0..RETRIEVAL_MAX_EXP]
     let request_timeout = RETRIEVAL_INITIAL_TIMEOUT * 2_u32.pow(exp);
+    Some(request_timeout)
+    /*
     let now = Instant::now();
     let deadline_timeout = if *deadline >= now {
         Some(deadline.duration_since(now))
@@ -427,4 +461,5 @@ fn retrieval_timeout(deadline: &Instant, attempt: u32) -> Option<Duration> {
         None
     };
     deadline_timeout.map(|delay| request_timeout.min(delay))
+    */
 }
