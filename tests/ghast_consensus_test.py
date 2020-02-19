@@ -45,7 +45,7 @@ bench_cmd = os.getenv(
     "CONFLUX_BENCH",
     default=os.path.join(
         test_dir,
-        "../target/release/conflux"))
+        "../target/release/consensus_bench"))
 test_input_dir = os.path.join(test_dir, "../core/benchmark/consensus/test/")
 
 failed = set()
