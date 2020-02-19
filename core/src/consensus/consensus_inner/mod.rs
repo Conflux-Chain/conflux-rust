@@ -2467,7 +2467,7 @@ impl ConsensusGraphInner {
         }
         while !stack.is_empty() {
             let (stage, me) = stack.pop().unwrap();
-            if !to_visit.contains(&me) || self.arena[me].era_block == NULL {
+            if !to_visit.contains(&me) {
                 continue;
             }
             let parent = self.arena[me].parent;

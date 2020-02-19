@@ -22,7 +22,7 @@ use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
-    diff: U256, block_weight: u32,
+    diff: U256, block_weight: u32, adaptive: bool,
 ) -> (H256, Block)
 {
     let mut b = BlockHeaderBuilder::new();
@@ -32,6 +32,7 @@ pub fn create_simple_block_impl(
         .with_referee_hashes(ref_hashes)
         .with_nonce(nonce)
         .with_difficulty(diff)
+        .with_adaptive(adaptive)
         .build();
     header.compute_hash();
     header.pow_quality = if block_weight > 1 {
@@ -45,7 +46,7 @@ pub fn create_simple_block_impl(
 
 pub fn create_simple_block(
     sync: Arc<SynchronizationGraph>, parent_hash: H256, ref_hashes: Vec<H256>,
-    block_weight: u32,
+    block_weight: u32, adaptive: bool,
 ) -> (H256, Block)
 {
     //    sync.consensus.wait_for_generation(&parent_hash);
@@ -66,6 +67,7 @@ pub fn create_simple_block(
         nonce,
         exp_diff,
         block_weight,
+        adaptive,
     )
 }
 

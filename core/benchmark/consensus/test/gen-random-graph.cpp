@@ -361,7 +361,6 @@ back_track:
             if (x != -1) {
                 parent[i] = x;
                 is_valid[i] = 0;
-                weight[i] = 1;
             }
         }
         p_table[i][0] = parent[i];

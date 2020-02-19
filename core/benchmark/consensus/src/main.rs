@@ -257,11 +257,13 @@ fn main() {
         for ref_idx in ref_idxs.iter() {
             ref_hashes.push(hashes[*ref_idx]);
         }
+        let adaptive_fill = is_adaptive == 1;
         let (new_hash, mut new_block) = create_simple_block(
             sync.clone(),
             hashes[parent_idx],
             ref_hashes,
             block_weight,
+            adaptive_fill,
         );
         hashes.push(new_hash);
         sync.insert_block_header(

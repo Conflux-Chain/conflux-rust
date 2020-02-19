@@ -1353,7 +1353,8 @@ impl ConsensusNewBlockHandler {
                 inner.recompute_metadata(fork_at, last_pivot_to_update);
             } else {
                 // pivot chain not extend and not change
-                ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, me);
+                // FIXME: We should go back and revisit how we deal with this for performance
+                // ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, me);
                 inner.recompute_metadata(
                     inner.get_pivot_height(),
                     last_pivot_to_update,
