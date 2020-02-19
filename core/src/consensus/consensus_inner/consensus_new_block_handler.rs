@@ -946,19 +946,19 @@ impl ConsensusNewBlockHandler {
         self.data_man.insert_terminals_to_db(terminals);
     }
 
-    fn try_clear_blockset_in_own_view_of_epoch(
-        inner: &mut ConsensusGraphInner, me: usize,
-    ) {
-        if inner.arena[me].data.blockset_in_own_view_of_epoch.len() as u64
-            > BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP
-        {
-            inner.arena[me].data.blockset_in_own_view_of_epoch =
-                Default::default();
-            inner.arena[me].data.ordered_executable_epoch_blocks =
-                Default::default();
-            inner.arena[me].data.blockset_cleared = true;
-        }
-    }
+    //    fn try_clear_blockset_in_own_view_of_epoch(
+    //        inner: &mut ConsensusGraphInner, me: usize,
+    //    ) {
+    //        if inner.arena[me].data.blockset_in_own_view_of_epoch.len() as u64
+    //            > BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP
+    //        {
+    //            inner.arena[me].data.blockset_in_own_view_of_epoch =
+    //                Default::default();
+    //            inner.arena[me].data.ordered_executable_epoch_blocks =
+    //                Default::default();
+    //            inner.arena[me].data.blockset_cleared = true;
+    //        }
+    //    }
 
     // This function computes the timer chain in the view of the new block.
     // The first returned value is the fork height of the timer chain.
