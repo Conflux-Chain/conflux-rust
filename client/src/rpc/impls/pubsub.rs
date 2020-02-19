@@ -9,18 +9,27 @@ use crate::rpc::{
     helpers::{errors, Subscribers},
     metadata::Metadata,
     traits::PubSub,
-    types::{pubsub, Header, Log},
+    types::{pubsub, Header as RpcHeader, Log as RpcLog, H256},
 };
+
 use jsonrpc_core::{
-    futures::{self, sync::mpsc, Future, IntoFuture, Stream},
+    futures::{sync::mpsc, Future, IntoFuture, Stream},
     BoxFuture, Error, Result,
 };
-use parking_lot::RwLock;
-use runtime::Executor;
+
 use std::{
     collections::BTreeMap,
     sync::{Arc, Weak},
 };
+
+use cfxcore::{
+    BlockDataManager, ConsensusGraph, Notifications, SynchronizationGraph,
+};
+
+use futures::future::{FutureExt, TryFutureExt};
+use parking_lot::RwLock;
+use primitives::{filter::Filter, log_entry::LocalizedLogEntry, BlockHeader};
+use runtime::Executor;
 
 type Client = Sink<pubsub::Result>;
 
@@ -32,13 +41,35 @@ pub struct PubSubClient {
 
 impl PubSubClient {
     /// Creates new `PubSubClient`.
-    pub fn new(executor: Executor) -> Self {
+    pub fn new(
+        executor: Executor, consensus: Arc<ConsensusGraph>,
+        notifications: Arc<Notifications>,
+    ) -> Self
+    {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
 
         let handler = Arc::new(ChainNotificationHandler {
             executor,
+            consensus: consensus.clone(),
             heads_subscribers: heads_subscribers.clone(),
         });
+
+        // subscribe to the `new_block_hashes` channel
+        let receiver = notifications.new_block_hashes.subscribe();
+
+        // loop asynchronously
+        let handler_clone = handler.clone();
+        let data_man = consensus.data_man.clone();
+
+        let fut = receiver.for_each(move |(hash, _)| {
+            let header = match data_man.block_header_by_hash(&hash) {
+                Some(h) => handler_clone.notify_new_headers(&[(*h).clone()]),
+                None => return error!("Header {:?} not found", hash),
+            };
+        });
+
+        // run futures@0.3 future on tokio@0.1 executor
+        handler.executor.spawn(fut.unit_error().boxed().compat());
 
         PubSubClient {
             handler,
@@ -54,7 +85,8 @@ impl PubSubClient {
 
 /// PubSub notification handler.
 pub struct ChainNotificationHandler {
-    executor: Executor,
+    pub executor: Executor,
+    consensus: Arc<ConsensusGraph>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
 }
 
@@ -67,8 +99,18 @@ impl ChainNotificationHandler {
         ));
     }
 
-    fn notify_heads(&self, headers: &[(Vec<u8>, BTreeMap<String, String>)]) {
-        for subscriber in self.heads_subscribers.read().values() {}
+    fn notify_new_headers(&self, headers: &[BlockHeader]) {
+        for subscriber in self.heads_subscribers.read().values() {
+            let convert = |h| RpcHeader::new(h, &self.consensus);
+
+            for h in headers.iter().map(convert) {
+                Self::notify(
+                    &self.executor,
+                    subscriber,
+                    pubsub::Result::Header(h),
+                );
+            }
+        }
     }
 }
 
@@ -81,6 +123,7 @@ impl PubSub for PubSubClient {
     )
     {
         let error = match (kind, params) {
+            // newHeads
             (pubsub::Kind::NewHeads, None) => {
                 self.heads_subscribers.write().push(subscriber);
                 return;

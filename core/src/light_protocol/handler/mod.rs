@@ -7,7 +7,7 @@ mod sync;
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -27,6 +27,7 @@ use crate::{
         CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
     sync::{message::Throttled, SynchronizationGraph},
+    UniqueId,
 };
 use cfx_types::H256;
 use io::TimerToken;

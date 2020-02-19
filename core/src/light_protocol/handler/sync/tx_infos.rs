@@ -13,7 +13,7 @@ use std::{future::Future, sync::Arc};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, GetTxInfos, TxInfo},
         Error, ErrorKind,
     },
@@ -23,6 +23,7 @@ use crate::{
         CACHE_TIMEOUT, MAX_TX_INFOS_IN_FLIGHT, TX_INFO_REQUEST_BATCH_SIZE,
         TX_INFO_REQUEST_TIMEOUT,
     },
+    UniqueId,
 };
 
 use super::{
