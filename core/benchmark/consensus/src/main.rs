@@ -145,7 +145,12 @@ fn check_results(
             );
         }
     }
-    println!("There are {} blocks pending, skipped checking.", pending_cnt);
+    if pending_cnt > 0 {
+        println!(
+            "There are {} blocks pending, skipped checking.",
+            pending_cnt
+        );
+    }
 }
 
 fn main() {

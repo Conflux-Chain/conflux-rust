@@ -1277,7 +1277,9 @@ impl ConsensusGraphInner {
     /// Try to insert an outside era block, return it's sequence number. If both
     /// it's parent and referees are empty, we will not insert it into
     /// `arena`.
-    pub fn insert_out_era_block(&mut self, block_header: &BlockHeader) -> u64 {
+    pub fn insert_out_era_block(
+        &mut self, block_header: &BlockHeader, partial_invalid: bool,
+    ) -> u64 {
         let sn = self.get_next_sequence_number();
         let hash = block_header.hash();
         // we make cur_era_genesis be it's parent if it doesn‘t has one.
@@ -1325,6 +1327,7 @@ impl ConsensusGraphInner {
         });
         self.arena[index].data.pending = true;
         self.arena[index].data.activated = true;
+        self.arena[index].data.partial_invalid = partial_invalid;
         self.hash_to_arena_indices.insert(hash, index);
 
         let referees = self.arena[index].referees.clone();

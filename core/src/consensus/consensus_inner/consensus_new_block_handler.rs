@@ -340,7 +340,7 @@ impl ConsensusNewBlockHandler {
         anticone
     }
 
-    fn compute_anticone(
+    fn compute_and_update_anticone(
         inner: &mut ConsensusGraphInner, me: usize,
     ) -> (BitSet, BitSet) {
         let parent = inner.arena[me].parent;
@@ -372,6 +372,9 @@ impl ConsensusNewBlockHandler {
                 if my_past.contains(index as u32) {
                     continue;
                 }
+                // if me == 1634 || me == 678 {
+                debug!("exploring {} {}", index, inner.arena[index].hash);
+                // }
 
                 debug_assert!(index != parent);
                 if index != me {
@@ -379,14 +382,26 @@ impl ConsensusNewBlockHandler {
                 }
 
                 let idx_parent = inner.arena[index].parent;
-                debug_assert!(idx_parent != NULL);
-                if anticone.contains(idx_parent as u32) {
-                    queue.push_back(idx_parent);
+                // debug_assert!(idx_parent != NULL);
+                if idx_parent != NULL {
+                    if anticone.contains(idx_parent as u32)
+                        || inner.arena[idx_parent].era_block == NULL
+                    {
+                        queue.push_back(idx_parent);
+                        // if me == 1634 || me == 678 {
+                        debug!("parent_link {}", idx_parent);
+                        // }
+                    }
                 }
 
                 for referee in &inner.arena[index].referees {
-                    if anticone.contains(*referee as u32) {
+                    if anticone.contains(*referee as u32)
+                        || inner.arena[*referee].era_block == NULL
+                    {
                         queue.push_back(*referee);
+                        // if me == 1634 || me == 678 {
+                        debug!("referee_link {}", *referee);
+                        // }
                     }
                 }
             }
@@ -405,12 +420,18 @@ impl ConsensusNewBlockHandler {
         inner.anticone_cache.update(me, &anticone);
 
         let mut anticone_barrier = BitSet::new();
+        let mut out_str = String::with_capacity(100000);
+        out_str.push_str("[");
         for index in anticone.clone().iter() {
+            out_str.push_str(index.to_string().as_str());
+            out_str.push_str(" ");
             let parent = inner.arena[index as usize].parent as u32;
             if !anticone.contains(parent) {
                 anticone_barrier.add(index);
             }
         }
+        out_str.push_str("]");
+        debug!("Anticone {}", out_str);
 
         debug!(
             "Block {} anticone size {}",
@@ -553,7 +574,10 @@ impl ConsensusNewBlockHandler {
                 q.push_back(tmp);
                 while let Some(v) = q.pop_front() {
                     let w = inner.weight_tree.get(v);
-                    debug!("Subtree block {} index {} weight {}", inner.arena[v].hash, v, w);
+                    debug!(
+                        "Subtree block {} index {} weight {}",
+                        inner.arena[v].hash, v, w
+                    );
                     if w != 0 {
                         for child in &inner.arena[v].children {
                             q.push_back(*child);
@@ -809,8 +833,10 @@ impl ConsensusNewBlockHandler {
 
     fn process_outside_block(
         &self, inner: &mut ConsensusGraphInner, block_header: &BlockHeader,
-    ) -> u64 {
-        inner.insert_out_era_block(block_header)
+        partially_invalid: bool,
+    ) -> u64
+    {
+        inner.insert_out_era_block(block_header, partially_invalid)
     }
 
     fn recycle_tx_in_block(
@@ -985,7 +1011,7 @@ impl ConsensusNewBlockHandler {
             inner.arena[me].hash, me
         );
         let parent = inner.arena[me].parent;
-        let pending = {
+        let mut pending = {
             if let Some(f) = inner.initial_stable_future.as_mut() {
                 let mut in_future = false;
                 if inner.arena[me].hash == inner.cur_era_stable_block_hash {
@@ -1063,11 +1089,14 @@ impl ConsensusNewBlockHandler {
         inner.arena[me].data.force_confirm =
             inner.cur_era_genesis_block_arena_index;
 
-        let mut fully_valid = true;
+        let fully_valid;
+
+        // Note that this function also updates the anticone for other nodes, so
+        // we have to call it even for pending blocks!
+        let (anticone, anticone_barrier) =
+            ConsensusNewBlockHandler::compute_and_update_anticone(inner, me);
 
         if !pending {
-            let (anticone, anticone_barrier) =
-                ConsensusNewBlockHandler::compute_anticone(inner, me);
             let timer_chain_tuple =
                 ConsensusNewBlockHandler::compute_timer_chain_tuple(
                     inner, me, &anticone,
@@ -1076,7 +1105,7 @@ impl ConsensusNewBlockHandler {
             inner.arena[me].data.force_confirm =
                 inner.compute_force_confirm(Some(&timer_chain_tuple));
             debug!(
-                "Force confirm point is {} in the past view of block index={}",
+                "Force confirm block index {} in the past view of block index={}",
                 inner.arena[me].data.force_confirm, me
             );
 
@@ -1105,6 +1134,18 @@ impl ConsensusNewBlockHandler {
             if self.conf.bench_mode && fully_valid {
                 inner.arena[me].adaptive = adaptive;
             }
+        } else {
+            let block_status_in_db = self
+                .data_man
+                .local_block_info_from_db(&inner.arena[me].hash)
+                .map(|info| info.get_status())
+                .unwrap_or(BlockStatus::Pending);
+            fully_valid = block_status_in_db != BlockStatus::PartialInvalid;
+            pending = block_status_in_db == BlockStatus::Pending;
+            debug!(
+                "Fetch the block validity status {} from the local data base",
+                fully_valid
+            );
         }
 
         debug!(
@@ -1652,12 +1693,16 @@ impl ConsensusNewBlockHandler {
                 "parent={:?} not in consensus graph, set header to pending",
                 parent_hash
             );
-            let sn = self.process_outside_block(inner, &block_header);
             let block_status_in_db = self
                 .data_man
                 .local_block_info_from_db(hash)
                 .map(|info| info.get_status())
                 .unwrap_or(BlockStatus::Pending);
+            let sn = self.process_outside_block(
+                inner,
+                &block_header,
+                block_status_in_db == BlockStatus::PartialInvalid,
+            );
             let block_info = LocalBlockInfo::new(
                 block_status_in_db,
                 sn,
