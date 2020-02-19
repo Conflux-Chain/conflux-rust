@@ -179,7 +179,7 @@ impl ConsensusNewBlockHandler {
                 old_era_block_set.push_back(hash);
                 inner.hash_to_arena_indices.remove(&hash);
                 inner.terminal_hashes.remove(&hash);
-                // inner.arena.remove(index);
+                inner.arena.remove(index);
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitment(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
@@ -372,9 +372,6 @@ impl ConsensusNewBlockHandler {
                 if my_past.contains(index as u32) {
                     continue;
                 }
-                // if me == 1634 || me == 678 {
-                debug!("exploring {} {}", index, inner.arena[index].hash);
-                // }
 
                 debug_assert!(index != parent);
                 if index != me {
@@ -388,9 +385,6 @@ impl ConsensusNewBlockHandler {
                         || inner.arena[idx_parent].era_block == NULL
                     {
                         queue.push_back(idx_parent);
-                        // if me == 1634 || me == 678 {
-                        debug!("parent_link {}", idx_parent);
-                        // }
                     }
                 }
 
@@ -399,9 +393,6 @@ impl ConsensusNewBlockHandler {
                         || inner.arena[*referee].era_block == NULL
                     {
                         queue.push_back(*referee);
-                        // if me == 1634 || me == 678 {
-                        debug!("referee_link {}", *referee);
-                        // }
                     }
                 }
             }
@@ -420,18 +411,12 @@ impl ConsensusNewBlockHandler {
         inner.anticone_cache.update(me, &anticone);
 
         let mut anticone_barrier = BitSet::new();
-        let mut out_str = String::with_capacity(100000);
-        out_str.push_str("[");
         for index in anticone.clone().iter() {
-            out_str.push_str(index.to_string().as_str());
-            out_str.push_str(" ");
             let parent = inner.arena[index as usize].parent as u32;
             if !anticone.contains(parent) {
                 anticone_barrier.add(index);
             }
         }
-        out_str.push_str("]");
-        debug!("Anticone {}", out_str);
 
         debug!(
             "Block {} anticone size {}",
@@ -530,10 +515,10 @@ impl ConsensusNewBlockHandler {
         for index in anticone_barrier {
             let delta = inner.weight_tree.get(index as usize);
             weight_delta.insert(index as usize, delta);
-            debug!(
-                "Weight delta block {} index {} delta {}",
-                inner.arena[index as usize].hash, index, delta
-            );
+            //            debug!(
+            //                "Weight delta block {} index {} delta {}",
+            //                inner.arena[index as usize].hash, index, delta
+            //            );
         }
 
         // Remove weight contribution of anticone
@@ -568,24 +553,6 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
-            if me == 1634 || me == 678 {
-                let tmp = fork;
-                let mut q = VecDeque::new();
-                q.push_back(tmp);
-                while let Some(v) = q.pop_front() {
-                    let w = inner.weight_tree.get(v);
-                    debug!(
-                        "Subtree block {} index {} weight {}",
-                        inner.arena[v].hash, v, w
-                    );
-                    if w != 0 {
-                        for child in &inner.arena[v].children {
-                            q.push_back(*child);
-                        }
-                    }
-                }
-            }
-
             // debug!("checking lca {} fork {} fork_weight {} pivot_weight {}",
             // lca, fork, fork_subtree_weight, pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
@@ -598,7 +565,7 @@ impl ConsensusNewBlockHandler {
                 valid = false;
                 break;
             } else {
-                debug!("Pass one validity check, block index = {}. Referenced block {} index {} fork is not heavier than the parent block {} index {} fork. Ref fork block {} weight {}, parent fork block {} weight {}!",
+                trace!("Pass one validity check, block index = {}. Referenced block {} index {} fork is not heavier than the parent block {} index {} fork. Ref fork block {} weight {}, parent fork block {} weight {}!",
                        me, inner.arena[*consensus_arena_index_in_epoch].hash, *consensus_arena_index_in_epoch, inner.arena[parent].hash, parent,
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
             }
@@ -1280,7 +1247,9 @@ impl ConsensusNewBlockHandler {
                 {
                     // Reset the epoch_number of the discarded fork
                     inner.reset_epoch_number_in_epoch(discarded_idx);
-                    ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, discarded_idx);
+                    // ConsensusNewBlockHandler::
+                    // try_clear_blockset_in_own_view_of_epoch(inner,
+                    // discarded_idx);
                 }
                 let mut u = new;
                 loop {
@@ -1353,8 +1322,9 @@ impl ConsensusNewBlockHandler {
                 inner.recompute_metadata(fork_at, last_pivot_to_update);
             } else {
                 // pivot chain not extend and not change
-                // FIXME: We should go back and revisit how we deal with this for performance
-                // ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, me);
+                // FIXME: We should go back and revisit how we deal with this
+                // for performance ConsensusNewBlockHandler::
+                // try_clear_blockset_in_own_view_of_epoch(inner, me);
                 inner.recompute_metadata(
                     inner.get_pivot_height(),
                     last_pivot_to_update,

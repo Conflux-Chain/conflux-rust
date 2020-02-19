@@ -1298,7 +1298,7 @@ impl ConsensusGraphInner {
 
         if parent == NULL && referees.is_empty() {
             self.old_era_block_set.lock().push_back(hash);
-            // return sn;
+            return sn;
         }
 
         // actually, we only need these fields: `parent`, `referees`,

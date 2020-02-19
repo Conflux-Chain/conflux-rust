@@ -656,10 +656,11 @@ impl ConsensusGraph {
 
             // Reset pivot chain according to checkpoint information during
             // recovery
-            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                inner.set_pivot_to_stable(hash);
-                self.update_best_info(inner);
-            }
+            //            if *hash ==
+            // self.data_man.get_cur_consensus_era_stable_hash() {
+            //                inner.set_pivot_to_stable(hash);
+            //                self.update_best_info(inner);
+            //            }
             *self.latest_inserted_block.lock() = *hash;
 
             // Skip updating best info during recovery
