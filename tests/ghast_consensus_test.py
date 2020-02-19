@@ -41,8 +41,12 @@ TEST_INPUT = [
 test_dir = os.path.dirname(os.path.realpath(__file__))
 cur_dir = os.getcwd()
 os.chdir(cur_dir)
-bench_cmd = test_dir + "/../target/release/consensus_bench"
-test_input_dir = test_dir + "/../core/benchmark/consensus/test/"
+bench_cmd = os.getenv(
+    "CONFLUX_BENCH",
+    default=os.path.join(
+        test_dir,
+        "../target/release/consensus_bench"))
+test_input_dir = os.path.join(test_dir, "../core/benchmark/consensus/test/")
 
 failed = set()
 for inp in TEST_INPUT:
