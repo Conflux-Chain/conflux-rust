@@ -151,9 +151,23 @@ impl<T: Payload> BlockStore<T> {
                 .expect("Parent block must exist")
                 .executed_pivot();
 
-            let output = state_computer
-                .compute(&block, last_pivot, false /* ignore_db */)
-                .expect("fail to rebuild scratchpad");
+            let output = loop {
+                let res = state_computer.compute(
+                    &block,
+                    last_pivot.clone(),
+                    false, /* ignore_db */
+                );
+                if res.is_ok() {
+                    break res.unwrap();
+                }
+
+                let err = res.err().unwrap();
+                if err.to_string().contains("VerifyPivotTimeout") {
+                    debug!("Execute block {} timed out", block.id());
+                    continue;
+                }
+                panic!("fail to rebuild scratchpad");
+            };
 
             // if this block is certified, ensure we agree with the
             // certified state.

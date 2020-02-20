@@ -6,7 +6,7 @@ use super::{
     counters,
     state_replication::StateComputer,
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use cfx_types::H256;
 use libra_types::{
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
@@ -19,7 +19,7 @@ use crate::{
         consensus::SetPivotChainCallbackType,
         hsb_sync_protocol::sync_protocol::{PeerState, Peers},
     },
-    sync::SharedSynchronizationService,
+    sync::{ErrorKind, SharedSynchronizationService},
 };
 use futures::{channel::oneshot, executor::block_on};
 use libra_types::block_info::PivotBlockDecision;
@@ -105,9 +105,13 @@ impl StateComputer for ExecutionProxy {
             debug!("on_new_candidate_pivot returned");
             let valid_pivot_decision = match response {
                 Ok(res) => res,
-                _ => {
-                    bail!("Error checking validity of pivot selection");
-                }
+                Err(e) => match e.kind() {
+                    ErrorKind::RpcTimeout => {
+                        debug!("on_new_candidate_pivot timeout");
+                        return Err(anyhow!("VerifyPivotTimeout"));
+                    }
+                    _ => bail!("Error checking validity of pivot selection"),
+                },
             };
             ensure!(valid_pivot_decision, "Invalid pivot block proposal!");
         }

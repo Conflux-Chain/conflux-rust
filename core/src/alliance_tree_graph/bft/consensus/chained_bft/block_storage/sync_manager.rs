@@ -175,7 +175,16 @@ impl<T: Payload> BlockStore<T> {
         while let Some(block) = pending.pop() {
             let block_qc = block.quorum_cert().clone();
             self.insert_single_quorum_cert(block_qc)?;
-            self.execute_and_insert_block(block)?;
+            while let Err(e) = self.execute_and_insert_block(block.clone()) {
+                if e.to_string().contains("VerifyPivotTimeout") {
+                    debug!(
+                        "fetch_quorum_cert: Execute block {} timed out",
+                        block.id()
+                    );
+                    continue;
+                }
+                bail!("execute_and_insert_block Error");
+            }
         }
         self.insert_single_quorum_cert(qc)
     }
