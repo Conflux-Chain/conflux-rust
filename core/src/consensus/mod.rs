@@ -892,11 +892,9 @@ impl ConsensusGraph {
                     let epoch_hash = &inner.arena
                         [inner.get_pivot_block_arena_index(epoch_number)]
                     .hash;
-                    for index in &inner.arena
-                        [inner.get_pivot_block_arena_index(epoch_number)]
-                    .data
-                    .ordered_executable_epoch_blocks
-                    {
+                    for index in inner.get_ordered_executable_epoch_blocks(
+                        inner.get_pivot_block_arena_index(epoch_number),
+                    ) {
                         let hash = &inner.arena[*index].hash;
                         if self.block_matches_bloom(hash, epoch_hash, &blooms) {
                             blocks.push(*hash);

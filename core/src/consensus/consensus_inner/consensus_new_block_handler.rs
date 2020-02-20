@@ -480,22 +480,24 @@ impl ConsensusNewBlockHandler {
         // to consider more for block candidates. This may cause a
         // performance issue and we should consider another optimized strategy.
         let mut candidate;
+        let blockset =
+            inner.exchange_or_compute_blockset_in_own_view_of_epoch(me, None);
         let candidate_iter = if inner.arena[parent].data.partial_invalid {
-            candidate =
-                inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
+            candidate = blockset.clone();
             let mut p = parent;
             while p != NULL && inner.arena[p].data.partial_invalid {
-                if inner.arena[p].data.blockset_cleared {
-                    inner.collect_blockset_in_own_view_of_epoch(p);
-                }
-                candidate.extend(
-                    inner.arena[p].data.blockset_in_own_view_of_epoch.iter(),
+                let blockset_p = inner
+                    .exchange_or_compute_blockset_in_own_view_of_epoch(p, None);
+                candidate.extend(blockset_p.iter());
+                inner.exchange_or_compute_blockset_in_own_view_of_epoch(
+                    p,
+                    Some(blockset_p),
                 );
                 p = inner.arena[p].parent;
             }
             candidate.iter()
         } else {
-            inner.arena[me].data.blockset_in_own_view_of_epoch.iter()
+            blockset.iter()
         };
 
         if let Some(subtree_weight) = weight_tuple {
@@ -560,6 +562,11 @@ impl ConsensusNewBlockHandler {
                        inner.arena[fork].hash, fork_subtree_weight, inner.arena[pivot].hash, pivot_subtree_weight);
             }
         }
+
+        inner.exchange_or_compute_blockset_in_own_view_of_epoch(
+            me,
+            Some(blockset),
+        );
 
         for (index, delta) in &weight_delta {
             inner.weight_tree.path_apply(*index, *delta);
@@ -1242,9 +1249,7 @@ impl ConsensusNewBlockHandler {
                 }
                 let mut u = new;
                 loop {
-                    if inner.arena[u].data.blockset_cleared {
-                        inner.collect_blockset_in_own_view_of_epoch(u);
-                    }
+                    inner.compute_blockset_in_own_view_of_epoch(u);
                     inner.pivot_chain.push(u);
                     inner.set_epoch_number_in_epoch(
                         u,

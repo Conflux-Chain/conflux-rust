@@ -378,10 +378,7 @@ impl ConsensusExecutor {
                 } else {
                     anticone_cutoff_epoch_anticone_set_opt = None;
                 }
-                let ordered_epoch_blocks = inner.arena[pivot_arena_index]
-                    .data
-                    .ordered_executable_epoch_blocks
-                    .clone();
+                let ordered_epoch_blocks = inner.get_or_compute_ordered_executable_epoch_blocks(pivot_arena_index);
                 for index in ordered_epoch_blocks.iter() {
                     let block_consensus_node = &inner.arena[*index];
 
