@@ -486,6 +486,9 @@ impl ConsensusNewBlockHandler {
                 inner.arena[me].data.blockset_in_own_view_of_epoch.clone();
             let mut p = parent;
             while p != NULL && inner.arena[p].data.partial_invalid {
+                if inner.arena[p].data.blockset_cleared {
+                    inner.collect_blockset_in_own_view_of_epoch(p);
+                }
                 candidate.extend(
                     inner.arena[p].data.blockset_in_own_view_of_epoch.iter(),
                 );
@@ -946,19 +949,19 @@ impl ConsensusNewBlockHandler {
         self.data_man.insert_terminals_to_db(terminals);
     }
 
-    //    fn try_clear_blockset_in_own_view_of_epoch(
-    //        inner: &mut ConsensusGraphInner, me: usize,
-    //    ) {
-    //        if inner.arena[me].data.blockset_in_own_view_of_epoch.len() as u64
-    //            > BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP
-    //        {
-    //            inner.arena[me].data.blockset_in_own_view_of_epoch =
-    //                Default::default();
-    //            inner.arena[me].data.ordered_executable_epoch_blocks =
-    //                Default::default();
-    //            inner.arena[me].data.blockset_cleared = true;
-    //        }
-    //    }
+    fn try_clear_blockset_in_own_view_of_epoch(
+        inner: &mut ConsensusGraphInner, me: usize,
+    ) {
+        if inner.arena[me].data.blockset_in_own_view_of_epoch.len() as u64
+            > BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP
+        {
+            inner.arena[me].data.blockset_in_own_view_of_epoch =
+                Default::default();
+            inner.arena[me].data.ordered_executable_epoch_blocks =
+                Default::default();
+            inner.arena[me].data.blockset_cleared = true;
+        }
+    }
 
     // This function computes the timer chain in the view of the new block.
     // The first returned value is the fork height of the timer chain.
@@ -1247,9 +1250,8 @@ impl ConsensusNewBlockHandler {
                 {
                     // Reset the epoch_number of the discarded fork
                     inner.reset_epoch_number_in_epoch(discarded_idx);
-                    // ConsensusNewBlockHandler::
-                    // try_clear_blockset_in_own_view_of_epoch(inner,
-                    // discarded_idx);
+                    ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner,
+                    discarded_idx);
                 }
                 let mut u = new;
                 loop {
@@ -1323,8 +1325,8 @@ impl ConsensusNewBlockHandler {
             } else {
                 // pivot chain not extend and not change
                 // FIXME: We should go back and revisit how we deal with this
-                // for performance ConsensusNewBlockHandler::
-                // try_clear_blockset_in_own_view_of_epoch(inner, me);
+                // for performance
+                ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, me);
                 inner.recompute_metadata(
                     inner.get_pivot_height(),
                     last_pivot_to_update,
@@ -1725,11 +1727,10 @@ impl ConsensusNewBlockHandler {
                 } else {
                     if block_status == BlockStatus::Pending {
                         inner.arena[me].data.pending = true;
-                        //
-                        // ConsensusNewBlockHandler::
-                        // try_clear_blockset_in_own_view_of_epoch(
-                        //                            inner, me,
-                        //                        );
+                        ConsensusNewBlockHandler::
+                        try_clear_blockset_in_own_view_of_epoch(
+                                                    inner, me,
+                                                );
                         debug!(
                             "Block {} (hash = {}) is pending but processed",
                             me, inner.arena[me].hash
