@@ -223,9 +223,15 @@ where
     /// filter out invalid proposal, process_proposed_block would execute
     /// and decide whether to vote for it.
     pub async fn process_proposal_msg(&mut self, proposal_msg: ProposalMsg<T>) {
+        debug!(
+            "process_proposal_msg block id {}, round {}",
+            proposal_msg.proposal().id(),
+            proposal_msg.round()
+        );
         if let Some(block) = self.pre_process_proposal(proposal_msg).await {
             self.process_proposed_block(block).await
         }
+        debug!("process_proposal_msg finish");
     }
 
     /// The function is responsible for processing the incoming proposals and
@@ -399,13 +405,14 @@ where
     pub async fn process_sync_info_msg(
         &mut self, sync_info: SyncInfo, peer: Author,
     ) {
-        debug!("Received a sync info msg: {}", sync_info);
+        debug!("process_sync_info_msg: {}", sync_info);
         counters::SYNC_INFO_MSGS_RECEIVED_COUNT.inc();
         // To avoid a ping-pong cycle between two peers that move forward
         // together.
         if let Err(e) = self.sync_up(&sync_info, peer, false).await {
             error!("Fail to process sync info: {}", e);
         }
+        debug!("process_sync_info_msg finish");
     }
 
     /// The replica broadcasts a "timeout vote message", which includes the
@@ -824,6 +831,7 @@ where
     /// 2. Add the vote to the store and check whether it finishes a QC.
     /// 3. Once the QC successfully formed, notify the Pacemaker.
     pub async fn process_vote(&mut self, vote_msg: VoteMsg) {
+        debug!("process_vote enter");
         // Check whether this validator is a valid recipient of the vote.
         if !vote_msg.vote().is_timeout() {
             // Unlike timeout votes regular votes are sent to the leaders of the
@@ -859,6 +867,8 @@ where
         if let Err(e) = self.add_vote(vote_msg.vote()).await {
             error!("Error adding a new vote: {:?}", e);
         }
+
+        debug!("process_vote enter finish");
     }
 
     /// Add a vote to the pending votes.
@@ -1005,6 +1015,9 @@ where
         let mut blocks = vec![];
         let mut status = BlockRetrievalStatus::Succeeded;
         let mut id = request.req.block_id();
+
+        debug!("process_block_retrieval block {}", id);
+
         while (blocks.len() as u64) < request.req.num_blocks() {
             if let Some(executed_block) = self.block_store.get_block(id) {
                 id = executed_block.parent_id();
@@ -1025,6 +1038,7 @@ where
         };
         self.network
             .send_message_with_peer_id(request.peer_id, &response);
+        debug!("process_block_retrieval finish");
     }
 
     /// To jump start new round with the current certificates we have.

@@ -378,8 +378,9 @@ impl Executor {
     ) -> Result<()>
     {
         info!(
-            "Received request to commit block {:x}.",
-            ledger_info_with_sigs.ledger_info().consensus_block_id()
+            "Received request to commit block {:x}, round {}.",
+            ledger_info_with_sigs.ledger_info().consensus_block_id(),
+            ledger_info_with_sigs.ledger_info().round(),
         );
 
         self.db

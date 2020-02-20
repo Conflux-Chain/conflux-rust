@@ -428,6 +428,7 @@ class TreeGraphTracing(ConfluxTestFramework):
                 new_blocks = self.nodes[chosen_peer].sync_graph_state()
                 self._snapshots[chosen_peer].new_blocks(
                     new_blocks['readyBlockVec'])
+                self.nodes[chosen_peer].save_node_db()
                 self.stop_node(chosen_peer, kill=True)
                 self._stopped_peers.append(chosen_peer)
                 self._snapshots[chosen_peer].stop()

@@ -97,8 +97,10 @@ impl StateComputer for ExecutionProxy {
                 .get(&peer_hash)
                 .map(|peer_state| peer_state.read().get_id());
             let (callback, cb_receiver) = oneshot::channel();
+            debug!("tg_sync.on_new_candidate_pivot");
             self.tg_sync.on_new_candidate_pivot(p, peer_id, callback);
             let response = block_on(async move { cb_receiver.await? });
+            debug!("on_new_candidate_pivot returned");
             let valid_pivot_decision = match response {
                 Ok(res) => res,
                 _ => {

@@ -78,6 +78,8 @@ where
             .or_insert(Arc::new(RwLock::new(T::default())));
     }
 
+    pub fn len(&self) -> usize { self.0.read().len() }
+
     pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
     pub fn contains(&self, peer: &K) -> bool {
@@ -434,7 +436,6 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
     }
 
     fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
-        info!("hsb on_peer_connected: {}", peer);
         let new_originated = io.get_peer_connection_origin(peer);
         if new_originated.is_none() {
             debug!("Peer does not exist when just connected");
@@ -490,13 +491,24 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
                 "remove new peer connection",
             );
         }
+
+        info!(
+            "hsb on_peer_connected: peer {}, {}, peer count {}",
+            peer,
+            node_id,
+            self.peers.len()
+        );
     }
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
         let node_id = io.get_peer_node_id(peer);
         let peer_hash = keccak(&node_id);
-        info!("on_peer_disconnected: peer={:?}", peer_hash);
         self.peers.remove(&peer_hash);
+        info!(
+            "hsb on_peer_disconnected: peer={}, peer count {}",
+            node_id,
+            self.peers.len()
+        );
     }
 
     fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {}

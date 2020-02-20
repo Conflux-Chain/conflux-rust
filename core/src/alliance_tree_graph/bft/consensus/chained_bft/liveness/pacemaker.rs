@@ -284,7 +284,7 @@ impl Pacemaker {
             now.checked_duration_since(self.current_round_deadline)
                 .map_or("0 ms".to_string(), |v| format!("{:?}", v))
         );
-        debug!("Set round deadline to {:?} from now", timeout);
+        debug!("Set round deadline to {:?} from now (committed_round {}, current_round {})", timeout, self.highest_committed_round, self.current_round);
         self.current_round_deadline = now + timeout;
         timeout
     }
