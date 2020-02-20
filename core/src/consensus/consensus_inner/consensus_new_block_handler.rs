@@ -340,13 +340,13 @@ impl ConsensusNewBlockHandler {
         anticone
     }
 
+    /// Note that this function is not a pure computation function. It has the
+    /// sideeffect of updating all existing anticone set in the anticone
+    /// cache
     fn compute_and_update_anticone(
         inner: &mut ConsensusGraphInner, me: usize,
     ) -> (BitSet, BitSet) {
         let parent = inner.arena[me].parent;
-        debug_assert!(parent != NULL);
-        debug_assert!(inner.arena[me].children.is_empty());
-        debug_assert!(inner.arena[me].referrers.is_empty());
 
         // If we do not have the anticone of its parent, we compute it with
         // brute force!
@@ -379,7 +379,6 @@ impl ConsensusNewBlockHandler {
                 }
 
                 let idx_parent = inner.arena[index].parent;
-                // debug_assert!(idx_parent != NULL);
                 if idx_parent != NULL {
                     if anticone.contains(idx_parent as u32)
                         || inner.arena[idx_parent].era_block == NULL
@@ -510,18 +509,12 @@ impl ConsensusNewBlockHandler {
         let mut valid = true;
         let force_confirm = inner.arena[me].data.force_confirm;
         let force_confirm_height = inner.arena[force_confirm].height;
-        //        debug!("force confirm {} height {}", force_confirm,
-        // force_confirm_height);
 
         let mut weight_delta = HashMap::new();
 
         for index in anticone_barrier {
             let delta = inner.weight_tree.get(index as usize);
             weight_delta.insert(index as usize, delta);
-            //            debug!(
-            //                "Weight delta block {} index {} delta {}",
-            //                inner.arena[index as usize].hash, index, delta
-            //            );
         }
 
         // Remove weight contribution of anticone
@@ -529,14 +522,10 @@ impl ConsensusNewBlockHandler {
             inner.weight_tree.path_apply(*index, -delta);
         }
 
-        //        debug!("BLOCKSET {:?} len {}",
-        // inner.arena[me].data.blockset_in_own_view_of_epoch,
-        // inner.arena[me].data.blockset_in_own_view_of_epoch.len());
         // Check the pivot selection decision.
         for consensus_arena_index_in_epoch in candidate_iter {
             let lca = inner.lca(*consensus_arena_index_in_epoch, parent);
             assert!(lca != *consensus_arena_index_in_epoch);
-            // debug!("checking lca {}", lca);
             // If it is outside the era, we will skip!
             if lca == NULL || inner.arena[lca].height < force_confirm_height {
                 continue;
@@ -556,8 +545,6 @@ impl ConsensusNewBlockHandler {
             let fork_subtree_weight = inner.weight_tree.get(fork);
             let pivot_subtree_weight = inner.weight_tree.get(pivot);
 
-            // debug!("checking lca {} fork {} fork_weight {} pivot_weight {}",
-            // lca, fork, fork_subtree_weight, pivot_subtree_weight);
             if ConsensusGraphInner::is_heavier(
                 (fork_subtree_weight, &inner.arena[fork].hash),
                 (pivot_subtree_weight, &inner.arena[pivot].hash),
@@ -1341,9 +1328,9 @@ impl ConsensusNewBlockHandler {
                 .insert(me);
         }
 
-        let mut concat_list = inner.arena[me].children.clone();
-        concat_list.extend(inner.arena[me].referrers.iter());
-        for succ in &concat_list {
+        let mut succ_list = inner.arena[me].children.clone();
+        succ_list.extend(inner.arena[me].referrers.iter());
+        for succ in &succ_list {
             assert!(inner.arena[*succ].data.active_cnt > 0);
             inner.arena[*succ].data.active_cnt -= 1;
             if inner.arena[*succ].data.active_cnt == 0 {
@@ -1663,7 +1650,7 @@ impl ConsensusNewBlockHandler {
             || inner.arena[*parent_index.unwrap()].era_block == NULL
         {
             debug!(
-                "parent={:?} not in consensus graph, set header to pending",
+                "parent={:?} not in consensus graph or not in the genesis subtree, inserted as an out-era block stub",
                 parent_hash
             );
             let block_status_in_db = self
@@ -1752,8 +1739,7 @@ impl ConsensusNewBlockHandler {
                     );
                 }
                 // Now we are going to check all invalid blocks in the delay
-                // queue Activate them if the timer is
-                // up
+                // queue Activate them if the timer is up
                 let timer = if let Some(x) = inner.timer_chain.last() {
                     inner.arena[*x].timer_chain_height + 1
                 } else {

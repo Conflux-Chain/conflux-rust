@@ -2565,22 +2565,17 @@ impl ConsensusGraphInner {
                 visited.add(self.timer_chain[fork_at_index - 1] as u32);
             }
             while let Some(x) = queue.pop_front() {
-                for child in &self.arena[x].children {
-                    if anticone.contains(*child as u32) {
+                for succ in self.arena[x]
+                    .children
+                    .iter()
+                    .chain(self.arena[x].referrers.iter())
+                {
+                    if anticone.contains(*succ as u32) {
                         continue;
                     }
-                    if !visited.contains(*child as u32) {
-                        queue.push_back(*child);
-                        visited.add(*child as u32);
-                    }
-                }
-                for referer in &self.arena[x].referrers {
-                    if anticone.contains(*referer as u32) {
-                        continue;
-                    }
-                    if !visited.contains(*referer as u32) {
-                        queue.push_back(*referer);
-                        visited.add(*referer as u32);
+                    if !visited.contains(*succ as u32) {
+                        queue.push_back(*succ);
+                        visited.add(*succ as u32);
                     }
                 }
             }
@@ -2626,25 +2621,19 @@ impl ConsensusGraphInner {
                     }
                 }
                 res.insert(x, timer_chain_height);
-                for child in &self.arena[x].children {
-                    if !visited.contains(*child as u32) {
+                for succ in self.arena[x]
+                    .children
+                    .iter()
+                    .chain(self.arena[x].referrers.iter())
+                {
+                    if !visited.contains(*succ as u32) {
                         continue;
                     }
-                    let cnt = counter.get(child).unwrap() - 1;
+                    let cnt = counter.get(succ).unwrap() - 1;
                     if cnt == 0 {
-                        queue.push_back(*child);
+                        queue.push_back(*succ);
                     }
-                    counter.insert(*child, cnt);
-                }
-                for referer in &self.arena[x].referrers {
-                    if !visited.contains(*referer as u32) {
-                        continue;
-                    }
-                    let cnt = counter.get(referer).unwrap() - 1;
-                    if cnt == 0 {
-                        queue.push_back(*referer);
-                    }
-                    counter.insert(*referer, cnt);
+                    counter.insert(*succ, cnt);
                 }
             }
         }
