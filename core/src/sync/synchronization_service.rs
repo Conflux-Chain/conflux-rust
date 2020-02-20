@@ -7,11 +7,8 @@ use super::{
 };
 use crate::{
     alliance_tree_graph::consensus::{
-        consensus_inner::{
-            NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
-            SetPivotChainCallbackType,
-        },
-        TreeGraphConsensus,
+        NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
+        SetPivotChainCallbackType, TreeGraphConsensus,
     },
     light_protocol::Provider as LightProvider,
     parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,

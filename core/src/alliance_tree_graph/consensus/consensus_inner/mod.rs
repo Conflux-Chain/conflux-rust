@@ -7,16 +7,17 @@ pub mod consensus_executor;
 pub mod consensus_new_block_handler;
 
 use crate::{
+    alliance_tree_graph::consensus::{
+        NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
+        SetPivotChainCallbackType,
+    },
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
-    sync::Error,
 };
 use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
-use futures::channel::oneshot;
 use hibitset::BitSet;
-use libra_types::block_info::PivotBlockDecision;
 use link_cut_tree::SizeMinLinkCutTree;
 use parking_lot::Mutex;
 use primitives::{
@@ -28,11 +29,6 @@ use std::{
     sync::Arc,
 };
 
-pub type NextSelectedPivotCallbackType =
-    oneshot::Sender<Result<PivotBlockDecision, Error>>;
-pub type NewCandidatePivotCallbackType = oneshot::Sender<Result<bool, Error>>;
-pub type SetPivotChainCallbackType = oneshot::Sender<Result<(), Error>>;
-
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
     // The number of epochs per era. Each era is a potential checkpoint
@@ -42,6 +38,7 @@ pub struct ConsensusInnerConfig {
     // FIXME: We should replace this to use confirmation risk instead
     pub era_checkpoint_gap: u64,
     pub enable_state_expose: bool,
+    pub candidate_pivot_waiting_timeout_ms: u64,
 }
 
 #[derive(Default)]
@@ -124,8 +121,9 @@ pub struct ConsensusGraphInner {
     pub state_boundary_height: u64,
     pub next_selected_pivot_waiting_list:
         HashMap<H256, NextSelectedPivotCallbackType>,
-    pub new_candidate_pivot_waiting_list:
+    pub new_candidate_pivot_waiting_map:
         HashMap<H256, NewCandidatePivotCallbackType>,
+    pub new_candidate_pivot_waiting_list: VecDeque<(H256, u64)>,
     pub set_pivot_chain_callback: Option<(H256, SetPivotChainCallbackType)>,
 }
 
@@ -185,7 +183,8 @@ impl ConsensusGraphInner {
             candidate_pivot_tree: CandidatePivotTree::new(NULL),
             state_boundary_height: cur_era_stable_height,
             next_selected_pivot_waiting_list: HashMap::new(),
-            new_candidate_pivot_waiting_list: HashMap::new(),
+            new_candidate_pivot_waiting_map: HashMap::new(),
+            new_candidate_pivot_waiting_list: VecDeque::new(),
             set_pivot_chain_callback: None,
         };
 
@@ -900,27 +899,9 @@ impl ConsensusGraphInner {
 
     pub fn new_candidate_pivot(
         &mut self, block_hash: &H256, parent_hash: &H256, height: u64,
-        callback: NewCandidatePivotCallbackType,
-    ) -> bool
-    {
-        if !self.hash_to_arena_indices.contains_key(block_hash) {
-            debug!(
-                "new_candidate_pivot due to invalid block_hash={:?}",
-                block_hash
-            );
-            self.new_candidate_pivot_waiting_list
-                .insert(*block_hash, callback);
-            false
-        } else {
-            callback
-                .send(Ok(self.validate_and_add_candidate_pivot(
-                    block_hash,
-                    parent_hash,
-                    height,
-                )))
-                .expect("send new candidate pivot should succeed");
-            true
-        }
+    ) -> bool {
+        assert!(self.hash_to_arena_indices.contains_key(block_hash));
+        self.validate_and_add_candidate_pivot(block_hash, parent_hash, height)
     }
 
     pub fn new_pivot(&mut self, pivot_arena_index: usize) {

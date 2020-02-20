@@ -8,8 +8,7 @@ mod debug;
 use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
     consensus_new_block_handler::ConsensusNewBlockHandler, ConsensusGraphInner,
-    ConsensusInnerConfig, NewCandidatePivotCallbackType,
-    NextSelectedPivotCallbackType, SetPivotChainCallbackType,
+    ConsensusInnerConfig,
 };
 
 use crate::{
@@ -23,10 +22,12 @@ use crate::{
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
+    sync::Error,
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, Bloom, H256, U256};
+use futures::channel::oneshot;
 use libra_types::block_info::PivotBlockDecision;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::PeerId;
@@ -40,6 +41,11 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{any::Any, cmp::Reverse, collections::HashSet, sync::Arc};
+
+pub type NextSelectedPivotCallbackType =
+    oneshot::Sender<Result<PivotBlockDecision, Error>>;
+pub type NewCandidatePivotCallbackType = oneshot::Sender<Result<bool, Error>>;
+pub type SetPivotChainCallbackType = oneshot::Sender<Result<(), Error>>;
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
@@ -373,14 +379,8 @@ impl TreeGraphConsensus {
         &self, block_hash: &H256, callback: SetPivotChainCallbackType,
     ) {
         let inner = &mut *self.inner.write();
-        if inner.hash_to_arena_indices.contains_key(block_hash) {
-            self.new_block_handler.set_pivot_chain(inner, block_hash);
-            callback
-                .send(Ok(()))
-                .expect("send set pivot chain result back should succeed");
-        } else {
-            inner.set_pivot_chain_callback = Some((*block_hash, callback));
-        }
+        self.new_block_handler
+            .set_pivot_chain(inner, block_hash, callback);
     }
 
     pub fn get_transaction_receipt_and_block_info(
@@ -623,7 +623,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
     ) {
         debug!("enter on new_block hash={:?}", hash);
         let notify_tx_pool = update_best_info;
-        let mut update_best_info = update_best_info;
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
@@ -636,19 +635,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
         {
             let inner = &mut *self.inner.write();
             self.new_block_handler.on_new_block(inner, &block_header);
-
-            // Reset pivot chain according to bft commits
-            if inner.set_pivot_chain_callback.is_some()
-                && *hash == inner.set_pivot_chain_callback.as_ref().unwrap().0
-            {
-                let (pivot_hash, callback) =
-                    inner.set_pivot_chain_callback.take().unwrap();
-                self.new_block_handler.set_pivot_chain(inner, &pivot_hash);
-                callback
-                    .send(Ok(()))
-                    .expect("send set pivot chain result back should succeed");
-                update_best_info = true;
-            }
 
             *self.latest_inserted_block.lock() = *hash;
 

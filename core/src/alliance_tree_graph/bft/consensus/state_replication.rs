@@ -11,7 +11,7 @@ use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::{
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use crate::{
-    alliance_tree_graph::consensus::consensus_inner::SetPivotChainCallbackType,
+    alliance_tree_graph::consensus::SetPivotChainCallbackType,
     sync::{request_manager::RequestManager, SharedSynchronizationService},
 };
 use cfx_types::H256;

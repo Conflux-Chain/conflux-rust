@@ -397,11 +397,11 @@ class TreeGraphTracing(ConfluxTestFramework):
                 with self._peer_lock:
                     chosen_peer = self._stopped_peers[random.randint(
                         0, len(self._stopped_peers) - 1)]
-                    self._stopped_peers.remove(chosen_peer)
                     self.log.info("starting {}".format(chosen_peer))
                     self.start_node(chosen_peer, phase_to_wait=None)
                     self._snapshots[chosen_peer].start()
                     self.log.info("started {}".format(chosen_peer))
+                    self._stopped_peers.remove(chosen_peer)
         except Exception as e:
             self.log.info('got exception[{}] during start'.format(repr(e)))
             self.persist_snapshot()
@@ -422,7 +422,9 @@ class TreeGraphTracing(ConfluxTestFramework):
                 alive_peer_indices = normal_peers + catch_up_peers
                 # We need peer[0] to run forever as a reference
                 chosen_peer = alive_peer_indices[random.randint(
-                    1, len(alive_peer_indices) - 1)]
+                    0, len(alive_peer_indices) - 1)]
+                if self._snapshots[chosen_peer].bft.last_commited is None:
+                    return
                 self.log.info("stopping {}".format(chosen_peer))
                 # retrieve new ready blocks before stopping it
                 new_blocks = self.nodes[chosen_peer].sync_graph_state()
@@ -820,7 +822,7 @@ if __name__ == "__main__":
             snapshot_timeout=args.snapshot_timeout)
         conflux_tracing.add_predicate(ExecutionStatusPredicate())
         conflux_tracing.add_predicate(BFTCommitPredicatePredicate())
-        conflux_tracing.add_predicate(BFTLivenessPredicate(30))
+        conflux_tracing.add_predicate(BFTLivenessPredicate(100))
         conflux_tracing.main()
     elif args.cmd == 'replay':
         conflux_tracing = TreeGraphTracing(

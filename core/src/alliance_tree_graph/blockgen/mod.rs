@@ -15,6 +15,7 @@ use log::trace;
 //use metrics::{Gauge, GaugeUsize};
 use parking_lot::RwLock;
 use primitives::*;
+use rand::Rng;
 use std::{cmp::max, sync::Arc, thread, time};
 use time::{Duration, SystemTime, UNIX_EPOCH};
 //use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
@@ -68,6 +69,7 @@ impl TGBlockGenerator {
         block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
     ) -> Block
     {
+        let mut rng = rand::thread_rng();
         let parent_header = data_man
             .block_header_by_hash(&parent_hash)
             .expect("parent header must exist");
@@ -98,7 +100,7 @@ impl TGBlockGenerator {
             .with_deferred_receipts_root(deferred_receipts_root)
             .with_deferred_logs_bloom_hash(deferred_logs_bloom_hash)
             .with_referee_hashes(referee)
-            .with_nonce(0)
+            .with_nonce(rng.gen())
             .with_gas_limit(block_gas_limit)
             .build();
 
