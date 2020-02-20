@@ -16,7 +16,7 @@ use libra_types::{
 use super::super::executor::{Executor, ProcessedVMOutput};
 use crate::{
     alliance_tree_graph::{
-        consensus::consensus_inner::SetPivotChainCallbackType,
+        consensus::SetPivotChainCallbackType,
         hsb_sync_protocol::sync_protocol::{PeerState, Peers},
     },
     sync::SharedSynchronizationService,

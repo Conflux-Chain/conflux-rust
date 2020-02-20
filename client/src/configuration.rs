@@ -187,6 +187,7 @@ build_config! {
         (ledger_cache_size, (Option<usize>), Some(1024))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (max_download_state_peers, (usize), 8)
+        (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
     }
     {
         (
@@ -323,6 +324,9 @@ impl Configuration {
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
                 enable_state_expose: self.raw_conf.enable_state_expose,
+                candidate_pivot_waiting_timeout_ms: self
+                    .raw_conf
+                    .candidate_pivot_waiting_timeout_ms,
             },
             bench_mode: false,
         }

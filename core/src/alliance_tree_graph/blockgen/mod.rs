@@ -15,9 +15,9 @@ use log::trace;
 //use metrics::{Gauge, GaugeUsize};
 use parking_lot::RwLock;
 use primitives::*;
+use rand::Rng;
 use std::{cmp::max, sync::Arc, thread, time};
 use time::{Duration, SystemTime, UNIX_EPOCH};
-use rand::Rng;
 //use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
 
 pub struct TGBlockGenerator {

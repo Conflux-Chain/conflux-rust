@@ -5,10 +5,10 @@
 use super::super::{
     consensus_inner::{
         consensus_executor::{ConsensusExecutor, EpochExecutionTask},
-        ConsensusGraphInner, NewCandidatePivotCallbackType,
-        NextSelectedPivotCallbackType, NULL,
+        ConsensusGraphInner, NULL,
     },
-    ConsensusConfig,
+    ConsensusConfig, NewCandidatePivotCallbackType,
+    NextSelectedPivotCallbackType, SetPivotChainCallbackType,
 };
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     parameters::{consensus::*, consensus_internal::*},
     statistics::SharedStatistics,
-    sync::delta::CHECKPOINT_DUMP_MANAGER,
+    sync::{delta::CHECKPOINT_DUMP_MANAGER, ErrorKind},
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedTransactionPool,
 };
@@ -27,6 +27,7 @@ use primitives::{Block, BlockHeader};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
+    time::Instant,
 };
 
 pub struct ConsensusNewBlockHandler {
@@ -368,7 +369,7 @@ impl ConsensusNewBlockHandler {
         }
 
         if let Some(callback) =
-            inner.new_candidate_pivot_waiting_list.remove(&hash)
+            inner.new_candidate_pivot_waiting_map.remove(&hash)
         {
             debug!("new_candidate_pivot callback for block={:?}", hash);
             let height = block_header.height();
@@ -389,6 +390,42 @@ impl ConsensusNewBlockHandler {
             true, /* persist_terminal */
         );
 
+        // Reset pivot chain according to bft commits
+        if inner.set_pivot_chain_callback.is_some()
+            && hash == inner.set_pivot_chain_callback.as_ref().unwrap().0
+        {
+            let (_, callback) = inner.set_pivot_chain_callback.take().unwrap();
+            inner.set_to_pivot(&hash);
+            self.construct_pivot_state(inner);
+            callback
+                .send(Ok(()))
+                .expect("send set pivot chain result back should succeed");
+        }
+
+        let now = Instant::now().elapsed().as_millis() as u64;
+        while let Some((hash, timestamp)) =
+            inner.new_candidate_pivot_waiting_list.pop_front()
+        {
+            if !inner.new_candidate_pivot_waiting_map.contains_key(&hash)
+                || timestamp
+                    + inner.inner_conf.candidate_pivot_waiting_timeout_ms
+                    < now
+            {
+                if let Some(callback) =
+                    inner.new_candidate_pivot_waiting_map.remove(&hash)
+                {
+                    callback
+                        .send(Err(ErrorKind::RpcTimeout.into()))
+                        .expect("send new candidate pivot back should succeed");
+                }
+            } else {
+                inner
+                    .new_candidate_pivot_waiting_list
+                    .push_front((hash, timestamp));
+                break;
+            }
+        }
+
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }
 
@@ -402,12 +439,32 @@ impl ConsensusNewBlockHandler {
             "on_new_candidate_pivot, pivot_decision={:?}",
             pivot_decision
         );
-        inner.new_candidate_pivot(
-            &pivot_decision.block_hash,
-            &pivot_decision.parent_hash,
-            pivot_decision.height,
-            callback,
-        )
+        if !inner
+            .hash_to_arena_indices
+            .contains_key(&pivot_decision.block_hash)
+        {
+            debug!(
+                "insert to new_candidate_pivot_waiting_map, block={:?}",
+                pivot_decision.block_hash
+            );
+            inner
+                .new_candidate_pivot_waiting_map
+                .insert(pivot_decision.block_hash, callback);
+            inner.new_candidate_pivot_waiting_list.push_back((
+                pivot_decision.block_hash,
+                Instant::now().elapsed().as_millis() as u64,
+            ));
+            false
+        } else {
+            callback
+                .send(Ok(inner.new_candidate_pivot(
+                    &pivot_decision.block_hash,
+                    &pivot_decision.parent_hash,
+                    pivot_decision.height,
+                )))
+                .expect("send new candidate pivot should succeed");
+            true
+        }
     }
 
     pub fn on_next_selected_pivot_block(
@@ -435,7 +492,10 @@ impl ConsensusNewBlockHandler {
                 last_pivot_hash,
                 inner.terminal_hashes.iter().cloned().collect(),
             );
-            debug!("inser to next_selected_pivot_waiting_list block={:?}", block.hash());
+            debug!(
+                "inser to next_selected_pivot_waiting_list block={:?}",
+                block.hash()
+            );
             inner
                 .next_selected_pivot_waiting_list
                 .insert(block.hash(), callback);
@@ -459,7 +519,10 @@ impl ConsensusNewBlockHandler {
                     last_pivot_hash,
                     inner.terminal_hashes.iter().cloned().collect(),
                 );
-                debug!("inser to next_selected_pivot_waiting_list block={:?}", block.hash());
+                debug!(
+                    "inser to next_selected_pivot_waiting_list block={:?}",
+                    block.hash()
+                );
                 inner
                     .next_selected_pivot_waiting_list
                     .insert(block.hash(), callback);
@@ -543,9 +606,18 @@ impl ConsensusNewBlockHandler {
 
     pub fn set_pivot_chain(
         &self, inner: &mut ConsensusGraphInner, block_hash: &H256,
-    ) {
-        inner.set_to_pivot(block_hash);
-        self.construct_pivot_state(inner);
+        callback: SetPivotChainCallbackType,
+    )
+    {
+        if inner.hash_to_arena_indices.contains_key(block_hash) {
+            inner.set_to_pivot(block_hash);
+            self.construct_pivot_state(inner);
+            callback
+                .send(Ok(()))
+                .expect("send set pivot chain result back should succeed");
+        } else {
+            inner.set_pivot_chain_callback = Some((*block_hash, callback));
+        }
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
