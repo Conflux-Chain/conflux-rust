@@ -73,6 +73,7 @@ impl StateComputer for ExecutionProxy {
         block: &Block<Self::Payload>,
         // The last pivot selection after executing the parent block.
         last_pivot: Option<PivotBlockDecision>,
+        ignore_db: bool,
     ) -> Result<ProcessedVMOutput>
     {
         // TODO: figure out error handling for the prologue txn
@@ -98,7 +99,8 @@ impl StateComputer for ExecutionProxy {
                 .map(|peer_state| peer_state.read().get_id());
             let (callback, cb_receiver) = oneshot::channel();
             debug!("tg_sync.on_new_candidate_pivot");
-            self.tg_sync.on_new_candidate_pivot(p, peer_id, callback);
+            self.tg_sync
+                .on_new_candidate_pivot(p, peer_id, callback, ignore_db);
             let response = block_on(async move { cb_receiver.await? });
             debug!("on_new_candidate_pivot returned");
             let valid_pivot_decision = match response {

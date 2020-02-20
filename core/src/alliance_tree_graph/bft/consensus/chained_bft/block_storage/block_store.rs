@@ -152,7 +152,7 @@ impl<T: Payload> BlockStore<T> {
                 .executed_pivot();
 
             let output = state_computer
-                .compute(&block, last_pivot)
+                .compute(&block, last_pivot, false /* ignore_db */)
                 .expect("fail to rebuild scratchpad");
 
             // if this block is certified, ensure we agree with the
@@ -329,6 +329,7 @@ impl<T: Payload> BlockStore<T> {
                 .compute(
                     &block, /* , &parent_trees, self.root().executed_trees() */
                     parent_block.executed_pivot(),
+                    true, /* ignore_db */
                 )
                 .with_context(|| {
                     format!("Execution failure for block {}", block)

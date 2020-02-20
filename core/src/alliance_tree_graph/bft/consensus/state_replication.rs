@@ -81,6 +81,14 @@ pub trait StateComputer: Send + Sync {
         block: &Block<Self::Payload>,
         // The last pivot selection after executing the parent block.
         last_pivot: Option<PivotBlockDecision>,
+        // Whether when requesting the block from peer if missed in
+        // consensus graph it can ignore checking on local disk first.
+        // During the recovery phase, it is possible to execute a block
+        // (in the subtree of root) that is proposed by the node itself.
+        // And any other peer does not see this block, and it is only
+        // stored in the local storage of this node. In this case, it
+        // has to check the local storage first.
+        ignore_db: bool,
     ) -> Result<ProcessedVMOutput>;
 
     /// Send a successful commit. A future is fulfilled when the state is

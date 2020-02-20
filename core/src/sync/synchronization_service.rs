@@ -135,7 +135,7 @@ impl SynchronizationService {
 
     pub fn on_new_candidate_pivot(
         &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
-        callback: NewCandidatePivotCallbackType,
+        callback: NewCandidatePivotCallbackType, ignore_db: bool,
     )
     {
         let sync_graph = self.get_synchronization_graph();
@@ -155,7 +155,7 @@ impl SynchronizationService {
                     io,
                     peer_id,
                     vec![pivot_decision.block_hash],
-                    true, /* ignore_db */
+                    ignore_db, /* ignore_db */
                 )
             });
         }
