@@ -19,6 +19,8 @@ pub mod consensus {
 
     pub const NULL: usize = !0;
     pub const NULLU64: u64 = !0;
+
+    pub const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 }
 
 pub mod consensus_internal {
@@ -57,11 +59,6 @@ pub mod consensus_internal {
     // This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
     // have more than this number, we will not store it in memory
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
-
-    // FIXME Use another method to prevent DDoS attacks if attackers control the
-    // pivot chain A block can blame up to BLAME_BOUND ancestors that their
-    // states are incorrect.
-    //    pub const BLAME_BOUND: u32 = 1000;
 }
 
 pub mod sync {

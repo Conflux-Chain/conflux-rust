@@ -33,8 +33,6 @@ use std::{
     sync::Arc,
 };
 
-const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
-
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
     /// Beta is the threshold in GHAST algorithm
