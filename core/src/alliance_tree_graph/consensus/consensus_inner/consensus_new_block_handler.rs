@@ -16,7 +16,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
     parameters::{consensus::*, consensus_internal::*},
     statistics::SharedStatistics,
-    sync::{delta::CHECKPOINT_DUMP_MANAGER, ErrorKind},
+    sync::delta::CHECKPOINT_DUMP_MANAGER,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedTransactionPool,
 };
@@ -399,33 +399,7 @@ impl ConsensusNewBlockHandler {
                 .expect("send set pivot chain result back should succeed");
         }
 
-        let now = Instant::now().elapsed().as_millis() as u64;
-        while let Some((hash, timestamp)) =
-            inner.new_candidate_pivot_waiting_list.pop_front()
-        {
-            if !inner.new_candidate_pivot_waiting_map.contains_key(&hash)
-                || timestamp
-                    + inner.inner_conf.candidate_pivot_waiting_timeout_ms
-                    < now
-            {
-                debug!(
-                    "new_candidate_pivot_waiting timeout for block[{:?}]",
-                    hash
-                );
-                if let Some(callback) =
-                    inner.new_candidate_pivot_waiting_map.remove(&hash)
-                {
-                    callback
-                        .send(Err(ErrorKind::RpcTimeout.into()))
-                        .expect("send new candidate pivot back should succeed");
-                }
-            } else {
-                inner
-                    .new_candidate_pivot_waiting_list
-                    .push_front((hash, timestamp));
-                break;
-            }
-        }
+        inner.remove_expired_bft_execution();
 
         debug!("Finish processing block in ConsensusGraph: hash={:?}", hash);
     }

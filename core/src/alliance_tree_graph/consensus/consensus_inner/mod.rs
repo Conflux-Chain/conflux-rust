@@ -16,6 +16,7 @@ use crate::{
     },
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
+    sync::ErrorKind,
 };
 use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
@@ -29,6 +30,7 @@ use slab::Slab;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     sync::Arc,
+    time::Instant,
 };
 
 #[derive(Copy, Clone)]
@@ -966,5 +968,34 @@ impl ConsensusGraphInner {
             block_hash,
             self.pivot_chain.len()
         );
+    }
+
+    pub fn remove_expired_bft_execution(&mut self) {
+        let now = Instant::now().elapsed().as_millis() as u64;
+        while let Some((hash, timestamp)) =
+            self.new_candidate_pivot_waiting_list.pop_front()
+        {
+            if !self.new_candidate_pivot_waiting_map.contains_key(&hash)
+                || timestamp
+                    + self.inner_conf.candidate_pivot_waiting_timeout_ms
+                    < now
+            {
+                debug!(
+                    "new_candidate_pivot_waiting timeout for block[{:?}]",
+                    hash
+                );
+                if let Some(callback) =
+                    self.new_candidate_pivot_waiting_map.remove(&hash)
+                {
+                    callback
+                        .send(Err(ErrorKind::RpcTimeout.into()))
+                        .expect("send new candidate pivot back should succeed");
+                }
+            } else {
+                self.new_candidate_pivot_waiting_list
+                    .push_front((hash, timestamp));
+                break;
+            }
+        }
     }
 }
