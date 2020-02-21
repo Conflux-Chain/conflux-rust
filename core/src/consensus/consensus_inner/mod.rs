@@ -167,7 +167,7 @@ impl Default for ConsensusGraphPivotData {
     }
 }
 
-/// [Implementation details of Eras, Timer chain and Checkpoints]
+/// # Implementation details of Eras, Timer chain and Checkpoints
 ///
 /// Era in Conflux is defined based on the height of a block. Every
 /// epoch_block_count height corresponds to one era. For example, if
@@ -180,7 +180,7 @@ impl Default for ConsensusGraphPivotData {
 /// definition of Era enables Conflux to form checkpoints at the stabilized
 /// era genesis blocks.
 ///
-/// Implementation details of the Timer chain
+/// # Implementation details of the Timer chain
 ///
 /// Timer chain contains special blocks whose PoW qualities are significantly
 /// higher than normal blocks. The goal of timer chain is to enable a slowly
@@ -205,22 +205,24 @@ impl Default for ConsensusGraphPivotData {
 /// new blocks will always be generated under b.
 ///
 ///
-/// Implementation details of the GHAST algorithm
+/// # Implementation details of the GHAST algorithm
 ///
 /// Conflux uses the Greedy Heaviest Adaptive SubTree (GHAST) algorithm to
 /// select a chain from the genesis block to one of the leaf blocks as the pivot
 /// chain. For each block b, GHAST algorithm computes it is adaptive
 ///
-/// 1   B = Past(b)
-/// 2   f is the force confirm point of b in the view of Past(b)
-/// 3   a = b.parent
-/// 4   adaptive = False
-/// 5   Let f(x) = 2 * SubTW(B, x) - SubTW(B, x.parent) + x.parent.weight
-/// 6   Let g(x) = adaptive_weight_beta * b.diff
-/// 7   while a != force_confirm do
-/// 8       if TimerDis(a, b) >= timer_chain_beta and f(a) < g(a) then
-/// 8           adaptive = True
-/// 9       a = a.parent
+/// ```python
+/// B = Past(b)
+/// f is the force confirm point of b in the view of Past(b)
+/// a = b.parent
+/// adaptive = False
+/// Let f(x) = 2 * SubTW(B, x) - SubTW(B, x.parent) + x.parent.weight
+/// Let g(x) = adaptive_weight_beta * b.diff
+/// while a != force_confirm do
+///     if TimerDis(a, b) >= timer_chain_beta and f(a) < g(a) then
+///         adaptive = True
+///     a = a.parent
+/// ```
 ///
 /// To efficiently compute adaptive, we maintain a link-cut tree called
 /// adaptive_weight_tree. The value for x in the link-cut-tree is
@@ -236,7 +238,7 @@ impl Default for ConsensusGraphPivotData {
 /// with potential liveness attacks that balance two subtrees. Note that when
 /// computing adaptive we only consider the nodes after force_confirm.
 ///
-/// [Implementation details of partial invalid blocks]
+/// # Implementation details of partial invalid blocks
 ///
 /// One block may become partial invalid because 1) it chooses incorrect parent
 /// or 2) it generates an adaptive block when it should not. In normal
@@ -249,7 +251,7 @@ impl Default for ConsensusGraphPivotData {
 /// least, we exclude *partial invalid* blocks from the timer chain
 /// consideration. They are not timer blocks!
 ///
-/// [Implementation details of checkpoints]
+/// # Implementation details of checkpoints
 ///
 /// Our consensus engine will form a checkpoint pair (a, b) given a DAG state G
 /// if:
@@ -276,7 +278,7 @@ impl Default for ConsensusGraphPivotData {
 /// to move to a sibling tree. This assumption is true if the timer_chain_beta
 /// and the timer_chain_difficulty_ratio are set to large enough values.
 
-/// [Introduction of blaming mechanism]
+/// # Introduction of blaming mechanism
 ///
 /// Blaming is used to provide proof for state root of a specific pivot block.
 /// The rationale behind is as follows. Verifying state roots of blocks off
@@ -322,6 +324,7 @@ impl Default for ConsensusGraphPivotData {
 /// Computing the reward for a block relies on correct blaming behavior of
 /// the block. If the block is a pivot block when computing its reward,
 /// it is required that:
+///
 /// 1. the block correctly chooses its parent;
 /// 2. the block contains the correct deferred state root;
 /// 3. the block correctly blames all its previous blocks following parent
@@ -339,6 +342,7 @@ impl Default for ConsensusGraphPivotData {
 /// to recover from a checkpoint), the protocol goes through the following
 /// steps. Let's assume the verifier has a subtree of block headers which
 /// includes the block whose state root is to be verified.
+///
 /// 1. The verifier node gets a merkle path whose merkle root corresponds
 /// to the state root after executing block Bi. Let's call it the path root
 /// which is to be verified.
@@ -364,7 +368,7 @@ impl Default for ConsensusGraphPivotData {
 /// 6. The verifier verifies the keccak hash of [..., DSRi+2, ...] equals
 /// to deferred state root of Bk, and then verifies that DSRi+2 equals to the
 /// path root of Bi.
-
+/// 
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
 /// to use integer index instead of H256 block hashes.
