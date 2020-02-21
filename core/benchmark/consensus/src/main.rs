@@ -206,6 +206,8 @@ fn main() {
     let mut valid_indices = HashMap::new();
     let mut stable_indices = HashMap::new();
     let mut adaptive_indices = HashMap::new();
+    let mut block_heights = Vec::new();
+    block_heights.push(0);
     let mut blocks = Vec::new();
     blocks.push((*genesis_block).clone());
     let mut check_batch_size = era_epoch_count as usize;
@@ -258,10 +260,14 @@ fn main() {
             ref_hashes.push(hashes[*ref_idx]);
         }
         let adaptive_fill = is_adaptive == 1;
+        let parent_height = block_heights[parent_idx];
+        let height = parent_height + 1;
+        block_heights.push(height);
         let (new_hash, mut new_block) = create_simple_block(
             sync.clone(),
             hashes[parent_idx],
             ref_hashes,
+            height,
             block_weight,
             adaptive_fill,
         );
@@ -296,10 +302,13 @@ fn main() {
         }
 
         let n = hashes.len();
+        let mut last_checked_count = 0;
         if (n != 0) && (n % check_batch_size == 0) {
             let last_hash = hashes[n - 1];
-            while consensus.get_processed_block_count() != n - 1 {
-                thread::sleep(time::Duration::from_millis(100));
+            let checked_count = consensus.get_processed_block_count();
+            if checked_count != n - 1 && last_checked_count != checked_count {
+                last_checked_count = checked_count;
+                thread::sleep(time::Duration::from_millis(500));
             }
             check_results(
                 last_checked,
@@ -310,13 +319,17 @@ fn main() {
                 &stable_indices,
                 &adaptive_indices,
             );
-            last_checked = n;
+            last_checked = checked_count + 1;
         }
     }
 
     let n = hashes.len();
     let last_hash = hashes[n - 1];
-    while consensus.get_processed_block_count() != n - 1 {
+    let mut last_checked_count = 0;
+    while consensus.get_processed_block_count() != n - 1
+        && consensus.get_processed_block_count() != last_checked_count
+    {
+        last_checked_count = consensus.get_processed_block_count();
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
@@ -332,7 +345,7 @@ fn main() {
             );
             last_consensus_block_cnt = consensus_block_cnt;
         }
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(500));
     }
     check_results(
         last_checked,
