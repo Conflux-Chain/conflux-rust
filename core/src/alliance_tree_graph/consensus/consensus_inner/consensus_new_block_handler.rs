@@ -137,7 +137,7 @@ impl ConsensusNewBlockHandler {
                 inner.split_root(me);
             }
             if !new_era_block_arena_index_set.contains(&parent) {
-                parent = new_era_block_arena_index;
+                parent = NULL;
             }
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
@@ -176,6 +176,7 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_block_arena_index = new_era_block_arena_index;
         inner.cur_era_genesis_height = new_era_height;
         inner.cur_era_stable_height = new_era_stable_height;
+        // TODO: use state boundary availability in data manager.
         inner.state_boundary_height = new_era_stable_height;
 
         let cur_era_hash = inner.arena[new_era_block_arena_index].hash.clone();
@@ -190,7 +191,6 @@ impl ConsensusNewBlockHandler {
         CHECKPOINT_DUMP_MANAGER.read().dump_async(next_era_hash);
     }
 
-    #[allow(dead_code)]
     fn recycle_tx_in_block(
         &self, inner: &ConsensusGraphInner, arena_index: usize,
     ) {
@@ -206,7 +206,6 @@ impl ConsensusNewBlockHandler {
 
     /// This recycles txs in all blocks outside the era represented by the era
     /// block.
-    #[allow(dead_code)]
     fn recycle_tx_outside_era(
         &self, inner: &mut ConsensusGraphInner, era_block: usize,
     ) {
@@ -230,7 +229,6 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    #[allow(dead_code)]
     fn should_form_checkpoint_at(
         &self, inner: &mut ConsensusGraphInner,
     ) -> usize {
@@ -382,11 +380,10 @@ impl ConsensusNewBlockHandler {
                 .expect("send new candidate pivot back should succeed");
         }
 
-        // FIXME: fill the correctly value of `persist_terminal`.
         self.persist_terminal_and_block_info(
             inner,
             me,
-            block_status,
+            BlockStatus::Valid,
             true, /* persist_terminal */
         );
 
@@ -411,6 +408,10 @@ impl ConsensusNewBlockHandler {
                     + inner.inner_conf.candidate_pivot_waiting_timeout_ms
                     < now
             {
+                debug!(
+                    "new_candidate_pivot_waiting timeout for block[{:?}]",
+                    hash
+                );
                 if let Some(callback) =
                     inner.new_candidate_pivot_waiting_map.remove(&hash)
                 {
@@ -513,7 +514,6 @@ impl ConsensusNewBlockHandler {
                 }
             }
             if next_pivot == NULL {
-                // FIXME: maybe we should send error back
                 let block = self.generate_block(
                     inner,
                     last_pivot_hash,
@@ -592,12 +592,10 @@ impl ConsensusNewBlockHandler {
                 self.recycle_tx_outside_era(inner, new_pivot_era_block);
                 inner.last_recycled_era_block = new_pivot_era_block;
             }
-            // TODO: change block_status_in_db in disk
-            // FIXME: fill correct value
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[pivot_arena_index].hash,
                 inner.get_epoch_block_hashes(pivot_arena_index),
-                inner.get_epoch_start_block_number(pivot_arena_index),
+                inner.get_epoch_start_block_number(inner.pivot_chain.len() - 1),
                 None,  /* reward_info */
                 false, /* debug_record */
             ));
@@ -661,18 +659,12 @@ impl ConsensusNewBlockHandler {
                 // We should recompute the epochs that should have been executed
                 // but fail to persist their
                 // execution_commitments before shutdown
-                let reward_execution_info =
-                    self.executor.get_reward_execution_info(inner, arena_index);
-                let epoch_block_hashes =
-                    inner.get_epoch_block_hashes(arena_index);
-                let start_block_number =
-                    inner.get_epoch_start_block_number(arena_index);
                 self.executor.compute_epoch(EpochExecutionTask::new(
                     pivot_hash,
-                    epoch_block_hashes,
-                    start_block_number,
-                    reward_execution_info,
-                    false,
+                    inner.get_epoch_block_hashes(arena_index),
+                    inner.get_epoch_start_block_number(pivot_index),
+                    None,  /* reward_info */
+                    false, /* debug_record */
                 ));
             }
         }
