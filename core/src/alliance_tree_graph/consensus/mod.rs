@@ -383,6 +383,11 @@ impl TreeGraphConsensus {
             .set_pivot_chain(inner, block_hash, callback);
     }
 
+    pub fn remove_expired_bft_execution(&self) {
+        let inner = &mut *self.inner.write();
+        inner.remove_expired_bft_execution();
+    }
+
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
     ) -> Option<(BlockExecutionResultWithEpoch, TransactionAddress, H256)> {

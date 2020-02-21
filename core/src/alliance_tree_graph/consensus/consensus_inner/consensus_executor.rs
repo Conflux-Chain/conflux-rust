@@ -742,7 +742,11 @@ impl ConsensusExecutionHandler {
 
         self.tx_pool.recycle_transactions(to_pending);
 
-        debug!("Finish processing tx for epoch");
+        debug!(
+            "Finish processing tx for epoch[{:?}] epoch_receipts_len={:?}",
+            pivot_block.hash(),
+            epoch_receipts.len()
+        );
         epoch_receipts
     }
 

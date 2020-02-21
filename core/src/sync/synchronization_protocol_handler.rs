@@ -7,6 +7,7 @@ use super::{
     ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
+    alliance_tree_graph::consensus::TreeGraphConsensus,
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
@@ -65,6 +66,7 @@ const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
 const HEARTBEAT_TIMER: TimerToken = 9;
+const EXPIRE_BFT_EXECUTION_TIMER: TimerToken = 10;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -1397,6 +1399,16 @@ impl SynchronizationProtocolHandler {
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
+
+    fn remove_expired_bft_execution(&self) {
+        let sync_graph = self.get_synchronization_graph();
+        let tg_consensus = sync_graph
+            .consensus
+            .as_any()
+            .downcast_ref::<TreeGraphConsensus>()
+            .expect("downcast to TreeGraphConsensus should success");
+        tg_consensus.remove_expired_bft_execution();
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -1431,6 +1443,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
         io.register_timer(EXPIRE_BLOCK_GC_TIMER, Duration::from_secs(60 * 15))
             .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
+        io.register_timer(
+            EXPIRE_BFT_EXECUTION_TIMER,
+            Duration::from_millis(10_000),
+        )
+        .expect("Error registering log_statistics timer");
     }
 
     fn send_local_message(&self, io: &dyn NetworkContext, message: Vec<u8>) {
@@ -1538,6 +1555,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             EXPIRE_BLOCK_GC_TIMER => {
                 // remove expire blocks every 450 seconds
                 self.expire_block_gc(io, 30).ok();
+            }
+            EXPIRE_BFT_EXECUTION_TIMER => {
+                self.remove_expired_bft_execution();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }
