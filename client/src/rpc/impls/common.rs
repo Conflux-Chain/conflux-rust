@@ -129,7 +129,7 @@ impl RpcImpl {
             .map_err(RpcError::invalid_params)?;
 
         let pivot_hash = inner
-            .get_hash_from_epoch_number(epoch_height)
+            .get_pivot_hash_from_epoch_number(epoch_height)
             .map_err(RpcError::invalid_params)?;
 
         if let Some(block) = self

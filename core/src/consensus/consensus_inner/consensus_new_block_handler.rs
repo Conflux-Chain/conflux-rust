@@ -284,10 +284,12 @@ impl ConsensusNewBlockHandler {
             // This is genesis, so the anticone should be empty
             return BitSet::new();
         }
-        let mut last_in_pivot = inner.arena[parent].last_pivot_in_past;
+        let mut last_in_pivot = inner.arena[parent].data.last_pivot_in_past;
         for referee in &inner.arena[me].referees {
-            last_in_pivot =
-                max(last_in_pivot, inner.arena[*referee].last_pivot_in_past);
+            last_in_pivot = max(
+                last_in_pivot,
+                inner.arena[*referee].data.last_pivot_in_past,
+            );
         }
         let mut visited = BitSet::new();
         let mut queue = VecDeque::new();
@@ -1002,14 +1004,14 @@ impl ConsensusNewBlockHandler {
                 !in_future
             } else {
                 let mut last_pivot_in_past = if parent != NULL {
-                    inner.arena[parent].last_pivot_in_past
+                    inner.arena[parent].data.last_pivot_in_past
                 } else {
                     inner.cur_era_genesis_height
                 };
                 for referee in &inner.arena[me].referees {
                     last_pivot_in_past = max(
                         last_pivot_in_past,
-                        inner.arena[*referee].last_pivot_in_past,
+                        inner.arena[*referee].data.last_pivot_in_past,
                     );
                 }
                 last_pivot_in_past < inner.cur_era_stable_height
@@ -1335,7 +1337,7 @@ impl ConsensusNewBlockHandler {
             }
         } else {
             let height = inner.arena[me].height;
-            inner.arena[me].last_pivot_in_past = height;
+            inner.arena[me].data.last_pivot_in_past = height;
             let pivot_index = inner.height_to_pivot_index(height);
             inner.pivot_chain_metadata[pivot_index]
                 .last_pivot_in_past_blocks
@@ -1494,7 +1496,7 @@ impl ConsensusNewBlockHandler {
         // We can not assume that confirmed epoch are already executed,
         // but we can assume that the deferred block are executed.
         let confirmed_epoch_hash = inner
-            .get_hash_from_epoch_number(confirmed_height)
+            .get_pivot_hash_from_epoch_number(confirmed_height)
             // FIXME: shouldn't unwrap but the function doesn't return error...
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         // FIXME: we also need more helper function to get the execution result
@@ -1533,7 +1535,6 @@ impl ConsensusNewBlockHandler {
         };
         let era_block = inner.get_era_genesis_block_with_parent(parent, 0);
 
-        // FIXME: this is header only.
         // If we are inserting header only, we will skip execution and
         // tx_pool-related operations
         if has_body {
