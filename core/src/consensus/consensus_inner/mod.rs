@@ -58,6 +58,8 @@ pub struct ConsensusInnerConfig {
 }
 
 pub struct ConsensusGraphNodeData {
+    /// It indicates the epoch number of the block, i.e., the height of the
+    /// corresponding pivot chain block of this one
     pub epoch_number: u64,
     partial_invalid: bool,
     pending: bool,
@@ -80,9 +82,9 @@ pub struct ConsensusGraphNodeData {
     /// For cur_era_genesis, this field should NOT be used because they contain
     /// out-of-era blocks not maintained in the memory.
     ordered_executable_epoch_blocks: Vec<usize>,
-    /// It indicates whether `blockset_in_own_view_of_epoch` is cleared due to
-    /// its size.
-    pub blockset_cleared: bool,
+    /// It indicates whether `blockset_in_own_view_of_epoch` and
+    /// `ordered_executable_epoch_blocks` are cleared due to its size.
+    blockset_cleared: bool,
     pub sequence_number: u64,
     /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
