@@ -144,9 +144,9 @@ impl ConsensusNewBlockHandler {
                 .blockset_in_own_view_of_epoch
                 .retain(|v| new_era_block_arena_index_set.contains(v));
             if !new_era_block_arena_index_set
-                .contains(&inner.arena[me].last_timer_block_arena_index)
+                .contains(&inner.arena[me].data.last_timer_block_arena_index)
             {
-                inner.arena[me].last_timer_block_arena_index = NULL;
+                inner.arena[me].data.last_timer_block_arena_index = NULL;
             }
             if !new_era_block_arena_index_set
                 .contains(&inner.arena[me].data.force_confirm)
@@ -198,7 +198,9 @@ impl ConsensusNewBlockHandler {
         inner.cur_era_genesis_timer_chain_height += timer_chain_truncate as u64;
         assert_eq!(
             inner.cur_era_genesis_timer_chain_height,
-            inner.arena[new_era_block_arena_index].timer_chain_height
+            inner.arena[new_era_block_arena_index]
+                .data
+                .timer_chain_height
         );
         for i in 0..(inner.timer_chain.len() - timer_chain_truncate) {
             inner.timer_chain[i] = inner.timer_chain[i + timer_chain_truncate];
@@ -922,8 +924,10 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
-        let start_timer_chain_height =
-            inner.arena[new_genesis_block_arena_index].timer_chain_height;
+        let start_timer_chain_height = inner.arena
+            [new_genesis_block_arena_index]
+            .data
+            .timer_chain_height;
         let start_timer_chain_index = (start_timer_chain_height
             - inner.cur_era_genesis_timer_chain_height)
             as usize;
@@ -1017,14 +1021,14 @@ impl ConsensusNewBlockHandler {
         let mut timer_longest_difficulty = 0;
         let mut longest_referee = parent;
         if parent != NULL {
-            timer_longest_difficulty = inner.arena[parent]
-                .timer_longest_difficulty
-                + inner.get_timer_difficulty(parent);
+            timer_longest_difficulty =
+                inner.arena[parent].data.timer_longest_difficulty
+                    + inner.get_timer_difficulty(parent);
         }
         for referee in &inner.arena[me].referees {
-            let timer_difficulty = inner.arena[*referee]
-                .timer_longest_difficulty
-                + inner.get_timer_difficulty(*referee);
+            let timer_difficulty =
+                inner.arena[*referee].data.timer_longest_difficulty
+                    + inner.get_timer_difficulty(*referee);
             if longest_referee == NULL
                 || ConsensusGraphInner::is_heavier(
                     (timer_difficulty, &inner.arena[*referee].hash),
@@ -1044,10 +1048,13 @@ impl ConsensusNewBlockHandler {
         {
             longest_referee
         } else {
-            inner.arena[longest_referee].last_timer_block_arena_index
+            inner.arena[longest_referee]
+                .data
+                .last_timer_block_arena_index
         };
-        inner.arena[me].timer_longest_difficulty = timer_longest_difficulty;
-        inner.arena[me].last_timer_block_arena_index =
+        inner.arena[me].data.timer_longest_difficulty =
+            timer_longest_difficulty;
+        inner.arena[me].data.last_timer_block_arena_index =
             last_timer_block_arena_index;
 
         inner.arena[me].data.force_confirm =
@@ -1156,7 +1163,7 @@ impl ConsensusNewBlockHandler {
         let old_pivot_chain_len = inner.pivot_chain.len();
 
         // Now we are going to maintain the timer chain.
-        let diff = inner.arena[me].timer_longest_difficulty
+        let diff = inner.arena[me].data.timer_longest_difficulty
             + inner.get_timer_difficulty(me);
         if inner.arena[me].is_timer
             && !inner.arena[me].data.partial_invalid
@@ -1172,7 +1179,8 @@ impl ConsensusNewBlockHandler {
             inner.best_timer_chain_hash = inner.arena[me].hash.clone();
             inner.update_timer_chain(me);
         } else {
-            let mut timer_chain_height = inner.arena[parent].timer_chain_height;
+            let mut timer_chain_height =
+                inner.arena[parent].data.timer_chain_height;
             if inner.get_timer_chain_index(parent) != NULL {
                 timer_chain_height += 1;
             }
@@ -1183,14 +1191,15 @@ impl ConsensusNewBlockHandler {
                 } else {
                     0
                 };
-                if inner.arena[*referee].timer_chain_height + timer_bit
+                if inner.arena[*referee].data.timer_chain_height + timer_bit
                     > timer_chain_height
                 {
                     timer_chain_height =
-                        inner.arena[*referee].timer_chain_height + timer_bit;
+                        inner.arena[*referee].data.timer_chain_height
+                            + timer_bit;
                 }
             }
-            inner.arena[me].timer_chain_height = timer_chain_height;
+            inner.arena[me].data.timer_chain_height = timer_chain_height;
         }
 
         meter.aggregate_total_weight_in_past(my_weight);
@@ -1686,11 +1695,11 @@ impl ConsensusNewBlockHandler {
                 if block_status == BlockStatus::PartialInvalid {
                     inner.arena[me].data.partial_invalid = true;
                     let last_index =
-                        inner.arena[me].last_timer_block_arena_index;
+                        inner.arena[me].data.last_timer_block_arena_index;
                     let timer = if last_index == NULL {
                         inner.inner_conf.timer_chain_beta
                     } else {
-                        inner.arena[last_index].timer_chain_height
+                        inner.arena[last_index].data.timer_chain_height
                             + inner.inner_conf.timer_chain_beta
                             + if inner.get_timer_chain_index(last_index) != NULL
                             {
@@ -1741,7 +1750,7 @@ impl ConsensusNewBlockHandler {
                 // Now we are going to check all invalid blocks in the delay
                 // queue Activate them if the timer is up
                 let timer = if let Some(x) = inner.timer_chain.last() {
-                    inner.arena[*x].timer_chain_height + 1
+                    inner.arena[*x].data.timer_chain_height + 1
                 } else {
                     inner.cur_era_genesis_timer_chain_height
                 };

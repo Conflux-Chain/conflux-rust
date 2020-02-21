@@ -37,22 +37,22 @@ const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
-    // Beta is the threshold in GHAST algorithm
+    /// Beta is the threshold in GHAST algorithm
     pub adaptive_weight_beta: u64,
-    // The heavy block ratio (h) in GHAST algorithm
+    /// The heavy block ratio (h) in GHAST algorithm
     pub heavy_block_difficulty_ratio: u64,
-    // The timer block ratio in timer chain algorithm
+    /// The timer block ratio in timer chain algorithm
     pub timer_chain_block_difficulty_ratio: u64,
-    // The timer chain beta ratio
+    /// The timer chain beta ratio
     pub timer_chain_beta: u64,
-    // The number of epochs per era. Each era is a potential checkpoint
-    // position. The parent_edge checking and adaptive checking are defined
-    // relative to the era start blocks.
+    /// The number of epochs per era. Each era is a potential checkpoint
+    /// position. The parent_edge checking and adaptive checking are defined
+    /// relative to the era start blocks.
     pub era_epoch_count: u64,
-    // Optimistic execution is the feature to execute ahead of the deferred
-    // execution boundary. The goal is to pipeline the transaction
-    // execution and the block packaging and verification.
-    // optimistic_executed_height is the number of step to go ahead
+    /// Optimistic execution is the feature to execute ahead of the deferred
+    /// execution boundary. The goal is to pipeline the transaction
+    /// execution and the block packaging and verification.
+    /// optimistic_executed_height is the number of step to go ahead
     pub enable_optimistic_execution: bool,
     pub enable_state_expose: bool,
 }
@@ -61,7 +61,13 @@ pub struct ConsensusGraphNodeData {
     /// It indicates the epoch number of the block, i.e., the height of the
     /// corresponding pivot chain block of this one
     pub epoch_number: u64,
+    /// It indicates whether the block is partial invalid or not. A block
+    /// is partial invalid if it selects an incorrect parent or filling an
+    /// incorrect adaptive field.
     partial_invalid: bool,
+    /// It indicates whether the block is pending or not. A block is pending if
+    /// the consensus engine determines that it is not necessary to determine
+    /// its partial invalid status.
     pending: bool,
     /// This is a special counter marking whether the block is active or not.
     /// A block is active only if the counter is zero
@@ -69,6 +75,10 @@ pub struct ConsensusGraphNodeData {
     /// A normal block which referenced directly or indirectly will have a
     /// positive counter
     active_cnt: usize,
+    /// This is an implementation flag indicate whether the node is active or
+    /// not. Because multiple blocks may have their `active_cnt` turning
+    /// zero in the same time, we need this flag to process them correctly
+    /// one by one.
     activated: bool,
     /// This records the force confirm point in the past view of this block.
     force_confirm: usize,
@@ -85,7 +95,19 @@ pub struct ConsensusGraphNodeData {
     /// It indicates whether `blockset_in_own_view_of_epoch` and
     /// `ordered_executable_epoch_blocks` are cleared due to its size.
     blockset_cleared: bool,
-    pub sequence_number: u64,
+    /// The sequence number is used to identify the order of each block
+    /// entering the consensus. The sequence number of the genesis is used
+    /// by the syncronization layer to determine whether a block exists in
+    /// the consensus or not.
+    sequence_number: u64,
+    /// The longest chain of all timer blocks.
+    timer_longest_difficulty: i128,
+    /// The last timer block index in the chain.
+    last_timer_block_arena_index: usize,
+    /// The height of the closest timer block in the longest timer chain.
+    /// Note that this only considers the current longest timer chain and
+    /// ingores the remaining timer blocks.
+    timer_chain_height: u64,
     /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
     vote_valid_lca_height: u64,
@@ -113,6 +135,9 @@ impl ConsensusGraphNodeData {
             ordered_executable_epoch_blocks: Default::default(),
             blockset_cleared: true,
             sequence_number,
+            timer_longest_difficulty: 0,
+            last_timer_block_arena_index: NULL,
+            timer_chain_height: 0,
             vote_valid_lca_height: NULLU64,
             vote_valid: true,
             state_valid: None,
@@ -404,23 +429,15 @@ pub struct ConsensusGraphInner {
 pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,
-    is_heavy: bool,
+    pub parent: usize,
     difficulty: U256,
+    is_heavy: bool,
+    is_timer: bool,
     /// The total weight of its past set in the era (exclude itself)
     past_num_blocks: u64,
     /// The total weight of its past set in its own era
     past_era_weight: i128,
-    is_timer: bool,
-    /// The longest chain of all timer blocks.
-    timer_longest_difficulty: i128,
-    /// The last timer block index in the chain.
-    last_timer_block_arena_index: usize,
-    /// The height of the closest timer block in the longest timer chain.
-    /// Note that this only considers the current longest timer chain and
-    /// ingores the remaining timer blocks.
-    timer_chain_height: u64,
     adaptive: bool,
-    pub parent: usize,
 
     /// The genesis arena index of the era that `self` is in.
     ///
@@ -555,6 +572,7 @@ impl ConsensusGraphInner {
                 .push(inner.cur_era_genesis_block_arena_index);
         }
         inner.arena[inner.cur_era_genesis_block_arena_index]
+            .data
             .timer_chain_height = 0;
         inner.best_timer_chain_difficulty =
             inner.get_timer_difficulty(inner.cur_era_genesis_block_arena_index);
@@ -576,6 +594,13 @@ impl ConsensusGraphInner {
             .collect();
         self.data_man
             .insert_epoch_set_hashes_to_db(height, &epoch_set_hashes);
+    }
+
+    #[inline]
+    pub fn current_era_genesis_seq_num(&self) -> u64 {
+        self.arena[self.cur_era_genesis_block_arena_index]
+            .data
+            .sequence_number
     }
 
     #[inline]
@@ -1081,10 +1106,10 @@ impl ConsensusGraphInner {
             if let Some(t) = m.get(&me) {
                 return *t;
             } else {
-                assert!(self.arena[me].timer_chain_height <= *fork_at);
+                assert!(self.arena[me].data.timer_chain_height <= *fork_at);
             }
         }
-        return self.arena[me].timer_chain_height;
+        return self.arena[me].data.timer_chain_height;
     }
 
     fn adaptive_weight_impl_brutal(
@@ -1363,9 +1388,6 @@ impl ConsensusGraphInner {
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             is_timer: false,
-            timer_longest_difficulty: 0,
-            last_timer_block_arena_index: 0,
-            timer_chain_height: 0,
             // Block header contains an adaptive field, we will verify with our
             // own computation
             adaptive: block_header.adaptive(),
@@ -1488,9 +1510,6 @@ impl ConsensusGraphInner {
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
             is_timer,
-            timer_longest_difficulty: 0,
-            last_timer_block_arena_index: NULL,
-            timer_chain_height: NULLU64,
             // Block header contains an adaptive field, we will verify with our
             // own computation
             adaptive: block_header.adaptive(),
@@ -2550,7 +2569,7 @@ impl ConsensusGraphInner {
         if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
             return NULL;
         }
-        let timer_chain_index = (self.arena[me].timer_chain_height
+        let timer_chain_index = (self.arena[me].data.timer_chain_height
             - self.cur_era_genesis_timer_chain_height)
             as usize;
         if self.timer_chain.len() > timer_chain_index
@@ -2573,17 +2592,17 @@ impl ConsensusGraphInner {
         };
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
-        let mut i = self.arena[me].last_timer_block_arena_index;
+        let mut i = self.arena[me].data.last_timer_block_arena_index;
         while i != NULL && self.get_timer_chain_index(i) == NULL {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
-            i = self.arena[i].last_timer_block_arena_index;
+            i = self.arena[i].data.last_timer_block_arena_index;
         }
         tmp_chain.reverse();
         let fork_at;
         let fork_at_index;
         if i != NULL {
-            fork_at = self.arena[i].timer_chain_height + 1;
+            fork_at = self.arena[i].data.timer_chain_height + 1;
             assert!(fork_at >= self.cur_era_genesis_timer_chain_height);
             fork_at_index =
                 (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
@@ -2654,7 +2673,7 @@ impl ConsensusGraphInner {
                     let mut height = if let Some(v) = res.get(pred) {
                         *v
                     } else {
-                        self.arena[*pred].timer_chain_height
+                        self.arena[*pred].data.timer_chain_height
                     };
                     if tmp_chain_set.contains(pred)
                         || self.get_timer_chain_index(*pred) < fork_at_index
@@ -2781,7 +2800,7 @@ impl ConsensusGraphInner {
         }
         assert!(res.contains_key(&me));
         for (k, v) in res {
-            self.arena[k].timer_chain_height = v;
+            self.arena[k].data.timer_chain_height = v;
         }
         if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
             self.timer_chain.push(me);

@@ -1008,10 +1008,7 @@ impl ConsensusGraph {
     // FIXME store this in BlockDataManager
     /// Return the sequence number of the current era genesis hash.
     pub fn current_era_genesis_seq_num(&self) -> u64 {
-        let inner = self.inner.read_recursive();
-        inner.arena[inner.cur_era_genesis_block_arena_index]
-            .data
-            .sequence_number
+        self.inner.read_recursive().current_era_genesis_seq_num()
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
