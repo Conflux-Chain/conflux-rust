@@ -375,9 +375,9 @@ pub struct ConsensusGraphInner {
     // A priority that holds for every non-active partial invalid block, the
     // timer chain stamp that will become valid
     invalid_block_queue: BinaryHeap<(i128, usize)>,
-    // This cache is to store all passed transaction parameters of non-active
+    // This cache is to store all passed block body parameters of non-active
     // blocks
-    transaction_caches: HashMap<usize, Option<Vec<Arc<SignedTransaction>>>>,
+    block_body_caches: HashMap<usize, Option<Vec<Arc<SignedTransaction>>>>,
     pub pow_config: ProofOfWorkConfig,
     // It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
@@ -475,7 +475,7 @@ impl ConsensusGraphInner {
             weight_tree: SizeMinLinkCutTree::new(),
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
             invalid_block_queue: BinaryHeap::new(),
-            transaction_caches: HashMap::new(),
+            block_body_caches: HashMap::new(),
             pow_config,
             current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),

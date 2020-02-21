@@ -183,7 +183,7 @@ impl ConsensusNewBlockHandler {
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitment(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
-                inner.transaction_caches.remove(&index);
+                inner.block_body_caches.remove(&index);
             }
         }
 
@@ -1122,7 +1122,7 @@ impl ConsensusNewBlockHandler {
     fn activate_block(
         &self, inner: &mut ConsensusGraphInner, me: usize,
         meter: &ConfirmationMeter,
-        transactions: Option<Vec<Arc<SignedTransaction>>>,
+        block_body_opt: Option<Vec<Arc<SignedTransaction>>>,
         queue: &mut VecDeque<usize>,
     )
     {
@@ -1131,7 +1131,7 @@ impl ConsensusNewBlockHandler {
             me, inner.arena[me].hash
         );
         let parent = inner.arena[me].parent;
-        let has_transactions = transactions.is_some();
+        let has_body = block_body_opt.is_some();
         // Update terminal hashes for mining
         if parent != NULL {
             inner.terminal_hashes.remove(&inner.arena[parent].hash);
@@ -1351,7 +1351,7 @@ impl ConsensusNewBlockHandler {
                 inner,
                 me,
                 block_status,
-                has_transactions,
+                has_body,
             );
             debug!(
                 "Finish activating block in ConsensusGraph: index={:?} hash={:?}, block is earlier than stable, skip execution.",
@@ -1446,7 +1446,7 @@ impl ConsensusNewBlockHandler {
                 ConsensusNewBlockHandler::make_checkpoint_at(
                     inner,
                     new_checkpoint_era_genesis,
-                    has_transactions && !self.conf.bench_mode,
+                    has_body && !self.conf.bench_mode,
                     &self.executor,
                 );
                 let stable_era_genesis_arena_index =
@@ -1522,14 +1522,14 @@ impl ConsensusNewBlockHandler {
         // FIXME: this is header only.
         // If we are inserting header only, we will skip execution and
         // tx_pool-related operations
-        if has_transactions {
+        if has_body {
             // It's only correct to set tx stale after the block is considered
             // terminal for mining.
             // Note that we conservatively only mark those blocks inside the
             // current pivot era
             if era_block == cur_pivot_era_block {
                 self.txpool
-                    .set_tx_packed(&transactions.expect("Already checked"));
+                    .set_tx_packed(&block_body_opt.expect("Already checked"));
             }
             if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
                 < inner.pivot_index_to_height(inner.pivot_chain.len())
@@ -1624,12 +1624,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        self.persist_terminal_and_block_info(
-            inner,
-            me,
-            block_status,
-            has_transactions,
-        );
+        self.persist_terminal_and_block_info(inner, me, block_status, has_body);
         debug!(
             "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
             me, inner.arena[me].hash
@@ -1640,7 +1635,7 @@ impl ConsensusNewBlockHandler {
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
         hash: &H256, block_header: &BlockHeader,
-        transactions: Option<Vec<Arc<SignedTransaction>>>,
+        block_body_opt: Option<Vec<Arc<SignedTransaction>>>,
     )
     {
         let parent_hash = block_header.parent_hash();
@@ -1674,7 +1669,7 @@ impl ConsensusNewBlockHandler {
         }
 
         let me = self.insert_block_initial(inner, &block_header);
-        inner.transaction_caches.insert(me, transactions);
+        inner.block_body_caches.insert(me, block_body_opt);
         self.update_lcts_initial(inner, me);
 
         if inner.arena[me].data.active_cnt == 0 {
@@ -1729,7 +1724,7 @@ impl ConsensusNewBlockHandler {
                         );
                     }
                     let transactions =
-                        inner.transaction_caches.remove(&me).unwrap();
+                        inner.block_body_caches.remove(&me).unwrap();
                     self.activate_block(
                         inner,
                         me,
@@ -1757,7 +1752,7 @@ impl ConsensusNewBlockHandler {
                     assert!(inner.arena[x].data.active_cnt == NULL);
                     inner.arena[x].data.active_cnt = 0;
                     let transactions =
-                        inner.transaction_caches.remove(&x).unwrap();
+                        inner.block_body_caches.remove(&x).unwrap();
                     self.activate_block(
                         inner,
                         x,
