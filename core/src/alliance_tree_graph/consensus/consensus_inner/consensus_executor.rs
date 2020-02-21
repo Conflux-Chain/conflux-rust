@@ -349,7 +349,7 @@ impl ConsensusExecutor {
             self.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[epoch_arena_index].hash,
                 inner.get_epoch_block_hashes(epoch_arena_index),
-                inner.get_epoch_start_block_number(epoch_arena_index),
+                inner.get_epoch_start_block_number(start_chain_index),
                 None,
                 false,
             ));
