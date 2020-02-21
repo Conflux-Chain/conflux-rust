@@ -11,7 +11,7 @@ cfx-types = { path = "../../../cfx_types" }
 cfxcore = { path = "../../../core" }
 clap = "2.32"
 db = { path = "../../../db" }
-env_logger = "0.6"
+env_logger = "0.7"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethkey = { package = "ethkey", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }

@@ -378,7 +378,6 @@ fn add_accounts(
         ))?
         .unwrap()
         .get_state_root()?
-        .unwrap()
         .state_root
         .delta_root;
     println!("checkpoint: epoch_id={:?}, root: {:?}", epoch_id, root);

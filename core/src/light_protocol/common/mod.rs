@@ -4,11 +4,9 @@
 
 mod ledger_info;
 mod peers;
-mod unique_id;
 
 pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
-pub use unique_id::UniqueId;
 
 use std::cmp;
 

@@ -9,7 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, GetWitnessInfo, WitnessInfoWithHeight},
         Error, ErrorKind,
     },
@@ -23,6 +23,7 @@ use crate::{
             WITNESS_REQUEST_TIMEOUT,
         },
     },
+    UniqueId,
 };
 
 use super::common::{KeyReverseOrdered, LedgerProof, SyncManager};

@@ -53,6 +53,7 @@ mod parameters;
 #[macro_use]
 pub mod message;
 pub mod alliance_tree_graph;
+pub mod channel;
 pub mod client;
 pub mod light_protocol;
 pub mod machine;
@@ -65,6 +66,7 @@ pub mod statistics;
 pub mod storage;
 pub mod sync;
 pub mod transaction_pool;
+pub mod unique_id;
 pub mod verification;
 pub mod vm;
 pub mod vm_factory;
@@ -73,6 +75,7 @@ pub mod test_helpers;
 
 pub use crate::{
     block_data_manager::BlockDataManager,
+    channel::Notifications,
     consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
     light_protocol::{
         Provider as LightProvider, QueryService as LightQueryService,
@@ -82,6 +85,7 @@ pub use crate::{
         SynchronizationGraph, SynchronizationService,
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
+    unique_id::UniqueId,
 };
 pub use network::PeerInfo;
 pub use parameters::{

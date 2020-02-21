@@ -11,7 +11,7 @@ use super::{
 use crate::{
     consensus::ConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, BlockTxsWithHash, GetBlockTxs},
         Error, ErrorKind,
     },
@@ -21,6 +21,7 @@ use crate::{
         BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOCK_TXS_IN_FLIGHT,
     },
+    UniqueId,
 };
 use cfx_types::H256;
 use lru_time_cache::LruCache;

@@ -3944,6 +3944,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fdd17989496f49cdc57978c96f0c9fe5e4a58a8bddc6813c449a4624f6a030b"
 dependencies = [
  "bytes 0.5.4",
+ "fnv",
  "pin-project-lite",
  "slab 0.4.2",
 ]

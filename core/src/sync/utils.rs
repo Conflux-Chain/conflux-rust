@@ -11,7 +11,7 @@ use crate::{
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_BLOCK_GAS_LIMIT},
     verification::VerificationConfig,
     vm_factory::VmFactory,
-    ConsensusGraph, TransactionPool,
+    ConsensusGraph, Notifications, TransactionPool,
 };
 use cfx_types::{Address, H256, U256};
 use core::str::FromStr;
@@ -181,6 +181,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         verification_config,
         pow_config,
         sync_config,
+        Notifications::init(),
         false,
     ));
 

@@ -10,7 +10,7 @@ use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         message::{msgid, GetReceipts, ReceiptsWithEpoch},
         Error, ErrorKind,
     },
@@ -21,6 +21,7 @@ use crate::{
         RECEIPT_REQUEST_TIMEOUT,
     },
     primitives::{BlockHeaderBuilder, Receipt},
+    UniqueId,
 };
 
 use super::{
