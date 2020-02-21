@@ -384,7 +384,8 @@ impl ConsensusGraph {
     ) -> Result<StateDb, String> {
         self.validate_stated_epoch(&epoch_number)?;
         let height = self.get_height_from_epoch_number(epoch_number)?;
-        let hash = self.inner.read().get_pivot_hash_from_epoch_number(height)?;
+        let hash =
+            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =

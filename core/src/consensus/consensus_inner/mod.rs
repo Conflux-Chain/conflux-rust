@@ -368,7 +368,7 @@ impl Default for ConsensusGraphPivotData {
 /// 6. The verifier verifies the keccak hash of [..., DSRi+2, ...] equals
 /// to deferred state root of Bk, and then verifies that DSRi+2 equals to the
 /// path root of Bi.
-/// 
+///
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
 /// to use integer index instead of H256 block hashes.
@@ -1995,8 +1995,9 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// Get the pivot hash from an epoch number. This function will try to query the data manager
-    /// if it is not available in the ConsensusGraph due to out of the current era.
+    /// Get the pivot hash from an epoch number. This function will try to query
+    /// the data manager if it is not available in the ConsensusGraph due to
+    /// out of the current era.
     pub fn get_pivot_hash_from_epoch_number(
         &self, epoch_number: u64,
     ) -> Result<H256, String> {
@@ -2018,8 +2019,8 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// This function differs from `ge_pivot_hash_from_epoch_number` in that it only
-    /// returns the hash if it is in the current consensus graph.
+    /// This function differs from `ge_pivot_hash_from_epoch_number` in that it
+    /// only returns the hash if it is in the current consensus graph.
     fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
         let pivot_index = self.height_to_pivot_index(epoch_number);
         self.pivot_chain
@@ -3113,9 +3114,10 @@ impl ConsensusGraphInner {
             .and_then(|arena_index| self.arena.get(*arena_index))
     }
 
-    /// Return the list of best terminals when respecting a bound (for referencing edges).
-    /// We sort the terminals based on its lca so that it will not change the parent
-    /// selection results if we exclude last few terminals in the sorted order.
+    /// Return the list of best terminals when respecting a bound (for
+    /// referencing edges). We sort the terminals based on its lca so that
+    /// it will not change the parent selection results if we exclude last
+    /// few terminals in the sorted order.
     pub fn best_terminals(&self, ref_bound: usize) -> Vec<H256> {
         let mut tmp = Vec::new();
         let best_idx = self.pivot_chain.last().unwrap();
@@ -3130,8 +3132,9 @@ impl ConsensusGraphInner {
         bounded_hashes
     }
 
-    /// This function is used by the synchronization layer to garbege collect `old_era_block_set`.
-    /// The set contains all the blocks that should be eliminated by full nodes
+    /// This function is used by the synchronization layer to garbege collect
+    /// `old_era_block_set`. The set contains all the blocks that should be
+    /// eliminated by full nodes
     pub fn pop_old_era_block_set(&self) -> Option<H256> {
         self.old_era_block_set.lock().pop_front()
     }
