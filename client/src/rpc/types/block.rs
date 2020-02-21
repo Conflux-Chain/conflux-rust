@@ -111,6 +111,7 @@ pub struct Block {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
+    // TODO: We should change python test script and remove this field
     /// PoW Quality
     pub pow_quality: Option<U256>,
     /// Referee hashes
@@ -306,6 +307,7 @@ pub struct Header {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
+    // TODO: We should change python test script and remove this field
     /// PoW Quality
     pub pow_quality: Option<U256>,
     /// Referee hashes
@@ -344,11 +346,11 @@ impl Header {
             gas_limit: h.gas_limit().into(),
             timestamp: h.timestamp().into(),
             difficulty: h.difficulty().into(),
-            stable: consensus.inner.read().is_stable(&hash),
             adaptive: h.adaptive(),
             referee_hashes,
             nonce: h.nonce().into(),
-            // TODO(thegaram): include custom
+            pow_quality: Some(h.pow_quality.into()), /* TODO(thegaram):
+                                                      * include custom */
         }
     }
 }
@@ -461,13 +463,13 @@ mod tests {
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
+            pow_quality: None,
             referee_hashes: Vec::new(),
-            stable: None,
             adaptive: false,
             nonce: 0.into(),
         };
         let serialized_header = serde_json::to_string(&header).unwrap();
 
-        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0"}"#);
+        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
     }
 }

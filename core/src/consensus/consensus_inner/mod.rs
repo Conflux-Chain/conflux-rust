@@ -2556,7 +2556,6 @@ impl ConsensusGraphInner {
             // remaining blocks with topological sort
             let mut queue = VecDeque::new();
             let mut visited = BitSet::new();
-            visited.clear();
             if i == NULL {
                 queue.push_back(self.cur_era_genesis_block_arena_index);
                 visited.add(self.cur_era_genesis_block_arena_index as u32);
