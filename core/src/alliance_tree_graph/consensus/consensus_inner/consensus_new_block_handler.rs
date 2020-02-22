@@ -581,7 +581,7 @@ impl ConsensusNewBlockHandler {
     pub fn set_pivot_chain(
         &self, inner: &mut ConsensusGraphInner, block_hash: &H256,
         callback: SetPivotChainCallbackType,
-    )
+    ) -> bool
     {
         if inner.hash_to_arena_indices.contains_key(block_hash) {
             inner.set_to_pivot(block_hash);
@@ -589,8 +589,10 @@ impl ConsensusNewBlockHandler {
             callback
                 .send(Ok(()))
                 .expect("send set pivot chain result back should succeed");
+            true
         } else {
             inner.set_pivot_chain_callback = Some((*block_hash, callback));
+            false
         }
     }
 

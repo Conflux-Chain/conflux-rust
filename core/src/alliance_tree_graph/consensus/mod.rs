@@ -378,10 +378,10 @@ impl TreeGraphConsensus {
 
     pub fn set_pivot_chain(
         &self, block_hash: &H256, callback: SetPivotChainCallbackType,
-    ) {
+    ) -> bool {
         let inner = &mut *self.inner.write();
         self.new_block_handler
-            .set_pivot_chain(inner, block_hash, callback);
+            .set_pivot_chain(inner, block_hash, callback)
     }
 
     pub fn remove_expired_bft_execution(&self) {

@@ -182,6 +182,17 @@ class ConsensusExecutionStatus(object):
             self.deferred_receipt_root == other.deferred_receipt_root and \
             self.deferred_logs_bloom_hash == other.deferred_logs_bloom_hash
 
+    def __str__(self):
+        return "ConsensusExecutionStatus(\
+                hash={}, \
+                deferred_state_root={}, \
+                deferred_receipt_root={}, \
+                deferred_logs_bloom_hash={})".format(
+            self.hash,
+            self.deferred_state_root,
+            self.deferred_receipt_root,
+            self.deferred_logs_bloom_hash)
+
 
 class ConsensusSnapshot(object):
     def __init__(self, peer_id):
@@ -689,7 +700,7 @@ class ExecutionStatusPredicate(Predicate):
 
     def verify_blocks(self, blocks):
         for i in range(1, len(blocks)):
-            assert blocks[i] == blocks[0]
+            assert blocks[i] == blocks[0], "check exec status mismatch for block[{}], expected[{}], but [{}] found".format(blocks[i].hash, str(blocks[0]), str(blocks[i]))
 
     def verify_snapshots(self, snapshots, hashes):
         for h in hashes:
