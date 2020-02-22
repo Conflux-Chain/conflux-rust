@@ -105,13 +105,13 @@ pub struct ConsensusGraphNodeData {
     /// the consensus or not.
     sequence_number: u64,
     /// The longest chain of all timer blocks.
-    timer_longest_difficulty: i128,
+    past_view_timer_longest_difficulty: i128,
     /// The last timer block index in the chain.
-    last_timer_block_arena_index: usize,
+    past_view_last_timer_block_arena_index: usize,
     /// The height of the closest timer block in the longest timer chain.
     /// Note that this only considers the current longest timer chain and
     /// ingores the remaining timer blocks.
-    timer_chain_height: u64,
+    ledger_view_timer_chain_height: u64,
     /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
     vote_valid_lca_height: u64,
@@ -142,9 +142,9 @@ impl ConsensusGraphNodeData {
             ordered_executable_epoch_blocks: Default::default(),
             blockset_cleared: true,
             sequence_number,
-            timer_longest_difficulty: 0,
-            last_timer_block_arena_index: NULL,
-            timer_chain_height: 0,
+            past_view_timer_longest_difficulty: 0,
+            past_view_last_timer_block_arena_index: NULL,
+            ledger_view_timer_chain_height: 0,
             vote_valid_lca_height: NULLU64,
             vote_valid: true,
             last_pivot_in_past: 0,
@@ -591,7 +591,7 @@ impl ConsensusGraphInner {
         }
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .data
-            .timer_chain_height = 0;
+            .ledger_view_timer_chain_height = 0;
         inner.best_timer_chain_difficulty =
             inner.get_timer_difficulty(inner.cur_era_genesis_block_arena_index);
 
@@ -1118,10 +1118,10 @@ impl ConsensusGraphInner {
             if let Some(t) = m.get(&me) {
                 return *t;
             } else {
-                assert!(self.arena[me].data.timer_chain_height <= *fork_at);
+                assert!(self.arena[me].data.ledger_view_timer_chain_height <= *fork_at);
             }
         }
-        return self.arena[me].data.timer_chain_height;
+        return self.arena[me].data.ledger_view_timer_chain_height;
     }
 
     fn adaptive_weight_impl_brutal(
@@ -2186,14 +2186,10 @@ impl ConsensusGraphInner {
     }
 
     /// Compute the block weight following the GHAST algorithm:
-    /// For partially invalid block, the weight is always 0
     /// If a block is not adaptive, the weight is its difficulty
     /// If a block is adaptive, then for the heavy blocks, it equals to
-    /// the heavy block ratio. Otherwise, it is zero.
+    /// the heavy block ratio times the difficulty. Otherwise, it is zero.
     fn block_weight(&self, me: usize) -> i128 {
-        //        if self.arena[me].data.partial_invalid && !inclusive {
-        //            return 0 as i128;
-        //        }
         if !self.arena[me].data.activated {
             return 0 as i128;
         }
@@ -2581,7 +2577,7 @@ impl ConsensusGraphInner {
         if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
             return NULL;
         }
-        let timer_chain_index = (self.arena[me].data.timer_chain_height
+        let timer_chain_index = (self.arena[me].data.ledger_view_timer_chain_height
             - self.cur_era_genesis_timer_chain_height)
             as usize;
         if self.timer_chain.len() > timer_chain_index
@@ -2604,17 +2600,17 @@ impl ConsensusGraphInner {
         };
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
-        let mut i = self.arena[me].data.last_timer_block_arena_index;
+        let mut i = self.arena[me].data.past_view_last_timer_block_arena_index;
         while i != NULL && self.get_timer_chain_index(i) == NULL {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
-            i = self.arena[i].data.last_timer_block_arena_index;
+            i = self.arena[i].data.past_view_last_timer_block_arena_index;
         }
         tmp_chain.reverse();
         let fork_at;
         let fork_at_index;
         if i != NULL {
-            fork_at = self.arena[i].data.timer_chain_height + 1;
+            fork_at = self.arena[i].data.ledger_view_timer_chain_height + 1;
             assert!(fork_at >= self.cur_era_genesis_timer_chain_height);
             fork_at_index =
                 (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
@@ -2685,7 +2681,7 @@ impl ConsensusGraphInner {
                     let mut height = if let Some(v) = res.get(pred) {
                         *v
                     } else {
-                        self.arena[*pred].data.timer_chain_height
+                        self.arena[*pred].data.ledger_view_timer_chain_height
                     };
                     if tmp_chain_set.contains(pred)
                         || self.get_timer_chain_index(*pred) < fork_at_index
@@ -2812,7 +2808,7 @@ impl ConsensusGraphInner {
         }
         assert!(res.contains_key(&me));
         for (k, v) in res {
-            self.arena[k].data.timer_chain_height = v;
+            self.arena[k].data.ledger_view_timer_chain_height = v;
         }
         if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
             self.timer_chain.push(me);
