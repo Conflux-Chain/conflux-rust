@@ -143,10 +143,11 @@ impl ConsensusNewBlockHandler {
                 .data
                 .blockset_in_own_view_of_epoch
                 .retain(|v| new_era_block_arena_index_set.contains(v));
-            if !new_era_block_arena_index_set
-                .contains(&inner.arena[me].data.past_view_last_timer_block_arena_index)
-            {
-                inner.arena[me].data.past_view_last_timer_block_arena_index = NULL;
+            if !new_era_block_arena_index_set.contains(
+                &inner.arena[me].data.past_view_last_timer_block_arena_index,
+            ) {
+                inner.arena[me].data.past_view_last_timer_block_arena_index =
+                    NULL;
             }
             if !new_era_block_arena_index_set
                 .contains(&inner.arena[me].data.force_confirm)
@@ -777,9 +778,7 @@ impl ConsensusNewBlockHandler {
 
     #[inline]
     /// Subroutine called by on_new_block()
-    fn update_lcts_finalize(
-        &self, inner: &mut ConsensusGraphInner, me: usize,
-    ) {
+    fn update_lcts_finalize(&self, inner: &mut ConsensusGraphInner, me: usize) {
         let parent = inner.arena[me].parent;
         let weight = inner.block_weight(me);
 
@@ -1010,9 +1009,10 @@ impl ConsensusNewBlockHandler {
                     + inner.get_timer_difficulty(parent);
         }
         for referee in &inner.arena[me].referees {
-            let timer_difficulty =
-                inner.arena[*referee].data.past_view_timer_longest_difficulty
-                    + inner.get_timer_difficulty(*referee);
+            let timer_difficulty = inner.arena[*referee]
+                .data
+                .past_view_timer_longest_difficulty
+                + inner.get_timer_difficulty(*referee);
             if longest_referee == NULL
                 || ConsensusGraphInner::is_heavier(
                     (timer_difficulty, &inner.arena[*referee].hash),
@@ -1114,6 +1114,8 @@ impl ConsensusNewBlockHandler {
         } else {
             BlockStatus::PartialInvalid
         };
+        self.persist_block_info(inner, me, block_status);
+
         block_status
     }
 
@@ -1176,15 +1178,18 @@ impl ConsensusNewBlockHandler {
                 } else {
                     0
                 };
-                if inner.arena[*referee].data.ledger_view_timer_chain_height + timer_bit
+                if inner.arena[*referee].data.ledger_view_timer_chain_height
+                    + timer_bit
                     > timer_chain_height
                 {
-                    timer_chain_height =
-                        inner.arena[*referee].data.ledger_view_timer_chain_height
-                            + timer_bit;
+                    timer_chain_height = inner.arena[*referee]
+                        .data
+                        .ledger_view_timer_chain_height
+                        + timer_bit;
                 }
             }
-            inner.arena[me].data.ledger_view_timer_chain_height = timer_chain_height;
+            inner.arena[me].data.ledger_view_timer_chain_height =
+                timer_chain_height;
         }
 
         meter.aggregate_total_weight_in_past(my_weight);
@@ -1337,21 +1342,10 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let block_status = if inner.arena[me].data.pending {
-            BlockStatus::Pending
-        } else if inner.arena[me].data.partial_invalid {
-            BlockStatus::PartialInvalid
-        } else {
-            BlockStatus::Valid
-        };
-
         if fork_at <= inner.cur_era_stable_height && !self.conf.bench_mode {
-            self.persist_terminal_and_block_info(
-                inner,
-                me,
-                block_status,
-                has_body,
-            );
+            if has_body {
+                self.persist_terminals(inner);
+            }
             debug!(
                 "Finish activating block in ConsensusGraph: index={:?} hash={:?}, block is earlier than stable, skip execution.",
                 me, inner.arena[me].hash
@@ -1622,7 +1616,9 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        self.persist_terminal_and_block_info(inner, me, block_status, has_body);
+        if has_body {
+            self.persist_terminals(inner);
+        }
         debug!(
             "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
             me, inner.arena[me].hash
@@ -1680,12 +1676,15 @@ impl ConsensusNewBlockHandler {
 
                 if block_status == BlockStatus::PartialInvalid {
                     inner.arena[me].data.partial_invalid = true;
-                    let last_index =
-                        inner.arena[me].data.past_view_last_timer_block_arena_index;
+                    let last_index = inner.arena[me]
+                        .data
+                        .past_view_last_timer_block_arena_index;
                     let timer = if last_index == NULL {
                         inner.inner_conf.timer_chain_beta
                     } else {
-                        inner.arena[last_index].data.ledger_view_timer_chain_height
+                        inner.arena[last_index]
+                            .data
+                            .ledger_view_timer_chain_height
                             + inner.inner_conf.timer_chain_beta
                             + if inner.get_timer_chain_index(last_index) != NULL
                             {
@@ -1770,15 +1769,11 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    fn persist_terminal_and_block_info(
+    fn persist_block_info(
         &self, inner: &mut ConsensusGraphInner, me: usize,
-        block_status: BlockStatus, persist_terminal: bool,
+        block_status: BlockStatus,
     )
     {
-        if persist_terminal {
-            self.persist_terminals(inner);
-        }
-
         let block_info = LocalBlockInfo::new(
             block_status,
             inner.arena[me].data.sequence_number,

@@ -1118,7 +1118,10 @@ impl ConsensusGraphInner {
             if let Some(t) = m.get(&me) {
                 return *t;
             } else {
-                assert!(self.arena[me].data.ledger_view_timer_chain_height <= *fork_at);
+                assert!(
+                    self.arena[me].data.ledger_view_timer_chain_height
+                        <= *fork_at
+                );
             }
         }
         return self.arena[me].data.ledger_view_timer_chain_height;
@@ -2577,9 +2580,9 @@ impl ConsensusGraphInner {
         if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
             return NULL;
         }
-        let timer_chain_index = (self.arena[me].data.ledger_view_timer_chain_height
-            - self.cur_era_genesis_timer_chain_height)
-            as usize;
+        let timer_chain_index =
+            (self.arena[me].data.ledger_view_timer_chain_height
+                - self.cur_era_genesis_timer_chain_height) as usize;
         if self.timer_chain.len() > timer_chain_index
             && self.timer_chain[timer_chain_index] == me
         {
