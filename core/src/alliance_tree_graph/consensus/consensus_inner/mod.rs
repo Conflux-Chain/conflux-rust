@@ -345,6 +345,31 @@ impl ConsensusGraphInner {
     fn collect_blockset_in_epoch(&mut self, pivot_index: usize) {
         assert!(pivot_index < self.pivot_chain.len());
         let pivot_arena_index = self.pivot_chain[pivot_index];
+        /*debug!(
+            "collect_blockset_in_epoch for pivot_index={:?} hash={:?}",
+            pivot_index, self.arena[pivot_arena_index].hash
+        );
+        debug!("cur_genesis= {:?}", self.cur_era_genesis_block_arena_index);
+        let past = if pivot_index > 0 {
+            self.compute_past_bitset(self.pivot_chain[pivot_index - 1])
+        } else {
+            BitSet::new()
+        };
+        let mut past_vec = Vec::new();
+        let mut in_past = Vec::new();
+        for i in self.pastset.clone() {
+            in_past.push(i as usize);
+        }
+        for (i, node) in &self.arena {
+            debug!("index={:?} {:?}", i, node);
+            if past.contains(i as u32) {
+                past_vec.push(i);
+            }
+        }
+        past_vec.sort();
+        in_past.sort();
+        debug!("pastset={:?} past_vec={:?}", in_past, past_vec);
+        assert!(past_vec == in_past);*/
 
         let mut queue = VecDeque::new();
         queue.push_back(pivot_arena_index);
@@ -955,6 +980,7 @@ impl ConsensusGraphInner {
             .expect("block_hash should inserted");
         self.pivot_chain.clear();
         self.pastset.clear();
+        self.pivot_chain_metadata.clear();
         let mut pivot = arena_index;
         while pivot != NULL {
             self.pivot_chain.push(pivot);
