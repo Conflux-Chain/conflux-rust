@@ -146,7 +146,6 @@ impl SynchronizationService {
             peer_id,
             callback,
         ) {
-            // TODO: request block from peers
             let _res = self.network.with_context(self.protocol, |io| {
                 self.protocol_handler.request_block_headers(
                     io,
@@ -167,7 +166,16 @@ impl SynchronizationService {
             .as_any()
             .downcast_ref::<TreeGraphConsensus>()
             .expect("downcast to TreeGraphConsensus should success");
-        tg_consensus.set_pivot_chain(block_hash, callback);
+        if !tg_consensus.set_pivot_chain(block_hash, callback) {
+            let _res = self.network.with_context(self.protocol, |io| {
+                self.protocol_handler.request_block_headers(
+                    io,
+                    None, /* peer_id */
+                    vec![*block_hash],
+                    false, /* ignore_db */
+                )
+            });
+        }
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {
