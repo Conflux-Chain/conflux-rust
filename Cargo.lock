@@ -487,7 +487,7 @@ dependencies = [
  "priority-send-queue",
  "rand 0.7.3",
  "rand_chacha",
- "rand_xorshift 0.2.0",
+ "rand_xorshift",
  "rayon",
  "rlp",
  "rlp_derive",
@@ -577,7 +577,7 @@ dependencies = [
  "parking_lot 0.10.0",
  "primitives",
  "rand 0.7.3",
- "rand_xorshift 0.1.1",
+ "rand_xorshift",
  "rlp",
  "runtime",
  "rustc-hex 1.0.0",
@@ -2964,15 +2964,6 @@ dependencies = [
  "rand_core 0.4.2",
  "rdrand",
  "winapi 0.3.8",
-]
-
-[[package]]
-name = "rand_xorshift"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
-dependencies = [
- "rand_core 0.3.1",
 ]
 
 [[package]]

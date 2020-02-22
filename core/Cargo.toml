@@ -46,7 +46,7 @@ primitives = { path = "../primitives", optional = true }
 priority-send-queue = { path = "../util/priority-send-queue" }
 rand = "0.7"
 rand_chacha="0.2.1"
-rand_xorshift="0.2.0"
+rand_xorshift="0.2"
 rayon = "1.0"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }

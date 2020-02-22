@@ -323,6 +323,9 @@ impl Database {
         }
 
         let columns = config.columns as usize;
+        if columns == 0 {
+            return Err(other_io_err("columns number cannot be 0"));
+        }
 
         let mut cf_options = Vec::with_capacity(columns);
         let column_names: Vec<_> =
@@ -373,19 +376,14 @@ impl Database {
             Err(ref s) if is_corrupted(s) => {
                 warn!("DB corrupted: {}, attempting repair", s);
                 DB::repair(opts.clone(), path).map_err(other_io_err)?;
-
-                if cfnames.is_empty() {
-                    DB::open(opts, path).map_err(other_io_err)?
-                } else {
-                    let db = DB::open_cf(opts, path, cf_options)
-                        .map_err(other_io_err)?;
-                    for name in cfnames {
-                        let _ = db.cf_handle(name).expect(
-                            "rocksdb opens a cf_handle for each cfname; qed",
-                        );
-                    }
-                    db
+                let db = DB::open_cf(opts, path, cf_options)
+                    .map_err(other_io_err)?;
+                for name in cfnames {
+                    let _ = db.cf_handle(name).expect(
+                        "rocksdb opens a cf_handle for each cfname; qed",
+                    );
                 }
+                db
             }
             Err(s) => return Err(other_io_err(s)),
         };
@@ -442,28 +440,16 @@ impl Database {
                         for (key, state) in column.iter() {
                             match *state {
                                 KeyState::Delete => {
-                                    if c > 0 {
-                                        let cf = cfs.get_cf(c - 1);
-                                        batch
-                                            .delete_cf(cf, key)
-                                            .map_err(other_io_err)?;
-                                    } else {
-                                        batch
-                                            .delete(key)
-                                            .map_err(other_io_err)?;
-                                    }
+                                    let cf = cfs.get_cf(c);
+                                    batch
+                                        .delete_cf(cf, key)
+                                        .map_err(other_io_err)?;
                                 }
                                 KeyState::Insert(ref value) => {
-                                    if c > 0 {
-                                        let cf = cfs.get_cf(c - 1);
-                                        batch
-                                            .put_cf(cf, key, value)
-                                            .map_err(other_io_err)?;
-                                    } else {
-                                        batch
-                                            .put(key, value)
-                                            .map_err(other_io_err)?;
-                                    }
+                                    let cf = cfs.get_cf(c);
+                                    batch
+                                        .put_cf(cf, key, value)
+                                        .map_err(other_io_err)?;
                                 }
                             }
                         }
@@ -742,11 +728,11 @@ mod tests {
         .unwrap();
 
         let mut batch = db.transaction();
-        batch.put(None, key1.as_bytes(), b"cat");
-        batch.put(None, key2.as_bytes(), b"dog");
+        batch.put(0, key1.as_bytes(), b"cat");
+        batch.put(0, key2.as_bytes(), b"dog");
         db.write(batch).unwrap();
 
-        assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"cat");
+        assert_eq!(&*db.get(0, key1.as_bytes()).unwrap().unwrap(), b"cat");
 
         // TODO implement iter
         //        let contents: Vec<_> = db.iter(None).collect();
@@ -757,24 +743,21 @@ mod tests {
         //        assert_eq!(&*contents[1].1, b"dog");
 
         let mut batch = db.transaction();
-        batch.delete(None, key1.as_bytes());
+        batch.delete(0, key1.as_bytes());
         db.write(batch).unwrap();
 
-        assert!(db.get(None, key1.as_bytes()).unwrap().is_none());
+        assert!(db.get(0, key1.as_bytes()).unwrap().is_none());
 
         let mut batch = db.transaction();
-        batch.put(None, key1.as_bytes(), b"cat");
+        batch.put(0, key1.as_bytes(), b"cat");
         db.write(batch).unwrap();
 
         let mut transaction = db.transaction();
-        transaction.put(None, key3.as_bytes(), b"elephant");
-        transaction.delete(None, key1.as_bytes());
+        transaction.put(0, key3.as_bytes(), b"elephant");
+        transaction.delete(0, key1.as_bytes());
         db.write(transaction).unwrap();
-        assert!(db.get(None, key1.as_bytes()).unwrap().is_none());
-        assert_eq!(
-            &*db.get(None, key3.as_bytes()).unwrap().unwrap(),
-            b"elephant"
-        );
+        assert!(db.get(0, key1.as_bytes()).unwrap().is_none());
+        assert_eq!(&*db.get(0, key3.as_bytes()).unwrap().unwrap(), b"elephant");
 
         // TODO Implement get_by_prefix
         //        assert_eq!(
@@ -785,15 +768,15 @@ mod tests {
         // b"dog");
 
         let mut transaction = db.transaction();
-        transaction.put(None, key1.as_bytes(), b"horse");
-        transaction.delete(None, key3.as_bytes());
+        transaction.put(0, key1.as_bytes(), b"horse");
+        transaction.delete(0, key3.as_bytes());
         db.write_buffered(transaction);
-        assert!(db.get(None, key3.as_bytes()).unwrap().is_none());
-        assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"horse");
+        assert!(db.get(0, key3.as_bytes()).unwrap().is_none());
+        assert_eq!(&*db.get(0, key1.as_bytes()).unwrap().unwrap(), b"horse");
 
         db.flush().unwrap();
-        assert!(db.get(None, key3.as_bytes()).unwrap().is_none());
-        assert_eq!(&*db.get(None, key1.as_bytes()).unwrap().unwrap(), b"horse");
+        assert!(db.get(0, key3.as_bytes()).unwrap().is_none());
+        assert_eq!(&*db.get(0, key1.as_bytes()).unwrap().unwrap(), b"horse");
     }
 
     #[test]
@@ -827,7 +810,7 @@ mod tests {
     #[test]
     fn add_columns() {
         let config = DatabaseConfig::default();
-        let config_5 = DatabaseConfig::with_columns(Some(5));
+        let config_5 = DatabaseConfig::with_columns(5);
 
         let tempdir = TempDir::new("").unwrap();
 
@@ -835,11 +818,11 @@ mod tests {
         {
             let db = Database::open(&config, tempdir.path().to_str().unwrap())
                 .unwrap();
-            assert_eq!(db.num_columns(), 0);
+            assert_eq!(db.num_columns(), 1);
 
-            for i in 0..5 {
+            for i in 0..4 {
                 db.add_column().unwrap();
-                assert_eq!(db.num_columns(), i + 1);
+                assert_eq!(db.num_columns(), i + 2);
             }
         }
 
@@ -855,7 +838,7 @@ mod tests {
     #[test]
     fn drop_columns() {
         let config = DatabaseConfig::default();
-        let config_5 = DatabaseConfig::with_columns(Some(5));
+        let config_5 = DatabaseConfig::with_columns(5);
 
         let tempdir = TempDir::new("").unwrap();
 
@@ -876,7 +859,7 @@ mod tests {
         {
             let db = Database::open(&config, tempdir.path().to_str().unwrap())
                 .unwrap();
-            assert_eq!(db.num_columns(), 0);
+            assert_eq!(db.num_columns(), 1);
         }
     }
 
@@ -888,13 +871,13 @@ mod tests {
             Database::open(&config, tempdir.path().to_str().unwrap()).unwrap();
 
         let mut batch = db.transaction();
-        batch.put(None, b"foo", b"bar");
+        batch.put(0, b"foo", b"bar");
         db.write_buffered(batch);
 
         let mut batch = db.transaction();
-        batch.put(None, b"foo", b"baz");
+        batch.put(0, b"foo", b"baz");
         db.write(batch).unwrap();
 
-        assert_eq!(db.get(None, b"foo").unwrap().unwrap().as_ref(), b"baz");
+        assert_eq!(db.get(0, b"foo").unwrap().unwrap(), b"baz");
     }
 }
