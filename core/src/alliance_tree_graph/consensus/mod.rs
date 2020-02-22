@@ -354,6 +354,7 @@ impl TreeGraphConsensus {
             inner,
             pivot_decision,
             callback,
+            inner.inner_conf.candidate_pivot_waiting_timeout_ms,
         )
     }
 

@@ -129,7 +129,7 @@ pub struct ConsensusGraphInner {
         HashMap<H256, NextSelectedPivotCallbackType>,
     pub new_candidate_pivot_waiting_map:
         HashMap<H256, NewCandidatePivotCallbackType>,
-    pub new_candidate_pivot_waiting_list: VecDeque<(H256, u64)>,
+    pub new_candidate_pivot_waiting_list: VecDeque<(H256, Instant)>,
     pub set_pivot_chain_callback: Option<(H256, SetPivotChainCallbackType)>,
 }
 
@@ -997,14 +997,11 @@ impl ConsensusGraphInner {
     }
 
     pub fn remove_expired_bft_execution(&mut self) {
-        let now = Instant::now().elapsed().as_millis() as u64;
         while let Some((hash, timestamp)) =
             self.new_candidate_pivot_waiting_list.pop_front()
         {
             if !self.new_candidate_pivot_waiting_map.contains_key(&hash)
-                || timestamp
-                    + self.inner_conf.candidate_pivot_waiting_timeout_ms
-                    < now
+                || timestamp < Instant::now()
             {
                 debug!(
                     "new_candidate_pivot_waiting timeout for block[{:?}]",

@@ -27,7 +27,7 @@ use primitives::{Block, BlockHeader};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 pub struct ConsensusNewBlockHandler {
@@ -408,7 +408,7 @@ impl ConsensusNewBlockHandler {
     pub fn on_new_candidate_pivot(
         &self, inner: &mut ConsensusGraphInner,
         pivot_decision: &PivotBlockDecision,
-        callback: NewCandidatePivotCallbackType,
+        callback: NewCandidatePivotCallbackType, timeout_millis: u64,
     ) -> bool
     {
         debug!(
@@ -426,10 +426,11 @@ impl ConsensusNewBlockHandler {
             inner
                 .new_candidate_pivot_waiting_map
                 .insert(pivot_decision.block_hash, callback);
-            inner.new_candidate_pivot_waiting_list.push_back((
-                pivot_decision.block_hash,
-                Instant::now().elapsed().as_millis() as u64,
-            ));
+            let timeout_time =
+                Instant::now() + Duration::from_millis(timeout_millis);
+            inner
+                .new_candidate_pivot_waiting_list
+                .push_back((pivot_decision.block_hash, timeout_time));
             false
         } else {
             callback

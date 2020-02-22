@@ -1445,7 +1445,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
         io.register_timer(
             EXPIRE_BFT_EXECUTION_TIMER,
-            Duration::from_millis(10_000),
+            Duration::from_millis(4_000),
         )
         .expect("Error registering log_statistics timer");
     }
@@ -1557,6 +1557,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.expire_block_gc(io, 30).ok();
             }
             EXPIRE_BFT_EXECUTION_TIMER => {
+                debug!("timeout: remove_expired_bft_execution");
                 self.remove_expired_bft_execution();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
