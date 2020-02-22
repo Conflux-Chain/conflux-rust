@@ -1389,7 +1389,6 @@ impl ConsensusNewBlockHandler {
             inner.pivot_index_to_height(old_pivot_chain_len);
         let new_pivot_era_block = inner.get_era_genesis_block_with_parent(
             *inner.pivot_chain.last().unwrap(),
-            0,
         );
         let new_era_height = inner.arena[new_pivot_era_block].height;
 
@@ -1501,7 +1500,7 @@ impl ConsensusNewBlockHandler {
         }
 
         let era_genesis_height =
-            inner.get_era_genesis_height(inner.arena[parent].height, 0);
+            inner.get_era_genesis_height(inner.arena[parent].height);
         let cur_pivot_era_block = if inner
             .pivot_index_to_height(inner.pivot_chain.len())
             > era_genesis_height
@@ -1510,7 +1509,7 @@ impl ConsensusNewBlockHandler {
         } else {
             NULL
         };
-        let era_block = inner.get_era_genesis_block_with_parent(parent, 0);
+        let era_block = inner.get_era_genesis_block_with_parent(parent);
 
         // If we are inserting header only, we will skip execution and
         // tx_pool-related operations

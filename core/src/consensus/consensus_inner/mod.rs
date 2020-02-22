@@ -681,14 +681,9 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_era_genesis_height(&self, parent_height: u64, offset: u64) -> u64 {
-        let era_genesis_height = if parent_height > offset {
-            (parent_height - offset) / self.inner_conf.era_epoch_count
-                * self.inner_conf.era_epoch_count
-        } else {
-            0
-        };
-        era_genesis_height
+    fn get_era_genesis_height(&self, parent_height: u64) -> u64 {
+        parent_height / self.inner_conf.era_epoch_count
+            * self.inner_conf.era_epoch_count
     }
 
     #[inline]
@@ -697,14 +692,12 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_era_genesis_block_with_parent(
-        &self, parent: usize, offset: u64,
-    ) -> usize {
+    fn get_era_genesis_block_with_parent(&self, parent: usize) -> usize {
         if parent == NULL {
             return 0;
         }
         let height = self.arena[parent].height;
-        let era_genesis_height = self.get_era_genesis_height(height, offset);
+        let era_genesis_height = self.get_era_genesis_height(height);
         trace!(
             "height={} era_height={} era_genesis_height={}",
             height,
@@ -1528,7 +1521,7 @@ impl ConsensusGraphInner {
             // own computation
             adaptive: block_header.adaptive(),
             parent,
-            era_block: self.get_era_genesis_block_with_parent(parent, 0),
+            era_block: self.get_era_genesis_block_with_parent(parent),
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
@@ -1550,7 +1543,7 @@ impl ConsensusGraphInner {
             self.get_ordered_executable_epoch_blocks(index).len();
 
         if parent != NULL {
-            let era_genesis = self.get_era_genesis_block_with_parent(parent, 0);
+            let era_genesis = self.get_era_genesis_block_with_parent(parent);
 
             let weight_era_in_my_epoch =
                 self.total_weight_in_own_epoch(&blockset, era_genesis);
