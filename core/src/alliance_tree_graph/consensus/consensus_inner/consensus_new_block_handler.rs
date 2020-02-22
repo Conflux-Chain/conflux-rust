@@ -152,6 +152,7 @@ impl ConsensusNewBlockHandler {
                 inner.hash_to_arena_indices.remove(&hash);
                 inner.terminal_hashes.remove(&hash);
                 inner.arena.remove(index);
+                inner.pastset.remove(index as u32);
                 // remove useless data in BlockDataManager
                 inner.data_man.remove_epoch_execution_commitment(&hash);
                 inner.data_man.remove_epoch_execution_context(&hash);
