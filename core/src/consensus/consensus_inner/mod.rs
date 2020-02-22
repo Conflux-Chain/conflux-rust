@@ -235,6 +235,11 @@ impl Default for ConsensusGraphPivotData {
 /// partial invalid. We can ignore them as well. Therefore *a* can be treated as
 /// a new genesis block. We are going to check the possibility of making
 /// checkpoints only at the era boundary.
+/// 
+/// Note that we have the assumption that the force confirmation point will
+/// always move along parental edges, i.e., it is not possible for the point
+/// to move to a sibling tree. This assumption is true if the timer_chain_beta
+/// and the timer_chain_difficulty_ratio are set to large enough values.
 
 /// [Introduction of blaming mechanism]
 ///
@@ -2688,6 +2693,12 @@ impl ConsensusGraphInner {
                         }
                         lca = self.lca(lca, self.timer_chain[j]);
                     }
+                    // Note that we have the assumption that the force confirmation point will
+                    // always move along parental edges, i.e., it is not possible for the point
+                    // to move to a sibling tree. This assumption is true if the timer_chain_beta
+                    // and the timer_chain_difficulty_ratio are set to large enough values.
+                    //
+                    // It is therefore safe here to use the height to compare.
                     if lca != NULL
                         && self.arena[last_lca].height < self.arena[lca].height
                     {
@@ -2754,6 +2765,12 @@ impl ConsensusGraphInner {
                     } else {
                         self.cur_era_genesis_block_arena_index
                     };
+                // Note that we have the assumption that the force confirmation point will
+                // always move along parental edges, i.e., it is not possible for the point
+                // to move to a sibling tree. This assumption is true if the timer_chain_beta
+                // and the timer_chain_difficulty_ratio are set to large enough values.
+                //
+                // It is therefore safe here to use the height to compare.
                 if lca != NULL
                     && self.arena[last_lca].height < self.arena[lca].height
                 {
