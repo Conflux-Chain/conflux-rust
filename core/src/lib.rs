@@ -8,7 +8,6 @@
 
 extern crate cfx_bytes as bytes;
 extern crate core;
-extern crate elastic_array;
 extern crate ethkey as keylib;
 extern crate io;
 extern crate keccak_hash as hash;

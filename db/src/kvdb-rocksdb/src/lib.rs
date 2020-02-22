@@ -26,11 +26,11 @@ use rocksdb::{
     Writable, WriteBatch, WriteOptions, DB,
 };
 
-use elastic_array::ElasticArray32;
 use fs_swap::{swap, swap_nonatomic};
-use kvdb::{DBOp, DBTransaction, DBValue, KeyValueDB};
+use kvdb::{DBKey, DBOp, DBTransaction, DBValue, KeyValueDB};
 use log::{debug, warn};
 
+use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
 #[cfg(target_os = "linux")]
 use regex::Regex;
 #[cfg(target_os = "linux")]
@@ -161,7 +161,7 @@ pub struct DatabaseConfig {
     /// Compaction profile
     pub compaction: CompactionProfile,
     /// Set number of columns
-    pub columns: Option<u32>,
+    pub columns: u32,
     /// Disable WAL if set to `true`
     pub disable_wal: bool,
 }
@@ -169,7 +169,7 @@ pub struct DatabaseConfig {
 impl DatabaseConfig {
     /// Create new `DatabaseConfig` with default parameters and specified set of
     /// columns. Note that cache sizes must be explicitly set.
-    pub fn with_columns(columns: Option<u32>) -> Self {
+    pub fn with_columns(columns: u32) -> Self {
         let mut config = Self::default();
         config.columns = columns;
         config
@@ -180,7 +180,7 @@ impl DatabaseConfig {
     }
 
     pub fn memory_budget_per_col(&self) -> usize {
-        self.memory_budget() / self.columns.unwrap_or(1) as usize
+        self.memory_budget() / self.columns as usize
     }
 
     pub fn memory_budget_mb(&self) -> usize {
@@ -194,7 +194,7 @@ impl Default for DatabaseConfig {
             max_open_files: 512,
             memory_budget: None,
             compaction: CompactionProfile::default(),
-            columns: None,
+            columns: 1,
             disable_wal: false,
         }
     }
@@ -241,9 +241,9 @@ pub struct Database {
     read_opts: Mutex<ReadOptions>,
     block_opts: Mutex<BlockBasedOptions>,
     // Dirty values added with `write_buffered`. Cleaned on `flush`.
-    overlay: RwLock<Vec<HashMap<ElasticArray32<u8>, KeyState>>>,
+    overlay: RwLock<Vec<HashMap<DBKey, KeyState>>>,
     // Values currently being flushed. Cleared when `flush` completes.
-    flushing: RwLock<Vec<HashMap<ElasticArray32<u8>, KeyState>>>,
+    flushing: RwLock<Vec<HashMap<DBKey, KeyState>>>,
     // Prevents concurrent flushes.
     // Value indicates if a flush is in progress.
     flushing_lock: Mutex<bool>,
@@ -322,7 +322,7 @@ impl Database {
             fs::remove_file(db_corrupted)?;
         }
 
-        let columns = config.columns.unwrap_or(0) as usize;
+        let columns = config.columns as usize;
 
         let mut cf_options = Vec::with_capacity(columns);
         let column_names: Vec<_> =
@@ -330,7 +330,7 @@ impl Database {
         let cfnames: Vec<&str> =
             column_names.iter().map(|n| n as &str).collect();
 
-        for i in 0..config.columns.unwrap_or(0) {
+        for i in 0..config.columns {
             cf_options
                 .push((cfnames[i as usize], col_config(&config, &block_opts)?));
         }
@@ -341,35 +341,31 @@ impl Database {
         read_opts.set_prefix_same_as_start(true);
         read_opts.set_verify_checksums(false);
 
-        let db = match config.columns {
-            Some(_) => {
-                match DB::open_cf(opts.clone(), path, cf_options.clone()) {
-                    Ok(db) => {
-                        for name in &cfnames {
-                            let _ = db.cf_handle(name).expect("rocksdb opens a cf_handle for each cfname; qed");
+        let db = match DB::open_cf(opts.clone(), path, cf_options.clone()) {
+            Ok(db) => {
+                for name in &cfnames {
+                    let _ = db.cf_handle(name).expect(
+                        "rocksdb opens a cf_handle for each cfname; qed",
+                    );
+                }
+                Ok(db)
+            }
+            Err(_) => {
+                // retry and create CFs
+                match DB::open_cf(
+                    opts.clone(),
+                    path,
+                    Vec::<(&str, ColumnFamilyOptions)>::new(),
+                ) {
+                    Ok(mut db) => {
+                        for cfd in &cf_options {
+                            db.create_cf(cfd.clone()).map_err(other_io_err)?;
                         }
                         Ok(db)
                     }
-                    Err(_) => {
-                        // retry and create CFs
-                        match DB::open_cf(
-                            opts.clone(),
-                            path,
-                            Vec::<(&str, ColumnFamilyOptions)>::new(),
-                        ) {
-                            Ok(mut db) => {
-                                for cfd in &cf_options {
-                                    db.create_cf(cfd.clone())
-                                        .map_err(other_io_err)?;
-                                }
-                                Ok(db)
-                            }
-                            err => err,
-                        }
-                    }
+                    err => err,
                 }
             }
-            None => DB::open(opts.clone(), path),
         };
 
         let db = match db {
@@ -414,10 +410,6 @@ impl Database {
     /// Helper to create new transaction for this database.
     pub fn transaction(&self) -> DBTransaction { DBTransaction::new() }
 
-    fn to_overlay_column(col: Option<u32>) -> usize {
-        col.map_or(0, |c| (c + 1) as usize)
-    }
-
     /// Commit transaction to database.
     pub fn write_buffered(&self, tr: DBTransaction) {
         let mut overlay = self.overlay.write();
@@ -425,12 +417,10 @@ impl Database {
         for op in ops {
             match op {
                 DBOp::Insert { col, key, value } => {
-                    let c = Self::to_overlay_column(col);
-                    overlay[c].insert(key, KeyState::Insert(value));
+                    overlay[col as usize].insert(key, KeyState::Insert(value));
                 }
                 DBOp::Delete { col, key } => {
-                    let c = Self::to_overlay_column(col);
-                    overlay[c].insert(key, KeyState::Delete);
+                    overlay[col as usize].insert(key, KeyState::Delete);
                 }
             }
         }
@@ -522,24 +512,15 @@ impl Database {
                 let ops = tr.ops;
                 for op in ops {
                     // remove any buffered operation for this key
-                    self.overlay.write()[Self::to_overlay_column(op.col())]
-                        .remove(op.key());
+                    self.overlay.write()[op.col() as usize].remove(op.key());
 
                     match op {
-                        DBOp::Insert { col, key, value } => match col {
-                            None => {
-                                batch.put(&key, &value).map_err(other_io_err)?
-                            }
-                            Some(c) => batch
-                                .put_cf(cfs.get_cf(c as usize), &key, &value)
-                                .map_err(other_io_err)?,
-                        },
-                        DBOp::Delete { col, key } => match col {
-                            None => batch.delete(&key).map_err(other_io_err)?,
-                            Some(c) => batch
-                                .delete_cf(cfs.get_cf(c as usize), &key)
-                                .map_err(other_io_err)?,
-                        },
+                        DBOp::Insert { col, key, value } => batch
+                            .put_cf(cfs.get_cf(col as usize), &key, &value)
+                            .map_err(other_io_err)?,
+                        DBOp::Delete { col, key } => batch
+                            .delete_cf(cfs.get_cf(col as usize), &key)
+                            .map_err(other_io_err)?,
                     }
                 }
 
@@ -553,54 +534,30 @@ impl Database {
     }
 
     /// Get value by key.
-    pub fn get(
-        &self, col: Option<u32>, key: &[u8],
-    ) -> io::Result<Option<DBValue>> {
+    pub fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<DBValue>> {
         match *self.db.read() {
             Some(ref cfs) => {
-                let overlay =
-                    &self.overlay.read()[Self::to_overlay_column(col)];
+                let overlay = &self.overlay.read()[col as usize];
                 match overlay.get(key) {
                     Some(&KeyState::Insert(ref value)) => {
                         Ok(Some(value.clone()))
                     }
                     Some(&KeyState::Delete) => Ok(None),
                     None => {
-                        let flushing =
-                            &self.flushing.read()[Self::to_overlay_column(col)];
+                        let flushing = &self.flushing.read()[col as usize];
                         match flushing.get(key) {
                             Some(&KeyState::Insert(ref value)) => {
                                 Ok(Some(value.clone()))
                             }
                             Some(&KeyState::Delete) => Ok(None),
-                            None => col
-                                .map_or_else(
-                                    || {
-                                        cfs.db
-                                            .get_opt(
-                                                key,
-                                                &*self.read_opts.lock(),
-                                            )
-                                            .map(|r| {
-                                                r.map(|v| {
-                                                    DBValue::from_slice(&v)
-                                                })
-                                            })
-                                    },
-                                    |c| {
-                                        cfs.db
-                                            .get_cf_opt(
-                                                cfs.get_cf(c as usize),
-                                                key,
-                                                &*self.read_opts.lock(),
-                                            )
-                                            .map(|r| {
-                                                r.map(|v| {
-                                                    DBValue::from_slice(&v)
-                                                })
-                                            })
-                                    },
+                            None => cfs
+                                .db
+                                .get_cf_opt(
+                                    cfs.get_cf(col as usize),
+                                    key,
+                                    &*self.read_opts.lock(),
                                 )
+                                .map(|r| r.map(|v| v.to_vec()))
                                 .map_err(other_io_err),
                         }
                     }
@@ -709,16 +666,20 @@ impl Database {
     }
 }
 
+// TODO Count db memory size in cache manager
+// Compatible hack for KeyValueDB
+impl MallocSizeOf for Database {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
+
 // duplicate declaration of methods here to avoid trait import in certain
 // existing cases at time of addition.
 impl KeyValueDB for Database {
-    fn get(&self, col: Option<u32>, key: &[u8]) -> io::Result<Option<DBValue>> {
+    fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<DBValue>> {
         Database::get(self, col, key)
     }
 
-    fn get_by_prefix(
-        &self, _col: Option<u32>, _prefix: &[u8],
-    ) -> Option<Box<[u8]>> {
+    fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
         unimplemented!()
     }
 
@@ -733,13 +694,13 @@ impl KeyValueDB for Database {
     fn flush(&self) -> io::Result<()> { Database::flush(self) }
 
     fn iter<'a>(
-        &'a self, _col: Option<u32>,
+        &'a self, _col: u32,
     ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
         unimplemented!()
     }
 
     fn iter_from_prefix<'a>(
-        &'a self, _col: Option<u32>, _prefix: &'a [u8],
+        &'a self, _col: u32, _prefix: &'a [u8],
     ) -> Box<dyn Iterator<Item = KeyValuePair> + 'a> {
         unimplemented!()
     }
