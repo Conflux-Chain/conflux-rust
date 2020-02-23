@@ -119,6 +119,7 @@ build_config! {
         (port, (Option<u16>), Some(32323))
 
         // Network parameters section.
+        (heartbeat_period_interval_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 60_000)
         (check_request_period_ms, (u64), 1000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
@@ -441,6 +442,9 @@ impl Configuration {
             ),
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
+            ),
+            heartbeat_period_interval: Duration::from_millis(
+                self.raw_conf.heartbeat_period_interval_ms,
             ),
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,

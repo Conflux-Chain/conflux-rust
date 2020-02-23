@@ -558,7 +558,8 @@ class TreeGraphTracing(ConfluxTestFramework):
             "dev_snapshot_epoch_count": 50,
             "era_checkpoint_gap": 100,
             "blocks_request_timeout_ms": 8000,
-            "headers_request_timeout_ms": 4000
+            "headers_request_timeout_ms": 4000,
+            "heartbeat_period_interval_ms": 4000 
         }
 
     def setup_nodes(self):

@@ -40,7 +40,7 @@ use rlp::Rlp;
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    sync::{self, Arc},
+    sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -253,6 +253,7 @@ pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,
     pub check_request_period: Duration,
+    pub heartbeat_period_interval: Duration,
     pub block_cache_gc_period: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
@@ -1427,8 +1428,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.protocol_config.check_request_period,
         )
         .expect("Error registering check request timer");
-        io.register_timer(HEARTBEAT_TIMER, Duration::from_secs(30))
-            .expect("Error registering heartbeat timer");
+        io.register_timer(
+            HEARTBEAT_TIMER,
+            self.protocol_config.heartbeat_period_interval,
+        )
+        .expect("Error registering heartbeat timer");
         io.register_timer(
             BLOCK_CACHE_GC_TIMER,
             self.protocol_config.block_cache_gc_period,

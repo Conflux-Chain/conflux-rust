@@ -6,7 +6,7 @@ use super::{
     counters,
     state_replication::StateComputer,
 };
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{ensure, Result};
 use cfx_types::H256;
 use libra_types::{
     crypto_proxies::{LedgerInfoWithSignatures, ValidatorChangeProof},
@@ -19,7 +19,7 @@ use crate::{
         consensus::SetPivotChainCallbackType,
         hsb_sync_protocol::sync_protocol::{PeerState, Peers},
     },
-    sync::{ErrorKind, SharedSynchronizationService},
+    sync::SharedSynchronizationService,
 };
 use futures::{channel::oneshot, executor::block_on};
 use libra_types::block_info::PivotBlockDecision;
@@ -101,18 +101,9 @@ impl StateComputer for ExecutionProxy {
             debug!("tg_sync.on_new_candidate_pivot");
             self.tg_sync
                 .on_new_candidate_pivot(p, peer_id, callback, ignore_db);
-            let response = block_on(async move { cb_receiver.await? });
-            debug!("on_new_candidate_pivot returned");
-            let valid_pivot_decision = match response {
-                Ok(res) => res,
-                Err(e) => match e.kind() {
-                    ErrorKind::RpcTimeout => {
-                        debug!("on_new_candidate_pivot timeout");
-                        return Err(anyhow!("VerifyPivotTimeout"));
-                    }
-                    _ => bail!("Error checking validity of pivot selection"),
-                },
-            };
+            let valid_pivot_decision =
+                block_on(async move { cb_receiver.await? })?;
+            debug!("on_new_candidate_pivot returned in time");
             ensure!(valid_pivot_decision, "Invalid pivot block proposal!");
         }
         // FIXME: Check whether new membership is valid.

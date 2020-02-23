@@ -21,7 +21,10 @@ use libra_crypto::HashValue;
 //use libra_logger::prelude::*;
 
 use super::super::super::super::executor::ProcessedVMOutput;
-use crate::alliance_tree_graph::bft::consensus::state_replication::StateComputer;
+use crate::alliance_tree_graph::{
+    bft::consensus::state_replication::StateComputer,
+    consensus::error::ConsensusError,
+};
 use futures::{channel::oneshot, executor::block_on};
 use libra_types::{
     block_info::PivotBlockDecision,
@@ -162,11 +165,13 @@ impl<T: Payload> BlockStore<T> {
                 }
 
                 let err = res.err().unwrap();
-                if err.to_string().contains("VerifyPivotTimeout") {
-                    debug!("Execute block {} timed out", block.id());
-                    continue;
+                match err.downcast_ref::<ConsensusError>() {
+                    Some(ConsensusError::VerifyPivotTimeout) => {
+                        debug!("Execute block {} timed out", block.id());
+                        continue;
+                    }
+                    _ => panic!("fail to rebuild scratchpad"),
                 }
-                panic!("fail to rebuild scratchpad");
             };
 
             // if this block is certified, ensure we agree with the

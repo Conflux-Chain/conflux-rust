@@ -8,15 +8,14 @@ pub mod consensus_new_block_handler;
 
 use crate::{
     alliance_tree_graph::consensus::{
-        NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
-        SetPivotChainCallbackType,
+        error::ConsensusError, NewCandidatePivotCallbackType,
+        NextSelectedPivotCallbackType, SetPivotChainCallbackType,
     },
     block_data_manager::{
         BlockDataManager, BlockExecutionResultWithEpoch, EpochExecutionContext,
     },
     parameters::consensus::*,
     pow::ProofOfWorkConfig,
-    sync::ErrorKind,
 };
 use candidate_pivot_tree::CandidatePivotTree;
 use cfx_types::H256;
@@ -986,7 +985,7 @@ impl ConsensusGraphInner {
                     self.new_candidate_pivot_waiting_map.remove(&hash)
                 {
                     callback
-                        .send(Err(ErrorKind::RpcTimeout.into()))
+                        .send(Err(ConsensusError::VerifyPivotTimeout.into()))
                         .expect("send new candidate pivot back should succeed");
                 }
             } else {

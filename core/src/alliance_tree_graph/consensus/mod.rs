@@ -4,6 +4,7 @@
 
 pub mod consensus_inner;
 mod debug;
+pub mod error;
 
 use super::consensus::consensus_inner::{
     consensus_executor::ConsensusExecutor,
@@ -44,7 +45,8 @@ use std::{any::Any, cmp::Reverse, collections::HashSet, sync::Arc};
 
 pub type NextSelectedPivotCallbackType =
     oneshot::Sender<Result<PivotBlockDecision, Error>>;
-pub type NewCandidatePivotCallbackType = oneshot::Sender<Result<bool, Error>>;
+pub type NewCandidatePivotCallbackType =
+    oneshot::Sender<Result<bool, anyhow::Error>>;
 pub type SetPivotChainCallbackType = oneshot::Sender<Result<(), Error>>;
 
 lazy_static! {

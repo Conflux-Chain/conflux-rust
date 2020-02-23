@@ -20,6 +20,7 @@ use libra_types::account_address::AccountAddress;
 use crate::{
     alliance_tree_graph::{
         bft::consensus::chained_bft::network::NetworkSender,
+        consensus::error::ConsensusError,
         hsb_sync_protocol::{
             message::block_retrieval_response::BlockRetrievalRpcResponse,
             sync_protocol::RpcResponse, HSB_PROTOCOL_ID,
@@ -176,14 +177,16 @@ impl<T: Payload> BlockStore<T> {
             let block_qc = block.quorum_cert().clone();
             self.insert_single_quorum_cert(block_qc)?;
             while let Err(e) = self.execute_and_insert_block(block.clone()) {
-                if e.to_string().contains("VerifyPivotTimeout") {
-                    debug!(
-                        "fetch_quorum_cert: Execute block {} timed out",
-                        block.id()
-                    );
-                    continue;
+                match e.downcast_ref::<ConsensusError>() {
+                    Some(ConsensusError::VerifyPivotTimeout) => {
+                        debug!(
+                            "fetch_quorum_cert: Execute block {} timed out",
+                            block.id()
+                        );
+                        continue;
+                    }
+                    _ => bail!("execute_and_insert_block Error"),
                 }
-                bail!("execute_and_insert_block Error");
             }
         }
         self.insert_single_quorum_cert(qc)
