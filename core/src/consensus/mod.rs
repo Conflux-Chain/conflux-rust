@@ -447,7 +447,7 @@ impl ConsensusGraph {
         }
     }
 
-    /// The the interest rate at an epoch
+    /// Get the interest rate at an epoch
     pub fn get_interest_rate(
         &self, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
@@ -459,7 +459,7 @@ impl ConsensusGraph {
         }
     }
 
-    /// The the accumulative interest rate at an epoch
+    /// Get the accumulative interest rate at an epoch
     pub fn get_accumulate_interest_rate(
         &self, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
