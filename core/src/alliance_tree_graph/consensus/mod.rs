@@ -380,6 +380,7 @@ impl TreeGraphConsensus {
         &self, block_hash: &H256, callback: SetPivotChainCallbackType,
     ) -> bool {
         let inner = &mut *self.inner.write();
+        assert!(inner.hash_to_arena_indices.contains_key(block_hash));
         self.new_block_handler
             .set_pivot_chain(inner, block_hash, callback)
     }
