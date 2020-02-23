@@ -1330,6 +1330,19 @@ impl ConsensusNewBlockHandler {
             inner.pivot_chain_metadata[pivot_index]
                 .last_pivot_in_past_blocks
                 .insert(me);
+            let blockset = inner
+                .exchange_or_compute_blockset_in_own_view_of_epoch(me, None);
+            inner.pivot_chain_metadata[pivot_index].past_weight =
+                inner.pivot_chain_metadata[pivot_index - 1].past_weight
+                    + inner.total_weight_in_own_epoch(
+                        &blockset,
+                        inner.cur_era_genesis_block_arena_index,
+                    )
+                    + inner.block_weight(me);
+            inner.exchange_or_compute_blockset_in_own_view_of_epoch(
+                me,
+                Some(blockset),
+            );
         }
 
         let mut succ_list = inner.arena[me].children.clone();

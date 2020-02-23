@@ -154,6 +154,7 @@ impl ConfirmationMeter {
     {
         // Compute w_1
         let idx = g_inner.get_pivot_block_arena_index(epoch_num);
+        let pivot_idx = g_inner.height_to_pivot_index(epoch_num);
         let w_1 = g_inner.block_weight(idx);
 
         // Compute w_2
@@ -173,8 +174,7 @@ impl ConfirmationMeter {
         let w_2 = max_weight;
 
         // Compute w_3
-        // FIXME: This was past_weight, we should revisit this later
-        let w_3 = g_inner.arena[idx].past_era_weight;
+        let w_3 = g_inner.pivot_chain_metadata[pivot_idx].past_weight;
 
         // Compute d
         let d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();

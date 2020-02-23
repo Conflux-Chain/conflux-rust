@@ -157,6 +157,9 @@ struct ConsensusGraphPivotData {
     /// The set of blocks whose last_pivot_in_past point to this pivot chain
     /// location
     last_pivot_in_past_blocks: HashSet<usize>,
+    /// The total weight of the past set of the pivot block. This value
+    /// is used by the confirmation meter.
+    past_weight: i128,
 }
 
 impl Default for ConsensusGraphPivotData {
@@ -449,7 +452,7 @@ pub struct ConsensusGraphNode {
     is_timer: bool,
     /// The total weight of its past set in the era (exclude itself)
     past_num_blocks: u64,
-    /// The total weight of its past set in its own era
+    /// The total weight of its past set in its own era (exclude itself)
     past_era_weight: i128,
     adaptive: bool,
 
@@ -583,6 +586,7 @@ impl ConsensusGraphInner {
             .insert(inner.cur_era_genesis_block_arena_index);
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
+            past_weight: genesis_block_weight as i128,
         });
         if inner.arena[inner.cur_era_genesis_block_arena_index].is_timer {
             inner
@@ -2527,6 +2531,26 @@ impl ConsensusGraphInner {
             self.pivot_chain_metadata[i_pivot_index]
                 .last_pivot_in_past_blocks
                 .insert(me);
+            self.pivot_chain_metadata[i_pivot_index].past_weight =
+                if i_pivot_index > 0 {
+                    let blockset = self
+                        .exchange_or_compute_blockset_in_own_view_of_epoch(
+                            me, None,
+                        );
+                    let blockset_weight = self.total_weight_in_own_epoch(
+                        &blockset,
+                        self.cur_era_genesis_block_arena_index,
+                    );
+                    self.exchange_or_compute_blockset_in_own_view_of_epoch(
+                        me,
+                        Some(blockset),
+                    );
+                    self.pivot_chain_metadata[i_pivot_index - 1].past_weight
+                        + blockset_weight
+                        + self.block_weight(me)
+                } else {
+                    self.block_weight(me)
+                };
             to_update.remove(&me);
         }
         let mut stack = Vec::new();
