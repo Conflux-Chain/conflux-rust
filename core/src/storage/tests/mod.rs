@@ -80,6 +80,7 @@ impl FakeStateManager {
                     consensus_param: ConsensusParam {
                         snapshot_epoch_count: 10_000_000,
                     },
+                    debug_snapshot_checker_threads: 0,
                     delta_mpts_cache_recent_lfu_factor: 4.0,
                     delta_mpts_cache_size: 20_000_000,
                     delta_mpts_cache_start_size: 1_000_000,

@@ -1599,7 +1599,7 @@ impl TxReplayer {
     const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
 
     pub fn new(
-        conflux_data_dir: &str, reset_db: bool,
+        conflux_data_dir: &str, reset_db: bool, debug_snapshot_integrity: bool,
     ) -> errors::Result<TxReplayer> {
         if reset_db {
             match fs::remove_dir_all(conflux_data_dir) {
@@ -1612,6 +1612,10 @@ impl TxReplayer {
         let mut storage_configuration = StorageConfiguration::new_default(
             conflux_data_dir.to_string() + "/",
         );
+        // Check data-integrity for snapshot mpt with 4 threads.
+        if debug_snapshot_integrity {
+            storage_configuration.debug_snapshot_checker_threads = 4;
+        }
         storage_configuration.consensus_param.snapshot_epoch_count =
             Self::SNAPSHOT_EPOCHS_CAPACITY;
         let storage_manager =
@@ -1839,6 +1843,7 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
     let tx_replayer = TxReplayer::new(
         matches.value_of("conflux_data_dir").unwrap(),
         matches.occurrences_of("reset_db") > 0,
+        matches.occurrences_of("debug_check_snapshot_integrity") > 0,
     )?;
 
     let txs_to_process = match matches.value_of("txs_to_process") {
