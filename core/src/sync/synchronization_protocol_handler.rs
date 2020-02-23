@@ -557,7 +557,10 @@ impl SynchronizationProtocolHandler {
 
                 let to_request = terminals
                     .difference(&requested)
-                    .filter(|h| !self.graph.contains_block_header(&h))
+                    .filter(|h| {
+                        // Request never-seen blocks
+                        self.graph.data_man.block_header_by_hash(*h).is_none()
+                    })
                     .cloned()
                     .collect::<Vec<H256>>();
 

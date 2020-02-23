@@ -15,17 +15,15 @@ cfx-stratum = { path = "../blockgen/stratum" }
 cfx-types = { path = "../cfx_types" }
 clap = "2"
 db = { path = "../db" }
-elastic-array = "0.10"
 ethkey = { path = "../accounts/ethkey" }
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
 futures = {version="0.3.3", features = ["compat"]}
-heapsize = "0.4"
 hibitset = { path = "../util/hibitset" }
 io = { path = "../util/io" }
-keccak-hash = "0.3.0"
-kvdb = "0.1.1"
+keccak-hash = "0.4"
+kvdb = "0.4"
 kvdb-rocksdb = {path="../db/src/kvdb-rocksdb"}
 lazy_static = "1.1.0"
 link-cut-tree = { path = "../util/link-cut-tree" }
@@ -37,7 +35,7 @@ lru_time_cache = "0.9.0"
 malloc_size_of = {path = "../util/malloc_size_of"}
 malloc_size_of_derive = {path = "../util/malloc_size_of_derive"}
 memoffset = "0.5.1"
-memory-cache = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+memory-cache = { path = "../util/memory-cache" }
 metrics = { path = "../util/metrics" }
 network = { path = "../network" }
 num = "0.2"
@@ -48,7 +46,7 @@ primitives = { path = "../primitives", optional = true }
 priority-send-queue = { path = "../util/priority-send-queue" }
 rand = "0.7"
 rand_chacha="0.2.1"
-rand_xorshift="0.2.0"
+rand_xorshift="0.2"
 rayon = "1.0"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
@@ -73,6 +71,10 @@ tokio = { version = "0.2.11", features = ["sync"] }
 criterion = "0.2"
 primitives = { path = "../primitives", features = ["test_no_account_length_check"] }
 tokio = { version = "0.2.11", features = ["time"] }
+
+[dependencies.parity-util-mem]
+version = "0.5"
+default-features = false
 
 [features]
 default = ["primitives"]

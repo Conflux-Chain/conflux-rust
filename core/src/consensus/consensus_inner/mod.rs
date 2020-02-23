@@ -281,7 +281,7 @@ impl Default for ConsensusGraphPivotData {
 /// always move along parental edges, i.e., it is not possible for the point
 /// to move to a sibling tree. This assumption is true if the timer_chain_beta
 /// and the timer_chain_difficulty_ratio are set to large enough values.
-
+///
 /// # Introduction of blaming mechanism
 ///
 /// Blaming is used to provide proof for state root of a specific pivot block.
@@ -2492,6 +2492,7 @@ impl ConsensusGraphInner {
 
     /// Compute the total weight in the epoch represented by the block of
     /// my_hash.
+    /// FIXME: check inclusive parameter and its usage
     fn total_weight_in_own_epoch(
         &self, blockset_in_own_epoch: &Vec<usize>, genesis: usize,
     ) -> i128 {
