@@ -11,7 +11,7 @@ use parking_lot::RwLock;
 use std::{cmp::min, collections::VecDeque, convert::TryFrom};
 
 pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
-pub const MAX_NUM_MAINTAINED_RISK: usize = 10;
+pub const MAX_NUM_MAINTAINED_RISK: usize = 100;
 
 pub struct TotalWeightInPastMovingDelta {
     pub old: i128,
@@ -155,18 +155,18 @@ impl ConfirmationMeter {
         // Compute w_1
         let idx = g_inner.get_pivot_block_arena_index(epoch_num);
         let pivot_idx = g_inner.height_to_pivot_index(epoch_num);
-        let w_1 = g_inner.block_weight(idx);
+        let w_1 = g_inner.weight_tree.get(idx);
 
         // Compute w_2
         let parent = g_inner.arena[idx].parent;
         assert!(parent != NULL);
         let mut max_weight = 0;
         for child in g_inner.arena[parent].children.iter() {
-            if *child == idx || g_inner.arena[*child].data.partial_invalid {
+            if *child == idx {
                 continue;
             }
 
-            let child_weight = g_inner.block_weight(*child);
+            let child_weight = g_inner.weight_tree.get(*child);
             if child_weight > max_weight {
                 max_weight = child_weight;
             }
@@ -189,6 +189,8 @@ impl ConfirmationMeter {
         let m = if w_0 >= w_3 { w_0 - w_3 } else { 0 };
 
         let m = m / d;
+
+        // debug!("Confirmation Risk: m {} n {} w_0 {}, w_1 {}, w_2 {}, w_3 {}, w_4 {}, epoch_num {} genesis {}", m, n, w_0, w_1, w_2, w_3, w_4, epoch_num, g_inner.cur_era_genesis_block_arena_index);
 
         // Compute risk
         let m_2 = 2i128 * m;
@@ -232,12 +234,12 @@ impl ConfirmationMeter {
             {
                 let w_4 = self.get_total_weight_in_past();
                 let risk = self.confirmation_risk(g_inner, w_0, w_4, epoch_num);
-                if risk <= MIN_MAINTAINED_RISK {
-                    break;
-                }
                 risks.push_front(risk);
                 epoch_num -= 1;
                 count += 1;
+                if risk <= MIN_MAINTAINED_RISK {
+                    break;
+                }
             }
 
             if risks.is_empty() {
@@ -247,6 +249,7 @@ impl ConfirmationMeter {
             }
 
             let mut finality = &mut self.inner.write().finality_manager;
+            debug!("Confirmation Risk: {:?}", risks);
             finality.lowest_epoch_num = epoch_num;
             finality.risks_less_than = risks;
         }

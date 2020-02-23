@@ -166,7 +166,7 @@ impl Default for ConsensusGraphPivotData {
     fn default() -> Self {
         ConsensusGraphPivotData {
             last_pivot_in_past_blocks: HashSet::new(),
-            past_weight: 0
+            past_weight: 0,
         }
     }
 }
@@ -791,9 +791,13 @@ impl ConsensusGraphInner {
                 }
             }
         }
+        debug!("BLOCKSET {:?}", self.arena[pivot].data.blockset_in_own_view_of_epoch);
     }
 
     fn compute_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
+        if !self.arena[pivot].data.blockset_cleared {
+            return;
+        }
         // TODO: consider the speed for recovery from db
         let parent = self.arena[pivot].parent;
         if parent != NULL {

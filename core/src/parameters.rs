@@ -50,14 +50,14 @@ pub mod consensus_internal {
     /// This is the number seconds per year
     pub const SECONDS_PER_YEAR: u64 = 60 * 60 * 24 * 365;
 
-    // This is the cap of the size of the anticone barrier. If we have more than
-    // this number we will use the brute_force O(n) algorithm instead.
+    /// This is the cap of the size of the anticone barrier. If we have more than
+    /// this number we will use the brute_force O(n) algorithm instead.
     pub const ANTICONE_BARRIER_CAP: usize = 1000;
-    // Here is the delay for us to recycle those orphaned blocks in the boundary
-    // of eras.
+    /// Here is the delay for us to recycle those orphaned blocks in the boundary
+    /// of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
-    // This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
-    // have more than this number, we will not store it in memory
+    /// This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
+    /// have more than this number, we will not store it in memory
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 }
 
@@ -90,6 +90,11 @@ pub mod sync {
     /// LOCAL_BLOCK_INFO_QUERY_THRESHOLD, we can request block directly through
     /// network, otherwise we should check disk first.
     pub const LOCAL_BLOCK_INFO_QUERY_THRESHOLD: u64 = 5;
+
+    /// Measured block propagation delay. This will determine the conservative
+    /// window when we measure confirmation risk internally in the consensus
+    /// layer.
+    pub const BLOCK_PROPAGATION_DELAY: u64 = 10;
 
     // The waiting time duration that will be accumulated for resending a
     // timeout request.
