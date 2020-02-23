@@ -578,8 +578,6 @@ impl State {
     fn do_db_commit(
         &mut self, epoch_id: EpochId, merkle_root: &MerkleHash,
     ) -> Result<()> {
-        self.dirty = false;
-
         let maybe_existing_merkle_root =
             self.delta_trie.get_merkle_root_by_epoch_id(&epoch_id)?;
         if maybe_existing_merkle_root.is_some() {
@@ -596,6 +594,7 @@ impl State {
                 Some(*merkle_root),
                 "Overwriting computed state with a different merkle root."
             );
+            self.revert();
             return Ok(());
         }
 
@@ -712,6 +711,8 @@ impl State {
             self.parent_epoch_id,
             self.delta_trie_root.clone(),
         );
+
+        self.dirty = false;
 
         Ok(())
     }
