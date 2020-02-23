@@ -27,6 +27,7 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
+use libra_types::crypto_proxies::ValidatorVerifier;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
     throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
@@ -39,7 +40,7 @@ use rlp::Rlp;
 use std::{
     cmp,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    sync::Arc,
+    sync::{self, Arc},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -285,6 +286,7 @@ impl SynchronizationProtocolHandler {
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(
+            protocol_config.is_consortium,
             is_full_node,
             protocol_config.dev_mode,
         ));
@@ -325,6 +327,11 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
+
+    pub fn update_validator_info(&self, validators: &ValidatorVerifier) {
+        assert!(self.is_consortium());
+        self.syn.update_validator_info(validators)
+    }
 
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
         self.graph.get_to_propagate_trans()

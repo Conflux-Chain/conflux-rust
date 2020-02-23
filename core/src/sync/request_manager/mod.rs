@@ -231,7 +231,7 @@ impl RequestManager {
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
-        debug!("request_block_headers: {:?}", hashes);
+        debug!("request_block_headers: {:?}, peer {:?}", hashes, &peer_id);
 
         let request = GetBlockHeaders {
             request_id: 0,

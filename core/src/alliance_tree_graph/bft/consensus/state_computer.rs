@@ -122,6 +122,7 @@ impl StateComputer for ExecutionProxy {
     fn recover_tree_graph_from_pivot_block(
         &self, block_hash: &H256, callback: SetPivotChainCallbackType,
     ) {
+        debug!("recover_tree_graph_from_pivot_block: {:?}", block_hash);
         self.tg_sync.set_pivot_chain(block_hash, callback);
     }
 

@@ -169,8 +169,12 @@ impl SynchronizationGraphInner {
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
         };
+        let genesis_hash = genesis_header.hash();
         let genesis_block_index = inner.insert(genesis_header);
-        debug!("genesis_block_index in sync graph: {}", genesis_block_index);
+        debug!(
+            "genesis block {:?} has index {} in sync graph",
+            genesis_hash, genesis_block_index
+        );
 
         inner.old_era_blocks_frontier.push_back(genesis_block_index);
         inner

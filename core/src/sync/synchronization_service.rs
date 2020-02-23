@@ -19,7 +19,9 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use libra_types::block_info::PivotBlockDecision;
+use libra_types::{
+    block_info::PivotBlockDecision, crypto_proxies::ValidatorVerifier,
+};
 use network::{NetworkService, PeerId, ProtocolId};
 use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
@@ -55,6 +57,10 @@ impl SynchronizationService {
             protocol_handler: sync_handler,
             protocol: *b"cfx",
         }
+    }
+
+    pub fn update_validator_info(&self, validators: &ValidatorVerifier) {
+        self.protocol_handler.update_validator_info(validators)
     }
 
     pub fn catch_up_mode(&self) -> bool {

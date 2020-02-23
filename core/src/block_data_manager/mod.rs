@@ -265,6 +265,11 @@ impl BlockDataManager {
                 }
             };
 
+        debug!(
+            "BlockDataManager::new() cur_era_genesis_hash: {:?}",
+            &cur_era_genesis_hash
+        );
+
         if cur_era_genesis_hash == data_man.true_genesis.hash() {
             // Only insert block body for true genesis
             data_man.insert_block(

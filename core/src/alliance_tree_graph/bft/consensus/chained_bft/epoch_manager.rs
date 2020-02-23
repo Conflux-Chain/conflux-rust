@@ -214,6 +214,7 @@ where
     ) -> EventProcessor<TT, T>
     {
         let validators = initial_data.validators();
+        self.tg_sync.update_validator_info(validators.as_ref());
         let epoch = self.epoch();
         counters::EPOCH.set(epoch as i64);
         counters::CURRENT_EPOCH_VALIDATORS.set(validators.len() as i64);
