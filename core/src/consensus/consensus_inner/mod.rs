@@ -791,10 +791,10 @@ impl ConsensusGraphInner {
                 }
             }
         }
-        debug!(
-            "BLOCKSET {:?}",
-            self.arena[pivot].data.blockset_in_own_view_of_epoch
-        );
+        //        debug!(
+        //            "BLOCKSET {:?}",
+        //            self.arena[pivot].data.blockset_in_own_view_of_epoch
+        //        );
     }
 
     fn compute_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
