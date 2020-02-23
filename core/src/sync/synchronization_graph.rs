@@ -1178,7 +1178,7 @@ impl SynchronizationGraph {
         );
 
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        if !header_only {
+        if !header_only && !self.is_consortium() {
             // Rebuild pivot chain state info.
             self.consensus.construct_pivot_state();
         }

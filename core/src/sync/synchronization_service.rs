@@ -167,6 +167,7 @@ impl SynchronizationService {
         &self, block_hash: &H256, callback: SetPivotChainCallbackType,
     ) {
         let sync_graph = self.get_synchronization_graph();
+        sync_graph.recover_graph_from_db(false /* header_only */);
         let tg_consensus = sync_graph
             .consensus
             .as_any()
