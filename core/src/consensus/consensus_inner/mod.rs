@@ -166,6 +166,7 @@ impl Default for ConsensusGraphPivotData {
     fn default() -> Self {
         ConsensusGraphPivotData {
             last_pivot_in_past_blocks: HashSet::new(),
+            past_weight: 0
         }
     }
 }
