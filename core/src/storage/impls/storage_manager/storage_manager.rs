@@ -377,10 +377,10 @@ impl StorageManager {
     ) -> Result<()>
     {
         let this_cloned = this.clone();
-        let mut in_progress_snapshoting_tasks =
+        let mut in_progress_snapshotting_tasks =
             this_cloned.in_progress_snapshotting_tasks.write();
 
-        if !in_progress_snapshoting_tasks.contains_key(&snapshot_epoch_id)
+        if !in_progress_snapshotting_tasks.contains_key(&snapshot_epoch_id)
             && !this
                 .snapshot_info_map_by_epoch
                 .read()
@@ -493,7 +493,7 @@ impl StorageManager {
                 task_result
             })?;
 
-            in_progress_snapshoting_tasks.insert(
+            in_progress_snapshotting_tasks.insert(
                 snapshot_epoch_id,
                 Arc::new(RwLock::new(InProgressSnapshotTask {
                     snapshot_info: in_progress_snapshot_info,
@@ -870,20 +870,25 @@ impl StorageManager {
             .map(Clone::clone)
     }
 
-    /// FIXME Enable later.
     pub fn log_usage(&self) {
-        // FIXME: log usage for all delta mpt.
-        // Log the usage of the delta mpt for the first snapshot.
-        // FIXME: due to initialization problems the delta mpt may not be
-        // available?
-        //        self.snapshot_associated_mpts_by_epoch
-        //            .read()
-        //            .get(&NULL_EPOCH)
-        //            .unwrap()
-        //            .1
-        //            .as_ref()
-        //            .unwrap()
-        //            .log_usage();
+        let mut delta_mpts = HashMap::new();
+        for (_snapshot_epoch_id, associated_delta_mpts) in
+            &*self.snapshot_associated_mpts_by_epoch.read()
+        {
+            if let Some(delta_mpt) = associated_delta_mpts.0.as_ref() {
+                delta_mpts.insert(delta_mpt.get_mpt_id(), delta_mpt.clone());
+            }
+            if let Some(delta_mpt) = associated_delta_mpts.1.as_ref() {
+                delta_mpts.insert(delta_mpt.get_mpt_id(), delta_mpt.clone());
+            }
+        }
+        if let Some((_mpt_id, delta_mpt)) = delta_mpts.iter().next() {
+            delta_mpt.log_usage();
+
+            // Now delta_mpt calls log_usage of the singleton
+            // node_memory_manager, so there is no need to log_usage
+            // on second delta_mpt.
+        }
     }
 
     pub fn load_persist_state(&self) -> Result<()> {
