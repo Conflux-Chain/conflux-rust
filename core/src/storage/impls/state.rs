@@ -225,6 +225,8 @@ impl Drop for State {
 
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+        self.ensure_temp_slab_for_db_load();
+
         self.get_from_all_tries(access_key, false)
             .map(|(value, _)| value)
     }
@@ -232,6 +234,8 @@ impl StateTrait for State {
     fn get_with_proof(
         &self, access_key: StorageKey,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        self.ensure_temp_slab_for_db_load();
+
         self.get_from_all_tries(access_key, true)
     }
 
@@ -427,16 +431,22 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
+        self.ensure_temp_slab_for_db_load();
+
         let merkle_root = self.compute_merkle_root()?;
         Ok(self.state_root(merkle_root))
     }
 
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
+        self.ensure_temp_slab_for_db_load();
+
         Ok(self.state_root(self.state_root_check()?))
     }
 
     // TODO(yz): replace coarse lock with a queue.
     fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
+        self.ensure_temp_slab_for_db_load();
+
         let merkle_root = self.state_root_check()?;
 
         // TODO(yz): Think about leaving these node dirty and only commit when
@@ -498,6 +508,10 @@ impl StateTrait for State {
 }
 
 impl State {
+    fn ensure_temp_slab_for_db_load(&self) {
+        self.delta_trie.get_node_memory_manager().enlarge().ok();
+    }
+
     fn pre_modification(&mut self) {
         if !self.dirty {
             self.dirty = true

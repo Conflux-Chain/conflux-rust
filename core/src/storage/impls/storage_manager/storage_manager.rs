@@ -377,10 +377,10 @@ impl StorageManager {
     ) -> Result<()>
     {
         let this_cloned = this.clone();
-        let mut in_progress_snapshoting_tasks =
+        let mut in_progress_snapshotting_tasks =
             this_cloned.in_progress_snapshotting_tasks.write();
 
-        if !in_progress_snapshoting_tasks.contains_key(&snapshot_epoch_id)
+        if !in_progress_snapshotting_tasks.contains_key(&snapshot_epoch_id)
             && !this
                 .snapshot_info_map_by_epoch
                 .read()
@@ -493,7 +493,7 @@ impl StorageManager {
                 task_result
             })?;
 
-            in_progress_snapshoting_tasks.insert(
+            in_progress_snapshotting_tasks.insert(
                 snapshot_epoch_id,
                 Arc::new(RwLock::new(InProgressSnapshotTask {
                     snapshot_info: in_progress_snapshot_info,
