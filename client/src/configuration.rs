@@ -83,14 +83,11 @@ build_config! {
         (rocksdb_disable_wal, (bool), false)
 
         // Genesis section.
-        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
-        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
-        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
@@ -135,6 +132,8 @@ build_config! {
         (snapshot_candidate_request_timeout_ms, (u64), 30_000)
         (snapshot_chunk_request_timeout_ms, (u64), 30_000)
         (snapshot_manifest_request_timeout_ms, (u64), 30_000)
+        (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
+        (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (throttling_conf, (Option<String>), None)
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
@@ -320,18 +319,15 @@ impl Configuration {
                 .debug_dump_dir_invalid_state_root
                 .clone(),
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: self
-                    .raw_conf
-                    .adaptive_weight_alpha_num,
-                adaptive_weight_alpha_den: self
-                    .raw_conf
-                    .adaptive_weight_alpha_den,
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
                     .raw_conf
                     .heavy_block_difficulty_ratio,
+                timer_chain_block_difficulty_ratio: self
+                    .raw_conf
+                    .timer_chain_block_difficulty_ratio,
+                timer_chain_beta: self.raw_conf.timer_chain_beta,
                 era_epoch_count: self.raw_conf.era_epoch_count,
-                era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
             },

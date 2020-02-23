@@ -3,9 +3,7 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
-    parameters::{
-        consensus::ERA_DEFAULT_CHECKPOINT_GAP, WORKER_COMPUTATION_PARALLELISM,
-    },
+    parameters::WORKER_COMPUTATION_PARALLELISM,
     pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
@@ -24,7 +22,7 @@ use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
-    diff: U256, block_weight: u32,
+    diff: U256, block_weight: u32, adaptive: bool,
 ) -> (H256, Block)
 {
     let mut b = BlockHeaderBuilder::new();
@@ -34,6 +32,7 @@ pub fn create_simple_block_impl(
         .with_referee_hashes(ref_hashes)
         .with_nonce(nonce)
         .with_difficulty(diff)
+        .with_adaptive(adaptive)
         .build();
     header.compute_hash();
     header.pow_quality = if block_weight > 1 {
@@ -47,11 +46,11 @@ pub fn create_simple_block_impl(
 
 pub fn create_simple_block(
     sync: Arc<SynchronizationGraph>, parent_hash: H256, ref_hashes: Vec<H256>,
-    block_weight: u32,
+    height: u64, block_weight: u32, adaptive: bool,
 ) -> (H256, Block)
 {
     //    sync.consensus.wait_for_generation(&parent_hash);
-    let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
+    // let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
     //    let exp_diff = sync.expected_difficulty(&parent_hash);
     //    assert!(
     //        exp_diff == U256::from(10),
@@ -64,19 +63,17 @@ pub fn create_simple_block(
     create_simple_block_impl(
         parent_hash,
         ref_hashes,
-        parent_header.height() + 1,
+        height,
         nonce,
         exp_diff,
         block_weight,
+        adaptive,
     )
 }
 
-/// This method is only used in tests and benchmarks.
-pub fn initialize_synchronization_graph(
-    db_dir: &str, alpha_den: u64, alpha_num: u64, beta: u64, h: u64,
-    era_epoch_count: u64, dbtype: DbType,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>, Arc<Block>)
-{
+pub fn initialize_data_manager(
+    db_dir: &str, dbtype: DbType,
+) -> (Arc<BlockDataManager>, Arc<Block>) {
     let ledger_db = db::open_database(
         db_dir,
         &db::db_config(
@@ -128,7 +125,14 @@ pub fn initialize_synchronization_graph(
             dbtype,
         ),
     ));
+    (data_man, genesis_block)
+}
 
+pub fn initialize_synchronization_graph_with_data_manager(
+    data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
+    era_epoch_count: u64,
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
+{
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),
         data_man.clone(),
@@ -153,12 +157,11 @@ pub fn initialize_synchronization_graph(
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: alpha_num,
-                adaptive_weight_alpha_den: alpha_den,
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
+                timer_chain_block_difficulty_ratio: tcr,
+                timer_chain_beta: tcb,
                 era_epoch_count,
-                era_checkpoint_gap: ERA_DEFAULT_CHECKPOINT_GAP,
                 enable_optimistic_execution: false,
                 enable_state_expose: false,
             },
@@ -182,5 +185,30 @@ pub fn initialize_synchronization_graph(
         false,
     ));
 
-    (sync, consensus, genesis_block)
+    (sync, consensus)
+}
+
+/// This method is only used in tests and benchmarks.
+pub fn initialize_synchronization_graph(
+    db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
+    dbtype: DbType,
+) -> (
+    Arc<SynchronizationGraph>,
+    Arc<ConsensusGraph>,
+    Arc<BlockDataManager>,
+    Arc<Block>,
+)
+{
+    let (data_man, genesis_block) = initialize_data_manager(db_dir, dbtype);
+
+    let (sync, consensus) = initialize_synchronization_graph_with_data_manager(
+        data_man.clone(),
+        beta,
+        h,
+        tcr,
+        tcb,
+        era_epoch_count,
+    );
+
+    (sync, consensus, data_man, genesis_block)
 }

@@ -17,8 +17,10 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.num_nodes = 3
         self.conf_parameters = {
             "dev_snapshot_epoch_count": "10",
+            "adaptive_weight_beta": "1",
+            "timer_chain_block_difficulty_ratio": "2",
+            "timer_chain_beta": "6",
             "era_epoch_count": "50",
-            "era_checkpoint_gap": "50",
             "chunk_size_byte": "1000",
             "log_level": '"debug"',
         }
@@ -42,7 +44,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
     def run_test(self):
         num_blocks = 200
-        snapshot_epoch = 100
+        snapshot_epoch = 150
 
         # Generate checkpoint on node[0]
         archive_node_client = RpcClient(self.nodes[0])

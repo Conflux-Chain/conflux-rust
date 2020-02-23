@@ -425,6 +425,11 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             let (cur_era_genesis_hash, cur_era_genesis_height) =
                 old_sync_inner.get_genesis_hash_and_height_in_current_era();
 
+            let (cur_era_stable_hash, cur_era_stable_height) =
+                old_sync_inner.get_stable_hash_and_height_in_current_era();
+
+            debug!("Build new consensus graph for sync-recovery with identified genesis {} height {} stable block {} height {}", cur_era_genesis_hash, cur_era_genesis_height, cur_era_stable_hash, cur_era_stable_height);
+
             // TODO: Make sure that the checkpoint will not change between the
             // end of CatchUpCheckpointPhase and the start of
             // CatchUpRecoverBlockFromDbPhase.
@@ -434,6 +439,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 self.graph.data_man.clone(),
                 old_consensus_inner.inner_conf.clone(),
                 &cur_era_genesis_hash,
+                &cur_era_stable_hash,
             );
             // For archive node, this will be `None`.
             // For full node, this is `None` when the state of checkpoint is
@@ -500,19 +506,14 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                     }
                 }
             } else {
-                let cur_era_stable_height = if cur_era_genesis_height == 0 {
-                    0
-                } else {
-                    cur_era_genesis_height
-                        + new_consensus_inner.inner_conf.era_epoch_count
-                };
-                let stable_epoch_set = self
+                let cur_era_stable_hash =
+                    self.graph.data_man.get_cur_consensus_era_stable_hash();
+                let cur_era_stable_height = self
                     .graph
                     .data_man
-                    .epoch_set_hashes_from_db(cur_era_stable_height)
-                    .expect("epoch set for stable must exist");
-                let cur_era_stable_hash =
-                    *stable_epoch_set.last().expect("nonempty");
+                    .block_header_by_hash(&cur_era_stable_hash)
+                    .expect("stable era block header must exist")
+                    .height();
                 *self.graph.data_man.state_availability_boundary.write() =
                     StateAvailabilityBoundary::new(
                         cur_era_stable_hash,
