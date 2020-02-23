@@ -1205,8 +1205,8 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
-    fn update_total_weight_in_past(&self) {
-        self.graph.update_total_weight_in_past();
+    fn update_total_weight_delta_heartbeat(&self) {
+        self.graph.update_total_weight_delta_heartbeat();
     }
 
     pub fn update_sync_phase(&self, io: &dyn NetworkContext) {
@@ -1523,7 +1523,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.log_statistics();
             }
             TOTAL_WEIGHT_IN_PAST_TIMER => {
-                self.update_total_weight_in_past();
+                self.update_total_weight_delta_heartbeat();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
                 let timeout = Duration::from_secs(180);

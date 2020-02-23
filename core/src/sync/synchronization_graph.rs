@@ -1771,8 +1771,8 @@ impl SynchronizationGraph {
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
-    pub fn update_total_weight_in_past(&self) {
-        self.consensus.update_total_weight_in_past();
+    pub fn update_total_weight_delta_heartbeat(&self) {
+        self.consensus.update_total_weight_delta_heartbeat();
     }
 
     /// Get the current number of blocks in the synchronization graph

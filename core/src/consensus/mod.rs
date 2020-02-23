@@ -221,9 +221,10 @@ impl ConsensusGraph {
         inner.expected_difficulty(parent_hash)
     }
 
-    // FIXME: We are going to revisit this once we implemented the new
-    // confirmation meter
-    pub fn update_total_weight_in_past(&self) {
+    /// This function is a wrapper function for the function in the confirmation
+    /// meter. The synchronization layer is supposed to call this function
+    /// every 2 * BLOCK_PROPAGATION_DELAY seconds
+    pub fn update_total_weight_delta_heartbeat(&self) {
         self.confirmation_meter
             .update_total_weight_delta_heartbeat();
     }
