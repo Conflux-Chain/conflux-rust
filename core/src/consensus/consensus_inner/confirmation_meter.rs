@@ -190,7 +190,9 @@ impl ConfirmationMeter {
 
         let m = m / d;
 
-        // debug!("Confirmation Risk: m {} n {} w_0 {}, w_1 {}, w_2 {}, w_3 {}, w_4 {}, epoch_num {} genesis {}", m, n, w_0, w_1, w_2, w_3, w_4, epoch_num, g_inner.cur_era_genesis_block_arena_index);
+        // debug!("Confirmation Risk: m {} n {} w_0 {}, w_1 {}, w_2 {}, w_3 {},
+        // w_4 {}, epoch_num {} genesis {}", m, n, w_0, w_1, w_2, w_3, w_4,
+        // epoch_num, g_inner.cur_era_genesis_block_arena_index);
 
         // Compute risk
         let m_2 = 2i128 * m;

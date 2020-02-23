@@ -1413,8 +1413,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
             .expect("Error registering log_statistics timer");
-        io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(BLOCK_PROPAGATION_DELAY * 2))
-            .expect("Error registering total_weight_in_past timer");
+        io.register_timer(
+            TOTAL_WEIGHT_IN_PAST_TIMER,
+            Duration::from_secs(BLOCK_PROPAGATION_DELAY * 2),
+        )
+        .expect("Error registering total_weight_in_past timer");
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
         io.register_timer(
