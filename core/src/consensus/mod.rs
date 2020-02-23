@@ -224,7 +224,8 @@ impl ConsensusGraph {
     // FIXME: We are going to revisit this once we implemented the new
     // confirmation meter
     pub fn update_total_weight_in_past(&self) {
-        self.confirmation_meter.update_total_weight_in_past();
+        self.confirmation_meter
+            .update_total_weight_delta_heartbeat();
     }
 
     /// Wait for the generation and the execution completion of a block in the

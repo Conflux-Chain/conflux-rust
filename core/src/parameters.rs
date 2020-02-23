@@ -59,6 +59,12 @@ pub mod consensus_internal {
     /// This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
     /// have more than this number, we will not store it in memory
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
+
+    /// This is the minimum risk that the confirmation meter tries to maintain.
+    pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
+    /// The maximum number of epochs that the confirmation meter tries to
+    /// maintain internally.
+    pub const MAX_NUM_MAINTAINED_RISK: usize = 100;
 }
 
 pub mod sync {
@@ -91,9 +97,9 @@ pub mod sync {
     /// network, otherwise we should check disk first.
     pub const LOCAL_BLOCK_INFO_QUERY_THRESHOLD: u64 = 5;
 
-    /// Measured block propagation delay. This will determine the conservative
-    /// window when we measure confirmation risk internally in the consensus
-    /// layer.
+    /// Measured block propagation delay in *seconds*. This will determine the
+    /// conservative window when we measure confirmation risk internally in
+    /// the consensus layer.
     pub const BLOCK_PROPAGATION_DELAY: u64 = 10;
 
     // The waiting time duration that will be accumulated for resending a

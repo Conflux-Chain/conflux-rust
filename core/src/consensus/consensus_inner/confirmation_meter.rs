@@ -2,16 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::consensus::{
-    consensus_inner::{NULL, NULLU64},
-    ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
+use crate::{
+    consensus::{
+        consensus_inner::{NULL, NULLU64},
+        ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
+    },
+    parameters::consensus_internal::*,
 };
 use cfx_types::H256;
 use parking_lot::RwLock;
 use std::{cmp::min, collections::VecDeque, convert::TryFrom};
-
-pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
-pub const MAX_NUM_MAINTAINED_RISK: usize = 100;
 
 pub struct TotalWeightInPastMovingDelta {
     pub old: i128,
@@ -45,6 +45,16 @@ impl ConfirmationMeterInner {
     }
 }
 
+/// `ConfirmationMeter` computes an approximate *local view* confirmation risk
+/// given the current blockchain state. Local view means that the meter assumes
+/// a potential block propagation delay and assumes a worst case scenario of
+/// what this delay could do.
+///
+/// The meter serves two purposes. First, it allows the underlying storage layer
+/// to determine whether it is *relatively safe* to discard previous snapshots.
+/// Snapshot consumes a lot of disk space and it is ideal to discard old ones.
+/// Second, it enables the consensus layer to provide an interface to query the
+/// confirmation status of a block/transaction.
 pub struct ConfirmationMeter {
     inner: RwLock<ConfirmationMeterInner>,
 }
@@ -56,32 +66,32 @@ impl ConfirmationMeter {
         }
     }
 
-    pub fn reset(&self) {
+    pub fn clear(&self) {
         let mut inner = self.inner.write();
-        inner.total_weight_in_past_2d = TotalWeightInPastMovingDelta {
-            old: 0,
-            cur: 0,
-            delta: 0,
-        };
-        inner.finality_manager = FinalityManager {
-            lowest_epoch_num: 0,
-            risks_less_than: VecDeque::new(),
-        };
+        *inner = ConfirmationMeterInner::new();
     }
 
-    pub fn update_total_weight_in_past(&self) {
+    /// This is the function that should be invoked every 2 *
+    /// BLOCK_PROPAGATION_DELAY by the synchronization layer to measure the
+    /// weight of generated blocks in 2d
+    pub fn update_total_weight_delta_heartbeat(&self) {
         let mut inner = self.inner.write();
         let total_weight = &mut inner.total_weight_in_past_2d;
         total_weight.delta = total_weight.cur - total_weight.old;
         total_weight.old = total_weight.cur;
     }
 
+    /// The `ConsensusGraph` calls this function for every inserted and
+    /// activated block to accumulate the total weight value
     pub fn aggregate_total_weight_in_past(&self, weight: i128) {
         let mut inner = self.inner.write();
         let total_weight = &mut inner.total_weight_in_past_2d;
         total_weight.cur += weight;
     }
 
+    /// The `ConsensusGraph` invokes this function when making a checkpoint. The
+    /// confirmation meter needs to aware of the genesis change and make
+    /// adjustment accordingly.
     pub fn reset_for_checkpoint(&self, total_weight: i128, stable_height: u64) {
         let mut inner = self.inner.write();
         let change = inner.total_weight_in_past_2d.cur - total_weight;
@@ -97,22 +107,18 @@ impl ConfirmationMeter {
         }
     }
 
-    fn get_total_weight_in_past(&self) -> i128 {
-        let inner = self.inner.read();
-        inner.total_weight_in_past_2d.delta
-    }
-
     // FIXME: For now we sync at checkpoint rather than the latest snapshot,
     // FIXME: therefore we fake the confirmed epoch_num by passing it.
-    pub fn get_confirmed_epoch_num(&self, cur_era_genesis_height: u64) -> u64 {
+    pub fn get_confirmed_epoch_num(&self, bound_height: u64) -> u64 {
         let x = self.inner.read().finality_manager.lowest_epoch_num;
         if x > 0 {
-            min(x - 1, cur_era_genesis_height)
+            min(x - 1, bound_height)
         } else {
             0
         }
     }
 
+    /// Query the confirmation hash of a specific block.
     pub fn confirmation_risk_by_hash(
         &self, g_inner: &ConsensusGraphInner, hash: H256,
     ) -> Option<f64> {
@@ -221,6 +227,8 @@ impl ConfirmationMeter {
         risk
     }
 
+    /// `ConsensusGraphInner` invokes this function to recompute confirmation
+    /// risk of all epochs periodically
     pub fn update_confirmation_risks(&self, g_inner: &ConsensusGraphInner) {
         if g_inner.pivot_chain.len() > DEFERRED_STATE_EPOCH_COUNT as usize {
             let w_0 = g_inner
@@ -234,7 +242,7 @@ impl ConfirmationMeter {
             while epoch_num > g_inner.cur_era_genesis_height
                 && count < MAX_NUM_MAINTAINED_RISK
             {
-                let w_4 = self.get_total_weight_in_past();
+                let w_4 = self.inner.read().total_weight_in_past_2d.delta;
                 let risk = self.confirmation_risk(g_inner, w_0, w_4, epoch_num);
                 risks.push_front(risk);
                 epoch_num -= 1;
