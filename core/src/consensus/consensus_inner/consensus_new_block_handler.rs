@@ -238,6 +238,19 @@ impl ConsensusNewBlockHandler {
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
         inner.pivot_chain_metadata =
             inner.pivot_chain_metadata.split_off(new_era_pivot_index);
+        // Recompute past weight values
+        inner.pivot_chain_metadata[0].past_weight =
+            inner.block_weight(new_era_block_arena_index);
+        for i in 1..inner.pivot_chain_metadata.len() {
+            let pivot = inner.pivot_chain[i];
+            inner.pivot_chain_metadata[i].past_weight =
+                inner.pivot_chain_metadata[i - 1].past_weight
+                    + inner.total_weight_in_own_epoch(
+                        &inner.arena[pivot].data.blockset_in_own_view_of_epoch,
+                        new_era_block_arena_index,
+                    )
+                    + inner.block_weight(pivot)
+        }
         for d in inner.pivot_chain_metadata.iter_mut() {
             d.last_pivot_in_past_blocks
                 .retain(|v| new_era_block_arena_index_set.contains(v));
