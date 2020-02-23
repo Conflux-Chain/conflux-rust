@@ -224,6 +224,7 @@ impl ConfirmationMeter {
         }
 
         risk = 0.000001;
+        // FIXME: We should consider the risk of generating heavy blocks
         risk
     }
 

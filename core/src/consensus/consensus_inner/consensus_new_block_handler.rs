@@ -1482,11 +1482,19 @@ impl ConsensusNewBlockHandler {
                 );
             }
         }
+
+        // FIXME: Now we have to pass a conservative stable_height here.
+        // FIXME: Because the storage layer does not handle the case when
+        // FIXME: this confirmed point being reverted. We have to be extra
+        // FIXME: conservatively but this will cost storage space.
+        // FIXME: Eventually, we should implement the logic to recover from
+        // FIXME: the database if such a rare reversion case happens.
+        //
         // FIXME: we need a function to compute the deferred epoch
         // FIXME: number. the current codebase may not be
         // FIXME: consistent at all places.
         let mut confirmed_height = meter.get_confirmed_epoch_num(
-            inner.cur_era_genesis_height
+            inner.cur_era_stable_height
                 + 2 * self.data_man.get_snapshot_epoch_count() as u64
                 + DEFERRED_STATE_EPOCH_COUNT,
         );
