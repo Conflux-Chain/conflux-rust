@@ -383,7 +383,7 @@ impl ConsensusGraphInner {
             .ordered_executable_epoch_blocks
             .push(pivot_arena_index);
 
-        if pivot_arena_index > 0 {
+        if pivot_index > 0 {
             let past_num_blocks = self.pivot_chain_metadata[pivot_index - 1]
                 .past_num_blocks
                 + self.pivot_chain_metadata[pivot_index]
