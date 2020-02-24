@@ -17,7 +17,7 @@ impl DeltaDbManagerRocksdb {
             block_size: 16 * 1024,
             write_rate_limit: Some(64 * 1048576 as u64),
         },
-        columns: None,
+        columns: 1,
         disable_wal: false,
     };
 
@@ -60,7 +60,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
                     &Self::ROCKSDB_CONFIG,
                     &self.get_delta_db_path(delta_db_name),
                 )?),
-                col: None,
+                col: 0,
             })
         }
     }
@@ -75,7 +75,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
                     &Self::ROCKSDB_CONFIG,
                     &path_str,
                 )?),
-                col: None,
+                col: 0,
             }))
         } else {
             Ok(None)

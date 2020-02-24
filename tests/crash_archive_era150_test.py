@@ -19,8 +19,10 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 8
         self.conf_parameters["log_level"] = "\"debug\""
+        self.conf_parameters["adaptive_weight_beta"] = "1"
+        self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
+        self.conf_parameters["timer_chain_beta"] = "10"
         self.conf_parameters["era_epoch_count"] = "150"
-        self.conf_parameters["era_checkpoint_gap"] = "150"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
 
     def setup_network(self):
@@ -60,9 +62,11 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
 
         for i in range(1, self.num_nodes):
             self.stop_node(i)
+        self.log.info("Stopped all other nodes except node 0")
         self.nodes[0].add_p2p_connection(P2PInterface())
         network_thread_start()
         self.nodes[0].p2p.wait_for_status()
+        self.log.info("p2p connection to node 0 connected")
         gas_price = 1
         value = 1
         receiver_sk, _ = ec_random_keys()

@@ -12,7 +12,7 @@ use std::{future::Future, sync::Arc};
 use crate::{
     hash::keccak,
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         message::{msgid, BloomWithEpoch, GetBlooms},
         Error, ErrorKind,
     },
@@ -22,6 +22,7 @@ use crate::{
         BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOOMS_IN_FLIGHT,
     },
+    UniqueId,
 };
 
 use super::{

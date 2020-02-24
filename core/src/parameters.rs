@@ -6,16 +6,14 @@ pub mod consensus {
     pub const DEFERRED_STATE_EPOCH_COUNT: u64 = 5;
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
-    pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM: u64 = 2;
-    pub const ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN: u64 = 3;
     pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
     pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
+    pub const TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 180;
+    pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 330;
     // The number of epochs per era. Each era is a potential checkpoint
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
-    pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 50000;
-    // FIXME: We should use finality to determine the checkpoint moment instead.
-    pub const ERA_DEFAULT_CHECKPOINT_GAP: u64 = 50000;
+    pub const ERA_DEFAULT_EPOCH_COUNT: u64 = 20000;
 
     pub const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10000;
 

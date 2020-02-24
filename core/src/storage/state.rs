@@ -38,8 +38,8 @@ pub trait StateTrait {
     /// It's costly to compute state root however it's only necessary to compute
     /// state root once before committing.
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
-    fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>>;
-    fn commit(&mut self, epoch: EpochId) -> Result<()>;
+    fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
+    fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
     fn revert(&mut self);
 }
 

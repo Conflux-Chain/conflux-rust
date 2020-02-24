@@ -38,8 +38,9 @@ use cfxcore::{
     sync::{request_manager::RequestManager, SyncPhaseType},
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     vm_factory::VmFactory,
-    LightProvider, SharedSynchronizationService, SynchronizationGraph,
-    SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
+    LightProvider, Notifications, SharedSynchronizationService,
+    SynchronizationGraph, SynchronizationService, TransactionPool,
+    WORKER_COMPUTATION_PARALLELISM,
 };
 use ctrlc::CtrlC;
 use keccak_hash::keccak;
@@ -194,6 +195,7 @@ impl TgArchiveClient {
         let statistics = Arc::new(Statistics::new());
 
         let pow_config = conf.pow_config();
+        let notifications = Notifications::init();
         let vm = VmFactory::new(1024 * 32);
         let tg_consensus = Arc::new(TreeGraphConsensus::new(
             conf.tg_consensus_config(),
@@ -213,6 +215,7 @@ impl TgArchiveClient {
             verification_config,
             pow_config.clone(),
             sync_config,
+            notifications.clone(),
             false,
         ));
 
@@ -396,7 +399,11 @@ impl TgArchiveClient {
         ));
 
         let runtime = Runtime::with_default_thread_count();
-        let pubsub = PubSubClient::new(runtime.executor());
+        let pubsub = PubSubClient::new(
+            runtime.executor(),
+            tg_consensus.clone(),
+            notifications,
+        );
 
         let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(

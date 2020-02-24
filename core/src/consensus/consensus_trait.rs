@@ -75,10 +75,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
-    fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
-    ) -> bool;
-
     fn update_best_info(&self);
 
     fn latest_inserted_block(&self) -> H256;

@@ -667,7 +667,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                             block_status: local_info.get_status(),
                             past_era_weight: 0.into(),
                             era_block_hash,
-                            stable: true,
                             adaptive: false,
                         },
                     )
@@ -830,14 +829,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
 
     fn set_initial_sequence_number(&self, initial_sn: u64) {
         self.inner.write().set_initial_sequence_number(initial_sn);
-    }
-
-    fn check_mining_adaptive_block(
-        &self, _parent_hash: &H256, _referees: &mut Vec<H256>,
-        _difficulty: &U256,
-    ) -> bool
-    {
-        true
     }
 
     /// This function is called after a new block appended to the

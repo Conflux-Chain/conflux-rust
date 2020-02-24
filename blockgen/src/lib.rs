@@ -189,19 +189,26 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let mut expected_difficulty = consensus_graph
-            .inner
-            .write()
-            .expected_difficulty(&parent_hash);
+
+        let mut consensus_inner = consensus_graph.inner.write();
+        // referees are retrieved before locking inner, so we need to
+        // filter out the blocks that should be removed by possible
+        // checkpoint making that happens before we acquire the inner lock
+        referees
+            .retain(|h| consensus_inner.hash_to_arena_indices.contains_key(h));
+        let mut expected_difficulty =
+            consensus_inner.expected_difficulty(&parent_hash);
         let adaptive = if let Some(x) = adaptive_opt {
             x
         } else {
-            self.graph.check_mining_adaptive_block(
+            consensus_graph.check_mining_adaptive_block(
+                &mut *consensus_inner,
                 &parent_hash,
-                &mut referees,
+                &referees,
                 &expected_difficulty,
             )
         };
+
         if U256::from(difficulty) > expected_difficulty {
             expected_difficulty = U256::from(difficulty);
         }

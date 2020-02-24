@@ -143,6 +143,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
+        era_stable_block_hash: &H256,
     ) -> Self
     {
         let inner =
@@ -151,6 +152,7 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
+                era_stable_block_hash,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -195,6 +197,7 @@ impl ConsensusGraph {
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
+        let stable_hash = data_man.get_cur_consensus_era_stable_hash();
         ConsensusGraph::with_era_genesis(
             conf,
             vm,
@@ -203,6 +206,7 @@ impl ConsensusGraph {
             data_man,
             pow_config,
             &genesis_hash,
+            &stable_hash,
         )
     }
 
@@ -514,6 +518,10 @@ impl ConsensusGraph {
         )
     }
 
+    pub fn best_block_hash(&self) -> H256 {
+        self.best_info.read_recursive().best_block_hash
+    }
+
     /// Returns the latest epoch with executed state.
     pub fn executed_best_state_epoch_number(&self) -> u64 {
         self.inner
@@ -774,9 +782,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn on_new_block(
         &self, hash: &H256, ignore_body: bool, update_best_info: bool,
     ) {
-        let notify_tx_pool = update_best_info;
-        let mut update_best_info = update_best_info;
-
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
@@ -808,7 +813,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                     &self.confirmation_meter,
                     hash,
                     &block.block_header,
-                    Some(&block.transactions),
+                    Some(block.transactions.clone()),
                 );
             } else {
                 // This `ignore_body` case will only be used when
@@ -846,12 +851,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
                     pivot_block_state_valid_map.remove(&hash);
             }
 
-            // Reset pivot chain according to checkpoint information during
-            // recovery
-            if *hash == self.data_man.get_cur_consensus_era_stable_hash() {
-                inner.set_pivot_to_stable(hash);
-                update_best_info = true;
-            }
             *self.latest_inserted_block.lock() = *hash;
 
             if inner.inner_conf.enable_state_expose {
@@ -875,7 +874,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
                             past_era_weight: inner.arena[*arena_index]
                                 .past_era_weight(),
                             era_block_hash,
-                            stable: inner.arena[*arena_index].stable(),
                             adaptive: inner.arena[*arena_index].adaptive(),
                         },
                     )
@@ -886,16 +884,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
         // Skip updating best info during recovery
         if update_best_info {
             self.update_best_info();
-        }
-        if notify_tx_pool {
             self.txpool
                 .notify_new_best_info(self.best_info.read().clone())
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         }
-
-        // Update total_weight_in_past periodically.
-        self.confirmation_meter.update_total_weight_in_past();
     }
 
     /// This function returns the set of blocks that are two eras farther from
@@ -1068,29 +1061,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn set_initial_sequence_number(&self, initial_sn: u64) {
         self.inner.write().set_initial_sequence_number(initial_sn);
-    }
-
-    /// Determine whether the next mined block should have adaptive weight or
-    /// not
-    fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
-    ) -> bool {
-        let mut inner = self.inner.write();
-        // referees are retrieved before locking inner, so we need to
-        // filter out the blocks that should be removed by possible
-        // checkpoint making that happens before we acquire the inner lock
-        referees.retain(|h| inner.hash_to_arena_indices.contains_key(h));
-        let parent_index =
-            *inner.hash_to_arena_indices.get(parent_hash).unwrap();
-        let referee_indices: Vec<_> = referees
-            .iter()
-            .map(|h| *inner.hash_to_arena_indices.get(h).unwrap())
-            .collect();
-        inner.check_mining_adaptive_block(
-            parent_index,
-            referee_indices,
-            *difficulty,
-        )
     }
 
     /// This function is called after a new block appended to the

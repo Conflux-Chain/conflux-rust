@@ -325,19 +325,15 @@ impl ConsensusExecutor {
     {
         reward_index.map(
             |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
-                // FIXME: this is hard to understand due to lack of
-                // FIXME: documentation. Under which scenarios
-                // FIXME: it is absolute necessary to wait? Are
-                // FIXME: there other mechanisms to avoid the wait?
-                // FIXME: Wait for the execution info populated for all blocks
-                // FIXME: before pivot_arena_index
+                // We have to wait here because blame information will determine the reward of each block.
+                // In order to compute the correct blame information locally, we have to wait for the execution to return.
                 let height = inner.arena[pivot_arena_index].height;
                 if !self.consensus_graph_bench_mode
                 {
                     debug!(
                         "wait_and_compute_state_valid_locked, idx = {}, \
-                         height = {}, era stable height = {}",
-                        pivot_arena_index, height, inner.cur_era_stable_height
+                         height = {}, era_genesis_height = {} era_stable_height = {}",
+                        pivot_arena_index, height, inner.cur_era_genesis_height, inner.cur_era_stable_height
                     );
                     self.wait_and_compute_state_valid_locked(
                         pivot_arena_index,
@@ -453,7 +449,7 @@ impl ConsensusExecutor {
                                 // Check with the spec!
                                 anticone_difficulty +=
                                     U512::from(U256::from(inner.block_weight(
-                                        a_index, false, /* inclusive */
+                                        a_index
                                     )));
                             }
                         };

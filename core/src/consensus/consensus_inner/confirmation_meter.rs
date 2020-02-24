@@ -154,7 +154,7 @@ impl ConfirmationMeter {
     {
         // Compute w_1
         let idx = g_inner.get_pivot_block_arena_index(epoch_num);
-        let w_1 = g_inner.block_weight(idx, false /* inclusive */);
+        let w_1 = g_inner.block_weight(idx);
 
         // Compute w_2
         let parent = g_inner.arena[idx].parent;
@@ -165,8 +165,7 @@ impl ConfirmationMeter {
                 continue;
             }
 
-            let child_weight =
-                g_inner.block_weight(*child, false /* inclusive */);
+            let child_weight = g_inner.block_weight(*child);
             if child_weight > max_weight {
                 max_weight = child_weight;
             }
@@ -174,7 +173,8 @@ impl ConfirmationMeter {
         let w_2 = max_weight;
 
         // Compute w_3
-        let w_3 = g_inner.arena[idx].past_weight;
+        // FIXME: This was past_weight, we should revisit this later
+        let w_3 = g_inner.arena[idx].past_era_weight;
 
         // Compute d
         let d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
@@ -227,7 +227,9 @@ impl ConfirmationMeter {
                 .pivot_index_to_height(g_inner.pivot_chain.len())
                 - DEFERRED_STATE_EPOCH_COUNT;
             let mut count = 0;
-            while epoch_num > 0 && count < MAX_NUM_MAINTAINED_RISK {
+            while epoch_num > g_inner.cur_era_genesis_height
+                && count < MAX_NUM_MAINTAINED_RISK
+            {
                 let w_4 = self.get_total_weight_in_past();
                 let risk = self.confirmation_risk(g_inner, w_0, w_4, epoch_num);
                 if risk <= MIN_MAINTAINED_RISK {
@@ -239,7 +241,7 @@ impl ConfirmationMeter {
             }
 
             if risks.is_empty() {
-                epoch_num = 0;
+                epoch_num = g_inner.cur_era_genesis_height;
             } else {
                 epoch_num += 1;
             }

@@ -465,7 +465,6 @@ class ConfluxTracing(ConfluxTestFramework):
             "enable_state_expose": "true",
             "era_epoch_count": 100,
             "dev_snapshot_epoch_count": 50,
-            "era_checkpoint_gap": 100
         }
 
     def setup_nodes(self):

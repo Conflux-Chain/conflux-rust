@@ -134,7 +134,6 @@ class ConsensusBlockStatus(object):
         self.block_status = BlockStatus(json_data['blockStatus'])
         self.past_era_weight = json_data['pastEraWeight']
         self.era_block_hash = json_data['eraBlockHash']
-        self.stable = json_data['stable']
         self.adaptive = json_data['adaptive']
 
     def __eq__(self, other):
@@ -148,8 +147,7 @@ class ConsensusBlockStatus(object):
         return self.hash == other.hash and \
             self.past_era_weight == other.past_era_weight and \
             self.block_status == other.block_status and \
-            self.adaptive == other.adaptive and \
-            self.stable == other.stable
+            self.adaptive == other.adaptive
 
     def __str__(self):
         return "ConsensusBlockStatus(\
@@ -158,14 +156,12 @@ class ConsensusBlockStatus(object):
                 block_status={}, \
                 past_era_weight={}, \
                 era_block={}, \
-                stable={}, \
                 adaptive={})".format(
             self.hash,
             self.best_block_hash,
             self.block_status,
             self.past_era_weight,
             self.era_block,
-            self.stable,
             self.adaptive)
 
 
@@ -208,8 +204,6 @@ class ConsensusSnapshot(object):
             if block.block_status != BlockStatus.Pending:
                 assert block.block_status == verified_block.block_status, "peer[{}] block[{}] status[{}], expect [{}]".format(
                     self.peer_id, block.hash, block.block_status, verified_block.block_status)
-                assert block.stable == verified_block.stable, "peer[{}] block[{}] stable[{}], expect [{}]".format(
-                    self.peer_id, block.hash, block.stable, verified_block.stable)
                 assert block.adaptive == verified_block.adaptive, "peer[{}] block[{}] adaptive[{}], expect [{}]".format(
                     self.peer_id, block.hash, block.adaptive, verified_block.adaptive)
                 assert block.era_block_hash == verified_block.era_block_hash or \
@@ -225,8 +219,6 @@ class ConsensusSnapshot(object):
                 if block.block_status != BlockStatus.Pending:
                     assert block.block_status == unverified_block.block_status, "peer[{}] block[{}] status[{}], expect [{}]".format(
                         self.peer_id, block.hash, block.block_status, unverified_block.block_status)
-                    assert block.stable == unverified_block.stable, "peer[{}] block[{}] stable[{}], expect [{}]".format(
-                        self.peer_id, block.hash, block.stable, unverified_block.stable)
                     assert block.adaptive == unverified_block.adaptive, "peer[{}] block[{}] adaptive[{}], expect [{}]".format(
                         self.peer_id, block.hash, block.adaptive, unverified_block.adaptive)
                     assert block.era_block_hash == unverified_block.era_block_hash or \
@@ -556,7 +548,6 @@ class TreeGraphTracing(ConfluxTestFramework):
             "enable_state_expose": "true",
             "era_epoch_count": 100,
             "dev_snapshot_epoch_count": 50,
-            "era_checkpoint_gap": 100,
             "blocks_request_timeout_ms": 8000,
             "headers_request_timeout_ms": 4000,
             "heartbeat_period_interval_ms": 4000 

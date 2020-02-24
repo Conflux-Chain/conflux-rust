@@ -234,11 +234,12 @@ impl ConsensusNewBlockHandler {
         &self, inner: &mut ConsensusGraphInner,
     ) -> usize {
         // FIXME: We should use finality to implement this function
+        let era_checkpoint_gap = 100;
         let best_height = inner.best_epoch_number();
-        if best_height <= inner.inner_conf.era_checkpoint_gap {
+        if best_height <= era_checkpoint_gap {
             return inner.cur_era_genesis_block_arena_index;
         }
-        let stable_height = best_height - inner.inner_conf.era_checkpoint_gap;
+        let stable_height = best_height - era_checkpoint_gap;
         let stable_era_genesis_height =
             inner.get_era_genesis_height(stable_height - 1, 0);
         if stable_era_genesis_height < inner.inner_conf.era_epoch_count {

@@ -375,7 +375,6 @@ impl BlockDataManager {
             .unwrap()
             .get_state_root()
             .unwrap()
-            .unwrap()
     }
 
     pub fn transaction_by_hash(

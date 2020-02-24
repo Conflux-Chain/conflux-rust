@@ -11,6 +11,7 @@ use crate::{
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     verification::*,
+    Notifications,
 };
 use cfx_types::{H256, U256};
 use metrics::{
@@ -25,10 +26,7 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
     mem, panic,
-    sync::{
-        mpsc::{self, Sender},
-        Arc,
-    },
+    sync::Arc,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -195,6 +193,19 @@ impl SynchronizationGraphInner {
             self.arena[era_genesis].block_header.hash(),
             self.arena[era_genesis].block_header.height(),
         )
+    }
+
+    pub fn get_stable_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        let stable_hash = self.data_man.get_cur_consensus_era_stable_hash();
+        // The stable block may not be in the sync-graph when this function is
+        // invoked during the synchronization phase, let's query the
+        // data from data manager
+        let height = self
+            .data_man
+            .block_header_by_hash(&stable_hash)
+            .expect("stable block must exist in data manager")
+            .height();
+        (stable_hash, height)
     }
 
     fn try_clear_old_era_blocks(&mut self) {
@@ -929,9 +940,11 @@ pub struct SynchronizationGraph {
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_graph_ready_block: Mutex<H256>,
 
-    /// Channel used to send work to `ConsensusGraph`
+    /// `notifications.new_block_hashes` is the channel used to send work to
+    /// `ConsensusGraph`.
     /// Each element is <block_hash, ignore_body>
-    consensus_sender: Mutex<Sender<(H256, bool)>>,
+    notifications: Arc<Notifications>,
+
     /// whether it is a archive node or full node
     is_full_node: bool,
 }
@@ -942,7 +955,8 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        sync_config: SyncGraphConfig, is_full_node: bool,
+        sync_config: SyncGraphConfig, notifications: Arc<Notifications>,
+        is_full_node: bool,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -950,7 +964,8 @@ impl SynchronizationGraph {
         let genesis_block_header = data_man
             .block_header_by_hash(&genesis_hash)
             .expect("genesis block header should exist here");
-        let (consensus_sender, consensus_receiver) = mpsc::channel();
+
+        let mut consensus_receiver = notifications.new_block_hashes.subscribe();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
                 genesis_block_header.clone(),
@@ -968,8 +983,8 @@ impl SynchronizationGraph {
             consensus: consensus.clone(),
             statistics: consensus.get_statistics().clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
-            consensus_sender: Mutex::new(consensus_sender),
             is_full_node,
+            notifications,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
@@ -977,8 +992,8 @@ impl SynchronizationGraph {
         thread::Builder::new()
             .name("Consensus Worker".into())
             .spawn(move || loop {
-                match consensus_receiver.recv() {
-                    Ok((hash, ignore_body)) => {
+                match consensus_receiver.recv_blocking() {
+                    Some((hash, ignore_body)) => {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
                         consensus.on_new_block(
                             &hash,
@@ -986,7 +1001,7 @@ impl SynchronizationGraph {
                             true, /* update_best_info */
                         )
                     }
-                    Err(_) => break,
+                    _ => break,
                 }
             })
             .expect("Cannot fail");
@@ -1191,20 +1206,6 @@ impl SynchronizationGraph {
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
     }
 
-    pub fn check_mining_adaptive_block(
-        &self, parent_hash: &H256, referees: &mut Vec<H256>, difficulty: &U256,
-    ) -> bool {
-        if !self.is_consortium() {
-            self.consensus.check_mining_adaptive_block(
-                parent_hash,
-                referees,
-                difficulty,
-            )
-        } else {
-            false
-        }
-    }
-
     /// Return None if `hash` is not in sync graph
     pub fn block_header_by_hash(&self, hash: &H256) -> Option<BlockHeader> {
         if !self.contains_block_header(hash) {
@@ -1318,13 +1319,15 @@ impl SynchronizationGraph {
                         CONSENSUS_WORKER_QUEUE.enqueue(1);
                         *self.latest_graph_ready_block.lock() =
                             inner.arena[index].block_header.hash();
-                        self.consensus_sender
-                            .lock()
-                            .send((
+
+                        assert!(
+                            self.notifications.new_block_hashes.send((
                                 inner.arena[index].block_header.hash(),
-                                true,
-                            ))
-                            .expect("Receiver not dropped");
+                                true, /* ignore_body */
+                            )),
+                            "consensus receiver dropped"
+                        );
+
                         // maintain not_ready_blocks_frontier
                         inner.not_ready_blocks_count -= 1;
                         inner.not_ready_blocks_frontier.remove(&index);
@@ -1556,10 +1559,13 @@ impl SynchronizationGraph {
         *self.latest_graph_ready_block.lock() = h;
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
-            self.consensus_sender
-                .lock()
-                .send((h, false /* ignore_body */))
-                .expect("Cannot fail");
+            assert!(
+                self.notifications
+                    .new_block_hashes
+                    .send((h, false /* ignore_body */)),
+                "consensus receiver dropped"
+            );
+
             if inner.config.enable_state_expose {
                 STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(
                     SyncGraphBlockState {
