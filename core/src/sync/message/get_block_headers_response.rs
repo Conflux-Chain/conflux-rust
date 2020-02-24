@@ -19,7 +19,7 @@ use crate::{
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
-use primitives::BlockHeader;
+use primitives::{BlockHeader, NULL_EPOCH};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::HashSet,
@@ -194,8 +194,6 @@ impl GetBlockHeadersResponse {
         }
 
         // do not request headers we just received
-        dependent_hashes_bounded.remove(&H256::default());
-        dependent_hashes_unbounded.remove(&H256::default());
         for hash in &returned_headers {
             dependent_hashes_bounded.remove(hash);
             dependent_hashes_unbounded.remove(hash);

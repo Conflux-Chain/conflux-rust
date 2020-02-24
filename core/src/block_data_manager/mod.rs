@@ -969,7 +969,7 @@ impl BlockDataManager {
         let mut tx_address = self.transaction_addresses.write();
         let mut exeuction_contexts = self.epoch_execution_contexts.write();
         let mut cache_man = self.cache_man.lock();
-        info!(
+        debug!(
             "Before gc cache_size={} {} {} {} {}",
             current_size,
             blocks.len(),

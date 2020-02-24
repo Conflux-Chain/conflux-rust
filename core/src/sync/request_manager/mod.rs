@@ -846,6 +846,7 @@ impl RequestManager {
                 break;
             } else if req.request.1 > *DEFAULT_REQUEST_DELAY_UPPER_BOUND {
                 // Discard stale requests
+                req.request.0.on_removed(&self.inflight_keys);
                 continue;
             }
 
