@@ -1102,8 +1102,8 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, reason = {:?}, session = {:?}",
-                    deregister, reason, *sess
+                    "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
+                    deregister, reason, *sess, op
                 );
             }
         }

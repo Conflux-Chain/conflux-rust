@@ -718,7 +718,7 @@ impl SynchronizationProtocolHandler {
             debug!("Recovered header {:?} from db", hash);
             // Process headers from db
             let mut block_headers_resp = GetBlockHeadersResponse::default();
-            block_headers_resp.set_request_id(0);
+            block_headers_resp.request_id = 0;
             let mut headers = Vec::new();
             headers.push((*header).clone());
             block_headers_resp.headers = headers;

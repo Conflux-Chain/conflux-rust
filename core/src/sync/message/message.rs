@@ -62,33 +62,33 @@ build_msgid! {
 // high priority message types
 build_msg_impl! { Status, msgid::STATUS, "Status" }
 build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
-build_msg_with_request_id_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse" }
+build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse" }
 build_msg_with_request_id_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
-build_msg_with_request_id_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse" }
+build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse" }
 build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock" }
-build_msg_with_request_id_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse" }
+build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse" }
 build_msg_with_request_id_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES, "GetTerminalBlockHashes" }
 build_msg_with_request_id_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks" }
 build_msg_with_request_id_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks" }
-build_msg_with_request_id_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse" }
+build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse" }
 build_msg_with_request_id_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn" }
 build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange" }
 build_msg_with_request_id_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
 build_msg_with_request_id_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
-build_msg_with_request_id_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
+build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
 build_msg_with_request_id_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
-build_msg_with_request_id_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
+build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
 build_msg_with_request_id_impl! { StateSyncCandidateRequest, msgid::STATE_SYNC_CANDIDATE_REQUEST, "StateSyncCandidateRequest" }
-build_msg_with_request_id_impl! { StateSyncCandidateResponse, msgid::STATE_SYNC_CANDIDATE_RESPONSE, "StateSyncCandidateResponse" }
+build_msg_impl! { StateSyncCandidateResponse, msgid::STATE_SYNC_CANDIDATE_RESPONSE, "StateSyncCandidateResponse" }
 build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled" }
 
 // normal priority and size-sensitive message types
 impl Message for Transactions {
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
+
     fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
 
     fn msg_name(&self) -> &'static str { "Transactions" }
-
-    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
@@ -98,11 +98,11 @@ impl Message for Transactions {
 }
 
 impl Message for GetBlocksResponse {
+    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
+
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
@@ -112,11 +112,11 @@ impl Message for GetBlocksResponse {
 }
 
 impl Message for GetBlocksWithPublicResponse {
+    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
+
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
@@ -126,11 +126,11 @@ impl Message for GetBlocksWithPublicResponse {
 }
 
 impl Message for GetBlockTxnResponse {
+    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
+
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
@@ -140,11 +140,11 @@ impl Message for GetBlockTxnResponse {
 }
 
 impl Message for TransactionDigests {
+    fn is_size_sensitive(&self) -> bool { self.len() > 1 }
+
     fn msg_id(&self) -> MsgId { msgid::TRANSACTION_DIGESTS }
 
     fn msg_name(&self) -> &'static str { "TransactionDigests" }
-
-    fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
@@ -192,11 +192,11 @@ impl Message for GetTransactionsFromTxHashes {
 }
 
 impl Message for GetTransactionsResponse {
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
+
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
@@ -208,13 +208,13 @@ impl Message for GetTransactionsResponse {
 }
 
 impl Message for GetTransactionsFromTxHashesResponse {
+    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
+
     fn msg_id(&self) -> MsgId {
         msgid::GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE
     }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
-
-    fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
