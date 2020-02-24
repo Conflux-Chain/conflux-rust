@@ -10,7 +10,7 @@ use crate::{
     block_parameters::*, pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     BlockDataManager, SharedSynchronizationService, SharedTransactionPool,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, H256};
 use log::trace;
 //use metrics::{Gauge, GaugeUsize};
 use parking_lot::RwLock;
@@ -63,12 +63,21 @@ impl TGBlockGenerator {
 
     /// Assume that the consensus lock was hold for the caller.
     pub fn assemble_new_block(
-        data_man: &Arc<BlockDataManager>, parent_hash: H256,
-        referee: Vec<H256>, deferred_state_root: H256,
+        data_man: &Arc<BlockDataManager>, txpool: &SharedTransactionPool,
+        parent_hash: H256, referee: Vec<H256>, deferred_state_root: H256,
         deferred_receipts_root: H256, deferred_logs_bloom_hash: H256,
-        block_gas_limit: U256, transactions: Vec<Arc<SignedTransaction>>,
+        num_txs: usize,
     ) -> Block
     {
+        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
+
+        let transactions = txpool.pack_transactions(
+            num_txs,
+            block_gas_limit,
+            block_size_limit,
+        );
+
         let mut rng = rand::thread_rng();
         let parent_header = data_man
             .block_header_by_hash(&parent_hash)
@@ -113,23 +122,15 @@ impl TGBlockGenerator {
         deferred_logs_bloom_hash: H256, num_txs: usize,
     ) -> H256
     {
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
-        let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
-
-        let transactions = self.txpool.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            block_size_limit,
-        );
         let block = Self::assemble_new_block(
             &self.data_man,
+            &self.txpool,
             parent_hash,
             referee,
             deferred_state_root,
             deferred_receipts_root,
             deferred_logs_bloom_hash,
-            block_gas_limit,
-            transactions,
+            num_txs,
         );
         let block_hash = block.hash();
         self.on_mined_block(block);

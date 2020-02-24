@@ -20,7 +20,7 @@ from test_framework.test_framework import ConfluxTestFramework
 
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
-NUM_TX_PER_BLOCK = 10
+NUM_TX_PER_BLOCK = 5
 CRASH_EXIT_CODE = 100
 CRASH_EXIT_PROBABILITY = 0.01
 
@@ -489,13 +489,10 @@ class TreeGraphTracing(ConfluxTestFramework):
                     ["NormalSyncPhase"])
                 alive_peer_indices = alive_peer_indices.get(
                     'NormalSyncPhase', [])
-                if self.options.archive:
-                    assert len(alive_peer_indices) * \
-                        2 > self.num_nodes, "alive[{}] total[{}]".format(
-                            len(alive_peer_indices), self.num_nodes)
                 chosen_peer = alive_peer_indices[random.randint(
                     0, len(alive_peer_indices) - 1)]
                 txs = self._generate_txs(chosen_peer, NUM_TX_PER_BLOCK)
+                """
                 if random.randint(1, 100) <= 40:
                     # this will generate a partial invalid block
                     block_hash = RpcClient(
@@ -505,8 +502,9 @@ class TreeGraphTracing(ConfluxTestFramework):
                         self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
                 self._block_txs[block_hash] = eth_utils.encode_hex(
                     rlp.encode(txs))
-                self.log.info("peer[%d] generate block[%s]",
-                              chosen_peer, block_hash)
+                """
+                self.log.info("peer[%d] generate [%s] txs",
+                              chosen_peer, len(txs))
         except Exception as e:
             self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()
@@ -601,18 +599,18 @@ class TreeGraphTracing(ConfluxTestFramework):
         genesis_hash = self.nodes[0].best_block_hash()
         crash_timer = Timer(self._crash_timeout, self._random_crash)
         start_timer = Timer(self._start_timeout, self._random_start)
-        # blockgen_timer = Timer(self._blockgen_timeout, self._generate_block)
+        blockgen_timer = Timer(self._blockgen_timeout, self._generate_block)
         snapshot_timer = Timer(self._snapshot_timeout, self._retrieve_snapshot)
         # db_crash_timer = Timer(self._db_crash_timeout, self._enable_db_crash)
 
         self._snapshots = [Snapshot(i, genesis_hash)
                            for i in range(len(self.nodes))]
         self._peer_nonce = [0] * len(self.nodes)
-        # self.setup_balance()
+        self.setup_balance()
 
         crash_timer.start()
         start_timer.start()
-        # blockgen_timer.start()
+        blockgen_timer.start()
         snapshot_timer.start()
         # db_crash_timer.start()
 
@@ -621,7 +619,7 @@ class TreeGraphTracing(ConfluxTestFramework):
 
         # crash_timer.cancel()
         start_timer.cancel()
-        # blockgen_timer.cancel()
+        blockgen_timer.cancel()
         snapshot_timer.cancel()
         # db_crash_timer.cancel()
 
