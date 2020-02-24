@@ -1268,7 +1268,7 @@ impl ConsensusExecutionHandler {
             / U256::from(SECONDS_PER_YEAR);
         // Calculate the new total tokens.
         let total_tokens = state.total_tokens()
-            + state.total_bank_tokens() * interest_rate
+            + state.total_staking_tokens() * interest_rate
                 / U256::from(INTEREST_RATE_SCALE)
             + total_base_reward;
         state.set_total_tokens(total_tokens);

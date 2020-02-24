@@ -12,7 +12,7 @@ use crate::{
         INTERNAL_CONTRACT_CODE_HASH, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },
     hash::KECCAK_EMPTY,
-    parameters::consensus_internal::RENTAL_PRICE_PER_STORAGE_KEY,
+    parameters::staking::*,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
     storage::StateRootWithAuxInfo,
     transaction_pool::SharedTransactionPool,
@@ -56,21 +56,26 @@ pub struct State {
     checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
     account_start_nonce: U256,
     total_tokens: U256,
-    total_bank_tokens: U256,
+    total_staking_tokens: U256,
     total_storage_tokens: U256,
     interest_rate: U256,
     accumulate_interest_rate: U256,
+    past_num_block: u64,
     vm: VmFactory,
 }
 
 impl State {
-    pub fn new(db: StateDb, account_start_nonce: U256, vm: VmFactory) -> Self {
+    pub fn new(
+        db: StateDb, account_start_nonce: U256, vm: VmFactory,
+        past_num_block: u64,
+    ) -> Self
+    {
         let interest_rate = db.get_interest_rate().expect("no db error");
         let accumulate_interest_rate =
             db.get_accumulate_interest_rate().expect("no db error");
         let total_tokens = db.get_total_tokens().expect("No db error");
-        let total_bank_tokens =
-            db.get_total_bank_tokens().expect("No db error");
+        let total_staking_tokens =
+            db.get_total_staking_tokens().expect("No db error");
         let total_storage_tokens =
             db.get_total_storage_tokens().expect("No db error");
         State {
@@ -79,10 +84,11 @@ impl State {
             checkpoints: RefCell::new(Vec::new()),
             account_start_nonce,
             total_tokens,
-            total_bank_tokens,
+            total_staking_tokens,
             total_storage_tokens,
             interest_rate,
             accumulate_interest_rate,
+            past_num_block,
             vm,
         }
     }
@@ -102,14 +108,14 @@ impl State {
     /// return true if all affected accounts have enough storage balance.
     ///
     /// Some assumptions must hold if this function returns `true`:
-    /// + The `storage_balance` is not greater than `bank_balance` for all
-    ///   accounts.
-    /// + The `storage_balance` and `bank_balance` for all contract accounts
-    ///   are always the same.
-    /// + The value of `self.total_bank_tokens` must equal to the summation of
-    ///   `bank_balance` of all accounts.
+    /// + The `collateral_for_storage` is not greater than `staking_balance` for
+    /// all   accounts.
+    /// + The `collateral_for_storage` and `staking_balance` for all contract
+    /// accounts   are always the same.
+    /// + The value of `self.total_staking_tokens` must equal to the summation
+    /// of   `staking_balance` of all accounts.
     /// + The value of `self.total_storage_tokens` must equal to the summation
-    ///   of `storage_balance` of all accounts.
+    ///   of `collateral_for_storage` of all accounts.
     ///
     /// If the function returns `true`, we should call `discard_checkpoint()`
     /// right after it. If the function returns `false`, we should call
@@ -119,28 +125,30 @@ impl State {
     /// storage changed.
     ///
     /// If some storage is released:
-    /// + For normal account, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY`
-    ///   from `storage_balance` for each released storage. The value of
-    ///   `balance` and `bank_balance` remain untouched.
-    /// + For contract account, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY`
-    ///   from both `storage_balance` and `bank_balance` for each released
-    ///   storage. And we will increase `RENTAL_PRICE_PER_STORAGE_KEY` to
-    ///   `balance` for each released storage.
+    /// + For normal account, we will decrease `COLLATERAL_PER_STORAGE_KEY`
+    ///   from `collateral_for_storage` for each released storage. The value of
+    ///   `balance` and `staking_balance` remain untouched.
+    /// + For contract account, we will decrease `COLLATERAL_PER_STORAGE_KEY`
+    ///   from both `collateral_for_storage` and `staking_balance` for each
+    /// released   storage. And we will increase
+    /// `COLLATERAL_PER_STORAGE_KEY` to   `balance` for each released
+    /// storage.
     ///
     /// If new storage is occupied:
-    /// + For normal account, we will increase `RENTAL_PRICE_PER_STORAGE_KEY`
-    ///   to `storage_balance` for each new storage. If the `bank_balance` is
-    ///   not sufficient to cover `storage_balance`, the automatic deposit
-    ///   feature will apply. we will deposit sufficient tokens from `balance`
+    /// + For normal account, we will increase `COLLATERAL_PER_STORAGE_KEY`
+    ///   to `collateral_for_storage` for each new storage. If the
+    /// `staking_balance` is   not sufficient to cover
+    /// `collateral_for_storage`, the automatic deposit   feature will
+    /// apply. we will deposit sufficient tokens from `balance`
     ///   first. This will be treated as normal deposit, and the deposit history
     ///   will be kept in account.
-    /// + For contract account, we will increase `RENTAL_PRICE_PER_STORAGE_KEY`
-    ///   to both `storage_balance` and `bank_balance` for each new storage.
-    ///   Also, we will decrease `RENTAL_PRICE_PER_STORAGE_KEY` from `balance`
-    ///   for each new storage.
-    pub fn check_storage_balance(&mut self, timestamp: u64) -> bool {
-        let mut storage_balance_sub = HashMap::new();
-        let mut storage_balance_inc = HashMap::new();
+    /// + For contract account, we will increase `COLLATERAL_PER_STORAGE_KEY`
+    ///   to both `collateral_for_storage` and `staking_balance` for each new
+    /// storage.   Also, we will decrease `COLLATERAL_PER_STORAGE_KEY`
+    /// from `balance`   for each new storage.
+    pub fn check_collateral_for_storage(&mut self, timestamp: u64) -> bool {
+        let mut collateral_for_storage_sub = HashMap::new();
+        let mut collateral_for_storage_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.borrow().last() {
             for address in checkpoint.keys() {
                 if let Some(ref mut maybe_acc) = self
@@ -154,12 +162,12 @@ impl State {
                             acc.commit_ownership_change(&self.db);
                         for (addr, (inc, sub)) in ownership_delta {
                             if inc > 0 {
-                                *storage_balance_inc
+                                *collateral_for_storage_inc
                                     .entry(addr)
                                     .or_insert(0) += inc;
                             }
                             if sub > 0 {
-                                *storage_balance_sub
+                                *collateral_for_storage_sub
                                     .entry(addr)
                                     .or_insert(0) += sub;
                             }
@@ -168,55 +176,55 @@ impl State {
                 }
             }
         }
-        for (addr, sub) in storage_balance_sub {
+        for (addr, sub) in collateral_for_storage_sub {
             let delta =
-                U256::from(sub) * U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
+                U256::from(sub) * U256::from(COLLATERAL_PER_STORAGE_KEY);
             assert!(self.exists(&addr).expect("no db error"));
-            if self.is_contract(&addr) {
-                self.total_bank_tokens -= delta;
-            }
-            self.sub_storage_balance(&addr, &delta)
+            self.sub_collateral_for_storage(&addr, &delta)
                 .expect("no db error");
         }
-        for (addr, inc) in storage_balance_inc {
+        for (addr, inc) in collateral_for_storage_inc {
             let delta =
-                U256::from(inc) * U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
+                U256::from(inc) * U256::from(COLLATERAL_PER_STORAGE_KEY);
             let balance = self.balance(&addr).expect("no db error");
-            let bank_balance = self.bank_balance(&addr).expect("no db error");
-            let storage_balance =
-                self.storage_balance(&addr).expect("no db error");
+            let staking_balance =
+                self.staking_balance(&addr).expect("no db error");
+            let collateral_for_storage =
+                self.collateral_for_storage(&addr).expect("no db error");
             assert!(self.exists(&addr).expect("no db error"));
             if self.is_contract(&addr) {
                 // For contract account, we only need to check the `balance`.
                 if delta > balance {
                     return false;
                 }
-                self.total_bank_tokens += delta;
+                self.total_staking_tokens += delta;
             } else {
-                // For normal account, we should take both `bank_balance` and
+                // For normal account, we should take both `staking_balance` and
                 // `balance` into consideration.
-                if storage_balance + delta > bank_balance + balance {
+                if collateral_for_storage + delta > staking_balance + balance {
                     return false;
                 }
-                if storage_balance + delta > bank_balance {
-                    // `bank_balance` is not enough, enable automatic deposit.
+                if collateral_for_storage + delta > staking_balance {
+                    // `staking_balance` is not enough, enable automatic
+                    // deposit.
                     self.deposit(
                         &addr,
-                        &(storage_balance + delta - bank_balance),
+                        &(collateral_for_storage + delta - staking_balance),
                         timestamp,
                     )
                     .expect("no db error");
                 }
             }
-            self.add_storage_balance(&addr, &delta)
+            self.add_collateral_for_storage(&addr, &delta)
                 .expect("no db error");
         }
         true
     }
 
     /// Merge last checkpoint with previous.
-    /// Caller should make sure the function `check_storage_balance(timestamp)`
-    /// was called before calling this function.
+    /// Caller should make sure the function
+    /// `check_collateral_for_storage(timestamp)` was called before calling
+    /// this function.
     pub fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
@@ -416,15 +424,17 @@ impl State {
         }
     }
 
-    pub fn bank_balance(&self, address: &Address) -> DbResult<U256> {
+    pub fn staking_balance(&self, address: &Address) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| *account.bank_balance())
+            acc.map_or(U256::zero(), |account| *account.staking_balance())
         })
     }
 
-    pub fn storage_balance(&self, address: &Address) -> DbResult<U256> {
+    pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| *account.storage_balance())
+            acc.map_or(U256::zero(), |account| {
+                *account.collateral_for_storage()
+            })
         })
     }
 
@@ -461,23 +471,23 @@ impl State {
         Ok(())
     }
 
-    /// Caller should make sure that bank_balance for this account is sufficient
-    /// enough.
-    pub fn add_storage_balance(
+    /// Caller should make sure that staking_balance for this account is
+    /// sufficient enough.
+    pub fn add_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.add_storage_balance(by);
+            self.require(address, false)?.add_collateral_for_storage(by);
             self.total_storage_tokens += *by;
         }
         Ok(())
     }
 
-    pub fn sub_storage_balance(
+    pub fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.sub_storage_balance(by);
+            self.require(address, false)?.sub_collateral_for_storage(by);
             self.total_storage_tokens -= *by;
         }
         Ok(())
@@ -489,7 +499,7 @@ impl State {
         // TODO: check account type, only basic account can deposit
         if !by.is_zero() {
             self.require(address, false)?.deposit(by, deposit_time);
-            self.total_bank_tokens += *by;
+            self.total_staking_tokens += *by;
         }
         Ok(())
     }
@@ -497,34 +507,24 @@ impl State {
     pub fn withdraw(&mut self, address: &Address, by: &U256) -> DbResult<()> {
         if !by.is_zero() {
             self.require(address, false)?.withdraw(by);
-            self.total_bank_tokens -= *by;
+            self.total_staking_tokens -= *by;
         }
         Ok(())
     }
 
     pub fn interest_rate(&self) -> &U256 { &self.interest_rate }
 
-    pub fn set_interest_rate(&mut self, new_interest_rate: U256) {
-        self.interest_rate = new_interest_rate;
+    pub fn set_interest_rate(&mut self, interest_rate: U256) {
+        self.interest_rate = interest_rate;
     }
 
     pub fn accumulate_interest_rate(&self) -> &U256 {
         &self.accumulate_interest_rate
     }
 
-    pub fn set_accumulate_interest_rate(
-        &mut self, accumulate_interest_rate: U256,
-    ) {
-        self.accumulate_interest_rate = accumulate_interest_rate;
-    }
-
     pub fn total_tokens(&self) -> &U256 { &self.total_tokens }
 
-    pub fn set_total_tokens(&mut self, total_tokens: U256) {
-        self.total_tokens = total_tokens;
-    }
-
-    pub fn total_bank_tokens(&self) -> &U256 { &self.total_bank_tokens }
+    pub fn total_staking_tokens(&self) -> &U256 { &self.total_staking_tokens }
 
     pub fn total_storage_tokens(&self) -> &U256 { &self.total_storage_tokens }
 
@@ -561,13 +561,14 @@ impl State {
         self.db
             .set_accumulate_interest_rate(&self.accumulate_interest_rate)?;
         self.db.set_total_tokens(&self.total_tokens)?;
-        self.db.set_total_bank_tokens(&self.total_bank_tokens)?;
+        self.db
+            .set_total_staking_tokens(&self.total_staking_tokens)?;
         self.db
             .set_total_storage_tokens(&self.total_storage_tokens)?;
         Ok(())
     }
 
-    /// Assume that only contract with zero `balance` or zero `bank_balance`
+    /// Assume that only contract with zero `balance` or zero `staking_balance`
     /// will be killed.
     fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
@@ -587,12 +588,12 @@ impl State {
                         .exists(&storage_value.owner)
                         .expect("no db error"));
                     if self.is_contract(&storage_value.owner) {
-                        self.total_bank_tokens -=
-                            U256::from(RENTAL_PRICE_PER_STORAGE_KEY);
+                        self.total_staking_tokens -=
+                            U256::from(COLLATERAL_PER_STORAGE_KEY);
                     }
-                    self.sub_storage_balance(
+                    self.sub_collateral_for_storage(
                         &storage_value.owner,
-                        &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
+                        &U256::from(COLLATERAL_PER_STORAGE_KEY),
                     )?;
                 }
             }
@@ -752,7 +753,7 @@ impl State {
         min_balance: &Option<U256>, kill_contracts: bool,
     ) -> DbResult<()>
     {
-        // TODO: consider both balance and bank_balance
+        // TODO: consider both balance and staking_balance
         let to_kill: HashSet<_> = {
             self.cache
                 .borrow()
@@ -1111,7 +1112,7 @@ mod tests {
         state
             .new_contract(
                 &a,
-                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::from(COLLATERAL_PER_STORAGE_KEY * 2),
                 U256::zero(),
             )
             .unwrap();
@@ -1158,7 +1159,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(4)))
         );
 
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c5.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1199,7 +1200,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(1)))
         );
 
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c3.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1224,7 +1225,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(0)))
         );
 
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c1.
         assert_eq!(
             state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -1244,7 +1245,7 @@ mod tests {
         state
             .add_balance(
                 &a,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                &U256::from(COLLATERAL_PER_STORAGE_KEY * 2),
                 CleanupMode::NoEmpty,
             )
             .unwrap();
@@ -1256,7 +1257,7 @@ mod tests {
                 a,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1u64)))
@@ -1278,7 +1279,7 @@ mod tests {
         state
             .new_contract(
                 &a,
-                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::from(COLLATERAL_PER_STORAGE_KEY * 2),
                 U256::zero(),
             )
             .unwrap();
@@ -1329,7 +1330,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(4)))
         );
 
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c5.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1378,7 +1379,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(1)))
         );
 
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c3.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1411,7 +1412,7 @@ mod tests {
             Some(BigEndianHash::from_uint(&U256::from(0)))
         );
 
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // Commit/discard c1.
         assert_eq!(
             state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
@@ -1462,7 +1463,7 @@ mod tests {
         state
             .add_balance(&a, &U256::from(1), CleanupMode::ForceCreate)
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint(); // discard c2
         state.revert_to_checkpoint(); // revert to c1
         assert_eq!(state.exists(&a).unwrap(), false);
@@ -1483,7 +1484,7 @@ mod tests {
         state
             .add_balance(
                 &a,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
+                &U256::from(COLLATERAL_PER_STORAGE_KEY),
                 CleanupMode::NoEmpty,
             )
             .unwrap();
@@ -1495,7 +1496,7 @@ mod tests {
                 a,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         state
             .commit(BigEndianHash::from_uint(&U256::from(1)))
@@ -1547,14 +1548,14 @@ mod tests {
         state
             .add_balance(
                 &normal_account,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                &U256::from(COLLATERAL_PER_STORAGE_KEY * 2),
                 CleanupMode::NoEmpty,
             )
             .unwrap();
         state
             .new_contract(
                 &contract_account,
-                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::from(COLLATERAL_PER_STORAGE_KEY * 2),
                 U256::zero(),
             )
             .unwrap();
@@ -1569,16 +1570,16 @@ mod tests {
                 normal_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
 
         assert_eq!(
             state.balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
             state.balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
 
         // simple set one key with nonzero value for normal account
@@ -1591,27 +1592,27 @@ mod tests {
                 normal_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(
             state.balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.bank_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // test not sufficient balance
@@ -1632,27 +1633,27 @@ mod tests {
                 normal_account,
             )
             .unwrap();
-        assert!(!state.check_storage_balance(0 /* timestamp */));
+        assert!(!state.check_collateral_for_storage(0 /* timestamp */));
         state.revert_to_checkpoint();
         assert_eq!(
             state.balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.bank_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // use all balance
@@ -1665,24 +1666,24 @@ mod tests {
                 normal_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(state.balance(&normal_account).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.staking_balance(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
-            state.storage_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.collateral_for_storage(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
 
         // set one key to zero
@@ -1695,24 +1696,24 @@ mod tests {
                 normal_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(state.balance(&normal_account).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.staking_balance(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
-            state.storage_balance(&normal_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&normal_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
     }
 
@@ -1728,7 +1729,7 @@ mod tests {
         state
             .new_contract(
                 &contract_account,
-                U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2),
+                U256::from(COLLATERAL_PER_STORAGE_KEY * 2),
                 U256::zero(),
             )
             .unwrap();
@@ -1743,12 +1744,12 @@ mod tests {
                 contract_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
 
         assert_eq!(
             state.balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
 
         // simple set one key with nonzero value for normal account
@@ -1761,27 +1762,27 @@ mod tests {
                 contract_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(
             state.balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.bank_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // test not sufficient balance
@@ -1802,27 +1803,27 @@ mod tests {
                 contract_account,
             )
             .unwrap();
-        assert!(!state.check_storage_balance(0 /* timestamp */));
+        assert!(!state.check_collateral_for_storage(0 /* timestamp */));
         state.revert_to_checkpoint();
         assert_eq!(
             state.balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.bank_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // use all balance
@@ -1835,24 +1836,24 @@ mod tests {
                 contract_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.staking_balance(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
-            state.storage_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.collateral_for_storage(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
 
         // set one key to zero
@@ -1865,27 +1866,27 @@ mod tests {
                 contract_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(
             state.balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.bank_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&contract_account).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.total_bank_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.total_staking_tokens,
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
             state.total_storage_tokens,
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // set another key to zero
@@ -1898,21 +1899,21 @@ mod tests {
                 contract_account,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert_eq!(
             state.balance(&contract_account).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY * 2)
+            U256::from(COLLATERAL_PER_STORAGE_KEY * 2)
         );
         assert_eq!(
-            state.bank_balance(&contract_account).unwrap(),
+            state.staking_balance(&contract_account).unwrap(),
             U256::from(0)
         );
         assert_eq!(
-            state.storage_balance(&contract_account).unwrap(),
+            state.collateral_for_storage(&contract_account).unwrap(),
             U256::from(0)
         );
-        assert_eq!(state.total_bank_tokens, U256::from(0));
+        assert_eq!(state.total_staking_tokens, U256::from(0));
         assert_eq!(state.total_storage_tokens, U256::from(0));
     }
 }

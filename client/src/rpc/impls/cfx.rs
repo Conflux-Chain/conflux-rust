@@ -103,7 +103,7 @@ impl RpcImpl {
             .boxed()
     }
 
-    fn bank_balance(
+    fn staking_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
@@ -114,14 +114,14 @@ impl RpcImpl {
         );
 
         self.consensus
-            .get_bank_balance(address, num.into())
+            .get_staking_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
             .into_future()
             .boxed()
     }
 
-    fn storage_balance(
+    fn collateral_for_storage(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
@@ -132,7 +132,7 @@ impl RpcImpl {
         );
 
         self.consensus
-            .get_storage_balance(address, num.into())
+            .get_collateral_for_storage(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
             .into_future()
@@ -646,8 +646,8 @@ impl Cfx for CfxHandler {
             fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;

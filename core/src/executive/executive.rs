@@ -300,8 +300,8 @@ impl<'a> CallCreateExecutive<'a> {
     fn withdraw(
         params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
-        if state.bank_balance(&params.sender)?
-            - state.storage_balance(&params.sender)?
+        if state.staking_balance(&params.sender)?
+            - state.collateral_for_storage(&params.sender)?
             < *val
         {
             Err(vm::Error::InternalContract(
@@ -338,7 +338,7 @@ impl<'a> CallCreateExecutive<'a> {
         result: &vm::Result<FinalizationResult>, env: &'a Env,
         state: &mut State, substate: &mut Substate,
         unconfirmed_substate: Substate,
-    )
+    ) -> bool
     {
         match *result {
             Err(vm::Error::OutOfGas)
@@ -357,14 +357,16 @@ impl<'a> CallCreateExecutive<'a> {
                 apply_state: false, ..
             }) => {
                 state.revert_to_checkpoint();
+                true
             }
             Ok(_) | Err(vm::Error::Internal(_)) => {
-                if state.check_storage_balance(env.timestamp) {
+                if state.check_collateral_for_storage(env.timestamp) {
                     state.discard_checkpoint();
                     substate.accrue(unconfirmed_substate);
+                    true
                 } else {
-                    // FIXME: return error details.
                     state.revert_to_checkpoint();
+                    false
                 }
             }
         }
@@ -398,7 +400,11 @@ impl<'a> CallCreateExecutive<'a> {
         timestamp: u64,
     ) -> vm::Result<()>
     {
-        // FIXME: make sure params.sender is a normal account.
+        if state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract(
+                "contract accounts are not allowed to deposit or withdraw",
+            ));
+        }
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -437,7 +443,11 @@ impl<'a> CallCreateExecutive<'a> {
     fn exec_commission_privilege_control_contract(
         params: &ActionParams, state: &mut State, gas_cost: &U256,
     ) -> vm::Result<()> {
-        // FIXME: params.sender should be address of a contract.
+        if !state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract(
+                "normal account is not allowed to set commission_privilege",
+            ));
+        }
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -534,7 +544,9 @@ impl<'a> CallCreateExecutive<'a> {
     fn exec_storage_commission_privilege_control_contract(
         params: &ActionParams, state: &mut State, gas_cost: &U256,
     ) -> vm::Result<()> {
-        // FIXME: params.sender should be address of a contract.
+        if !state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract("normal account is not allowed to set storage_commission_privilege"));
+        }
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -748,7 +760,9 @@ impl<'a> CallCreateExecutive<'a> {
                     if let Err(e) = result {
                         state.revert_to_checkpoint();
                         Err(e.into())
-                    } else if state.check_storage_balance(self.env.timestamp) {
+                    } else if state
+                        .check_collateral_for_storage(self.env.timestamp)
+                    {
                         state.discard_checkpoint();
                         let internal_contract_out_buffer = Vec::new();
                         let out_len = internal_contract_out_buffer.len();
@@ -763,7 +777,6 @@ impl<'a> CallCreateExecutive<'a> {
                         })
                     } else {
                         state.revert_to_checkpoint();
-                        // FIXME: add more details.
                         Err(vm::Error::OutOfStaking)
                     }
                 };
@@ -845,14 +858,17 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                if Self::enact_result(
                     &res,
                     &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                ) {
+                    Ok(res)
+                } else {
+                    Ok(Err(vm::Error::OutOfStaking))
+                }
             }
 
             CallCreateExecutiveKind::ExecCreate(
@@ -929,14 +945,17 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                if Self::enact_result(
                     &res,
                     &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                ) {
+                    Ok(res)
+                } else {
+                    Ok(Err(vm::Error::OutOfStaking))
+                }
             }
 
             CallCreateExecutiveKind::ResumeCall(..)
@@ -1005,14 +1024,17 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                if Self::enact_result(
                     &res,
                     &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                ) {
+                    Ok(res)
+                } else {
+                    Ok(Err(vm::Error::OutOfStaking))
+                }
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("Resumable as create, but called resume_call")
@@ -1086,14 +1108,17 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                if Self::enact_result(
                     &res,
                     &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                ) {
+                    Ok(res)
+                } else {
+                    Ok(Err(vm::Error::OutOfStaking))
+                }
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
                 panic!("Resumable as call, but called resume_create")
@@ -1349,15 +1374,13 @@ impl<'a> Executive<'a> {
                         self.state.commission_balance(&params.code_address)?;
                     if gas_cost <= commission_balance && gas_cost <= balance {
                         self.state.checkpoint();
-                        // FIXME: If there are some db errors, should we panic
-                        // here?
                         self.state.sub_commission_balance(
                             &params.code_address,
                             &gas_cost,
                         )?;
                         assert!(self
                             .state
-                            .check_storage_balance(self.env.timestamp));
+                            .check_collateral_for_storage(self.env.timestamp));
                         self.state.sub_balance(
                             &params.code_address,
                             &gas_cost,
@@ -1570,13 +1593,12 @@ impl<'a> Executive<'a> {
 
         // perform suicides
         for address in &substate.suicides {
-            // If the `bank_balance` of the address is not zero, it means it
+            // If the `staking_balance` of the address is not zero, it means it
             // owns some storages. We should not kill this account, unless all
             // the storages are released.
             //
-            // FIXME: some db errors should be handled here.
             assert!(self.state.exists(address)?);
-            if self.state.bank_balance(address)?.is_zero() {
+            if self.state.staking_balance(address)?.is_zero() {
                 self.state.kill_account(address);
             }
         }
@@ -1636,7 +1658,7 @@ mod tests {
         evm::{Factory, VMType},
         machine::Machine,
         parameters::consensus_internal::{
-            CONFLUX_TOKEN, RENTAL_PRICE_PER_STORAGE_KEY,
+            CONFLUX_TOKEN, COLLATERAL_PER_STORAGE_KEY,
         },
         state::{CleanupMode, State, Substate},
         statedb::StateDb,
@@ -2082,7 +2104,7 @@ mod tests {
             state.balance(&sender).unwrap(),
             U256::from(1_000_000_000_000u64)
         );
-        assert_eq!(state.bank_balance(&sender).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&sender).unwrap(), U256::from(0));
 
         // everything is fine
         params.call_type = CallType::Call;
@@ -2094,7 +2116,7 @@ mod tests {
             U256::from(900_000_000_000u64)
         );
         assert_eq!(
-            state.bank_balance(&sender).unwrap(),
+            state.staking_balance(&sender).unwrap(),
             U256::from(100_000_000_000u64)
         );
 
@@ -2108,7 +2130,7 @@ mod tests {
             U256::from(900_000_000_000u64)
         );
         assert_eq!(
-            state.bank_balance(&sender).unwrap(),
+            state.staking_balance(&sender).unwrap(),
             U256::from(100_000_000_000u64)
         );
 
@@ -2122,7 +2144,7 @@ mod tests {
             U256::from(900_000_000_000u64)
         );
         assert_eq!(
-            state.bank_balance(&sender).unwrap(),
+            state.staking_balance(&sender).unwrap(),
             U256::from(100_000_000_000u64)
         );
 
@@ -2136,7 +2158,7 @@ mod tests {
             U256::from(900_000_000_000u64)
         );
         assert_eq!(
-            state.bank_balance(&sender).unwrap(),
+            state.staking_balance(&sender).unwrap(),
             U256::from(100_000_000_000u64)
         );
 
@@ -2150,7 +2172,7 @@ mod tests {
             U256::from(950_000_000_000u64)
         );
         assert_eq!(
-            state.bank_balance(&sender).unwrap(),
+            state.staking_balance(&sender).unwrap(),
             U256::from(50_000_000_000u64)
         );
     }
@@ -2411,7 +2433,7 @@ mod tests {
         params.gas_price = U256::from(1);
         params.code = Some(Arc::new(code));
         params.value =
-            ActionValue::Transfer(U256::from(RENTAL_PRICE_PER_STORAGE_KEY));
+            ActionValue::Transfer(U256::from(COLLATERAL_PER_STORAGE_KEY));
 
         let storage_manager = new_state_manager_for_unit_test();
         let mut state =
@@ -2437,27 +2459,27 @@ mod tests {
         assert_eq!(substate.contracts_created.len(), 0);
         assert_eq!(
             state.balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         state
             .add_balance(
                 &caller1,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
+                &U256::from(COLLATERAL_PER_STORAGE_KEY),
                 CleanupMode::NoEmpty,
             )
             .unwrap();
         state
             .add_balance(
                 &caller2,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
+                &U256::from(COLLATERAL_PER_STORAGE_KEY),
                 CleanupMode::NoEmpty,
             )
             .unwrap();
         state
             .add_balance(
                 &caller3,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
+                &U256::from(COLLATERAL_PER_STORAGE_KEY),
                 CleanupMode::NoEmpty,
             )
             .unwrap();
@@ -2480,7 +2502,7 @@ mod tests {
                 caller2,
             )
             .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage(0 /* timestamp */));
         state.discard_checkpoint();
         assert!(state
             .check_commission_privilege(
@@ -2510,7 +2532,7 @@ mod tests {
         // call with no privilege
         assert_eq!(
             state.balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         params.sender = caller3;
         params.original_sender = caller3;
@@ -2521,18 +2543,18 @@ mod tests {
         assert_eq!(gas_left, U256::from(94983));
         assert_eq!(state.balance(&caller3).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&caller3).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&caller3).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // call with privilege
         assert_eq!(
             state.balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         params.sender = caller1;
         params.original_sender = caller1;
@@ -2543,30 +2565,36 @@ mod tests {
         assert_eq!(gas_left, U256::from(94983));
         assert_eq!(
             state.balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
-        assert_eq!(state.bank_balance(&caller1).unwrap(), U256::from(0));
-        assert_eq!(state.storage_balance(&caller1).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&caller1).unwrap(), U256::from(0));
+        assert_eq!(
+            state.collateral_for_storage(&caller1).unwrap(),
+            U256::from(0)
+        );
         assert_eq!(state.balance(&address).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&address).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&address).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(state.balance(&caller3).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&caller3).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
-        assert_eq!(state.storage_balance(&caller3).unwrap(), U256::from(0));
+        assert_eq!(
+            state.collateral_for_storage(&caller3).unwrap(),
+            U256::from(0)
+        );
 
         // another caller call with commission privilege
         assert_eq!(
             state.balance(&caller2).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         params.sender = caller2;
         params.original_sender = caller2;
@@ -2577,18 +2605,21 @@ mod tests {
         assert_eq!(gas_left, U256::from(94983));
         assert_eq!(
             state.balance(&caller2).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
-        assert_eq!(state.bank_balance(&caller2).unwrap(), U256::from(0));
-        assert_eq!(state.storage_balance(&caller2).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&caller2).unwrap(), U256::from(0));
+        assert_eq!(
+            state.collateral_for_storage(&caller2).unwrap(),
+            U256::from(0)
+        );
         assert_eq!(state.balance(&address).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&address).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&address).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
 
         // remove privilege from caller1
@@ -2609,7 +2640,7 @@ mod tests {
             .unwrap());
         assert_eq!(
             state.balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         params.sender = caller1;
         params.original_sender = caller1;
@@ -2620,18 +2651,21 @@ mod tests {
         assert_eq!(gas_left, U256::from(94983));
         assert_eq!(state.balance(&caller1).unwrap(), U256::from(0));
         assert_eq!(
-            state.bank_balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.staking_balance(&caller1).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
-            state.storage_balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            state.collateral_for_storage(&caller1).unwrap(),
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
         assert_eq!(
             state.balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
+            U256::from(COLLATERAL_PER_STORAGE_KEY)
         );
-        assert_eq!(state.bank_balance(&address).unwrap(), U256::from(0));
-        assert_eq!(state.storage_balance(&address).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&address).unwrap(), U256::from(0));
+        assert_eq!(
+            state.collateral_for_storage(&address).unwrap(),
+            U256::from(0)
+        );
     }
 }

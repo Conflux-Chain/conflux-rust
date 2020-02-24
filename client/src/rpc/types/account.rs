@@ -11,8 +11,8 @@ pub struct Account {
     pub balance: U256,
     pub nonce: U256,
     pub code_hash: H256,
-    pub bank_balance: U256,
-    pub storage_balance: U256,
+    pub staking_balance: U256,
+    pub collateral_for_storage: U256,
     pub bank_ar: U256,
 }
 
@@ -22,8 +22,8 @@ impl Account {
             balance: account.balance.into(),
             nonce: account.nonce.into(),
             code_hash: account.code_hash.into(),
-            bank_balance: account.bank_balance.into(),
-            storage_balance: account.storage_balance.into(),
+            staking_balance: account.staking_balance.into(),
+            collateral_for_storage: account.collateral_for_storage.into(),
             bank_ar: account.bank_ar.into(),
         }
     }

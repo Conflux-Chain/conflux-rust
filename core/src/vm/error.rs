@@ -75,7 +75,7 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
-    /// When bank_balance is not enough for storage_balance.
+    /// When staking_balance is not enough for collateral_for_storage.
     /// FIXME: add more details.
     OutOfStaking,
     /// Built-in contract failed on given input
