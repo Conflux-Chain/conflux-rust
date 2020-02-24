@@ -27,6 +27,8 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
+use primitives::TransactionWithSignature;
+use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::SharedTransactionGenerator;
 
@@ -34,23 +36,23 @@ pub struct RpcImpl {
     //config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
+    tx_pool: SharedTransactionPool,
     /* block_gen: Arc<TGBlockGenerator>,
-     *tx_pool: SharedTransactionPool,
      * tx_gen: SharedTransactionGenerator, */
 }
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        _block_gen: Arc<TGBlockGenerator>, _tx_pool: SharedTransactionPool,
+        _block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
         _tx_gen: SharedTransactionGenerator, _config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
             consensus,
             sync,
+            tx_pool,
             /*block_gen,
-             *tx_pool,
              *tx_gen,
              *config, */
         }
@@ -75,18 +77,49 @@ impl RpcImpl {
     fn current_sync_phase(&self) -> RpcResult<String> {
         Ok(self.sync.current_sync_phase().name().into())
     }
+
+    fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256> {
+        info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
+
+        let tx = Rlp::new(&raw.into_vec()).as_val().map_err(|err| {
+            RpcError::invalid_params(format!("Error: {:?}", err))
+        })?;
+
+        self.send_transaction_with_signature(tx)
+    }
+
+    fn send_transaction_with_signature(
+        &self, tx: TransactionWithSignature,
+    ) -> RpcResult<RpcH256> {
+        let (signed_trans, failed_trans) =
+            self.tx_pool.insert_new_transactions(vec![tx]);
+        if signed_trans.len() + failed_trans.len() > 1 {
+            // This should never happen
+            error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
+            Ok(H256::zero().into())
+        } else if signed_trans.len() + failed_trans.len() == 0 {
+            // For tx in transactions_pubkey_cache, we simply ignore them
+            debug!("insert_new_transactions ignores inserted transactions");
+            Err(RpcError::invalid_params(String::from("tx already exist")))
+        } else if signed_trans.is_empty() {
+            let tx_err = failed_trans.iter().next().expect("Not empty").1;
+            Err(RpcError::invalid_params(tx_err))
+        } else {
+            let tx_hash = signed_trans[0].hash();
+            self.sync.append_received_transactions(signed_trans);
+            Ok(tx_hash.into())
+        }
+    }
 }
 
 pub struct CfxHandler {
     common: Arc<CommonImpl>,
-    //rpc_impl: Arc<RpcImpl>,
+    rpc_impl: Arc<RpcImpl>,
 }
 
 impl CfxHandler {
-    pub fn new(common: Arc<CommonImpl>, _rpc_impl: Arc<RpcImpl>) -> Self {
-        CfxHandler {
-            common, /* , rpc_impl */
-        }
+    pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
+        CfxHandler { common, rpc_impl }
     }
 }
 
@@ -97,8 +130,9 @@ impl Cfx for CfxHandler {
             fn best_block_hash(&self) -> RpcResult<RpcH256>;
         }
 
-        /*target self.rpc_impl {
-        }*/
+        target self.rpc_impl {
+            fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+        }
     }
 
     not_supported! {
@@ -117,7 +151,6 @@ impl Cfx for CfxHandler {
         fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
         fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
-        fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
         fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
         fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
 

@@ -17,7 +17,6 @@ use crate::{
     parameters::{consensus::*, consensus_internal::*},
     statistics::SharedStatistics,
     sync::delta::CHECKPOINT_DUMP_MANAGER,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     SharedTransactionPool,
 };
 use cfx_types::H256;
@@ -307,16 +306,16 @@ impl ConsensusNewBlockHandler {
             deferred_exec_commitment.receipts_root.clone();
         let deferred_logs_bloom_hash =
             deferred_exec_commitment.logs_bloom_hash.clone();
-        // TODO: pack some transactions
+        // TODO: change `num_txs` to be a configuration
         TGBlockGenerator::assemble_new_block(
             &self.data_man,
+            &self.txpool,
             parent,
             referees,
             deferred_state_root,
             deferred_receipt_root,
             deferred_logs_bloom_hash,
-            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
-            vec![], /* transactions */
+            20, /* num_txs */
         )
     }
 
