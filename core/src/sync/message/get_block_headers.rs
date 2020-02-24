@@ -65,7 +65,7 @@ impl Handleable for GetBlockHeaders {
             .collect();
 
         let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(self.request_id);
+        block_headers_resp.request_id = self.request_id;
         block_headers_resp.headers = headers;
 
         debug!(
