@@ -7,6 +7,7 @@ use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
+    channel::Channel,
     consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
     machine::new_machine_with_builtin,
@@ -16,7 +17,7 @@ use crate::{
     storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
     vm::{Env, Spec},
     vm_factory::VmFactory,
-    SharedTransactionPool,
+    Notifications, SharedTransactionPool,
 };
 use cfx_types::{Address, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
@@ -161,13 +162,14 @@ impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        bench_mode: bool,
+        notifications: Arc<Notifications>, bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
             vm,
+            notifications,
         ));
         let (sender, receiver) = channel();
 
@@ -773,18 +775,25 @@ pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
+
+    /// Channel used to send epochs to PubSub
+    /// Each element is <epoch_number, epoch_hashes>
+    epochs_sender: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory,
+        vm: VmFactory, notifications: Arc<Notifications>,
     ) -> Self
     {
+        let epochs_sender = notifications.epochs_executed.clone();
+
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
             vm,
+            epochs_sender,
         }
     }
 
@@ -1132,8 +1141,15 @@ impl ConsensusExecutionHandler {
                 block_receipts.clone(),
                 on_local_pivot,
             );
+
             epoch_receipts.push(block_receipts);
         }
+
+        // send to PubSub
+        self.epochs_sender.send((
+            pivot_block.block_header.height(), /* epoch number */
+            epoch_blocks.iter().map(|b| b.hash()).collect(), /* epoch hashes */
+        ));
 
         if on_local_pivot {
             self.tx_pool.recycle_transactions(to_pending);

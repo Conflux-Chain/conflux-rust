@@ -4,6 +4,7 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
+    channel::Channel,
     consensus::{ConsensusGraphInner, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
@@ -936,10 +937,9 @@ pub struct SynchronizationGraph {
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_graph_ready_block: Mutex<H256>,
 
-    /// `notifications.new_block_hashes` is the channel used to send work to
-    /// `ConsensusGraph`.
+    /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
-    notifications: Arc<Notifications>,
+    new_block_hashes: Arc<Channel<(H256, bool)>>,
 
     /// whether it is a archive node or full node
     is_full_node: bool,
@@ -979,8 +979,8 @@ impl SynchronizationGraph {
             consensus: consensus.clone(),
             statistics: consensus.statistics.clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
+            new_block_hashes: notifications.new_block_hashes.clone(),
             is_full_node,
-            notifications,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
@@ -1336,7 +1336,7 @@ impl SynchronizationGraph {
                             inner.arena[index].block_header.hash();
 
                         assert!(
-                            self.notifications.new_block_hashes.send((
+                            self.new_block_hashes.send((
                                 inner.arena[index].block_header.hash(),
                                 true, /* ignore_body */
                             )),
@@ -1572,9 +1572,7 @@ impl SynchronizationGraph {
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
             assert!(
-                self.notifications
-                    .new_block_hashes
-                    .send((h, false /* ignore_body */)),
+                self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
             );
 

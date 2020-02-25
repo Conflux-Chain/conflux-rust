@@ -172,6 +172,7 @@ impl LightClient {
             statistics,
             data_man.clone(),
             pow_config.clone(),
+            notifications.clone(),
         ));
 
         let _protocol_config = conf.protocol_config();
