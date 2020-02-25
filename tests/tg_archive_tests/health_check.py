@@ -179,11 +179,7 @@ class ConsensusExecutionStatus(object):
             self.deferred_logs_bloom_hash == other.deferred_logs_bloom_hash
 
     def __str__(self):
-        return "ConsensusExecutionStatus(\
-                hash={}, \
-                deferred_state_root={}, \
-                deferred_receipt_root={}, \
-                deferred_logs_bloom_hash={})".format(
+        return "ConsensusExecutionStatus(hash={}, deferred_state_root={}, deferred_receipt_root={}, deferred_logs_bloom_hash={})".format(
             self.hash,
             self.deferred_state_root,
             self.deferred_receipt_root,
@@ -268,12 +264,7 @@ class BFTCommit(object):
             self.timestamp == other.timestamp
 
     def __str__(self):
-        return "BFTCommit(\
-                epoch={}, \
-                commit={}, \
-                round={}, \
-                parent={}, \
-                timestamp={})".format(
+        return "BFTCommit(epoch={}, commit={}, round={}, parent={}, timestamp={})".format(
             self.epoch,
             self.commit,
             self.round,

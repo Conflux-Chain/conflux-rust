@@ -28,6 +28,7 @@ use primitives::{
 use slab::Slab;
 use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    mem,
     sync::Arc,
     time::Instant,
 };
@@ -42,14 +43,14 @@ pub struct ConsensusInnerConfig {
     pub candidate_pivot_waiting_timeout_ms: u64,
 }
 
-#[derive(Default)]
-pub struct ConsensusGraphPivotData {
+#[derive(Default, Debug)]
+pub struct ConsensusGraphNodeData {
     /// The total block of its past set (exclude itself)
     pub past_num_blocks: u64,
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
-    pub blockset_in_epoch: Vec<usize>,
+    pub blockset_in_own_view_of_epoch: Vec<usize>,
     /// Ordered executable blocks in this epoch. This filters out blocks that
     /// are not in the same era of the epoch pivot block.
     ///
@@ -89,8 +90,6 @@ pub struct ConsensusGraphInner {
     /// The current pivot chain indexes.
     pub pivot_chain: Vec<usize>,
     pub pastset: BitSet,
-    /// The metadata associated with each pivot chain block
-    pub pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
     /// The set of *graph* tips in the TreeGraph.
     terminal_hashes: HashSet<H256>,
     /// The ``current'' era_genesis block index. It will start being the
@@ -146,6 +145,9 @@ pub struct ConsensusGraphNode {
     children: Vec<usize>,
     referrers: Vec<usize>,
     referees: Vec<usize>,
+
+    /// This maintains some data structures related with consensus graph node.
+    pub data: Option<ConsensusGraphNodeData>,
 }
 
 impl ConsensusGraphInner {
@@ -167,7 +169,6 @@ impl ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
             pivot_chain: Vec::new(),
-            pivot_chain_metadata: Vec::new(),
             terminal_hashes: Default::default(),
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
@@ -196,13 +197,13 @@ impl ConsensusGraphInner {
         inner.inclusive_weight_tree.make_tree(genesis_arena_index);
         inner.arena[genesis_arena_index].epoch_number = cur_era_genesis_height;
         inner.pivot_chain.push(genesis_arena_index);
-        inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
+        inner.arena[genesis_arena_index].data = Some(ConsensusGraphNodeData {
             past_num_blocks: inner
                 .data_man
                 .get_epoch_execution_context(cur_era_genesis_block_hash)
                 .expect("ExecutionContext for cur_era_genesis exists")
                 .start_block_number,
-            blockset_in_epoch: Vec::new(),
+            blockset_in_own_view_of_epoch: Vec::new(),
             ordered_executable_epoch_blocks: vec![genesis_arena_index],
         });
         inner.pastset.add(genesis_arena_index as u32);
@@ -214,8 +215,12 @@ impl ConsensusGraphInner {
     }
 
     pub fn persist_epoch_set_hashes(&self, pivot_index: usize) {
+        let pivot_arena_index = self.pivot_chain[pivot_index];
         let height = self.pivot_index_to_height(pivot_index);
-        let epoch_set_hashes = self.pivot_chain_metadata[pivot_index]
+        let epoch_set_hashes = self.arena[pivot_arena_index]
+            .data
+            .as_ref()
+            .expect("pivot data exists")
             .ordered_executable_epoch_blocks
             .iter()
             .map(|arena_index| self.arena[*arena_index].hash)
@@ -314,9 +319,10 @@ impl ConsensusGraphInner {
     #[inline]
     fn get_epoch_block_hashes(&self, pivot_arena_index: usize) -> Vec<H256> {
         assert!(pivot_arena_index != self.cur_era_genesis_block_arena_index);
-        let pivot_index =
-            self.height_to_pivot_index(self.arena[pivot_arena_index].height);
-        self.pivot_chain_metadata[pivot_index]
+        self.arena[pivot_arena_index]
+            .data
+            .as_ref()
+            .expect("pivot data computed")
             .ordered_executable_epoch_blocks
             .iter()
             .map(|idx| self.arena[*idx].hash)
@@ -324,8 +330,14 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_epoch_start_block_number(&self, pivot_index: usize) -> u64 {
-        self.pivot_chain_metadata[pivot_index - 1].past_num_blocks + 1
+    fn get_epoch_start_block_number(&self, pivot_arena_index: usize) -> u64 {
+        let parent = self.arena[pivot_arena_index].parent;
+        self.arena[parent]
+            .data
+            .as_ref()
+            .expect("pivot data computed")
+            .past_num_blocks
+            + 1
     }
 
     #[inline]
@@ -339,67 +351,97 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
-    fn collect_blockset_in_epoch(&mut self, pivot_index: usize) {
-        assert!(pivot_index < self.pivot_chain.len());
-        let pivot_arena_index = self.pivot_chain[pivot_index];
+    /// Assume that
+    ///   1. `arena_index` is not in pivot chain yet.
+    ///   2. `arena_index` is in the subtree of last pivot block.
+    ///   3. the blockset from parent of `arena_index` to last pivot block
+    /// exist.
+    fn collect_blockset_in_own_view_of_epoch(&mut self, arena_index: usize) {
+        debug!(
+            "collect_blockset_in_own_view_of_epoch for [{:?}] hash[{:?}]",
+            arena_index, self.arena[arena_index].hash
+        );
+        let mut parent = self.arena[arena_index].parent;
+        let last_pivot =
+            *self.pivot_chain.last().expect("pivot chain not empty");
+        assert!(parent != NULL);
+        assert!(self.lca(parent, last_pivot) == last_pivot);
+
+        let mut path_to_last_pivot = Vec::new();
+        while parent != last_pivot {
+            assert!(self.arena[parent].data.is_some());
+            path_to_last_pivot.push(parent);
+            parent = self.arena[parent].parent;
+        }
+        path_to_last_pivot.reverse();
+
+        let mut visited = HashSet::new();
+        for index in path_to_last_pivot {
+            visited.insert(index);
+            for block_arena_index in &self.arena[index]
+                .data
+                .as_ref()
+                .unwrap()
+                .blockset_in_own_view_of_epoch
+            {
+                visited.insert(*block_arena_index);
+            }
+        }
 
         let mut queue = VecDeque::new();
-        queue.push_back(pivot_arena_index);
-        self.pastset.add(pivot_arena_index as u32);
-        let mut blockset = HashSet::new();
+        queue.push_back(arena_index);
+        visited.insert(arena_index);
+        let mut blockset_in_own_view_of_epoch = Vec::new();
         while let Some(index) = queue.pop_front() {
-            if index != pivot_arena_index {
-                self.pivot_chain_metadata[pivot_index]
-                    .blockset_in_epoch
-                    .push(index);
-                blockset.insert(index);
+            if index != arena_index {
+                blockset_in_own_view_of_epoch.push(index);
             }
             let parent = self.arena[index].parent;
-            if parent != NULL && !self.pastset.contains(parent as u32) {
-                self.pastset.add(parent as u32);
+            if parent != NULL
+                && !self.pastset.contains(parent as u32)
+                && !visited.contains(&parent)
+            {
+                visited.insert(parent);
                 queue.push_back(parent);
             }
             for referee in &self.arena[index].referees {
-                if !self.pastset.contains(*referee as u32) {
-                    self.pastset.add(*referee as u32);
+                if !self.pastset.contains(*referee as u32)
+                    && !visited.contains(referee)
+                {
+                    visited.insert(*referee);
                     queue.push_back(*referee);
                 }
             }
         }
 
-        let filtered_blockset = self.pivot_chain_metadata[pivot_index]
-            .blockset_in_epoch
+        let filtered_blockset = blockset_in_own_view_of_epoch
             .iter()
-            .filter(|idx| self.is_same_era(**idx, pivot_arena_index))
+            .filter(|idx| self.is_same_era(**idx, arena_index))
             .map(|idx| *idx)
             .collect();
 
-        self.pivot_chain_metadata[pivot_index]
-            .ordered_executable_epoch_blocks =
+        let mut ordered_executable_epoch_blocks =
             self.topological_sort(&filtered_blockset);
-        self.pivot_chain_metadata[pivot_index]
-            .ordered_executable_epoch_blocks
-            .push(pivot_arena_index);
+        ordered_executable_epoch_blocks.push(arena_index);
 
-        if pivot_index > 0 {
-            let past_num_blocks = self.pivot_chain_metadata[pivot_index - 1]
-                .past_num_blocks
-                + self.pivot_chain_metadata[pivot_index]
-                    .ordered_executable_epoch_blocks
-                    .len() as u64;
+        parent = self.arena[arena_index].parent;
+        let past_num_blocks =
+            self.arena[parent].data.as_ref().unwrap().past_num_blocks
+                + ordered_executable_epoch_blocks.len() as u64;
 
-            self.data_man.insert_epoch_execution_context(
-                self.arena[pivot_arena_index].hash,
-                EpochExecutionContext {
-                    start_block_number: self
-                        .get_epoch_start_block_number(pivot_index),
-                },
-                true, /* persistent to db */
-            );
-
-            self.pivot_chain_metadata[pivot_index].past_num_blocks =
-                past_num_blocks;
-        }
+        self.data_man.insert_epoch_execution_context(
+            self.arena[arena_index].hash,
+            EpochExecutionContext {
+                start_block_number: self
+                    .get_epoch_start_block_number(arena_index),
+            },
+            true, /* persistent to db */
+        );
+        self.arena[arena_index].data = Some(ConsensusGraphNodeData {
+            past_num_blocks,
+            blockset_in_own_view_of_epoch,
+            ordered_executable_epoch_blocks,
+        });
     }
 
     fn insert_referee_if_not_duplicate(
@@ -462,6 +504,7 @@ impl ConsensusGraphInner {
             referrers: Vec::new(),
             epoch_number: NULLU64,
             sequence_number: sn,
+            data: None,
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -524,6 +567,7 @@ impl ConsensusGraphInner {
             referrers: Vec::new(),
             epoch_number: NULLU64,
             sequence_number: sn,
+            data: None,
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -637,9 +681,10 @@ impl ConsensusGraphInner {
     pub fn get_executable_epoch_blocks(
         &self, pivot_arena_index: usize,
     ) -> Vec<Arc<Block>> {
-        let pivot_index =
-            self.height_to_pivot_index(self.arena[pivot_arena_index].height);
-        self.pivot_chain_metadata[pivot_index]
+        self.arena[pivot_arena_index]
+            .data
+            .as_ref()
+            .expect("pivot data exists")
             .ordered_executable_epoch_blocks
             .iter()
             .map(|x| {
@@ -722,7 +767,10 @@ impl ConsensusGraphInner {
                             .epoch_set_hashes_from_db(epoch_number)
                             .ok_or("Fail to load the epoch set for current era genesis in db".into())
                     } else {
-                        Ok(self.pivot_chain_metadata[pivot_index]
+                        Ok(self.arena[*pivot_arena_index]
+                            .data
+                            .as_ref()
+                            .expect("pivot data exists")
                             .ordered_executable_epoch_blocks
                             .iter()
                             .map(|arena_index| self.arena[*arena_index].hash)
@@ -836,18 +884,6 @@ impl ConsensusGraphInner {
         Ok(())
     }
 
-    /// Compute metadata associated information on pivot chain extending.
-    pub fn compute_metadata(&mut self, start_at: u64) {
-        self.pivot_chain_metadata
-            .resize_with(self.pivot_chain.len(), Default::default);
-        let pivot_height = self.get_pivot_height();
-        for height in start_at..pivot_height {
-            let pivot_index = self.height_to_pivot_index(height);
-            self.collect_blockset_in_epoch(pivot_index);
-            self.set_epoch_number_in_epoch(pivot_index, height)
-        }
-    }
-
     pub fn total_processed_block_count(&self) -> u64 {
         self.sequence_number_of_block_entrance
     }
@@ -874,13 +910,28 @@ impl ConsensusGraphInner {
     }
 
     fn set_epoch_number_in_epoch(
-        &mut self, pivot_index: usize, epoch_number: u64,
+        &mut self, pivot_arena_index: usize, epoch_number: u64,
     ) {
-        for idx in &self.pivot_chain_metadata[pivot_index].blockset_in_epoch {
+        let block_set = mem::replace(
+            &mut self.arena[pivot_arena_index]
+                .data
+                .as_mut()
+                .expect("pivot data exists")
+                .blockset_in_own_view_of_epoch,
+            Default::default(),
+        );
+        for idx in &block_set {
             self.arena[*idx].epoch_number = epoch_number;
         }
-        let pivot_arena_index = self.pivot_chain[pivot_index];
         self.arena[pivot_arena_index].epoch_number = epoch_number;
+        mem::replace(
+            &mut self.arena[pivot_arena_index]
+                .data
+                .as_mut()
+                .expect("pivot data exists")
+                .blockset_in_own_view_of_epoch,
+            block_set,
+        );
     }
 
     /// Given a new `PivotBlockDecision` check whether it is valid. If it is
@@ -920,12 +971,31 @@ impl ConsensusGraphInner {
         self.validate_and_add_candidate_pivot(block_hash, parent_hash, height)
     }
 
-    pub fn new_pivot(&mut self, pivot_arena_index: usize) {
+    pub fn new_pivot(&mut self, pivot_arena_index: usize, persist_epoch: bool) {
         assert!(self.arena.contains(pivot_arena_index));
         let parent = self.arena[pivot_arena_index].parent;
         assert!(parent == self.best_epoch_arena_index());
+
+        if self.arena[pivot_arena_index].data.is_none() {
+            self.collect_blockset_in_own_view_of_epoch(pivot_arena_index);
+        }
         self.pivot_chain.push(pivot_arena_index);
-        self.compute_metadata(self.arena[pivot_arena_index].height);
+        self.set_epoch_number_in_epoch(
+            pivot_arena_index,
+            self.arena[pivot_arena_index].height,
+        );
+        for index in &self.arena[pivot_arena_index]
+            .data
+            .as_ref()
+            .expect("pivot data exists")
+            .blockset_in_own_view_of_epoch
+        {
+            self.pastset.add(*index as u32);
+        }
+        self.pastset.add(pivot_arena_index as u32);
+        if persist_epoch {
+            self.persist_epoch_set_hashes(self.pivot_chain.len() - 1);
+        }
     }
 
     pub fn commit(&mut self, block_hash: &H256) {
@@ -942,7 +1012,7 @@ impl ConsensusGraphInner {
             block_hash,
             self.arena[arena_index].height,
         );
-        self.new_pivot(arena_index);
+        self.new_pivot(arena_index, true /* persist_epoch */);
     }
 
     pub fn set_to_pivot(&mut self, block_hash: &H256) {
@@ -950,16 +1020,34 @@ impl ConsensusGraphInner {
             .hash_to_arena_indices
             .get(block_hash)
             .expect("block_hash should inserted");
-        self.pivot_chain.clear();
+
+        let genesis_arena_index = self.cur_era_genesis_block_arena_index;
+        let genesis_block_hash = self.arena[genesis_arena_index].hash;
+        self.pivot_chain = vec![genesis_arena_index];
         self.pastset.clear();
-        self.pivot_chain_metadata.clear();
+        self.arena[genesis_arena_index].data = Some(ConsensusGraphNodeData {
+            past_num_blocks: self
+                .data_man
+                .get_epoch_execution_context(&genesis_block_hash)
+                .expect("ExecutionContext for cur_era_genesis exists")
+                .start_block_number,
+            blockset_in_own_view_of_epoch: Vec::new(),
+            ordered_executable_epoch_blocks: vec![genesis_arena_index],
+        });
+        self.pastset.add(genesis_arena_index as u32);
+
+        let mut pivot_chain = Vec::new();
         let mut pivot = arena_index;
-        while pivot != NULL {
-            self.pivot_chain.push(pivot);
+        while pivot != genesis_arena_index {
+            pivot_chain.push(pivot);
             pivot = self.arena[pivot].parent;
         }
-        self.pivot_chain.reverse();
-        self.compute_metadata(self.cur_era_genesis_height);
+        pivot_chain.reverse();
+
+        for index in pivot_chain {
+            self.new_pivot(index, false /* persist_epoch */);
+        }
+
         self.candidate_pivot_tree = CandidatePivotTree::new(arena_index);
         debug!(
             "set pivot chain to block[{:?}], pivot_chain_len={:?}",

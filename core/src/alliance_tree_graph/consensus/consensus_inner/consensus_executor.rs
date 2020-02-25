@@ -294,19 +294,52 @@ impl ConsensusExecutor {
         }
     }
 
+    /// Binary search to find the starting point so we can execute to the end of
+    /// the chain.
+    /// Return the first index that is not executed,
+    /// or return `chain.len()` if they are all executed (impossible for now).
+    ///
+    /// NOTE: If a state for an block exists, all the blocks on its pivot chain
+    /// must have been executed and state committed. The receipts for these
+    /// past blocks may not exist because the receipts on forks will be
+    /// garbage-collected, but when we need them, we will recompute these
+    /// missing receipts in `process_rewards_and_fees`. This 'recompute' is safe
+    /// because the parent state exists. Thus, it's okay that here we do not
+    /// check existence of the receipts that will be needed for reward
+    /// computation during epoch execution.
+    fn find_start_chain_index(
+        inner: &ConsensusGraphInner, chain: &Vec<usize>,
+    ) -> usize {
+        let mut base = 0;
+        let mut size = chain.len();
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            let epoch_hash = inner.arena[chain[mid]].hash;
+            base = if inner.data_man.epoch_executed(&epoch_hash) {
+                mid
+            } else {
+                base
+            };
+            size -= half;
+        }
+        let epoch_hash = inner.arena[chain[base]].hash;
+        if inner.data_man.epoch_executed(&epoch_hash) {
+            base + 1
+        } else {
+            base
+        }
+    }
+
     /// This is a blocking call to force the execution engine to compute the
     /// state of a block immediately
     pub fn compute_state_for_block(
-        &self, pivot_index: usize, inner: &mut ConsensusGraphInner,
+        &self, arena_index: usize, inner: &mut ConsensusGraphInner,
     ) -> Result<(), String> {
         let _timer = MeterTimer::time_func(
             CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER.as_ref(),
         );
-        let pivot_arena_index = *inner
-            .pivot_chain
-            .get(pivot_index)
-            .expect("pivot index exists");
-        let block_hash = inner.arena[pivot_arena_index].hash;
+        let block_hash = inner.arena[arena_index].hash;
         // If we already computed the state of the block before, we should not
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
@@ -328,38 +361,54 @@ impl ConsensusExecutor {
                 if let Ok(Some(_)) = maybe_cached_state_result {
                     return Ok(());
                 } else {
-                    return Err("Internal storage error".into());
+                    return Err("Internal storage error".to_owned());
                 }
             }
         }
-        let mut start_chain_index = pivot_index;
-        while start_chain_index > 0 {
-            let epoch_hash =
-                inner.arena[inner.pivot_chain[start_chain_index - 1]].hash;
-            if inner.data_man.epoch_executed(&epoch_hash) {
-                break;
-            }
-            start_chain_index += 1;
+
+        let block_height = inner.arena[arena_index].height;
+        let mut fork_height = block_height;
+        let mut chain: Vec<usize> = Vec::new();
+        let mut idx = arena_index;
+        while fork_height > 0
+            && (fork_height >= inner.get_pivot_height()
+                || inner.get_pivot_block_arena_index(fork_height) != idx)
+        {
+            chain.push(idx);
+            fork_height -= 1;
+            idx = inner.arena[idx].parent;
         }
+        // Because we have genesis at height 0, this should always be true
+        assert!(inner.get_pivot_block_arena_index(fork_height) == idx);
+        debug!(
+            "compute_state_for_block forked at index {} height {}",
+            idx, fork_height
+        );
+        chain.push(idx);
+        chain.reverse();
+        let start_chain_index =
+            ConsensusExecutor::find_start_chain_index(inner, &chain);
 
-        debug!("Start execution from index {}", start_chain_index);
+        debug!(
+            "Start execution from index[{:?}] hash[{:?}]",
+            chain[start_chain_index], inner.arena[chain[start_chain_index]]
+        );
 
-        while start_chain_index <= pivot_index {
-            let epoch_arena_index = inner.pivot_chain[start_chain_index];
+        for fork_chain_index in start_chain_index..chain.len() {
+            let pivot_arena_index = chain[fork_chain_index];
             self.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_arena_index].hash,
-                inner.get_epoch_block_hashes(epoch_arena_index),
-                inner.get_epoch_start_block_number(start_chain_index),
-                None,
-                false,
+                inner.arena[pivot_arena_index].hash,
+                inner.get_epoch_block_hashes(pivot_arena_index),
+                inner.get_epoch_start_block_number(pivot_arena_index),
+                None,  /* reward_info */
+                false, /* debug_record */
             ));
-            start_chain_index += 1;
         }
 
         let epoch_execution_result = self.wait_for_result(block_hash);
         debug!(
             "Epoch {:?} has state_root={:?} receipts_root={:?} logs_bloom_hash={:?}",
-            block_hash, epoch_execution_result.state_root_with_aux_info,
+            inner.arena[arena_index].hash, epoch_execution_result.state_root_with_aux_info,
             epoch_execution_result.receipts_root, epoch_execution_result.logs_bloom_hash
         );
 
