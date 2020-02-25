@@ -300,17 +300,19 @@ impl ConsensusNewBlockHandler {
                 }
                 index
             };
-
         let deferred_epoch_hash = inner.arena[deferred_arena_index].hash;
         let deferred_epoch_height = inner.arena[deferred_arena_index].height;
 
         debug!("generate block from parent[{:?}] referees[{:?}] deferred_epoch_hash=[{:?}]", parent, referees, deferred_epoch_hash);
-
         assert!(
             inner.candidate_pivot_tree.contains(deferred_arena_index)
                 || inner.get_pivot_block_arena_index(deferred_epoch_height)
                     == deferred_arena_index
         );
+
+        self.executor
+            .compute_state_for_block(deferred_arena_index, inner)
+            .expect("execution in generate_block should succeed");
 
         let deferred_exec_commitment =
             self.executor.wait_for_result(deferred_epoch_hash);
@@ -399,13 +401,6 @@ impl ConsensusNewBlockHandler {
                 if inner.arena[me].data.is_none() {
                     inner.collect_blockset_in_own_view_of_epoch(me);
                 }
-                self.executor.enqueue_epoch(EpochExecutionTask::new(
-                    inner.arena[me].hash,
-                    inner.get_epoch_block_hashes(me),
-                    inner.get_epoch_start_block_number(me),
-                    None,  /* reward_info */
-                    false, /* debug_record */
-                ));
             } else {
                 callback
                     .send(Ok(false))
@@ -465,13 +460,6 @@ impl ConsensusNewBlockHandler {
                         pivot_arena_index,
                     );
                 }
-                self.executor.enqueue_epoch(EpochExecutionTask::new(
-                    inner.arena[pivot_arena_index].hash,
-                    inner.get_epoch_block_hashes(pivot_arena_index),
-                    inner.get_epoch_start_block_number(pivot_arena_index),
-                    None,  /* reward_info */
-                    false, /* debug_record */
-                ));
             } else {
                 callback
                     .send(Ok(false))
