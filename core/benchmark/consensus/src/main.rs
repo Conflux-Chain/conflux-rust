@@ -46,6 +46,8 @@ use std::{
 };
 use threadpool::ThreadPool;
 
+pub const CHECKER_SLEEP_PERIOD: u64 = 50;
+
 fn initialize_logger(log_file: &str, log_level: LevelFilter) {
     let log_config = {
         let mut conf_builder = LogConfig::builder().appender(
@@ -308,7 +310,9 @@ fn main() {
             let checked_count = consensus.get_processed_block_count();
             if checked_count != n - 1 && last_checked_count != checked_count {
                 last_checked_count = checked_count;
-                thread::sleep(time::Duration::from_millis(500));
+                thread::sleep(time::Duration::from_millis(
+                    CHECKER_SLEEP_PERIOD,
+                ));
             }
             check_results(
                 last_checked,
@@ -345,7 +349,7 @@ fn main() {
             );
             last_consensus_block_cnt = consensus_block_cnt;
         }
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(CHECKER_SLEEP_PERIOD));
     }
     check_results(
         last_checked,
@@ -417,7 +421,7 @@ fn main() {
             consensus_n.get_processed_block_count(),
             blocks.len() - genesis_idx - 1
         );
-        thread::sleep(time::Duration::from_millis(100));
+        thread::sleep(time::Duration::from_millis(CHECKER_SLEEP_PERIOD));
     }
     check_results(
         genesis_idx + 1,

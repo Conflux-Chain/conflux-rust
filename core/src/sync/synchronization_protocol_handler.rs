@@ -1205,8 +1205,8 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
-    fn update_total_weight_in_past(&self) {
-        self.graph.update_total_weight_in_past();
+    fn update_total_weight_delta_heartbeat(&self) {
+        self.graph.update_total_weight_delta_heartbeat();
     }
 
     pub fn update_sync_phase(&self, io: &dyn NetworkContext) {
@@ -1416,8 +1416,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
             .expect("Error registering log_statistics timer");
-        io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(60))
-            .expect("Error registering total_weight_in_past timer");
+        io.register_timer(
+            TOTAL_WEIGHT_IN_PAST_TIMER,
+            Duration::from_secs(BLOCK_PROPAGATION_DELAY * 2),
+        )
+        .expect("Error registering total_weight_in_past timer");
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
         io.register_timer(
@@ -1520,7 +1523,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.log_statistics();
             }
             TOTAL_WEIGHT_IN_PAST_TIMER => {
-                self.update_total_weight_in_past();
+                self.update_total_weight_delta_heartbeat();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
                 let timeout = Duration::from_secs(180);

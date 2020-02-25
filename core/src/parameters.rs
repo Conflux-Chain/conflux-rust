@@ -7,9 +7,9 @@ pub mod consensus {
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
     pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
-    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 240;
+    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 330;
     pub const TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 180;
-    pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 330;
+    pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 240;
     // The number of epochs per era. Each era is a potential checkpoint
     // position. The parent_edge checking and adaptive checking are defined
     // relative to the era start blocks.
@@ -19,6 +19,8 @@ pub mod consensus {
 
     pub const NULL: usize = !0;
     pub const NULLU64: u64 = !0;
+
+    pub const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 }
 
 pub mod consensus_internal {
@@ -48,20 +50,21 @@ pub mod consensus_internal {
     /// This is the number seconds per year
     pub const SECONDS_PER_YEAR: u64 = 60 * 60 * 24 * 365;
 
-    // This is the cap of the size of the anticone barrier. If we have more than
-    // this number we will use the brute_force O(n) algorithm instead.
+    /// This is the cap of the size of the anticone barrier. If we have more
+    /// than this number we will use the brute_force O(n) algorithm instead.
     pub const ANTICONE_BARRIER_CAP: usize = 1000;
-    // Here is the delay for us to recycle those orphaned blocks in the boundary
-    // of eras.
+    /// Here is the delay for us to recycle those orphaned blocks in the
+    /// boundary of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
-    // This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
-    // have more than this number, we will not store it in memory
+    /// This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
+    /// have more than this number, we will not store it in memory
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
-    // FIXME Use another method to prevent DDoS attacks if attackers control the
-    // pivot chain A block can blame up to BLAME_BOUND ancestors that their
-    // states are incorrect.
-    //    pub const BLAME_BOUND: u32 = 1000;
+    /// This is the minimum risk that the confirmation meter tries to maintain.
+    pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
+    /// The maximum number of epochs that the confirmation meter tries to
+    /// maintain internally.
+    pub const MAX_NUM_MAINTAINED_RISK: usize = 100;
 }
 
 pub mod sync {
@@ -93,6 +96,11 @@ pub mod sync {
     /// LOCAL_BLOCK_INFO_QUERY_THRESHOLD, we can request block directly through
     /// network, otherwise we should check disk first.
     pub const LOCAL_BLOCK_INFO_QUERY_THRESHOLD: u64 = 5;
+
+    /// Measured block propagation delay in *seconds*. This will determine the
+    /// conservative window when we measure confirmation risk internally in
+    /// the consensus layer.
+    pub const BLOCK_PROPAGATION_DELAY: u64 = 10;
 
     // The waiting time duration that will be accumulated for resending a
     // timeout request.
