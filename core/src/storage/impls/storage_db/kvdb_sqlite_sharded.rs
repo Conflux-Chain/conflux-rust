@@ -65,7 +65,6 @@ pub struct KvdbSqliteShardedBorrowShared<'db, ValueType> {
 }
 
 impl<'db, ValueType> KvdbSqliteShardedBorrowShared<'db, ValueType> {
-    #[allow(unused)]
     pub fn new(
         shard_connections: Option<&'db [SqliteConnection]>,
         statements: &'db KvdbSqliteStatements,
@@ -99,6 +98,24 @@ pub trait KvdbSqliteShardedDestructureTrait {
 impl<ValueType> KvdbSqliteSharded<ValueType> {
     pub fn db_path<P: AsRef<Path>>(path: P, shard_id: u16) -> PathBuf {
         path.as_ref().join(format!("shard_{:02x}", shard_id))
+    }
+
+    pub fn try_clone(&self) -> Result<Self> {
+        Ok(Self {
+            shards_connections: match &self.shards_connections {
+                None => None,
+                Some(connections) => {
+                    let mut cloned_connections =
+                        Vec::with_capacity(connections.len());
+                    for conn in connections.iter() {
+                        cloned_connections.push(conn.try_clone()?)
+                    }
+                    Some(cloned_connections.into_boxed_slice())
+                }
+            },
+            statements: self.statements.clone(),
+            __marker_value: Default::default(),
+        })
     }
 
     pub fn open<P: AsRef<Path>>(
@@ -539,7 +556,8 @@ impl<
         match self.peek() {
             None => Ok(None),
             Some(iter_id) => {
-                // FIXME: iter executions are not in parallel.
+                // TODO: iter executions are not in parallel. Current
+                // performance seems OK.
                 let next_kv = self.shard_iters[iter_id as usize].next()?;
                 self.kv_pop_and_push(iter_id, next_kv)
             }
@@ -556,7 +574,7 @@ impl<T: KvdbSqliteShardedDestructureTrait + KeyValueDbTypes>
 {
 }
 
-// FIXME: iter executions are not in parallel.
+// TODO: iter executions are not in parallel. Current performance seems OK.
 pub fn kvdb_sqlite_sharded_iter_range_impl<
     'db,
     Key: 'db + KeyPrefixToMap,
@@ -672,6 +690,148 @@ impl<
     }
 }
 
+// 'static because Any is static.
+impl<
+        ValueType: 'static
+            + DbValueType
+            + ValueRead
+            + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > KeyValueDbTraitTransactional for KvdbSqliteSharded<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    type TransactionType = KvdbSqliteShardedTransaction<ValueType>;
+
+    fn start_transaction(
+        &self, immediate_write: bool,
+    ) -> Result<KvdbSqliteShardedTransaction<ValueType>> {
+        if self.shards_connections.is_none() {
+            bail!(ErrorKind::DbNotExist);
+        }
+
+        KvdbSqliteShardedTransaction::new(self.try_clone()?, immediate_write)
+    }
+}
+
+pub struct KvdbSqliteShardedTransaction<
+    ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+> where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    db: KvdbSqliteSharded<ValueType>,
+    committed: bool,
+}
+
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > Drop for KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    fn drop(&mut self) {
+        if !self.committed {
+            self.revert().ok();
+        }
+    }
+}
+
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    fn new(
+        mut db: KvdbSqliteSharded<ValueType>, immediate_write: bool,
+    ) -> Result<Self> {
+        Self::start_transaction(
+            db.shards_connections.as_mut(),
+            immediate_write,
+        )?;
+        Ok(Self {
+            db,
+            committed: false,
+        })
+    }
+
+    fn start_transaction(
+        maybe_shard_connections: Option<&mut Box<[SqliteConnection]>>,
+        immediate_write: bool,
+    ) -> Result<()>
+    {
+        if let Some(connections) = maybe_shard_connections {
+            for conn in connections.iter_mut() {
+                KvdbSqliteTransaction::<ValueType>::start_transaction(
+                    conn.get_db_mut(),
+                    immediate_write,
+                )?
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > KeyValueDbTransactionTrait for KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    fn commit(&mut self, _db: &dyn Any) -> Result<()> {
+        self.committed = true;
+        if let Some(connections) = self.db.shards_connections.as_mut() {
+            for conn in connections.iter_mut() {
+                conn.get_db_mut().execute("COMMIT")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn revert(&mut self) -> Result<()> {
+        self.committed = true;
+        if let Some(connections) = self.db.shards_connections.as_mut() {
+            for conn in connections.iter_mut() {
+                conn.get_db_mut().execute("ROLLBACK")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn restart(
+        &mut self, immediate_write: bool, no_revert: bool,
+    ) -> Result<()> {
+        if !no_revert {
+            self.revert()?;
+        }
+        Self::start_transaction(
+            self.db.shards_connections.as_mut(),
+            immediate_write,
+        )
+    }
+}
+
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > KeyValueDbTypes for KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    type ValueType = ValueType;
+}
+
+impl KeyValueDbTraitMultiReader for KvdbSqliteSharded<Box<[u8]>> {}
+impl OwnedReadImplFamily for &KvdbSqliteSharded<Box<[u8]>> {
+    type FamilyRepresentative =
+        dyn KeyValueDbTraitMultiReader<ValueType = Box<[u8]>>;
+}
+impl DeltaDbTrait for KvdbSqliteSharded<Box<[u8]>> {}
+
 impl<ValueType: DbValueType> KeyValueDbTypes for KvdbSqliteSharded<ValueType> {
     type ValueType = ValueType;
 }
@@ -711,6 +871,21 @@ impl<ValueType: DbValueType> KvdbSqliteShardedDestructureTrait
             self.shards_connections.as_mut().map(|r| &mut **r),
             &self.statements,
         )
+    }
+}
+
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > KvdbSqliteShardedDestructureTrait
+    for KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    fn destructure_mut(
+        &mut self,
+    ) -> (Option<&mut [SqliteConnection]>, &KvdbSqliteStatements) {
+        self.db.destructure_mut()
     }
 }
 
@@ -769,6 +944,26 @@ impl<ValueType> ReadImplFamily for KvdbSqliteShardedBorrowMut<'_, ValueType> {
     type FamilyRepresentative = KvdbSqliteSharded<ValueType>;
 }
 
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > OwnedReadImplFamily for KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    type FamilyRepresentative = KvdbSqliteSharded<ValueType>;
+}
+
+impl<
+        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
+    > SingleWriterImplFamily for KvdbSqliteShardedTransaction<ValueType>
+where ValueType::Type:
+        SqlBindableValue
+            + BindValueAppendImpl<<ValueType::Type as SqlBindableValue>::Kind>
+{
+    type FamilyRepresentative = KvdbSqliteSharded<ValueType>;
+}
+
 impl<ValueType> OwnedReadImplFamily
     for KvdbSqliteShardedBorrowMut<'_, ValueType>
 {
@@ -805,6 +1000,7 @@ use crate::storage::{
             kvdb_sqlite::{
                 kvdb_sqlite_iter_range_excl_impl, kvdb_sqlite_iter_range_impl,
                 KvdbSqliteBorrowMut, KvdbSqliteBorrowShared,
+                KvdbSqliteTransaction,
             },
             sqlite::{
                 BindValueAppendImpl, MappedRows, SqlBindableValue, ValueRead,
@@ -813,9 +1009,11 @@ use crate::storage::{
         },
     },
     storage_db::{
-        DbValueType, KeyValueDbIterableTrait, KeyValueDbTypes,
-        OwnedReadImplByFamily, OwnedReadImplFamily, ReadImplByFamily,
-        ReadImplFamily, SingleWriterImplByFamily, SingleWriterImplFamily,
+        DbValueType, DeltaDbTrait, KeyValueDbIterableTrait,
+        KeyValueDbTraitMultiReader, KeyValueDbTraitTransactional,
+        KeyValueDbTransactionTrait, KeyValueDbTypes, OwnedReadImplByFamily,
+        OwnedReadImplFamily, ReadImplByFamily, ReadImplFamily,
+        SingleWriterImplByFamily, SingleWriterImplFamily,
     },
     utils::deref_plus_impl_or_borrow_self::*,
     KvdbSqlite, KvdbSqliteStatements, SqliteConnection,
@@ -824,6 +1022,7 @@ use fallible_iterator::FallibleIterator;
 use serde::export::PhantomData;
 use sqlite::Statement;
 use std::{
+    any::Any,
     path::{Path, PathBuf},
     sync::Arc,
 };

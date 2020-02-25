@@ -110,7 +110,7 @@ pub trait KeyValueDbTransactionTrait:
 {
     /// Commit may be retried upon failure.
     fn commit(&mut self, db: &dyn Any) -> Result<()>;
-    fn revert(&mut self);
+    fn revert(&mut self) -> Result<()>;
     /// When error occured within a transaction before commit, user may have to
     /// revert the transaction and restart a new transaction.
     ///

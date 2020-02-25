@@ -316,7 +316,7 @@ impl MultiVersionMerklePatriciaTrie {
                         &self.node_memory_manager.get_allocator(),
                         node,
                         self.node_memory_manager.get_cache_manager(),
-                        &mut *self.db.to_owned_read()?,
+                        &mut *self.db_owned_read()?,
                         self.mpt_id,
                         &mut false,
                     )?
