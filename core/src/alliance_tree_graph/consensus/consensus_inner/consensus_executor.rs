@@ -345,11 +345,11 @@ impl ConsensusExecutor {
         debug!("Start execution from index {}", start_chain_index);
 
         while start_chain_index <= pivot_index {
-            let epoch_arena_index = inner.pivot_chain[start_chain_index];
+            let pivot_arena_index = inner.pivot_chain[start_chain_index];
             self.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_arena_index].hash,
-                inner.get_epoch_block_hashes(epoch_arena_index),
-                inner.get_epoch_start_block_number(start_chain_index),
+                inner.arena[pivot_arena_index].hash,
+                inner.get_epoch_block_hashes(pivot_arena_index),
+                inner.get_epoch_start_block_number(pivot_arena_index),
                 None,
                 false,
             ));

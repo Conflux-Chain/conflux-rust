@@ -491,7 +491,10 @@ impl TreeGraphConsensus {
                     let pivot_index = inner.height_to_pivot_index(epoch_number);
                     let pivot_arena_index = inner.pivot_chain[pivot_index];
                     let epoch_hash = &inner.arena[pivot_arena_index].hash;
-                    for index in &inner.pivot_chain_metadata[pivot_index]
+                    for index in &inner.arena[pivot_arena_index]
+                        .data
+                        .as_ref()
+                        .expect("pivot data exists")
                         .ordered_executable_epoch_blocks
                     {
                         let hash = &inner.arena[*index].hash;

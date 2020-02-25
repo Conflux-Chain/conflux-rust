@@ -141,6 +141,14 @@ impl ConsensusNewBlockHandler {
             inner.arena[me].parent = parent;
             inner.arena[me].era_block = NULL;
             inner.terminal_hashes.remove(&inner.arena[me].hash);
+            if let Some(metadata) = inner.arena[me].data.as_mut() {
+                metadata
+                    .blockset_in_own_view_of_epoch
+                    .retain(|v| new_era_block_arena_index_set.contains(v));
+                metadata
+                    .ordered_executable_epoch_blocks
+                    .retain(|v| new_era_block_arena_index_set.contains(v));
+            }
         }
         // Now we are ready to cleanup outside blocks in inner data structures
         {
@@ -159,16 +167,6 @@ impl ConsensusNewBlockHandler {
         }
         assert!(new_era_pivot_index < inner.pivot_chain.len());
         inner.pivot_chain = inner.pivot_chain.split_off(new_era_pivot_index);
-        inner.pivot_chain_metadata =
-            inner.pivot_chain_metadata.split_off(new_era_pivot_index);
-        for metadata in inner.pivot_chain_metadata.iter_mut() {
-            metadata
-                .blockset_in_epoch
-                .retain(|v| new_era_block_arena_index_set.contains(v));
-            metadata
-                .ordered_executable_epoch_blocks
-                .retain(|v| new_era_block_arena_index_set.contains(v));
-        }
 
         // Chop off all link-cut-trees in the inner data structure
         inner.split_root(new_era_block_arena_index);
@@ -282,20 +280,38 @@ impl ConsensusNewBlockHandler {
         referees: Vec<H256>,
     ) -> Block
     {
+        let parent_arena_index = *inner
+            .hash_to_arena_indices
+            .get(&parent)
+            .expect("parent hash exists");
         let parent_height = self
             .data_man
             .block_header_by_hash(&parent)
             .expect("parent header exists")
             .height();
-        let deferred_height = if parent_height > DEFERRED_STATE_EPOCH_COUNT - 1
-        {
-            parent_height - DEFERRED_STATE_EPOCH_COUNT + 1
-        } else {
-            0
-        };
-        let deferred_epoch_hash = inner
-            .epoch_hash(deferred_height)
-            .expect("should be a valid epoch_height");
+        let deferred_arena_index =
+            if parent_height + 1 <= DEFERRED_STATE_EPOCH_COUNT {
+                inner.cur_era_genesis_block_arena_index
+            } else {
+                let mut index = parent_arena_index;
+                for _ in 1..DEFERRED_STATE_EPOCH_COUNT {
+                    index = inner.arena[index].parent;
+                    assert!(index != NULL);
+                }
+                index
+            };
+
+        let deferred_epoch_hash = inner.arena[deferred_arena_index].hash;
+        let deferred_epoch_height = inner.arena[deferred_arena_index].height;
+
+        debug!("generate block from parent[{:?}] referees[{:?}] deferred_epoch_hash=[{:?}]", parent, referees, deferred_epoch_hash);
+
+        assert!(
+            inner.candidate_pivot_tree.contains(deferred_arena_index)
+                || inner.get_pivot_block_arena_index(deferred_epoch_height)
+                    == deferred_arena_index
+        );
+
         let deferred_exec_commitment =
             self.executor.wait_for_result(deferred_epoch_hash);
         let deferred_state_root = deferred_exec_commitment
@@ -372,13 +388,29 @@ impl ConsensusNewBlockHandler {
         {
             debug!("new_candidate_pivot callback for block={:?}", hash);
             let height = block_header.height();
-            callback
-                .send(Ok(inner.validate_and_add_candidate_pivot(
-                    &hash,
-                    parent_hash,
-                    height,
-                )))
-                .expect("send new candidate pivot back should succeed");
+            if inner.validate_and_add_candidate_pivot(
+                &hash,
+                parent_hash,
+                height,
+            ) {
+                callback
+                    .send(Ok(true))
+                    .expect("send new candidate pivot back should succeed");
+                if inner.arena[me].data.is_none() {
+                    inner.collect_blockset_in_own_view_of_epoch(me);
+                }
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[me].hash,
+                    inner.get_epoch_block_hashes(me),
+                    inner.get_epoch_start_block_number(me),
+                    None,  /* reward_info */
+                    false, /* debug_record */
+                ));
+            } else {
+                callback
+                    .send(Ok(false))
+                    .expect("send new candidate pivot back should succeed");
+            }
         }
 
         self.persist_terminal_and_block_info(
@@ -415,10 +447,38 @@ impl ConsensusNewBlockHandler {
             "on_new_candidate_pivot, pivot_decision={:?}",
             pivot_decision
         );
-        if !inner
+        if let Some(pivot_arena_index) = inner
             .hash_to_arena_indices
-            .contains_key(&pivot_decision.block_hash)
+            .get(&pivot_decision.block_hash)
+            .cloned()
         {
+            if inner.new_candidate_pivot(
+                &pivot_decision.block_hash,
+                &pivot_decision.parent_hash,
+                pivot_decision.height,
+            ) {
+                callback
+                    .send(Ok(true))
+                    .expect("send new candidate pivot should succeed");
+                if inner.arena[pivot_arena_index].data.is_none() {
+                    inner.collect_blockset_in_own_view_of_epoch(
+                        pivot_arena_index,
+                    );
+                }
+                self.executor.enqueue_epoch(EpochExecutionTask::new(
+                    inner.arena[pivot_arena_index].hash,
+                    inner.get_epoch_block_hashes(pivot_arena_index),
+                    inner.get_epoch_start_block_number(pivot_arena_index),
+                    None,  /* reward_info */
+                    false, /* debug_record */
+                ));
+            } else {
+                callback
+                    .send(Ok(false))
+                    .expect("send new candidate pivot should succeed");
+            }
+            true
+        } else {
             debug!(
                 "insert to new_candidate_pivot_waiting_map, block={:?}",
                 pivot_decision.block_hash
@@ -432,15 +492,6 @@ impl ConsensusNewBlockHandler {
                 .new_candidate_pivot_waiting_list
                 .push_back((pivot_decision.block_hash, timeout_time));
             false
-        } else {
-            callback
-                .send(Ok(inner.new_candidate_pivot(
-                    &pivot_decision.block_hash,
-                    &pivot_decision.parent_hash,
-                    pivot_decision.height,
-                )))
-                .expect("send new candidate pivot should succeed");
-            true
         }
     }
 
@@ -571,7 +622,7 @@ impl ConsensusNewBlockHandler {
             self.executor.enqueue_epoch(EpochExecutionTask::new(
                 inner.arena[pivot_arena_index].hash,
                 inner.get_epoch_block_hashes(pivot_arena_index),
-                inner.get_epoch_start_block_number(inner.pivot_chain.len() - 1),
+                inner.get_epoch_start_block_number(pivot_arena_index),
                 None,  /* reward_info */
                 false, /* debug_record */
             ));
@@ -624,8 +675,8 @@ impl ConsensusNewBlockHandler {
                 .expect("epoch_execution_commitment for stable hash must exist in disk");
         }
         for pivot_index in start_pivot_index + 1..inner.pivot_chain.len() {
-            let arena_index = inner.pivot_chain[pivot_index];
-            let pivot_hash = inner.arena[arena_index].hash;
+            let pivot_arena_index = inner.pivot_chain[pivot_index];
+            let pivot_hash = inner.arena[pivot_arena_index].hash;
 
             // Ensure that the commitments for the blocks on
             // pivot_chain after cur_era_stable_genesis are kept in memory.
@@ -639,8 +690,8 @@ impl ConsensusNewBlockHandler {
                 // execution_commitments before shutdown
                 self.executor.compute_epoch(EpochExecutionTask::new(
                     pivot_hash,
-                    inner.get_epoch_block_hashes(arena_index),
-                    inner.get_epoch_start_block_number(pivot_index),
+                    inner.get_epoch_block_hashes(pivot_arena_index),
+                    inner.get_epoch_start_block_number(pivot_arena_index),
                     None,  /* reward_info */
                     false, /* debug_record */
                 ));
