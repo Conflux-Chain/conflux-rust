@@ -1793,6 +1793,8 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         self.network_service.get_peer_node_id(peer)
     }
 
+    fn get_protocol(&self) -> ProtocolId { self.protocol.clone() }
+
     fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool> {
         self.network_service.get_peer_connection_origin(peer)
     }

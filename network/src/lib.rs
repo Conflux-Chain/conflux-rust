@@ -252,6 +252,8 @@ pub enum UpdateNodeOperation {
 pub trait NetworkContext {
     fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
 
+    fn get_protocol(&self) -> ProtocolId;
+
     fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool>;
 
     fn send(
