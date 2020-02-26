@@ -214,7 +214,7 @@ impl RequestManager {
 
     pub fn request_block_headers(
         &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
-        hashes: Vec<H256>,
+        hashes: Vec<H256>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -226,12 +226,12 @@ impl RequestManager {
             hashes,
         };
 
-        self.request_with_delay(io, Box::new(request), peer_id, None);
+        self.request_with_delay(io, Box::new(request), peer_id, delay);
     }
 
     pub fn request_epoch_hashes(
         &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
-        epochs: Vec<u64>,
+        epochs: Vec<u64>, delay: Option<Duration>,
     )
     {
         let request = GetBlockHashesByEpoch {
@@ -239,12 +239,12 @@ impl RequestManager {
             epochs,
         };
 
-        self.request_with_delay(io, Box::new(request), peer_id, None);
+        self.request_with_delay(io, Box::new(request), peer_id, delay);
     }
 
     pub fn request_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
-        hashes: Vec<H256>, with_public: bool,
+        hashes: Vec<H256>, with_public: bool, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -255,7 +255,7 @@ impl RequestManager {
             hashes,
         };
 
-        self.request_with_delay(io, Box::new(request), peer_id, None);
+        self.request_with_delay(io, Box::new(request), peer_id, delay);
     }
 
     pub fn request_transactions_from_digest(
@@ -481,7 +481,7 @@ impl RequestManager {
 
     pub fn request_compact_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
-        hashes: Vec<H256>,
+        hashes: Vec<H256>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -491,12 +491,12 @@ impl RequestManager {
             hashes,
         };
 
-        self.request_with_delay(io, Box::new(request), peer_id, None);
+        self.request_with_delay(io, Box::new(request), peer_id, delay);
     }
 
     pub fn request_blocktxn(
         &self, io: &dyn NetworkContext, peer_id: PeerId, block_hash: H256,
-        indexes: Vec<usize>,
+        indexes: Vec<usize>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -507,7 +507,7 @@ impl RequestManager {
             indexes,
         };
 
-        self.request_with_delay(io, Box::new(request), Some(peer_id), None);
+        self.request_with_delay(io, Box::new(request), Some(peer_id), delay);
     }
 
     pub fn send_request_again(
@@ -547,7 +547,7 @@ impl RequestManager {
     /// received or will be requested by the caller again.
     pub fn headers_received(
         &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
-        mut received_headers: HashSet<H256>,
+        mut received_headers: HashSet<H256>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -580,14 +580,14 @@ impl RequestManager {
         if !missing_headers.is_empty() {
             let chosen_peer =
                 PeerFilter::new(msgid::GET_BLOCK_HEADERS).select(&self.syn);
-            self.request_block_headers(io, chosen_peer, missing_headers);
+            self.request_block_headers(io, chosen_peer, missing_headers, delay);
         }
     }
 
     /// Remove from inflight keys when a epoch is received.
     pub fn epochs_received(
         &self, io: &dyn NetworkContext, req_epochs: HashSet<u64>,
-        mut received_epochs: HashSet<u64>,
+        mut received_epochs: HashSet<u64>, delay: Option<Duration>,
     )
     {
         debug!(
@@ -619,7 +619,7 @@ impl RequestManager {
         if !missing_epochs.is_empty() {
             let chosen_peer = PeerFilter::new(msgid::GET_BLOCK_HASHES_BY_EPOCH)
                 .select(&self.syn);
-            self.request_epoch_hashes(io, chosen_peer, missing_epochs);
+            self.request_epoch_hashes(io, chosen_peer, missing_epochs, delay);
         }
     }
 
@@ -632,7 +632,7 @@ impl RequestManager {
     pub fn blocks_received(
         &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
-        peer: Option<PeerId>, with_public: bool,
+        peer: Option<PeerId>, with_public: bool, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -681,9 +681,15 @@ impl RequestManager {
                     chosen_peer,
                     missing_blocks,
                     with_public,
+                    delay,
                 );
             } else {
-                self.request_compact_blocks(io, chosen_peer, missing_blocks);
+                self.request_compact_blocks(
+                    io,
+                    chosen_peer,
+                    missing_blocks,
+                    delay,
+                );
             }
         }
     }

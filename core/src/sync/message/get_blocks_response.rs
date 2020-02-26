@@ -49,6 +49,7 @@ impl Handleable for GetBlocksResponse {
         }
 
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let requested_blocks: HashSet<H256> = req
             .downcast_ref::<GetBlocks>(
                 ctx.io,
@@ -67,6 +68,7 @@ impl Handleable for GetBlocksResponse {
                 requested_blocks,
                 ctx.peer,
                 false,
+                delay,
             ),
         );
 
@@ -92,6 +94,7 @@ impl Handleable for GetBlocksWithPublicResponse {
                 .collect::<Vec<H256>>()
         );
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let req_hashes: HashSet<H256> = if let Ok(req) = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
@@ -115,6 +118,7 @@ impl Handleable for GetBlocksWithPublicResponse {
                 req_hashes,
                 ctx.peer,
                 false, /* compact */
+                delay,
             ),
         );
 
