@@ -224,7 +224,6 @@ impl ConfirmationMeter {
         }
 
         risk = 0.000001;
-        // FIXME: We should consider the risk of generating heavy blocks
         risk
     }
 
@@ -264,5 +263,73 @@ impl ConfirmationMeter {
             finality.lowest_epoch_num = epoch_num;
             finality.risks_less_than = risks;
         }
+    }
+
+    /// This is an expensive function to check whether the current tree graph
+    /// will generate adaptive block under `me` in future. This function is
+    /// used by Conflux to determine when we will remove old snapshots. If
+    /// this is true, we will avoid remove snapshots from the storage layer.
+    pub fn is_adaptive_possible(
+        &self, g_inner: &ConsensusGraphInner, me: usize,
+    ) -> bool {
+        let psi = 5;
+        // Find the first pivot chain block whose timer diff is less than 140
+        let mut cur_height = g_inner.cur_era_stable_height;
+        let mut cur_arena_index =
+            g_inner.get_pivot_block_arena_index(cur_height);
+        while g_inner.arena[cur_arena_index]
+            .data
+            .ledger_view_timer_chain_height
+            + 140
+            <= g_inner.arena[me].data.ledger_view_timer_chain_height
+            && cur_height < g_inner.best_epoch_number()
+        {
+            cur_height += 1;
+            cur_arena_index = g_inner.get_pivot_block_arena_index(cur_height);
+        }
+
+        if cur_height == g_inner.cur_era_stable_height {
+            return false;
+        }
+
+        let end_checking_height =
+            (cur_height - g_inner.cur_era_stable_height + psi - 1) / psi * psi
+                + g_inner.cur_era_stable_height;
+        let n = end_checking_height - cur_height;
+        let total_weight = g_inner
+            .weight_tree
+            .get(g_inner.cur_era_genesis_block_arena_index);
+        let me_index =
+            g_inner.height_to_pivot_index(g_inner.arena[me].data.epoch_number);
+        let x_3 =
+            total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
+
+        for i in 0..n {
+            let a_pivot_index =
+                g_inner.height_to_pivot_index(cur_height + i * psi as u64);
+            let b_pivot_index = g_inner
+                .height_to_pivot_index(cur_height + (i + 1) * psi as u64);
+            let b = g_inner.pivot_chain[b_pivot_index];
+            let y = g_inner.weight_tree.get(b);
+            let mut x_1 = 0;
+            for v in a_pivot_index..b_pivot_index {
+                let pivot = g_inner.pivot_chain[v];
+                let next_pivot = g_inner.pivot_chain[v + 1];
+                for child in &g_inner.arena[pivot].children {
+                    if *child != next_pivot {
+                        x_1 += g_inner.weight_tree.get(*child);
+                    }
+                }
+            }
+            let x_2 = (total_weight
+                - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
+                - y;
+            let x = x_1 + x_2 + x_3;
+
+            if 3 * y - 2 * x - 18000 < 3500 * 12 {
+                return true;
+            }
+        }
+        return false;
     }
 }
