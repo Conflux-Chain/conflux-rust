@@ -86,6 +86,7 @@ pub const NODE_TAG_ARCHIVE: &str = "archive";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
+    pub is_consortium: bool,
     /// Network identifier
     pub id: u64,
     /// Directory path to store general network configuration. None means
@@ -143,6 +144,7 @@ impl Default for NetworkConfiguration {
 impl NetworkConfiguration {
     pub fn new() -> Self {
         NetworkConfiguration {
+            is_consortium: false,
             id: 1,
             config_path: Some("./net_config".to_string()),
             listen_address: None,

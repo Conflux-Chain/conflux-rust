@@ -60,7 +60,9 @@ impl SynchronizationService {
     }
 
     pub fn update_validator_info(&self, validators: &ValidatorVerifier) {
-        self.protocol_handler.update_validator_info(validators)
+        let validator_set =
+            self.protocol_handler.update_validator_info(validators);
+        self.network.update_validator_info(validator_set);
     }
 
     pub fn catch_up_mode(&self) -> bool {

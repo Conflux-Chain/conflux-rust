@@ -231,6 +231,7 @@ impl Configuration {
             None => NetworkConfiguration::default(),
         };
 
+        network_config.is_consortium = self.raw_conf.is_consortium;
         network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)

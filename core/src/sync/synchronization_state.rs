@@ -89,14 +89,20 @@ impl SynchronizationState {
 
     pub fn is_consortium(&self) -> bool { self.is_consortium }
 
-    pub fn update_validator_info(&self, validators: &ValidatorVerifier) {
+    pub fn update_validator_info(
+        &self, validators: &ValidatorVerifier,
+    ) -> HashSet<NodeId> {
         let peers = self.peers.write();
         let mut validator_set = self.validator_set.write();
+
+        let mut node_set = HashSet::new();
 
         // update validator set
         validator_set.clear();
         for node_id in validators.get_ordered_account_addresses_iter() {
             validator_set.insert(node_id);
+            node_set
+                .insert(*validators.get_public_key(&node_id).unwrap().public());
         }
 
         for (_, peer) in peers.iter() {
@@ -109,6 +115,8 @@ impl SynchronizationState {
                 false
             };
         }
+
+        node_set
     }
 
     pub fn on_status_in_handshaking(&self, peer: PeerId) -> bool {

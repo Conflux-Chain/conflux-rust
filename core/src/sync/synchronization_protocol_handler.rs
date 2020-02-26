@@ -30,8 +30,9 @@ use io::TimerToken;
 use libra_types::crypto_proxies::ValidatorVerifier;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
-    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-    NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
+    node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
+    HandlerWorkType, NetworkContext, NetworkProtocolHandler, PeerId,
+    UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
@@ -329,7 +330,9 @@ impl SynchronizationProtocolHandler {
 
     pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
 
-    pub fn update_validator_info(&self, validators: &ValidatorVerifier) {
+    pub fn update_validator_info(
+        &self, validators: &ValidatorVerifier,
+    ) -> HashSet<NodeId> {
         assert!(self.is_consortium());
         self.syn.update_validator_info(validators)
     }

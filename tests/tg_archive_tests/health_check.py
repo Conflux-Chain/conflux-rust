@@ -552,7 +552,7 @@ class TreeGraphTracing(ConfluxTestFramework):
         self.setup_nodes()
         self.log.info("connect peers ...")
         if len(self.nodes) > 1:
-            connect_sample_nodes(self.nodes, self.log)
+            connect_sample_nodes(self.nodes, self.log, sample=self.num_nodes-1)
         # self.log.info("sync up with blocks among nodes ...")
         # sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
