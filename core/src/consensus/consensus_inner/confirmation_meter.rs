@@ -11,7 +11,11 @@ use crate::{
 };
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{cmp::min, collections::VecDeque, convert::TryFrom};
+use std::{
+    cmp::{max, min},
+    collections::VecDeque,
+    convert::TryFrom,
+};
 
 pub struct TotalWeightInPastMovingDelta {
     pub old: i128,
@@ -272,7 +276,7 @@ impl ConfirmationMeter {
     pub fn is_adaptive_possible(
         &self, g_inner: &ConsensusGraphInner, me: usize,
     ) -> bool {
-        let psi = 5;
+        let psi = 30;
         // Find the first pivot chain block whose timer diff is less than 140
         let mut cur_height = g_inner.cur_era_stable_height;
         let mut cur_arena_index =
@@ -292,10 +296,14 @@ impl ConfirmationMeter {
             return false;
         }
 
-        let end_checking_height =
+        let mut end_checking_height =
             (cur_height - g_inner.cur_era_stable_height + psi - 1) / psi * psi
                 + g_inner.cur_era_stable_height;
-        let n = end_checking_height - cur_height;
+        // corner case, should be extremely rare
+        if end_checking_height > g_inner.best_epoch_number() {
+            end_checking_height -= psi;
+        }
+        let n = (end_checking_height - g_inner.cur_era_stable_height) / psi;
         let total_weight = g_inner
             .weight_tree
             .get(g_inner.cur_era_genesis_block_arena_index);
@@ -305,10 +313,12 @@ impl ConfirmationMeter {
             total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
 
         for i in 0..n {
-            let a_pivot_index =
-                g_inner.height_to_pivot_index(cur_height + i * psi as u64);
-            let b_pivot_index = g_inner
-                .height_to_pivot_index(cur_height + (i + 1) * psi as u64);
+            let a_pivot_index = g_inner.height_to_pivot_index(
+                g_inner.cur_era_stable_height + i * psi as u64,
+            );
+            let b_pivot_index = g_inner.height_to_pivot_index(
+                g_inner.cur_era_stable_height + (i + 1) * psi as u64,
+            );
             let b = g_inner.pivot_chain[b_pivot_index];
             let y = g_inner.weight_tree.get(b);
             let mut x_1 = 0;
@@ -317,7 +327,9 @@ impl ConfirmationMeter {
                 let next_pivot = g_inner.pivot_chain[v + 1];
                 for child in &g_inner.arena[pivot].children {
                     if *child != next_pivot {
-                        x_1 += g_inner.weight_tree.get(*child);
+                        let child_subtree_weight =
+                            g_inner.weight_tree.get(*child);
+                        x_1 = max(x_1, child_subtree_weight);
                     }
                 }
             }
