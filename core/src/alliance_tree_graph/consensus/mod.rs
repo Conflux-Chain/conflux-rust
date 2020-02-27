@@ -13,7 +13,10 @@ use super::consensus::consensus_inner::{
 };
 
 use crate::{
-    block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
+    block_data_manager::{
+        block_data_types::EpochExecutionCommitment, BlockDataManager,
+        BlockExecutionResultWithEpoch,
+    },
     bytes::Bytes,
     consensus::{BestInformation, ConsensusGraphTrait},
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
@@ -618,6 +621,28 @@ impl TreeGraphConsensus {
     /// on_new_block()
     pub fn get_processed_block_count(&self) -> usize {
         self.statistics.get_consensus_graph_processed_block_count()
+    }
+
+    pub fn get_deferred_state_for_generation(
+        &self, parent_hash: &H256,
+    ) -> EpochExecutionCommitment {
+        let inner = &*self.inner.read();
+        let parent_arena_index = *inner
+            .hash_to_arena_indices
+            .get(parent_hash)
+            .expect("parent_hash exists");
+        let deferred_arena_index = inner.get_deferred_arena_index(
+            parent_arena_index,
+            DEFERRED_STATE_EPOCH_COUNT - 1,
+        );
+        let deferred_block_hash = inner.arena[deferred_arena_index].hash;
+        self.executor
+            .compute_state_for_block(deferred_arena_index, inner)
+            .expect("execution in generate_block should succeed");
+        self.data_man
+            .get_epoch_execution_commitment(&deferred_block_hash)
+            .cloned()
+            .expect("epoch_execution_commitment exists for generate block")
     }
 }
 

@@ -19,8 +19,9 @@ use crate::rpc::{
 use cfx_types::H256;
 use cfxcore::{
     alliance_tree_graph::blockgen::TGBlockGenerator,
-    state_exposer::STATE_EXPOSER, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
+    PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
 use network::{
@@ -34,26 +35,26 @@ use txgen::SharedTransactionGenerator;
 
 pub struct RpcImpl {
     //config: RpcImplConfiguration,
-    pub consensus: SharedConsensusGraph,
+    //consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
-    /* block_gen: Arc<TGBlockGenerator>,
-     * tx_gen: SharedTransactionGenerator, */
+    block_gen: Arc<TGBlockGenerator>,
+    // tx_gen: SharedTransactionGenerator,
 }
 
 impl RpcImpl {
     pub fn new(
-        consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        _block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
+        _consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
+        block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
         _tx_gen: SharedTransactionGenerator, _config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
-            consensus,
+            // consensus,
             sync,
             tx_pool,
-            /*block_gen,
-             *tx_gen,
+            block_gen,
+            /* tx_gen,
              *config, */
         }
     }
@@ -110,6 +111,28 @@ impl RpcImpl {
             Ok(tx_hash.into())
         }
     }
+
+    fn generate_one_block(
+        &self, num_txs: usize, block_size_limit: usize,
+    ) -> RpcResult<H256> {
+        Ok(self
+            .block_gen
+            .generate_block(num_txs, block_size_limit, vec![]))
+    }
+
+    fn generate(
+        &self, num_blocks: usize, num_txs: usize,
+    ) -> RpcResult<Vec<H256>> {
+        let mut result = Vec::new();
+        for _ in 0..num_blocks {
+            result.push(self.block_gen.generate_block(
+                num_txs,
+                MAX_BLOCK_SIZE_IN_BYTES,
+                vec![],
+            ));
+        }
+        Ok(result)
+    }
 }
 
 pub struct CfxHandler {
@@ -161,14 +184,12 @@ impl Cfx for CfxHandler {
 
 pub struct TestRpcImpl {
     common: Arc<CommonImpl>,
-    //rpc_impl: Arc<RpcImpl>,
+    rpc_impl: Arc<RpcImpl>,
 }
 
 impl TestRpcImpl {
-    pub fn new(common: Arc<CommonImpl>, _rpc_impl: Arc<RpcImpl>) -> Self {
-        TestRpcImpl {
-            common, /* , rpc_impl */
-        }
+    pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
+        TestRpcImpl { common, rpc_impl }
     }
 }
 
@@ -186,6 +207,11 @@ impl TestRpc for TestRpcImpl {
             fn stop(&self) -> RpcResult<()>;
             fn save_node_db(&self) -> RpcResult<()>;
         }
+
+        target self.rpc_impl {
+            fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
+            fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
+        }
     }
 
     not_supported! {
@@ -200,8 +226,6 @@ impl TestRpc for TestRpcImpl {
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
         fn generate_one_block_special(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
-        fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
-        fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
         fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
         fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
         fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;

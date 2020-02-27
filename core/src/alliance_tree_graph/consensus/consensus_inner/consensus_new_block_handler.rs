@@ -284,26 +284,16 @@ impl ConsensusNewBlockHandler {
             .hash_to_arena_indices
             .get(&parent)
             .expect("parent hash exists");
-        let parent_height = self
-            .data_man
-            .block_header_by_hash(&parent)
-            .expect("parent header exists")
-            .height();
-        let deferred_arena_index =
-            if parent_height + 1 <= DEFERRED_STATE_EPOCH_COUNT {
-                inner.cur_era_genesis_block_arena_index
-            } else {
-                let mut index = parent_arena_index;
-                for _ in 1..DEFERRED_STATE_EPOCH_COUNT {
-                    index = inner.arena[index].parent;
-                    assert!(index != NULL);
-                }
-                index
-            };
+        let deferred_arena_index = inner.get_deferred_arena_index(
+            parent_arena_index,
+            DEFERRED_STATE_EPOCH_COUNT - 1,
+        );
         let deferred_epoch_hash = inner.arena[deferred_arena_index].hash;
         let deferred_epoch_height = inner.arena[deferred_arena_index].height;
 
         debug!("generate block from parent[{:?}] referees[{:?}] deferred_epoch_hash=[{:?}]", parent, referees, deferred_epoch_hash);
+        // make sure `deferred_arena_index` is on pivot chain or inside
+        // `candidate_pivot_tree`.
         assert!(
             inner.candidate_pivot_tree.contains(deferred_arena_index)
                 || inner.get_pivot_block_arena_index(deferred_epoch_height)
@@ -313,9 +303,15 @@ impl ConsensusNewBlockHandler {
         self.executor
             .compute_state_for_block(deferred_arena_index, inner)
             .expect("execution in generate_block should succeed");
+        let deferred_exec_commitment = self
+            .data_man
+            .get_epoch_execution_commitment(&deferred_epoch_hash)
+            .expect("epoch_execution_commitment exists for generate block");
+        debug!(
+            "got deferred_exec_commitment[{:?}]",
+            deferred_exec_commitment
+        );
 
-        let deferred_exec_commitment =
-            self.executor.wait_for_result(deferred_epoch_hash);
         let deferred_state_root = deferred_exec_commitment
             .state_root_with_aux_info
             .state_root
@@ -335,6 +331,28 @@ impl ConsensusNewBlockHandler {
             deferred_logs_bloom_hash,
             20, /* num_txs */
         )
+    }
+
+    fn prepare_vote_and_propose(
+        &self, inner: &mut ConsensusGraphInner, arena_index: usize,
+    ) {
+        if inner.arena[arena_index].state_valid.is_some() {
+            return;
+        }
+        let deferred_arena_index = inner
+            .get_deferred_arena_index(arena_index, DEFERRED_STATE_EPOCH_COUNT);
+        if self
+            .data_man
+            .get_epoch_execution_commitment(
+                &inner.arena[deferred_arena_index].hash,
+            )
+            .is_none()
+        {
+            self.executor
+                .compute_state_for_block(deferred_arena_index, inner)
+                .expect("compute_state_for_block should succeed");
+        }
+        inner.compute_state_valid_for_block(arena_index);
     }
 
     pub fn on_new_block(
@@ -376,6 +394,10 @@ impl ConsensusNewBlockHandler {
             inner.next_selected_pivot_waiting_list.remove(&hash)
         {
             debug!("next_selected_pivot callback for block={:?}", hash);
+            self.prepare_vote_and_propose(inner, me);
+            assert!(inner.arena[me]
+                .state_valid
+                .expect("state_valid exists and true"));
             callback
                 .send(Ok(PivotBlockDecision {
                     height: block_header.height(),
@@ -389,6 +411,7 @@ impl ConsensusNewBlockHandler {
             inner.new_candidate_pivot_waiting_map.remove(&hash)
         {
             debug!("new_candidate_pivot callback for block={:?}", hash);
+            self.prepare_vote_and_propose(inner, me);
             let height = block_header.height();
             if inner.validate_and_add_candidate_pivot(
                 &hash,
@@ -447,6 +470,7 @@ impl ConsensusNewBlockHandler {
             .get(&pivot_decision.block_hash)
             .cloned()
         {
+            self.prepare_vote_and_propose(inner, pivot_arena_index);
             if inner.new_candidate_pivot(
                 &pivot_decision.block_hash,
                 &pivot_decision.parent_hash,
@@ -519,10 +543,16 @@ impl ConsensusNewBlockHandler {
         } else {
             assert!(inner.candidate_pivot_tree.contains(arena_index));
             let mut next_pivot = NULL;
-            // Find a non-selected child with maximum block hash.
+            // Find a non-selected child whose state is valid with maximum block
+            // hash.
+            for child in inner.arena[arena_index].children.clone() {
+                self.prepare_vote_and_propose(inner, child);
+            }
             for child in &inner.arena[arena_index].children {
-                if (next_pivot == NULL
-                    || inner.arena[*child].hash > inner.arena[next_pivot].hash)
+                if inner.arena[*child].state_valid.unwrap()
+                    && (next_pivot == NULL
+                        || inner.arena[*child].hash
+                            > inner.arena[next_pivot].hash)
                     && !inner.candidate_pivot_tree.contains(*child)
                 {
                     next_pivot = *child;
