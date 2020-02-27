@@ -97,8 +97,6 @@ struct WaitingRequest(Box<dyn Request>, Duration); // (request, delay)
 ///
 /// No lock is held when we call another function in this struct, and all locks
 /// are acquired in the same order, so there should exist no deadlocks.
-// TODO A non-existing block request will remain in the struct forever, and we
-// need garbage collect
 pub struct RequestManager {
     // used to avoid send duplicated requests.
     inflight_keys: KeyContainer,
@@ -184,9 +182,6 @@ impl RequestManager {
 
         // delay if no peer available or delay required
         if peer.is_none() || delay.is_some() {
-            // todo remove the request if waiting time is too long?
-            // E.g. attacker may broadcast many many invalid block hashes,
-            // and no peer could return the corresponding block header.
             debug!("request_with_delay: add request to waiting_requests, peer={:?}, request={:?}, delay={:?}", peer, request, cur_delay);
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
@@ -812,7 +807,6 @@ impl RequestManager {
     }
 
     /// Send waiting requests that their backoff delay have passes
-    /// TODO Batch requests with close delays.
     pub fn resend_waiting_requests(&self, io: &dyn NetworkContext) {
         debug!("resend_waiting_requests: start");
         let mut waiting_requests = self.waiting_requests.lock();
