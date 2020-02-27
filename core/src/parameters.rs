@@ -61,10 +61,19 @@ pub mod consensus_internal {
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
     /// This is the minimum risk that the confirmation meter tries to maintain.
-    pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
+    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.000001;
     /// The maximum number of epochs that the confirmation meter tries to
     /// maintain internally.
-    pub const MAX_NUM_MAINTAINED_RISK: usize = 100;
+    pub const CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK: usize = 100;
+    /// The minimum timer diff value for the adaptive test in confirmation meter
+    /// to consider
+    pub const CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF: u64 = 140;
+    /// The batch step in the confirmation meter to do the adaptive test
+    pub const CONFIRMATION_METER_PSI: u64 = 30;
+    /// The maximum value of adaptive block generation risk that a confirmation
+    /// meter is going to consider safe to assume no adaptive blocks in the
+    /// near future.
+    pub const CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK: f64 = 0.0000001;
 }
 
 pub mod sync {

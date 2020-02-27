@@ -139,7 +139,7 @@ impl ConfirmationMeter {
         let finality = &self.inner.read().finality_manager;
 
         if epoch_num < finality.lowest_epoch_num {
-            return Some(MIN_MAINTAINED_RISK);
+            return Some(CONFIRMATION_METER_MIN_MAINTAINED_RISK);
         }
 
         let idx = (epoch_num - finality.lowest_epoch_num) as usize;
@@ -244,14 +244,14 @@ impl ConfirmationMeter {
                 - DEFERRED_STATE_EPOCH_COUNT;
             let mut count = 0;
             while epoch_num > g_inner.cur_era_genesis_height
-                && count < MAX_NUM_MAINTAINED_RISK
+                && count < CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK
             {
                 let w_4 = self.inner.read().total_weight_in_past_2d.delta;
                 let risk = self.confirmation_risk(g_inner, w_0, w_4, epoch_num);
                 risks.push_front(risk);
                 epoch_num -= 1;
                 count += 1;
-                if risk <= MIN_MAINTAINED_RISK {
+                if risk <= CONFIRMATION_METER_MIN_MAINTAINED_RISK {
                     break;
                 }
             }
@@ -276,7 +276,7 @@ impl ConfirmationMeter {
     pub fn is_adaptive_possible(
         &self, g_inner: &ConsensusGraphInner, me: usize,
     ) -> bool {
-        let psi = 30;
+        let psi = CONFIRMATION_METER_PSI;
         // Find the first pivot chain block whose timer diff is less than 140
         let mut cur_height = g_inner.cur_era_stable_height;
         let mut cur_arena_index =
@@ -284,7 +284,7 @@ impl ConfirmationMeter {
         while g_inner.arena[cur_arena_index]
             .data
             .ledger_view_timer_chain_height
-            + 140
+            + CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF
             <= g_inner.arena[me].data.ledger_view_timer_chain_height
             && cur_height < g_inner.best_epoch_number()
         {
@@ -312,6 +312,7 @@ impl ConfirmationMeter {
         let x_3 =
             total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
 
+        let mut adaptive_risk = 0f64;
         for i in 0..n {
             let a_pivot_index = g_inner.height_to_pivot_index(
                 g_inner.cur_era_stable_height + i * psi as u64,
@@ -338,10 +339,10 @@ impl ConfirmationMeter {
                 - y;
             let x = x_1 + x_2 + x_3;
 
-            if 3 * y - 2 * x - 18000 < 3500 * 12 {
-                return true;
-            }
+            let i_risk = 10f64.powf(-(3 * y - 2 * x - 18000) as f64 / 3500f64);
+            adaptive_risk += i_risk;
         }
-        return false;
+
+        adaptive_risk > CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK
     }
 }
