@@ -334,7 +334,7 @@ impl ConsensusExecutor {
     /// This is a blocking call to force the execution engine to compute the
     /// state of a block immediately
     pub fn compute_state_for_block(
-        &self, arena_index: usize, inner: &mut ConsensusGraphInner,
+        &self, arena_index: usize, inner: &ConsensusGraphInner,
     ) -> Result<(), String> {
         let _timer = MeterTimer::time_func(
             CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER.as_ref(),
@@ -361,7 +361,7 @@ impl ConsensusExecutor {
                 if let Ok(Some(_)) = maybe_cached_state_result {
                     return Ok(());
                 } else {
-                    return Err("Internal storage error".to_owned());
+                    return Err("internal storage error".to_string());
                 }
             }
         }

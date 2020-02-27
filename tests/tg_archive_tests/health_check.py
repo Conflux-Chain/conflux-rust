@@ -20,7 +20,7 @@ from test_framework.test_framework import ConfluxTestFramework
 
 
 DEFAULT_HASH = '0x0000000000000000000000000000000000000000000000000000000000000000'
-NUM_TX_PER_BLOCK = 5
+NUM_TX_PER_BLOCK = 10
 CRASH_EXIT_CODE = 100
 CRASH_EXIT_PROBABILITY = 0.01
 
@@ -483,19 +483,11 @@ class TreeGraphTracing(ConfluxTestFramework):
                 chosen_peer = alive_peer_indices[random.randint(
                     0, len(alive_peer_indices) - 1)]
                 txs = self._generate_txs(chosen_peer, NUM_TX_PER_BLOCK)
-                """
-                if random.randint(1, 100) <= 40:
-                    # this will generate a partial invalid block
-                    block_hash = RpcClient(
-                        self.nodes[chosen_peer]).generate_block_with_fake_txs(txs, True)
-                else:
-                    block_hash = RpcClient(
-                        self.nodes[chosen_peer]).generate_block_with_fake_txs(txs)
-                self._block_txs[block_hash] = eth_utils.encode_hex(
-                    rlp.encode(txs))
-                """
-                self.log.info("peer[%d] generate [%s] txs",
-                              chosen_peer, len(txs))
+                block_hash = RpcClient(self.nodes[chosen_peer]).generate_block(NUM_TX_PER_BLOCK)
+                self.log.info("peer[{}] generate block[{}] and [{}] txs".format(
+                    chosen_peer,
+                    block_hash,
+                    len(txs)))
         except Exception as e:
             self.log.info('got exception[{}]'.format(repr(e)))
             self.persist_snapshot()

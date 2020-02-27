@@ -148,6 +148,10 @@ pub struct ConsensusGraphNode {
 
     /// This maintains some data structures related with consensus graph node.
     pub data: Option<ConsensusGraphNodeData>,
+    /// It indicates whether the states stored in header is correct or not.
+    /// It's evaluated when needed, i.e., when we need to propose a new bft
+    /// block or vote a bft block.
+    pub state_valid: Option<bool>,
 }
 
 impl ConsensusGraphInner {
@@ -351,6 +355,27 @@ impl ConsensusGraphInner {
         self.arena[me].era_block == self.arena[pivot].era_block
     }
 
+    pub fn get_deferred_arena_index(&self, me: usize, offset: u64) -> usize {
+        let mut idx = me;
+        for _ in 0..offset {
+            if idx == self.cur_era_genesis_block_arena_index {
+                // If it is the original genesis, we just break
+                if self.arena[idx].height == 0 {
+                    break;
+                } else {
+                    panic!(
+                        "parent is too old for computing the deferred state"
+                    );
+                }
+            }
+            idx = self.arena[idx].parent;
+            if idx == NULL {
+                panic!("parent is NULL, possibly out of era?");
+            }
+        }
+        idx
+    }
+
     /// Assume that
     ///   1. `arena_index` is not in pivot chain yet.
     ///   2. `arena_index` is in the subtree of last pivot block.
@@ -505,6 +530,7 @@ impl ConsensusGraphInner {
             epoch_number: NULLU64,
             sequence_number: sn,
             data: None,
+            state_valid: None,
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -568,6 +594,7 @@ impl ConsensusGraphInner {
             epoch_number: NULLU64,
             sequence_number: sn,
             data: None,
+            state_valid: None,
         });
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -952,6 +979,11 @@ impl ConsensusGraphInner {
             "arena_index={:?} parent_arena_index={:?}",
             arena_index, parent_arena_index
         );
+        assert!(self.arena[arena_index].state_valid.is_some());
+        if !self.arena[arena_index].state_valid.unwrap() {
+            debug!("Invalid pivot proposal: states in header are wrong");
+            return false;
+        }
         if self.arena[arena_index].parent != parent_arena_index {
             debug!("Invalid pivot proposal: parent wrong");
             return false;
@@ -1080,5 +1112,61 @@ impl ConsensusGraphInner {
                 break;
             }
         }
+    }
+
+    /// Compute `state_valid` for `me`.
+    /// Assumption:
+    ///   1. The execution_commitment for deferred block of `me` exist.
+    ///   2. `me` is in stable era.
+    fn compute_state_valid_for_block(&mut self, me: usize) {
+        debug!(
+            "compute_state_valid: block[{:?}] arena_index[{:?}] height[{:?}]",
+            self.arena[me].hash, me, self.arena[me].height
+        );
+        let deferred_arena_index =
+            self.get_deferred_arena_index(me, DEFERRED_STATE_EPOCH_COUNT);
+        let deferred_exec_commitment = self
+            .data_man
+            .get_epoch_execution_commitment(
+                &self.arena[deferred_arena_index].hash,
+            )
+            .expect("execution commitment of deferred block exists");
+        let deferred_state_root = deferred_exec_commitment
+            .state_root_with_aux_info
+            .state_root
+            .compute_state_root_hash();
+        let deferred_receipts_root = deferred_exec_commitment.receipts_root;
+        let deferred_logs_bloom_hash = deferred_exec_commitment.logs_bloom_hash;
+
+        let block_header = self
+            .data_man
+            .block_header_by_hash(&self.arena[me].hash)
+            .unwrap();
+
+        let state_valid = *block_header.deferred_state_root()
+            == deferred_state_root
+            && *block_header.deferred_receipts_root() == deferred_receipts_root
+            && *block_header.deferred_logs_bloom_hash()
+                == deferred_logs_bloom_hash;
+
+        if state_valid {
+            debug!(
+                "compute_state_valid_for_block(): Block {} state is valid.",
+                self.arena[me].hash
+            );
+        } else {
+            debug!(
+                "compute_state_valid_for_block(): Block[{:?}] state is invalid! expected (state_root[{:?}], receipts_root[{:?}], logs_bloom_hash[{:?}]), but (state_root[{:?}], receipts_root[{:?}], logs_bloom_hash[{:?}]) found",
+                self.arena[me].hash,
+                deferred_state_root,
+                deferred_receipts_root,
+                deferred_logs_bloom_hash,
+                block_header.deferred_state_root(),
+                block_header.deferred_receipts_root(),
+                block_header.deferred_logs_bloom_hash()
+            );
+        }
+
+        self.arena[me].state_valid = Some(state_valid);
     }
 }
