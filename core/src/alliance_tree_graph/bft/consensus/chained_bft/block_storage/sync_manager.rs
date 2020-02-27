@@ -23,10 +23,11 @@ use crate::{
         consensus::error::ConsensusError,
         hsb_sync_protocol::{
             message::block_retrieval_response::BlockRetrievalRpcResponse,
-            sync_protocol::RpcResponse, HSB_PROTOCOL_ID,
+            request_manager::Request, sync_protocol::RpcResponse,
+            HSB_PROTOCOL_ID,
         },
     },
-    sync::{request_manager::Request, Error, ErrorKind},
+    sync::Error,
 };
 use cfx_types::H256;
 use futures::channel::oneshot;
@@ -420,14 +421,9 @@ impl<P: Payload> BlockRetriever<P> {
                         }
                     }
                 }
-                Err(e) => match e.0 {
-                    ErrorKind::RpcCancelledByEmpty => {
-                        return Ok(Vec::new());
-                    }
-                    _ => {
-                        continue;
-                    }
-                },
+                Err(_) => {
+                    continue;
+                }
             }
         }
     }

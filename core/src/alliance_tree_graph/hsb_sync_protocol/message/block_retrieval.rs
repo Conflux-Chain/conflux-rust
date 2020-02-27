@@ -4,20 +4,18 @@
 
 use super::super::sync_protocol::{Context, Handleable, RpcResponse};
 use crate::{
-    alliance_tree_graph::bft::consensus::{
-        chained_bft::network::IncomingBlockRetrievalRequest,
-        consensus_types::{
-            block_retrieval::BlockRetrievalRequest, common::Payload,
+    alliance_tree_graph::{
+        bft::consensus::{
+            chained_bft::network::IncomingBlockRetrievalRequest,
+            consensus_types::{
+                block_retrieval::BlockRetrievalRequest, common::Payload,
+            },
         },
+        hsb_sync_protocol::request_manager::{AsAny, Request},
     },
-    message::{Message, RequestId},
-    sync::{
-        message::{Key, KeyContainer},
-        request_manager::{AsAny, Request},
-        Error, ErrorKind, ProtocolConfiguration,
-    },
+    message::RequestId,
+    sync::{Error, ProtocolConfiguration},
 };
-use cfx_types::H256;
 use futures::channel::oneshot;
 use libra_types::account_address::AccountAddress;
 use serde::{Deserialize, Serialize};
@@ -48,37 +46,11 @@ impl Request for BlockRetrievalRpcRequest {
         self.timeout
     }
 
-    fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut inflight_keys = inflight_keys.write(self.msg_id());
-        let key = H256::from_slice(self.request.block_id().to_vec().as_slice());
-        inflight_keys.remove(&Key::Hash(key));
-    }
-
-    fn with_inflight(&mut self, inflight_keys: &KeyContainer) {
-        let inflight_keys = inflight_keys.write(self.msg_id());
-        let key = H256::from_slice(self.request.block_id().to_vec().as_slice());
-        if inflight_keys.contains(&Key::Hash(key)) {
-            self.is_empty = true;
-        }
-    }
-
-    fn is_empty(&self) -> bool { self.is_empty }
-
-    fn resend(&self) -> Option<Box<dyn Request>> { None }
-
-    fn notify_empty(&mut self) {
+    fn notify_error(&mut self, error: Error) {
         let res_tx = self.response_tx.take();
         if let Some(tx) = res_tx {
-            tx.send(Err(ErrorKind::RpcCancelledByEmpty.into()))
+            tx.send(Err(error))
                 .expect("send ResponseTX EmptyError should succeed");
-        }
-    }
-
-    fn notify_timeout(&mut self) {
-        let res_tx = self.response_tx.take();
-        if let Some(tx) = res_tx {
-            tx.send(Err(ErrorKind::RpcTimeout.into()))
-                .expect("send ResponseTX TimeoutError should succeed");
         }
     }
 

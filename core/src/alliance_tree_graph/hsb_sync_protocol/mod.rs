@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub mod message;
+pub mod request_manager;
 pub mod sync_protocol;
 
 use crate::network::ProtocolId;

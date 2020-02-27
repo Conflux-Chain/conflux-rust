@@ -69,6 +69,7 @@ const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
 const HEARTBEAT_TIMER: TimerToken = 9;
 const EXPIRE_BFT_EXECUTION_TIMER: TimerToken = 10;
+pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -506,8 +507,8 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Failure)
             }
             ErrorKind::InternalError(_) => {}
+            ErrorKind::RpcCancelledByDisconnection => {}
             ErrorKind::RpcTimeout => {}
-            ErrorKind::RpcCancelledByEmpty => {}
             ErrorKind::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }

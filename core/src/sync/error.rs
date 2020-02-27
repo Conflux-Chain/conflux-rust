@@ -56,9 +56,9 @@ error_chain! {
             display("Rpc gets timeout"),
         }
 
-        RpcCancelledByEmpty {
-            description("Rpc gets cancelled by empty"),
-            display("Rpc gets cancelled by empty"),
+        RpcCancelledByDisconnection {
+            description("Rpc gets cancelled by disconnection"),
+            display("Rpc gets cancelled by disconnection"),
         }
 
         InvalidTimestamp {

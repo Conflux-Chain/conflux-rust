@@ -14,9 +14,7 @@ use std::sync::Arc;
 //use storage_client::{StorageRead, StorageReadServiceClient};
 //use vm_runtime::LibraVM;
 use super::super::executor::Executor;
-use crate::sync::{
-    request_manager::RequestManager, SharedSynchronizationService,
-};
+use crate::sync::{ProtocolConfiguration, SharedSynchronizationService};
 use cfx_types::H256;
 
 /// Public interface to a consensus protocol.
@@ -28,7 +26,7 @@ pub trait ConsensusProvider {
     /// connections (e.g., to mempool and executor).
     fn start(
         &mut self, network: Arc<NetworkService>, own_node_hash: H256,
-        request_manager: Arc<RequestManager>,
+        protocol_config: ProtocolConfiguration,
     ) -> Result<()>;
 
     /// Stop the consensus operations. The function returns after graceful

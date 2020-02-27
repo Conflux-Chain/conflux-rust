@@ -14,8 +14,11 @@ use crate::{
                 vote_msg::VoteMsg,
             },
         },
-        hsb_sync_protocol::message::{
-            block_retrieval::BlockRetrievalRpcRequest, msgid,
+        hsb_sync_protocol::{
+            message::{block_retrieval::BlockRetrievalRpcRequest, msgid},
+            request_manager::{
+                request_handler::AsAny, RequestManager, RequestMessage,
+            },
         },
     },
     message::{Message, MsgId},
@@ -23,18 +26,15 @@ use crate::{
         NetworkContext, NetworkProtocolHandler, NetworkService, PeerId,
         UpdateNodeOperation,
     },
-    sync::{
-        msg_sender::NULL,
-        request_manager::{
-            request_handler::AsAny, RequestManager, RequestMessage,
-        },
-        Error, ErrorKind,
-    },
+    sync::{msg_sender::NULL, Error, ErrorKind, CHECK_RPC_REQUEST_TIMER},
 };
 
-use crate::alliance_tree_graph::{
-    bft::consensus::consensus_types::epoch_retrieval::EpochRetrievalRequest,
-    hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+use crate::{
+    alliance_tree_graph::{
+        bft::consensus::consensus_types::epoch_retrieval::EpochRetrievalRequest,
+        hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+    },
+    sync::ProtocolConfiguration,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -134,6 +134,7 @@ impl<'a, P: Payload> Context<'a, P> {
 }
 
 pub struct HotStuffSynchronizationProtocol<P> {
+    pub protocol_config: ProtocolConfiguration,
     pub own_node_hash: H256,
     pub peers: Arc<Peers<PeerState, H256>>,
     pub request_manager: Arc<RequestManager>,
@@ -142,11 +143,13 @@ pub struct HotStuffSynchronizationProtocol<P> {
 
 impl<P: Payload> HotStuffSynchronizationProtocol<P> {
     pub fn new(
-        own_node_hash: H256, request_manager: Arc<RequestManager>,
-        network_task: NetworkTask<P>,
+        own_node_hash: H256, network_task: NetworkTask<P>,
+        protocol_config: ProtocolConfiguration,
     ) -> Self
     {
+        let request_manager = Arc::new(RequestManager::new(&protocol_config));
         HotStuffSynchronizationProtocol {
+            protocol_config,
             own_node_hash,
             peers: Arc::new(Peers::new()),
             request_manager,
@@ -155,11 +158,13 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
     }
 
     pub fn with_peers(
-        own_node_hash: H256, request_manager: Arc<RequestManager>,
+        protocol_config: ProtocolConfiguration, own_node_hash: H256,
         network_task: NetworkTask<P>, peers: Arc<Peers<PeerState, H256>>,
     ) -> Self
     {
+        let request_manager = Arc::new(RequestManager::new(&protocol_config));
         HotStuffSynchronizationProtocol {
+            protocol_config,
             own_node_hash,
             peers,
             request_manager,
@@ -178,6 +183,11 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
                     e
                 )
             })
+    }
+
+    pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
+        self.request_manager.process_timeout_requests(io);
+        self.request_manager.resend_waiting_requests(io);
     }
 
     /// In the event two peers simultaneously dial each other we need to be able
@@ -291,7 +301,7 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
             }
             ErrorKind::InternalError(_) => {}
             ErrorKind::RpcTimeout => {}
-            ErrorKind::RpcCancelledByEmpty => {}
+            ErrorKind::RpcCancelledByDisconnection => {}
             ErrorKind::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
@@ -413,7 +423,13 @@ where M: Deserialize<'a> + Handleable<P> + Message {
 }
 
 impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
-    fn initialize(&self, _io: &dyn NetworkContext) {}
+    fn initialize(&self, io: &dyn NetworkContext) {
+        io.register_timer(
+            CHECK_RPC_REQUEST_TIMER,
+            self.protocol_config.check_request_period,
+        )
+        .expect("Error registering check rpc request timer");
+    }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
         let len = raw.len();
@@ -484,6 +500,7 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
             let mut peer_state = peer_state.write();
             peer_state.id = peer;
             peer_state.peer_hash = peer_hash;
+            self.request_manager.on_peer_connected(peer);
         } else {
             io.disconnect_peer(
                 peer,
@@ -504,6 +521,7 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
         let node_id = io.get_peer_node_id(peer);
         let peer_hash = keccak(&node_id);
         self.peers.remove(&peer_hash);
+        self.request_manager.on_peer_disconnected(io, peer);
         info!(
             "hsb on_peer_disconnected: peer={}, peer count {}",
             node_id,
@@ -511,7 +529,15 @@ impl<P: Payload> NetworkProtocolHandler for HotStuffSynchronizationProtocol<P> {
         );
     }
 
-    fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {}
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
+        trace!("hsb protocol timeout: timer={:?}", timer);
+        match timer {
+            CHECK_RPC_REQUEST_TIMER => {
+                self.remove_expired_flying_request(io);
+            }
+            _ => warn!("hsb protocol: unknown timer {} triggered.", timer),
+        }
+    }
 }
 
 pub trait Handleable<P> {

@@ -35,7 +35,7 @@ use cfxcore::{
     genesis,
     statistics::Statistics,
     storage::StorageManager,
-    sync::{request_manager::RequestManager, SyncPhaseType},
+    sync::{ProtocolConfiguration, SyncPhaseType},
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     vm_factory::VmFactory,
     LightProvider, Notifications, SharedSynchronizationService,
@@ -240,7 +240,7 @@ impl TgArchiveClient {
                 false,
                 network.clone(),
                 sync_graph.clone(),
-                protocol_config,
+                protocol_config.clone(),
                 conf.state_sync_config(),
                 initial_sync_phase,
                 light_provider,
@@ -273,7 +273,7 @@ impl TgArchiveClient {
             sync.clone(),
             network.clone(),
             own_node_hash,
-            sync.get_request_manager(),
+            protocol_config.clone(),
         );
 
         if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
@@ -494,7 +494,7 @@ impl TgArchiveClient {
     fn setup_tg_environment(
         node_config: &mut NodeConfig, tg_sync: SharedSynchronizationService,
         network: Arc<NetworkService>, own_node_hash: H256,
-        request_manager: Arc<RequestManager>,
+        protocol_config: ProtocolConfiguration,
     ) -> Option<Box<dyn ConsensusProvider>>
     {
         // Some of our code uses the rayon global thread pool. Name the rayon
@@ -537,7 +537,7 @@ impl TgArchiveClient {
         let mut consensus_provider =
             make_consensus_provider(node_config, executor, tg_sync);
         consensus_provider
-            .start(network, own_node_hash, request_manager)
+            .start(network, own_node_hash, protocol_config)
             .expect("Failed to start consensus. Can't proceed.");
         debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 

@@ -12,7 +12,7 @@ use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use crate::{
     alliance_tree_graph::consensus::SetPivotChainCallbackType,
-    sync::{request_manager::RequestManager, SharedSynchronizationService},
+    sync::{ProtocolConfiguration, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use libra_types::{
@@ -128,7 +128,7 @@ pub trait StateMachineReplication {
         &mut self, txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>, own_node_hash: H256,
-        request_manager: Arc<RequestManager>,
+        protocol_config: ProtocolConfiguration,
         tg_sync: SharedSynchronizationService,
     ) -> Result<()>;
 

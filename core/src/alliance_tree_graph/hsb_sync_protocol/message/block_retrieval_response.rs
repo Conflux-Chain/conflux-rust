@@ -8,10 +8,13 @@ use crate::{
         bft::consensus::consensus_types::{
             block_retrieval::BlockRetrievalResponse, common::Payload,
         },
-        hsb_sync_protocol::message::block_retrieval::BlockRetrievalRpcRequest,
+        hsb_sync_protocol::{
+            message::block_retrieval::BlockRetrievalRpcRequest,
+            request_manager::AsAny,
+        },
     },
     message::RequestId,
-    sync::{request_manager::AsAny, Error},
+    sync::Error,
 };
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -49,9 +52,6 @@ impl<P: Payload> Handleable<P> for BlockRetrievalRpcResponse<P> {
                 }
             }
             Err(e) => {
-                ctx.manager
-                    .request_manager
-                    .remove_mismatch_request(ctx.io, &req);
                 return Err(e);
             }
         }

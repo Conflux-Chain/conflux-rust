@@ -27,7 +27,7 @@ use crate::{
         chained_bft::network::NetworkSender,
         state_replication::{StateComputer, TxnTransformer},
     },
-    sync::{request_manager::RequestManager, SharedSynchronizationService},
+    sync::{ProtocolConfiguration, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use libra_types::crypto_proxies::EpochInfo;
@@ -183,7 +183,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         &mut self, txn_transformer: TT,
         state_computer: Arc<dyn StateComputer<Payload = Self::Payload>>,
         network: Arc<NetworkService>, own_node_hash: H256,
-        request_manager: Arc<RequestManager>,
+        protocol_config: ProtocolConfiguration,
         tg_sync: SharedSynchronizationService,
     ) -> Result<()>
     {
@@ -216,8 +216,8 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
 
         let protocol_handler =
             Arc::new(HotStuffSynchronizationProtocol::with_peers(
+                protocol_config,
                 own_node_hash,
-                request_manager,
                 network_task,
                 state_computer.get_peers(),
             ));

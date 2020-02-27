@@ -25,7 +25,7 @@ use crate::{
         state_computer::ExecutionProxy,
         state_replication::{StateComputer, TxnTransformerProxy},
     },
-    sync::{request_manager::RequestManager, SharedSynchronizationService},
+    sync::{ProtocolConfiguration, SharedSynchronizationService},
 };
 use cfx_types::H256;
 use network::NetworkService;
@@ -116,7 +116,7 @@ impl ChainedBftProvider {
 impl ConsensusProvider for ChainedBftProvider {
     fn start(
         &mut self, network: Arc<NetworkService>, own_node_hash: H256,
-        request_manager: Arc<RequestManager>,
+        protocol_config: ProtocolConfiguration,
     ) -> Result<()>
     {
         debug!("Starting consensus provider.");
@@ -125,7 +125,7 @@ impl ConsensusProvider for ChainedBftProvider {
             self.state_computer.clone(),
             network,
             own_node_hash,
-            request_manager,
+            protocol_config,
             self.tg_sync.clone(),
         )
     }
