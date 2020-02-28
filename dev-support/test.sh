@@ -60,7 +60,7 @@ function check_unit_tests {
 
     pushd $ROOT_DIR > /dev/null
     local result
-    result=`cargo test --release --all --features fuzzing`
+    result=`cargo test --release --all`
     local exit_code=$?
     popd > /dev/null
 
