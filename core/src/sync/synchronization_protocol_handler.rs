@@ -743,7 +743,7 @@ impl SynchronizationProtocolHandler {
             debug!("Recovered header {:?} from db", hash);
             // Process headers from db
             let mut block_headers_resp = GetBlockHeadersResponse::default();
-            block_headers_resp.set_request_id(0);
+            block_headers_resp.request_id = 0;
             let mut headers = Vec::new();
             headers.push((*header).clone());
             block_headers_resp.headers = headers;
@@ -1231,6 +1231,10 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
+    fn update_total_weight_delta_heartbeat(&self) {
+        self.graph.update_total_weight_delta_heartbeat();
+    }
+
     pub fn update_sync_phase(&self, io: &dyn NetworkContext) {
         {
             let _pm_lock = self.phase_manager_lock.lock();
@@ -1455,6 +1459,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
             .expect("Error registering log_statistics timer");
+        io.register_timer(
+            TOTAL_WEIGHT_IN_PAST_TIMER,
+            Duration::from_secs(BLOCK_PROPAGATION_DELAY * 2),
+        )
+        .expect("Error registering total_weight_in_past timer");
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
         io.register_timer(
@@ -1563,6 +1572,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             LOG_STATISTIC_TIMER => {
                 self.log_statistics();
+            }
+            TOTAL_WEIGHT_IN_PAST_TIMER => {
+                self.update_total_weight_delta_heartbeat();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
                 let timeout = Duration::from_secs(180);

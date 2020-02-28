@@ -33,6 +33,7 @@ pub trait Message: Send + Sync {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
     fn get_request_id(&self) -> Option<RequestId> { None }
+    // TODO Refactor: Avoid using this for responses.
     fn set_request_id(&mut self, _id: RequestId) {}
 
     fn encode(&self) -> Vec<u8>;

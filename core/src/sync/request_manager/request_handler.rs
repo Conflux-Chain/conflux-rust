@@ -375,6 +375,12 @@ pub trait AsAny {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
+impl<T: 'static + Request> AsAny for T {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 /// Trait of request message
 pub trait Request: Send + Debug + AsAny + Message {
     /// Request timeout for resend purpose.

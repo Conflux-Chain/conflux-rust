@@ -286,7 +286,6 @@ impl<ValueType> KvdbSqlite<ValueType> {
                     SQLITE_NO_PARAM,
                 )?
                 .finish_ignore_rows()?;
-            // FIXME: is it necessary to create index?
         }
 
         // Main table. When with_number_key_table is true it's the
@@ -298,8 +297,6 @@ impl<ValueType> KvdbSqlite<ValueType> {
                 SQLITE_NO_PARAM,
             )?
             .finish_ignore_rows()
-        // FIXME: is it necessary to create index when the main table has bytes
-        // key?
     }
 
     pub fn drop_table(
@@ -400,20 +397,6 @@ where ValueType::Type:
     }
 }
 
-impl<
-        ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
-    > KeyValueDbToOwnedReadTrait for KvdbSqlite<ValueType>
-{
-    fn to_owned_read<'a>(
-        &'a self,
-    ) -> Result<Box<dyn 'a + KeyValueDbTraitOwnedRead<ValueType = ValueType>>>
-    {
-        Ok(Box::new(self.try_clone()?))
-    }
-}
-
-impl DeltaDbTrait for KvdbSqlite<Box<[u8]>> {}
-
 pub struct KvdbSqliteTransaction<
     ValueType: DbValueType + ValueRead + ValueReadImpl<<ValueType as ValueRead>::Kind>,
 > where ValueType::Type:
@@ -446,7 +429,7 @@ where ValueType::Type:
         })
     }
 
-    fn start_transaction(
+    pub fn start_transaction(
         db: &mut Connection, immediate_write: bool,
     ) -> Result<()> {
         if immediate_write {
@@ -467,7 +450,7 @@ where ValueType::Type:
 {
     fn drop(&mut self) {
         if !self.committed {
-            self.revert();
+            self.revert().ok();
         }
     }
 }
@@ -499,21 +482,21 @@ where ValueType::Type:
             .execute("COMMIT")?)
     }
 
-    fn revert(&mut self) {
+    fn revert(&mut self) -> Result<()> {
         self.committed = true;
         self.connection
             .as_mut()
             .unwrap()
             .get_db_mut()
-            .execute("ROLLBACK")
-            .ok();
+            .execute("ROLLBACK")?;
+        Ok(())
     }
 
     fn restart(
         &mut self, immediate_write: bool, no_revert: bool,
     ) -> Result<()> {
         if !no_revert {
-            self.revert();
+            self.revert()?;
         }
         Self::start_transaction(
             self.connection.as_mut().unwrap().get_db_mut(),
@@ -665,7 +648,7 @@ impl<
         match connection {
             None => Ok(None),
             Some(conn) => {
-                // TODO try clone connection
+                // TODO try pooled connections
                 let mut db = conn.lock_db();
                 let mut statement_cache = conn.lock_statement_cache();
 
@@ -958,8 +941,8 @@ where ValueType::Type:
     }
 }
 
-// Section for marking automatic implmentation of KeyValueDbTraitOwnedRead, etc.
-
+// Section for marking automatic implementation of KeyValueDbTraitOwnedRead,
+// etc.
 impl<ValueType> OwnedReadImplFamily for KvdbSqlite<ValueType> {
     type FamilyRepresentative = KvdbSqlite<ValueType>;
 }
@@ -1231,7 +1214,7 @@ enable_deref_mut_plus_impl_or_borrow_mut_self!(KvdbSqliteDestructureTrait);
 use super::{
     super::{
         super::{
-            storage_db::{delta_db_manager::DeltaDbTrait, key_value_db::*},
+            storage_db::key_value_db::*,
             utils::{deref_plus_impl_or_borrow_self::*, tuple::*},
         },
         errors::*,

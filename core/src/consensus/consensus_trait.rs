@@ -23,6 +23,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, hash: &H256, ignore_body: bool, update_best_info: bool,
     );
 
+    fn update_total_weight_delta_heartbeat(&self) {}
+
     fn expected_difficulty(&self, parent_hash: &H256) -> U256;
 
     fn retrieve_old_era_blocks(&self) -> Option<H256>;

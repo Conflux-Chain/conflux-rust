@@ -42,8 +42,6 @@ use primitives::{
 };
 use rayon::prelude::*;
 use std::{
-    any::Any,
-    cmp::Reverse,
     collections::{HashMap, HashSet},
     sync::Arc,
     thread::sleep,
@@ -57,15 +55,15 @@ lazy_static! {
 
 #[derive(Clone)]
 pub struct ConsensusConfig {
-    // If we hit invalid state root, we will dump the information into a
-    // directory specified here. This is useful for testing.
+    /// If we hit invalid state root, we will dump the information into a
+    /// directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: String,
-    // When bench_mode is true, the PoW solution verification will be skipped.
-    // The transaction execution will also be skipped and only return the
-    // pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
-    // only
+    /// When bench_mode is true, the PoW solution verification will be skipped.
+    /// The transaction execution will also be skipped and only return the
+    /// pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing
+    /// only
     pub bench_mode: bool,
-    // The configuration used by inner data
+    /// The configuration used by inner data
     pub inner_conf: ConsensusInnerConfig,
 }
 
@@ -106,10 +104,16 @@ pub struct BestInformation {
 /// available and 2) all of its past blocks are also in the ConsensusGraph.
 ///
 /// ConsensusGraph maintains the TreeGraph structure of the client and
-/// implements *GHAST*/*Conflux* algorithm to determine the block total order.
-/// It dispatches transactions in epochs to ConsensusExecutor to process. To
-/// avoid executing too many execution reroll caused by transaction order
-/// oscillation. It defers the transaction execution for a few epochs.
+/// implements *Timer Chain GHAST*/*Conflux* algorithm to determine the block
+/// total order. It dispatches transactions in epochs to ConsensusExecutor to
+/// process. To avoid executing too many execution reroll caused by transaction
+/// order oscillation. It defers the transaction execution for a few epochs.
+///
+/// When recovery from database, ConsensusGraph requires that 1) the data
+/// manager is in a consistent state, 2) the data manager stores the correct era
+/// genesis and era stable hash, and 3) the data manager contains correct *block
+/// status* for all blocks before era stable block (more restrictively speaking,
+/// whose past sets do not contain the stable block).
 pub struct ConsensusGraph {
     pub inner: Arc<RwLock<ConsensusGraphInner>>,
     pub txpool: SharedTransactionPool,
@@ -138,7 +142,7 @@ pub struct ConsensusGraph {
 impl ConsensusGraph {
     /// Build the ConsensusGraph with a specific era genesis block and various
     /// other components. The execution will be skipped if bench_mode sets
-    /// to true. The height of
+    /// to true.
     pub fn with_era_genesis(
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
@@ -347,7 +351,8 @@ impl ConsensusGraph {
     ) -> Result<StateDb, String> {
         self.validate_stated_epoch(&epoch_number)?;
         let height = self.get_height_from_epoch_number(epoch_number)?;
-        let hash = self.inner.read().get_hash_from_epoch_number(height)?;
+        let hash =
+            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -407,6 +412,7 @@ impl ConsensusGraph {
         }
     }
 
+    /// Get the interest rate at an epoch
     pub fn get_interest_rate(
         &self, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
@@ -418,6 +424,7 @@ impl ConsensusGraph {
         }
     }
 
+    /// Get the accumulative interest rate at an epoch
     pub fn get_accumulate_interest_rate(
         &self, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
@@ -641,11 +648,9 @@ impl ConsensusGraph {
                     let epoch_hash = &inner.arena
                         [inner.get_pivot_block_arena_index(epoch_number)]
                     .hash;
-                    for index in &inner.arena
-                        [inner.get_pivot_block_arena_index(epoch_number)]
-                    .data
-                    .ordered_executable_epoch_blocks
-                    {
+                    for index in inner.get_ordered_executable_epoch_blocks(
+                        inner.get_pivot_block_arena_index(epoch_number),
+                    ) {
                         let hash = &inner.arena[*index].hash;
                         if self.block_matches_bloom(hash, epoch_hash, &blooms) {
                             blocks.push(*hash);
@@ -852,7 +857,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
             }
 
             *self.latest_inserted_block.lock() = *hash;
-
             if inner.inner_conf.enable_state_expose {
                 if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
                 {
@@ -891,10 +895,18 @@ impl ConsensusGraphTrait for ConsensusGraph {
         }
     }
 
+    /// This function is a wrapper function for the function in the confirmation
+    /// meter. The synchronization layer is supposed to call this function
+    /// every 2 * BLOCK_PROPAGATION_DELAY seconds
+    fn update_total_weight_delta_heartbeat(&self) {
+        self.confirmation_meter
+            .update_total_weight_delta_heartbeat();
+    }
+
     /// This function returns the set of blocks that are two eras farther from
     /// current era. They can be safely garbage collected.
     fn retrieve_old_era_blocks(&self) -> Option<H256> {
-        self.inner.read().old_era_block_set.lock().pop_front()
+        self.inner.read().pop_old_era_block_set()
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
@@ -926,13 +938,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
         inner.expected_difficulty(parent_hash)
     }
 
-    /// FIXME store this in BlockDataManager
+    // FIXME store this in BlockDataManager
     /// Return the sequence number of the current era genesis hash.
     fn current_era_genesis_seq_num(&self) -> u64 {
-        let inner = self.inner.read_recursive();
-        inner.arena[inner.cur_era_genesis_block_arena_index]
-            .data
-            .sequence_number
+        self.inner.read_recursive().current_era_genesis_seq_num()
     }
 
     fn get_data_manager(&self) -> &Arc<BlockDataManager> { &self.data_man }
@@ -956,7 +965,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     ) -> Result<H256, String> {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
-                self.inner.read().get_hash_from_epoch_number(height)
+                self.inner.read().get_pivot_hash_from_epoch_number(height)
             })
     }
 
@@ -1074,18 +1083,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let terminal_hashes = inner.terminal_hashes();
         let (terminal_block_hashes, bounded_terminal_block_hashes) =
             if terminal_hashes.len() > REFEREE_BOUND {
-                let mut tmp = Vec::new();
-                let best_idx = inner.pivot_chain.last().unwrap();
-                for hash in terminal_hashes.iter() {
-                    let a_idx = inner.hash_to_arena_indices.get(hash).unwrap();
-                    let a_lca = inner.lca(*a_idx, *best_idx);
-                    tmp.push((inner.arena[a_lca].height, hash));
-                }
-                tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
-                tmp.split_off(REFEREE_BOUND);
-                let bounded_hashes =
-                    tmp.iter().map(|(_, b)| (*b).clone()).collect();
-                (Some(terminal_hashes), bounded_hashes)
+                (Some(terminal_hashes), inner.best_terminals(REFEREE_BOUND))
             } else {
                 (None, terminal_hashes)
             };

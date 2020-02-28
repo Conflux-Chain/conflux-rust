@@ -242,7 +242,7 @@ pub trait NetworkProtocolHandler: Sync + Send {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum UpdateNodeOperation {
     Failure,
     Demotion,

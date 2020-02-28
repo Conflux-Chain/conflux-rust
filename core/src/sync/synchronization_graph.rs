@@ -1759,6 +1759,10 @@ impl SynchronizationGraph {
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
+    pub fn update_total_weight_delta_heartbeat(&self) {
+        self.consensus.update_total_weight_delta_heartbeat();
+    }
+
     /// Get the current number of blocks in the synchronization graph
     /// This only returns cached block count, and this is enough since this is
     /// only used in test.
