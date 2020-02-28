@@ -1417,6 +1417,9 @@ impl SynchronizationProtocolHandler {
 
     fn remove_expired_bft_execution(&self) {
         let sync_graph = self.get_synchronization_graph();
+        if !sync_graph.is_consortium() {
+            return;
+        }
         let tg_consensus = sync_graph
             .consensus
             .as_any()

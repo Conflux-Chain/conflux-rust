@@ -56,7 +56,6 @@ impl ConsensusNewBlockHandler {
         }
     }
 
-    #[allow(dead_code)]
     fn make_checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
         will_execute: bool, executor: &ConsensusExecutor,

@@ -9,7 +9,6 @@ use std::collections::{HashMap, VecDeque};
 
 struct TreeNode {
     /// This is the parent index of current tree node.
-    #[allow(dead_code)]
     parent: usize,
     /// This is the corresponding consensus graph index
     consensus_index: usize,

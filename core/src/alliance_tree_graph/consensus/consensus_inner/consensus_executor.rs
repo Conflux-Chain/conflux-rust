@@ -548,7 +548,7 @@ impl ConsensusExecutionHandler {
                     // FIXME: propogate error.
                     .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
-            debug!("Skip execution in prefix {:?}", epoch_hash);
+            debug!("Skip execution in prefix[{:?}]", epoch_hash);
             return;
         }
 
@@ -563,7 +563,7 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Not empty");
 
         debug!(
-            "Process tx epoch_id={}, block_count={}",
+            "compute_epoch for epoch[{:?}], block_count[{:?}]",
             epoch_hash,
             epoch_blocks.len(),
         );
