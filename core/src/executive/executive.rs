@@ -52,7 +52,7 @@ pub fn contract_address(
             // address. For contract address, the bit will be set
             // one.
             let mut h = keccak(stream.as_raw());
-            h.as_bytes_mut()[0] |= 0x80;
+            h.as_bytes_mut()[12] |= 0x80;
             (From::from(h), None)
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
@@ -66,7 +66,7 @@ pub fn contract_address(
             // address. For contract address, the bit will be set
             // one.
             let mut h = keccak(&buffer[..]);
-            h.as_bytes_mut()[0] |= 0x80;
+            h.as_bytes_mut()[12] |= 0x80;
             (From::from(h), Some(code_hash))
         }
         CreateContractAddress::FromSenderAndCodeHash => {
@@ -78,7 +78,7 @@ pub fn contract_address(
             // address. For contract address, the bit will be set
             // one.
             let mut h = keccak(&buffer[..]);
-            h.as_bytes_mut()[0] |= 0x80;
+            h.as_bytes_mut()[12] |= 0x80;
             (From::from(h), Some(code_hash))
         }
     }
