@@ -25,11 +25,11 @@ use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 lazy_static! {
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
-        Address::from_str("c43c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
+        Address::from_str("043c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
     pub static ref COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("dad036480160591706c831f0da19d1a424e39469").unwrap();
+        Address::from_str("0ad036480160591706c831f0da19d1a424e39469").unwrap();
     pub static ref STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("d7ca63b239c537ada331614df304b6ce3caa11f4").unwrap();
+        Address::from_str("07ca63b239c537ada331614df304b6ce3caa11f4").unwrap();
     pub static ref INTERNAL_CONTRACT_CODE: Bytes = vec![0u8, 0u8, 0u8, 0u8];
     pub static ref INTERNAL_CONTRACT_CODE_HASH: H256 =
         keccak([0u8, 0u8, 0u8, 0u8]);
@@ -51,9 +51,10 @@ pub fn contract_address(
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bit will be set
             // one.
-            let mut h = keccak(stream.as_raw());
-            h.as_bytes_mut()[12] |= 0x80;
-            (From::from(h), None)
+            let mut h = Address::from(keccak(stream.as_raw()));
+            h.as_bytes_mut()[0] &= 0x0f;
+            h.as_bytes_mut()[0] |= 0x80;
+            (h, None)
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let code_hash = keccak(code);
@@ -65,9 +66,10 @@ pub fn contract_address(
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bit will be set
             // one.
-            let mut h = keccak(&buffer[..]);
-            h.as_bytes_mut()[12] |= 0x80;
-            (From::from(h), Some(code_hash))
+            let mut h = Address::from(keccak(&buffer[..]));
+            h.as_bytes_mut()[0] &= 0x0f;
+            h.as_bytes_mut()[0] |= 0x80;
+            (h, Some(code_hash))
         }
         CreateContractAddress::FromSenderAndCodeHash => {
             let code_hash = keccak(code);
@@ -77,9 +79,10 @@ pub fn contract_address(
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bit will be set
             // one.
-            let mut h = keccak(&buffer[..]);
-            h.as_bytes_mut()[12] |= 0x80;
-            (From::from(h), Some(code_hash))
+            let mut h = Address::from(keccak(&buffer[..]));
+            h.as_bytes_mut()[0] &= 0x0f;
+            h.as_bytes_mut()[0] |= 0x80;
+            (h, Some(code_hash))
         }
     }
 }
@@ -1684,7 +1687,7 @@ mod tests {
             Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
                 .unwrap();
         let expected_address =
-            Address::from_str("3f09c73a5ed19289fb9bdc72f1742566df146f56")
+            Address::from_str("8f09c73a5ed19289fb9bdc72f1742566df146f56")
                 .unwrap();
         assert_eq!(
             expected_address,
