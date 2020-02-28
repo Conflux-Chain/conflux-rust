@@ -25,9 +25,9 @@ use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 lazy_static! {
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
-        Address::from_str("443c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
+        Address::from_str("c43c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
     pub static ref COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("5ad036480160591706c831f0da19d1a424e39469").unwrap();
+        Address::from_str("dad036480160591706c831f0da19d1a424e39469").unwrap();
     pub static ref STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
         Address::from_str("d7ca63b239c537ada331614df304b6ce3caa11f4").unwrap();
     pub static ref INTERNAL_CONTRACT_CODE: Bytes = vec![0u8, 0u8, 0u8, 0u8];
