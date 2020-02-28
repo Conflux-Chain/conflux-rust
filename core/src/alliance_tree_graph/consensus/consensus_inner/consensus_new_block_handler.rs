@@ -230,7 +230,7 @@ impl ConsensusNewBlockHandler {
         &self, inner: &mut ConsensusGraphInner,
     ) -> usize {
         // FIXME: We should use finality to implement this function
-        let era_checkpoint_gap = 100;
+        let era_checkpoint_gap = inner.inner_conf.era_epoch_count;
         let best_height = inner.best_epoch_number();
         if best_height <= era_checkpoint_gap {
             return inner.cur_era_genesis_block_arena_index;
@@ -564,7 +564,7 @@ impl ConsensusNewBlockHandler {
                     inner.terminal_hashes.iter().cloned().collect(),
                 );
                 debug!(
-                    "inser to next_selected_pivot_waiting_list block={:?}",
+                    "insert to next_selected_pivot_waiting_list block={:?}",
                     block.hash()
                 );
                 inner
