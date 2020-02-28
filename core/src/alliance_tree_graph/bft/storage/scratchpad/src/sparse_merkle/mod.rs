@@ -6,7 +6,9 @@
 //! small portion of the state -- the part of accounts that have been modified
 //! by uncommitted transactions. For example, if we execute a transaction T_i on
 //! top of committed state and it modified account A, we will end up having the
-//! following tree: ```text
+//! following tree:
+//!
+//! ```text
 //!              S_i
 //!             /   \
 //!            o     y
@@ -19,7 +21,9 @@
 //! This Sparse Merkle Tree is immutable once constructed. If the next
 //! transaction T_{i+1} modified another account B that lives in the subtree at
 //! y, a new tree will be constructed and the structure will look like the
-//! following: ```text
+//! following:
+//!
+//! ```text
 //!                 S_i        S_{i+1}
 //!                /   \      /       \
 //!               /     y   /          \
@@ -49,7 +53,9 @@
 //!
 //! This Sparse Merkle Tree serves a dual purpose. First, to support a leader
 //! based consensus algorithm, we need to build a tree of transactions like the
-//! following: ```text
+//! following:
+//!
+//! ```text
 //! Committed -> T5 -> T6  -> T7
 //!              └---> T6' -> T7'
 //!                    └----> T7"
@@ -299,7 +305,8 @@ impl SparseMerkleTree {
     ///
     /// 1. If the key equals the existing leaf's key, we simply need to update
     /// the leaf to the new    value and return it. For example, in the
-    /// following case this function will return    `new_leaf`.
+    /// following case this function will return `new_leaf`.
+    ///
     ///  ``` text
     ///       o                    o
     ///      / \                  / \
@@ -313,6 +320,7 @@ impl SparseMerkleTree {
     /// example, in the following case we assume the    existing leaf's key
     /// starts with 010010 and key starts with 010011, and this function
     ///    will return `x`.
+    ///
     /// ```text
     ///        o                              o             common_prefix_len = 5
     ///       / \                            / \            distance_from_root_to_existing_leaf = 2
@@ -375,7 +383,9 @@ impl SparseMerkleTree {
 
     /// Constructs a subtree with a list of siblings and a leaf. For example, if
     /// `bits` are [false, false, true] and `siblings` are [a, b, c], the
-    /// resulting subtree will look like: ```text
+    /// resulting subtree will look like:
+    ///
+    /// ```text
     ///          x
     ///         / \
     ///        c   o

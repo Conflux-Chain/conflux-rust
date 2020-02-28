@@ -5,11 +5,13 @@
 //! with ledger versions.
 //!
 //! Each version has values for multiple counters and they are serialized as a
-//! map. ```text
+//! map.
+//!
+//! ```text
 //! |<--key-->|<--value->|
 //! | version | counters |
 //! ```
-//! 
+//!
 //! `Version` is serialized in big endian so that records in RocksDB will be in
 //! order of it's numeric value.
 
