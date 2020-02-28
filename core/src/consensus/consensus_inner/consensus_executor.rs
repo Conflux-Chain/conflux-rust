@@ -7,7 +7,6 @@ use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
-    channel::Channel,
     consensus::ConsensusGraphInner,
     executive::{ExecutionError, Executive},
     machine::new_machine_with_builtin,
@@ -17,7 +16,7 @@ use crate::{
     storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
     vm::{Env, Spec},
     vm_factory::VmFactory,
-    Notifications, SharedTransactionPool,
+    SharedTransactionPool,
 };
 use cfx_types::{Address, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
@@ -162,14 +161,13 @@ impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        notifications: Arc<Notifications>, bench_mode: bool,
+        bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
             vm,
-            notifications,
         ));
         let (sender, receiver) = channel();
 
@@ -772,25 +770,18 @@ pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
-
-    /// Channel used to send epochs to PubSub
-    /// Each element is <epoch_number, epoch_hashes>
-    epochs_sender: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory, notifications: Arc<Notifications>,
+        vm: VmFactory,
     ) -> Self
     {
-        let epochs_sender = notifications.epochs_executed.clone();
-
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
             vm,
-            epochs_sender,
         }
     }
 
@@ -888,6 +879,7 @@ impl ConsensusExecutionHandler {
                 .data_man
                 .block_header_by_hash(epoch_hash)
                 .expect("must exists");
+
             if on_local_pivot {
                 // Unwrap is safe here because it's guaranteed by outer if.
                 let state_root = &self
@@ -924,6 +916,7 @@ impl ConsensusExecutionHandler {
                 .write()
                 .adjust_upper_bound(pivot_block_header.as_ref());
             debug!("Skip execution in prefix {:?}", epoch_hash);
+
             return;
         }
 
@@ -1141,12 +1134,6 @@ impl ConsensusExecutionHandler {
 
             epoch_receipts.push(block_receipts);
         }
-
-        // send to PubSub
-        self.epochs_sender.send((
-            pivot_block.block_header.height(), /* epoch number */
-            epoch_blocks.iter().map(|b| b.hash()).collect(), /* epoch hashes */
-        ));
 
         if on_local_pivot {
             self.tx_pool.recycle_transactions(to_pending);

@@ -20,6 +20,7 @@ use jsonrpc_core::{
 use std::{
     collections::BTreeMap,
     sync::{Arc, Weak},
+    time::Duration,
 };
 
 use cfxcore::{
@@ -30,16 +31,17 @@ use cfxcore::{
 use cfx_types::H256;
 use futures::{
     compat::Future01CompatExt,
-    future::{FutureExt, TryFutureExt},
+    future::{join_all, FutureExt, TryFutureExt},
 };
 use itertools::zip;
 use parking_lot::RwLock;
 use primitives::{
     filter::Filter,
     log_entry::{LocalizedLogEntry, LogEntry},
-    BlockHeader,
+    BlockHeader, Receipt,
 };
 use runtime::Executor;
+use tokio_timer::sleep;
 
 type Client = Sink<pubsub::Result>;
 
@@ -49,7 +51,7 @@ pub struct PubSubClient {
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
     logs_subscribers: Arc<RwLock<Subscribers<(Client, Filter)>>>,
-    epochs_executed: Arc<Channel<(u64, Vec<H256>)>>,
+    epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
 impl PubSubClient {
@@ -91,7 +93,7 @@ impl PubSubClient {
             heads_subscribers,
             epochs_subscribers,
             logs_subscribers,
-            epochs_executed: notifications.epochs_executed.clone(),
+            epochs_ordered: notifications.epochs_ordered.clone(),
         }
     }
 
@@ -108,11 +110,11 @@ impl PubSubClient {
 
         // clone everything we use in our async loop
         let subscribers = self.epochs_subscribers.clone();
-        let epochs_executed = self.epochs_executed.clone();
+        let epochs_ordered = self.epochs_ordered.clone();
         let handler = self.handler.clone();
 
-        // subscribe to the `epochs_executed` channel
-        let mut receiver = epochs_executed.subscribe();
+        // subscribe to the `epochs_ordered` channel
+        let mut receiver = epochs_ordered.subscribe();
 
         // loop asynchronously
         let fut = async move {
@@ -124,7 +126,7 @@ impl PubSubClient {
                     Some(sub) => sub.clone(),
                     None => {
                         // unsubscribed, terminate loop
-                        epochs_executed.unsubscribe(receiver.id);
+                        epochs_ordered.unsubscribe(receiver.id);
                         return;
                     }
                 };
@@ -147,11 +149,11 @@ impl PubSubClient {
 
         // clone everything we use in our async loop
         let subscribers = self.logs_subscribers.clone();
-        let epochs_executed = self.epochs_executed.clone();
+        let epochs_ordered = self.epochs_ordered.clone();
         let handler = self.handler.clone();
 
-        // subscribe to the `epochs_executed` channel
-        let mut receiver = epochs_executed.subscribe();
+        // subscribe to the `epochs_ordered` channel
+        let mut receiver = epochs_ordered.subscribe();
 
         // loop asynchronously
         let fut = async move {
@@ -165,7 +167,7 @@ impl PubSubClient {
                     Some(sub) => sub.clone(),
                     None => {
                         // unsubscribed, terminate loop
-                        epochs_executed.unsubscribe(receiver.id);
+                        epochs_ordered.unsubscribe(receiver.id);
                         return;
                     }
                 };
@@ -285,7 +287,7 @@ impl ChainNotificationHandler {
         // NOTE: calls to DbManager are supposed to be cached
         // FIXME(thegaram): what is the perf impact of calling this for each
         // subscriber? would it be better to do this once for each epoch?
-        let logs = match self.retrieve_epoch_logs(epoch) {
+        let logs = match self.retrieve_epoch_logs(epoch).await {
             Some(logs) => logs,
             None => return,
         };
@@ -305,24 +307,47 @@ impl ChainNotificationHandler {
         }
     }
 
-    fn retrieve_epoch_logs(
+    // attempt to retrieve block receipts from BlockDataManager
+    // on failure, wait and retry a few times, then fail
+    // NOTE: we do this because we might get epoch notifications
+    // before the corresponding execution results are computed
+    async fn retrieve_block_receipts(
+        &self, block: &H256, pivot: &H256,
+    ) -> Option<Arc<Vec<Receipt>>> {
+        const NUM_POLLS: i8 = 10;
+        const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
+
+        for iter in 0..NUM_POLLS {
+            match self.data_man.block_execution_result_by_hash_with_epoch(
+                &block, &pivot, true, /* update_cache */
+            ) {
+                Some(res) => return Some(res.receipts.clone()),
+                None => {
+                    trace!("Cannot find receipts with {:?}/{:?}", block, pivot);
+                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
+                }
+            }
+        }
+
+        warn!("Cannot find receipts with {:?}/{:?}", block, pivot);
+        None
+    }
+
+    async fn retrieve_epoch_logs(
         &self, epoch: (u64, Vec<H256>),
     ) -> Option<Vec<LocalizedLogEntry>> {
         let (epoch_number, hashes) = epoch;
         let pivot = hashes.last().cloned().expect("epoch should not be empty");
 
         // retrieve epoch receipts
-        // short-circuit if any of them is missing
-        let receipts = hashes.iter().map(|h| {
-            match self.data_man.block_execution_result_by_hash_with_epoch(&h, &pivot, true, /* update_cache */) {
-                Some(res) => Some(res.receipts.clone()),
-                None => {
-                    warn!("Unable to retrieve receipts for block {:?} in epoch {}", h, epoch_number);
-                    None
-                }
-            }
-        })
-        .collect::<Option<Vec<_>>>()?;
+        let fut = hashes
+            .iter()
+            .map(|h| self.retrieve_block_receipts(&h, &pivot));
+
+        let receipts = join_all(fut)
+            .await
+            .into_iter()
+            .collect::<Option<Vec<_>>>()?;
 
         let mut logs = vec![];
         let mut log_index = 0;
@@ -343,6 +368,7 @@ impl ChainNotificationHandler {
             let txs = &block.transactions;
             assert_eq!(receipts.len(), txs.len());
 
+            // construct logs
             for (txid, (receipt, tx)) in zip(&*receipts, txs).enumerate() {
                 for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
                     logs.push(LocalizedLogEntry {

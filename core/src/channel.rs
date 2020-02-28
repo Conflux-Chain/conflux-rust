@@ -90,14 +90,14 @@ impl<T: Clone> Channel<T> {
 
 pub struct Notifications {
     pub new_block_hashes: Arc<Channel<(H256, bool)>>,
-    pub epochs_executed: Arc<Channel<(u64, Vec<H256>)>>,
+    pub epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
 impl Notifications {
     pub fn init() -> Arc<Self> {
         Arc::new(Notifications {
             new_block_hashes: Arc::new(Channel::new("new-block-hashes")),
-            epochs_executed: Arc::new(Channel::new("epochs-executed")),
+            epochs_ordered: Arc::new(Channel::new("epochs-executed")),
         })
     }
 }

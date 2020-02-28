@@ -165,7 +165,6 @@ impl ConsensusGraph {
             data_man.clone(),
             vm,
             inner.clone(),
-            notifications,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
@@ -177,7 +176,12 @@ impl ConsensusGraph {
             executor: executor.clone(),
             statistics: statistics.clone(),
             new_block_handler: ConsensusNewBlockHandler::new(
-                conf, txpool, data_man, executor, statistics,
+                conf,
+                txpool,
+                data_man,
+                executor,
+                statistics,
+                notifications,
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),

@@ -57,6 +57,7 @@ order-stat = "0.1"
 futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }
 throttling = { path = "../util/throttling" }
+tokio-timer = "0.2.13"
 
 [dev-dependencies]
 criterion = "0.2"
