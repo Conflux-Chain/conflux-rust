@@ -365,10 +365,14 @@ pub struct SynchronizationPeerRequest {
 /// Support to downcast trait to concrete request type.
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
+
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl<T: 'static + Request> AsAny for T {
     fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Trait of request message

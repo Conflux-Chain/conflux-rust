@@ -486,8 +486,9 @@ impl ValueReadImpl<()> for () {
     }
 
     fn from_kv_row_impl(
-        _row: &Statement<'_>, _key: &mut dyn SqlReadableIntoSelf,
+        row: &Statement<'_>, key: &mut dyn SqlReadableIntoSelf,
     ) -> Result<Self> {
+        key.read_into_self(row, 0)?;
         Ok(())
     }
 }
