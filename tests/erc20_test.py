@@ -70,7 +70,9 @@ class P2PTest(ConfluxTestFramework):
         self.log.info("Contract created, start transfering tokens")
 
         tx_n = 10
-        self.tx_conf["to"] = Web3.toChecksumAddress(encode_hex_0x(sha3_256(rlp.encode([genesis_addr, nonce]))[-20:]))
+        contract_addr = sha3_256(rlp.encode([genesis_addr, nonce]))[-20:]
+        contract_addr[0] |= 0x80
+        self.tx_conf["to"] = Web3.toChecksumAddress(encode_hex_0x(contract_addr))
         nonce += 1
         balance_map = {genesis_key: 1000000 * 10**18}
         sender_key = genesis_key
