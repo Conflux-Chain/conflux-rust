@@ -31,6 +31,7 @@ from .util import (
     disconnect_nodes,
     get_datadir_path,
     initialize_datadir,
+    initialize_tg_config,
     p2p_port,
     set_node_times,
     sync_blocks,
@@ -293,11 +294,13 @@ class ConfluxTestFramework:
         self.add_nodes(self.num_nodes, binary=binary)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False):
+    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, is_consortium=False):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
         assert_equal(len(binary), num_nodes)
+        if is_consortium:
+            initialize_tg_config(self.options.tmpdir, num_nodes)
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(

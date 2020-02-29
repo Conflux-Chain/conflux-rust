@@ -2,39 +2,37 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::{debug::*, ConsensusGraphInner};
+use super::super::{debug::*, ConsensusGraphInner, ConsensusInnerConfig};
 use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
     executive::{ExecutionError, Executive},
     machine::new_machine_with_builtin,
-    parameters::{consensus::*, consensus_internal::*},
     state::{CleanupMode, State},
+    state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     statedb::StateDb,
     storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{Address, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
-use core::convert::TryFrom;
+use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256};
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parity_bytes::ToPretty;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use primitives::{
     receipt::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, BlockHeaderBuilder, SignedTransaction,
-    TransactionAddress, MERKLE_NULL_NODE,
+    Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
+    MERKLE_NULL_NODE,
 };
 use std::{
-    cmp::max,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     convert::From,
     fmt::{Debug, Formatter},
     sync::{
@@ -61,26 +59,17 @@ lazy_static! {
 /// for old epochs
 pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
-    pub epoch_block_no_reward: Vec<bool>,
-    pub epoch_block_anticone_difficulties: Vec<U512>,
-    /// This block is used to estimate interest rate in current epoch. Usually,
-    /// it is a pivot block and it is 100 epochs before current epoch.
-    pub interest_rate_est_block_header: Arc<BlockHeader>,
 }
 
 impl Debug for RewardExecutionInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "RewardExecutionInfo{{ epoch_blocks: {:?} \
-             epoch_block_no_reward: {:?} \
-             epoch_block_anticone_difficulties: {:?}}}",
+            "RewardExecutionInfo{{ epoch_blocks: {:?}}}",
             self.epoch_blocks
                 .iter()
                 .map(|b| b.hash())
                 .collect::<Vec<H256>>(),
-            self.epoch_block_no_reward,
-            self.epoch_block_anticone_difficulties
         )
     }
 }
@@ -102,7 +91,6 @@ pub struct EpochExecutionTask {
     pub epoch_block_hashes: Vec<H256>,
     pub start_block_number: u64,
     pub reward_info: Option<RewardExecutionInfo>,
-    pub on_local_pivot: bool,
     pub debug_record: Arc<Mutex<Option<ComputeEpochDebugRecord>>>,
 }
 
@@ -110,7 +98,7 @@ impl EpochExecutionTask {
     pub fn new(
         epoch_hash: H256, epoch_block_hashes: Vec<H256>,
         start_block_number: u64, reward_info: Option<RewardExecutionInfo>,
-        on_local_pivot: bool, debug_record: bool,
+        debug_record: bool,
     ) -> Self
     {
         Self {
@@ -118,7 +106,6 @@ impl EpochExecutionTask {
             epoch_block_hashes,
             start_block_number,
             reward_info,
-            on_local_pivot,
             debug_record: if debug_record {
                 // FIXME: make debug_record great again.
                 Default::default()
@@ -159,13 +146,13 @@ pub struct ConsensusExecutor {
 impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        bench_mode: bool,
+        vm: VmFactory, conf: ConsensusInnerConfig, bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
+            conf,
             vm,
         ));
         let (sender, receiver) = channel();
@@ -184,38 +171,15 @@ impl ConsensusExecutor {
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
                 if executor_thread.stopped.load(Relaxed) {
-                    // The thread should be stopped. The rest tasks in the queue will be discarded.
+                    // The thread should be stopped. The rest tasks in the queue
+                    // will be discarded.
                     break;
                 }
                 let maybe_task = receiver.try_recv();
                 match maybe_task {
                     Err(TryRecvError::Empty) => {
-                        // The channel is empty, so we try to optimistically
-                        // get later epochs to execute. Here we use `try_write` because some thread
-                        // may wait for execution results while holding the Consensus Inner lock,
-                        // if we wait on inner lock here we may get deadlock
-                        let maybe_optimistic_task = consensus_inner
-                            .try_write()
-                            .and_then(|mut inner|
-                                executor_thread.get_optimistic_execution_task(&mut *inner)
-                            );
-                        match maybe_optimistic_task {
-                            Some(task) => {
-                                debug!("Get optimistic_execution_task {:?}", task);
-                                handler.handle_epoch_execution(task)
-                            },
-                            None => {
-                                debug!("No optimistic tasks to execute, block for new tasks");
-                                //  Even optimistic tasks are all finished, so we block and wait for
-                                //  new execution tasks.
-                                //  New optimistic tasks will only exist if pivot_chain changes,
-                                //  and new tasks will be sent to `receiver` in this case, so this
-                                // waiting will not prevent new optimistic tasks from being executed
-                                if !handler.handle_recv_result(receiver.recv())
-                                {
-                                    break;
-                                }
-                            }
+                        if !handler.handle_recv_result(receiver.recv()) {
+                            break;
                         }
                     }
                     maybe_error => {
@@ -279,296 +243,10 @@ impl ConsensusExecutor {
         }
     }
 
-    fn get_optimistic_execution_task(
-        &self, inner: &mut ConsensusGraphInner,
-    ) -> Option<EpochExecutionTask> {
-        if !inner.inner_conf.enable_optimistic_execution {
-            return None;
-        }
-
-        let opt_height = inner.optimistic_executed_height?;
-        let epoch_arena_index = inner.get_pivot_block_arena_index(opt_height);
-
-        // `on_local_pivot` is set to `true` because when we later skip its
-        // execution on pivot chain, we will not notify tx pool, so we
-        // will also notify in advance.
-        let execution_task = EpochExecutionTask::new(
-            inner.arena[epoch_arena_index].hash,
-            inner.get_epoch_block_hashes(epoch_arena_index),
-            inner.get_epoch_start_block_number(epoch_arena_index),
-            self.get_reward_execution_info(inner, epoch_arena_index),
-            true,
-            false,
-        );
-        let next_opt_height = opt_height + 1;
-        if next_opt_height
-            >= inner.pivot_index_to_height(inner.pivot_chain.len())
-        {
-            inner.optimistic_executed_height = None;
-        } else {
-            inner.optimistic_executed_height = Some(next_opt_height);
-        }
-        Some(execution_task)
-    }
-
-    pub fn get_reward_execution_info_from_index(
-        &self, inner: &mut ConsensusGraphInner,
-        reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo>
-    {
-        reward_index.map(
-            |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
-                // FIXME: this is hard to understand due to lack of
-                // FIXME: documentation. Under which scenarios
-                // FIXME: it is absolute necessary to wait? Are
-                // FIXME: there other mechanisms to avoid the wait?
-                // FIXME: Wait for the execution info populated for all blocks
-                // FIXME: before pivot_arena_index
-                let height = inner.arena[pivot_arena_index].height;
-                if !self.consensus_graph_bench_mode
-                {
-                    debug!(
-                        "wait_and_compute_state_valid_locked, idx = {}, \
-                         height = {}, era stable height = {}",
-                        pivot_arena_index, height, inner.cur_era_stable_height
-                    );
-                    self.wait_and_compute_state_valid_locked(
-                        pivot_arena_index,
-                        inner,
-                    )
-                    .unwrap();
-                }
-
-                let interest_rate_est_block_height = if height > 100 {
-                   height - 100
-                } else {
-                    1
-                };
-
-                let interest_rate_est_block_hash = if interest_rate_est_block_height < inner.cur_era_genesis_height {
-                    let mut block_hash = inner.arena[inner.cur_era_genesis_block_arena_index].hash;
-                    for _ in 0..inner.cur_era_genesis_height - interest_rate_est_block_height {
-                        block_hash = *inner.data_man.block_header_by_hash(&block_hash).expect("block header must exists").parent_hash();
-                    }
-                    block_hash
-                } else {
-                    inner.arena[inner.pivot_chain[inner.height_to_pivot_index(interest_rate_est_block_height)]].hash
-                };
-                let interest_rate_est_block_header = inner.data_man.block_header_by_hash(&interest_rate_est_block_hash).expect("interest_rate_est_block must exist");
-
-                let epoch_blocks =
-                    inner.get_executable_epoch_blocks(pivot_arena_index);
-
-                let mut epoch_block_no_reward =
-                    Vec::with_capacity(epoch_blocks.len());
-                let mut epoch_block_anticone_difficulties =
-                    Vec::with_capacity(epoch_blocks.len());
-
-                let epoch_difficulty =
-                    inner.arena[pivot_arena_index].difficulty;
-                let anticone_cutoff_epoch_anticone_set_ref_opt = inner
-                    .anticone_cache
-                    .get(anticone_penalty_cutoff_epoch_arena_index);
-                let anticone_cutoff_epoch_anticone_set_opt;
-                if let Some(r) = anticone_cutoff_epoch_anticone_set_ref_opt {
-                    anticone_cutoff_epoch_anticone_set_opt = Some(r.clone());
-                } else {
-                    anticone_cutoff_epoch_anticone_set_opt = None;
-                }
-                let ordered_epoch_blocks = inner.arena[pivot_arena_index]
-                    .data
-                    .ordered_executable_epoch_blocks
-                    .clone();
-                for index in ordered_epoch_blocks.iter() {
-                    let block_consensus_node = &inner.arena[*index];
-
-                    let mut no_reward =
-                        block_consensus_node.data.partial_invalid;
-                    if !self.consensus_graph_bench_mode && !no_reward {
-                        if *index == pivot_arena_index {
-                            no_reward = !inner.arena[pivot_arena_index]
-                                .data
-                                .state_valid.expect("computed in wait_and_compute_state_valid_locked");
-                        } else {
-                            no_reward = !inner
-                                .compute_vote_valid_for_pivot_block(
-                                    *index,
-                                    pivot_arena_index,
-                                );
-                        }
-                    }
-                    // If a block is partial_invalid, it won't have reward and
-                    // anticone_difficulty will not be used, so it's okay to set
-                    // it to 0.
-                    let mut anticone_difficulty: U512 = 0.into();
-                    if !no_reward {
-                        let block_consensus_node_anticone_opt =
-                            inner.anticone_cache.get(*index);
-                        if block_consensus_node_anticone_opt.is_none()
-                            || anticone_cutoff_epoch_anticone_set_opt.is_none()
-                        {
-                            anticone_difficulty = U512::from(U256::from(
-                                inner.recompute_anticone_weight(
-                                    *index,
-                                    anticone_penalty_cutoff_epoch_arena_index,
-                                ),
-                            ));
-                        } else {
-                            let block_consensus_node_anticone: HashSet<usize> =
-                                block_consensus_node_anticone_opt
-                                    .unwrap()
-                                    .iter()
-                                    .filter(|idx| {
-                                        inner.is_same_era(
-                                            **idx,
-                                            pivot_arena_index,
-                                        )
-                                    })
-                                    .map(|idx| *idx)
-                                    .collect();
-                            let anticone_cutoff_epoch_anticone_set: HashSet<
-                                usize,
-                            > = anticone_cutoff_epoch_anticone_set_opt
-                                .as_ref()
-                                .unwrap()
-                                .iter()
-                                .filter(|idx| {
-                                    inner.is_same_era(**idx, pivot_arena_index)
-                                })
-                                .map(|idx| *idx)
-                                .collect();
-                            let anticone_set = block_consensus_node_anticone
-                                .difference(&anticone_cutoff_epoch_anticone_set)
-                                .cloned()
-                                .collect::<HashSet<_>>();
-                            for a_index in anticone_set {
-                                // TODO: Maybe consider to use base difficulty
-                                // Check with the spec!
-                                anticone_difficulty +=
-                                    U512::from(U256::from(inner.block_weight(
-                                        a_index, false, /* inclusive */
-                                    )));
-                            }
-                        };
-
-                        // TODO: check the clear definition of anticone penalty,
-                        // normally and around the time of difficulty
-                        // adjustment.
-                        // LINT.IfChange(ANTICONE_PENALTY_1)
-                        if anticone_difficulty / U512::from(epoch_difficulty)
-                            >= U512::from(ANTICONE_PENALTY_RATIO)
-                        {
-                            no_reward = true;
-                        }
-                        // LINT.ThenChange(consensus/consensus_executor.
-                        // rs#ANTICONE_PENALTY_2)
-                    }
-                    epoch_block_no_reward.push(no_reward);
-                    epoch_block_anticone_difficulties.push(anticone_difficulty);
-                }
-                RewardExecutionInfo {
-                    epoch_blocks,
-                    epoch_block_no_reward,
-                    epoch_block_anticone_difficulties,
-                    interest_rate_est_block_header,
-                }
-            },
-        )
-    }
-
     pub fn get_reward_execution_info(
-        &self, inner: &mut ConsensusGraphInner, epoch_arena_index: usize,
+        &self, _inner: &mut ConsensusGraphInner, _epoch_arena_index: usize,
     ) -> Option<RewardExecutionInfo> {
-        self.get_reward_execution_info_from_index(
-            inner,
-            inner.get_pivot_reward_index(epoch_arena_index),
-        )
-    }
-
-    /// Wait for the deferred state to be executed and compute `state_valid` for
-    /// `me`.
-    fn wait_and_compute_state_valid(
-        &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<(), String> {
-        // We go up from deferred state block of `me`
-        // and find all states whose commitments are missing
-        let waiting_blocks = inner_lock
-            .read()
-            .collect_defer_blocks_missing_execution_commitments(me)?;
-        // Now we wait without holding the inner lock
-        // Note that we must use hash instead of index because once we release
-        // the lock, there might be a checkpoint coming in to break
-        // index FIXME: There could be situations that in the
-        // data_manager, the result is removed due to checkpoint, FIXME:
-        // for this rare case, we should make wait_for_result to pop up errors!
-        for state_block_hash in waiting_blocks {
-            self.wait_for_result(state_block_hash);
-        }
-        // Now we need to wait for the execution information of all missing
-        // blocks to come back
-        inner_lock.write().compute_state_valid(me)?;
-        Ok(())
-    }
-
-    fn wait_and_compute_state_valid_locked(
-        &self, me: usize, inner: &mut ConsensusGraphInner,
-    ) -> Result<(), String> {
-        // We go up from deferred state block of `me`
-        // and find all states whose commitments are missing
-        let waiting_blocks =
-            inner.collect_defer_blocks_missing_execution_commitments(me)?;
-        trace!(
-            "wait_and_compute_state_valid_locked: waiting_blocks={:?}",
-            waiting_blocks
-        );
-        // for this rare case, we should make wait_for_result to pop up errors!
-        for state_block_hash in waiting_blocks {
-            self.wait_for_result(state_block_hash);
-        }
-        // Now we need to wait for the execution information of all missing
-        // blocks to come back
-        inner.compute_state_valid(me)?;
-        Ok(())
-    }
-
-    // FIXME: structure the return value?
-    pub fn get_blame_and_deferred_state_for_generation(
-        &self, parent_block_hash: &H256,
-        inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<(u32, H256, H256, H256), String>
-    {
-        let (parent_arena_index, last_state_block) = {
-            let inner = inner_lock.read();
-            let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
-            if parent_opt.is_none() {
-                return Err(
-                    "Too old parent to prepare for generation".to_owned()
-                );
-            }
-            (
-                *parent_opt.unwrap(),
-                inner
-                    .get_state_block_with_delay(
-                        parent_block_hash,
-                        DEFERRED_STATE_EPOCH_COUNT as usize - 1,
-                    )?
-                    .clone(),
-            )
-        };
-        let last_result = self.wait_for_result(last_state_block);
-        self.wait_and_compute_state_valid(parent_arena_index, inner_lock)?;
-        {
-            let inner = &mut *inner_lock.write();
-            if inner.arena[parent_arena_index].hash == *parent_block_hash {
-                Ok(inner.compute_blame_and_state_with_execution_result(
-                    parent_arena_index,
-                    &last_result,
-                )?)
-            } else {
-                Err("Too old parent/subtree to prepare for generation"
-                    .to_owned())
-            }
-        }
+        None
     }
 
     /// Enqueue the epoch to be executed by the background execution thread
@@ -656,11 +334,12 @@ impl ConsensusExecutor {
     /// This is a blocking call to force the execution engine to compute the
     /// state of a block immediately
     pub fn compute_state_for_block(
-        &self, block_hash: &H256, inner: &mut ConsensusGraphInner,
+        &self, arena_index: usize, inner: &ConsensusGraphInner,
     ) -> Result<(), String> {
         let _timer = MeterTimer::time_func(
             CONSENSIS_COMPUTE_STATE_FOR_BLOCK_TIMER.as_ref(),
         );
+        let block_hash = inner.arena[arena_index].hash;
         // If we already computed the state of the block before, we should not
         // do it again
         debug!("compute_state_for_block {:?}", block_hash);
@@ -682,19 +361,15 @@ impl ConsensusExecutor {
                 if let Ok(Some(_)) = maybe_cached_state_result {
                     return Ok(());
                 } else {
-                    return Err("Internal storage error".to_owned());
+                    return Err("internal storage error".to_string());
                 }
             }
         }
-        let me_opt = inner.hash_to_arena_indices.get(block_hash);
-        if me_opt == None {
-            return Err("Block hash not found!".to_owned());
-        }
-        let me: usize = *me_opt.unwrap();
-        let block_height = inner.arena[me].height;
+
+        let block_height = inner.arena[arena_index].height;
         let mut fork_height = block_height;
         let mut chain: Vec<usize> = Vec::new();
-        let mut idx = me;
+        let mut idx = arena_index;
         while fork_height > 0
             && (fork_height >= inner.get_pivot_height()
                 || inner.get_pivot_block_arena_index(fork_height) != idx)
@@ -704,61 +379,36 @@ impl ConsensusExecutor {
             idx = inner.arena[idx].parent;
         }
         // Because we have genesis at height 0, this should always be true
-        debug_assert!(inner.get_pivot_block_arena_index(fork_height) == idx);
-        debug!("Forked at index {} height {}", idx, fork_height);
+        assert!(inner.get_pivot_block_arena_index(fork_height) == idx);
+        debug!(
+            "compute_state_for_block forked at index {} height {}",
+            idx, fork_height
+        );
         chain.push(idx);
         chain.reverse();
         let start_chain_index =
             ConsensusExecutor::find_start_chain_index(inner, &chain);
-        debug!("Start execution from index {}", start_chain_index);
 
-        // We need the state of the fork point to start executing the fork
-        if start_chain_index == 0 {
-            let mut last_state_height =
-                if inner.get_pivot_height() > DEFERRED_STATE_EPOCH_COUNT {
-                    inner.get_pivot_height() - DEFERRED_STATE_EPOCH_COUNT
-                } else {
-                    0
-                };
-
-            last_state_height += 1;
-            while last_state_height < fork_height {
-                let epoch_arena_index =
-                    inner.get_pivot_block_arena_index(last_state_height);
-                let reward_execution_info =
-                    self.get_reward_execution_info(inner, epoch_arena_index);
-                self.enqueue_epoch(EpochExecutionTask::new(
-                    inner.arena[epoch_arena_index].hash,
-                    inner.get_epoch_block_hashes(epoch_arena_index),
-                    inner.get_epoch_start_block_number(epoch_arena_index),
-                    reward_execution_info,
-                    false,
-                    false,
-                ));
-                last_state_height += 1;
-            }
-        }
+        debug!(
+            "Start execution from index[{:?}] hash[{:?}]",
+            chain[start_chain_index], inner.arena[chain[start_chain_index]]
+        );
 
         for fork_chain_index in start_chain_index..chain.len() {
-            let epoch_arena_index = chain[fork_chain_index];
-            let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
-
-            let reward_execution_info =
-                self.get_reward_execution_info_from_index(inner, reward_index);
+            let pivot_arena_index = chain[fork_chain_index];
             self.enqueue_epoch(EpochExecutionTask::new(
-                inner.arena[epoch_arena_index].hash,
-                inner.get_epoch_block_hashes(epoch_arena_index),
-                inner.get_epoch_start_block_number(epoch_arena_index),
-                reward_execution_info,
-                false,
-                false,
+                inner.arena[pivot_arena_index].hash,
+                inner.get_epoch_block_hashes(pivot_arena_index),
+                inner.get_epoch_start_block_number(pivot_arena_index),
+                None,  /* reward_info */
+                false, /* debug_record */
             ));
         }
 
-        let epoch_execution_result = self.wait_for_result(*block_hash);
+        let epoch_execution_result = self.wait_for_result(block_hash);
         debug!(
             "Epoch {:?} has state_root={:?} receipts_root={:?} logs_bloom_hash={:?}",
-            inner.arena[me].hash, epoch_execution_result.state_root_with_aux_info,
+            inner.arena[arena_index].hash, epoch_execution_result.state_root_with_aux_info,
             epoch_execution_result.receipts_root, epoch_execution_result.logs_bloom_hash
         );
 
@@ -769,18 +419,20 @@ impl ConsensusExecutor {
 pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
+    conf: ConsensusInnerConfig,
     pub vm: VmFactory,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory,
+        conf: ConsensusInnerConfig, vm: VmFactory,
     ) -> Self
     {
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
+            conf,
             vm,
         }
     }
@@ -794,7 +446,7 @@ impl ConsensusExecutionHandler {
         match maybe_task {
             Ok(task) => self.handle_execution_work(task),
             Err(e) => {
-                warn!("Consensus Executor stopped by Err={:?}", e);
+                error!("Consensus Executor stopped by Err={:?}", e);
                 false
             }
         }
@@ -820,7 +472,6 @@ impl ConsensusExecutionHandler {
             &task.epoch_block_hashes,
             task.start_block_number,
             &task.reward_info,
-            task.on_local_pivot,
             &mut *task.debug_record.lock(),
         );
     }
@@ -859,7 +510,6 @@ impl ConsensusExecutionHandler {
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         start_block_number: u64,
         reward_execution_info: &Option<RewardExecutionInfo>,
-        on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
@@ -872,41 +522,33 @@ impl ConsensusExecutionHandler {
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
-                on_local_pivot,
+                true, /* on_local_pivot */
             )
         {
-            if on_local_pivot {
-                // Unwrap is safe here because it's guaranteed by outer if.
-                let state_root = &self
-                    .data_man
-                    .get_epoch_execution_commitment(epoch_hash)
-                    .unwrap()
-                    .state_root_with_aux_info;
-                // When the state have expired, don't inform TransactionPool.
-                // TransactionPool doesn't require a precise best_executed_state
-                // when pivot chain oscillates.
-                if self
-                    .data_man
-                    .state_availability_boundary
-                    .read()
-                    .check_availability(start_block_number + 1, epoch_hash)
-                {
-                    self.tx_pool
-                        .set_best_executed_epoch(StateIndex::new_for_readonly(
-                            epoch_hash,
-                            &state_root,
-                        ))
-                        // FIXME: propogate error.
-                        .expect(&concat!(
-                            file!(),
-                            ":",
-                            line!(),
-                            ":",
-                            column!()
-                        ));
-                }
+            // Unwrap is safe here because it's guaranteed by outer if.
+            let state_root = &self
+                .data_man
+                .get_epoch_execution_commitment(epoch_hash)
+                .unwrap()
+                .state_root_with_aux_info;
+            // When the state have expired, don't inform TransactionPool.
+            // TransactionPool doesn't require a precise best_executed_state
+            // when pivot chain oscillates.
+            if self
+                .data_man
+                .state_availability_boundary
+                .read()
+                .check_availability(start_block_number + 1, epoch_hash)
+            {
+                self.tx_pool
+                    .set_best_executed_epoch(StateIndex::new_for_readonly(
+                        epoch_hash,
+                        &state_root,
+                    ))
+                    // FIXME: propogate error.
+                    .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
-            debug!("Skip execution in prefix {:?}", epoch_hash);
+            debug!("Skip execution in prefix[{:?}]", epoch_hash);
             return;
         }
 
@@ -921,7 +563,7 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Not empty");
 
         debug!(
-            "Process tx epoch_id={}, block_count={}",
+            "compute_epoch for epoch[{:?}], block_count[{:?}]",
             epoch_hash,
             epoch_blocks.len(),
         );
@@ -954,7 +596,6 @@ impl ConsensusExecutionHandler {
             &mut state,
             &epoch_blocks,
             start_block_number,
-            on_local_pivot,
         );
 
         if let Some(reward_execution_info) = reward_execution_info {
@@ -963,31 +604,21 @@ impl ConsensusExecutionHandler {
             self.process_rewards_and_fees(
                 &mut state,
                 &reward_execution_info,
-                on_local_pivot,
                 debug_record,
             );
         }
 
         // FIXME: We may want to propagate the error up.
         let state_root;
-        if on_local_pivot {
-            state_root = state
-                .commit_and_notify(*epoch_hash, &self.tx_pool)
-                .expect(&concat!(file!(), ":", line!(), ":", column!()));
-            self.tx_pool
-                .set_best_executed_epoch(StateIndex::new_for_readonly(
-                    epoch_hash,
-                    &state_root,
-                ))
-                .expect(&concat!(file!(), ":", line!(), ":", column!()));
-        } else {
-            state_root = state.commit(*epoch_hash).expect(&format!(
-                "{}:{}:{}",
-                file!(),
-                line!(),
-                column!()
-            ));
-        };
+        state_root = state
+            .commit_and_notify(*epoch_hash, &self.tx_pool)
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        self.tx_pool
+            .set_best_executed_epoch(StateIndex::new_for_readonly(
+                epoch_hash,
+                &state_root,
+            ))
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
@@ -997,16 +628,34 @@ impl ConsensusExecutionHandler {
         let epoch_execution_commitment = self
             .data_man
             .get_epoch_execution_commitment(&epoch_hash)
-            .unwrap();
+            .expect("EpochExecutionCommitment should exist");
+
+        if self.conf.enable_state_expose {
+            STATE_EXPOSER
+                .consensus_graph
+                .lock()
+                .block_execution_state_vec
+                .push(ConsensusGraphBlockExecutionState {
+                    block_hash: *epoch_hash,
+                    deferred_state_root: state_root
+                        .state_root
+                        .compute_state_root_hash(),
+                    deferred_receipt_root: epoch_execution_commitment
+                        .receipts_root,
+                    deferred_logs_bloom_hash: epoch_execution_commitment
+                        .logs_bloom_hash,
+                    state_valid: true,
+                })
+        }
         debug!(
-            "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
-            on_local_pivot, epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
+            "compute_epoch: epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
+            epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
         );
     }
 
     fn process_epoch_transactions(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
-        start_block_number: u64, on_local_pivot: bool,
+        start_block_number: u64,
     ) -> Vec<Arc<Vec<Receipt>>>
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
@@ -1069,7 +718,7 @@ impl ConsensusExecutionHandler {
                         trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
                         // Add future transactions back to pool if we are
                         // not verifying forking chain
-                        if on_local_pivot && got > expected {
+                        if got > expected {
                             trace!(
                                 "To re-add transaction ({:?}) to pending pool",
                                 transaction.clone()
@@ -1114,18 +763,15 @@ impl ConsensusExecutionHandler {
                 );
                 receipts.push(receipt);
 
-                if on_local_pivot {
-                    let hash = transaction.hash();
-                    let tx_addr = TransactionAddress {
-                        block_hash: block.hash(),
-                        index: idx,
-                    };
-                    if tx_outcome_status
-                        != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
-                    {
-                        self.data_man
-                            .insert_transaction_address(&hash, &tx_addr);
-                    }
+                let hash = transaction.hash();
+                let tx_addr = TransactionAddress {
+                    block_hash: block.hash(),
+                    index: idx,
+                };
+                if tx_outcome_status
+                    != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
+                {
+                    self.data_man.insert_transaction_address(&hash, &tx_addr);
                 }
             }
 
@@ -1134,7 +780,7 @@ impl ConsensusExecutionHandler {
                 block.hash(),
                 pivot_block.hash(),
                 block_receipts.clone(),
-                on_local_pivot,
+                true, /* persistent */
             );
             epoch_receipts.push(block_receipts);
             debug!(
@@ -1143,11 +789,13 @@ impl ConsensusExecutionHandler {
             );
         }
 
-        if on_local_pivot {
-            self.tx_pool.recycle_transactions(to_pending);
-        }
+        self.tx_pool.recycle_transactions(to_pending);
 
-        debug!("Finish processing tx for epoch");
+        debug!(
+            "Finish processing tx for epoch[{:?}] epoch_receipts_len={:?}",
+            pivot_block.hash(),
+            epoch_receipts.len()
+        );
         epoch_receipts
     }
 
@@ -1155,7 +803,6 @@ impl ConsensusExecutionHandler {
     /// anticone difficulty
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
-        on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
@@ -1166,159 +813,24 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Not empty");
         let reward_epoch_hash = pivot_block.hash();
         debug!("Process rewards and fees for {:?}", reward_epoch_hash);
-        let epoch_difficulty = pivot_block.block_header.difficulty();
-
-        let epoch_size = epoch_blocks.len();
-        let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
-        // This maintains the primary tokens rewarded to each miner. And it will
-        // be used to compute ratio for secondary reward.
-        let mut base_reward_count: HashMap<Address, U256> = HashMap::new();
-        // This is the total primary tokens issued in this epoch.
-        let mut total_base_reward: U256 = 0.into();
-
-        // Base reward and anticone penalties.
-        for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let no_reward = reward_info.epoch_block_no_reward[enum_idx];
-
-            if no_reward {
-                epoch_block_total_rewards.push(U256::from(0));
-                if debug_record.is_some() {
-                    let debug_out = debug_record.as_mut().unwrap();
-                    debug_out.no_reward_blocks.push(block.hash());
-                }
-            } else {
-                let mut reward = if block.block_header.pow_quality
-                    >= *epoch_difficulty
-                {
-                    U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
-                } else {
-                    debug!(
-                        "Block {} pow_quality {} is less than epoch_difficulty {}!",
-                        block.hash(), block.block_header.pow_quality, epoch_difficulty
-                    );
-                    0.into()
-                };
-
-                if debug_record.is_some() {
-                    let debug_out = debug_record.as_mut().unwrap();
-                    debug_out.block_rewards.push(BlockHashAuthorValue(
-                        block.hash(),
-                        block.block_header.author().clone(),
-                        U256::try_from(reward).unwrap(),
-                    ));
-                }
-
-                if reward > 0.into() {
-                    let anticone_difficulty =
-                        reward_info.epoch_block_anticone_difficulties[enum_idx];
-                    // LINT.IfChange(ANTICONE_PENALTY_2)
-                    let anticone_penalty = reward * anticone_difficulty
-                        / U512::from(epoch_difficulty)
-                        * anticone_difficulty
-                        / U512::from(epoch_difficulty)
-                        / U512::from(ANTICONE_PENALTY_RATIO)
-                        / U512::from(ANTICONE_PENALTY_RATIO);
-                    // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
-
-                    debug_assert!(reward > anticone_penalty);
-                    reward -= anticone_penalty;
-
-                    if debug_record.is_some() {
-                        let debug_out = debug_record.as_mut().unwrap();
-                        debug_out.anticone_penalties.push(
-                            BlockHashAuthorValue(
-                                block.hash(),
-                                block.block_header.author().clone(),
-                                U256::try_from(anticone_penalty).unwrap(),
-                            ),
-                        );
-                        //
-                        // debug_out.anticone_set_size.push(BlockHashValue(
-                        //                            block.hash(),
-                        //
-                        // reward_info.epoch_block_anticone_set_sizes
-                        //                                [enum_idx],
-                        //                        ));
-                    }
-                }
-
-                debug_assert!(reward <= U512::from(U256::max_value()));
-                let reward = U256::try_from(reward).unwrap();
-                epoch_block_total_rewards.push(reward);
-                if !reward.is_zero() {
-                    *base_reward_count
-                        .entry(*block.block_header.author())
-                        .or_insert(0.into()) += reward;
-                    total_base_reward += reward;
-                }
-            }
-        }
-
-        let epoch_delta = max(
-            1,
-            pivot_block.block_header.height()
-                - reward_info.interest_rate_est_block_header.height(),
-        );
-        let timestamp_delta = pivot_block.block_header.timestamp()
-            - reward_info.interest_rate_est_block_header.timestamp();
-
-        // Use actutal time to calculate the interest
-        let interest_rate = state.interest_rate() * U256::from(timestamp_delta)
-            / U256::from(epoch_delta)
-            / U256::from(SECONDS_PER_YEAR);
-        // Calculate the new total tokens.
-        let total_tokens = state.total_tokens()
-            + state.total_bank_tokens() * interest_rate
-                / U256::from(INTEREST_RATE_SCALE)
-            + total_base_reward;
-        state.set_total_tokens(total_tokens);
-
-        // Calculate the new accumulate interest rate.
-        let accumulate_interest_rate =
-            state.accumulate_interest_rate() + interest_rate;
-        state.set_accumulate_interest_rate(accumulate_interest_rate);
-
-        // Calculate
-        let secondary_reward = state.total_storage_tokens() * interest_rate
-            / U256::from(INTEREST_RATE_SCALE);
 
         // Tx fee for each block in this epoch
         let mut tx_fee = HashMap::new();
 
         // Compute tx_fee of each block based on gas_used and gas_price of every
         // tx
-        let mut epoch_receipts = None;
-        for (enum_idx, block) in epoch_blocks.iter().enumerate() {
+        for (_, block) in epoch_blocks.iter().enumerate() {
             let block_hash = block.hash();
             // TODO: better redesign to avoid recomputation.
-            let receipts = match self
+            let receipts = self
                 .data_man
                 .block_execution_result_by_hash_with_epoch(
                     &block_hash,
                     &reward_epoch_hash,
                     true, /* update_cache */
-                ) {
-                Some(receipts) => receipts.receipts,
-                None => {
-                    let ctx = self
-                        .data_man
-                        .get_epoch_execution_context(&reward_epoch_hash)
-                        .expect("epoch_execution_context should exists here");
-
-                    // We need to return receipts instead of getting it through
-                    // function get_receipts, because it's
-                    // possible that the computed receipts is deleted by garbage
-                    // collection before we try get it
-                    if epoch_receipts.is_none() {
-                        epoch_receipts = Some(self.recompute_states(
-                            &reward_epoch_hash,
-                            &epoch_blocks,
-                            ctx.start_block_number,
-                        ));
-                    }
-                    epoch_receipts.as_ref().unwrap()[enum_idx].clone()
-                }
-            };
+                )
+                .expect("should exists")
+                .receipts;
 
             let mut last_gas_used = U256::zero();
             debug_assert!(receipts.len() == block.transactions.len());
@@ -1332,11 +844,7 @@ impl ConsensusExecutionHandler {
                 debug_assert!(
                     fee.is_zero() || info.0.is_zero() || info.1.len() == 0
                 );
-                // `false` means the block is fully valid
-                // Partial invalid blocks will not share the tx fee
-                if reward_info.epoch_block_no_reward[enum_idx] == false {
-                    info.1.insert(block_hash);
-                }
+                info.1.insert(block_hash);
                 if !fee.is_zero() && info.0.is_zero() {
                     info.0 = fee;
                 }
@@ -1367,12 +875,12 @@ impl ConsensusExecutionHandler {
 
         let mut merged_rewards = BTreeMap::new();
 
-        for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let reward = &mut epoch_block_total_rewards[enum_idx];
+        for (_enum_idx, block) in epoch_blocks.iter().enumerate() {
+            let mut reward = U256::zero();
             let block_hash = block.hash();
             // Add tx fee to reward.
             if let Some(fee) = block_tx_fees.get(&block_hash) {
-                *reward += *fee;
+                reward += *fee;
                 if !debug_record.is_none() {
                     let debug_out = debug_record.as_mut().unwrap();
                     debug_out.tx_fees.push(BlockHashAuthorValue(
@@ -1385,29 +893,23 @@ impl ConsensusExecutionHandler {
 
             *merged_rewards
                 .entry(*block.block_header.author())
-                .or_insert(U256::from(0)) += *reward;
+                .or_insert(U256::from(0)) += reward;
 
             if debug_record.is_some() {
                 let debug_out = debug_record.as_mut().unwrap();
                 debug_out.block_final_rewards.push(BlockHashAuthorValue(
                     block_hash,
                     block.block_header.author().clone(),
-                    *reward,
+                    reward,
                 ));
             }
-            if on_local_pivot {
-                self.data_man
-                    .receipts_retain_epoch(&block_hash, &reward_epoch_hash);
-            }
+            self.data_man
+                .receipts_retain_epoch(&block_hash, &reward_epoch_hash);
         }
 
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
-        for (address, mut reward) in merged_rewards {
-            // Distribute the secondary reward according to primary reward.
-            if let Some(base_reward) = base_reward_count.get(&address) {
-                reward += base_reward * secondary_reward / total_base_reward;
-            }
+        for (address, reward) in merged_rewards {
             state
                 .add_balance(&address, &reward, CleanupMode::ForceCreate)
                 .unwrap();
@@ -1427,49 +929,6 @@ impl ConsensusExecutionHandler {
                 });
             }
         }
-    }
-
-    fn recompute_states(
-        &self, pivot_hash: &H256, epoch_blocks: &Vec<Arc<Block>>,
-        start_block_number: u64,
-    ) -> Vec<Arc<Vec<Receipt>>>
-    {
-        debug!(
-            "Recompute receipts epoch_id={}, block_count={}",
-            pivot_hash,
-            epoch_blocks.len(),
-        );
-        let pivot_block = epoch_blocks.last().expect("Not empty");
-        let mut state = State::new(
-            StateDb::new(
-                self.data_man
-                    .storage_manager
-                    .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
-                        &self
-                            .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
-                            // Unwrapping is safe because the state exists.
-                            .unwrap()
-                            .state_root_with_aux_info,
-                        pivot_block.block_header.height() - 1,
-                        self.data_man.get_snapshot_epoch_count(),
-                    ))
-                    .unwrap()
-                    // Unwrapping is safe because the state exists.
-                    .unwrap(),
-            ),
-            0.into(),
-            self.vm.clone(),
-        );
-        self.process_epoch_transactions(
-            &mut state,
-            &epoch_blocks,
-            start_block_number,
-            false,
-        )
     }
 
     pub fn call_virtual(

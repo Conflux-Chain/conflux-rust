@@ -152,6 +152,8 @@ args:
         long: light
     - archive:
         long: archive
+    - tg_archive:
+        long: tg_archive
     - full:
         long: full
         hidden: true

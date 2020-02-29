@@ -31,7 +31,8 @@ use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use primitives::{
-    BlockHeaderBuilder, EpochId, Receipt, StateRoot, StorageKey, NULL_EPOCH,
+    BlockHeaderBuilder, EpochId, EpochNumber, Receipt, StateRoot, StorageKey,
+    NULL_EPOCH,
 };
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
@@ -784,9 +785,9 @@ impl SnapshotChunkSync {
                 .manager
                 .graph
                 .consensus
-                .inner
-                .read()
-                .block_hashes_by_epoch(block_header.height())
+                .get_block_hashes_by_epoch(EpochNumber::Number(
+                    block_header.height(),
+                ))
                 .expect("ordered executable epoch blocks must exist");
             let mut epoch_receipts = Vec::new();
             for i in 0..ordered_executable_epoch_blocks.len() {

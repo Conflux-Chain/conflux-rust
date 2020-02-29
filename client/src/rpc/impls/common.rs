@@ -13,7 +13,8 @@ use std::{
 
 use cfx_types::{Address, H256, U128};
 use cfxcore::{
-    BlockDataManager, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use ethcore_accounts::AccountProvider;
 use ethkey::Password;
@@ -78,7 +79,7 @@ impl RpcImpl {
                 .expect("failed to initialize account provider"),
         );
 
-        let data_man = consensus.data_man.clone();
+        let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {
             exit,
@@ -99,19 +100,26 @@ impl RpcImpl {
     }
 
     pub fn gas_price(&self) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         info!("RPC Request: cfx_gasPrice()");
-        Ok(self.consensus.gas_price().unwrap_or(0.into()).into())
+        Ok(consensus_graph.gas_price().unwrap_or(0.into()).into())
     }
 
     pub fn epoch_number(
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber({:?})", epoch_num);
-        match self
-            .consensus
-            .get_height_from_epoch_number(epoch_num.into())
-        {
+        match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
             Ok(height) => Ok(height.into()),
             Err(e) => Err(RpcError::invalid_params(e)),
         }
@@ -120,11 +128,15 @@ impl RpcImpl {
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<RpcBlock> {
-        let inner = &*self.consensus.inner.read();
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
 
-        let epoch_height = self
-            .consensus
+        let epoch_height = consensus_graph
             .get_height_from_epoch_number(epoch_num.into())
             .map_err(RpcError::invalid_params)?;
 
@@ -145,13 +157,18 @@ impl RpcImpl {
     pub fn block_by_hash(
         &self, hash: RpcH256, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let hash: H256 = hash.into();
         info!(
             "RPC Request: cfx_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
 
-        let inner = &*self.consensus.inner.read();
+        let inner = &*consensus_graph.inner.read();
 
         let maybe_block = self
             .data_man
@@ -164,7 +181,12 @@ impl RpcImpl {
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64,
     ) -> RpcResult<RpcBlock> {
-        let inner = &*self.consensus.inner.read();
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
         let pivot_hash: H256 = pivot_hash.into();
         let epoch_number = epoch_number.as_usize() as u64;
@@ -199,6 +221,11 @@ impl RpcImpl {
     pub fn transaction_count(
         &self, address: RpcH160, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let num = num.unwrap_or(BlockHashOrEpochNumber::EpochNumber(
             EpochNumber::LatestState,
         ));
@@ -207,7 +234,7 @@ impl RpcImpl {
             address, num
         );
 
-        self.consensus
+        consensus_graph
             .transaction_count(address.into(), num.into())
             .map_err(RpcError::invalid_params)
             .map(|x| x.into())
@@ -242,7 +269,12 @@ impl RpcImpl {
 
     pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
         info!("RPC Request: cfx_getChain");
-        let inner = &*self.consensus.inner.read();
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
 
         let construct_block = |hash| {
             let block = self
@@ -285,15 +317,18 @@ impl RpcImpl {
     }
 
     pub fn get_goodput(&self) -> RpcResult<String> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         info!("RPC Request: get_goodput");
         let mut set = HashSet::new();
         let mut min = std::u64::MAX;
         let mut max: u64 = 0;
-        for key in self.consensus.inner.read().hash_to_arena_indices.keys() {
-            if let Some(block) = self
-                .consensus
-                .data_man
-                .block_by_hash(key, false /* update_cache */)
+        for key in consensus_graph.inner.read().hash_to_arena_indices.keys() {
+            if let Some(block) =
+                self.data_man.block_by_hash(key, false /* update_cache */)
             {
                 let timestamp = block.block_header.timestamp();
                 if timestamp < min && timestamp > 0 {
@@ -312,10 +347,9 @@ impl RpcImpl {
             let lower_bound = min + ((max - min) as f64 * 0.3) as u64;
             let upper_bound = min + ((max - min) as f64 * 0.8) as u64;
             let mut ranged_set = HashSet::new();
-            for key in self.consensus.inner.read().hash_to_arena_indices.keys()
+            for key in consensus_graph.inner.read().hash_to_arena_indices.keys()
             {
                 if let Some(block) = self
-                    .consensus
                     .data_man
                     .block_by_hash(key, false /* update_cache */)
                 {
@@ -384,8 +418,13 @@ impl RpcImpl {
     pub fn get_transaction_receipt(
         &self, tx_hash: H256,
     ) -> RpcResult<Option<RpcReceipt>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let maybe_receipt =
-            self.consensus.get_transaction_info_by_hash(&tx_hash).map(
+            consensus_graph.get_transaction_info_by_hash(&tx_hash).map(
                 |(tx, receipt, address)| RpcReceipt::new(tx, receipt, address),
             );
         Ok(maybe_receipt)

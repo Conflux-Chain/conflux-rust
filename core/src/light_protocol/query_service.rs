@@ -2,10 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate futures;
-
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerFilter, LedgerInfo},
         message::msgid,
@@ -61,7 +59,7 @@ async fn with_timeout<T>(
 
 pub struct QueryService {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // light protocol handler
     handler: Arc<LightHandler>,
@@ -75,7 +73,7 @@ pub struct QueryService {
 
 impl QueryService {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+        consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>, throttling_config_file: Option<String>,
     ) -> Self
     {
