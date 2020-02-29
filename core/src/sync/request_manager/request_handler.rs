@@ -179,12 +179,17 @@ impl RequestHandler {
                 debug!("Timeout a removed request {:?}", sync_req);
             }
         }
+        let op = if self.protocol_config.demote_peer_for_timeout {
+            Some(UpdateNodeOperation::Demotion)
+        } else {
+            Some(UpdateNodeOperation::Failure)
+        };
         for peer_id in peers_to_disconnect {
             // Note `self.peers` will be used in `disconnect_peer`, so we must
             // call it without locking `self.peers`.
             io.disconnect_peer(
                 peer_id,
-                Some(UpdateNodeOperation::Failure),
+                op,
                 "too many timeout requests", /* reason */
             );
         }

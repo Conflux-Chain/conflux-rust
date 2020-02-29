@@ -280,6 +280,7 @@ pub struct ProtocolConfiguration {
     pub chunk_size_byte: u64,
     pub timeout_observing_period_s: u64,
     pub max_allowed_timeout_in_observing_period: u64,
+    pub demote_peer_for_timeout: bool,
 }
 
 impl SynchronizationProtocolHandler {

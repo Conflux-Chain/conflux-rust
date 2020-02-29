@@ -123,6 +123,7 @@ build_config! {
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
+        (demote_peer_for_timeout, (bool), false)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
@@ -497,6 +498,7 @@ impl Configuration {
             max_allowed_timeout_in_observing_period: self
                 .raw_conf
                 .max_allowed_timeout_in_observing_period,
+            demote_peer_for_timeout: self.raw_conf.demote_peer_for_timeout,
         }
     }
 
