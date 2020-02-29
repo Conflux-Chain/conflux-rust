@@ -25,9 +25,6 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-const TIMEOUT_OBSERVING_PERIOD_IN_SEC: u64 = 600;
-const MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD: u64 = 10;
-
 pub struct RequestHandler {
     protocol_config: ProtocolConfiguration,
     peers: Mutex<HashMap<PeerId, RequestContainer>>,
@@ -167,7 +164,9 @@ impl RequestHandler {
                 if let Some(request_container) =
                     self.peers.lock().get_mut(&peer_id)
                 {
-                    if request_container.on_timeout_should_disconnect() {
+                    if request_container
+                        .on_timeout_should_disconnect(&self.protocol_config)
+                    {
                         peers_to_disconnect.insert(peer_id);
                     }
                 }
@@ -181,7 +180,7 @@ impl RequestHandler {
             // call it without locking `self.peers`.
             io.disconnect_peer(
                 peer_id,
-                Some(UpdateNodeOperation::Demotion),
+                Some(UpdateNodeOperation::Failure),
                 "too many timeout requests", /* reason */
             );
         }
@@ -209,7 +208,9 @@ struct RequestContainer {
 }
 
 impl RequestContainer {
-    pub fn on_timeout_should_disconnect(&mut self) -> bool {
+    pub fn on_timeout_should_disconnect(
+        &mut self, config: &ProtocolConfiguration,
+    ) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -222,14 +223,14 @@ impl RequestContainer {
         self.timeout_statistics.push_back(now);
         loop {
             let old_time = *self.timeout_statistics.front().unwrap();
-            if now - old_time <= TIMEOUT_OBSERVING_PERIOD_IN_SEC {
+            if now - old_time <= config.timeout_observing_period_s {
                 break;
             }
             self.timeout_statistics.pop_front();
         }
 
         if self.timeout_statistics.len()
-            <= MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD as usize
+            <= config.max_allowed_timeout_in_observing_period as usize
         {
             return false;
         } else {
