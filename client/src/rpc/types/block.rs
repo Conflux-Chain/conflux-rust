@@ -6,7 +6,7 @@ use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
-    ConsensusGraph,
+    SharedConsensusGraph,
 };
 use jsonrpc_core::Error as RpcError;
 use primitives::{
@@ -320,13 +320,13 @@ pub struct Header {
 
 impl Header {
     pub fn new(
-        h: &PrimitiveBlockHeader, consensus: &Arc<ConsensusGraph>,
+        h: &PrimitiveBlockHeader, consensus: SharedConsensusGraph,
     ) -> Self {
         let hash = h.hash();
 
         let epoch_number = consensus
             .get_block_epoch_number(&hash)
-            .or_else(|| consensus.data_man.block_epoch_number(&hash))
+            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
             .map(Into::into);
 
         let referee_hashes =

@@ -25,7 +25,8 @@ use std::{
 
 use cfxcore::{
     block_data_manager::BlockExecutionResult, channel::Channel,
-    BlockDataManager, ConsensusGraph, Notifications, SynchronizationGraph,
+    BlockDataManager, Notifications, SharedConsensusGraph,
+    SynchronizationGraph,
 };
 
 use cfx_types::H256;
@@ -57,7 +58,7 @@ pub struct PubSubClient {
 impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
-        executor: Executor, consensus: Arc<ConsensusGraph>,
+        executor: Executor, consensus: SharedConsensusGraph,
         notifications: Arc<Notifications>,
     ) -> Self
     {
@@ -68,7 +69,7 @@ impl PubSubClient {
         let handler = Arc::new(ChainNotificationHandler {
             executor,
             consensus: consensus.clone(),
-            data_man: consensus.data_man.clone(),
+            data_man: consensus.get_data_manager().clone(),
             heads_subscribers: heads_subscribers.clone(),
             epochs_subscribers: epochs_subscribers.clone(),
             logs_subscribers: logs_subscribers.clone(),
@@ -195,7 +196,7 @@ impl PubSubClient {
 /// PubSub notification handler.
 pub struct ChainNotificationHandler {
     pub executor: Executor,
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
@@ -236,7 +237,7 @@ impl ChainNotificationHandler {
         }
 
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => RpcHeader::new(&*h, &self.consensus),
+            Some(h) => RpcHeader::new(&*h, self.consensus.clone()),
             None => return warn!("Unable to retrieve header for {:?}", hash),
         };
 

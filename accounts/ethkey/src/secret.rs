@@ -15,7 +15,6 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethereum_types::H256;
-use rustc_hex::ToHex;
 use secp256k1::{constants::SECRET_KEY_SIZE as SECP256K1_SECRET_KEY_SIZE, key};
 use std::{fmt, ops::Deref, str::FromStr};
 use zeroize::Zeroize;
@@ -29,10 +28,6 @@ pub struct Secret {
 
 impl Drop for Secret {
     fn drop(&mut self) { self.inner.0.zeroize() }
-}
-
-impl ToHex for Secret {
-    fn to_hex(&self) -> String { format!("{:x}", self.inner) }
 }
 
 impl fmt::LowerHex for Secret {
@@ -211,6 +206,8 @@ impl Secret {
     pub fn to_secp256k1_secret(&self) -> Result<key::SecretKey, Error> {
         Ok(key::SecretKey::from_slice(&SECP256K1, &self[..])?)
     }
+
+    pub fn to_hex(&self) -> String { format!("{:x}", self.inner) }
 }
 
 impl FromStr for Secret {

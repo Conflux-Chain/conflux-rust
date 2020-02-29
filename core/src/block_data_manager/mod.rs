@@ -265,6 +265,11 @@ impl BlockDataManager {
                 }
             };
 
+        debug!(
+            "BlockDataManager::new() cur_era_genesis_hash: {:?}",
+            &cur_era_genesis_hash
+        );
+
         if cur_era_genesis_hash == data_man.true_genesis.hash() {
             // Only insert block body for true genesis
             data_man.insert_block(
@@ -706,6 +711,28 @@ impl BlockDataManager {
         } else {
             Some(vec![self.true_genesis.hash()])
         }
+    }
+
+    pub fn insert_epoch_block_hash_to_db(&self, epoch: u64, block_hash: &H256) {
+        self.db_manager
+            .insert_epoch_block_hash_to_db(epoch, block_hash)
+    }
+
+    pub fn epoch_block_hash_from_db(&self, epoch_number: u64) -> Option<H256> {
+        if epoch_number != 0 {
+            self.db_manager.epoch_block_hash_from_db(epoch_number)
+        } else {
+            Some(self.true_genesis.hash())
+        }
+    }
+
+    pub fn insert_block_height_to_db(&self, block_hash: &H256, height: u64) {
+        self.db_manager
+            .insert_block_height_to_db(block_hash, height)
+    }
+
+    pub fn block_height_from_db(&self, block_hash: &H256) -> Option<u64> {
+        self.db_manager.block_height_from_db(block_hash)
     }
 
     /// Return `false` if there is no executed results for given `block_hash`

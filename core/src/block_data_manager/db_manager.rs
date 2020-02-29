@@ -22,6 +22,8 @@ const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
 const BLOCK_EXECUTION_RESULT_SUFFIX_BYTE: u8 = 3;
 const EPOCH_EXECUTION_CONTEXT_SUFFIX_BYTE: u8 = 4;
 const EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE: u8 = 5;
+const BLOCK_HEIGHT_SUFFIX_BYTE: u8 = 6;
+const EPOCH_BLOCK_HASH_SUFFIX_BYTE: u8 = 7;
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 enum DBTable {
@@ -258,6 +260,33 @@ impl DBManager {
         )
     }
 
+    pub fn insert_epoch_block_hash_to_db(&self, epoch: u64, block_hash: &H256) {
+        self.insert_encodable_val(
+            DBTable::EpochNumbers,
+            &epoch_block_hash_key(epoch),
+            block_hash,
+        )
+    }
+
+    pub fn epoch_block_hash_from_db(&self, epoch: u64) -> Option<H256> {
+        self.load_decodable_val(
+            DBTable::EpochNumbers,
+            &epoch_block_hash_key(epoch),
+        )
+    }
+
+    pub fn insert_block_height_to_db(&self, block_hash: &H256, height: u64) {
+        self.insert_encodable_val(
+            DBTable::Blocks,
+            &block_height_key(block_hash),
+            &height,
+        )
+    }
+
+    pub fn block_height_from_db(&self, block_hash: &H256) -> Option<u64> {
+        self.load_decodable_val(DBTable::Blocks, &block_height_key(block_hash))
+    }
+
     pub fn insert_terminals_to_db(&self, terminals: &Vec<H256>) {
         self.insert_encodable_list(DBTable::Misc, b"terminals", terminals);
     }
@@ -370,10 +399,21 @@ fn block_body_key(block_hash: &H256) -> Vec<u8> {
     append_suffix(block_hash, BLOCK_BODY_SUFFIX_BYTE)
 }
 
+fn block_height_key(block_hash: &H256) -> Vec<u8> {
+    append_suffix(block_hash, BLOCK_HEIGHT_SUFFIX_BYTE)
+}
+
 fn epoch_set_key(epoch_number: u64) -> [u8; 8] {
     let mut epoch_key = [0; 8];
     LittleEndian::write_u64(&mut epoch_key[0..8], epoch_number);
     epoch_key
+}
+
+fn epoch_block_hash_key(epoch_number: u64) -> Vec<u8> {
+    let mut key = Vec::with_capacity(8 + 1);
+    key.extend_from_slice(&epoch_set_key(epoch_number)[..]);
+    key.push(EPOCH_BLOCK_HASH_SUFFIX_BYTE);
+    key
 }
 
 fn block_execution_result_key(hash: &H256) -> Vec<u8> {
