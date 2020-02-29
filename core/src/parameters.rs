@@ -35,8 +35,10 @@ pub mod consensus_internal {
     pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 11_300_000;
     // The ultimate base mining reward in uCFX.
     pub const ULTIMATE_BASE_MINING_REWARD_IN_UCFX: u64 = 2_030_000;
-    pub const MINED_BLOCK_COUNT_IN_QUARTER: u64 = 15768000;
+    // The average number of blocks mined per quarter.
+    pub const MINED_BLOCK_COUNT_PER_QUARTER: u64 = 15768000;
     pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
+    // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
     /// The unit of one Conflux token: 10 ** 18
     pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;

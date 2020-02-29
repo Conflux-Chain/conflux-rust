@@ -1165,7 +1165,7 @@ impl ConsensusExecutionHandler {
 
     fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
         let reward_table_index =
-            (past_block_count / MINED_BLOCK_COUNT_IN_QUARTER) as usize;
+            (past_block_count / MINED_BLOCK_COUNT_PER_QUARTER) as usize;
         let reward_in_ucfx =
             if reward_table_index < self.base_reward_table_in_ucfx.len() {
                 self.base_reward_table_in_ucfx[reward_table_index]
