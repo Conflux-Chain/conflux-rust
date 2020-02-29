@@ -185,12 +185,23 @@ impl StorageManager {
 
     pub fn wait_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
-    ) -> Result<Option<SnapshotDb>> {
+    ) -> Result<
+        Option<GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, SnapshotDb>>,
+    > {
+        // After a snapshot is returned from this function, it can be deleted,
+        // then getting intermediate mpt for the snapshot can fail,
+        // which is not a nice error to state queries from clients.
+        //
+        // maintain_snapshots_pivot_chain_confirmed() can not delete snapshot
+        // while the current_snapshots are read locked.
+        let guard = self.current_snapshots.read();
         match self
             .snapshot_manager
             .get_snapshot_by_epoch_id(snapshot_epoch_id)?
         {
-            Some(snapshot_db) => Ok(Some(snapshot_db)),
+            Some(snapshot_db) => {
+                Ok(Some(GuardedValue::new(guard, snapshot_db)))
+            }
             None => {
                 // Wait for in progress snapshot.
                 if let Some(in_progress_snapshot_task) = self
@@ -206,8 +217,16 @@ impl StorageManager {
                     {
                         result?;
                     }
-                    self.snapshot_manager
+                    match self
+                        .snapshot_manager
                         .get_snapshot_by_epoch_id(snapshot_epoch_id)
+                    {
+                        Err(e) => Err(e),
+                        Ok(None) => Ok(None),
+                        Ok(Some(snapshot_db)) => {
+                            Ok(Some(GuardedValue::new(guard, snapshot_db)))
+                        }
+                    }
                 } else {
                     Ok(None)
                 }
@@ -1119,11 +1138,12 @@ use crate::{
                 KvdbSqliteStatements,
             },
         },
+        utils::guarded_value::GuardedValue,
         KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
     },
 };
 use fallible_iterator::FallibleIterator;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use primitives::{EpochId, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp};
 use sqlite::Statement;
