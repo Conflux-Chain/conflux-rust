@@ -114,9 +114,7 @@ impl StorageManager {
             delta_db_manager: DeltaDbManager::new(
                 storage_conf.path_delta_mpts_dir.clone(),
             )?,
-            snapshot_manager: Box::new(StorageManagerFullNode::<
-                SnapshotDbManager,
-            > {
+            snapshot_manager: Box::new(SnapshotManager::<SnapshotDbManager> {
                 snapshot_db_manager: SnapshotDbManager::new(
                     storage_conf.path_snapshot_dir.clone(),
                 )?,
@@ -797,7 +795,7 @@ impl StorageManager {
             || !old_pivot_snapshots_to_remove.is_empty()
         {
             {
-                // FIXME: Archive node may do something different.
+                // TODO: Archive node may do something different.
                 let state_boundary = &mut *state_availability_boundary.write();
                 if first_available_state_height > state_boundary.lower_bound {
                     state_boundary
@@ -1086,23 +1084,20 @@ lazy_static! {
     );
 }
 
-use super::{
+use super::super::{
     super::{
-        super::{
-            snapshot_manager::*,
-            state_manager::*,
-            storage_db::{
-                delta_db_manager::*, snapshot_db::*,
-                snapshot_db_manager::SnapshotDbManagerTrait,
-            },
-            utils::arc_ext::*,
-            StateRootWithAuxInfo,
-        },
-        delta_mpt::*,
-        errors::*,
+        snapshot_manager::*,
         state_manager::*,
+        storage_db::{
+            delta_db_manager::*, snapshot_db::*,
+            snapshot_db_manager::SnapshotDbManagerTrait,
+        },
+        utils::arc_ext::*,
+        StateRootWithAuxInfo,
     },
-    *,
+    delta_mpt::*,
+    errors::*,
+    state_manager::*,
 };
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
@@ -1118,6 +1113,7 @@ use crate::{
                 kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
                 KvdbSqliteStatements,
             },
+            storage_manager::snapshot_manager::SnapshotManager,
         },
         KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
     },
