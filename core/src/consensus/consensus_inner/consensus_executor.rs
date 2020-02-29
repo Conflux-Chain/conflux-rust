@@ -61,6 +61,7 @@ lazy_static! {
 /// The RewardExecutionInfo struct includes most information to compute rewards
 /// for old epochs
 pub struct RewardExecutionInfo {
+    pub past_block_count: u64,
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_no_reward: Vec<bool>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
@@ -73,9 +74,11 @@ impl Debug for RewardExecutionInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "RewardExecutionInfo{{ epoch_blocks: {:?} \
+            "RewardExecutionInfo{{ past_block_count: {} \
+             epoch_blocks: {:?} \
              epoch_block_no_reward: {:?} \
              epoch_block_anticone_difficulties: {:?}}}",
+            self.past_block_count,
             self.epoch_blocks
                 .iter()
                 .map(|b| b.hash())
@@ -467,6 +470,7 @@ impl ConsensusExecutor {
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
                 }
                 RewardExecutionInfo {
+                    past_block_count: inner.arena[pivot_arena_index].past_num_blocks + 1,
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
@@ -766,10 +770,27 @@ impl ConsensusExecutor {
     }
 }
 
+fn build_base_reward_table() -> Vec<u64> {
+    let mut base_reward_table = Vec::new();
+    base_reward_table.resize(MINING_REWARD_DECAY_PERIOD_IN_QUARTER, 0);
+    for i in 0..MINING_REWARD_DECAY_PERIOD_IN_QUARTER {
+        let reward = if i == 0 {
+            INITIAL_BASE_MINING_REWARD_IN_UCFX
+        } else {
+            (base_reward_table[i - 1] as f64
+                * MINING_REWARD_DECAY_RATIO_PER_QUARTER)
+                .round() as u64
+        };
+        base_reward_table[i] = reward;
+    }
+    base_reward_table
+}
+
 pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
+    base_reward_table_in_ucfx: Vec<u64>,
 }
 
 impl ConsensusExecutionHandler {
@@ -778,10 +799,12 @@ impl ConsensusExecutionHandler {
         vm: VmFactory,
     ) -> Self
     {
+        let base_reward_table_in_ucfx = build_base_reward_table();
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
             vm,
+            base_reward_table_in_ucfx,
         }
     }
 
@@ -1140,6 +1163,19 @@ impl ConsensusExecutionHandler {
         epoch_receipts
     }
 
+    fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
+        let reward_table_index =
+            (past_block_count / MINED_BLOCK_COUNT_PER_QUARTER) as usize;
+        let reward_in_ucfx =
+            if reward_table_index < self.base_reward_table_in_ucfx.len() {
+                self.base_reward_table_in_ucfx[reward_table_index]
+            } else {
+                ULTIMATE_BASE_MINING_REWARD_IN_UCFX
+            };
+
+        U512::from(reward_in_ucfx) * U512::from(CONFLUX_TOKEN / 1_000_000)
+    }
+
     /// `epoch_block_states` includes if a block is partial invalid and its
     /// anticone difficulty
     fn process_rewards_and_fees(
@@ -1165,6 +1201,9 @@ impl ConsensusExecutionHandler {
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
+        let base_reward_per_block =
+            self.compute_block_base_reward(reward_info.past_block_count);
+
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let no_reward = reward_info.epoch_block_no_reward[enum_idx];
@@ -1179,7 +1218,7 @@ impl ConsensusExecutionHandler {
                 let mut reward = if block.block_header.pow_quality
                     >= *epoch_difficulty
                 {
-                    U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
+                    base_reward_per_block
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than epoch_difficulty {}!",
