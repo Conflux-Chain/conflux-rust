@@ -602,6 +602,13 @@ impl BlockDataManager {
             .note_used(CacheId::BlockReceipts(hash));
     }
 
+    pub fn remove_block_results(&self, hash: &H256, remove_db: bool) {
+        self.block_receipts.write().remove(hash);
+        if remove_db {
+            self.db_manager.remove_block_execution_result_from_db(hash);
+        }
+    }
+
     pub fn transaction_address_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<TransactionAddress> {
@@ -713,28 +720,6 @@ impl BlockDataManager {
         }
     }
 
-    pub fn insert_epoch_block_hash_to_db(&self, epoch: u64, block_hash: &H256) {
-        self.db_manager
-            .insert_epoch_block_hash_to_db(epoch, block_hash)
-    }
-
-    pub fn epoch_block_hash_from_db(&self, epoch_number: u64) -> Option<H256> {
-        if epoch_number != 0 {
-            self.db_manager.epoch_block_hash_from_db(epoch_number)
-        } else {
-            Some(self.true_genesis.hash())
-        }
-    }
-
-    pub fn insert_block_height_to_db(&self, block_hash: &H256, height: u64) {
-        self.db_manager
-            .insert_block_height_to_db(block_hash, height)
-    }
-
-    pub fn block_height_from_db(&self, block_hash: &H256) -> Option<u64> {
-        self.db_manager.block_height_from_db(block_hash)
-    }
-
     /// Return `false` if there is no executed results for given `block_hash`
     pub fn receipts_retain_epoch(
         &self, block_hash: &H256, epoch: &H256,
@@ -795,9 +780,7 @@ impl BlockDataManager {
             &self.epoch_execution_commitments,
             |key, value| {
                 self.db_manager
-                    .insert_consensus_graph_epoch_execution_commitment_to_db(
-                        key, value,
-                    )
+                    .insert_epoch_execution_commitment_to_db(key, value)
             },
             None,
             true,
@@ -824,7 +807,7 @@ impl BlockDataManager {
     ) -> Option<EpochExecutionCommitment> {
         let commitment = self
             .db_manager
-            .consensus_graph_epoch_execution_commitment_from_db(block_hash)?;
+            .epoch_execution_commitment_from_db(block_hash)?;
         self.epoch_execution_commitments
             .write()
             .insert(*block_hash, commitment.clone());
@@ -839,9 +822,7 @@ impl BlockDataManager {
         self.get_epoch_execution_commitment(block_hash).map_or_else(
             || {
                 self.db_manager
-                    .consensus_graph_epoch_execution_commitment_from_db(
-                        block_hash,
-                    )
+                    .epoch_execution_commitment_from_db(block_hash)
             },
             |maybe_ref| Some(maybe_ref.clone()),
         )
@@ -851,8 +832,18 @@ impl BlockDataManager {
         self.epoch_execution_commitments.write().remove(block_hash);
     }
 
+    pub fn remove_epoch_execution_commitment_from_db(&self, block_hash: &H256) {
+        self.db_manager
+            .remove_epoch_execution_commitment_from_db(block_hash);
+    }
+
     pub fn remove_epoch_execution_context(&self, block_hash: &H256) {
         self.epoch_execution_contexts.write().remove(block_hash);
+    }
+
+    pub fn remove_epoch_execution_context_from_db(&self, block_hash: &H256) {
+        self.db_manager
+            .remove_block_execution_result_from_db(block_hash);
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
