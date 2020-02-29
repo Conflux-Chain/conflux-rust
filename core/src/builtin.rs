@@ -301,7 +301,11 @@ impl Impl for EcRecover {
         let s = Signature::from_rsv(&r, &s, bit);
         if s.is_valid() {
             if let Ok(p) = ec_recover(&s, &hash) {
-                let r = keccak(p);
+                // In Conflux, normal user account have the first four bits as
+                // 0x1.
+                let mut r = keccak(p);
+                r.as_bytes_mut()[12] &= 0x0f;
+                r.as_bytes_mut()[12] |= 0x10;
                 output.write(0, &[0; 12]);
                 output.write(12, &r[12..H256::len_bytes()]);
             }

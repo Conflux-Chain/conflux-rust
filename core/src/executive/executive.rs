@@ -25,11 +25,11 @@ use std::{convert::TryFrom, str::FromStr, sync::Arc};
 
 lazy_static! {
     pub static ref STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS: Address =
-        Address::from_str("043c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
+        Address::from_str("843c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
     pub static ref COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("0ad036480160591706c831f0da19d1a424e39469").unwrap();
+        Address::from_str("8ad036480160591706c831f0da19d1a424e39469").unwrap();
     pub static ref STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
-        Address::from_str("07ca63b239c537ada331614df304b6ce3caa11f4").unwrap();
+        Address::from_str("87ca63b239c537ada331614df304b6ce3caa11f4").unwrap();
     pub static ref INTERNAL_CONTRACT_CODE: Bytes = vec![0u8, 0u8, 0u8, 0u8];
     pub static ref INTERNAL_CONTRACT_CODE_HASH: H256 =
         keccak([0u8, 0u8, 0u8, 0u8]);
