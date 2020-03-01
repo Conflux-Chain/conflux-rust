@@ -1553,7 +1553,14 @@ impl ConsensusExecutionHandler {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
-        r.map(|r| (r.output, r.gas_used))
-            .map_err(|e| format!("execution error: {:?}", e))
+        match r {
+            Ok(executed) => match executed.exception {
+                Some(vm_err) => {
+                    Err(format!("exception thrown in execution: {:?}", vm_err))
+                }
+                None => Ok((executed.output, executed.gas_used)),
+            },
+            Err(e) => Err(format!("execution error: {:?}", e)),
+        }
     }
 }
