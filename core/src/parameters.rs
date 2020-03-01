@@ -31,13 +31,15 @@ pub mod consensus_internal {
     pub const REWARD_EPOCH_COUNT: u64 = 12;
     pub const ANTICONE_PENALTY_UPPER_EPOCH_COUNT: u64 = 10;
     pub const ANTICONE_PENALTY_RATIO: u64 = 100;
-    /// 17 Conflux tokens will give 1B tokens for the first year.
-    /// Consider we stick with the schedule of halving every 3.5 years.
-    /// That means we need to reduce the reward with a ratio of 0.951695 every
-    /// three months Therefore to release 1B for the first year, the first
-    /// three month we need to release 268861235 tokens. 268861235 / (365 *
-    /// 24 * 60 * 60 / 4) / 2 (two blocks per second) = 17.05
-    pub const BASE_MINING_REWARD: u64 = 17;
+    // The initial base mining reward in uCFX.
+    pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 11_300_000;
+    // The ultimate base mining reward in uCFX.
+    pub const ULTIMATE_BASE_MINING_REWARD_IN_UCFX: u64 = 2_030_000;
+    // The average number of blocks mined per quarter.
+    pub const MINED_BLOCK_COUNT_PER_QUARTER: u64 = 15768000;
+    pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
+    // How many quarters that the mining reward keep decaying.
+    pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
     /// The unit of one Conflux token: 10 ** 18
     pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
