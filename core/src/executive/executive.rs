@@ -48,9 +48,9 @@ pub fn contract_address(
             let mut stream = RlpStream::new_list(2);
             stream.append(sender);
             stream.append(nonce);
-            // In Conflux, we use the first bit to indicate the type of the
-            // address. For contract address, the bit will be set
-            // one.
+            // In Conflux, we use the first four bits to indicate the type of
+            // the address. For contract address, the bits will be
+            // set to 0x8.
             let mut h = Address::from(keccak(stream.as_raw()));
             h.as_bytes_mut()[0] &= 0x0f;
             h.as_bytes_mut()[0] |= 0x80;
