@@ -29,8 +29,9 @@ use byteorder::{BigEndian, ByteOrder};
 use num::{BigUint, One, Zero};
 use parity_crypto::digest;
 
-use crate::{bytes::BytesRef, hash::keccak};
+use crate::bytes::BytesRef;
 use cfx_types::{H256, U256};
+use ethkey::{public_to_address, Address};
 use keylib::{recover as ec_recover, Signature};
 
 /// Execution error.
@@ -301,13 +302,10 @@ impl Impl for EcRecover {
         let s = Signature::from_rsv(&r, &s, bit);
         if s.is_valid() {
             if let Ok(p) = ec_recover(&s, &hash) {
-                // In Conflux, normal user account have the first four bits as
-                // 0x1.
-                let mut r = keccak(p);
-                r.as_bytes_mut()[12] &= 0x0f;
-                r.as_bytes_mut()[12] |= 0x10;
+                // We use public_to_address() here
+                let addr = public_to_address(&p);
                 output.write(0, &[0; 12]);
-                output.write(12, &r[12..H256::len_bytes()]);
+                output.write(12, &addr[0..Address::len_bytes()]);
             }
         }
 
