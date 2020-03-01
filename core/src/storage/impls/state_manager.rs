@@ -183,11 +183,11 @@ impl StateManager {
             None => {
                 // This is the special scenario when the snapshot isn't
                 // available but the snapshot at the intermediate epoch exists.
-                if let Some(snapshot_got) = self
+                if let Some(guarded_snapshot) = self
                     .storage_manager
                     .wait_for_snapshot(&state_index.intermediate_epoch_id)?
                 {
-                    snapshot = snapshot_got;
+                    snapshot = guarded_snapshot;
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
                     delta_mpt = match self
@@ -215,8 +215,8 @@ impl StateManager {
                     return Ok(None);
                 }
             }
-            Some(snapshot_got) => {
-                snapshot = snapshot_got;
+            Some(guarded_snapshot) => {
+                snapshot = guarded_snapshot;
                 maybe_intermediate_mpt_key_padding =
                     state_index.maybe_intermediate_mpt_key_padding;
                 maybe_intermediate_mpt = if maybe_intermediate_mpt_key_padding
@@ -248,7 +248,7 @@ impl StateManager {
         };
 
         Self::get_state_trees_internal(
-            snapshot,
+            snapshot.into().1,
             state_index.snapshot_epoch_id,
             *state_index.snapshot_merkle_root,
             maybe_intermediate_mpt,
@@ -320,7 +320,7 @@ impl StateManager {
                             );
                             return Ok(None);
                         }
-                        Some(snapshot_got) => snapshot = snapshot_got,
+                        Some(guarded_snapshot) => snapshot = guarded_snapshot,
                     }
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
@@ -342,8 +342,8 @@ impl StateManager {
                         Some(mpt) => delta_mpt = mpt,
                     }
                 }
-                Some(snapshot_got) => {
-                    snapshot = snapshot_got;
+                Some(guarded_snapshot) => {
+                    snapshot = guarded_snapshot;
 
                     snapshot_merkle_root = match self
                         .storage_manager
@@ -403,11 +403,11 @@ impl StateManager {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
                     // exists.
-                    if let Some(snapshot_got) = self
+                    if let Some(guarded_snapshot) = self
                         .storage_manager
                         .wait_for_snapshot(&intermediate_epoch_id)?
                     {
-                        snapshot = snapshot_got;
+                        snapshot = guarded_snapshot;
                         maybe_intermediate_mpt = None;
                         maybe_intermediate_mpt_key_padding = None;
                         delta_mpt = match self
@@ -437,8 +437,8 @@ impl StateManager {
                         return Ok(None);
                     }
                 }
-                Some(snapshot_got) => {
-                    snapshot = snapshot_got;
+                Some(guarded_snapshot) => {
+                    snapshot = guarded_snapshot;
                     maybe_intermediate_mpt_key_padding =
                         parent_state_index.maybe_intermediate_mpt_key_padding;
                     maybe_intermediate_mpt =
@@ -479,7 +479,7 @@ impl StateManager {
             }
         };
         Self::get_state_trees_internal(
-            snapshot,
+            snapshot.into().1,
             snapshot_epoch_id,
             snapshot_merkle_root,
             maybe_intermediate_mpt,
@@ -538,7 +538,9 @@ impl StateManagerTrait for StateManager {
                     .storage_manager
                     .wait_for_snapshot(&NULL_EPOCH)
                     .unwrap()
-                    .unwrap(),
+                    .unwrap()
+                    .into()
+                    .1,
                 snapshot_epoch_id: NULL_EPOCH,
                 snapshot_merkle_root: MERKLE_NULL_NODE,
                 maybe_intermediate_trie: None,
