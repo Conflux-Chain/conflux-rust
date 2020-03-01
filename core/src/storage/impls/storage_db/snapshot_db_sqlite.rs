@@ -358,8 +358,9 @@ impl SnapshotDbSqlite {
     }
 
     pub fn try_clone(&self) -> Result<Self> {
+        let maybe_db_connections = self.try_clone_connections()?;
         Ok(Self {
-            maybe_db_connections: self.try_clone_connections()?,
+            maybe_db_connections,
             ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
                 &self.ref_count,
                 &self.path,
