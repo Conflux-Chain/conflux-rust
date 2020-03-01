@@ -213,7 +213,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
     fn open(
         snapshot_path: &str, readonly: bool,
-        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Option<SnapshotDbSqlite>>
     {
         let file_exists = Path::new(&snapshot_path).exists();
@@ -226,7 +226,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             )?;
             return Ok(Some(SnapshotDbSqlite {
                 maybe_db_connections: kvdb_sqlite_sharded.into_connections(),
-                ref_count,
+                ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
+                    ref_count,
+                    snapshot_path,
+                ),
                 path: snapshot_path.to_string(),
             }));
         } else {
@@ -236,7 +239,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
     fn create(
         snapshot_path: &str,
-        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<SnapshotDbSqlite>
     {
         fs::create_dir_all(snapshot_path)?;
@@ -267,7 +270,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             }
             Ok(connections) => Ok(SnapshotDbSqlite {
                 maybe_db_connections: Some(connections),
-                ref_count,
+                ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
+                    ref_count,
+                    &snapshot_path,
+                ),
                 path: snapshot_path.to_string(),
             }),
         }
@@ -352,8 +358,9 @@ impl SnapshotDbSqlite {
     }
 
     pub fn try_clone(&self) -> Result<Self> {
+        let maybe_db_connections = self.try_clone_connections()?;
         Ok(Self {
-            maybe_db_connections: self.try_clone_connections()?,
+            maybe_db_connections,
             ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
                 &self.ref_count,
                 &self.path,

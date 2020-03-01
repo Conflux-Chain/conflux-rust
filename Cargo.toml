@@ -52,6 +52,22 @@ ethkey = { path = "accounts/ethkey" }
 parity-wordlist = "1.3.0"
 rustc-hex = "2.0.1"
 env_logger = "0.5"
+libra-config = { path = "core/src/alliance_tree_graph/bft/config" }
+libra-canonical-serialization = { path = "core/src/alliance_tree_graph/bft/common/lcs" }
+libra-types = { path = "core/src/alliance_tree_graph/bft/types" }
+libra-crypto-derive = { path = "core/src/alliance_tree_graph/bft/crypto/crypto-derive" }
+libra-nibble = { path = "core/src/alliance_tree_graph/bft/common/nibble" }
+libra-proptest-helpers = { path = "core/src/alliance_tree_graph/bft/common/proptest-helpers" }
+libra-tools = { path = "core/src/alliance_tree_graph/bft/common/tools" }
+libra-logger = { path = "core/src/alliance_tree_graph/bft/common/logger" }
+libra-metrics = { path = "core/src/alliance_tree_graph/bft/common/metrics" }
+channel = { path = "core/src/alliance_tree_graph/bft/common/channel" }
+futures-semaphore = { path = "core/src/alliance_tree_graph/bft/common/futures-semaphore" }
+libra-prost-ext = { path = "core/src/alliance_tree_graph/bft/common/prost-ext" }
+schemadb = { path = "core/src/alliance_tree_graph/bft/storage/schemadb" }
+scratchpad = { path = "core/src/alliance_tree_graph/bft/storage/scratchpad" }
+libra-state-view = { path="core/src/alliance_tree_graph/bft/storage/state-view" }
+storage-proto = { path = "core/src/alliance_tree_graph/bft/storage/storage-proto" }
 
 [[bin]]
 name = "consensus_bench"
@@ -64,6 +80,10 @@ path = "tools/cfx-gen-dot/main.rs"
 [[bin]]
 name = "ethkey"
 path = "accounts/ethkey/cli/src/main.rs"
+
+[[bin]]
+name = "tg_config_gen"
+path = "tools/tg_config_gen/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
@@ -85,4 +105,3 @@ debug-assertions = true
 
 [profile.bench]
 debug-assertions = true
-

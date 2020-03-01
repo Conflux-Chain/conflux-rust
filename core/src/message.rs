@@ -63,9 +63,11 @@ pub trait Message: Send + Sync {
         };
 
         debug!(
-            "Send message({}) to {:?}",
+            "Send message({}) to peer {} {:?}, protocol {:?}",
             self.msg_name(),
-            io.get_peer_node_id(peer)
+            peer,
+            io.get_peer_node_id(peer),
+            io.get_protocol(),
         );
 
         metric_message(peer, self.msg_id(), size);

@@ -5,6 +5,10 @@
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
 use cfxcore::{
+    alliance_tree_graph::consensus::{
+        consensus_inner::ConsensusInnerConfig as TreeGraphConsensusInnerConfig,
+        ConsensusConfig as TreeGraphConsensusConfig,
+    },
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
@@ -112,6 +116,7 @@ build_config! {
         (port, (Option<u16>), Some(32323))
 
         // Network parameters section.
+        (heartbeat_period_interval_ms, (u64), 30_000)
         (blocks_request_timeout_ms, (u64), 60_000)
         (check_request_period_ms, (u64), 1000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
@@ -178,9 +183,11 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (is_consortium, (bool), false)
+        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
         (ledger_cache_size, (Option<usize>), Some(1024))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (max_download_state_peers, (usize), 8)
+        (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
     }
     {
         (
@@ -224,6 +231,7 @@ impl Configuration {
             None => NetworkConfiguration::default(),
         };
 
+        network_config.is_consortium = self.raw_conf.is_consortium;
         network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
@@ -305,6 +313,23 @@ impl Configuration {
             NUM_COLUMNS.clone(),
             self.raw_conf.rocksdb_disable_wal,
         )
+    }
+
+    pub fn tg_consensus_config(&self) -> TreeGraphConsensusConfig {
+        TreeGraphConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            inner_conf: TreeGraphConsensusInnerConfig {
+                era_epoch_count: self.raw_conf.era_epoch_count,
+                enable_state_expose: self.raw_conf.enable_state_expose,
+                candidate_pivot_waiting_timeout_ms: self
+                    .raw_conf
+                    .candidate_pivot_waiting_timeout_ms,
+            },
+            bench_mode: false,
+        }
     }
 
     pub fn consensus_config(&self) -> ConsensusConfig {
@@ -413,6 +438,9 @@ impl Configuration {
             ),
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
+            ),
+            heartbeat_period_interval: Duration::from_millis(
+                self.raw_conf.heartbeat_period_interval_ms,
             ),
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,

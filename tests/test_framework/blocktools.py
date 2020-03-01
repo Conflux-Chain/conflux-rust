@@ -6,7 +6,7 @@ from rlp.sedes import CountableList
 from conflux import utils, trie
 from conflux.config import default_config
 from conflux.messages import BlockHeader, Block, Transactions, Account
-from conflux.transactions import Transaction
+from conflux.transactions import Transaction, UnsignedTransaction
 from conflux.utils import *
 from trie import HexaryTrie
 import time
@@ -71,8 +71,8 @@ def create_block_with_nonce(
 
 
 def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=default_config['GENESIS_COINBASE'],
-                       data=b'', v=0, r=0, s=0, pri_key=default_config["GENESIS_PRI_KEY"]):
-    transaction = Transaction(nonce, gas_price, gas, receiver, value, data, v, r, s)
+                       data=b'', pri_key=default_config["GENESIS_PRI_KEY"]):
+    transaction = UnsignedTransaction(nonce, gas_price, gas, receiver, value, data)
     return transaction.sign(pri_key)
 
 

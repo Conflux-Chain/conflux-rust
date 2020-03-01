@@ -73,12 +73,12 @@ pub trait SnapshotDbTrait:
 
     fn open(
         snapshot_path: &str, readonly: bool,
-        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Option<Self>>;
 
     fn create(
         snapshot_path: &str,
-        ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Self>;
 
     fn direct_merge(&mut self) -> Result<MerkleHash>;

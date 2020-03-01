@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{storage, sync::message::Throttled};
+use futures::channel::oneshot;
 use network;
 use rlp::DecoderError;
 use std::io;
@@ -50,6 +51,16 @@ error_chain! {
             display("Sent too many transactions"),
         }
 
+        RpcTimeout {
+            description("Rpc gets timeout"),
+            display("Rpc gets timeout"),
+        }
+
+        RpcCancelledByDisconnection {
+            description("Rpc gets cancelled by disconnection"),
+            display("Rpc gets cancelled by disconnection"),
+        }
+
         InvalidTimestamp {
             description("Peer timestamp drifts too much"),
             display("Drift too much"),
@@ -75,9 +86,20 @@ error_chain! {
             display("packet {:?} throttled: {:?}", msg_name, response),
         }
 
+        InternalError(reason: String) {
+            description("Internal error"),
+            display("Internal error: {:?}", reason),
+        }
+
         UnexpectedMessage(reason: String) {
             description("Message received in unexpected"),
             display("UnexpectedMessage: {:?}", reason)
         }
+    }
+}
+
+impl From<oneshot::Canceled> for Error {
+    fn from(error: oneshot::Canceled) -> Self {
+        ErrorKind::InternalError(format!("{}", error)).into()
     }
 }

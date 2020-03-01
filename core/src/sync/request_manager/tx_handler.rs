@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::sync::message::TransactionDigests;
 use cfx_types::H256;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
