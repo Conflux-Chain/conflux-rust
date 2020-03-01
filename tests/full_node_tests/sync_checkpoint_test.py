@@ -22,7 +22,6 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "timer_chain_beta": "6",
             "era_epoch_count": "50",
             "chunk_size_byte": "1000",
-            "log_level": '"debug"',
         }
 
     def setup_network(self):

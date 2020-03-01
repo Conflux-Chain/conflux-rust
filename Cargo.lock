@@ -663,7 +663,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "throttling",
- "tokio 0.2.12",
+ "tokio 0.2.13",
  "tokio-timer 0.2.13",
  "toml 0.4.10",
  "unexpected",
@@ -681,7 +681,7 @@ dependencies = [
  "libra-metrics",
  "libra-types",
  "rusty-fork",
- "tokio 0.2.12",
+ "tokio 0.2.13",
 ]
 
 [[package]]
@@ -1751,7 +1751,7 @@ name = "futures-semaphore"
 version = "0.1.0"
 dependencies = [
  "futures 0.3.4",
- "tokio 0.2.12",
+ "tokio 0.2.13",
  "tokio-sync 0.2.0-alpha.6",
 ]
 
@@ -3853,7 +3853,7 @@ dependencies = [
  "rand 0.6.5",
  "rand_chacha 0.1.1",
  "rand_xorshift 0.1.1",
- "regex-syntax 0.6.14",
+ "regex-syntax 0.6.15",
  "rusty-fork",
  "tempfile",
 ]
@@ -4288,7 +4288,7 @@ checksum = "322cf97724bea3ee221b78fe25ac9c46114ebb51747ad5babd51a2fc6a8235a8"
 dependencies = [
  "aho-corasick 0.7.9",
  "memchr",
- "regex-syntax 0.6.14",
+ "regex-syntax 0.6.15",
  "thread_local 1.0.1",
 ]
 
@@ -4312,9 +4312,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.14"
+version = "0.6.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b28dfe3fe9badec5dbf0a79a9cccad2cfc2ab5484bdb3e44cbd1ae8b3ba2be06"
+checksum = "7246cd0a0a6ec2239a5405b2b16e3f404fa0dcc6d28f5f5b877bf80e33e0f294"
 
 [[package]]
 name = "relay"
@@ -5311,9 +5311,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b34bee1facdc352fba10c9c58b654e6ecb6a2250167772bf86071f7c5f2f5061"
+checksum = "0fa5e81d6bc4e67fe889d5783bd2a128ab2e0cfa487e0be16b6a8d177b101616"
 dependencies = [
  "bytes 0.5.4",
  "fnv",
@@ -6107,9 +6107,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e41ff37ba788e2169b19fa70253b70cb53d9f2db9fb9aea9bcfc5047e02c3bae"
+checksum = "6df134e83b8f0f8153a094c7b0fd79dfebe437f1d76e7715afa18ed95ebe2fd7"
 dependencies = [
  "bzip2",
  "crc32fast",
