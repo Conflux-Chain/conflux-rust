@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{max_of_collection, FullPeerFilter, FullPeerState, Peers},
         handler::sync::headers::Headers,
@@ -52,7 +52,7 @@ impl EpochRequest {
 
 pub struct Epochs {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // header sync manager
     headers: Arc<Headers>,
@@ -72,7 +72,7 @@ pub struct Epochs {
 
 impl Epochs {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, headers: Arc<Headers>,
+        consensus: SharedConsensusGraph, headers: Arc<Headers>,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {

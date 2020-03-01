@@ -9,6 +9,8 @@ use keylib::{
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::{Deserialize, Serialize};
 use std::{error, fmt, mem, ops::Deref};
 use unexpected::OutOfBounds;
 
@@ -125,7 +127,7 @@ impl error::Error for TransactionError {
     fn description(&self) -> &str { "Transaction error" }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
     /// Create creates new contract.
     Create,
@@ -157,7 +159,17 @@ impl Encodable for Action {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
 pub struct Transaction {
     /// Nonce.
     pub nonce: U256,
@@ -195,10 +207,12 @@ impl Transaction {
     pub fn fake_sign(self, from: Address) -> SignedTransaction {
         SignedTransaction {
             transaction: TransactionWithSignature {
-                unsigned: self,
-                r: U256::one(),
-                s: U256::one(),
-                v: 0,
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: self,
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
                 hash: H256::zero(),
                 rlp_size: None,
             }
@@ -211,39 +225,16 @@ impl Transaction {
     /// Signs the transaction with signature.
     pub fn with_signature(self, sig: Signature) -> TransactionWithSignature {
         TransactionWithSignature {
-            unsigned: self,
-            r: sig.r().into(),
-            s: sig.s().into(),
-            v: sig.v(),
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: self,
+                r: sig.r().into(),
+                s: sig.s().into(),
+                v: sig.v(),
+            },
             hash: H256::zero(),
             rlp_size: None,
         }
         .compute_hash()
-    }
-}
-
-impl Decodable for Transaction {
-    fn decode(r: &Rlp) -> Result<Self, DecoderError> {
-        Ok(Transaction {
-            nonce: r.val_at(0)?,
-            gas_price: r.val_at(1)?,
-            gas: r.val_at(2)?,
-            action: r.val_at(3)?,
-            value: r.val_at(4)?,
-            data: r.val_at(5)?,
-        })
-    }
-}
-
-impl Encodable for Transaction {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(6);
-        s.append(&self.nonce);
-        s.append(&self.gas_price);
-        s.append(&self.gas);
-        s.append(&self.action);
-        s.append(&self.value);
-        s.append(&self.data);
     }
 }
 
@@ -254,8 +245,17 @@ impl MallocSizeOf for Transaction {
 }
 
 /// Signed transaction information without verified signature.
-#[derive(Debug, Clone, PartialEq)]
-pub struct TransactionWithSignature {
+#[derive(
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
+pub struct TransactionWithSignatureSerializePart {
     /// Plain Transaction.
     pub unsigned: Transaction,
     /// The V field of the signature; helps describe which half of the curve
@@ -265,38 +265,44 @@ pub struct TransactionWithSignature {
     pub r: U256,
     /// The S field of the signature; helps describe the point on the curve.
     pub s: U256,
-    /// Hash of the transaction
-    pub hash: H256,
-    /// The transaction size when serialized in rlp
-    pub rlp_size: Option<usize>,
 }
 
-impl Deref for TransactionWithSignature {
+impl Deref for TransactionWithSignatureSerializePart {
     type Target = Transaction;
 
     fn deref(&self) -> &Self::Target { &self.unsigned }
 }
 
+/// Signed transaction information without verified signature.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct TransactionWithSignature {
+    /// Serialize part.
+    pub transaction: TransactionWithSignatureSerializePart,
+    /// Hash of the transaction
+    #[serde(skip)]
+    pub hash: H256,
+    /// The transaction size when serialized in rlp
+    #[serde(skip)]
+    pub rlp_size: Option<usize>,
+}
+
+impl Deref for TransactionWithSignature {
+    type Target = TransactionWithSignatureSerializePart;
+
+    fn deref(&self) -> &Self::Target { &self.transaction }
+}
+
 impl Decodable for TransactionWithSignature {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
-        if d.item_count()? != 9 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
-
+        // Check item count of TransactionWithSignatureSerializePart
+        if d.item_count()? != 4 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+        let transaction = d.as_val()?;
         Ok(TransactionWithSignature {
-            unsigned: Transaction {
-                nonce: d.val_at(0)?,
-                gas_price: d.val_at(1)?,
-                gas: d.val_at(2)?,
-                action: d.val_at(3)?,
-                value: d.val_at(4)?,
-                data: d.val_at(5)?,
-            },
-            v: d.val_at(6)?,
-            r: d.val_at(7)?,
-            s: d.val_at(8)?,
+            transaction,
             hash,
             rlp_size,
         })
@@ -304,18 +310,18 @@ impl Decodable for TransactionWithSignature {
 }
 
 impl Encodable for TransactionWithSignature {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        self.rlp_append_sealed_transaction(s)
-    }
+    fn rlp_append(&self, s: &mut RlpStream) { s.append(&self.transaction); }
 }
 
 impl TransactionWithSignature {
     pub fn new_unsigned(tx: Transaction) -> Self {
         TransactionWithSignature {
-            unsigned: tx,
-            s: 0.into(),
-            r: 0.into(),
-            v: 0,
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: tx,
+                s: 0.into(),
+                r: 0.into(),
+                v: 0,
+            },
             hash: Default::default(),
             rlp_size: None,
         }
@@ -330,20 +336,6 @@ impl TransactionWithSignature {
 
     /// Checks whether signature is empty.
     pub fn is_unsigned(&self) -> bool { self.r.is_zero() && self.s.is_zero() }
-
-    /// Append object with a signature into RLP stream
-    fn rlp_append_sealed_transaction(&self, s: &mut RlpStream) {
-        s.begin_list(9);
-        s.append(&self.nonce);
-        s.append(&self.gas_price);
-        s.append(&self.gas);
-        s.append(&self.action);
-        s.append(&self.value);
-        s.append(&self.data);
-        s.append(&self.v);
-        s.append(&self.r);
-        s.append(&self.s);
-    }
 
     /// Construct a signature object from the sig.
     pub fn signature(&self) -> Signature {
@@ -402,7 +394,7 @@ pub struct SignedTransaction {
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(3);
-        self.transaction.rlp_append_sealed_transaction(s);
+        s.append(&self.transaction);
         s.append(&self.sender);
         s.append(&self.public);
     }

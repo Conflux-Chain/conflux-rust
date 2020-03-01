@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub struct DeltaDbManagerRocksdb {
-    pub delta_db_path: String,
+    delta_db_path: String,
     creation_mutex: Mutex<()>,
 }
 
@@ -58,7 +58,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
             Ok(KvdbRocksdb {
                 kvdb: Arc::new(Database::open(
                     &Self::ROCKSDB_CONFIG,
-                    &self.get_delta_db_path(delta_db_name),
+                    &path_str,
                 )?),
                 col: 0,
             })

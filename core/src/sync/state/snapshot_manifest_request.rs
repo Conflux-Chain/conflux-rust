@@ -10,7 +10,7 @@ use crate::{
     },
     sync::{
         message::{Context, DynamicCapability, Handleable, KeyContainer},
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         state::{
             snapshot_manifest_response::SnapshotManifestResponse,
             storage::RangedManifest,
@@ -19,9 +19,9 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use primitives::StateRoot;
+use primitives::{EpochNumber, StateRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestRequest {
@@ -97,14 +97,9 @@ impl SnapshotManifestRequest {
             if let Some(block) =
                 ctx.manager.graph.data_man.block_header_by_hash(&epoch_hash)
             {
-                match ctx
-                    .manager
-                    .graph
-                    .consensus
-                    .inner
-                    .read()
-                    .block_hashes_by_epoch(block.height())
-                {
+                match ctx.manager.graph.consensus.get_block_hashes_by_epoch(
+                    EpochNumber::Number(block.height()),
+                ) {
                     Ok(ordered_executable_epoch_blocks) => {
                         for hash in &ordered_executable_epoch_blocks {
                             match ctx
@@ -254,6 +249,12 @@ impl SnapshotManifestRequest {
 
         Some((state_root_vec, receipt_blame_vec, bloom_blame_vec))
     }
+}
+
+impl AsAny for SnapshotManifestRequest {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for SnapshotManifestRequest {

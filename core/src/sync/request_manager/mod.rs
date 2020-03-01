@@ -1,8 +1,13 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use super::{
     synchronization_protocol_handler::ProtocolConfiguration,
     synchronization_state::SynchronizationState,
 };
 use crate::{
+    alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     parameters::sync::REQUEST_START_WAITING_TIME,
     sync::{
         message::{
@@ -10,11 +15,13 @@ use crate::{
             GetBlocks, GetCompactBlocks, GetTransactions,
             GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
         },
+        request_manager::request_batcher::RequestBatcher,
         synchronization_state::PeerFilter,
         Error,
     },
 };
 use cfx_types::H256;
+use futures::{channel::oneshot, future::Future};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
 };
@@ -22,7 +29,7 @@ use network::{NetworkContext, PeerId};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature};
 pub use request_handler::{
-    Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
+    AsAny, Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
 use std::{
     cmp::Ordering,
@@ -35,6 +42,7 @@ use tx_handler::{
     ReceivedTransactionContainer, SentTransactionContainer,
 };
 
+mod request_batcher;
 mod request_handler;
 pub mod tx_handler;
 
@@ -74,6 +82,13 @@ lazy_static! {
             "system_metrics",
             "request_tx_from_inflight_pending_pool"
         );
+
+    /// Delay is increased by 1 second each time, so it costs at least 90*91/2 = 4095s to reach
+    /// this upper bound. And requests will be discarded after reaching this upper bound.
+    static ref DEFAULT_REQUEST_DELAY_UPPER_BOUND: Duration =
+        Duration::from_secs(90);
+    static ref DEFAULT_REQUEST_BATCH_BUCKET_SIZE: Duration =
+        Duration::from_secs(2);
 }
 
 #[derive(Debug)]
@@ -109,6 +124,7 @@ pub struct RequestManager {
 
     /// This is used to handle request_id matching
     request_handler: Arc<RequestHandler>,
+
     syn: Arc<SynchronizationState>,
 }
 
@@ -152,6 +168,25 @@ impl RequestManager {
             .len() as u64
     }
 
+    /// Send a unary rpc request to remote peer `recipient`.
+    pub async fn unary_rpc<'a>(
+        &'a self, io: &'a dyn NetworkContext, recipient: Option<PeerId>,
+        mut request: Box<dyn Request>,
+    ) -> impl Future<Output = Result<Box<dyn RpcResponse>, Error>> + 'a
+    {
+        async move {
+            // ask network to fulfill rpc request
+            let (res_tx, res_rx) = oneshot::channel();
+            request.set_response_notification(res_tx);
+
+            self.request_with_delay(io, request, recipient, None);
+
+            // wait for response
+            let response = res_rx.await??;
+            Ok(response)
+        }
+    }
+
     /// Send request to remote peer with delay mechanism. If failed,
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(
@@ -163,6 +198,7 @@ impl RequestManager {
         request.with_inflight(&self.inflight_keys);
 
         if request.is_empty() {
+            request.notify_empty();
             return;
         }
 
@@ -209,7 +245,7 @@ impl RequestManager {
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
-        debug!("request_block_headers: {:?}", hashes);
+        debug!("request_block_headers: {:?}, peer {:?}", hashes, &peer_id);
 
         let request = GetBlockHeaders {
             request_id: 0,
@@ -796,34 +832,22 @@ impl RequestManager {
     }
 
     /// Send waiting requests that their backoff delay have passes
+    /// TODO Batch requests with close delays.
     pub fn resend_waiting_requests(&self, io: &dyn NetworkContext) {
         debug!("resend_waiting_requests: start");
         let mut waiting_requests = self.waiting_requests.lock();
         let now = Instant::now();
+        let mut batcher =
+            RequestBatcher::new(*DEFAULT_REQUEST_BATCH_BUCKET_SIZE);
 
         while let Some(req) = waiting_requests.pop() {
             if req.time_to_send >= now {
                 waiting_requests.push(req);
                 break;
+            } else if req.request.1 > *DEFAULT_REQUEST_DELAY_UPPER_BOUND {
+                // Discard stale requests
+                continue;
             }
-
-            let maybe_peer = req.peer.or_else(|| {
-                let msg_id = req.request.0.msg_id();
-                let mut filter = PeerFilter::new(msg_id);
-                if let Some(cap) = req.request.0.required_capability() {
-                    filter = filter.with_cap(cap);
-                }
-                filter.select(&self.syn)
-            });
-            let chosen_peer = match maybe_peer {
-                Some(p) => p,
-                None => {
-                    debug!("No peer to send request, wait for next time");
-                    waiting_requests.push(req);
-                    break;
-                }
-            };
-            debug!("Send waiting req {:?} to peer={}", req, chosen_peer);
 
             // Waiting requests are already in-flight, so send them without
             // checking
@@ -832,9 +856,33 @@ impl RequestManager {
                 Some(r) => r,
                 None => continue,
             };
-            let next_delay = delay + *REQUEST_START_WAITING_TIME;
+            batcher.insert(delay, request);
+        }
 
-            if let Err(req) = self.request_handler.send_request(
+        for (delay, request) in batcher.get_batched_requests() {
+            let next_delay = delay + *REQUEST_START_WAITING_TIME;
+            let mut filter = PeerFilter::new(request.msg_id());
+            if let Some(cap) = request.required_capability() {
+                filter = filter.with_cap(cap);
+            }
+            let chosen_peer = match filter.select(&self.syn) {
+                Some(p) => p,
+                None => {
+                    debug!("No peer to send request, wait for next time");
+                    waiting_requests.push(TimedWaitingRequest::new(
+                        Instant::now() + delay,
+                        WaitingRequest(request, next_delay),
+                        None,
+                    ));
+                    continue;
+                }
+            };
+            debug!(
+                "Send waiting req {:?} to peer={} with next_delay={:?}",
+                request, chosen_peer, next_delay
+            );
+
+            if let Err(request) = self.request_handler.send_request(
                 io,
                 Some(chosen_peer),
                 request,
@@ -842,7 +890,7 @@ impl RequestManager {
             ) {
                 waiting_requests.push(TimedWaitingRequest::new(
                     Instant::now() + delay,
-                    WaitingRequest(req, next_delay),
+                    WaitingRequest(request, next_delay),
                     None,
                 ));
             }

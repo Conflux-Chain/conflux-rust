@@ -23,7 +23,8 @@ use std::{
 };
 
 use cfxcore::{
-    BlockDataManager, ConsensusGraph, Notifications, SynchronizationGraph,
+    BlockDataManager, ConsensusGraph, Notifications, SharedConsensusGraph,
+    SynchronizationGraph,
 };
 
 use futures::future::{FutureExt, TryFutureExt};
@@ -42,7 +43,7 @@ pub struct PubSubClient {
 impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
-        executor: Executor, consensus: Arc<ConsensusGraph>,
+        executor: Executor, consensus: SharedConsensusGraph,
         notifications: Arc<Notifications>,
     ) -> Self
     {
@@ -59,7 +60,7 @@ impl PubSubClient {
 
         // loop asynchronously
         let handler_clone = handler.clone();
-        let data_man = consensus.data_man.clone();
+        let data_man = consensus.get_data_manager().clone();
 
         let fut = receiver.for_each(move |(hash, _)| {
             let header = match data_man.block_header_by_hash(&hash) {
@@ -86,7 +87,7 @@ impl PubSubClient {
 /// PubSub notification handler.
 pub struct ChainNotificationHandler {
     pub executor: Executor,
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
 }
 
@@ -101,7 +102,7 @@ impl ChainNotificationHandler {
 
     fn notify_new_headers(&self, headers: &[BlockHeader]) {
         for subscriber in self.heads_subscribers.read().values() {
-            let convert = |h| RpcHeader::new(h, &self.consensus);
+            let convert = |h| RpcHeader::new(h, self.consensus.clone());
 
             for h in headers.iter().map(convert) {
                 Self::notify(

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::sync::Arc;
-
 use cfx_types::{Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,
@@ -11,7 +9,7 @@ use primitives::{
 };
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
     parameters::consensus::DEFERRED_STATE_EPOCH_COUNT,
     statedb::StateDb,
@@ -24,7 +22,7 @@ use crate::{
 
 pub struct LedgerInfo {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 }
 
 /// NOTE: we use `height` when we talk about headers on the pivot chain
@@ -33,7 +31,7 @@ pub struct LedgerInfo {
 /// example: the roots of epoch=5 are stored in the header at height=10
 ///          (or later, if there is blaming involved)
 impl LedgerInfo {
-    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
+    pub fn new(consensus: SharedConsensusGraph) -> Self {
         LedgerInfo { consensus }
     }
 
@@ -41,7 +39,7 @@ impl LedgerInfo {
     #[inline]
     pub fn block(&self, hash: H256) -> Result<Block, Error> {
         self.consensus
-            .data_man
+            .get_data_manager()
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
             .ok_or(ErrorKind::InternalError.into())
@@ -51,7 +49,7 @@ impl LedgerInfo {
     #[inline]
     pub fn header(&self, hash: H256) -> Result<BlockHeader, Error> {
         self.consensus
-            .data_man
+            .get_data_manager()
             .block_header_by_hash(&hash)
             .map(|h| (*h).clone())
             .ok_or(ErrorKind::InternalError.into())
@@ -100,7 +98,7 @@ impl LedgerInfo {
         let pivot = self.pivot_hash_of(epoch)?;
 
         self.consensus
-            .data_man
+            .get_data_manager()
             .get_epoch_execution_commitment(&pivot)
             .map(|c| c.receipts_root)
             .ok_or(ErrorKind::InternalError.into())
@@ -116,7 +114,7 @@ impl LedgerInfo {
         let pivot = self.pivot_hash_of(epoch)?;
 
         self.consensus
-            .data_man
+            .get_data_manager()
             .get_epoch_execution_commitment(&pivot)
             .map(|c| c.logs_bloom_hash)
             .ok_or(ErrorKind::InternalError.into())
@@ -129,12 +127,12 @@ impl LedgerInfo {
 
         let (_state_index_guard, maybe_state_index) = self
             .consensus
-            .data_man
+            .get_data_manager()
             .get_state_readonly_index(&pivot)
             .into();
         let state = maybe_state_index.map(|state_index| {
             self.consensus
-                .data_man
+                .get_data_manager()
                 .storage_manager
                 .get_state_no_commit(state_index)
         });
@@ -184,7 +182,7 @@ impl LedgerInfo {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .data_man
+                    .get_data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_cache */
                     )
@@ -208,7 +206,7 @@ impl LedgerInfo {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .data_man
+                    .get_data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_cache */
                     )

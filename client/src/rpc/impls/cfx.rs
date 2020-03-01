@@ -4,16 +4,17 @@
 
 use delegate::delegate;
 
-use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
+    impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
-        EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, Status as RpcStatus, SyncGraphStates,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
+        sign_call, Account as RpcAccount, BFTStates, BlameInfo,
+        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
+        ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
+        Receipt as RpcReceipt, SendTxRequest, Status as RpcStatus,
+        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+        U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -21,7 +22,7 @@ use cfx_types::{H160, H256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
-    test_context::*, PeerInfo, SharedConsensusGraph,
+    test_context::*, ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{
@@ -50,6 +51,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     tx_gen: Arc<TransactionGenerator>,
 }
+
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
@@ -76,8 +78,13 @@ impl RpcImpl {
             "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
             address, epoch_number
         );
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
 
-        self.consensus
+        consensus_graph
             .get_code(address, epoch_number.into())
             .map(Bytes::new)
             .map_err(RpcError::invalid_params)
@@ -95,7 +102,13 @@ impl RpcImpl {
             address, num
         );
 
-        self.consensus
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
             .get_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
@@ -113,7 +126,13 @@ impl RpcImpl {
             address, num
         );
 
-        self.consensus
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
             .get_bank_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
@@ -131,7 +150,13 @@ impl RpcImpl {
             address, num
         );
 
-        self.consensus
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
             .get_storage_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
@@ -150,8 +175,13 @@ impl RpcImpl {
             "RPC Request: cfx_getAccount address={:?} epoch_num={:?}",
             address, epoch_num
         );
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
 
-        self.consensus
+        consensus_graph
             .get_account(address, epoch_num.into())
             .map(|acc| RpcAccount::new(acc))
             .map_err(RpcError::invalid_params)
@@ -164,7 +194,13 @@ impl RpcImpl {
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        self.consensus
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
             .get_interest_rate(epoch_num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
@@ -175,7 +211,13 @@ impl RpcImpl {
         &self, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
-        self.consensus
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
             .get_accumulate_interest_rate(epoch_num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
@@ -217,9 +259,14 @@ impl RpcImpl {
     fn prepare_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> RpcResult<TransactionWithSignature> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
         if tx.nonce.is_none() {
-            let nonce = self
-                .consensus
+            let nonce = consensus_graph
                 .transaction_count(
                     tx.from.clone().into(),
                     BlockHashOrEpochNumber::EpochNumber(
@@ -293,8 +340,14 @@ impl RpcImpl {
 
     fn prepare_receipt(&self, hash: H256) -> RpcResult<Option<RpcReceipt>> {
         // Get a consistent view from ConsensusInner
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
         let maybe_results =
-            self.consensus.get_transaction_receipt_and_block_info(&hash);
+            consensus_graph.get_transaction_receipt_and_block_info(&hash);
         let (
             BlockExecutionResultWithEpoch(epoch_hash, execution_result),
             address,
@@ -307,7 +360,7 @@ impl RpcImpl {
         // Operations below will not involve the status of ConsensusInner
         let block = self
             .consensus
-            .data_man
+            .get_data_manager()
             .block_by_hash(&address.block_hash, true)
             .ok_or(RpcError::internal_error())?;
         let transaction = block
@@ -324,7 +377,7 @@ impl RpcImpl {
         let mut rpc_receipt = RpcReceipt::new(transaction, receipt, address);
         let epoch_block_header = self
             .consensus
-            .data_man
+            .get_data_manager()
             .block_header_by_hash(&epoch_hash)
             .ok_or(RpcError::internal_error())?;
         let epoch_number = epoch_block_header.height();
@@ -463,7 +516,7 @@ impl RpcImpl {
                 Ok(public) => {
                     let mut signed_tx = SignedTransaction::new(public, tx);
                     if tx_data_len > 0 {
-                        signed_tx.transaction.unsigned.data =
+                        signed_tx.transaction.transaction.unsigned.data =
                             vec![0; tx_data_len];
                     }
                     transactions.push(Arc::new(signed_tx));
@@ -507,6 +560,11 @@ impl RpcImpl {
     fn call(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
         debug!("RPC Request: cfx_call");
@@ -514,13 +572,19 @@ impl RpcImpl {
             RpcError::invalid_params(format!("Sign tx error: {:?}", err))
         })?;
         trace!("call tx {:?}", signed_tx);
-        self.consensus
+        consensus_graph
             .call_virtual(&signed_tx, epoch.into())
             .map(|output| Bytes::new(output.0))
             .map_err(RpcError::invalid_params)
     }
 
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
         info!("RPC Request: cfx_getLogs({:?})", filter);
         let mut filter: Filter = filter.into();
 
@@ -533,7 +597,7 @@ impl RpcImpl {
             }
         }
 
-        self.consensus
+        consensus_graph
             .logs(filter)
             .map_err(|e| format!("{}", e))
             .map_err(RpcError::invalid_params)
@@ -545,6 +609,11 @@ impl RpcImpl {
     fn estimate_gas(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
         debug!("RPC Request: cfx_estimateGas");
@@ -552,7 +621,7 @@ impl RpcImpl {
             RpcError::invalid_params(format!("Sign tx error: {:?}", err))
         })?;
         trace!("call tx {:?}", signed_tx);
-        let result = self.consensus.estimate_gas(&signed_tx, epoch.into());
+        let result = consensus_graph.estimate_gas(&signed_tx, epoch.into());
         result
             .map_err(|e| {
                 warn!("Transaction execution error {:?}", e);
@@ -584,14 +653,17 @@ impl RpcImpl {
     /// Return (block_info.status, state_valid)
     /// Return Error if either field is missing
     pub fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)> {
-        let status = self
+        let consensus_graph = self
             .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let status = consensus_graph
             .data_man
             .local_block_info_from_db(&block_hash)
             .ok_or(RpcError::invalid_params("No block status"))?
             .get_status();
-        let state_valid = self
-            .consensus
+        let state_valid = consensus_graph
             .inner
             .read()
             .block_node(&block_hash)
@@ -741,5 +813,9 @@ impl DebugRpc for DebugRpcImpl {
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
         }
+    }
+
+    not_supported! {
+        fn bft_state(&self) -> RpcResult<BFTStates>;
     }
 }

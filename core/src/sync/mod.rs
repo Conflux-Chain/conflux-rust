@@ -32,7 +32,7 @@ pub use self::{
     },
     synchronization_protocol_handler::{
         LocalMessageTask, ProtocolConfiguration, SyncHandlerWorkType,
-        SynchronizationProtocolHandler,
+        SynchronizationProtocolHandler, CHECK_RPC_REQUEST_TIMER,
     },
     synchronization_service::{
         SharedSynchronizationService, SynchronizationService,
