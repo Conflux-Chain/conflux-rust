@@ -311,7 +311,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
 
     fn open(
         _snapshot_path: &str, _readonly: bool,
-        _ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        _ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Option<Self>>
     {
         unreachable!()
@@ -319,7 +319,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
 
     fn create(
         _snapshot_path: &str,
-        _ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        _ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
     ) -> Result<Self>
     {
         unreachable!()
