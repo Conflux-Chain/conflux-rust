@@ -21,10 +21,10 @@ class CrashTest(ConfluxTestFramework):
     def setup_network(self):
         self.add_nodes(self.num_nodes)
         bootnode = self.nodes[0]
-        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
+        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout-s", "1", "--node-table-promotion-timeout-s", "1"]
         self.start_node(0, extra_args = extra_args0)
         bootnode_id = "cfxnode://{}@{}:{}".format(bootnode.key[2:], bootnode.ip, bootnode.port)
-        self.node_extra_args = ["--bootnodes", bootnode_id, "--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1"]
+        self.node_extra_args = ["--bootnodes", bootnode_id, "--enable-discovery", "true", "--node-table-timeout-s", "1", "--node-table-promotion-timeout-s", "1"]
         for i in range(1, self.num_nodes):
             self.start_node(i, extra_args=self.node_extra_args)
         for i in range(self.num_nodes):

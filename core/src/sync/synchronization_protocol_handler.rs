@@ -270,8 +270,8 @@ pub struct ProtocolConfiguration {
     pub inflight_pending_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
-    pub min_peers_propagation: usize,
-    pub max_peers_propagation: usize,
+    pub min_peers_tx_propagation: usize,
+    pub max_peers_tx_propagation: usize,
     pub future_block_buffer_capacity: usize,
     pub max_download_state_peers: usize,
     pub test_mode: bool,
@@ -1000,8 +1000,8 @@ impl SynchronizationProtocolHandler {
             .round() as usize;
 
         let num_peers = chosen_size
-            .max(self.protocol_config.min_peers_propagation)
-            .min(self.protocol_config.max_peers_propagation);
+            .max(self.protocol_config.min_peers_tx_propagation)
+            .min(self.protocol_config.max_peers_tx_propagation);
 
         PeerFilter::new(msgid::TRANSACTION_DIGESTS)
             .select_n(num_peers, &self.syn)
