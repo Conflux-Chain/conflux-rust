@@ -116,15 +116,9 @@ impl QueryService {
     ) -> Result<StateRoot, String> {
         trace!("retrieve_state_root epoch = {}", epoch);
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg =
-            format!("Timeout while retrieving state root for epoch {}", epoch);
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving state root for epoch {}", epoch),
             self.with_io(|io| self.handler.state_roots.request_now(io, epoch)),
         )
         .await
@@ -135,20 +129,10 @@ impl QueryService {
     ) -> Result<Option<Vec<u8>>, String> {
         trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg = format!(
-            "Timeout while retrieving state entry for epoch {} with key {:?}",
-            epoch, key
-        );
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
-            self.with_io(|io| {
-                self.handler.state_entries.request_now(io, epoch, key)
-            }),
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving state entry for epoch {} with key {:?}", epoch, key),
+            self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key)),
         )
         .await
     }
@@ -156,14 +140,9 @@ impl QueryService {
     async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
         trace!("retrieve_bloom epoch = {}", epoch);
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving bloom for epoch {}", epoch);
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving bloom for epoch {}", epoch),
             self.handler.blooms.request(epoch),
         )
         .await
@@ -175,15 +154,9 @@ impl QueryService {
     ) -> Result<(u64, Vec<Vec<Receipt>>), String> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg =
-            format!("Timeout while retrieving receipts for epoch {}", epoch);
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving receipts for epoch {}", epoch),
             self.handler.receipts.request(epoch),
         )
         .await
@@ -196,15 +169,9 @@ impl QueryService {
         trace!("retrieve_block_txs log = {:?}", log);
         let hash = log.block_hash;
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg =
-            format!("Timeout while retrieving block txs for block {}", hash);
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving block txs for block {}", hash),
             self.handler.block_txs.request(hash),
         )
         .await
@@ -216,14 +183,9 @@ impl QueryService {
     ) -> Result<(SignedTransaction, Receipt, TransactionAddress), String> {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg = format!("Timeout while retrieving tx info for tx {}", hash);
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving tx info for tx {}", hash),
             self.with_io(|io| self.handler.tx_infos.request_now(io, hash)),
         )
         .await
@@ -374,15 +336,9 @@ impl QueryService {
     ) -> Result<SignedTransaction, String> {
         info!("get_tx hash={:?}", hash);
 
-        // We cannot await in scope that contains call to format!
-        // This is likely to be fixed in a future compiler version.
-        // See: https://github.com/rust-lang/rust/issues/64960
-        let msg =
-            format!("Timeout while retrieving transaction with hash {}", hash);
-
         with_timeout(
-            *MAX_POLL_TIME, /* timeout */
-            msg,            /* error */
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving transaction with hash {}", hash),
             self.with_io(|io| self.handler.txs.request_now(io, hash)),
         )
         .await
