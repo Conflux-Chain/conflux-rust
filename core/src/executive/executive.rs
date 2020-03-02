@@ -11,6 +11,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     hash::keccak,
     machine::Machine,
+    parameters::staking::*,
     state::{CleanupMode, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
@@ -287,12 +288,12 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn deposit(
-        params: &ActionParams, state: &mut State, val: &U256, deposit_time: u64,
+        params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
         if state.balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
         } else {
-            state.deposit(&params.sender, &val, deposit_time)?;
+            state.deposit(&params.sender, &val)?;
             Ok(())
         }
     }
@@ -300,15 +301,31 @@ impl<'a> CallCreateExecutive<'a> {
     fn withdraw(
         params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
-        if state.staking_balance(&params.sender)?
-            - state.collateral_for_storage(&params.sender)?
-            < *val
-        {
+        if state.withdrawable_staking_balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract(
-                "not enough bank balance to withdraw",
+                "not enough withdrawable staking balance to withdraw",
             ))
         } else {
             state.withdraw(&params.sender, &val)?;
+            Ok(())
+        }
+    }
+
+    fn lock(
+        params: &ActionParams, state: &mut State, val: &U256,
+        duration_in_day: u64,
+    ) -> vm::Result<()>
+    {
+        if !((std::u64::MAX - state.block_number()) / BLOCKS_PER_DAY
+            <= duration_in_day)
+        {
+            Err(vm::Error::InternalContract("invalid lock duration"))
+        } else if state.staking_balance(&params.sender)? < *val {
+            Err(vm::Error::InternalContract(
+                "not enough staking balance to lock",
+            ))
+        } else {
+            state.lock(&params.sender, val, duration_in_day)?;
             Ok(())
         }
     }
@@ -335,9 +352,8 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn enact_result(
-        result: &vm::Result<FinalizationResult>, env: &'a Env,
-        state: &mut State, substate: &mut Substate,
-        unconfirmed_substate: Substate,
+        result: &vm::Result<FinalizationResult>, state: &mut State,
+        substate: &mut Substate, unconfirmed_substate: Substate,
     ) -> bool
     {
         match *result {
@@ -360,7 +376,7 @@ impl<'a> CallCreateExecutive<'a> {
                 true
             }
             Ok(_) | Err(vm::Error::Internal(_)) => {
-                if state.check_collateral_for_storage(env.timestamp) {
+                if state.check_collateral_for_storage() {
                     state.discard_checkpoint();
                     substate.accrue(unconfirmed_substate);
                     true
@@ -397,9 +413,7 @@ impl<'a> CallCreateExecutive<'a> {
     /// Implementation of deposit and withdraw tokens in bank.
     fn exec_storage_interest_staking_contract(
         params: &ActionParams, state: &mut State, gas_cost: &U256,
-        timestamp: u64,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if state.is_contract(&params.sender) {
             return Err(vm::Error::InternalContract(
                 "contract accounts are not allowed to deposit or withdraw",
@@ -423,7 +437,7 @@ impl<'a> CallCreateExecutive<'a> {
                 Err(vm::Error::InternalContract("invalid data"))
             } else {
                 let amount = U256::from(&data[4..36]);
-                Self::deposit(params, state, &amount, timestamp)
+                Self::deposit(params, state, &amount)
             }
         } else if data[0..4] == [46, 26, 125, 77] {
             // The first 4 bytes of
@@ -434,6 +448,17 @@ impl<'a> CallCreateExecutive<'a> {
             } else {
                 let amount = U256::from(&data[4..36]);
                 Self::withdraw(params, state, &amount)
+            }
+        } else if data[0..4] == [16, 56, 115, 111] {
+            // The first 4 bytes of
+            // keccak('lock(uint256,uint256)') is `0x1338736f`.
+            // 4 bytes `Method ID` + 64 bytes `amount`.
+            if data.len() != 68 {
+                Err(vm::Error::InternalContract("invalid data"))
+            } else {
+                let amount = U256::from(&data[4..36]);
+                let duration_in_day = U256::from(&data[36..68]).low_u64();
+                Self::lock(params, state, &amount, duration_in_day)
             }
         } else {
             Ok(())
@@ -742,7 +767,6 @@ impl<'a> CallCreateExecutive<'a> {
                             &params,
                             state,
                             &gas_cost,
-                            self.env.timestamp,
                         )
                     } else if params.code_address
                         == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
@@ -760,9 +784,7 @@ impl<'a> CallCreateExecutive<'a> {
                     if let Err(e) = result {
                         state.revert_to_checkpoint();
                         Err(e.into())
-                    } else if state
-                        .check_collateral_for_storage(self.env.timestamp)
-                    {
+                    } else if state.check_collateral_for_storage() {
                         state.discard_checkpoint();
                         let internal_contract_out_buffer = Vec::new();
                         let out_len = internal_contract_out_buffer.len();
@@ -860,7 +882,6 @@ impl<'a> CallCreateExecutive<'a> {
 
                 if Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
@@ -947,7 +968,6 @@ impl<'a> CallCreateExecutive<'a> {
 
                 if Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
@@ -1026,7 +1046,6 @@ impl<'a> CallCreateExecutive<'a> {
 
                 if Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
@@ -1110,7 +1129,6 @@ impl<'a> CallCreateExecutive<'a> {
 
                 if Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
@@ -1378,9 +1396,7 @@ impl<'a> Executive<'a> {
                             &params.code_address,
                             &gas_cost,
                         )?;
-                        assert!(self
-                            .state
-                            .check_collateral_for_storage(self.env.timestamp));
+                        assert!(self.state.check_collateral_for_storage());
                         self.state.sub_balance(
                             &params.code_address,
                             &gas_cost,
@@ -1657,9 +1673,7 @@ mod tests {
     use crate::{
         evm::{Factory, VMType},
         machine::Machine,
-        parameters::consensus_internal::{
-            CONFLUX_TOKEN, COLLATERAL_PER_STORAGE_KEY,
-        },
+        parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
         state::{CleanupMode, State, Substate},
         statedb::StateDb,
         storage::{
@@ -1734,13 +1748,6 @@ mod tests {
                 &sender,
                 &U256::from(CONFLUX_TOKEN),
                 CleanupMode::NoEmpty,
-            )
-            .ok();
-        state
-            .deposit(
-                &sender,
-                &U256::from(CONFLUX_TOKEN),
-                1, /* duration_in_sec */
             )
             .ok();
         state
@@ -1966,7 +1973,7 @@ mod tests {
                     &BigEndianHash::from_uint(&U256::zero())
                 )
                 .unwrap(),
-            BigEndianHash::from_uint(&U256::from(0))
+            BigEndianHash::from_uint(&U256::zero())
         );
     }
 
@@ -2104,7 +2111,7 @@ mod tests {
             state.balance(&sender).unwrap(),
             U256::from(1_000_000_000_000u64)
         );
-        assert_eq!(state.staking_balance(&sender).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&sender).unwrap(), U256::zero());
 
         // everything is fine
         params.call_type = CallType::Call;
@@ -2234,7 +2241,7 @@ mod tests {
             )
             .unwrap();
         state
-            .deposit(&sender, &U256::from(1_000_000_000_000_000_000u64), 100)
+            .deposit(&sender, &U256::from(1_000_000_000_000_000_000u64))
             .unwrap();
         let FinalizationResult { gas_left, .. } = {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
@@ -2302,7 +2309,7 @@ mod tests {
         );
 
         params.call_type = CallType::Call;
-        params.value = ActionValue::Transfer(U256::from(0));
+        params.value = ActionValue::Transfer(U256::zero());
         assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
         // call with no commission privilege
         params.sender = caller3;
@@ -2393,7 +2400,7 @@ mod tests {
         };
         assert_eq!(gas_left, U256::from(62_976));
         assert_eq!(state.balance(&caller3).unwrap(), U256::from(200_000));
-        assert_eq!(state.commission_balance(&address).unwrap(), U256::from(0));
+        assert_eq!(state.commission_balance(&address).unwrap(), U256::zero());
     }
 
     #[test]
@@ -2432,8 +2439,7 @@ mod tests {
         params.gas = U256::from(100_000);
         params.gas_price = U256::from(1);
         params.code = Some(Arc::new(code));
-        params.value =
-            ActionValue::Transfer(U256::from(COLLATERAL_PER_STORAGE_KEY));
+        params.value = ActionValue::Transfer(*COLLATERAL_PER_STORAGE_KEY);
 
         let storage_manager = new_state_manager_for_unit_test();
         let mut state =
@@ -2459,27 +2465,27 @@ mod tests {
         assert_eq!(substate.contracts_created.len(), 0);
         assert_eq!(
             state.balance(&address).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
 
         state
             .add_balance(
                 &caller1,
-                &U256::from(COLLATERAL_PER_STORAGE_KEY),
+                &COLLATERAL_PER_STORAGE_KEY,
                 CleanupMode::NoEmpty,
             )
             .unwrap();
         state
             .add_balance(
                 &caller2,
-                &U256::from(COLLATERAL_PER_STORAGE_KEY),
+                &COLLATERAL_PER_STORAGE_KEY,
                 CleanupMode::NoEmpty,
             )
             .unwrap();
         state
             .add_balance(
                 &caller3,
-                &U256::from(COLLATERAL_PER_STORAGE_KEY),
+                &COLLATERAL_PER_STORAGE_KEY,
                 CleanupMode::NoEmpty,
             )
             .unwrap();
@@ -2502,7 +2508,7 @@ mod tests {
                 caller2,
             )
             .unwrap();
-        assert!(state.check_collateral_for_storage(0 /* timestamp */));
+        assert!(state.check_collateral_for_storage());
         state.discard_checkpoint();
         assert!(state
             .check_commission_privilege(
@@ -2527,12 +2533,12 @@ mod tests {
             .unwrap());
 
         params.call_type = CallType::Call;
-        params.value = ActionValue::Transfer(U256::from(0));
+        params.value = ActionValue::Transfer(U256::zero());
 
         // call with no privilege
         assert_eq!(
             state.balance(&caller3).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         params.sender = caller3;
         params.original_sender = caller3;
@@ -2541,20 +2547,20 @@ mod tests {
             ex.call(params.clone(), &mut substate).unwrap()
         };
         assert_eq!(gas_left, U256::from(94983));
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(0));
+        assert_eq!(state.balance(&caller3).unwrap(), U256::zero());
         assert_eq!(
             state.staking_balance(&caller3).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         assert_eq!(
             state.collateral_for_storage(&caller3).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
 
         // call with privilege
         assert_eq!(
             state.balance(&caller1).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         params.sender = caller1;
         params.original_sender = caller1;
@@ -2565,36 +2571,36 @@ mod tests {
         assert_eq!(gas_left, U256::from(94983));
         assert_eq!(
             state.balance(&caller1).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
-        assert_eq!(state.staking_balance(&caller1).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&caller1).unwrap(), U256::zero());
         assert_eq!(
             state.collateral_for_storage(&caller1).unwrap(),
-            U256::from(0)
+            U256::zero()
         );
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0));
+        assert_eq!(state.balance(&address).unwrap(), U256::zero());
         assert_eq!(
             state.staking_balance(&address).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         assert_eq!(
             state.collateral_for_storage(&address).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(0));
+        assert_eq!(state.balance(&caller3).unwrap(), U256::zero());
         assert_eq!(
             state.staking_balance(&caller3).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         assert_eq!(
             state.collateral_for_storage(&caller3).unwrap(),
-            U256::from(0)
+            U256::zero()
         );
 
         // another caller call with commission privilege
         assert_eq!(
             state.balance(&caller2).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         params.sender = caller2;
         params.original_sender = caller2;
@@ -2605,21 +2611,21 @@ mod tests {
         assert_eq!(gas_left, U256::from(94983));
         assert_eq!(
             state.balance(&caller2).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
-        assert_eq!(state.staking_balance(&caller2).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&caller2).unwrap(), U256::zero());
         assert_eq!(
             state.collateral_for_storage(&caller2).unwrap(),
-            U256::from(0)
+            U256::zero()
         );
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0));
+        assert_eq!(state.balance(&address).unwrap(), U256::zero());
         assert_eq!(
             state.staking_balance(&address).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         assert_eq!(
             state.collateral_for_storage(&address).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
 
         // remove privilege from caller1
@@ -2640,7 +2646,7 @@ mod tests {
             .unwrap());
         assert_eq!(
             state.balance(&caller1).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         params.sender = caller1;
         params.original_sender = caller1;
@@ -2649,23 +2655,23 @@ mod tests {
             ex.call(params.clone(), &mut substate).unwrap()
         };
         assert_eq!(gas_left, U256::from(94983));
-        assert_eq!(state.balance(&caller1).unwrap(), U256::from(0));
+        assert_eq!(state.balance(&caller1).unwrap(), U256::zero());
         assert_eq!(
             state.staking_balance(&caller1).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         assert_eq!(
             state.collateral_for_storage(&caller1).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
         assert_eq!(
             state.balance(&address).unwrap(),
-            U256::from(COLLATERAL_PER_STORAGE_KEY)
+            *COLLATERAL_PER_STORAGE_KEY,
         );
-        assert_eq!(state.staking_balance(&address).unwrap(), U256::from(0));
+        assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
         assert_eq!(
             state.collateral_for_storage(&address).unwrap(),
-            U256::from(0)
+            U256::zero()
         );
     }
 }

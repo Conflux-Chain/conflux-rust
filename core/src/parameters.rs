@@ -156,15 +156,22 @@ pub mod staking {
     use super::consensus_internal::CONFLUX_TOKEN;
     use cfx_types::U256;
 
-    /// This is the renting fee for one key/value pair in storage.
-    /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-    pub const COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / 16);
-    /// This is the scale factor for interest rate: 10^18. The interest rate per
-    /// epoch will be `interest_of_year * epoch_duration_fraction *
-    /// INTEREST_RATE_SCALE`.
-    pub const INTEREST_RATE_SCALE: U256 = U256::from(1_000_000_000_000_000_000);
-    /// This is the initial interest with scale: 0.04 * INTEREST_RATE_SCALE
-    pub const INITIAL_INTEREST_RATE: U256 = U256::from(40_000_000_000_000_000);
+    lazy_static! {
+        /// This is the renting fee for one key/value pair in storage.
+        /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / 16);
+        /// This is the scale factor for interest rate: `BLOCKS_PER_YEAR` * 100.
+        /// The actual interest rate per block will be `INITIAL_ANNUAL_INTEREST_RATE /
+        /// INTEREST_RATE_SCALE / BLOCKS_PER_YEAR`.
+        pub static ref INTEREST_RATE_SCALE: U256 = U256::from(12_614_400_000u64);
+        /// This is the initial annual interest rate with scale: `0.04 * INTEREST_RATE_SCALE`
+        pub static ref INITIAL_ANNUAL_INTEREST_RATE: U256 = U256::from(504_576_000);
+        /// This is the service change rate for withdraw, `SERVICE_CHARGE_RATE /
+        /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
+        pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
+        pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+    }
+
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 = 4;
     /// This is the number of blocks per day.
@@ -172,11 +179,7 @@ pub mod staking {
     /// This is the number of blocks per quarter.
     pub const BLOCKS_PER_QUATER: u64 = BLOCKS_PER_DAY * 91;
     /// This is the number of blocks per year.
-    pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_SECOND * 365;
-    /// This is the service change rate for withdraw, `SERVICE_CHARGE_RATE /
-    /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
-    pub const SERVICE_CHARGE_RATE: U256 = U256::from(5);
-    pub const SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+    pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
 }
 
 pub mod light {

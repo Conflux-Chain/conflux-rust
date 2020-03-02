@@ -133,7 +133,7 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         consensus_graph
-            .get_bank_balance(address, num.into())
+            .get_staking_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
             .into_future()
@@ -201,7 +201,7 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         consensus_graph
-            .get_interest_rate(epoch_num.into())
+            .get_annual_interest_rate(epoch_num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
     }

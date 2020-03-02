@@ -13,7 +13,7 @@ pub struct Account {
     pub code_hash: H256,
     pub staking_balance: U256,
     pub collateral_for_storage: U256,
-    pub bank_ar: U256,
+    pub accumulated_interest_return: U256,
 }
 
 impl Account {
@@ -24,7 +24,9 @@ impl Account {
             code_hash: account.code_hash.into(),
             staking_balance: account.staking_balance.into(),
             collateral_for_storage: account.collateral_for_storage.into(),
-            bank_ar: account.bank_ar.into(),
+            accumulated_interest_return: account
+                .accumulated_interest_return
+                .into(),
         }
     }
 }

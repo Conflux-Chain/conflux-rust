@@ -589,8 +589,9 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .expect("State exists"),
             ),
-            0.into(),
+            0.into(), /* account_start_nonce */
             self.vm.clone(),
+            start_block_number - 1, /* block_number */
         );
         let epoch_receipts = self.process_epoch_transactions(
             &mut state,
@@ -680,6 +681,8 @@ impl ConsensusExecutionHandler {
                 last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
+            state.increase_block_number();
+            assert_eq!(state.block_number(), env.number);
             block_number += 1;
             let mut accumulated_fee: U256 = 0.into();
             let mut n_invalid_nonce = 0;
@@ -965,8 +968,9 @@ impl ConsensusExecutionHandler {
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
-            0.into(),
+            0.into(), /* account_start_nonce */
             self.vm.clone(),
+            0, /* block_number */
         );
         drop(state_availability_boundary);
 
@@ -979,6 +983,7 @@ impl ConsensusExecutionHandler {
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
         };
+        assert_eq!(state.block_number(), env.number);
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
