@@ -11,7 +11,11 @@ use crate::{
 };
 use cfx_types::H256;
 use parking_lot::RwLock;
-use std::{cmp::min, collections::VecDeque, convert::TryFrom};
+use std::{
+    cmp::{max, min},
+    collections::VecDeque,
+    convert::TryFrom,
+};
 
 pub struct TotalWeightInPastMovingDelta {
     pub old: i128,
@@ -135,7 +139,7 @@ impl ConfirmationMeter {
         let finality = &self.inner.read().finality_manager;
 
         if epoch_num < finality.lowest_epoch_num {
-            return Some(MIN_MAINTAINED_RISK);
+            return Some(CONFIRMATION_METER_MIN_MAINTAINED_RISK);
         }
 
         let idx = (epoch_num - finality.lowest_epoch_num) as usize;
@@ -224,7 +228,6 @@ impl ConfirmationMeter {
         }
 
         risk = 0.000001;
-        // FIXME: We should consider the risk of generating heavy blocks
         risk
     }
 
@@ -241,14 +244,14 @@ impl ConfirmationMeter {
                 - DEFERRED_STATE_EPOCH_COUNT;
             let mut count = 0;
             while epoch_num > g_inner.cur_era_genesis_height
-                && count < MAX_NUM_MAINTAINED_RISK
+                && count < CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK
             {
                 let w_4 = self.inner.read().total_weight_in_past_2d.delta;
                 let risk = self.confirmation_risk(g_inner, w_0, w_4, epoch_num);
                 risks.push_front(risk);
                 epoch_num -= 1;
                 count += 1;
-                if risk <= MIN_MAINTAINED_RISK {
+                if risk <= CONFIRMATION_METER_MIN_MAINTAINED_RISK {
                     break;
                 }
             }
@@ -264,5 +267,82 @@ impl ConfirmationMeter {
             finality.lowest_epoch_num = epoch_num;
             finality.risks_less_than = risks;
         }
+    }
+
+    /// This is an expensive function to check whether the current tree graph
+    /// will generate adaptive block under `me` in future. This function is
+    /// used by Conflux to determine when we will remove old snapshots. If
+    /// this is true, we will avoid remove snapshots from the storage layer.
+    pub fn is_adaptive_possible(
+        &self, g_inner: &ConsensusGraphInner, me: usize,
+    ) -> bool {
+        let psi = CONFIRMATION_METER_PSI;
+        // Find the first pivot chain block whose timer diff is less than 140
+        let mut cur_height = g_inner.cur_era_stable_height;
+        let mut cur_arena_index =
+            g_inner.get_pivot_block_arena_index(cur_height);
+        while g_inner.arena[cur_arena_index]
+            .data
+            .ledger_view_timer_chain_height
+            + CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF
+            <= g_inner.arena[me].data.ledger_view_timer_chain_height
+            && cur_height < g_inner.best_epoch_number()
+        {
+            cur_height += 1;
+            cur_arena_index = g_inner.get_pivot_block_arena_index(cur_height);
+        }
+
+        if cur_height == g_inner.cur_era_stable_height {
+            return false;
+        }
+
+        let mut end_checking_height =
+            (cur_height - g_inner.cur_era_stable_height + psi - 1) / psi * psi
+                + g_inner.cur_era_stable_height;
+        // corner case, should be extremely rare
+        if end_checking_height > g_inner.best_epoch_number() {
+            end_checking_height -= psi;
+        }
+        let n = (end_checking_height - g_inner.cur_era_stable_height) / psi;
+        let total_weight = g_inner
+            .weight_tree
+            .get(g_inner.cur_era_genesis_block_arena_index);
+        let me_index =
+            g_inner.height_to_pivot_index(g_inner.arena[me].data.epoch_number);
+        let x_3 =
+            total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
+
+        let mut adaptive_risk = 0f64;
+        for i in 0..n {
+            let a_pivot_index = g_inner.height_to_pivot_index(
+                g_inner.cur_era_stable_height + i * psi as u64,
+            );
+            let b_pivot_index = g_inner.height_to_pivot_index(
+                g_inner.cur_era_stable_height + (i + 1) * psi as u64,
+            );
+            let b = g_inner.pivot_chain[b_pivot_index];
+            let y = g_inner.weight_tree.get(b);
+            let mut x_1 = 0;
+            for v in a_pivot_index..b_pivot_index {
+                let pivot = g_inner.pivot_chain[v];
+                let next_pivot = g_inner.pivot_chain[v + 1];
+                for child in &g_inner.arena[pivot].children {
+                    if *child != next_pivot {
+                        let child_subtree_weight =
+                            g_inner.weight_tree.get(*child);
+                        x_1 = max(x_1, child_subtree_weight);
+                    }
+                }
+            }
+            let x_2 = (total_weight
+                - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
+                - y;
+            let x = x_1 + x_2 + x_3;
+
+            let i_risk = 10f64.powf(-(3 * y - 2 * x - 18000) as f64 / 3500f64);
+            adaptive_risk += i_risk;
+        }
+
+        adaptive_risk > CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK
     }
 }

@@ -45,7 +45,7 @@ mod ip;
 mod ip_utils;
 mod node_database;
 pub mod node_table;
-mod service;
+pub mod service;
 mod session;
 mod session_manager;
 pub mod throttling;
@@ -86,6 +86,7 @@ pub const NODE_TAG_ARCHIVE: &str = "archive";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NetworkConfiguration {
+    pub is_consortium: bool,
     /// Network identifier
     pub id: u64,
     /// Directory path to store general network configuration. None means
@@ -143,6 +144,7 @@ impl Default for NetworkConfiguration {
 impl NetworkConfiguration {
     pub fn new() -> Self {
         NetworkConfiguration {
+            is_consortium: false,
             id: 1,
             config_path: Some("./net_config".to_string()),
             listen_address: None,
@@ -249,6 +251,8 @@ pub enum UpdateNodeOperation {
 
 pub trait NetworkContext {
     fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
+
+    fn get_protocol(&self) -> ProtocolId;
 
     fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool>;
 

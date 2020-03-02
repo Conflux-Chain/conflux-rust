@@ -12,6 +12,11 @@ use crate::{
         random, Error, ErrorKind,
     },
 };
+use keccak_hash::keccak;
+use libra_types::{
+    account_address::AccountAddress, crypto_proxies::ValidatorVerifier,
+};
+use network::node_table::NodeId;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use std::{
@@ -23,6 +28,10 @@ use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
 pub struct SynchronizationPeerState {
     pub id: PeerId,
+    pub node_id: NodeId,
+    // This field is only used for consortium setup.
+    // Whether this node is a validator.
+    pub is_validator: bool,
     pub protocol_version: u8,
     pub genesis_hash: H256,
     pub best_epoch: u64,
@@ -54,22 +63,60 @@ pub type SynchronizationPeers =
     HashMap<PeerId, Arc<RwLock<SynchronizationPeerState>>>;
 
 pub struct SynchronizationState {
+    is_consortium: bool,
     is_full_node: bool,
     is_dev_mode: bool,
     pub peers: RwLock<SynchronizationPeers>,
+    pub validator_set: RwLock<HashSet<AccountAddress>>,
     pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
 }
 
 impl SynchronizationState {
-    pub fn new(is_full_node: bool, is_dev_mode: bool) -> Self {
+    pub fn new(
+        is_consortium: bool, is_full_node: bool, is_dev_mode: bool,
+    ) -> Self {
         SynchronizationState {
+            is_consortium,
             is_full_node,
             is_dev_mode,
             peers: Default::default(),
+            validator_set: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
         }
+    }
+
+    pub fn is_consortium(&self) -> bool { self.is_consortium }
+
+    pub fn update_validator_info(
+        &self, validators: &ValidatorVerifier,
+    ) -> HashSet<NodeId> {
+        let peers = self.peers.write();
+        let mut validator_set = self.validator_set.write();
+
+        let mut node_set = HashSet::new();
+
+        // update validator set
+        validator_set.clear();
+        for node_id in validators.get_ordered_account_addresses_iter() {
+            validator_set.insert(node_id);
+            node_set
+                .insert(*validators.get_public_key(&node_id).unwrap().public());
+        }
+
+        for (_, peer) in peers.iter() {
+            let mut peer = peer.write();
+            let peer_id = AccountAddress::new(keccak(&peer.node_id).into());
+            peer.is_validator = if validators.get_public_key(&peer_id).is_some()
+            {
+                true
+            } else {
+                false
+            };
+        }
+
+        node_set
     }
 
     pub fn on_status_in_handshaking(&self, peer: PeerId) -> bool {
@@ -79,11 +126,21 @@ impl SynchronizationState {
     }
 
     pub fn peer_connected(
-        &self, peer: PeerId, state: SynchronizationPeerState,
+        &self, peer: PeerId, mut state: SynchronizationPeerState,
     ) {
-        self.peers
-            .write()
-            .insert(peer, Arc::new(RwLock::new(state)));
+        let mut peers = self.peers.write();
+        if self.is_consortium() {
+            let validator_set = self.validator_set.read();
+            let peer_id = AccountAddress::new(keccak(&state.node_id).into());
+            if validator_set.contains(&peer_id) {
+                state.is_validator = true;
+            } else {
+                state.is_validator = false;
+            }
+            peers.insert(peer, Arc::new(RwLock::new(state)));
+        } else {
+            peers.insert(peer, Arc::new(RwLock::new(state)));
+        }
     }
 
     pub fn contains_peer(&self, peer: &PeerId) -> bool {
@@ -233,6 +290,12 @@ impl<'a> PeerFilter<'a> {
 
             if check_state {
                 let mut peer = peer.write();
+
+                if syn.is_consortium() {
+                    if !peer.is_validator {
+                        continue;
+                    }
+                }
 
                 if let Some(ref ids) = self.throttle_msg_ids {
                     if ids

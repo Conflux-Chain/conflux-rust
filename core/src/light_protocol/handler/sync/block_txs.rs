@@ -9,7 +9,7 @@ use super::{
     Txs,
 };
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, BlockTxsWithHash, GetBlockTxs},
@@ -58,7 +58,7 @@ pub struct BlockTxs {
 
 impl BlockTxs {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, txs: Arc<Txs>,
     ) -> Self
     {
