@@ -58,7 +58,7 @@ impl AsAny for SnapshotChunkRequest {
 
 impl Request for SnapshotChunkRequest {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
-        conf.blocks_request_timeout
+        conf.snapshot_chunk_request_timeout
     }
 
     fn on_removed(&self, _inflight_keys: &KeyContainer) {}
@@ -67,7 +67,9 @@ impl Request for SnapshotChunkRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> { None }
+    fn resend(&self) -> Option<Box<dyn Request>> {
+        Some(Box::new(self.clone()))
+    }
 
     fn required_capability(&self) -> Option<DynamicCapability> { None }
 }
