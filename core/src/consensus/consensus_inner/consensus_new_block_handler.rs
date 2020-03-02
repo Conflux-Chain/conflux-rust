@@ -1518,7 +1518,6 @@ impl ConsensusNewBlockHandler {
             if confirmed_height
                 > self.data_man.state_availability_boundary.read().lower_bound
             {
-                // FIXME: how about archive node?
                 self.data_man
                     .storage_manager
                     .get_storage_manager()

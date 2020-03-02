@@ -7,6 +7,7 @@ use crate::{
     consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
+    parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
     pow::ProofOfWorkConfig,
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -1039,18 +1040,23 @@ impl SynchronizationGraph {
     }
 
     pub fn try_remove_old_era_blocks_from_disk(&self) {
-        let mut num_of_blocks_to_remove = 2;
+        let mut num_of_blocks_to_remove = OLD_ERA_BLOCK_GC_BATCH_SIZE;
         while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
-            // only full node should remove blocks in old eras
+            // only full node should remove blocks and receipts in old eras
             if self.is_full_node {
-                // TODO: remove state root
-                // remove block header in memory cache
-                self.data_man
-                    .remove_block_header(&hash, false /* remove_db */);
                 // remove block body in memory cache and db
                 self.data_man
                     .remove_block_body(&hash, true /* remove_db */);
+                self.data_man
+                    .remove_block_results(&hash, true /* remove_db */);
             }
+            // All nodes will not maintain old era states, so related data can
+            // be removed safely. The in-memory data is already
+            // removed in `make_checkpoint`.
+            // TODO Only call remove for executed epochs.
+            self.data_man
+                .remove_epoch_execution_commitment_from_db(&hash);
+            self.data_man.remove_epoch_execution_context_from_db(&hash);
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
                 break;
