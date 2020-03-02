@@ -4,7 +4,7 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
-    consensus::{ConsensusGraphInner, SharedConsensusGraph},
+    consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
     pow::ProofOfWorkConfig,
@@ -167,8 +167,12 @@ impl SynchronizationGraphInner {
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
         };
+        let genesis_hash = genesis_header.hash();
         let genesis_block_index = inner.insert(genesis_header);
-        debug!("genesis_block_index in sync graph: {}", genesis_block_index);
+        debug!(
+            "genesis block {:?} has index {} in sync graph",
+            genesis_hash, genesis_block_index
+        );
 
         inner.old_era_blocks_frontier.push_back(genesis_block_index);
         inner
@@ -955,7 +959,7 @@ impl SynchronizationGraph {
         is_full_node: bool,
     ) -> Self
     {
-        let data_man = consensus.data_man.clone();
+        let data_man = consensus.get_data_manager().clone();
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
             .block_header_by_hash(&genesis_hash)
@@ -977,7 +981,7 @@ impl SynchronizationGraph {
             verification_config,
             sync_config,
             consensus: consensus.clone(),
-            statistics: consensus.statistics.clone(),
+            statistics: consensus.get_statistics().clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
             is_full_node,
             notifications,
@@ -1021,14 +1025,16 @@ impl SynchronizationGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.consensus.txpool.get_to_be_propagated_transactions()
+        self.consensus
+            .get_tx_pool()
+            .get_to_be_propagated_transactions()
     }
 
     pub fn set_to_propagate_trans(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         self.consensus
-            .txpool
+            .get_tx_pool()
             .set_to_be_propagated_transactions(transactions);
     }
 
@@ -1073,10 +1079,7 @@ impl SynchronizationGraph {
             );
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
-        self.consensus
-            .inner
-            .write()
-            .set_initial_sequence_number(genesis_seq_num);
+        self.consensus.set_initial_sequence_number(genesis_seq_num);
         let genesis_header =
             self.data_man.block_header_by_hash(&genesis_hash).unwrap();
         debug!(
@@ -1190,35 +1193,17 @@ impl SynchronizationGraph {
         );
 
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        if !header_only {
+        if !header_only && !self.is_consortium() {
             // Rebuild pivot chain state info.
             self.consensus.construct_pivot_state();
         }
+        self.consensus.update_best_info();
         self.consensus
-            .update_best_info(&*self.consensus.inner.read());
-        self.consensus
-            .txpool
+            .get_tx_pool()
             .notify_new_best_info(self.consensus.best_info())
             // FIXME: propogate error.
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
-    }
-
-    pub fn check_mining_adaptive_block(
-        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        referees: &Vec<H256>, difficulty: &U256,
-    ) -> bool
-    {
-        if !self.is_consortium() {
-            self.consensus.check_mining_adaptive_block(
-                inner,
-                parent_hash,
-                referees,
-                difficulty,
-            )
-        } else {
-            false
-        }
     }
 
     /// Return None if `hash` is not in sync graph
@@ -1434,7 +1419,7 @@ impl SynchronizationGraph {
                 < self.consensus.current_era_genesis_seq_num()
                 || info.get_instance_id() == self.data_man.get_instance_id();
             if already_processed {
-                if need_to_verify {
+                if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
                     VerificationConfig::compute_header_pow_quality(header);
@@ -1452,14 +1437,17 @@ impl SynchronizationGraph {
             return (true, Vec::new());
         }
 
+        // skip check for consortium currently
+        debug!("is_consortium={:?}", self.is_consortium());
         let verification_passed = if need_to_verify {
-            !(self.parent_or_referees_invalid(header)
-                || self
-                    .verification_config
-                    .verify_header_params(header)
-                    .is_err())
+            self.is_consortium()
+                || !(self.parent_or_referees_invalid(header)
+                    || self
+                        .verification_config
+                        .verify_header_params(header)
+                        .is_err())
         } else {
-            if !bench_mode {
+            if !bench_mode && !self.is_consortium() {
                 self.verification_config
                     .verify_pow(header)
                     .expect("local mined block should pass this check!");

@@ -3,7 +3,7 @@ import eth_utils
 import rlp
 
 from .config import default_config
-from .transactions import Transaction
+from .transactions import Transaction, UnsignedTransaction
 from .filter import Filter
 from .utils import privtoaddr, sha3_256
 
@@ -201,7 +201,7 @@ class RpcClient:
             nonce = self.get_nonce(sender)
 
         action = eth_utils.decode_hex(receiver)
-        tx = Transaction(nonce, gas_price, gas, action, value, data)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data)
         
         if sign:
             return tx.sign(priv_key)
@@ -220,7 +220,7 @@ class RpcClient:
 
         action = eth_utils.decode_hex(receiver)
         data = eth_utils.decode_hex(data_hex)
-        tx = Transaction(nonce, gas_price, gas, action, value, data)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data)
 
         return tx.sign(priv_key)
 

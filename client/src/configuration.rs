@@ -5,6 +5,10 @@
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
 use cfxcore::{
+    alliance_tree_graph::consensus::{
+        consensus_inner::ConsensusInnerConfig as TreeGraphConsensusInnerConfig,
+        ConsensusConfig as TreeGraphConsensusConfig,
+    },
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
@@ -112,29 +116,33 @@ build_config! {
         (port, (Option<u16>), Some(32323))
 
         // Network parameters section.
-        (blocks_request_timeout_ms, (u64), 60_000)
+        (heartbeat_period_interval_ms, (u64), 30_000)
+        (blocks_request_timeout_ms, (u64), 20_000)
         (check_request_period_ms, (u64), 1000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
         (data_propagate_enabled, (bool), false)
         (data_propagate_interval_ms, (u64), 1000)
         (data_propagate_size, (usize), 1000)
+        (demote_peer_for_timeout, (bool), false)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
-        (headers_request_timeout_ms, (u64), 30_000)
+        (headers_request_timeout_ms, (u64), 10_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (min_peers_propagation, (usize), 8)
+        (max_allowed_timeout_in_observing_period, (u64), 10)
         (max_inflight_request_count, (u64), 64)
         (max_peers_propagation, (usize), 128)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
-        (snapshot_candidate_request_timeout_ms, (u64), 30_000)
+        (snapshot_candidate_request_timeout_ms, (u64), 10_000)
         (snapshot_chunk_request_timeout_ms, (u64), 30_000)
         (snapshot_manifest_request_timeout_ms, (u64), 30_000)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (throttling_conf, (Option<String>), None)
+        (timeout_observing_period_s, (u64), 600)
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
 
@@ -178,9 +186,11 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (is_consortium, (bool), false)
+        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
         (ledger_cache_size, (Option<usize>), Some(1024))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (max_download_state_peers, (usize), 8)
+        (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
     }
     {
         (
@@ -224,6 +234,7 @@ impl Configuration {
             None => NetworkConfiguration::default(),
         };
 
+        network_config.is_consortium = self.raw_conf.is_consortium;
         network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
@@ -305,6 +316,23 @@ impl Configuration {
             NUM_COLUMNS.clone(),
             self.raw_conf.rocksdb_disable_wal,
         )
+    }
+
+    pub fn tg_consensus_config(&self) -> TreeGraphConsensusConfig {
+        TreeGraphConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            inner_conf: TreeGraphConsensusInnerConfig {
+                era_epoch_count: self.raw_conf.era_epoch_count,
+                enable_state_expose: self.raw_conf.enable_state_expose,
+                candidate_pivot_waiting_timeout_ms: self
+                    .raw_conf
+                    .candidate_pivot_waiting_timeout_ms,
+            },
+            bench_mode: false,
+        }
     }
 
     pub fn consensus_config(&self) -> ConsensusConfig {
@@ -414,6 +442,9 @@ impl Configuration {
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
             ),
+            heartbeat_period_interval: Duration::from_millis(
+                self.raw_conf.heartbeat_period_interval_ms,
+            ),
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,
             ),
@@ -461,6 +492,13 @@ impl Configuration {
                 self.raw_conf.snapshot_chunk_request_timeout_ms,
             ),
             chunk_size_byte: self.raw_conf.chunk_size_byte,
+            timeout_observing_period_s: self
+                .raw_conf
+                .timeout_observing_period_s,
+            max_allowed_timeout_in_observing_period: self
+                .raw_conf
+                .max_allowed_timeout_in_observing_period,
+            demote_peer_for_timeout: self.raw_conf.demote_peer_for_timeout,
         }
     }
 

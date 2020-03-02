@@ -6,19 +6,25 @@ use crate::{
     message::RequestId,
     sync::{
         message::{Context, GetBlockTxnResponse, Handleable, KeyContainer},
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable, Clone)]
 pub struct GetBlockTxn {
     pub request_id: RequestId,
     pub block_hash: H256,
     pub indexes: Vec<usize>,
+}
+
+impl AsAny for GetBlockTxn {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetBlockTxn {

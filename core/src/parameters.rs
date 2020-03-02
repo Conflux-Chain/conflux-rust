@@ -31,8 +31,15 @@ pub mod consensus_internal {
     pub const REWARD_EPOCH_COUNT: u64 = 12;
     pub const ANTICONE_PENALTY_UPPER_EPOCH_COUNT: u64 = 10;
     pub const ANTICONE_PENALTY_RATIO: u64 = 100;
-    /// 900 Conflux tokens
-    pub const BASE_MINING_REWARD: u64 = 900;
+    // The initial base mining reward in uCFX.
+    pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 11_300_000;
+    // The ultimate base mining reward in uCFX.
+    pub const ULTIMATE_BASE_MINING_REWARD_IN_UCFX: u64 = 2_030_000;
+    // The average number of blocks mined per quarter.
+    pub const MINED_BLOCK_COUNT_PER_QUARTER: u64 = 15768000;
+    pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
+    // How many quarters that the mining reward keep decaying.
+    pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
     /// The unit of one Conflux token: 10 ** 18
     pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
@@ -49,10 +56,19 @@ pub mod consensus_internal {
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
     /// This is the minimum risk that the confirmation meter tries to maintain.
-    pub const MIN_MAINTAINED_RISK: f64 = 0.000001;
+    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.000001;
     /// The maximum number of epochs that the confirmation meter tries to
     /// maintain internally.
-    pub const MAX_NUM_MAINTAINED_RISK: usize = 100;
+    pub const CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK: usize = 100;
+    /// The minimum timer diff value for the adaptive test in confirmation meter
+    /// to consider
+    pub const CONFIRMATION_METER_ADAPTIVE_TEST_TIMER_DIFF: u64 = 140;
+    /// The batch step in the confirmation meter to do the adaptive test
+    pub const CONFIRMATION_METER_PSI: u64 = 30;
+    /// The maximum value of adaptive block generation risk that a confirmation
+    /// meter is going to consider safe to assume no adaptive blocks in the
+    /// near future.
+    pub const CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK: f64 = 0.0000001;
 }
 
 pub mod sync {
@@ -107,13 +123,20 @@ pub mod pow {
     pub const DIFFICULTY_ADJUSTMENT_FACTOR: usize = 2;
     pub const DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD: u64 = 5000;
     // Time unit is micro-second (usec)
-    pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 1000000;
-    pub const INITIAL_DIFFICULTY: u64 = 20_000_000;
+    // We target two blocks per second. This strikes a good balance between the
+    // growth of the metadata, the memory consumption of the consensus graph,
+    // and the confirmation speed
+    pub const TARGET_AVERAGE_BLOCK_GENERATION_PERIOD: u64 = 500000;
+    pub const INITIAL_DIFFICULTY: u64 = 10_000_000;
 }
 
 pub mod block {
     // The maximum block size limit in bytes
-    pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 800 * 1024;
+    // Consider that the simple payment transaction consumes only 100 bytes per
+    // second. This would allow us to have 2000 simple payment transactions
+    // per block. With two blocks per second, we will have 4000TPS at the
+    // peak with only simple payment, which is good enough for now.
+    pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
     // The maximum number of referees allowed for each block
     pub const REFEREE_BOUND: usize = 200;
     // The maximal length of custom data in block header

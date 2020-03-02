@@ -8,7 +8,7 @@ use crate::{
         request_manager::RequestMessage, Error, SynchronizationProtocolHandler,
     },
 };
-use network::{NetworkContext, PeerId};
+use network::{node_table::NodeId, NetworkContext, PeerId};
 
 pub struct Context<'a> {
     pub io: &'a dyn NetworkContext,
@@ -29,6 +29,8 @@ impl<'a> Context<'a> {
         response.send(self.io, self.peer)?;
         Ok(())
     }
+
+    pub fn node_id(&self) -> NodeId { self.io.get_peer_node_id(self.peer) }
 }
 
 // todo merge with Request and RequestContext!!!

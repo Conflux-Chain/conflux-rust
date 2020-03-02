@@ -10,6 +10,7 @@ use crate::{
     rpc::RpcBlock,
 };
 use cfx_types::H256;
+use cfxcore::ConsensusGraphTrait;
 use parking_lot::{Condvar, Mutex};
 use primitives::Block;
 use serde_json::Value;

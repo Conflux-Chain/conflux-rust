@@ -13,6 +13,7 @@ use ethkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
     Transaction as PrimitiveTransaction, TransactionWithSignature,
+    TransactionWithSignatureSerializePart,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
@@ -74,20 +75,22 @@ impl Transaction {
 
     pub fn into_signed(self) -> Result<SignedTransaction, Error> {
         let tx_with_sig = TransactionWithSignature {
-            unsigned: PrimitiveTransaction {
-                nonce: self.nonce.into(),
-                gas_price: self.gas_price.into(),
-                gas: self.gas.into(),
-                action: match self.to {
-                    None => Action::Create,
-                    Some(address) => Action::Call(address.into()),
+            transaction: TransactionWithSignatureSerializePart {
+                unsigned: PrimitiveTransaction {
+                    nonce: self.nonce.into(),
+                    gas_price: self.gas_price.into(),
+                    gas: self.gas.into(),
+                    action: match self.to {
+                        None => Action::Create,
+                        Some(address) => Action::Call(address.into()),
+                    },
+                    value: self.value.into(),
+                    data: self.data.into(),
                 },
-                value: self.value.into(),
-                data: self.data.into(),
+                v: self.v.as_usize() as u8,
+                r: self.r.into(),
+                s: self.s.into(),
             },
-            v: self.v.as_usize() as u8,
-            r: self.r.into(),
-            s: self.s.into(),
             hash: self.hash.into(),
             rlp_size: None,
         };

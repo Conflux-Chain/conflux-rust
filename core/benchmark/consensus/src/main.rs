@@ -8,7 +8,10 @@ use cfxcore::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     cache_manager::CacheManager,
-    consensus::{ConsensusConfig, ConsensusGraph, ConsensusInnerConfig},
+    consensus::{
+        ConsensusConfig, ConsensusGraph, ConsensusGraphTrait,
+        ConsensusInnerConfig,
+    },
     consensus_parameters::*,
     db::NUM_COLUMNS,
     pow::ProofOfWorkConfig,
