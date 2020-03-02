@@ -40,10 +40,6 @@ pub struct Log {
     /// Log Index in Transaction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_log_index: Option<U256>,
-
-    /// Whether Log Type is Removed
-    #[serde(default)]
-    pub removed: bool,
 }
 
 impl From<LocalizedLogEntry> for Log {
@@ -58,7 +54,6 @@ impl From<LocalizedLogEntry> for Log {
             transaction_index: Some(e.transaction_index.into()),
             log_index: Some(e.log_index.into()),
             transaction_log_index: Some(e.transaction_log_index.into()),
-            removed: false,
         }
     }
 }
@@ -75,7 +70,6 @@ impl From<LogEntry> for Log {
             transaction_index: None,
             log_index: None,
             transaction_log_index: None,
-            removed: false,
         }
     }
 }
@@ -88,7 +82,7 @@ mod tests {
 
     #[test]
     fn log_serialization() {
-        let s = r#"{"address":"0x33990122638b9132ca29c723bdf037f1a891a70c","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1","removed":false}"#;
+        let s = r#"{"address":"0x33990122638b9132ca29c723bdf037f1a891a70c","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"}"#;
 
         let log = Log {
             address: H160::from_str("33990122638b9132ca29c723bdf037f1a891a70c").unwrap(),
@@ -103,7 +97,6 @@ mod tests {
             transaction_index: Some(U256::default()),
             transaction_log_index: Some(1.into()),
             log_index: Some(U256::from(1)),
-            removed: false,
         };
 
         let serialized = serde_json::to_string(&log).unwrap();

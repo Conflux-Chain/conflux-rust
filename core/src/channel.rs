@@ -71,7 +71,7 @@ impl<T: Clone> Channel<T> {
             match send.send(t.clone()) {
                 Ok(_) => sent = true,
                 Err(_e) => {
-                    error!(
+                    warn!(
                         "Channel {}::{} dropped without unsubscribe",
                         self.name, id
                     );
@@ -89,13 +89,15 @@ impl<T: Clone> Channel<T> {
 }
 
 pub struct Notifications {
-    pub new_block_hashes: Channel<(H256, bool)>,
+    pub new_block_hashes: Arc<Channel<(H256, bool)>>,
+    pub epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
 impl Notifications {
     pub fn init() -> Arc<Self> {
         Arc::new(Notifications {
-            new_block_hashes: Channel::new("new-block-hashes"),
+            new_block_hashes: Arc::new(Channel::new("new-block-hashes")),
+            epochs_ordered: Arc::new(Channel::new("epochs-executed")),
         })
     }
 }

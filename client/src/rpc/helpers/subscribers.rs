@@ -83,7 +83,7 @@ impl<T> Default for Subscribers<T> {
 }
 
 impl<T> Subscribers<T> {
-    fn next_id(&mut self) -> Id {
+    pub fn next_id(&mut self) -> Id {
         let data = H64::random_using(&mut self.rand);
         Id(data)
     }
@@ -112,25 +112,29 @@ impl<T> Subscribers<T> {
 
 impl<T> Subscribers<Sink<T>> {
     /// Assigns id and adds a subscriber to the list.
-    pub fn push(&mut self, sub: Subscriber<T>) {
+    pub fn push(&mut self, sub: Subscriber<T>) -> Id {
         let id = self.next_id();
         if let Ok(sink) = sub.assign_id(SubscriptionId::String(id.as_string()))
         {
             debug!(target: "pubsub", "Adding subscription id={:?}", id);
-            self.subscriptions.insert(id, sink);
+            self.subscriptions.insert(id.clone(), sink);
         }
+
+        id
     }
 }
 
 impl<T, V> Subscribers<(Sink<T>, V)> {
     /// Assigns id and adds a subscriber to the list.
-    pub fn push(&mut self, sub: Subscriber<T>, val: V) {
+    pub fn push(&mut self, sub: Subscriber<T>, val: V) -> Id {
         let id = self.next_id();
         if let Ok(sink) = sub.assign_id(SubscriptionId::String(id.as_string()))
         {
             debug!(target: "pubsub", "Adding subscription id={:?}", id);
-            self.subscriptions.insert(id, (sink, val));
+            self.subscriptions.insert(id.clone(), (sink, val));
         }
+
+        id
     }
 }
 

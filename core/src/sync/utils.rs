@@ -152,6 +152,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         enable_state_expose: false,
         is_consortium: false,
     };
+    let notifications = Notifications::init();
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
@@ -173,6 +174,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
+        notifications.clone(),
     ));
 
     let verification_config = VerificationConfig::new(true);
@@ -181,7 +183,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         verification_config,
         pow_config,
         sync_config,
-        Notifications::init(),
+        notifications,
         false,
     ));
 
