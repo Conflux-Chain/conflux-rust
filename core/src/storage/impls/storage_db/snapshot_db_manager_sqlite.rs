@@ -188,10 +188,7 @@ impl SnapshotDbManagerSqlite {
         let maybe_old_snapshot_db = SnapshotDbSqlite::open(
             &snapshot_path,
             /* readonly = */ true,
-            Self::update_ref_count_open(
-                &self.open_ref_count_and_to_destroy,
-                &snapshot_path,
-            ),
+            &self.open_ref_count_and_to_destroy,
         )?;
         let mut old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
@@ -258,10 +255,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     // direct merge the first snapshot
                     snapshot_db = Self::SnapshotDb::create(
                         &temp_db_path,
-                        Self::update_ref_count_open(
-                            &self.open_ref_count_and_to_destroy,
-                            &temp_db_path,
-                        ),
+                        &self.open_ref_count_and_to_destroy,
                     )?;
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge()?
@@ -277,10 +271,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         snapshot_db = Self::SnapshotDb::open(
                             &temp_db_path,
                             /* readonly = */ false,
-                            Self::update_ref_count_open(
-                                &self.open_ref_count_and_to_destroy,
-                                &temp_db_path,
-                            ),
+                            &self.open_ref_count_and_to_destroy,
                         )?
                         .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
 
@@ -293,10 +284,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     } else {
                         snapshot_db = Self::SnapshotDb::create(
                             &temp_db_path,
-                            Self::update_ref_count_open(
-                                &self.open_ref_count_and_to_destroy,
-                                &temp_db_path,
-                            ),
+                            &self.open_ref_count_and_to_destroy,
                         )?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
@@ -328,10 +316,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             Self::SnapshotDb::open(
                 &path,
                 /* readonly = */ true,
-                Self::update_ref_count_open(
-                    &self.open_ref_count_and_to_destroy,
-                    &path,
-                ),
+                &self.open_ref_count_and_to_destroy,
             )
         }
     }
@@ -362,10 +347,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         );
         Self::SnapshotDb::create(
             &temp_db_path,
-            Self::update_ref_count_open(
-                &self.open_ref_count_and_to_destroy,
-                &temp_db_path,
-            ),
+            &self.open_ref_count_and_to_destroy,
         )
     }
 

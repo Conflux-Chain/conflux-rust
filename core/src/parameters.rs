@@ -126,6 +126,13 @@ pub mod sync {
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
     pub const DEFAULT_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
+
+    /// The batch size of old-era blocks garbage-collected from database for
+    /// each BLOCK_CACHE_GC_TIMER timer trigger.
+    /// Note that the average block removing rate should be greater than the
+    /// block generation rate, otherwise `ConsensusInner.old_era_block_set`
+    /// will keep growing.
+    pub const OLD_ERA_BLOCK_GC_BATCH_SIZE: usize = 50;
 }
 
 pub mod pow {

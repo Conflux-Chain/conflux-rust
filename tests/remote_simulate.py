@@ -24,9 +24,6 @@ class RemoteSimulate(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.rpc_timewait = 60
         self.num_nodes = 1
-        self.conf_parameters = {
-            "log_level": "\"debug\"",
-        }
 
     def add_options(self, parser:ArgumentParser):
         parser.add_argument(

@@ -1036,14 +1036,6 @@ impl ConsensusGraphInner {
         let parent_arena_index = self.arena[arena_index].parent;
         assert!(*self.pivot_chain.last().unwrap() == parent_arena_index);
         self.candidate_pivot_tree.make_root(arena_index);
-        self.data_man.insert_epoch_block_hash_to_db(
-            self.arena[arena_index].height,
-            block_hash,
-        );
-        self.data_man.insert_block_height_to_db(
-            block_hash,
-            self.arena[arena_index].height,
-        );
         self.new_pivot(arena_index, true /* persist_epoch */);
     }
 
