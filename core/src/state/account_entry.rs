@@ -318,6 +318,27 @@ impl OverlayAccount {
         &self.withdrawable_staking_balance
     }
 
+    #[cfg(test)]
+    pub fn deposit_list(&self) -> &Vec<DepositInfo> { &self.deposit_list }
+
+    #[cfg(test)]
+    pub fn staking_vote_list(&self) -> &Vec<StakingVoteInfo> {
+        &self.staking_vote_list
+    }
+
+    #[cfg(test)]
+    pub fn storage_changes(&self) -> &HashMap<H256, H256> {
+        &self.storage_changes
+    }
+
+    #[cfg(test)]
+    pub fn ownership_changes(&self) -> &HashMap<H256, Address> {
+        &self.ownership_changes
+    }
+
+    #[cfg(test)]
+    pub fn reset_storage(&self) -> bool { self.reset_storage }
+
     pub fn nonce(&self) -> &U256 { &self.nonce }
 
     pub fn code_hash(&self) -> H256 { self.code_hash.clone() }
@@ -339,6 +360,8 @@ impl OverlayAccount {
 
     pub fn is_null(&self) -> bool {
         self.balance.is_zero()
+            && self.staking_balance.is_zero()
+            && self.collateral_for_storage.is_zero()
             && self.nonce.is_zero()
             && self.code_hash == KECCAK_EMPTY
     }
@@ -550,11 +573,12 @@ impl OverlayAccount {
                 db,
                 &self.address,
                 key,
+                true, /* cache_ownership */
             )
         }
     }
 
-    /// TODO: Remove this function since it is not used outside.
+    #[cfg(test)]
     pub fn original_storage_at(
         &self, db: &StateDb, key: &H256,
     ) -> DbResult<H256> {
@@ -567,13 +591,14 @@ impl OverlayAccount {
             db,
             &self.address,
             key,
+            false, /* cache_ownership */
         )
     }
 
     fn get_and_cache_storage(
         storage_cache: &mut HashMap<H256, H256>,
         ownership_cache: &mut HashMap<H256, Option<Address>>, db: &StateDb,
-        address: &Address, key: &H256,
+        address: &Address, key: &H256, cache_ownership: bool,
     ) -> DbResult<H256>
     {
         assert!(!ownership_cache.contains_key(key));
@@ -585,11 +610,15 @@ impl OverlayAccount {
             .expect("get_and_cache_storage failed")
         {
             storage_cache.insert(*key, value.value);
-            ownership_cache.insert(*key, Some(value.owner));
+            if cache_ownership {
+                ownership_cache.insert(*key, Some(value.owner));
+            }
             Ok(value.value)
         } else {
             storage_cache.insert(key.clone(), H256::zero());
-            ownership_cache.insert(*key, None);
+            if cache_ownership {
+                ownership_cache.insert(*key, None);
+            }
             Ok(H256::zero())
         }
     }
@@ -614,6 +643,7 @@ impl OverlayAccount {
         self.staking_balance = other.staking_balance;
         self.withdrawable_staking_balance = other.withdrawable_staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
+        self.accumulated_interest_return = other.accumulated_interest_return;
         self.deposit_list = other.deposit_list;
         self.staking_vote_list = other.staking_vote_list;
         self.reset_storage = other.reset_storage;
@@ -638,6 +668,7 @@ impl OverlayAccount {
             db,
             &self.address,
             key,
+            true, /* cache_ownership */
         )
         .ok();
         self.ownership_cache
@@ -658,6 +689,12 @@ impl OverlayAccount {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
+        println!(
+            "reset_storage={:?} ownership_changes={:?} ownership_cache={:?}",
+            self.reset_storage,
+            ownership_changes,
+            self.ownership_cache.borrow().clone()
+        );
         for (k, v) in ownership_changes {
             let cur_value_is_zero = self
                 .storage_changes
@@ -669,6 +706,7 @@ impl OverlayAccount {
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
             let original_ownership_opt = self.original_ownership_at(db, &k);
+            println!("k={:?} v={:?} ori={:?}", k, v, original_ownership_opt);
             if let Some(original_ownership) = original_ownership_opt {
                 if v == original_ownership {
                     ownership_changed = false;
@@ -700,6 +738,10 @@ impl OverlayAccount {
 
     pub fn commit(&mut self, db: &mut StateDb) -> DbResult<()> {
         if self.reset_storage {
+            // FIXME: We should consider ownership reset during storage reset.
+            // FIXME: In current implementation, storage reset will only happen
+            // FIXME: on contract creation. And in this case, the storage in
+            // FIXME: disk should be empty. So we should not worry too much now.
             db.delete_all(StorageKey::new_storage_root_key(&self.address))?;
             db.delete_all(StorageKey::new_code_root_key(&self.address))?;
             self.reset_storage = false;
@@ -819,539 +861,4 @@ impl AccountEntry {
     pub fn exists_and_is_null(&self) -> bool {
         self.account.as_ref().map_or(false, |acc| acc.is_null())
     }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-
-    #[test]
-    fn test_overlay_account_create() {
-        let address = Address::zero();
-        let account = Account {
-            address,
-            balance: 0.into(),
-            nonce: 0.into(),
-            code_hash: KECCAK_EMPTY,
-            staking_balance: 0.into(),
-            collateral_for_storage: 0.into(),
-            accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
-        };
-        // test new from account 1
-        let overlay_account = OverlayAccount::new(&address, account, 0);
-        assert!(overlay_account.deposit_list.is_empty());
-        assert!(overlay_account.staking_vote_list.is_empty());
-        assert_eq!(overlay_account.address, address);
-        assert_eq!(overlay_account.balance, 0.into());
-        assert_eq!(overlay_account.withdrawable_staking_balance, 0.into());
-        assert_eq!(overlay_account.nonce, 0.into());
-        assert_eq!(overlay_account.staking_balance, 0.into());
-        assert_eq!(overlay_account.collateral_for_storage, 0.into());
-        assert_eq!(overlay_account.accumulated_interest_return, 0.into());
-        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
-        assert_eq!(overlay_account.reset_storage, false);
-        let account = Account {
-            address,
-            balance: 101.into(),
-            nonce: 55.into(),
-            code_hash: KECCAK_EMPTY,
-            staking_balance: 11111.into(),
-            collateral_for_storage: 455.into(),
-            accumulated_interest_return: 2.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
-        };
-
-        // test new from account 2
-        let overlay_account = OverlayAccount::new(&address, account, 1);
-        assert!(overlay_account.deposit_list.is_empty());
-        assert!(overlay_account.staking_vote_list.is_empty());
-        assert_eq!(overlay_account.address, address);
-        assert_eq!(overlay_account.balance, 101.into());
-        assert_eq!(overlay_account.nonce, 55.into());
-        assert_eq!(overlay_account.staking_balance, 11111.into());
-        assert_eq!(overlay_account.withdrawable_staking_balance, 11111.into());
-        assert_eq!(overlay_account.collateral_for_storage, 455.into());
-        assert_eq!(overlay_account.accumulated_interest_return, 2.into());
-        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
-        assert_eq!(overlay_account.reset_storage, false);
-
-        // test new basic
-        let overlay_account =
-            OverlayAccount::new_basic(&address, 1011.into(), 12345.into());
-        assert!(overlay_account.deposit_list.is_empty());
-        assert!(overlay_account.staking_vote_list.is_empty());
-        assert_eq!(overlay_account.address, address);
-        assert_eq!(overlay_account.balance, 1011.into());
-        assert_eq!(overlay_account.nonce, 12345.into());
-        assert_eq!(overlay_account.staking_balance, 0.into());
-        assert_eq!(overlay_account.withdrawable_staking_balance, 0.into());
-        assert_eq!(overlay_account.collateral_for_storage, 0.into());
-        assert_eq!(overlay_account.accumulated_interest_return, 0.into());
-        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
-        assert_eq!(overlay_account.reset_storage, false);
-
-        // test new contract
-        let overlay_account = OverlayAccount::new_contract(
-            &address,
-            5678.into(),
-            1234.into(),
-            true,
-        );
-        assert!(overlay_account.deposit_list.is_empty());
-        assert!(overlay_account.staking_vote_list.is_empty());
-        assert_eq!(overlay_account.address, address);
-        assert_eq!(overlay_account.balance, 5678.into());
-        assert_eq!(overlay_account.nonce, 1234.into());
-        assert_eq!(overlay_account.staking_balance, 0.into());
-        assert_eq!(overlay_account.withdrawable_staking_balance, 0.into());
-        assert_eq!(overlay_account.collateral_for_storage, 0.into());
-        assert_eq!(overlay_account.accumulated_interest_return, 0.into());
-        assert_eq!(overlay_account.code_hash, KECCAK_EMPTY);
-        assert_eq!(overlay_account.reset_storage, true);
-    }
-
-    #[test]
-    fn test_deposit_and_withdraw() {
-        let address = Address::zero();
-        let account = Account {
-            address,
-            balance: 0.into(),
-            nonce: 0.into(),
-            code_hash: KECCAK_EMPTY,
-            staking_balance: 0.into(),
-            collateral_for_storage: 0.into(),
-            accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
-        };
-        let interest_rate_per_block =
-            *INITIAL_ANNUAL_INTEREST_RATE / U256::from(BLOCKS_PER_YEAR);
-        let mut overlay_account = OverlayAccount::new(&address, account, 0);
-        // add balance 2 * 10^15
-        overlay_account.add_balance(&2_000_000_000_000_000u64.into());
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(2_000_000_000_000_000u64)
-        );
-        assert_eq!(*overlay_account.staking_balance(), U256::zero());
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::zero()
-        );
-        // deposit
-        overlay_account.deposit(
-            1_000_000_000_000_000u64.into(), /* amount */
-            interest_rate_per_block,
-            1, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(1_000_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_000_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_000_000_000_000_000u64)
-        );
-        overlay_account.deposit(
-            100_000_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(2),
-            2, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(900_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_100_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_100_000_000_000_000u64)
-        );
-        overlay_account.deposit(
-            10_000_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(3),
-            3, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(890_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_110_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_110_000_000_000_000u64)
-        );
-        overlay_account.deposit(
-            1_000_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(4),
-            4, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(889_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_111_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_111_000_000_000_000u64)
-        );
-        overlay_account.deposit(
-            100_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(5),
-            5, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(888_900_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_111_100_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_111_100_000_000_000u64)
-        );
-        overlay_account.deposit(
-            10_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(6),
-            6, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(888_890_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_111_110_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_111_110_000_000_000u64)
-        );
-        overlay_account.deposit(
-            1_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(7),
-            7, /* deposit_time */
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(888_889_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_111_111_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_111_111_000_000_000u64)
-        );
-        assert_eq!(overlay_account.deposit_list.len(), 7);
-
-        // add storage
-        assert_eq!(*overlay_account.collateral_for_storage(), U256::from(0));
-        overlay_account.add_collateral_for_storage(&11116.into());
-        assert_eq!(
-            *overlay_account.collateral_for_storage(),
-            U256::from(11_116)
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(888_888_999_988_884u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_111_111_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_111_111_000_000_000u64)
-        );
-
-        // sub storage
-        overlay_account.sub_collateral_for_storage(&11116.into());
-        assert_eq!(*overlay_account.collateral_for_storage(), U256::zero());
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(888_889_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(1_111_111_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(1_111_111_000_000_000u64)
-        );
-
-        // withdraw
-        let (interest, service_charge) = overlay_account.withdraw(
-            500_000_000_000_000u64.into(), /* amount */
-            interest_rate_per_block,
-            1, /* withdraw_time */
-        );
-        assert_eq!(interest, U256::zero());
-        assert_eq!(service_charge, U256::from(250_000_000_000u64));
-        assert_eq!(
-            *overlay_account.accumulated_interest_return(),
-            U256::zero()
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(1_388_639_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(611_111_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(611_111_000_000_000u64)
-        );
-        assert_eq!(overlay_account.deposit_list.len(), 7);
-        assert_eq!(
-            overlay_account.deposit_list[0].amount,
-            U256::from(500_000_000_000_000u64)
-        );
-
-        let (interest, service_charge) = overlay_account.withdraw(
-            500_000_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(BLOCKS_PER_YEAR + 1),
-            BLOCKS_PER_YEAR + 1, /* withdraw_time */
-        );
-        assert_eq!(interest, U256::from(20_000_000_000_000u64));
-        assert_eq!(service_charge, U256::zero());
-        assert_eq!(
-            *overlay_account.accumulated_interest_return(),
-            U256::from(20_000_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(1_908_639_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(111_111_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(111_111_000_000_000u64)
-        );
-        assert_eq!(overlay_account.deposit_list.len(), 6);
-        assert_eq!(
-            overlay_account.deposit_list[0].amount,
-            U256::from(100_000_000_000_000u64)
-        );
-
-        let (interest, service_charge) = overlay_account.withdraw(
-            110_250_000_000_000u64.into(), /* amount */
-            interest_rate_per_block * U256::from(100),
-            100, /* withdraw_time */
-        );
-        assert_eq!(interest, U256::from(3_422_753u64));
-        assert_eq!(service_charge, U256::from(55_124_957_214u64));
-        assert_eq!(
-            *overlay_account.accumulated_interest_return(),
-            U256::from(20_000_003_422_753u64)
-        );
-        assert_eq!(
-            *overlay_account.balance(),
-            U256::from(2_018_833_878_465_539u64)
-        );
-        assert_eq!(
-            *overlay_account.staking_balance(),
-            U256::from(861_000_000_000u64)
-        );
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(861_000_000_000u64)
-        );
-        assert_eq!(overlay_account.deposit_list.len(), 4);
-        assert_eq!(
-            overlay_account.deposit_list[0].amount,
-            U256::from(750_000_000_000u64)
-        );
-    }
-
-    fn check_ordered_feature(staking_vote_list: &Vec<StakingVoteInfo>) {
-        for i in 1..staking_vote_list.len() {
-            assert!(
-                staking_vote_list[i - 1].unlock_time
-                    < staking_vote_list[i].unlock_time
-            );
-            assert!(
-                staking_vote_list[i - 1].amount > staking_vote_list[i].amount
-            );
-        }
-    }
-
-    #[test]
-    fn test_vote_lock() {
-        let address = Address::zero();
-        let mut account = Account {
-            address,
-            balance: 0.into(),
-            nonce: 0.into(),
-            code_hash: KECCAK_EMPTY,
-            staking_balance: 10000000.into(),
-            collateral_for_storage: 0.into(),
-            accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
-        };
-        account.deposit_list.push(DepositInfo {
-            amount: 10000000.into(),
-            deposit_time: 0,
-            accumulated_interest_rate: 0.into(),
-        });
-        account.staking_vote_list.push(StakingVoteInfo {
-            amount: 100000.into(),
-            unlock_time: 10,
-        });
-        account.staking_vote_list.push(StakingVoteInfo {
-            amount: 10000.into(),
-            unlock_time: 30,
-        });
-        account.staking_vote_list.push(StakingVoteInfo {
-            amount: 1000.into(),
-            unlock_time: 100,
-        });
-        account.staking_vote_list.push(StakingVoteInfo {
-            amount: 100.into(),
-            unlock_time: 500,
-        });
-
-        let overlay_account = OverlayAccount::new(&address, account.clone(), 0);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9900000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 4);
-        let overlay_account =
-            OverlayAccount::new(&address, account.clone(), 10);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9990000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 3);
-        let overlay_account =
-            OverlayAccount::new(&address, account.clone(), 11);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9990000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 3);
-        let overlay_account =
-            OverlayAccount::new(&address, account.clone(), 30);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9999000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 2);
-        let overlay_account =
-            OverlayAccount::new(&address, account.clone(), 499);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9999900)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 1);
-        let overlay_account =
-            OverlayAccount::new(&address, account.clone(), 500);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(10000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 0);
-
-        let mut overlay_account =
-            OverlayAccount::new(&address, account.clone(), 0);
-        overlay_account.lock(U256::from(1000), 20);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9900000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 4);
-        overlay_account.lock(U256::from(100000), 10);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9900000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 4);
-        overlay_account.lock(U256::from(1000000), 11);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 4);
-        assert_eq!(overlay_account.staking_vote_list[0].unlock_time, 11);
-        overlay_account.lock(U256::from(1000000), 13);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(9000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 4);
-        assert_eq!(overlay_account.staking_vote_list[0].unlock_time, 13);
-        overlay_account.lock(U256::from(2000000), 40);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(8000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 3);
-        assert_eq!(overlay_account.staking_vote_list[0].unlock_time, 40);
-        overlay_account.lock(U256::from(10), 600);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(8000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 4);
-        assert_eq!(overlay_account.staking_vote_list[3].unlock_time, 600);
-        overlay_account.lock(U256::from(1000), 502);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(8000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 3);
-        assert_eq!(overlay_account.staking_vote_list[0].unlock_time, 40);
-        assert_eq!(overlay_account.staking_vote_list[1].unlock_time, 502);
-        overlay_account.lock(U256::from(3000000), 550);
-        check_ordered_feature(&overlay_account.staking_vote_list);
-        assert_eq!(
-            *overlay_account.withdrawable_staking_balance(),
-            U256::from(7000000)
-        );
-        assert_eq!(overlay_account.staking_vote_list.len(), 2);
-        assert_eq!(overlay_account.staking_vote_list[0].unlock_time, 550);
-        assert_eq!(overlay_account.staking_vote_list[1].unlock_time, 600);
-    }
-
-    #[test]
-    fn test_clone_overwrite() {}
 }

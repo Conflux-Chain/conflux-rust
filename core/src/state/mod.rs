@@ -26,6 +26,11 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(test)]
+mod account_entry_tests;
+#[cfg(test)]
+mod state_tests;
+
 mod account_entry;
 mod substate;
 
@@ -49,12 +54,8 @@ pub enum CleanupMode<'a> {
     TrackTouched(&'a mut HashSet<Address>),
 }
 
-pub struct State {
-    db: StateDb,
-
-    cache: RefCell<HashMap<Address, AccountEntry>>,
-    checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
-    account_start_nonce: U256,
+#[derive(Copy, Clone, Debug)]
+struct StakingState {
     // This is the total number of CFX issued.
     total_issued_tokens: U256,
     // This is the total number of CFX used as staking.
@@ -65,6 +66,16 @@ pub struct State {
     annual_interest_rate: U256,
     // This is the accumulated interest rate.
     accumulate_interest_rate: U256,
+}
+
+pub struct State {
+    db: StateDb,
+
+    cache: RefCell<HashMap<Address, AccountEntry>>,
+    staking_state_checkpoints: RefCell<Vec<StakingState>>,
+    checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
+    account_start_nonce: U256,
+    staking_state: StakingState,
     // This is the total number of blocks executed so far. It is the same as
     // the `number` entry in EVM Environment.
     block_number: u64,
@@ -90,13 +101,16 @@ impl State {
         State {
             db,
             cache: RefCell::new(HashMap::new()),
+            staking_state_checkpoints: RefCell::new(Vec::new()),
             checkpoints: RefCell::new(Vec::new()),
             account_start_nonce,
-            total_issued_tokens,
-            total_staking_tokens,
-            total_storage_tokens,
-            annual_interest_rate,
-            accumulate_interest_rate,
+            staking_state: StakingState {
+                total_issued_tokens,
+                total_staking_tokens,
+                total_storage_tokens,
+                annual_interest_rate,
+                accumulate_interest_rate,
+            },
             block_number,
             vm,
         }
@@ -104,12 +118,14 @@ impl State {
 
     /// Increase block number and calculate the current secondary reward.
     pub fn increase_block_number(&mut self) -> U256 {
+        assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.block_number += 1;
-        let interest_rate =
-            self.annual_interest_rate / U256::from(BLOCKS_PER_YEAR);
-        self.accumulate_interest_rate += interest_rate;
-        let secondary_reward =
-            self.total_storage_tokens * interest_rate / *INTEREST_RATE_SCALE;
+        let interest_rate = self.staking_state.annual_interest_rate
+            / U256::from(BLOCKS_PER_YEAR);
+        self.staking_state.accumulate_interest_rate += interest_rate;
+        let secondary_reward = self.staking_state.total_storage_tokens
+            * interest_rate
+            / *INTEREST_RATE_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
         secondary_reward
@@ -121,6 +137,9 @@ impl State {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index.
     pub fn checkpoint(&mut self) -> usize {
+        self.staking_state_checkpoints
+            .borrow_mut()
+            .push(self.staking_state.clone());
         let checkpoints = self.checkpoints.get_mut();
         let index = checkpoints.len();
         checkpoints.push(HashMap::new());
@@ -157,6 +176,10 @@ impl State {
                 }
             }
         }
+        println!(
+            "collateral_for_storage_sub={:?} collateral_for_storage_inc={:?}",
+            collateral_for_storage_sub, collateral_for_storage_inc
+        );
         for (addr, sub) in collateral_for_storage_sub {
             let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
             assert!(self.exists(&addr).expect("no db error"));
@@ -184,6 +207,7 @@ impl State {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
+            self.staking_state_checkpoints.borrow_mut().pop();
             if let Some(ref mut prev) = self.checkpoints.get_mut().last_mut() {
                 if prev.is_empty() {
                     **prev = checkpoint;
@@ -199,6 +223,11 @@ impl State {
     /// Revert to the last checkpoint and discard it.
     pub fn revert_to_checkpoint(&mut self) {
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
+            self.staking_state = self
+                .staking_state_checkpoints
+                .borrow_mut()
+                .pop()
+                .expect("staking_state_checkpoint should exist");
             for (k, v) in checkpoint.drain() {
                 match v {
                     Some(v) => match self.cache.get_mut().entry(k) {
@@ -443,7 +472,7 @@ impl State {
     ) -> DbResult<()> {
         if !by.is_zero() {
             self.require(address, false)?.add_collateral_for_storage(by);
-            self.total_storage_tokens += *by;
+            self.staking_state.total_storage_tokens += *by;
         }
         Ok(())
     }
@@ -453,7 +482,7 @@ impl State {
     ) -> DbResult<()> {
         if !by.is_zero() {
             self.require(address, false)?.sub_collateral_for_storage(by);
-            self.total_storage_tokens -= *by;
+            self.staking_state.total_storage_tokens -= *by;
         }
         Ok(())
     }
@@ -464,10 +493,10 @@ impl State {
         if !amount.is_zero() {
             self.require(address, false)?.deposit(
                 *amount,
-                self.accumulate_interest_rate,
+                self.staking_state.accumulate_interest_rate,
                 self.block_number,
             );
-            self.total_staking_tokens += *amount;
+            self.staking_state.total_staking_tokens += *amount;
         }
         Ok(())
     }
@@ -479,12 +508,14 @@ impl State {
             let (interest, service_charge) =
                 self.require(address, false)?.withdraw(
                     *amount,
-                    self.accumulate_interest_rate,
+                    self.staking_state.accumulate_interest_rate,
                     self.block_number,
                 );
-            self.total_issued_tokens += interest;
-            self.total_issued_tokens -= service_charge;
-            self.total_staking_tokens -= *amount;
+            // the interest will be put in balance.
+            self.staking_state.total_issued_tokens += interest;
+            // the serive charge will be destroyed.
+            self.staking_state.total_issued_tokens -= service_charge;
+            self.staking_state.total_staking_tokens -= *amount;
         }
         Ok(())
     }
@@ -499,23 +530,31 @@ impl State {
         Ok(())
     }
 
-    pub fn annual_interest_rate(&self) -> &U256 { &self.annual_interest_rate }
+    pub fn annual_interest_rate(&self) -> &U256 {
+        &self.staking_state.annual_interest_rate
+    }
 
     pub fn set_annual_interest_rate(&mut self, annual_interest_rate: U256) {
-        self.annual_interest_rate = annual_interest_rate;
+        self.staking_state.annual_interest_rate = annual_interest_rate;
     }
 
     pub fn accumulate_interest_rate(&self) -> &U256 {
-        &self.accumulate_interest_rate
+        &self.staking_state.accumulate_interest_rate
     }
 
     pub fn block_number(&self) -> u64 { self.block_number }
 
-    pub fn total_issued_tokens(&self) -> &U256 { &self.total_issued_tokens }
+    pub fn total_issued_tokens(&self) -> &U256 {
+        &self.staking_state.total_issued_tokens
+    }
 
-    pub fn total_staking_tokens(&self) -> &U256 { &self.total_staking_tokens }
+    pub fn total_staking_tokens(&self) -> &U256 {
+        &self.staking_state.total_staking_tokens
+    }
 
-    pub fn total_storage_tokens(&self) -> &U256 { &self.total_storage_tokens }
+    pub fn total_storage_tokens(&self) -> &U256 {
+        &self.staking_state.total_storage_tokens
+    }
 
     fn touch(&mut self, address: &Address) -> DbResult<()> {
         self.require(address, false)?;
@@ -545,16 +584,21 @@ impl State {
         }
     }
 
-    fn commit_metadata(&mut self) -> DbResult<()> {
+    fn commit_staking_state(&mut self) -> DbResult<()> {
+        self.db.set_annual_interest_rate(
+            &self.staking_state.annual_interest_rate,
+        )?;
+        self.db.set_accumulate_interest_rate(
+            &self.staking_state.accumulate_interest_rate,
+        )?;
         self.db
-            .set_annual_interest_rate(&self.annual_interest_rate)?;
-        self.db
-            .set_accumulate_interest_rate(&self.accumulate_interest_rate)?;
-        self.db.set_total_issued_tokens(&self.total_issued_tokens)?;
-        self.db
-            .set_total_staking_tokens(&self.total_staking_tokens)?;
-        self.db
-            .set_total_storage_tokens(&self.total_storage_tokens)?;
+            .set_total_issued_tokens(&self.staking_state.total_issued_tokens)?;
+        self.db.set_total_staking_tokens(
+            &self.staking_state.total_staking_tokens,
+        )?;
+        self.db.set_total_storage_tokens(
+            &self.staking_state.total_storage_tokens,
+        )?;
         Ok(())
     }
 
@@ -577,10 +621,6 @@ impl State {
                     assert!(self
                         .exists(&storage_value.owner)
                         .expect("no db error"));
-                    if self.is_contract(&storage_value.owner) {
-                        self.total_staking_tokens -=
-                            *COLLATERAL_PER_STORAGE_KEY;
-                    }
                     self.sub_collateral_for_storage(
                         &storage_value.owner,
                         &COLLATERAL_PER_STORAGE_KEY,
@@ -596,7 +636,8 @@ impl State {
     ) -> DbResult<StateRootWithAuxInfo> {
         debug!("Commit epoch[{}]", epoch_id);
         assert!(self.checkpoints.borrow().is_empty());
-        self.commit_metadata()?;
+        assert!(self.staking_state_checkpoints.borrow().is_empty());
+        self.commit_staking_state()?;
 
         let mut killed_addresses = Vec::new();
         {
@@ -630,7 +671,7 @@ impl State {
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
     ) -> DbResult<StateRootWithAuxInfo> {
         assert!(self.checkpoints.borrow().is_empty());
-        self.commit_metadata()?;
+        self.commit_staking_state()?;
 
         let mut accounts_for_txpool = vec![];
 
@@ -787,7 +828,7 @@ impl State {
         })
     }
 
-    /// TODO: Remove this function since it is not used outside.
+    #[cfg(test)]
     pub fn original_storage_at(
         &self, address: &Address, key: &H256,
     ) -> DbResult<H256> {
@@ -802,6 +843,7 @@ impl State {
 
     /// Get the value of storage at a specific checkpoint.
     /// TODO: Remove this function since it is not used outside.
+    #[cfg(test)]
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &Address, key: &H256,
     ) -> DbResult<Option<H256>> {
@@ -970,906 +1012,17 @@ impl State {
 
     pub fn clear(&mut self) {
         assert!(self.checkpoints.borrow().is_empty());
+        assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.cache.borrow_mut().clear();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::storage::{
-        tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
-        StorageManagerTrait,
-    };
-    use cfx_types::{Address, BigEndianHash, U256};
-
-    fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
-        State::new(
-            StateDb::new(
-                storage_manager
-                    .get_state_for_next_epoch(
-                        StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                    )
-                    .unwrap()
-                    .unwrap(),
-            ),
-            0.into(), /* account_start_nonce */
-            VmFactory::default(),
-            0, /* block_number */
-        )
-    }
-
-    fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
-        State::new(
-            StateDb::new(storage_manager.get_state_for_genesis_write()),
-            0.into(), /* account_start_nonce */
-            VmFactory::default(),
-            0, /* block_number */
-        )
-    }
-
-    #[test]
-    fn checkpoint_basic() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let address = Address::zero();
-        state.checkpoint();
-        state
-            .add_balance(&address, &U256::from(69u64), CleanupMode::NoEmpty)
-            .unwrap();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
-        state.discard_checkpoint();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
-        state.checkpoint();
-        state
-            .add_balance(&address, &U256::from(1u64), CleanupMode::NoEmpty)
-            .unwrap();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(70u64));
-        state.revert_to_checkpoint();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
-    }
-
-    #[test]
-    fn checkpoint_nested() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let address = Address::zero();
-        state.checkpoint();
-        state.checkpoint();
-        state
-            .add_balance(&address, &U256::from(69u64), CleanupMode::NoEmpty)
-            .unwrap();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
-        state.discard_checkpoint();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
-        state.revert_to_checkpoint();
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0));
-    }
-
-    #[test]
-    fn checkpoint_revert_to_get_storage_at() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let address = Address::zero();
-        let key = BigEndianHash::from_uint(&U256::from(0));
-        let c0 = state.checkpoint();
-        let c1 = state.checkpoint();
-        state
-            .set_storage(
-                &address,
-                key,
-                BigEndianHash::from_uint(&U256::from(1)),
-                address,
-            )
-            .unwrap();
-
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &address, &key).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &address, &key).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.storage_at(&address, &key).unwrap(),
-            BigEndianHash::from_uint(&U256::from(1))
-        );
-
-        state.revert_to_checkpoint();
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &address, &key).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.storage_at(&address, &key).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0))
-        );
-    }
-
-    #[test]
-    fn checkpoint_from_empty_get_storage_at() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let a = Address::zero();
-        let k = BigEndianHash::from_uint(&U256::from(0));
-        let k2 = BigEndianHash::from_uint(&U256::from(1));
-
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0))
-        );
-        state.clear();
-
-        let c0 = state.checkpoint();
-        state
-            .new_contract(
-                &a,
-                *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
-                U256::zero(),
-            )
-            .unwrap();
-        let c1 = state.checkpoint();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
-            .unwrap();
-        let c2 = state.checkpoint();
-        let c3 = state.checkpoint();
-        state
-            .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)), a)
-            .unwrap();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)), a)
-            .unwrap();
-        let c4 = state.checkpoint();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)), a)
-            .unwrap();
-        let c5 = state.checkpoint();
-
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c3, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c4, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(3)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c5, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(4)))
-        );
-
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // Commit/discard c5.
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c3, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c4, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(3)))
-        );
-
-        state.revert_to_checkpoint(); // Revert to c4.
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c3, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // Commit/discard c3.
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-
-        state.revert_to_checkpoint(); // Revert to c2.
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // Commit/discard c1.
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-    }
-
-    #[test]
-    fn checkpoint_get_storage_at() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let a = Address::zero();
-        let k = BigEndianHash::from_uint(&U256::from(0));
-        let k2 = BigEndianHash::from_uint(&U256::from(1));
-
-        state.checkpoint();
-        state
-            .add_balance(
-                &a,
-                &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state
-            .set_storage(
-                &a,
-                k,
-                BigEndianHash::from_uint(&U256::from(0xffff)),
-                a,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        state
-            .commit(BigEndianHash::from_uint(&U256::from(1u64)))
-            .unwrap();
-        state.clear();
-
-        state = get_state(
-            &storage_manager,
-            BigEndianHash::from_uint(&U256::from(1u64)),
-        );
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0xffff))
-        );
-        state.clear();
-
-        let cm1 = state.checkpoint();
-        let c0 = state.checkpoint();
-        state
-            .new_contract(
-                &a,
-                *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
-                U256::zero(),
-            )
-            .unwrap();
-        let c1 = state.checkpoint();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
-            .unwrap();
-        let c2 = state.checkpoint();
-        let c3 = state.checkpoint();
-        state
-            .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)), a)
-            .unwrap();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)), a)
-            .unwrap();
-        let c4 = state.checkpoint();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)), a)
-            .unwrap();
-        let c5 = state.checkpoint();
-
-        assert_eq!(
-            state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c3, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c4, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(3)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c5, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(4)))
-        );
-
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // Commit/discard c5.
-        assert_eq!(
-            state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c3, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c4, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(3)))
-        );
-
-        state.revert_to_checkpoint(); // Revert to c4.
-        assert_eq!(
-            state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c3, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // Commit/discard c3.
-        assert_eq!(
-            state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c2, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(1)))
-        );
-
-        state.revert_to_checkpoint(); // Revert to c2.
-        assert_eq!(
-            state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0)))
-        );
-
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // Commit/discard c1.
-        assert_eq!(
-            state.checkpoint_storage_at(cm1, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-        assert_eq!(
-            state.checkpoint_storage_at(c0, &a, &k).unwrap(),
-            Some(BigEndianHash::from_uint(&U256::from(0xffff)))
-        );
-    }
-
-    #[test]
-    fn kill_account_with_checkpoints() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let a = Address::zero();
-        let k = BigEndianHash::from_uint(&U256::from(0));
-        state.checkpoint();
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
-            .unwrap();
-        state.checkpoint();
-        state.kill_account(&a);
-
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0))
-        );
-        state.revert_to_checkpoint();
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(1))
-        );
-    }
-
-    #[test]
-    fn create_contract_fail() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let a = Address::from_low_u64_be(1000);
-
-        state.checkpoint(); // c1
-        state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
-        state
-            .add_balance(&a, &U256::from(1), CleanupMode::ForceCreate)
-            .unwrap();
-        state.checkpoint(); // c2
-        state
-            .add_balance(&a, &U256::from(1), CleanupMode::ForceCreate)
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint(); // discard c2
-        state.revert_to_checkpoint(); // revert to c1
-        assert_eq!(state.exists(&a).unwrap(), false);
-
-        state
-            .commit(BigEndianHash::from_uint(&U256::from(1)))
-            .unwrap();
-    }
-
-    #[test]
-    fn create_contract_fail_previous_storage() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let a = Address::from_low_u64_be(1000);
-        let k = BigEndianHash::from_uint(&U256::from(0));
-
-        state.checkpoint();
-        state
-            .add_balance(&a, &COLLATERAL_PER_STORAGE_KEY, CleanupMode::NoEmpty)
-            .unwrap();
-        state
-            .set_storage(
-                &a,
-                k,
-                BigEndianHash::from_uint(&U256::from(0xffff)),
-                a,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        state
-            .commit(BigEndianHash::from_uint(&U256::from(1)))
-            .unwrap();
-        state.clear();
-
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0xffff))
-        );
-        state.clear();
-        state = get_state(
-            &storage_manager,
-            BigEndianHash::from_uint(&U256::from(1)),
-        );
-
-        state.checkpoint(); // c1
-        state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
-        state.checkpoint(); // c2
-        state
-            .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(2)), a)
-            .unwrap();
-        state.revert_to_checkpoint(); // revert to c2
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0))
-        );
-        state.revert_to_checkpoint(); // revert to c1
-        assert_eq!(
-            state.storage_at(&a, &k).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0xffff))
-        );
-
-        state
-            .commit(BigEndianHash::from_uint(&U256::from(2)))
-            .unwrap();
-    }
-
-    #[test]
-    fn test_automatic_staking_normal_account() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let normal_account = Address::from_low_u64_be(0);
-        let contract_account = Address::from_low_u64_be(1);
-        let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
-        let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
-        let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
-
-        state
-            .add_balance(
-                &normal_account,
-                &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state
-            .new_contract(
-                &contract_account,
-                *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
-                U256::zero(),
-            )
-            .unwrap();
-
-        // simple set one key with zero value for normal account
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k1,
-                BigEndianHash::from_uint(&U256::from(0)),
-                normal_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-
-        assert_eq!(
-            state.balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-
-        // simple set one key with nonzero value for normal account
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k1,
-                BigEndianHash::from_uint(&U256::from(1)),
-                normal_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(
-            state.balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.staking_balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.collateral_for_storage(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(state.total_staking_tokens, *COLLATERAL_PER_STORAGE_KEY);
-        assert_eq!(state.total_storage_tokens, *COLLATERAL_PER_STORAGE_KEY);
-
-        // test not sufficient balance
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k2,
-                BigEndianHash::from_uint(&U256::from(1)),
-                normal_account,
-            )
-            .unwrap();
-        state
-            .set_storage(
-                &contract_account,
-                k3,
-                BigEndianHash::from_uint(&U256::from(1)),
-                normal_account,
-            )
-            .unwrap();
-        assert!(!state.check_collateral_for_storage());
-        state.revert_to_checkpoint();
-        assert_eq!(
-            state.balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.staking_balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.collateral_for_storage(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(state.total_staking_tokens, *COLLATERAL_PER_STORAGE_KEY);
-        assert_eq!(state.total_storage_tokens, *COLLATERAL_PER_STORAGE_KEY);
-
-        // use all balance
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k2,
-                BigEndianHash::from_uint(&U256::from(1)),
-                normal_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(state.balance(&normal_account).unwrap(), U256::from(0));
-        assert_eq!(
-            state.staking_balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.collateral_for_storage(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.total_staking_tokens,
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.total_storage_tokens,
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-
-        // set one key to zero
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k2,
-                BigEndianHash::from_uint(&U256::from(0)),
-                normal_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(state.balance(&normal_account).unwrap(), U256::from(0));
-        assert_eq!(
-            state.staking_balance(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.collateral_for_storage(&normal_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.total_staking_tokens,
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(state.total_storage_tokens, *COLLATERAL_PER_STORAGE_KEY);
-    }
-
-    #[test]
-    fn test_automatic_staking_contract_account() {
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        let contract_account = Address::from_low_u64_be(1);
-        let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
-        let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
-        let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
-
-        state
-            .new_contract(
-                &contract_account,
-                *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
-                U256::zero(),
-            )
-            .unwrap();
-
-        // simple set one key with zero value for normal account
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k1,
-                BigEndianHash::from_uint(&U256::from(0)),
-                contract_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-
-        assert_eq!(
-            state.balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-
-        // simple set one key with nonzero value for normal account
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k1,
-                BigEndianHash::from_uint(&U256::from(1)),
-                contract_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(
-            state.balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.staking_balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.collateral_for_storage(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(state.total_staking_tokens, *COLLATERAL_PER_STORAGE_KEY);
-        assert_eq!(state.total_storage_tokens, *COLLATERAL_PER_STORAGE_KEY);
-
-        // test not sufficient balance
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k2,
-                BigEndianHash::from_uint(&U256::from(1)),
-                contract_account,
-            )
-            .unwrap();
-        state
-            .set_storage(
-                &contract_account,
-                k3,
-                BigEndianHash::from_uint(&U256::from(1)),
-                contract_account,
-            )
-            .unwrap();
-        assert!(!state.check_collateral_for_storage());
-        state.revert_to_checkpoint();
-        assert_eq!(
-            state.balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.staking_balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.collateral_for_storage(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(state.total_staking_tokens, *COLLATERAL_PER_STORAGE_KEY);
-        assert_eq!(state.total_storage_tokens, *COLLATERAL_PER_STORAGE_KEY);
-
-        // use all balance
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k2,
-                BigEndianHash::from_uint(&U256::from(1)),
-                contract_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
-        assert_eq!(
-            state.staking_balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.collateral_for_storage(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.total_staking_tokens,
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.total_storage_tokens,
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-
-        // set one key to zero
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k2,
-                BigEndianHash::from_uint(&U256::from(0)),
-                contract_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(
-            state.balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.staking_balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(
-            state.collateral_for_storage(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY
-        );
-        assert_eq!(state.total_staking_tokens, *COLLATERAL_PER_STORAGE_KEY);
-        assert_eq!(state.total_storage_tokens, *COLLATERAL_PER_STORAGE_KEY);
-
-        // set another key to zero
-        state.checkpoint();
-        state
-            .set_storage(
-                &contract_account,
-                k1,
-                BigEndianHash::from_uint(&U256::from(0)),
-                contract_account,
-            )
-            .unwrap();
-        assert!(state.check_collateral_for_storage());
-        state.discard_checkpoint();
-        assert_eq!(
-            state.balance(&contract_account).unwrap(),
-            *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
-        );
-        assert_eq!(
-            state.staking_balance(&contract_account).unwrap(),
-            U256::from(0)
-        );
-        assert_eq!(
-            state.collateral_for_storage(&contract_account).unwrap(),
-            U256::from(0)
-        );
-        assert_eq!(state.total_staking_tokens, U256::from(0));
-        assert_eq!(state.total_storage_tokens, U256::from(0));
+        self.staking_state.annual_interest_rate =
+            self.db.get_annual_interest_rate().expect("no db error");
+        self.staking_state.accumulate_interest_rate =
+            self.db.get_accumulate_interest_rate().expect("no db error");
+        self.staking_state.total_issued_tokens =
+            self.db.get_total_issued_tokens().expect("No db error");
+        self.staking_state.total_staking_tokens =
+            self.db.get_total_staking_tokens().expect("No db error");
+        self.staking_state.total_storage_tokens =
+            self.db.get_total_storage_tokens().expect("No db error");
     }
 }
