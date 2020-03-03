@@ -88,11 +88,9 @@ impl LightClient {
         let cache_config = conf.cache_config();
 
         let db_config = conf.db_config();
-        let ledger_db = db::open_database(
-            conf.raw_conf.db_dir.as_ref().unwrap(),
-            &db_config,
-        )
-        .map_err(|e| format!("Failed to open database {:?}", e))?;
+        let ledger_db =
+            db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
+                .map_err(|e| format!("Failed to open database {:?}", e))?;
 
         let secret_store = Arc::new(SecretStore::new());
         let storage_manager = Arc::new(
@@ -172,6 +170,7 @@ impl LightClient {
             statistics,
             data_man.clone(),
             pow_config.clone(),
+            notifications.clone(),
         ));
 
         let _protocol_config = conf.protocol_config();

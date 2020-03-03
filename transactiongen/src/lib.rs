@@ -562,10 +562,6 @@ impl SpecialTransactionGenerator {
             "Special Transaction Generator: erc20 contract address: {:?}",
             erc20_address
         );
-        assert_eq!(
-            erc20_address.to_hex(),
-            "e2182fba747b5706a516d6cf6bf62d6117ef86ea"
-        );
 
         SpecialTransactionGenerator {
             accounts,

@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn prefix_generator() {
-        let prefix = vec![0xffu8];
+        let prefix = vec![0x1fu8];
         let keypair = Prefix::new(prefix.clone(), usize::max_value())
             .generate()
             .unwrap();

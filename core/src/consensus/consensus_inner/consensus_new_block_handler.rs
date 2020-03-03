@@ -4,6 +4,7 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus, LocalBlockInfo},
+    channel::Channel,
     consensus::{
         consensus_inner::{
             confirmation_meter::ConfirmationMeter,
@@ -17,7 +18,7 @@ use crate::{
     rlp::Encodable,
     statistics::SharedStatistics,
     storage::StateRootWithAuxInfo,
-    SharedTransactionPool,
+    Notifications, SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
@@ -37,6 +38,10 @@ pub struct ConsensusNewBlockHandler {
     data_man: Arc<BlockDataManager>,
     executor: Arc<ConsensusExecutor>,
     statistics: SharedStatistics,
+
+    /// Channel used to send epochs to PubSub
+    /// Each element is <epoch_number, epoch_hashes>
+    epochs_sender: Arc<Channel<(u64, Vec<H256>)>>,
 }
 
 /// ConsensusNewBlockHandler contains all sub-routines for handling new arriving
@@ -46,15 +51,18 @@ impl ConsensusNewBlockHandler {
     pub fn new(
         conf: ConsensusConfig, txpool: SharedTransactionPool,
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
-        statistics: SharedStatistics,
+        statistics: SharedStatistics, notifications: Arc<Notifications>,
     ) -> Self
     {
+        let epochs_sender = notifications.epochs_ordered.clone();
+
         Self {
             conf,
             txpool,
             data_man,
             executor,
             statistics,
+            epochs_sender,
         }
     }
 
@@ -1518,7 +1526,6 @@ impl ConsensusNewBlockHandler {
             if confirmed_height
                 > self.data_man.state_availability_boundary.read().lower_bound
             {
-                // FIXME: how about archive node?
                 self.data_man
                     .storage_manager
                     .get_storage_manager()
@@ -1645,6 +1652,14 @@ impl ConsensusNewBlockHandler {
                     true,
                     false,
                 ));
+
+                // send to PubSub
+                self.epochs_sender.send((
+                    /* epoch number: */ state_at,
+                    /* epoch hashes: */
+                    inner.get_epoch_block_hashes(epoch_arena_index),
+                ));
+
                 state_at += 1;
             }
         }

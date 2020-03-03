@@ -2,14 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// FIXME: rename to SnapshotManager... if it only deal with snapshots.
-pub struct StorageManagerFullNode<SnapshotDbManager: SnapshotDbManagerTrait> {
+pub struct SnapshotManager<SnapshotDbManager: SnapshotDbManagerTrait> {
     // FIXME: implement a new method and remove pub on fields.
     pub snapshot_db_manager: SnapshotDbManager,
 }
 
 impl<SnapshotDbManager: SnapshotDbManagerTrait> GetSnapshotDbManager
-    for StorageManagerFullNode<SnapshotDbManager>
+    for SnapshotManager<SnapshotDbManager>
 {
     type SnapshotDb = SnapshotDbManager::SnapshotDb;
     type SnapshotDbManager = SnapshotDbManager;
@@ -20,7 +19,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> GetSnapshotDbManager
 }
 
 impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
-    for StorageManagerFullNode<SnapshotDbManager>
+    for SnapshotManager<SnapshotDbManager>
 {
     fn remove_old_pivot_snapshot(
         &self, snapshot_epoch_id: &EpochId,

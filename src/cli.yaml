@@ -103,14 +103,14 @@ args:
         long: enable-discovery
         value_name: BOOL
         takes_value: true
-    - node-table-timeout:
+    - node-table-timeout-s:
         help: How often Conflux updates its peer table (default 300).
-        long: node-table-timeout
+        long: node-table-timeout-s
         value_name: SEC
         takes_value: true
-    - node-table-promotion-timeout:
+    - node-table-promotion-timeout-s:
         help: How long Conflux waits for promoting a peer to trustworthy (default 3 * 24 * 3600).
-        long: node-table-promotion-timeout
+        long: node-table-promotion-timeout-s
         value_name: SEC
         takes_value: true
     - test-mode:

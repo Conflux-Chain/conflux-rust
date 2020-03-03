@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn prefix_generator() {
-        let prefix = vec![0x00u8];
+        let prefix = vec![0x10u8];
         let keypair = BrainPrefix::new(prefix.clone(), usize::max_value(), 12)
             .generate()
             .unwrap();

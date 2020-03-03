@@ -880,6 +880,7 @@ impl ConsensusExecutionHandler {
                 .data_man
                 .block_header_by_hash(epoch_hash)
                 .expect("must exists");
+
             if on_local_pivot {
                 // Unwrap is safe here because it's guaranteed by outer if.
                 let state_root = &self
@@ -916,6 +917,7 @@ impl ConsensusExecutionHandler {
                 .write()
                 .adjust_upper_bound(pivot_block_header.as_ref());
             debug!("Skip execution in prefix {:?}", epoch_hash);
+
             return;
         }
 
@@ -1137,6 +1139,7 @@ impl ConsensusExecutionHandler {
                 block_receipts.clone(),
                 on_local_pivot,
             );
+
             epoch_receipts.push(block_receipts);
         }
 

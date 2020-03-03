@@ -512,7 +512,7 @@ class ContractBenchTest(SmartContractBenchBase):
             abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
             bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
         )
-        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
 
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"

@@ -27,7 +27,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
     def setup_network(self):
         self.add_nodes(self.num_nodes)
         bootnode = self.nodes[0]
-        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout", "1", "--node-table-promotion-timeout", "1",
+        extra_args0 = ["--enable-discovery", "true", "--node-table-timeout-s", "1", "--node-table-promotion-timeout-s", "1",
                        "--archive"]
         self.start_node(0, extra_args = extra_args0)
         bootnode_id = "cfxnode://{}@{}:{}".format(bootnode.key[2:], bootnode.ip, bootnode.port)

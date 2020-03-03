@@ -667,8 +667,9 @@ where Message: Send + Sync + 'static
             .set_readiness(Ready::readable())
             .expect("Set network_poll_stopped readiness failure");
         if let Some(thread) = self.network_poll_thread.lock().take() {
-            thread.join().unwrap_or_else(|e| {
-                debug!("Error joining network poll thread: {:?}", e);
+            thread.join().unwrap_or_else(|e| match e.downcast_ref::<&'static str>() {
+                Some(e) => error!("Error joining network poll thread: {}", e),
+                None => error!("Error joining network poll thread: Unknown error: {:?}", e),
             });
         }
         // Clear handlers so that shared pointers are not stuck on stack
@@ -679,8 +680,9 @@ where Message: Send + Sync + 'static
             .send(IoMessage::Shutdown)
             .unwrap_or_else(|e| warn!("Error on IO service shutdown: {:?}", e));
         if let Some(thread) = self.thread.lock().take() {
-            thread.join().unwrap_or_else(|e| {
-                debug!("Error joining IO service event loop thread: {:?}", e);
+            thread.join().unwrap_or_else(|e| match e.downcast_ref::<&'static str>() {
+                Some(e) => error!("Error joining IO service event loop thread: {}", e),
+                None => error!("Error joining IO service event loop thread: Unknown error: {:?}", e),
             });
         }
         debug!("[IoService] Closed.");

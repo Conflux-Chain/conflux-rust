@@ -4,9 +4,11 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
+    channel::Channel,
     consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
+    parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
     pow::ProofOfWorkConfig,
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -940,10 +942,9 @@ pub struct SynchronizationGraph {
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_graph_ready_block: Mutex<H256>,
 
-    /// `notifications.new_block_hashes` is the channel used to send work to
-    /// `ConsensusGraph`.
+    /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
-    notifications: Arc<Notifications>,
+    new_block_hashes: Arc<Channel<(H256, bool)>>,
 
     /// whether it is a archive node or full node
     is_full_node: bool,
@@ -983,8 +984,8 @@ impl SynchronizationGraph {
             consensus: consensus.clone(),
             statistics: consensus.get_statistics().clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
+            new_block_hashes: notifications.new_block_hashes.clone(),
             is_full_node,
-            notifications,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
@@ -1039,18 +1040,23 @@ impl SynchronizationGraph {
     }
 
     pub fn try_remove_old_era_blocks_from_disk(&self) {
-        let mut num_of_blocks_to_remove = 2;
+        let mut num_of_blocks_to_remove = OLD_ERA_BLOCK_GC_BATCH_SIZE;
         while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
-            // only full node should remove blocks in old eras
+            // only full node should remove blocks and receipts in old eras
             if self.is_full_node {
-                // TODO: remove state root
-                // remove block header in memory cache
-                self.data_man
-                    .remove_block_header(&hash, false /* remove_db */);
                 // remove block body in memory cache and db
                 self.data_man
                     .remove_block_body(&hash, true /* remove_db */);
+                self.data_man
+                    .remove_block_results(&hash, true /* remove_db */);
             }
+            // All nodes will not maintain old era states, so related data can
+            // be removed safely. The in-memory data is already
+            // removed in `make_checkpoint`.
+            // TODO Only call remove for executed epochs.
+            self.data_man
+                .remove_epoch_execution_commitment_from_db(&hash);
+            self.data_man.remove_epoch_execution_context_from_db(&hash);
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
                 break;
@@ -1321,7 +1327,7 @@ impl SynchronizationGraph {
                             inner.arena[index].block_header.hash();
 
                         assert!(
-                            self.notifications.new_block_hashes.send((
+                            self.new_block_hashes.send((
                                 inner.arena[index].block_header.hash(),
                                 true, /* ignore_body */
                             )),
@@ -1560,9 +1566,7 @@ impl SynchronizationGraph {
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
             assert!(
-                self.notifications
-                    .new_block_hashes
-                    .send((h, false /* ignore_body */)),
+                self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
             );
 

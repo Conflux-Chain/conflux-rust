@@ -36,7 +36,7 @@ class VoteTokenTest(SmartContractBenchBase):
             bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
         )
 
-        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
         self.tx_conf["to"] = staking_contract_addr
         tx_data = decode_hex(staking_contract.functions.deposit(1000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
         node = self.nodes[0]
