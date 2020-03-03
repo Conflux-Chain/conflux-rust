@@ -212,13 +212,14 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
                     }
                     self.recv_buf.extend_from_slice(&buf[0..size]);
                 }
-                Err(e) => {
-                    if e.kind() != io::ErrorKind::WouldBlock {
+                Err(e) => match e.kind() {
+                    io::ErrorKind::Interrupted => continue,
+                    io::ErrorKind::WouldBlock => break,
+                    _ => {
                         debug!("Failed to read socket data, token = {}, err = {:?}", self.token, e);
                         return Err(e);
                     }
-                    break;
-                }
+                },
             }
         }
 
