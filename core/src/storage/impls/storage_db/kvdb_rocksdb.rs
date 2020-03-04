@@ -4,12 +4,12 @@
 
 pub struct KvdbRocksdb {
     pub kvdb: Arc<Database>,
-    pub col: u32,
+    pub col: Option<u32>,
 }
 
 pub struct KvdbRocksDbTransaction {
     pending: DBTransaction,
-    col: u32,
+    col: Option<u32>,
 }
 
 impl KeyValueDbTraitRead for KvdbRocksdb {
@@ -17,7 +17,7 @@ impl KeyValueDbTraitRead for KvdbRocksdb {
         Ok(self
             .kvdb
             .get(self.col, key)?
-            .map(|db_value| db_value.into_boxed_slice()))
+            .map(|elastic_array| elastic_array.into_vec().into_boxed_slice()))
     }
 }
 
