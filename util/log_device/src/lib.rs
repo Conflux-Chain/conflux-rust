@@ -18,9 +18,9 @@ use std::{
 
 // database columns for rocksdb
 /// Column for miscellaneous items
-const COL_DB: u32 = 0;
+const COL_DB: Option<u32> = Some(0);
 /// Number of columns in DB
-const NUM_COLUMNS: u32 = 1;
+const NUM_COLUMNS: Option<u32> = Some(1);
 
 const DB_KEY_LOG_DEVICE_NUM: &[u8] = b"log_device_num";
 

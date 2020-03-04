@@ -6,4 +6,4 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 kvdb-rocksdb = {path="./src/kvdb-rocksdb"}
-kvdb = "0.4"
+kvdb = "0.1.1"

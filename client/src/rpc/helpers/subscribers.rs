@@ -53,7 +53,9 @@ mod random {
 
     pub type Rng = rand::rngs::OsRng;
 
-    pub fn new() -> Rng { rand::rngs::OsRng }
+    pub fn new() -> Rng {
+        Rng::new().expect("Valid random source is required.")
+    }
 }
 
 #[cfg(test)]
