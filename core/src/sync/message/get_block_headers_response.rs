@@ -23,7 +23,7 @@ use primitives::BlockHeader;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::HashSet,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
@@ -48,7 +48,13 @@ impl Handleable for GetBlockHeadersResponse {
         if ctx.peer == NULL {
             let requested = self.headers.iter().map(|h| h.hash()).collect();
 
-            self.handle_block_headers(ctx, &self.headers, requested, None);
+            self.handle_block_headers(
+                ctx,
+                &self.headers,
+                requested,
+                None,
+                None,
+            );
             return Ok(());
         }
 
@@ -60,6 +66,7 @@ impl Handleable for GetBlockHeadersResponse {
         }
 
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let req = req.downcast_ref::<GetBlockHeaders>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -98,7 +105,13 @@ impl Handleable for GetBlockHeadersResponse {
 
         // re-request headers requested but not received
         let requested: HashSet<H256> = req.hashes.iter().cloned().collect();
-        self.handle_block_headers(ctx, &self.headers, requested, chosen_peer);
+        self.handle_block_headers(
+            ctx,
+            &self.headers,
+            requested,
+            chosen_peer,
+            delay,
+        );
 
         timestamp_validation_result
     }
@@ -109,6 +122,7 @@ impl GetBlockHeadersResponse {
     fn handle_block_headers(
         &self, ctx: &Context, block_headers: &Vec<BlockHeader>,
         requested: HashSet<H256>, chosen_peer: Option<usize>,
+        delay: Option<Duration>,
     )
     {
         // This stores the block hashes for blocks without block body.
@@ -211,6 +225,7 @@ impl GetBlockHeadersResponse {
             ctx.io,
             requested,
             returned_headers,
+            delay,
         );
 
         // request missing headers. We do not need to request more headers on
