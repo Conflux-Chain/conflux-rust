@@ -12,9 +12,9 @@ cargo install grcov
 
 # Build binary and run unit tests with code coverage.
 export CARGO_INCREMENTAL=0
-# FIXME Add -Clink-dead-code after the fixing of core_foundation is released
+# FIXME Add -Clink-dead-code after fixing the HeapSizeOf issue of SharedCache
 export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Coverflow-checks=off -Zno-landing-pads"
-cargo +nightly build --bin conflux --bin consensus_bench
+cargo +nightly build
 cargo +nightly test --all
 
 # Run python integration tests.

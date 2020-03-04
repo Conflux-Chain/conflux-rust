@@ -28,15 +28,15 @@ use rlp;
 
 // database columns for rocksdb
 /// Column for miscellaneous items
-pub const COL_MISC: u32 = 0;
+pub const COL_MISC: Option<u32> = Some(0);
 /// Column for Blocks.
-pub const COL_BLOCKS: u32 = 1;
+pub const COL_BLOCKS: Option<u32> = Some(1);
 /// Column for Transaction Index
-pub const COL_TX_INDEX: u32 = 2;
+pub const COL_TX_INDEX: Option<u32> = Some(2);
 /// Column for Transaction Index
-pub const COL_EPOCH_NUMBER: u32 = 3;
+pub const COL_EPOCH_NUMBER: Option<u32> = Some(3);
 /// Number of columns in DB
-pub const NUM_COLUMNS: u32 = 4;
+pub const NUM_COLUMNS: Option<u32> = Some(4);
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]
@@ -84,21 +84,21 @@ pub trait Key<T> {
 pub trait Writable {
     /// Writes the value into the database.
     fn write<T, R>(
-        &mut self, col: u32, key: &dyn Key<T, Target = R>, value: &T,
+        &mut self, col: Option<u32>, key: &dyn Key<T, Target = R>, value: &T,
     ) where
         T: rlp::Encodable,
         R: Deref<Target = [u8]>;
 
     /// Deletes key from the databse.
-    fn delete<T, R>(&mut self, col: u32, key: &dyn Key<T, Target = R>)
+    fn delete<T, R>(&mut self, col: Option<u32>, key: &dyn Key<T, Target = R>)
     where
         T: rlp::Encodable,
         R: Deref<Target = [u8]>;
 
     /// Writes the value into the database and updates the cache.
     fn write_with_cache<K, T, R>(
-        &mut self, col: u32, cache: &mut dyn Cache<K, T>, key: K, value: T,
-        policy: CacheUpdatePolicy,
+        &mut self, col: Option<u32>, cache: &mut dyn Cache<K, T>, key: K,
+        value: T, policy: CacheUpdatePolicy,
     ) where
         K: Key<T, Target = R> + Hash + Eq,
         T: rlp::Encodable,
@@ -117,7 +117,7 @@ pub trait Writable {
 
     /// Writes the values into the database and updates the cache.
     fn extend_with_cache<K, T, R>(
-        &mut self, col: u32, cache: &mut dyn Cache<K, T>,
+        &mut self, col: Option<u32>, cache: &mut dyn Cache<K, T>,
         values: HashMap<K, T>, policy: CacheUpdatePolicy,
     ) where
         K: Key<T, Target = R> + Hash + Eq,
@@ -142,7 +142,7 @@ pub trait Writable {
 
     /// Writes and removes the values into the database and updates the cache.
     fn extend_with_option_cache<K, T, R>(
-        &mut self, col: u32, cache: &mut dyn Cache<K, Option<T>>,
+        &mut self, col: Option<u32>, cache: &mut dyn Cache<K, Option<T>>,
         values: HashMap<K, Option<T>>, policy: CacheUpdatePolicy,
     ) where
         K: Key<T, Target = R> + Hash + Eq,
@@ -175,14 +175,16 @@ pub trait Writable {
 /// Should be used to read values from database.
 pub trait Readable {
     /// Returns value for given key.
-    fn read<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> Option<T>
+    fn read<T, R>(
+        &self, col: Option<u32>, key: &dyn Key<T, Target = R>,
+    ) -> Option<T>
     where
         T: rlp::Decodable,
         R: Deref<Target = [u8]>;
 
     /// Returns value for given key either in cache or in database.
     fn read_with_cache<K, T, C>(
-        &self, col: u32, cache: &RwLock<C>, key: &K,
+        &self, col: Option<u32>, cache: &RwLock<C>, key: &K,
     ) -> Option<T>
     where
         K: Key<T> + Eq + Hash + Clone,
@@ -204,12 +206,14 @@ pub trait Readable {
     }
 
     /// Returns true if given value exists.
-    fn exists<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> bool
+    fn exists<T, R>(
+        &self, col: Option<u32>, key: &dyn Key<T, Target = R>,
+    ) -> bool
     where R: Deref<Target = [u8]>;
 
     /// Returns true if given value exists either in cache or in database.
     fn exists_with_cache<K, T, R, C>(
-        &self, col: u32, cache: &RwLock<C>, key: &K,
+        &self, col: Option<u32>, cache: &RwLock<C>, key: &K,
     ) -> bool
     where
         K: Eq + Hash + Key<T, Target = R>,
@@ -228,15 +232,16 @@ pub trait Readable {
 }
 
 impl Writable for DBTransaction {
-    fn write<T, R>(&mut self, col: u32, key: &dyn Key<T, Target = R>, value: &T)
-    where
+    fn write<T, R>(
+        &mut self, col: Option<u32>, key: &dyn Key<T, Target = R>, value: &T,
+    ) where
         T: rlp::Encodable,
         R: Deref<Target = [u8]>,
     {
         self.put(col, &key.key(), &rlp::encode(value));
     }
 
-    fn delete<T, R>(&mut self, col: u32, key: &dyn Key<T, Target = R>)
+    fn delete<T, R>(&mut self, col: Option<u32>, key: &dyn Key<T, Target = R>)
     where
         T: rlp::Encodable,
         R: Deref<Target = [u8]>,
@@ -246,7 +251,9 @@ impl Writable for DBTransaction {
 }
 
 impl<KVDB: KeyValueDB + ?Sized> Readable for KVDB {
-    fn read<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> Option<T>
+    fn read<T, R>(
+        &self, col: Option<u32>, key: &dyn Key<T, Target = R>,
+    ) -> Option<T>
     where
         T: rlp::Decodable,
         R: Deref<Target = [u8]>,
@@ -258,7 +265,9 @@ impl<KVDB: KeyValueDB + ?Sized> Readable for KVDB {
             .map(|v| rlp::decode(&v).expect("decode db value failed"))
     }
 
-    fn exists<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> bool
+    fn exists<T, R>(
+        &self, col: Option<u32>, key: &dyn Key<T, Target = R>,
+    ) -> bool
     where R: Deref<Target = [u8]> {
         let result = self.get(col, &key.key());
 
