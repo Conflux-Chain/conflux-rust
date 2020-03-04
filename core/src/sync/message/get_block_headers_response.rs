@@ -19,7 +19,7 @@ use crate::{
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
-use primitives::{BlockHeader, NULL_EPOCH};
+use primitives::BlockHeader;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     collections::HashSet,
