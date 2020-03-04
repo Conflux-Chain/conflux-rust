@@ -75,9 +75,8 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
-    /// When staking_balance is not enough for collateral_for_storage.
-    /// FIXME: add more details.
-    OutOfStaking,
+    /// When balance is not enough for collateral_for_storage.
+    OutOfStorageCollateral,
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
     /// Internal contract failed
@@ -125,7 +124,7 @@ impl fmt::Display for Error {
                 wanted,
                 limit,
             } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
-            OutOfStaking => write!(f, "Out of staking"),
+            OutOfStorageCollateral => write!(f, "Out of staking"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
             InternalContract(name) => {
                 write!(f, "InternalContract failed: {}", name)

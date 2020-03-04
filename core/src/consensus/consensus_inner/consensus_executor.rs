@@ -1417,6 +1417,7 @@ impl ConsensusExecutionHandler {
                 });
             }
         }
+        state.add_block_rewards(total_base_reward + secondary_reward);
     }
 
     fn recompute_states(

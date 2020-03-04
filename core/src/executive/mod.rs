@@ -6,6 +6,9 @@ mod context;
 mod executed;
 mod executive;
 
+#[cfg(test)]
+mod executive_tests;
+
 pub use self::{
     executed::{Executed, ExecutionError, ExecutionResult},
     executive::{

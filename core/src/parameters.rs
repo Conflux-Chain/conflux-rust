@@ -183,8 +183,6 @@ pub mod staking {
     pub const BLOCKS_PER_SECOND: u64 = 4;
     /// This is the number of blocks per day.
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
-    /// This is the number of blocks per quarter.
-    pub const BLOCKS_PER_QUATER: u64 = BLOCKS_PER_DAY * 91;
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
 }

@@ -689,12 +689,6 @@ impl OverlayAccount {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();
-        println!(
-            "reset_storage={:?} ownership_changes={:?} ownership_cache={:?}",
-            self.reset_storage,
-            ownership_changes,
-            self.ownership_cache.borrow().clone()
-        );
         for (k, v) in ownership_changes {
             let cur_value_is_zero = self
                 .storage_changes
@@ -706,7 +700,6 @@ impl OverlayAccount {
             // the value of the key is zero before execution. Otherwise, the
             // value of the key is nonzero.
             let original_ownership_opt = self.original_ownership_at(db, &k);
-            println!("k={:?} v={:?} ori={:?}", k, v, original_ownership_opt);
             if let Some(original_ownership) = original_ownership_opt {
                 if v == original_ownership {
                     ownership_changed = false;

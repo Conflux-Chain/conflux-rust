@@ -46,7 +46,6 @@ impl StateDb {
                 return Err(e.into());
             }
         };
-        //        println!("get key={:?} value={:?}", key, raw);
         Ok(Some(::rlp::decode::<T>(raw.as_ref())?))
     }
 

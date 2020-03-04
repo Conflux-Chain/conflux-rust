@@ -131,6 +131,13 @@ impl State {
         secondary_reward
     }
 
+    /// Maintain `total_issued_tokens`, both secondary reward and primary reward
+    /// are included.
+    pub fn add_block_rewards(&mut self, rewards: U256) {
+        assert!(self.staking_state_checkpoints.borrow().is_empty());
+        self.staking_state.total_issued_tokens += rewards;
+    }
+
     /// Get a VM factory that can execute on this state.
     pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
 
@@ -176,10 +183,6 @@ impl State {
                 }
             }
         }
-        println!(
-            "collateral_for_storage_sub={:?} collateral_for_storage_inc={:?}",
-            collateral_for_storage_sub, collateral_for_storage_inc
-        );
         for (addr, sub) in collateral_for_storage_sub {
             let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
             assert!(self.exists(&addr).expect("no db error"));
@@ -637,7 +640,6 @@ impl State {
         debug!("Commit epoch[{}]", epoch_id);
         assert!(self.checkpoints.borrow().is_empty());
         assert!(self.staking_state_checkpoints.borrow().is_empty());
-        self.commit_staking_state()?;
 
         let mut killed_addresses = Vec::new();
         {
@@ -649,6 +651,7 @@ impl State {
             }
         }
         self.recycle_storage(killed_addresses)?;
+        self.commit_staking_state()?;
 
         let mut accounts = self.cache.borrow_mut();
         for (address, ref mut entry) in accounts
@@ -671,7 +674,6 @@ impl State {
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
     ) -> DbResult<StateRootWithAuxInfo> {
         assert!(self.checkpoints.borrow().is_empty());
-        self.commit_staking_state()?;
 
         let mut accounts_for_txpool = vec![];
 
@@ -685,6 +687,7 @@ impl State {
             }
         }
         self.recycle_storage(killed_addresses)?;
+        self.commit_staking_state()?;
 
         let mut accounts = self.cache.borrow_mut();
         debug!("Notify epoch[{}]", epoch_id);
