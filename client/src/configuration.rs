@@ -4,7 +4,7 @@
 
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
-use cfxcore::{,
+use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
     cache_config::DEFAULT_LEDGER_CACHE_SIZE,

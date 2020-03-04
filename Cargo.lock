@@ -162,6 +162,12 @@ dependencies = [
 
 [[package]]
 name = "autocfg"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d49d90015b3c36167a20fe2810c5cd875ad504b39cff3d4eae7977e6b7c1cb2"
+
+[[package]]
+name = "autocfg"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
@@ -480,7 +486,7 @@ dependencies = [
 name = "cfx-types"
 version = "0.1.0"
 dependencies = [
- "ethereum-types",
+ "ethereum-types 0.7.0",
 ]
 
 [[package]]
@@ -500,6 +506,7 @@ dependencies = [
  "criterion",
  "db",
  "derivative",
+ "elastic-array",
  "error-chain",
  "fallible-iterator",
  "fs_extra",
@@ -529,14 +536,13 @@ dependencies = [
  "num-traits",
  "parity-bytes",
  "parity-crypto 0.3.1",
- "parity-util-mem",
  "parking_lot 0.10.0",
  "primitives",
  "priority-send-queue",
  "prometheus",
  "rand 0.7.3",
- "rand_chacha",
- "rand_xorshift",
+ "rand_chacha 0.2.2",
+ "rand_xorshift 0.2.0",
  "rayon",
  "rlp",
  "rlp_derive",
@@ -566,7 +572,7 @@ version = "0.1.0"
 dependencies = [
  "cfxkey",
  "cfxstore",
- "ethereum-types",
+ "ethereum-types 0.7.0",
  "log 0.4.8",
  "parking_lot 0.10.0",
  "serde",
@@ -580,7 +586,7 @@ name = "cfxkey"
 version = "0.3.0"
 dependencies = [
  "edit-distance",
- "ethereum-types",
+ "ethereum-types 0.7.0",
  "lazy_static",
  "log 0.4.8",
  "parity-crypto 0.4.2",
@@ -601,7 +607,7 @@ version = "0.2.1"
 dependencies = [
  "cfxkey",
  "dir",
- "ethereum-types",
+ "ethereum-types 0.7.0",
  "libc",
  "log 0.4.8",
  "matches",
@@ -697,8 +703,8 @@ dependencies = [
  "panic_hook",
  "parking_lot 0.10.0",
  "primitives",
- "rand 0.7.3",
- "rand_xorshift",
+ "rand 0.6.5",
+ "rand_xorshift 0.1.1",
  "rayon",
  "rlp",
  "runtime",
@@ -747,7 +753,7 @@ dependencies = [
  "docopt",
  "env_logger 0.5.13",
  "error-chain",
- "ethereum-types",
+ "ethereum-types 0.7.0",
  "futures 0.1.29",
  "home 0.5.3",
  "io",
@@ -868,7 +874,7 @@ version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "058ed274caafc1f60c4997b5fc07bf7dc7cca454af7c6e81edffe5f33f70dace"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "cfg-if",
  "crossbeam-utils",
  "lazy_static",
@@ -893,7 +899,7 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3c7c73a2d1e9fc0886a08b93e98eb643461230d5f1925e4036204d5f2e261a8"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "cfg-if",
  "lazy_static",
 ]
@@ -1019,7 +1025,7 @@ version = "0.1.2"
 source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
 dependencies = [
  "app_dirs",
- "ethereum-types",
+ "ethereum-types 0.8.0",
  "home 0.3.4",
 ]
 
@@ -1052,6 +1058,15 @@ name = "either"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
+
+[[package]]
+name = "elastic-array"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "580f3768bd6465780d063f5b8213a2ebd506e139b345e4a81eb301ceae3d61e1"
+dependencies = [
+ "heapsize",
+]
 
 [[package]]
 name = "enum-map"
@@ -1113,12 +1128,25 @@ dependencies = [
 
 [[package]]
 name = "ethbloom"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd0584482a6433370908dee84ea13992c2cf39c569600e4dbfafe520bb3b90d1"
+dependencies = [
+ "crunchy",
+ "fixed-hash 0.4.0",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "ethbloom"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
 dependencies = [
  "crunchy",
- "fixed-hash",
+ "fixed-hash 0.5.2",
  "impl-rlp",
  "impl-serde 0.2.3",
  "tiny-keccak",
@@ -1132,15 +1160,29 @@ checksum = "e957efe1e627f8ec4e253660615fd9fe3736e10026197740b8b4b26c812be2e9"
 
 [[package]]
 name = "ethereum-types"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a5a7777cb75d9ee2b8d3752634b15e4e4e70d2ef81a227e9d157acfa18592b1"
+dependencies = [
+ "ethbloom 0.7.0",
+ "fixed-hash 0.4.0",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "primitive-types 0.5.1",
+ "uint",
+]
+
+[[package]]
+name = "ethereum-types"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
 dependencies = [
- "ethbloom",
- "fixed-hash",
+ "ethbloom 0.8.1",
+ "fixed-hash 0.5.2",
  "impl-rlp",
  "impl-serde 0.2.3",
- "primitive-types",
+ "primitive-types 0.6.2",
  "uint",
 ]
 
@@ -1180,6 +1222,18 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
 name = "fixed-hash"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "516877b7b9a1cc2d0293cbce23cd6203f0edbfd4090e6ca4489fecb5aa73050e"
+dependencies = [
+ "byteorder",
+ "rand 0.5.6",
+ "rustc-hex 2.1.0",
+ "static_assertions 0.2.5",
+]
+
+[[package]]
+name = "fixed-hash"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3367952ceb191f4ab95dd5685dc163ac539e36202f9fcfd0cb22f9f9c542fefc"
@@ -1188,7 +1242,7 @@ dependencies = [
  "libc",
  "rand 0.7.3",
  "rustc-hex 2.1.0",
- "static_assertions",
+ "static_assertions 1.1.0",
 ]
 
 [[package]]
@@ -1731,23 +1785,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "impl-trait-for-tuples"
-version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ef5550a42e3740a0e71f909d4c861056a284060af885ae7aa6242820f920d9d"
-dependencies = [
- "proc-macro2 1.0.10",
- "quote 1.0.3",
- "syn 1.0.17",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "076f042c5b7b98f31d205f1249267e12a6518c1481e9dae9764af19b707d2292"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
 ]
 
 [[package]]
@@ -1934,11 +1977,11 @@ dependencies = [
 
 [[package]]
 name = "keccak-hash"
-version = "0.4.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f0e55d8f242fdc281c21c4cd70960a25db6dd17cc6232d8b38b564b5b18c784"
+checksum = "09364fca1db2974c2730ddfe2627b03a8def6128c9899303ca05e40ca6f20903"
 dependencies = [
- "primitive-types",
+ "primitive-types 0.5.1",
  "tiny-keccak",
 ]
 
@@ -1954,27 +1997,26 @@ dependencies = [
 
 [[package]]
 name = "kvdb"
-version = "0.4.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03080afe6f42cd996da9f568d6add5d7fb5ee2ea7fb7802d2d2cbd836958fd87"
+checksum = "c1b2f251f01a7224426abdb2563707d856f7de995d821744fd8fa8e2874f69e3"
 dependencies = [
+ "elastic-array",
  "parity-bytes",
- "parity-util-mem",
- "smallvec 1.3.0",
 ]
 
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.1.6"
 dependencies = [
- "ethereum-types",
+ "elastic-array",
+ "ethereum-types 0.8.0",
  "fs-swap",
  "interleaved-ordered",
  "kvdb",
  "log 0.4.8",
  "num_cpus",
  "owning_ref",
- "parity-util-mem",
  "parking_lot 0.10.0",
  "regex 1.3.6",
  "rocksdb",
@@ -2186,15 +2228,16 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4fc2c02a7e374099d4ee95a193111f72d2110197fe200272371758f6c3643d8"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
 ]
 
 [[package]]
 name = "memory-cache"
 version = "0.1.0"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
 dependencies = [
+ "heapsize",
  "lru-cache",
- "malloc_size_of",
 ]
 
 [[package]]
@@ -2400,7 +2443,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "num-integer",
  "num-traits",
 ]
@@ -2411,7 +2454,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6b19411a9719e753aff12e5187b74d60d3dc449ec3f4dc21e3989c3f554bc95"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "num-traits",
 ]
 
@@ -2432,7 +2475,7 @@ version = "0.1.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f6ea62e9d81a77cd3ee9a2a5b9b609447857f3d358704331e4ef39eb247fcba"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "num-traits",
 ]
 
@@ -2442,7 +2485,7 @@ version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfb0800a0291891dd9f4fe7bd9c19384f98f7fbe0cd0f39a2c6b88b9868bbc00"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "num-integer",
  "num-traits",
 ]
@@ -2453,7 +2496,7 @@ version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2465,7 +2508,7 @@ version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c62be47e61d1842b9170f0fdeec8eba98e60e90e5446449a0545e5152acd7096"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
 ]
 
 [[package]]
@@ -2520,7 +2563,7 @@ version = "0.9.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7717097d810a0f2e2323f9e5d11e71608355e24828410b55b9d4f18aa5f9a5d8"
 dependencies = [
- "autocfg",
+ "autocfg 1.0.0",
  "cc",
  "libc",
  "pkg-config",
@@ -2642,29 +2685,6 @@ dependencies = [
  "cc",
  "cfg-if",
  "rand 0.7.3",
-]
-
-[[package]]
-name = "parity-util-mem"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9344bc978467339b9ae688f9dcf279d1aaa0ccfc88e9a780c729b765a82d57d5"
-dependencies = [
- "cfg-if",
- "impl-trait-for-tuples",
- "parity-util-mem-derive",
- "winapi 0.3.8",
-]
-
-[[package]]
-name = "parity-util-mem-derive"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f557c32c6d268a07c921471619c0295f5efad3a0e76d4f97a05c091a51d110b2"
-dependencies = [
- "proc-macro2 1.0.10",
- "syn 1.0.17",
- "synstructure 0.12.3",
 ]
 
 [[package]]
@@ -2810,11 +2830,24 @@ checksum = "74490b50b9fbe561ac330df47c08f3f33073d2d00c150f719147d7c54522fa1b"
 
 [[package]]
 name = "primitive-types"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83ef7b3b965c0eadcb6838f34f827e1dfb2939bdd5ebd43f9647e009b12b0371"
+dependencies = [
+ "fixed-hash 0.4.0",
+ "impl-codec",
+ "impl-rlp",
+ "impl-serde 0.2.3",
+ "uint",
+]
+
+[[package]]
+name = "primitive-types"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4336f4f5d5524fa60bcbd6fe626f9223d8142a50e7053e979acdf0da41ab975"
 dependencies = [
- "fixed-hash",
+ "fixed-hash 0.5.2",
  "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.0",
@@ -2830,7 +2863,7 @@ dependencies = [
  "cfx-types",
  "cfxkey",
  "criterion",
- "fixed-hash",
+ "fixed-hash 0.5.2",
  "keccak-hash",
  "lazy_static",
  "log 0.4.8",
@@ -2969,15 +3002,44 @@ dependencies = [
 
 [[package]]
 name = "rand"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d71dacdc3c88c1fde3885a3be3fbab9f35724e6ce99467f7d9c5026132184ca"
+dependencies = [
+ "autocfg 0.1.7",
+ "libc",
+ "rand_chacha 0.1.1",
+ "rand_core 0.4.2",
+ "rand_hc 0.1.0",
+ "rand_isaac",
+ "rand_jitter",
+ "rand_os",
+ "rand_pcg",
+ "rand_xorshift 0.1.1",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "rand"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
 dependencies = [
  "getrandom",
  "libc",
- "rand_chacha",
+ "rand_chacha 0.2.2",
  "rand_core 0.5.1",
- "rand_hc",
+ "rand_hc 0.2.0",
+]
+
+[[package]]
+name = "rand_chacha"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "556d3a1ca6600bfcbab7c7c91ccb085ac7fbbcd70e008a98742e7847f4f7bcef"
+dependencies = [
+ "autocfg 0.1.7",
+ "rand_core 0.3.1",
 ]
 
 [[package]]
@@ -3016,11 +3078,40 @@ dependencies = [
 
 [[package]]
 name = "rand_hc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b40677c7be09ae76218dc623efbf7b18e34bced3f38883af07bb75630a21bc4"
+dependencies = [
+ "rand_core 0.3.1",
+]
+
+[[package]]
+name = "rand_hc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "rand_isaac"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ded997c9d5f13925be2a6fd7e66bf1872597f759fd9dd93513dd7e92e5a5ee08"
+dependencies = [
+ "rand_core 0.3.1",
+]
+
+[[package]]
+name = "rand_jitter"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1166d5c91dc97b88d1decc3285bb0a99ed84b05cfd0bc2341bdf2d43fc41e39b"
+dependencies = [
+ "libc",
+ "rand_core 0.4.2",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -3035,6 +3126,25 @@ dependencies = [
  "rand_core 0.4.2",
  "rdrand",
  "winapi 0.3.8",
+]
+
+[[package]]
+name = "rand_pcg"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abf9b09b01790cfe0364f52bf32995ea3c39f4d2dd011eac241d2914146d0b44"
+dependencies = [
+ "autocfg 0.1.7",
+ "rand_core 0.4.2",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
+dependencies = [
+ "rand_core 0.3.1",
 ]
 
 [[package]]
@@ -3353,7 +3463,7 @@ name = "secret-store"
 version = "0.1.0"
 dependencies = [
  "cfxkey",
- "ethereum-types",
+ "ethereum-types 0.7.0",
  "keccak-hash",
  "parking_lot 0.10.0",
  "primitives",
@@ -3588,6 +3698,12 @@ name = "stable_deref_trait"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
+
+[[package]]
+name = "static_assertions"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c19be23126415861cb3a23e501d34a708f7f9b2183c5252d690941c2e69199d5"
 
 [[package]]
 name = "static_assertions"
@@ -4257,7 +4373,7 @@ dependencies = [
  "byteorder",
  "crunchy",
  "rustc-hex 2.1.0",
- "static_assertions",
+ "static_assertions 1.1.0",
 ]
 
 [[package]]

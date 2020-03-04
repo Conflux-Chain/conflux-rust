@@ -79,7 +79,8 @@ pub fn compaction_profile(
 
 pub fn db_config(
     path: &Path, db_cache_size: Option<usize>,
-    db_compaction: DatabaseCompactionProfile, columns: u32, disable_wal: bool,
+    db_compaction: DatabaseCompactionProfile, columns: Option<u32>,
+    disable_wal: bool,
 ) -> DatabaseConfig
 {
     let mut db_config = DatabaseConfig::with_columns(columns);

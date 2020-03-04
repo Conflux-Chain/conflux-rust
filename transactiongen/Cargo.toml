@@ -12,7 +12,7 @@ cfxcore = { path = "../core" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 hex = "0.2"
-keccak-hash = "0.4"
+keccak-hash = "0.3.0"
 primitives = { path = "../primitives" }
 parking_lot = "0.10"
 rlp = "0.4.0"
