@@ -2,10 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    alliance_tree_graph::hsb_sync_protocol::message::msgid as hsb_msgid,
-    sync::message::msgid,
-};
+use crate::sync::message::msgid;
 use cfx_types::H256;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashSet;
@@ -36,7 +33,6 @@ impl Default for KeyContainer {
         keys[msgid::GET_TRANSACTIONS as usize] = Some(Default::default());
         keys[msgid::GET_TRANSACTIONS_FROM_TX_HASHES as usize] =
             Some(Default::default());
-        keys[hsb_msgid::BLOCK_RETRIEVAL as usize] = Some(Default::default());
 
         KeyContainer { keys }
     }

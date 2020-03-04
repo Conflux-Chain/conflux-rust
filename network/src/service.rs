@@ -150,12 +150,6 @@ impl NetworkService {
 
     pub fn is_consortium(&self) -> bool { self.config.is_consortium }
 
-    pub fn update_validator_info(&self, validator_set: HashSet<NodeId>) {
-        if let Some(ref inner) = self.inner {
-            inner.update_validator_info(validator_set)
-        }
-    }
-
     pub fn start_io_service(&mut self) -> Result<(), Error> {
         let raw_io_service =
             IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
@@ -422,8 +416,6 @@ pub struct NetworkServiceInner {
     dropped_nodes: RwLock<HashSet<StreamToken>>,
 
     is_consortium: bool,
-    validator_set: RwLock<HashSet<NodeId>>,
-    unconnected_validators: RwLock<HashSet<NodeId>>,
 
     /// Delayed message queue and corresponding latency
     delayed_queue: Option<DelayedQueue>,
@@ -604,8 +596,6 @@ impl NetworkServiceInner {
             reserved_nodes: RwLock::new(HashSet::new()),
             dropped_nodes: RwLock::new(HashSet::new()),
             is_consortium: config.is_consortium,
-            validator_set: RwLock::new(HashSet::new()),
-            unconnected_validators: RwLock::new(HashSet::new()),
             delayed_queue: None,
         };
 
@@ -621,36 +611,6 @@ impl NetworkServiceInner {
         }
 
         Ok(inner)
-    }
-
-    pub fn update_validator_info(&self, new_validator_set: HashSet<NodeId>) {
-        let mut validator_set = self.validator_set.write();
-        let mut unconnected_validators = self.unconnected_validators.write();
-
-        validator_set.clear();
-        validator_set.extend(new_validator_set);
-
-        let mut unconnected_non_validators = HashSet::new();
-        for unconnected in unconnected_validators.iter() {
-            if !validator_set.contains(unconnected) {
-                unconnected_non_validators.insert(*unconnected);
-            }
-        }
-
-        for unconnected in unconnected_non_validators.iter() {
-            unconnected_validators.remove(unconnected);
-        }
-
-        let self_id = self.metadata.id().clone();
-        for validator in validator_set.iter() {
-            if *validator == self_id {
-                continue;
-            }
-
-            if !self.sessions.contains_node(validator) {
-                unconnected_validators.insert(*validator);
-            }
-        }
     }
 
     pub fn new_with_latency(
@@ -791,24 +751,11 @@ impl NetworkServiceInner {
 
     fn on_housekeeping(&self, io: &IoContext<NetworkIoMessage>) {
         if self.is_consortium {
-            self.connect_validators(io);
+            unimplemented!();
         } else {
             self.connect_peers(io);
         }
         self.drop_peers(io);
-    }
-
-    fn connect_validators(&self, io: &IoContext<NetworkIoMessage>) {
-        let self_id = self.metadata.id().clone();
-
-        let unconnected_validators = self.unconnected_validators.read();
-        for unconnected in unconnected_validators.iter() {
-            if !self.sessions.contains_node(unconnected)
-                && *unconnected != self_id
-            {
-                self.connect_peer(unconnected, io);
-            }
-        }
     }
 
     // Connect to all reserved and trusted peers if not yet
@@ -1145,16 +1092,6 @@ impl NetworkServiceInner {
                     }
                 }
             }
-
-            if self.is_consortium {
-                let validator_set = self.validator_set.read();
-                let mut unconnected_validators =
-                    self.unconnected_validators.write();
-                let node_id = self.get_peer_node_id(stream);
-                if validator_set.contains(&node_id) {
-                    unconnected_validators.remove(&node_id);
-                }
-            }
         }
 
         for (protocol, data) in messages {
@@ -1222,7 +1159,6 @@ impl NetworkServiceInner {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut failure_id = None;
         let mut deregister = false;
-        let node_id = self.get_peer_node_id(token);
 
         if let FIRST_SESSION..=LAST_SESSION = token {
             if let Some(session) = self.sessions.get(token) {
@@ -1287,15 +1223,6 @@ impl NetworkServiceInner {
             io.deregister_stream(token).unwrap_or_else(|e| {
                 debug!("Error deregistering stream {:?}", e);
             });
-
-            if self.is_consortium {
-                let validator_set = self.validator_set.read();
-                let mut unconnected_validators =
-                    self.unconnected_validators.write();
-                if validator_set.contains(&node_id) {
-                    unconnected_validators.insert(node_id);
-                }
-            }
         }
     }
 

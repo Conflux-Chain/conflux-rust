@@ -25,7 +25,6 @@ pub mod light;
 pub mod rpc;
 #[cfg(test)]
 mod tests;
-pub mod tg_archive;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset

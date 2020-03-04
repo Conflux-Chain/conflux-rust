@@ -28,11 +28,6 @@ mod types;
 
 use self::{
     impls::{
-        alliance::{
-            CfxHandler as AllianceCfxHandler,
-            DebugRpcImpl as AllianceDebugRpcImpl, RpcImpl as AllianceImpl,
-            TestRpcImpl as AllianceTestRpcImpl,
-        },
         cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
         common::RpcImpl as CommonImpl,
         light::{
@@ -177,48 +172,6 @@ pub fn setup_debug_rpc_apis_light(
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();
     handler.extend_with(cfx);
-    handler.extend_with(test);
-    handler.extend_with(debug);
-    if let Some(pubsub) = pubsub {
-        handler.extend_with(pubsub.to_delegate());
-    }
-    handler
-}
-
-pub fn setup_public_rpc_apis_alliance(
-    common: Arc<CommonImpl>, rpc: Arc<AllianceImpl>,
-    pubsub: Option<PubSubClient>, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
-    let cfx = AllianceCfxHandler::new(common, rpc).to_delegate();
-    let interceptor =
-        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc");
-
-    // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = MetaIoHandler::default();
-    handler.extend_with(RpcProxy::new(cfx, interceptor));
-    if let Some(pubsub) = pubsub {
-        handler.extend_with(pubsub.to_delegate());
-    }
-    handler
-}
-
-pub fn setup_debug_rpc_apis_alliance(
-    common: Arc<CommonImpl>, rpc: Arc<AllianceImpl>,
-    pubsub: Option<PubSubClient>, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
-    let cfx =
-        AllianceCfxHandler::new(common.clone(), rpc.clone()).to_delegate();
-    let interceptor =
-        ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
-    let test =
-        AllianceTestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
-    let debug = AllianceDebugRpcImpl::new(common, rpc).to_delegate();
-
-    // extend_with maps each method in RpcImpl object into a RPC handler
-    let mut handler = MetaIoHandler::default();
-    handler.extend_with(RpcProxy::new(cfx, interceptor));
     handler.extend_with(test);
     handler.extend_with(debug);
     if let Some(pubsub) = pubsub {

@@ -9,10 +9,8 @@ use super::super::types::{
     H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
-use cfx_types::Public;
 use jsonrpc_core::{BoxFuture, Result as RpcResult};
 use jsonrpc_derive::rpc;
-use libra_types::transaction::SignedTransaction;
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -181,18 +179,6 @@ pub trait Cfx {
     fn accumulate_interest_rate(
         &self, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<RpcU256>;
-
-    /// Set administrators for consortium chain.
-    #[rpc(name = "cfx_setConsortiumAdministrators")]
-    fn set_consortium_administrators(
-        &self, admins: Vec<Public>,
-    ) -> RpcResult<bool>;
-
-    /// Send admin transaction for alliance membership change.
-    #[rpc(name = "cfx_sendNewConsortiumMembershipTrans")]
-    fn send_new_consortium_member_trans(
-        &self, admin_trans: SignedTransaction,
-    ) -> RpcResult<()>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
