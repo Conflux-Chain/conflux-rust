@@ -95,7 +95,7 @@ impl StateManager {
 
     pub fn log_usage(&self) {
         self.storage_manager.log_usage();
-        info!(
+        debug!(
             "number of nodes committed to db {}",
             self.number_committed_nodes.load(Ordering::Relaxed),
         );

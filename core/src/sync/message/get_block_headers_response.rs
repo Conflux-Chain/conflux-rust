@@ -194,8 +194,6 @@ impl GetBlockHeadersResponse {
         }
 
         // do not request headers we just received
-        dependent_hashes_bounded.remove(&H256::default());
-        dependent_hashes_unbounded.remove(&H256::default());
         for hash in &returned_headers {
             dependent_hashes_bounded.remove(hash);
             dependent_hashes_unbounded.remove(hash);
