@@ -473,13 +473,13 @@ impl Configuration {
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
-            snapshot_candidate_request_timeout_ms: Duration::from_millis(
+            snapshot_candidate_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_candidate_request_timeout_ms,
             ),
-            snapshot_manifest_request_timeout_ms: Duration::from_millis(
+            snapshot_manifest_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_manifest_request_timeout_ms,
             ),
-            snapshot_chunk_request_timeout_ms: Duration::from_millis(
+            snapshot_chunk_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_chunk_request_timeout_ms,
             ),
             chunk_size_byte: self.raw_conf.chunk_size_byte,

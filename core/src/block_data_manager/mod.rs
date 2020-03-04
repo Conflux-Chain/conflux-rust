@@ -1086,7 +1086,7 @@ impl BlockDataManager {
     ) -> (EpochId, Vec<EpochId>) {
         let mut epochs_reverse_order = vec![];
         while count > 0 {
-            info!("getting parent for block {:?}", block);
+            debug!("getting parent for block {:?}", block);
             epochs_reverse_order.push(block);
             block = *self.block_header_by_hash(&block).unwrap().parent_hash();
             if block == NULL_EPOCH
@@ -1097,7 +1097,7 @@ impl BlockDataManager {
             count -= 1;
         }
 
-        info!("get_parent_epochs stopped at block {:?}", block);
+        debug!("get_parent_epochs stopped at block {:?}", block);
         epochs_reverse_order.reverse();
         (block, epochs_reverse_order)
     }
