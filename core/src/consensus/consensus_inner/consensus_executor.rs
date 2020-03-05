@@ -108,13 +108,14 @@ pub struct EpochExecutionTask {
     pub reward_info: Option<RewardExecutionInfo>,
     pub on_local_pivot: bool,
     pub debug_record: Arc<Mutex<Option<ComputeEpochDebugRecord>>>,
+    pub force_recompute: bool,
 }
 
 impl EpochExecutionTask {
     pub fn new(
         epoch_hash: H256, epoch_block_hashes: Vec<H256>,
         start_block_number: u64, reward_info: Option<RewardExecutionInfo>,
-        on_local_pivot: bool, debug_record: bool,
+        on_local_pivot: bool, debug_record: bool, force_recompute: bool,
     ) -> Self
     {
         Self {
@@ -129,6 +130,7 @@ impl EpochExecutionTask {
             } else {
                 Arc::new(Mutex::new(None))
             },
+            force_recompute,
         }
     }
 }
@@ -315,8 +317,9 @@ impl ConsensusExecutor {
             inner.get_epoch_block_hashes(epoch_arena_index),
             inner.get_epoch_start_block_number(epoch_arena_index),
             self.get_reward_execution_info(inner, epoch_arena_index),
-            true,
-            false,
+            true,  /* on_local_pivot */
+            false, /* debug_record */
+            false, /* force_compute */
         );
         Some(execution_task)
     }
@@ -736,8 +739,9 @@ impl ConsensusExecutor {
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),
                     reward_execution_info,
-                    false,
-                    false,
+                    false, /* on_local_pivot */
+                    false, /* debug_record */
+                    false, /* force_recompute */
                 ));
                 last_state_height += 1;
             }
@@ -754,8 +758,9 @@ impl ConsensusExecutor {
                 inner.get_epoch_block_hashes(epoch_arena_index),
                 inner.get_epoch_start_block_number(epoch_arena_index),
                 reward_execution_info,
-                false,
-                false,
+                false, /* on_local_pivot */
+                false, /* debug_record */
+                false, /* force_recompute */
             ));
         }
 
@@ -845,6 +850,7 @@ impl ConsensusExecutionHandler {
             &task.reward_info,
             task.on_local_pivot,
             &mut *task.debug_record.lock(),
+            task.force_recompute,
         );
     }
 
@@ -884,6 +890,7 @@ impl ConsensusExecutionHandler {
         reward_execution_info: &Option<RewardExecutionInfo>,
         on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
+        force_recompute: bool,
     )
     {
         // FIXME: Question: where to calculate if we should make a snapshot?
@@ -891,7 +898,8 @@ impl ConsensusExecutionHandler {
         // FIXME: a new state.
 
         // Check if the state has been computed
-        if debug_record.is_none()
+        if !force_recompute
+            && debug_record.is_none()
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,

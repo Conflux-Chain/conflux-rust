@@ -630,8 +630,9 @@ impl ConsensusNewBlockHandler {
             epoch_block_hashes.clone(),
             inner.get_epoch_start_block_number(epoch_arena_index),
             reward_execution_info,
-            false,
-            true,
+            false, /* on_local_pivot */
+            true,  /* debug_record */
+            false, /* force_recompute */
         );
         let debug_record_data = task.debug_record.clone();
         {
@@ -1649,8 +1650,9 @@ impl ConsensusNewBlockHandler {
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),
                     reward_execution_info,
-                    true,
-                    false,
+                    true,  /* on_local_pivot */
+                    false, /* debug_record */
+                    false, /* force_recompute */
                 ));
 
                 // send to PubSub
@@ -1942,6 +1944,7 @@ impl ConsensusNewBlockHandler {
                         .get_reward_execution_info(inner, pivot_arena_index),
                     true,  /* on_local_pivot */
                     false, /* debug_record */
+                    true,  /* force_recompute */
                 ));
             }
         }
