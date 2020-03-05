@@ -126,8 +126,13 @@ impl RpcImpl {
             address, num
         );
 
-        self.consensus
-            .get_admin(address, num.into())
+        let cg = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        cg.get_admin(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
             .into_future()

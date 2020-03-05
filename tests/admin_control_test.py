@@ -193,16 +193,6 @@ class AdminControlTest(ConfluxTestFramework):
             check_status=True)
         assert_equal(node.cfx_getAdmin(contract_addr), addr2);
 
-        # # setup contract
-        # transaction = self.call_contract_function(
-        #     contract=commission_privilege_contract,
-        #     name="constructor",
-        #     args=[],
-        #     sender_key=self.genesis_priv_key)
-        # contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
-        # self.log.info("contract_addr={}".format(contract_addr))
-        # assert_equal(node.cfx_getBalance(contract_addr), hex(0))
-
         self.log.info("Pass")
 
 if __name__ == "__main__":
