@@ -47,13 +47,13 @@ pub trait Cfx {
     ) -> BoxFuture<RpcU256>;
 
     /// Returns balance of the given account.
-    #[rpc(name = "cfx_getBankBalance")]
+    #[rpc(name = "cfx_getStakingBalance")]
     fn staking_balance(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256>;
 
     /// Returns balance of the given account.
-    #[rpc(name = "cfx_getStorageBalance")]
+    #[rpc(name = "cfx_getCollateralForStorage")]
     fn collateral_for_storage(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256>;

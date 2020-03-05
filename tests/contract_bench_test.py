@@ -151,6 +151,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(int(result, 0) - int(time.time()) < 5)
 
         b0 = self.rpc.get_balance(self.sender)
+        c0 = self.rpc.get_collateral_for_storage(self.sender)
         fee = 10000000
         # interact with newContract(), sender send conflux to himself
         time_lock = int(time.time()) + 7200
@@ -158,9 +159,10 @@ class ContractBenchTest(SmartContractBenchBase):
         cost = 5000000000000000000
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost)
         logs = self.rpc.get_logs(self.filter)
+        c1 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(len(logs), l + 2)
         assert_equal(self.rpc.get_balance(contractAddr), cost)
-        assert_greater_than_or_equal(self.rpc.get_balance(self.sender), b0 - cost - fee)
+        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - fee - (c1 - c0))
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
@@ -182,7 +184,9 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.functions.withdraw(contract_id, self.solution).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data)
         assert_equal(self.rpc.get_balance(contractAddr), 0)
-        assert_greater_than_or_equal(self.rpc.get_balance(self.sender), b0 - fee * 2)
+        c2 = self.rpc.get_collateral_for_storage(self.sender)
+        assert_equal(c2 - c1, 125000000000000000)
+        assert_equal(self.rpc.get_balance(self.sender), b0 - fee * 2 - (c2 - c0))
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 

@@ -53,7 +53,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         client.send_tx(tx)
         self.wait_for_tx([tx])
         assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
-        assert_equal(node.cfx_getBankBalance(addr), hex(0))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(0))
 
         self.tx_conf["to"] = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
         # deposit 10**18
@@ -61,14 +61,14 @@ class WithdrawDepositTest(ConfluxTestFramework):
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], nonce=0, gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(node.cfx_getBankBalance(addr), hex(10 ** 18))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(10 ** 18))
 
         # withdraw 5 * 10**17
         tx_data = decode_hex(staking_contract.functions.withdraw(5 * 10 ** 17).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], nonce=1, gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(node.cfx_getBankBalance(addr), hex(5 * 10 ** 17))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(5 * 10 ** 17))
 
         block_gen_thread.stop()
         block_gen_thread.join()

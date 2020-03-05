@@ -122,7 +122,7 @@ impl RpcImpl {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
-            "RPC Request: cfx_getBankBalance address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getStakingBalance address={:?} epoch_num={:?}",
             address, num
         );
 
@@ -146,7 +146,7 @@ impl RpcImpl {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
-            "RPC Request: cfx_getStorageBalance address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getCollateralForStorage address={:?} epoch_num={:?}",
             address, num
         );
 

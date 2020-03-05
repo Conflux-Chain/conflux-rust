@@ -116,9 +116,11 @@ class RpcClient:
         logs = self.node.cfx_getLogs(filter.__dict__)
         return logs
 
-    def get_code(self, address: str, epoch: str) -> str:
-        assert_is_hash_string(address, length=40)
-        code = self.node.cfx_getCode(address, epoch)
+    def get_code(self, address: str, epoch: str = None) -> str:
+        if epoch is None:
+            code = self.node.cfx_getCode(address)
+        else:
+            code = self.node.cfx_getCode(address, epoch)
         assert_is_hex_string(code)
         return code
 
@@ -136,6 +138,18 @@ class RpcClient:
             return int(self.node.cfx_getBalance(addr), 0)
         else:
             return int(self.node.cfx_getBalance(addr, epoch), 0)
+
+    def get_staking_balance(self, addr: str, epoch: str = None) -> int:
+        if epoch is None:
+            return int(self.node.cfx_getStakingBalance(addr), 0)
+        else:
+            return int(self.node.cfx_getStakingBalance(addr, epoch), 0)
+
+    def get_collateral_for_storage(self, addr: str, epoch: str = None) -> int:
+        if epoch is None:
+            return int(self.node.cfx_getCollateralForStorage(addr), 0)
+        else:
+            return int(self.node.cfx_getCollateralForStorage(addr, epoch), 0)
 
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
