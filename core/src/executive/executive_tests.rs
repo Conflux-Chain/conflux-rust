@@ -7,7 +7,7 @@ use crate::{
     evm::{Factory, FinalizationResult, VMType},
     machine::Machine,
     parameters::staking::*,
-    state::{CleanupMode, Substate},
+    state::{CleanupMode, CollateralCheckResult, Substate},
     storage::tests::new_state_manager_for_unit_test,
     test_helpers::{
         get_state_for_genesis_write, get_state_for_genesis_write_with_factory,
@@ -228,13 +228,17 @@ fn test_call_to_create() {
     state
         .add_balance(
             &sender,
-            &(U256::from(100) + *COLLATERAL_PER_STORAGE_KEY),
+            &(U256::from(100)
+                + *COLLATERAL_PER_STORAGE_KEY
+                + U256::from(15_625_000_000_000_000u64)),
             CleanupMode::NoEmpty,
         )
         .unwrap();
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(100) + *COLLATERAL_PER_STORAGE_KEY
+        U256::from(100)
+            + *COLLATERAL_PER_STORAGE_KEY
+            + U256::from(15_625_000_000_000_000u64)
     );
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
@@ -253,9 +257,12 @@ fn test_call_to_create() {
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY
+        *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
     );
-    assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(
+        *state.total_storage_tokens(),
+        *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
+    );
 
     assert_eq!(gas_left, U256::from(44_752));
 }
@@ -390,6 +397,7 @@ fn test_not_enough_cash() {
         data: "3331600055".from_hex().unwrap(),
         gas: U256::from(100_000),
         gas_price: U256::one(),
+        storage_limit: U256::MAX,
         nonce: U256::zero(),
     }
     .sign(keypair.secret());
@@ -1087,7 +1095,13 @@ fn test_storage_commission_privilege() {
             caller2,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(
+            &privilege_control_address,
+            &U256::MAX
+        ),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(
         *state.total_storage_tokens(),

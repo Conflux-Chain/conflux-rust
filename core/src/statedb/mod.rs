@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    bytes::Bytes,
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     parameters::staking::*,
     storage::{
@@ -12,7 +11,7 @@ use crate::{
     },
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey};
+use primitives::{Account, CodeInfo, EpochId, StorageKey};
 
 mod error;
 
@@ -51,14 +50,8 @@ impl StateDb {
 
     pub fn get_code(
         &self, address: &Address, code_hash: &H256,
-    ) -> Option<Bytes> {
-        match self.get_raw(StorageKey::new_code_key(address, code_hash)) {
-            Ok(Some(code)) => Some(code.to_vec()),
-            _ => {
-                warn!("Failed reverse get of {}", code_hash);
-                None
-            }
-        }
+    ) -> Result<Option<CodeInfo>> {
+        self.get::<CodeInfo>(StorageKey::new_code_key(address, code_hash))
     }
 
     pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {

@@ -54,6 +54,13 @@ pub enum CleanupMode<'a> {
     TrackTouched(&'a mut HashSet<Address>),
 }
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum CollateralCheckResult {
+    ExceedStorageLimit { limit: U256, required: U256 },
+    NotEnoughBalance { required: U256, got: U256 },
+    Valid,
+}
+
 #[derive(Copy, Clone, Debug)]
 struct StakingState {
     // This is the total number of CFX issued.
@@ -153,7 +160,9 @@ impl State {
         index
     }
 
-    pub fn check_collateral_for_storage(&mut self) -> bool {
+    pub fn check_collateral_for_storage(
+        &mut self, sender: &Address, storage_limit: &U256,
+    ) -> CollateralCheckResult {
         let mut collateral_for_storage_sub = HashMap::new();
         let mut collateral_for_storage_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.borrow().last() {
@@ -194,12 +203,25 @@ impl State {
             let balance = self.balance(&addr).expect("no db error");
             // balance is not enough to cover storage incremental.
             if delta > balance {
-                return false;
+                return CollateralCheckResult::NotEnoughBalance {
+                    required: delta,
+                    got: balance,
+                };
             }
             self.add_collateral_for_storage(&addr, &delta)
                 .expect("no db error");
         }
-        true
+
+        let collateral_for_storage =
+            self.collateral_for_storage(sender).expect("no db error");
+        if collateral_for_storage > *storage_limit {
+            return CollateralCheckResult::ExceedStorageLimit {
+                limit: *storage_limit,
+                required: collateral_for_storage,
+            };
+        } else {
+            CollateralCheckResult::Valid
+        }
     }
 
     /// Merge last checkpoint with previous.
@@ -399,6 +421,12 @@ impl State {
         }
     }
 
+    pub fn code_owner(&self, address: &Address) -> DbResult<Option<Address>> {
+        self.ensure_cached(address, RequireCache::Code, |acc| {
+            acc.as_ref().map_or(None, |acc| acc.code_owner())
+        })
+    }
+
     pub fn code(&self, address: &Address) -> DbResult<Option<Arc<Bytes>>> {
         if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
             || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
@@ -578,7 +606,6 @@ impl State {
             return true;
         }
 
-        let _hash = account.code_hash();
         match require {
             RequireCache::None => true,
             RequireCache::Code | RequireCache::CodeSize => {
@@ -728,7 +755,7 @@ impl State {
     }
 
     pub fn init_code(
-        &mut self, address: &Address, code: Bytes,
+        &mut self, address: &Address, code: Bytes, owner: Address,
     ) -> DbResult<()> {
         self.require_or_from(
             address,
@@ -743,7 +770,7 @@ impl State {
             },
             |_| {},
         )?
-        .init_code(code);
+        .init_code(code, owner);
         Ok(())
     }
 

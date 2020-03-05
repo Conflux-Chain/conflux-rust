@@ -22,7 +22,7 @@
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
 use crate::statedb::Error as DbError;
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use std::fmt;
 
 #[derive(Debug)]
@@ -75,8 +75,13 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
-    /// When balance is not enough for collateral_for_storage.
-    OutOfStorageCollateral,
+    /// When balance is not enough for `collateral_for_storage`.
+    /// The state should be reverted to the state from before the
+    /// transaction execution.
+    NotEnoughBalanceForStorage { required: U256, got: U256 },
+    /// `ExceedStorageLimit` is returned when the `collateral_for_storage`
+    /// exceed the `storage_limit`.
+    ExceedStorageLimit,
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
     /// Internal contract failed
@@ -124,7 +129,10 @@ impl fmt::Display for Error {
                 wanted,
                 limit,
             } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
-            OutOfStorageCollateral => write!(f, "Out of staking"),
+            NotEnoughBalanceForStorage { required, got } => {
+                write!(f, "Not enough balance for storage {}/{}", required, got)
+            }
+            ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
             InternalContract(name) => {
                 write!(f, "InternalContract failed: {}", name)

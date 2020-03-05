@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{CleanupMode, State};
+use super::{CleanupMode, CollateralCheckResult, State};
 
 use crate::{
     parameters::staking::*,
@@ -234,7 +234,10 @@ fn checkpoint_from_empty_get_storage_at() {
         Some(BigEndianHash::from_uint(&U256::from(4)))
     );
 
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // Commit/discard c5.
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
@@ -283,7 +286,10 @@ fn checkpoint_from_empty_get_storage_at() {
         Some(BigEndianHash::from_uint(&U256::from(1)))
     );
 
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // Commit/discard c3.
     assert_eq!(
         *state.total_storage_tokens(),
@@ -318,7 +324,10 @@ fn checkpoint_from_empty_get_storage_at() {
         Some(BigEndianHash::from_uint(&U256::from(0)))
     );
 
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // Commit/discard c1.
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -351,7 +360,10 @@ fn checkpoint_get_storage_at() {
     state
         .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(0xffff)), a)
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(
         state.balance(&a).unwrap(),
@@ -448,7 +460,10 @@ fn checkpoint_get_storage_at() {
         Some(BigEndianHash::from_uint(&U256::from(4)))
     );
 
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // Commit/discard c5.
     assert_eq!(
         state.balance(&a).unwrap(),
@@ -509,7 +524,10 @@ fn checkpoint_get_storage_at() {
         Some(BigEndianHash::from_uint(&U256::from(1)))
     );
 
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // Commit/discard c3.
 
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
@@ -558,7 +576,10 @@ fn checkpoint_get_storage_at() {
         Some(BigEndianHash::from_uint(&U256::from(0)))
     );
 
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // Commit/discard c1.
     assert_eq!(state.balance(&a).unwrap(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -618,7 +639,10 @@ fn create_contract_fail() {
     state
         .add_balance(&a, &U256::from(1), CleanupMode::ForceCreate)
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint(); // discard c2
     state.revert_to_checkpoint(); // revert to c1
     assert_eq!(state.exists(&a).unwrap(), false);
@@ -645,7 +669,10 @@ fn create_contract_fail_previous_storage() {
     state
         .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(0xffff)), a)
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&a, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -756,7 +783,10 @@ fn test_automatic_collateral_normal_account() {
             normal_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&normal_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
 
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
@@ -787,7 +817,10 @@ fn test_automatic_collateral_normal_account() {
             normal_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&normal_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -821,7 +854,10 @@ fn test_automatic_collateral_normal_account() {
             normal_account,
         )
         .unwrap();
-    assert!(!state.check_collateral_for_storage());
+    assert_ne!(
+        state.check_collateral_for_storage(&normal_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.revert_to_checkpoint();
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -847,7 +883,10 @@ fn test_automatic_collateral_normal_account() {
             normal_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&normal_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(
         *state.total_storage_tokens(),
@@ -873,7 +912,10 @@ fn test_automatic_collateral_normal_account() {
             normal_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&normal_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
     assert_eq!(
@@ -898,7 +940,10 @@ fn test_automatic_collateral_normal_account() {
             normal_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&normal_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(
@@ -951,7 +996,10 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&contract_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(
@@ -973,7 +1021,10 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&contract_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(
         state.balance(&contract_account).unwrap(),
@@ -1003,7 +1054,10 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
-    assert!(!state.check_collateral_for_storage());
+    assert_ne!(
+        state.check_collateral_for_storage(&contract_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.revert_to_checkpoint();
     assert_eq!(
         state.balance(&contract_account).unwrap(),
@@ -1025,7 +1079,10 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&contract_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
@@ -1047,7 +1104,10 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&contract_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(
         state.balance(&contract_account).unwrap(),
@@ -1069,7 +1129,10 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
-    assert!(state.check_collateral_for_storage());
+    assert_eq!(
+        state.check_collateral_for_storage(&contract_account, &U256::MAX),
+        CollateralCheckResult::Valid
+    );
     state.discard_checkpoint();
     assert_eq!(
         state.balance(&contract_account).unwrap(),

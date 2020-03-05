@@ -366,7 +366,7 @@ mod tests {
     fn test_serialize_block_transactions() {
         let t = BlockTransactions::Full(vec![Transaction::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
+        assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#);
 
         let t = BlockTransactions::Hashes(vec![H256::default()]);
         let serialized = serde_json::to_string(&t).unwrap();
@@ -384,7 +384,7 @@ mod tests {
 
         let result_block_transactions =
             BlockTransactions::Full(vec![Transaction::default()]);
-        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);

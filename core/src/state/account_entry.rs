@@ -9,7 +9,7 @@ use crate::{
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
-use primitives::{Account, DepositInfo, StakingVoteInfo, StorageKey};
+use primitives::{Account, CodeInfo, DepositInfo, StakingVoteInfo, StorageKey};
 use rlp::RlpStream;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
@@ -71,6 +71,7 @@ pub struct OverlayAccount {
     code_size: Option<usize>,
     // Code cache of the account.
     code_cache: Arc<Bytes>,
+    code_owner: Address,
 
     pub reset_storage: bool,
     // Whether it is a contract address.
@@ -96,6 +97,7 @@ impl OverlayAccount {
             code_hash: account.code_hash,
             code_size: None,
             code_cache: Arc::new(vec![]),
+            code_owner: Address::zero(),
             reset_storage: false,
             is_contract: account.code_hash != KECCAK_EMPTY,
         };
@@ -143,6 +145,7 @@ impl OverlayAccount {
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
+            code_owner: Address::zero(),
             reset_storage: false,
             is_contract: false,
         }
@@ -167,7 +170,8 @@ impl OverlayAccount {
             staking_vote_list: Vec::new(),
             code_hash: KECCAK_EMPTY,
             code_size: None,
-            code_cache: Arc::new(vec![]),
+            code_cache: Arc::new(Default::default()),
+            code_owner: Address::zero(),
             reset_storage,
             is_contract: true,
         }
@@ -353,6 +357,14 @@ impl OverlayAccount {
         }
     }
 
+    pub fn code_owner(&self) -> Option<Address> {
+        if self.code_hash != KECCAK_EMPTY && self.code_cache.is_empty() {
+            None
+        } else {
+            Some(self.code_owner)
+        }
+    }
+
     pub fn is_cached(&self) -> bool {
         !self.code_cache.is_empty()
             || (self.code_cache.is_empty() && self.code_hash == KECCAK_EMPTY)
@@ -498,12 +510,11 @@ impl OverlayAccount {
             return Some(self.code_cache.clone());
         }
 
-        match db
-            .get_raw(StorageKey::new_code_key(&self.address, &self.code_hash))
-        {
+        match db.get_code(&self.address, &self.code_hash) {
             Ok(Some(code)) => {
-                self.code_size = Some(code.len());
-                self.code_cache = Arc::new(code.to_vec());
+                self.code_size = Some(code.code.len());
+                self.code_cache = Arc::new(code.code.to_vec());
+                self.code_owner = code.owner;
                 Some(self.code_cache.clone())
             }
             _ => {
@@ -531,6 +542,7 @@ impl OverlayAccount {
             code_hash: self.code_hash,
             code_size: self.code_size,
             code_cache: self.code_cache.clone(),
+            code_owner: self.code_owner,
             reset_storage: self.reset_storage,
             is_contract: self.is_contract,
         }
@@ -623,9 +635,10 @@ impl OverlayAccount {
         }
     }
 
-    pub fn init_code(&mut self, code: Bytes) {
+    pub fn init_code(&mut self, code: Bytes, owner: Address) {
         self.code_hash = keccak(&code);
         self.code_cache = Arc::new(code);
+        self.code_owner = owner;
         self.code_size = Some(self.code_cache.len());
         self.is_contract = true;
     }
@@ -635,6 +648,7 @@ impl OverlayAccount {
         self.nonce = other.nonce;
         self.code_hash = other.code_hash;
         self.code_cache = other.code_cache;
+        self.code_owner = other.code_owner;
         self.code_size = other.code_size;
         self.storage_cache = other.storage_cache;
         self.storage_changes = other.storage_changes;
@@ -762,12 +776,16 @@ impl OverlayAccount {
             None => {}
             Some(code) => {
                 if !code.is_empty() {
-                    db.set_raw(
-                        StorageKey::new_code_key(
-                            &self.address,
-                            &self.code_hash,
-                        ),
-                        code.as_ref().clone().into_boxed_slice(),
+                    let storage_key = StorageKey::new_code_key(
+                        &self.address,
+                        &self.code_hash,
+                    );
+                    db.set::<CodeInfo>(
+                        storage_key,
+                        &CodeInfo {
+                            code: (*code).clone(),
+                            owner: self.code_owner,
+                        },
                     )?;
                 }
             }

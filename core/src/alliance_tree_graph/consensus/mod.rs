@@ -332,8 +332,8 @@ impl TreeGraphConsensus {
         };
 
         match state_db.get_code(&address, &acc.code_hash) {
-            Some(code) => Ok(code),
-            None => Ok(vec![]),
+            Ok(Some(code)) => Ok(code.code),
+            _ => Ok(vec![]),
         }
     }
 

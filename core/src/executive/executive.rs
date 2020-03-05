@@ -12,7 +12,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     parameters::staking::*,
-    state::{CleanupMode, State, Substate},
+    state::{CleanupMode, CollateralCheckResult, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
         CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
@@ -373,7 +373,8 @@ impl<'a> CallCreateExecutive<'a> {
     fn enact_result(
         result: &vm::Result<FinalizationResult>, state: &mut State,
         substate: &mut Substate, unconfirmed_substate: Substate,
-    ) -> bool
+        sender: &Address, storage_limit: &U256,
+    ) -> CollateralCheckResult
     {
         match *result {
             Err(vm::Error::OutOfGas)
@@ -384,7 +385,8 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::InternalContract { .. })
             | Err(vm::Error::Wasm { .. })
             | Err(vm::Error::OutOfStack { .. })
-            | Err(vm::Error::OutOfStorageCollateral)
+            | Err(vm::Error::ExceedStorageLimit)
+            | Err(vm::Error::NotEnoughBalanceForStorage { .. })
             | Err(vm::Error::MutableCallInStaticContext)
             | Err(vm::Error::OutOfBounds)
             | Err(vm::Error::Reverted)
@@ -392,17 +394,24 @@ impl<'a> CallCreateExecutive<'a> {
                 apply_state: false, ..
             }) => {
                 state.revert_to_checkpoint();
-                true
+                CollateralCheckResult::Valid
             }
             Ok(_) | Err(vm::Error::Internal(_)) => {
-                if state.check_collateral_for_storage() {
-                    state.discard_checkpoint();
-                    substate.accrue(unconfirmed_substate);
-                    true
-                } else {
-                    state.revert_to_checkpoint();
-                    false
+                let check_result =
+                    state.check_collateral_for_storage(sender, storage_limit);
+                match check_result {
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        state.revert_to_checkpoint();
+                    }
+                    CollateralCheckResult::NotEnoughBalance { .. } => {
+                        state.revert_to_checkpoint();
+                    }
+                    CollateralCheckResult::Valid => {
+                        state.discard_checkpoint();
+                        substate.accrue(unconfirmed_substate);
+                    }
                 }
+                check_result
             }
         }
     }
@@ -803,22 +812,43 @@ impl<'a> CallCreateExecutive<'a> {
                     if let Err(e) = result {
                         state.revert_to_checkpoint();
                         Err(e.into())
-                    } else if state.check_collateral_for_storage() {
-                        state.discard_checkpoint();
-                        let internal_contract_out_buffer = Vec::new();
-                        let out_len = internal_contract_out_buffer.len();
-                        Ok(FinalizationResult {
-                            gas_left: params.gas - gas_cost,
-                            return_data: ReturnData::new(
-                                internal_contract_out_buffer,
-                                0,
-                                out_len,
-                            ),
-                            apply_state: true,
-                        })
                     } else {
-                        state.revert_to_checkpoint();
-                        Err(vm::Error::OutOfStorageCollateral)
+                        match state.check_collateral_for_storage(
+                            &params.original_sender,
+                            &params.storage_limit,
+                        ) {
+                            CollateralCheckResult::ExceedStorageLimit {
+                                ..
+                            } => {
+                                state.revert_to_checkpoint();
+                                Err(vm::Error::ExceedStorageLimit)
+                            }
+                            CollateralCheckResult::NotEnoughBalance {
+                                required,
+                                got,
+                            } => {
+                                state.revert_to_checkpoint();
+                                Err(vm::Error::NotEnoughBalanceForStorage {
+                                    required,
+                                    got,
+                                })
+                            }
+                            CollateralCheckResult::Valid => {
+                                state.discard_checkpoint();
+                                let internal_contract_out_buffer = Vec::new();
+                                let out_len =
+                                    internal_contract_out_buffer.len();
+                                Ok(FinalizationResult {
+                                    gas_left: params.gas - gas_cost,
+                                    return_data: ReturnData::new(
+                                        internal_contract_out_buffer,
+                                        0,
+                                        out_len,
+                                    ),
+                                    apply_state: true,
+                                })
+                            }
+                        }
                     }
                 };
 
@@ -857,6 +887,8 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
                 let out = {
                     let mut context = Self::as_context(
@@ -899,15 +931,25 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                if Self::enact_result(
+                match Self::enact_result(
                     &res,
                     state,
                     substate,
                     unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
                 ) {
-                    Ok(res)
-                } else {
-                    Ok(Err(vm::Error::OutOfStorageCollateral))
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
                 }
             }
 
@@ -943,6 +985,8 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
                 let out = {
                     let mut context = Self::as_context(
@@ -985,15 +1029,25 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                if Self::enact_result(
+                match Self::enact_result(
                     &res,
                     state,
                     substate,
                     unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
                 ) {
-                    Ok(res)
-                } else {
-                    Ok(Err(vm::Error::OutOfStorageCollateral))
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
                 }
             }
 
@@ -1041,6 +1095,9 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
+
                 let res = match out {
                     Ok(val) => val,
                     Err(TrapError::Call(subparams, resume)) => {
@@ -1063,15 +1120,25 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                if Self::enact_result(
+                match Self::enact_result(
                     &res,
                     state,
                     substate,
                     unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
                 ) {
-                    Ok(res)
-                } else {
-                    Ok(Err(vm::Error::OutOfStorageCollateral))
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
                 }
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
@@ -1099,6 +1166,9 @@ impl<'a> CallCreateExecutive<'a> {
                 resume,
                 mut unconfirmed_substate,
             ) => {
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
+
                 let out = {
                     let exec = resume.resume_create(result);
 
@@ -1146,15 +1216,25 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                if Self::enact_result(
+                match Self::enact_result(
                     &res,
                     state,
                     substate,
                     unconfirmed_substate,
+                    &sender,
+                    &storage_limit,
                 ) {
-                    Ok(res)
-                } else {
-                    Ok(Err(vm::Error::OutOfStorageCollateral))
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
                 }
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
@@ -1415,7 +1495,13 @@ impl<'a> Executive<'a> {
                             &params.code_address,
                             &gas_cost,
                         )?;
-                        assert!(self.state.check_collateral_for_storage());
+                        assert_eq!(
+                            self.state.check_collateral_for_storage(
+                                &params.original_sender,
+                                &params.storage_limit
+                            ),
+                            CollateralCheckResult::Valid
+                        );
                         self.state.sub_balance(
                             &params.code_address,
                             &gas_cost,
@@ -1552,6 +1638,15 @@ impl<'a> Executive<'a> {
             &mut substate.to_cleanup_mode(&spec),
         )?;
 
+        let collateral_for_storage =
+            self.state.collateral_for_storage(&sender)?;
+        let storage_limit =
+            if tx.storage_limit <= U256::MAX - collateral_for_storage {
+                tx.storage_limit + collateral_for_storage
+            } else {
+                U256::MAX
+            };
+
         let (result, output) = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
@@ -1574,6 +1669,7 @@ impl<'a> Executive<'a> {
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
+                    storage_limit,
                 };
                 let res = self.create(params, &mut substate);
                 let out = match &res {
@@ -1597,6 +1693,7 @@ impl<'a> Executive<'a> {
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
+                    storage_limit,
                 };
 
                 let res = self.call(params, &mut substate);
@@ -1628,14 +1725,7 @@ impl<'a> Executive<'a> {
 
         // perform suicides
         for address in &substate.suicides {
-            // If the `staking_balance` of the address is not zero, it means it
-            // owns some storages. We should not kill this account, unless all
-            // the storages are released.
-            //
-            assert!(self.state.exists(address)?);
-            if self.state.staking_balance(address)?.is_zero() {
-                self.state.kill_account(address);
-            }
+            self.state.kill_account(address);
         }
 
         // TODO should be added back after enabling dust collection

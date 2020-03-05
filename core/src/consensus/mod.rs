@@ -415,8 +415,8 @@ impl ConsensusGraph {
         };
 
         match state_db.get_code(&address, &acc.code_hash) {
-            Some(code) => Ok(code),
-            None => Ok(vec![]),
+            Ok(Some(code)) => Ok(code.code),
+            _ => Ok(vec![]),
         }
     }
 
@@ -1016,7 +1016,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn get_best_state(&self) -> State {
         let (best_state_hash, past_num_blocks) = {
             let inner = self.inner.read();
-            let best_state_hash = inner.best_block_hash();
+            let best_state_hash = inner.best_state_block_hash();
             let arena_index = inner.hash_to_arena_indices[&best_state_hash];
             let past_num_blocks = inner.arena[arena_index].past_num_blocks();
             (best_state_hash, past_num_blocks)

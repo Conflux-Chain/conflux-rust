@@ -9,6 +9,7 @@ use crate::{
         U256 as RpcU256,
     },
 };
+use cfx_types::U256;
 use ethkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
@@ -30,6 +31,7 @@ pub struct Transaction {
     pub gas: RpcU256,
     pub contract_created: Option<RpcH160>,
     pub data: Bytes,
+    pub storage_limit: RpcU256,
     pub status: Option<RpcU256>,
     /// The standardised V field of the signature.
     pub v: RpcU256,
@@ -67,6 +69,7 @@ impl Transaction {
             gas_price: t.gas_price.into(),
             gas: t.gas.into(),
             data: t.data.clone().into(),
+            storage_limit: t.storage_limit.into(),
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),
@@ -85,6 +88,7 @@ impl Transaction {
                         Some(address) => Action::Call(address.into()),
                     },
                     value: self.value.into(),
+                    storage_limit: self.storage_limit.into(),
                     data: self.data.into(),
                 },
                 v: self.v.as_usize() as u8,
@@ -109,6 +113,7 @@ pub struct SendTxRequest {
     pub value: RpcU256,
     pub data: Option<Bytes>,
     pub nonce: Option<RpcU256>,
+    pub storage_limit: Option<RpcU256>,
 }
 
 impl SendTxRequest {
@@ -124,6 +129,10 @@ impl SendTxRequest {
                 Some(address) => Action::Call(address.into()),
             },
             value: self.value.into(),
+            storage_limit: self
+                .storage_limit
+                .unwrap_or(U256::MAX.into())
+                .into(),
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 

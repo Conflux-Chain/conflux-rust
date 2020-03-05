@@ -163,10 +163,13 @@ pub mod staking {
     use super::consensus_internal::CONFLUX_TOKEN;
     use cfx_types::U256;
 
+    /// This is the exchange unit between storage and CFX.
+    pub const NUM_BYTES_PER_CONFLUX_TOKEN: u64 = 1024;
+
     lazy_static! {
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / 16);
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
         /// This is the scale factor for interest rate: `BLOCKS_PER_YEAR` * 100.
         /// The actual interest rate per block will be `INITIAL_ANNUAL_INTEREST_RATE /
         /// INTEREST_RATE_SCALE / BLOCKS_PER_YEAR`.

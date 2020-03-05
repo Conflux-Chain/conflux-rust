@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::hash::KECCAK_EMPTY;
+use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 use cfx_types::{Address, H256, U256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -29,6 +29,14 @@ pub struct StakingVoteInfo {
     /// This is the timestamp when the vote right will be invalid, measured in
     /// the number of past blocks.
     pub unlock_time: u64,
+}
+
+#[derive(
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+)]
+pub struct CodeInfo {
+    pub code: Bytes,
+    pub owner: Address,
 }
 
 #[derive(

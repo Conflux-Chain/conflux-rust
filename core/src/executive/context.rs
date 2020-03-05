@@ -7,6 +7,7 @@ use super::executive::*;
 use crate::{
     bytes::Bytes,
     machine::Machine,
+    parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
     state::{CleanupMode, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -36,6 +37,8 @@ pub struct OriginInfo {
     /// This is the address of original receiver of the transaction.
     /// If it is a contract call, it is the address of the contract.
     original_receiver: Address,
+    /// The upper bound of `collateral_for_storage` for `original_sender`
+    storage_limit: U256,
     gas_price: U256,
     value: U256,
 }
@@ -44,15 +47,20 @@ impl OriginInfo {
     /// Populates origin info from action params.
     pub fn from(params: &ActionParams) -> Self {
         OriginInfo {
-            address: params.address.clone(),
-            original_sender: params.original_sender.clone(),
-            original_receiver: params.original_receiver.clone(),
+            address: params.address,
+            original_sender: params.original_sender,
+            original_receiver: params.original_receiver,
+            storage_limit: params.storage_limit,
             gas_price: params.gas_price,
             value: match params.value {
                 ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
             },
         }
     }
+
+    pub fn original_sender(&self) -> &Address { &self.original_sender }
+
+    pub fn storage_limit(&self) -> &U256 { &self.storage_limit }
 }
 
 /// Implementation of evm context.
@@ -173,6 +181,7 @@ impl<'a> ContextTrait for Context<'a> {
             sender: self.origin.address.clone(),
             original_sender: self.origin.original_sender,
             original_receiver: self.origin.original_receiver,
+            storage_limit: self.origin.storage_limit,
             gas: *gas,
             gas_price: self.origin.gas_price,
             value: ActionValue::Transfer(*value),
@@ -240,6 +249,7 @@ impl<'a> ContextTrait for Context<'a> {
             code_address: *code_address,
             original_sender: self.origin.original_sender,
             original_receiver: self.origin.original_receiver,
+            storage_limit: self.origin.storage_limit,
             gas: *gas,
             gas_price: self.origin.gas_price,
             code,
@@ -285,7 +295,34 @@ impl<'a> ContextTrait for Context<'a> {
                         false => Ok(*gas),
                     };
                 }
-                self.state.init_code(&self.origin.address, data.to_vec())?;
+                let collateral_for_code = U256::from(data.len())
+                    * U256::from(CONFLUX_TOKEN)
+                    / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
+                let balance =
+                    self.state.balance(&self.origin.original_sender)?;
+                let collateral_for_storage = self
+                    .state
+                    .collateral_for_storage(&self.origin.original_sender)?;
+                if balance < collateral_for_code {
+                    return Err(vm::Error::NotEnoughBalanceForStorage {
+                        required: collateral_for_code,
+                        got: balance,
+                    });
+                }
+                if collateral_for_storage + collateral_for_code
+                    > self.origin.storage_limit
+                {
+                    return Err(vm::Error::ExceedStorageLimit);
+                }
+                self.state.add_collateral_for_storage(
+                    &self.origin.original_sender,
+                    &collateral_for_code,
+                )?;
+                self.state.init_code(
+                    &self.origin.address,
+                    data.to_vec(),
+                    self.origin.original_sender,
+                )?;
                 Ok(*gas - return_cost)
             }
             OutputPolicy::InitContract => Ok(*gas),
@@ -316,6 +353,15 @@ impl<'a> ContextTrait for Context<'a> {
 
         let address = self.origin.address.clone();
         let balance = self.balance(&address)?;
+        let code_size =
+            self.state.code_size(&address)?.expect("code size exists");
+        let code_owner =
+            self.state.code_owner(&address)?.expect("code owner exists");
+        let collateral_for_code = U256::from(code_size)
+            * U256::from(CONFLUX_TOKEN)
+            / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
+        self.state
+            .sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
         if &address == refund_address {
             self.state.sub_balance(
                 &address,
@@ -375,24 +421,24 @@ impl<'a> ContextTrait for Context<'a> {
 }
 
 #[cfg(test)]
-#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::{
-        machine::{new_machine, new_machine_with_builtin},
-        statedb::StateDb,
+        machine::{new_machine_with_builtin, Machine},
+        state::{State, Substate},
         storage::{
-            new_storage_manager_for_testing, state::StateTrait,
-            tests::FakeStateManager, StorageManager, StorageManagerTrait,
+            new_storage_manager_for_testing, tests::FakeStateManager,
+            StorageManager,
         },
         test_helpers::get_state_for_genesis_write,
-        vm::Env,
-        vm_factory::VmFactory,
+        vm::{
+            CallType, Context as ContextTrait, ContractCreateResult,
+            CreateContractAddress, Env, Spec,
+        },
     };
-    use cfx_types::{Address, U256};
-    use std::{ops::Deref, str::FromStr};
+    use cfx_types::{Address, H256, U256};
+    use std::{str::FromStr, sync::Arc};
 
-    #[allow(dead_code)]
     fn get_test_origin() -> OriginInfo {
         OriginInfo {
             address: Address::zero(),
@@ -400,6 +446,7 @@ mod tests {
             original_receiver: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
+            storage_limit: U256::MAX,
         }
     }
 
@@ -449,6 +496,13 @@ mod tests {
                 &*(&**setup.storage_manager.as_ref().unwrap().as_ref()
                     as *const StorageManager)
             });
+
+            setup
+                .state
+                .as_mut()
+                .unwrap()
+                .init_code(&Address::zero(), vec![], Address::zero())
+                .ok();
 
             setup
         }
@@ -568,15 +622,23 @@ mod tests {
 
         // this should panic because we have no balance on any account
         ctx.call(
-            &"0000000000000000000000000000000000000000000000000000000000120000".parse::<U256>().unwrap(),
-            &Address::zero(),
-            &Address::zero(),
-            Some("0000000000000000000000000000000000000000000000000000000000150000".parse::<U256>().unwrap()),
-            &[],
-            &Address::zero(),
-            CallType::Call,
-            false,
-        ).ok().unwrap();
+        &"0000000000000000000000000000000000000000000000000000000000120000"
+            .parse::<U256>()
+            .unwrap(),
+        &Address::zero(),
+        &Address::zero(),
+        Some(
+            "0000000000000000000000000000000000000000000000000000000000150000"
+                .parse::<U256>()
+                .unwrap(),
+        ),
+        &[],
+        &Address::zero(),
+        CallType::Call,
+        false,
+    )
+    .ok()
+    .unwrap();
     }
 
     #[test]
@@ -701,9 +763,19 @@ mod tests {
                 false,
             );
 
-            match ctx.create(&U256::max_value(), &U256::zero(), &[], CreateContractAddress::FromSenderSaltAndCodeHash(H256::default()), false) {
+            match ctx.create(
+                &U256::max_value(),
+                &U256::zero(),
+                &[],
+                CreateContractAddress::FromSenderSaltAndCodeHash(
+                    H256::default(),
+                ),
+                false,
+            ) {
                 Ok(ContractCreateResult::Created(address, _)) => address,
-                _ => panic!("Test create failed; expected Created, got Failed/Reverted."),
+                _ => panic!(
+                "Test create failed; expected Created, got Failed/Reverted."
+            ),
             }
         };
 
@@ -713,4 +785,5 @@ mod tests {
                 .unwrap()
         );
     }
+
 }
