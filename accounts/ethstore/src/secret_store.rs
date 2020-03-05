@@ -166,6 +166,10 @@ pub trait SecretStore: SimpleSecretStore {
         Ok(::ethkey::sign(&secret.0, message)?)
     }
 
+    /// Imports presale wallet
+    fn import_presale(
+        &self, vault: SecretVaultRef, json: &[u8], password: &Password,
+    ) -> Result<StoreAccountRef, Error>;
     /// Imports existing JSON wallet
     fn import_wallet(
         &self, vault: SecretVaultRef, json: &[u8], password: &Password,

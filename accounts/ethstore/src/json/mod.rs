@@ -24,6 +24,7 @@ mod hash;
 mod id;
 mod kdf;
 mod key_file;
+mod presale;
 mod vault_file;
 mod vault_key_file;
 mod version;
@@ -37,6 +38,7 @@ pub use self::{
     id::Uuid,
     kdf::{Kdf, KdfSer, KdfSerParams, Pbkdf2, Prf, Scrypt},
     key_file::{KeyFile, OpaqueKeyFile},
+    presale::{Encseed, PresaleWallet},
     vault_file::VaultFile,
     vault_key_file::{
         insert_vault_name_to_json_meta, remove_vault_name_from_json_meta,
