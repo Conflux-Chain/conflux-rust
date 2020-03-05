@@ -406,6 +406,7 @@ impl NodeDatabase {
 
     /// Demote the specified node to untrusted if it is trusted.
     pub fn demote(&mut self, node_id: &NodeId) {
+        self.ip_limit.demote(node_id);
         if let Some(removed_trusted_node) =
             self.trusted_nodes.remove_with_id(node_id)
         {

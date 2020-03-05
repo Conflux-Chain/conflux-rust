@@ -45,6 +45,7 @@ impl Handleable for GetCompactBlocksResponse {
         );
 
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let mut failed_blocks = HashSet::new();
         let mut completed_blocks = Vec::new();
 
@@ -103,7 +104,7 @@ impl Handleable for GetCompactBlocksResponse {
                 ctx.manager.graph.data_man.insert_compact_block(cmpct);
                 ctx.manager
                     .request_manager
-                    .request_blocktxn(ctx.io, ctx.peer, hash, missing);
+                    .request_blocktxn(ctx.io, ctx.peer, hash, missing, None);
             } else {
                 let trans = cmpct
                     .reconstructed_txes
@@ -140,6 +141,7 @@ impl Handleable for GetCompactBlocksResponse {
             completed_blocks.iter().cloned().collect(),
             true,
             Some(ctx.peer),
+            delay,
         );
 
         ctx.manager.recover_public_queue.dispatch(
@@ -149,6 +151,7 @@ impl Handleable for GetCompactBlocksResponse {
                 requested_blocks,
                 ctx.peer,
                 true,
+                delay,
             ),
         );
 

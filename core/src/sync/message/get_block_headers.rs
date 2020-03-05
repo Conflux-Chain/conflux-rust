@@ -55,6 +55,7 @@ impl Request for GetBlockHeaders {
 
 impl Handleable for GetBlockHeaders {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!("Received GetBlockHeaders {:?}", self);
         let headers = self
             .hashes
             .iter()

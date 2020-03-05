@@ -108,6 +108,7 @@ impl<T> AsyncTaskQueue<T> {
 pub struct RecoverPublicTask {
     blocks: Vec<Block>,
     requested: HashSet<H256>,
+    delay: Option<Duration>,
     failed_peer: PeerId,
     compact: bool,
 }
@@ -115,7 +116,7 @@ pub struct RecoverPublicTask {
 impl RecoverPublicTask {
     pub fn new(
         blocks: Vec<Block>, requested: HashSet<H256>, failed_peer: PeerId,
-        compact: bool,
+        compact: bool, delay: Option<Duration>,
     ) -> Self
     {
         RecoverPublicTask {
@@ -123,6 +124,7 @@ impl RecoverPublicTask {
             requested,
             failed_peer,
             compact,
+            delay,
         }
     }
 }
@@ -684,7 +686,8 @@ impl SynchronizationProtocolHandler {
                 peer
             );
 
-            self.request_manager.request_epoch_hashes(io, peer, epochs);
+            self.request_manager
+                .request_epoch_hashes(io, peer, epochs, None);
             *latest_requested = until - 1;
         }
 
@@ -706,8 +709,12 @@ impl SynchronizationProtocolHandler {
         // Headers may have been inserted into sync graph before as dependent
         // blocks
         header_hashes.retain(|h| !self.graph.contains_block_header(h));
-        self.request_manager
-            .request_block_headers(io, peer, header_hashes);
+        self.request_manager.request_block_headers(
+            io,
+            peer,
+            header_hashes,
+            None,
+        );
     }
 
     /// Try to get the block header from db. Return `true` if the block header
@@ -853,6 +860,7 @@ impl SynchronizationProtocolHandler {
             received_blocks,
             !task.compact,
             chosen_peer,
+            task.delay,
         );
         self.request_blocks(io, chosen_peer, missing_dependencies);
 
@@ -1289,7 +1297,7 @@ impl SynchronizationProtocolHandler {
             self.request_blocks(io, peer_id, hashes);
         } else {
             self.request_manager
-                .request_compact_blocks(io, peer_id, hashes);
+                .request_compact_blocks(io, peer_id, hashes, None);
         }
         Ok(())
     }
@@ -1308,6 +1316,7 @@ impl SynchronizationProtocolHandler {
             peer_id,
             hashes,
             self.request_block_need_public(),
+            None,
         );
     }
 
@@ -1384,6 +1393,7 @@ impl SynchronizationProtocolHandler {
                     requested,
                     0,
                     false,
+                    None,
                 ),
             );
             return true;
@@ -1395,7 +1405,7 @@ impl SynchronizationProtocolHandler {
     pub fn blocks_received(
         &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
-        peer: Option<PeerId>,
+        peer: Option<PeerId>, delay: Option<Duration>,
     )
     {
         self.request_manager.blocks_received(
@@ -1405,6 +1415,7 @@ impl SynchronizationProtocolHandler {
             ask_full_block,
             peer,
             self.request_block_need_public(),
+            delay,
         )
     }
 

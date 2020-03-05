@@ -866,6 +866,12 @@ impl NetworkServiceInner {
             handshake_count,
             started
         );
+        if egress_count + ingress_count == 0 {
+            warn!(
+                "No peers connected at this moment, {} pending + {} started",
+                handshake_count, started
+            );
+        }
     }
 
     /// Sample archive nodes for outgoing connections if not enough.

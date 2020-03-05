@@ -31,6 +31,7 @@ impl Handleable for GetBlockTxnResponse {
         debug!("on_get_blocktxn_response");
         let resp_hash = self.block_hash;
         let req = ctx.match_request(self.request_id)?;
+        let delay = req.delay;
         let req = req.downcast_ref::<GetBlockTxn>(
             ctx.io,
             &ctx.manager.request_manager,
@@ -136,6 +137,7 @@ impl Handleable for GetBlockTxnResponse {
                 HashSet::new(),
                 true,
                 req_peer,
+                delay,
             );
         }
         Ok(())

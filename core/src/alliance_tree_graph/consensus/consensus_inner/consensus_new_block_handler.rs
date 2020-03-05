@@ -695,16 +695,57 @@ impl ConsensusNewBlockHandler {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
             let pivot_hash = inner.arena[pivot_arena_index].hash;
 
+            let mut compute_epoch = false;
             // Ensure that the commitments for the blocks on
             // pivot_chain after cur_era_stable_genesis are kept in memory.
-            if self
+            let maybe_epoch_execution_commitment = self
                 .data_man
-                .load_epoch_execution_commitment_from_db(&pivot_hash)
-                .is_none()
-            {
-                // We should recompute the epochs that should have been executed
-                // but fail to persist their
-                // execution_commitments before shutdown
+                .load_epoch_execution_commitment_from_db(&pivot_hash);
+            match maybe_epoch_execution_commitment {
+                None => {
+                    // We should recompute the epochs that should have been
+                    // executed but fail to persist their
+                    // execution_commitments before shutdown
+
+                    compute_epoch = true;
+                }
+                Some(commitment) => {
+                    let block_height = inner.pivot_index_to_height(pivot_index);
+
+                    if (block_height + 1)
+                        % inner
+                            .data_man
+                            .storage_manager
+                            .get_storage_manager()
+                            .get_snapshot_epoch_count()
+                            as u64
+                        == 0
+                    {
+                        let next_snapshot_epoch = &commitment
+                            .state_root_with_aux_info
+                            .aux_info
+                            .intermediate_epoch_id;
+                        if inner
+                            .data_man
+                            .storage_manager
+                            .get_storage_manager()
+                            .get_snapshot_info_at_epoch(next_snapshot_epoch)
+                            .is_none()
+                        {
+                            // The upcoming snapshot is not ready because at the
+                            // last shutdown the snapshotting process wasn't
+                            // finished yet. In this case, we must trigger the
+                            // snapshotting process by computing epoch again.
+                            compute_epoch = true;
+                        }
+                    }
+                    self.data_man
+                        .state_availability_boundary
+                        .write()
+                        .upper_bound += 1;
+                }
+            }
+            if compute_epoch {
                 self.executor.compute_epoch(EpochExecutionTask::new(
                     pivot_hash,
                     inner.get_epoch_block_hashes(pivot_arena_index),

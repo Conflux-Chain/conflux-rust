@@ -32,6 +32,7 @@ pub struct ConsensusParam {
 #[derive(Debug, Clone)]
 pub struct StorageConfiguration {
     pub consensus_param: ConsensusParam,
+    pub debug_snapshot_checker_threads: u16,
     pub delta_mpts_cache_recent_lfu_factor: f64,
     pub delta_mpts_cache_start_size: u32,
     pub delta_mpts_cache_size: u32,
@@ -58,6 +59,8 @@ impl StorageConfiguration {
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
             },
+            debug_snapshot_checker_threads:
+                defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
             delta_mpts_cache_recent_lfu_factor:
                 defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR,
             delta_mpts_cache_size: defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE,

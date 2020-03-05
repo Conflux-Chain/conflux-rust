@@ -12,7 +12,10 @@ use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
-    storage::{self, ConsensusParam, StorageConfiguration},
+    storage::{
+        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
+        StorageConfiguration,
+    },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -400,6 +403,8 @@ impl Configuration {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
             },
+            debug_snapshot_checker_threads:
+                DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
             delta_mpts_cache_recent_lfu_factor: self
                 .raw_conf
                 .storage_delta_mpts_cache_recent_lfu_factor,
