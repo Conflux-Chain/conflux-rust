@@ -103,6 +103,24 @@ impl RpcImpl {
             .boxed()
     }
 
+    fn admin(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> BoxFuture<RpcH160> {
+        let num = num.unwrap_or(EpochNumber::LatestState);
+        let address: H160 = address.into();
+        info!(
+            "RPC Request: cfx_getAdmin address={:?} epoch_num={:?}",
+            address, num
+        );
+
+        self.consensus
+            .get_admin(address, num.into())
+            .map(|x| x.into())
+            .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
+    }
+
     fn bank_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
@@ -645,6 +663,7 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
