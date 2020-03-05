@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{H256, U256, H160};
+use crate::rpc::types::{H160, H256, U256};
 use primitives::Account as PrimitiveAccount;
 
 #[derive(Debug, Serialize, Deserialize)]

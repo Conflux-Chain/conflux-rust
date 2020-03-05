@@ -329,9 +329,19 @@ impl<'a> CallCreateExecutive<'a> {
                 &val,
                 &mut substate.to_cleanup_mode(&spec),
             )?;
-            state.new_contract_with_admin(&params.address, &params.sender, val + balance, nonce_offset)?;
+            state.new_contract_with_admin(
+                &params.address,
+                &params.sender,
+                val + balance,
+                nonce_offset,
+            )?;
         } else {
-            state.new_contract_with_admin(&params.address, &params.sender, balance, nonce_offset)?;
+            state.new_contract_with_admin(
+                &params.address,
+                &params.sender,
+                balance,
+                nonce_offset,
+            )?;
         }
 
         Ok(())
@@ -449,8 +459,15 @@ impl<'a> CallCreateExecutive<'a> {
             return Err(vm::Error::InternalContract("invalid data"));
         };
 
-        debug!("exec_admin_contrl_contract params={:?} |data|={:?}", params, data.len());
-        debug!("sig: {:?} {:?} {:?} {:?}", data[0], data[1], data[2], data[3]);
+        debug!(
+            "exec_admin_contrl_contract params={:?} |data|={:?}",
+            params,
+            data.len()
+        );
+        debug!(
+            "sig: {:?} {:?} {:?} {:?}",
+            data[0], data[1], data[2], data[3]
+        );
         if data[0..4] == [0x73, 0xe8, 0x0c, 0xba] {
             // The first 4 bytes of keccak('set_admin(address,address') is
             // 0x73e80cba 4 bytes `Method ID` + 20 bytes
@@ -460,7 +477,10 @@ impl<'a> CallCreateExecutive<'a> {
             } else {
                 let contract_address = Address::from_slice(&data[16..36]);
                 let new_admin_address = Address::from_slice(&data[48..68]);
-                debug!("contract_address={:?} new_admin_address={:?}", contract_address, new_admin_address);
+                debug!(
+                    "contract_address={:?} new_admin_address={:?}",
+                    contract_address, new_admin_address
+                );
                 Ok(state.set_admin(
                     &params.original_sender,
                     &contract_address,
