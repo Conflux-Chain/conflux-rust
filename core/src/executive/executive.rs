@@ -30,6 +30,8 @@ lazy_static! {
         Address::from_str("8ad036480160591706c831f0da19d1a424e39469").unwrap();
     pub static ref STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS: Address =
         Address::from_str("87ca63b239c537ada331614df304b6ce3caa11f4").unwrap();
+    pub static ref ADMIN_CONTROL_CONTRACT_ADDRESS: Address =
+        Address::from_str("6060de9e1568e69811c4a398f92c3d10949dc891").unwrap();
     pub static ref INTERNAL_CONTRACT_CODE: Bytes = vec![0u8, 0u8, 0u8, 0u8];
     pub static ref INTERNAL_CONTRACT_CODE_HASH: H256 =
         keccak([0u8, 0u8, 0u8, 0u8]);
@@ -134,6 +136,7 @@ pub fn is_internal_contract(address: &Address) -> bool {
     *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
         || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
         || *address == *STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
+        || *address == *ADMIN_CONTROL_CONTRACT_ADDRESS
 }
 
 enum CallCreateExecutiveKind {
@@ -344,9 +347,19 @@ impl<'a> CallCreateExecutive<'a> {
                 &val,
                 &mut substate.to_cleanup_mode(&spec),
             )?;
-            state.new_contract(&params.address, val + balance, nonce_offset)?;
+            state.new_contract_with_admin(
+                &params.address,
+                &params.sender,
+                val + balance,
+                nonce_offset,
+            )?;
         } else {
-            state.new_contract(&params.address, balance, nonce_offset)?;
+            state.new_contract_with_admin(
+                &params.address,
+                &params.sender,
+                balance,
+                nonce_offset,
+            )?;
         }
 
         Ok(())
@@ -446,6 +459,51 @@ impl<'a> CallCreateExecutive<'a> {
             } else {
                 let amount = U256::from(&data[4..36]);
                 Self::withdraw(params, state, &amount)
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    fn exec_admin_control_contract(
+        params: &ActionParams, state: &mut State, gas_cost: &U256,
+    ) -> vm::Result<()> {
+        if *gas_cost > params.gas {
+            return Err(vm::Error::OutOfGas);
+        }
+        let data = if let Some(ref d) = params.data {
+            d as &[u8]
+        } else {
+            return Err(vm::Error::InternalContract("invalid data"));
+        };
+
+        debug!(
+            "exec_admin_contrl_contract params={:?} |data|={:?}",
+            params,
+            data.len()
+        );
+        debug!(
+            "sig: {:?} {:?} {:?} {:?}",
+            data[0], data[1], data[2], data[3]
+        );
+        if data[0..4] == [0x73, 0xe8, 0x0c, 0xba] {
+            // The first 4 bytes of keccak('set_admin(address,address') is
+            // 0x73e80cba 4 bytes `Method ID` + 20 bytes
+            // `contract_address` + 20 bytes `new_admin_address`
+            if data.len() != 68 {
+                Err(vm::Error::InternalContract("invalid data"))
+            } else {
+                let contract_address = Address::from_slice(&data[16..36]);
+                let new_admin_address = Address::from_slice(&data[48..68]);
+                debug!(
+                    "contract_address={:?} new_admin_address={:?}",
+                    contract_address, new_admin_address
+                );
+                Ok(state.set_admin(
+                    &params.original_sender,
+                    &contract_address,
+                    &new_admin_address,
+                )?)
             }
         } else {
             Ok(())
@@ -760,6 +818,8 @@ impl<'a> CallCreateExecutive<'a> {
                         Self::exec_storage_commission_privilege_control_contract(
                             &params, state, &gas_cost,
                         )
+                    } else if params.code_address == *ADMIN_CONTROL_CONTRACT_ADDRESS {
+                        Self::exec_admin_control_contract(&params, state, &gas_cost)
                     } else {
                         Ok(())
                     };
