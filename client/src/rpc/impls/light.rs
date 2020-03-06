@@ -14,11 +14,12 @@ use crate::rpc::{
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
-use cfx_types::{H160, H256, U256};
+use cfx_types::{Public, H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
 use delegate::delegate;
 use futures::future::{FutureExt, TryFutureExt};
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
+use libra_types::transaction::SignedTransaction;
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -373,6 +374,8 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn set_consortium_administrators(&self, admins: Vec<Public>) -> RpcResult<bool>;
+        fn send_new_consortium_member_trans(&self, admin_trans: SignedTransaction) -> RpcResult<()>;
     }
 }
 

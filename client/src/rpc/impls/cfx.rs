@@ -18,7 +18,7 @@ use crate::rpc::{
     },
 };
 use blockgen::BlockGenerator;
-use cfx_types::{H160, H256};
+use cfx_types::{Public, H160, H256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
@@ -29,6 +29,7 @@ use jsonrpc_core::{
     futures::future::{Future, IntoFuture},
     BoxFuture, Error as RpcError, Result as RpcResult,
 };
+use libra_types::transaction::SignedTransaction as BftSignedTransaction;
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -727,6 +728,11 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }
+    }
+
+    not_supported! {
+        fn set_consortium_administrators(&self, admins: Vec<Public>) -> RpcResult<bool>;
+        fn send_new_consortium_member_trans(&self, admin_trans: BftSignedTransaction) -> RpcResult<()>;
     }
 }
 

@@ -29,6 +29,7 @@ use crate::{
 };
 use cfx_types::H256;
 use network::NetworkService;
+use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio::runtime;
 //use vm_runtime::LibraVM;
@@ -45,6 +46,8 @@ pub struct InitialSetup {
 pub struct ChainedBftProvider {
     smr: ChainedBftSMR<Vec<SignedTransaction>>,
     txn_transformer: TxnTransformerProxy,
+    // The manager for administrator transaction (for epoch change).
+    admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     state_computer: Arc<dyn StateComputer<Payload = Vec<SignedTransaction>>>,
     tg_sync: SharedSynchronizationService,
 }
@@ -74,6 +77,7 @@ impl ChainedBftProvider {
         let initial_data = storage.start();
 
         let txn_transformer = TxnTransformerProxy::default();
+        let admin_transaction = Arc::new(RwLock::new(None));
 
         let state_computer = Arc::new(ExecutionProxy::new(
             executor, /* , synchronizer_client.clone()) */
@@ -89,6 +93,7 @@ impl ChainedBftProvider {
         Self {
             smr,
             txn_transformer,
+            admin_transaction,
             state_computer,
             tg_sync,
         }
@@ -127,11 +132,20 @@ impl ConsensusProvider for ChainedBftProvider {
             own_node_hash,
             protocol_config,
             self.tg_sync.clone(),
+            self.admin_transaction.clone(),
         )
     }
 
     fn stop(&mut self) {
         self.smr.stop();
         debug!("Consensus provider stopped.");
+    }
+
+    fn get_executor(&self) -> Arc<Executor> {
+        self.state_computer.get_executor()
+    }
+
+    fn get_admin_transaction(&self) -> Arc<RwLock<Option<SignedTransaction>>> {
+        self.admin_transaction.clone()
     }
 }

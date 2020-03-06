@@ -11,7 +11,9 @@ use crate::alliance_tree_graph::hsb_sync_protocol::sync_protocol::{
 use anyhow::Result;
 //use executor::{ExecutedTrees, ProcessedVMOutput, StateComputeResult};
 use crate::{
-    alliance_tree_graph::consensus::SetPivotChainCallbackType,
+    alliance_tree_graph::{
+        bft::executor::Executor, consensus::SetPivotChainCallbackType,
+    },
     sync::{ProtocolConfiguration, SharedSynchronizationService},
 };
 use cfx_types::H256;
@@ -21,6 +23,7 @@ use libra_types::{
     transaction::SignedTransaction,
 };
 use network::NetworkService;
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 pub trait TxnTransformer: Send + Sync + Clone + 'static {
@@ -117,6 +120,7 @@ pub trait StateComputer: Send + Sync {
     ) -> Result<ValidatorChangeProof>;
 
     fn get_peers(&self) -> Arc<Peers<PeerState, H256>>;
+    fn get_executor(&self) -> Arc<Executor>;
 }
 
 pub trait StateMachineReplication {
@@ -130,6 +134,7 @@ pub trait StateMachineReplication {
         network: Arc<NetworkService>, own_node_hash: H256,
         protocol_config: ProtocolConfiguration,
         tg_sync: SharedSynchronizationService,
+        admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Result<()>;
 
     /// Stop is synchronous: returns when all the threads are shutdown and the

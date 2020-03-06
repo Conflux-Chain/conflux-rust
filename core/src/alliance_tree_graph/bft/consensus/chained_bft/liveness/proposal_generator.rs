@@ -26,9 +26,10 @@ use libra_types::{
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     language_storage::TypeTag,
-    transaction::{ChangeSet, RawTransaction},
+    transaction::{ChangeSet, RawTransaction, SignedTransaction},
     write_set::WriteSet,
 };
+use parking_lot::RwLock;
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -50,8 +51,10 @@ pub struct ProposalGenerator<TT, T> {
     // Block store is queried both for finding the branch to extend and for
     // generating the proposed block.
     block_store: Arc<dyn BlockReader<Payload = T> + Send + Sync>,
-    // Transaction manager is delivering the transactions.
+    // This is for a type cast trick.
     txn_transformer: TT,
+    // The manager for administrator transaction (for epoch change).
+    admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     // Time service to generate block timestamps
     time_service: Arc<dyn TimeService>,
     // Max number of transactions to be added to a proposed block.
@@ -74,12 +77,14 @@ where
         txn_transformer: TT, time_service: Arc<dyn TimeService>,
         _max_block_size: u64, tg_sync: SharedSynchronizationService,
         key_pair: KeyPair,
+        admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Self
     {
         Self {
             author,
             block_store,
             txn_transformer,
+            admin_transaction,
             time_service,
             //max_block_size,
             last_round_generated: Mutex::new(0),
@@ -232,6 +237,22 @@ where
             }
         };
 
+        let tx = self.admin_transaction.write().take();
+        if tx.is_some() {
+            let tx = tx.unwrap();
+            if tx.is_admin_type() {
+                let txns = self.txn_transformer.convert(tx);
+                return Ok(BlockData::new_proposal(
+                    txns,
+                    self.author,
+                    round,
+                    block_timestamp.as_micros() as u64,
+                    hqc.as_ref().clone(),
+                ));
+            }
+            // If tx is not admin type, simply ignore it.
+        }
+
         let parent_block = if let Some(p) = pending_blocks.last() {
             p.clone()
         } else {
@@ -264,20 +285,17 @@ where
         );
 
         let change_set = ChangeSet::new(WriteSet::default(), vec![event]);
-        let raw_tx = RawTransaction::new_change_set(self.author, 0, change_set);
+        let raw_tx = RawTransaction::new_change_set(
+            self.author,
+            0,
+            change_set,
+            false, /* is_admin_type */
+        );
         let signed_tx = raw_tx
             .sign(self.key_pair.secret(), self.key_pair.public().clone())?
             .into_inner();
 
         let txns = self.txn_transformer.convert(signed_tx);
-
-        /*
-        let txns = self
-            .txn_manager
-            .pull_txns(self.max_block_size, exclude_payload)
-            .await
-            .context("Fail to retrieve txn")?;
-            */
 
         Ok(BlockData::new_proposal(
             txns,

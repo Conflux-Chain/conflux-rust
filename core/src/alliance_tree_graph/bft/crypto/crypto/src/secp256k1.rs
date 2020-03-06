@@ -5,7 +5,7 @@
 //! # Examples
 
 use crate::{traits::*, HashValue};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use cfx_types::{H256, H520};
 use core::convert::TryFrom;
 use ethkey::{
@@ -84,6 +84,9 @@ impl Secp256k1PublicKey {
 
     /// Return the reference on the internal public key.
     pub fn public(&self) -> &Public { &self.0 }
+
+    /// Generate Secp256k1PublicKey from Public.
+    pub fn from_public(public: Public) -> Self { Self(public) }
 }
 
 impl Secp256k1Signature {
@@ -134,6 +137,11 @@ impl Secp256k1Signature {
             return Err(CryptoMaterialError::CanonicalRepresentationError);
         }
         Ok(())
+    }
+
+    /// Generate Secp256k1PrivateKey from Secret
+    pub fn from_signature(signature: EthkeySignature) -> Self {
+        Self(signature)
     }
 }
 
@@ -296,8 +304,12 @@ impl Signature for Secp256k1Signature {
     ) -> Result<()> {
         Secp256k1Signature::check_malleability(&self.to_bytes())?;
         let msg = H256::from_slice(message.to_vec().as_slice());
-        ethkey::verify_public(&public_key.0, &self.0, &msg)?;
-        Ok(())
+        let result = ethkey::verify_public(&public_key.0, &self.0, &msg)?;
+        if result {
+            Ok(())
+        } else {
+            bail!("Incorrect signature");
+        }
     }
 
     /// Checks that `self` is valid for an arbitrary &[u8] `message` using
