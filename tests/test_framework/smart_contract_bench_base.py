@@ -135,7 +135,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         for _ in range(5):
             client.generate_block()
-        receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)

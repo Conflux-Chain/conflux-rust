@@ -555,7 +555,7 @@ def get_ip_address():
 
 
 def checktx(node, tx_hash):
-    return node.gettransactionreceipt(tx_hash) is not None
+    return node.cfx_getTransactionReceipt(tx_hash) is not None
 
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):

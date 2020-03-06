@@ -401,7 +401,6 @@ impl TestRpc for TestRpcImpl {
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
-            fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
             fn save_node_db(&self) -> RpcResult<()>;

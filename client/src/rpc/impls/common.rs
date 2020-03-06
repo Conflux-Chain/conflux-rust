@@ -13,8 +13,8 @@ use std::{
 
 use cfx_types::{Address, H256, U128};
 use cfxcore::{
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
+    BlockDataManager, ConsensusGraph, PeerInfo, SharedConsensusGraph,
+    SharedTransactionPool,
 };
 use ethcore_accounts::AccountProvider;
 use ethkey::Password;
@@ -31,9 +31,9 @@ use crate::accounts::{account_provider, keys_path};
 
 use crate::rpc::types::{
     Block as RpcBlock, BlockHashOrEpochNumber, Bytes, EpochNumber,
-    Receipt as RpcReceipt, Status as RpcStatus, Transaction as RpcTransaction,
-    H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
-    U256 as RpcU256, U64 as RpcU64,
+    Status as RpcStatus, Transaction as RpcTransaction, H160 as RpcH160,
+    H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+    U64 as RpcU64,
 };
 
 fn grouped_txs<T, F>(
@@ -410,24 +410,6 @@ impl RpcImpl {
         } else {
             Err(RpcError::internal_error())
         }
-    }
-
-    /// The first element is true if the tx is executed in a confirmed block.
-    /// The second element indicate the execution result (standin
-    /// for receipt)
-    pub fn get_transaction_receipt(
-        &self, tx_hash: H256,
-    ) -> RpcResult<Option<RpcReceipt>> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-        let maybe_receipt =
-            consensus_graph.get_transaction_info_by_hash(&tx_hash).map(
-                |(tx, receipt, address)| RpcReceipt::new(tx, receipt, address),
-            );
-        Ok(maybe_receipt)
     }
 
     pub fn say_hello(&self) -> RpcResult<String> { Ok("Hello, world".into()) }

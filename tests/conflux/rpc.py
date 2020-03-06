@@ -272,9 +272,6 @@ class RpcClient:
     def chain(self) -> list:
         return self.node.cfx_getChain()
 
-    def get_receipt(self, tx_hash: str) -> dict:
-        return self.node.gettransactionreceipt(tx_hash)
-
     def get_transaction_receipt(self, tx_hash: str) -> dict:
         assert_is_hash_string(tx_hash)
         return self.node.cfx_getTransactionReceipt(tx_hash)

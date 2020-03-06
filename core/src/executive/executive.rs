@@ -308,7 +308,10 @@ impl<'a> CallCreateExecutive<'a> {
     fn deposit(
         params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
-        if state.balance(&params.sender)? < *val {
+        // FIXME: we should find a reasonable lowerbound.
+        if *val < U256::one() {
+            Err(vm::Error::InternalContract("invalid deposit amount"))
+        } else if state.balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
         } else {
             state.deposit(&params.sender, &val)?;

@@ -210,4 +210,4 @@ class TestSendTx(RpcClient):
 
         self.generate_blocks_to_state()
         for tx in [tx0, tx1, tx2, tx3]:
-            assert_equal(self.get_receipt(tx.hash_hex()) is None, False)
+            assert_equal(self.get_transaction_receipt(tx.hash_hex()) is None, False)
