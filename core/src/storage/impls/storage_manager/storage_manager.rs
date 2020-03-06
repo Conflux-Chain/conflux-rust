@@ -1065,11 +1065,19 @@ impl StorageManager {
                     snapshot_epoch_id, snapshot_info
                 );
                 self.snapshot_info_db.delete(snapshot_epoch_id.as_ref())?;
-                self.delta_db_manager.destroy_delta_db(
-                    &self
-                        .delta_db_manager
-                        .get_delta_db_name(&snapshot_epoch_id),
-                )?;
+                self.delta_db_manager
+                    .destroy_delta_db(
+                        &self
+                            .delta_db_manager
+                            .get_delta_db_name(&snapshot_epoch_id),
+                    )
+                    .or_else(|e| match e.kind() {
+                        ErrorKind::Io(io_err) => match io_err.kind() {
+                            std::io::ErrorKind::NotFound => Ok(()),
+                            _ => Err(e),
+                        },
+                        _ => Err(e),
+                    })?;
             }
 
             let (missing_delta_db_snapshots, delta_dbs) = self
