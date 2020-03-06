@@ -44,10 +44,9 @@ use crate::{
     sync::SharedSynchronizationService,
 };
 use futures::executor::block_on;
-use std::{
-    cmp::Ordering,
-    sync::{Arc, RwLock},
-};
+use libra_types::transaction::SignedTransaction;
+use parking_lot::RwLock;
+use std::{cmp::Ordering, sync::Arc};
 
 // Manager the components that shared across epoch and spawn per-epoch
 // EventProcessor with epoch-specific input.
@@ -59,6 +58,8 @@ pub struct EpochManager<TT, T> {
     network_sender: Arc<NetworkSender<T>>,
     timeout_sender: channel::Sender<Round>,
     txn_transformer: TT,
+    // The manager for administrator transaction (for epoch change).
+    admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     state_computer: Arc<dyn StateComputer<Payload = T>>,
     storage: Arc<dyn PersistentStorage<T>>,
     safety_rules_manager: SafetyRulesManager<T>,
@@ -82,6 +83,7 @@ where
         storage: Arc<dyn PersistentStorage<T>>,
         safety_rules_manager: SafetyRulesManager<T>,
         tg_sync: SharedSynchronizationService,
+        admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Self
     {
         Self {
@@ -92,6 +94,7 @@ where
             network_sender,
             timeout_sender,
             txn_transformer,
+            admin_transaction,
             state_computer,
             storage,
             safety_rules_manager,
@@ -99,7 +102,7 @@ where
         }
     }
 
-    fn epoch(&self) -> u64 { self.epoch_info.read().unwrap().epoch }
+    fn epoch(&self) -> u64 { self.epoch_info.read().epoch }
 
     fn create_pacemaker(
         &self, time_service: Arc<dyn TimeService>,
@@ -201,7 +204,7 @@ where
             error!("State sync to new epoch {} failed with {:?}, we'll try to start from current libradb", ledger_info, e);
         }
         let initial_data = self.storage.start();
-        *self.epoch_info.write().unwrap() = EpochInfo {
+        *self.epoch_info.write() = EpochInfo {
             epoch: initial_data.epoch(),
             verifier: initial_data.validators(),
         };
@@ -260,6 +263,7 @@ where
                 .network
                 .net_key_pair()
                 .expect("Network service not started yet!"),
+            self.admin_transaction.clone(),
         );
 
         let pacemaker = self.create_pacemaker(

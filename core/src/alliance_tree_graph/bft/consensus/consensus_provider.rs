@@ -16,6 +16,8 @@ use std::sync::Arc;
 use super::super::executor::Executor;
 use crate::sync::{ProtocolConfiguration, SharedSynchronizationService};
 use cfx_types::H256;
+use libra_types::transaction::SignedTransaction;
+use parking_lot::RwLock;
 
 /// Public interface to a consensus protocol.
 pub trait ConsensusProvider {
@@ -32,6 +34,9 @@ pub trait ConsensusProvider {
     /// Stop the consensus operations. The function returns after graceful
     /// shutdown.
     fn stop(&mut self);
+
+    fn get_executor(&self) -> Arc<Executor>;
+    fn get_admin_transaction(&self) -> Arc<RwLock<Option<SignedTransaction>>>;
 }
 
 /// Helper function to create a ConsensusProvider based on configuration

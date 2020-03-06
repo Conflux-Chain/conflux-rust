@@ -18,7 +18,7 @@ impl<P: Payload> Handleable<P> for ValidatorChangeProof {
         let msg_epoch = self.epoch()?;
         match msg_epoch.cmp(&ctx.manager.network_task.epoch()) {
             Ordering::Equal => {
-                let rlock = ctx.manager.network_task.epoch_info.read().unwrap();
+                let rlock = ctx.manager.network_task.epoch_info.read();
                 let target_ledger_info =
                     self.verify(rlock.epoch, &rlock.verifier)?;
                 debug!(

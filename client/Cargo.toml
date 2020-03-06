@@ -63,6 +63,7 @@ libra-config = { path = "../core/src/alliance_tree_graph/bft/config" }
 libradb = { path = "../core/src/alliance_tree_graph/bft/storage/libradb" }
 libra-metrics = { path = "../core/src/alliance_tree_graph/bft/common/metrics" }
 libra-crypto = { path = "../core/src/alliance_tree_graph/bft/crypto/crypto" }
+libra-types = { path = "../core/src/alliance_tree_graph/bft/types" }
 tokio-timer = "0.2.13"
 
 [dev-dependencies]

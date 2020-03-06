@@ -5,7 +5,7 @@ use crate::{config::RootPath, utils};
 use anyhow::Result;
 use libra_types::{
     contract_event::ContractEvent,
-    crypto_proxies::ValidatorSet,
+    crypto_proxies::{NextValidatorSetProposal, ValidatorSet},
     language_storage::TypeTag,
     transaction::{ChangeSet, Transaction},
     write_set::WriteSet,
@@ -52,7 +52,11 @@ impl ExecutionConfig {
             // TODO: update to use `Transaction::WriteSet` variant when ready.
             self.genesis = Some(lcs::from_bytes(&buffer)?);
         } else {
-            let event_data = lcs::to_bytes(&validator_set)?;
+            let next_validator_set_proposal = NextValidatorSetProposal {
+                this_epoch: 0,
+                next_validator_set: validator_set,
+            };
+            let event_data = lcs::to_bytes(&next_validator_set_proposal)?;
             let event = ContractEvent::new(
                 ValidatorSet::change_event_key(),
                 0, /* sequence_number */

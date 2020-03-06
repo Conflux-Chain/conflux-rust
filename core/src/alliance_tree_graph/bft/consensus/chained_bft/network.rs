@@ -39,10 +39,8 @@ use crate::{
 };
 use cfx_types::H256;
 use libra_logger::prelude::{security_log, SecurityEvent};
-use std::{
-    cmp::Ordering,
-    sync::{Arc, RwLock},
-};
+use parking_lot::RwLock;
+use std::{cmp::Ordering, sync::Arc};
 
 pub struct NetworkSender<P> {
     pub network: Arc<NetworkService>,
@@ -208,7 +206,7 @@ impl<T: Payload> NetworkTask<T> {
         )
     }
 
-    pub fn epoch(&self) -> u64 { self.epoch_info.read().unwrap().epoch }
+    pub fn epoch(&self) -> u64 { self.epoch_info.read().epoch }
 
     pub async fn start(self) {
         /*
@@ -288,7 +286,7 @@ impl<T: Payload> NetworkTask<T> {
         }
 
         let proposal = proposal
-            .validate_signatures(&self.epoch_info.read().unwrap().verifier)?
+            .validate_signatures(&self.epoch_info.read().verifier)?
             .verify_well_formed()?;
         ensure!(
             proposal.proposal().author() == Some(peer_id),
@@ -314,7 +312,7 @@ impl<T: Payload> NetworkTask<T> {
 
         debug!("Received {}", vote_msg);
         vote_msg
-            .verify(&self.epoch_info.read().unwrap().verifier)
+            .verify(&self.epoch_info.read().verifier)
             .map_err(|e| {
                 security_log(SecurityEvent::InvalidConsensusVote)
                     .error(&e)
@@ -331,7 +329,7 @@ impl<T: Payload> NetworkTask<T> {
         let msg_epoch = proof.epoch()?;
         match msg_epoch.cmp(&self.epoch()) {
             Ordering::Equal => {
-                let rlock = self.epoch_info.read().unwrap();
+                let rlock = self.epoch_info.read();
                 let target_ledger_info =
                     proof.verify(rlock.epoch, &rlock.verifier)?;
                 debug!(

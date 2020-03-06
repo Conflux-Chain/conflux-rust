@@ -38,7 +38,7 @@ impl<P: Payload> Handleable<P> for ProposalUncheckedSignatures<P> {
 
         let proposal = self
             .validate_signatures(
-                &ctx.manager.network_task.epoch_info.read().unwrap().verifier,
+                &ctx.manager.network_task.epoch_info.read().verifier,
             )?
             .verify_well_formed()?;
 

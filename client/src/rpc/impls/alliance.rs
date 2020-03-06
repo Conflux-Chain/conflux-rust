@@ -16,18 +16,29 @@ use crate::rpc::{
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
-use cfx_types::H256;
+use cfx_types::{Public, H256};
 use cfxcore::{
-    alliance_tree_graph::blockgen::TGBlockGenerator,
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
+    alliance_tree_graph::{
+        bft::executor::Executor, blockgen::TGBlockGenerator,
+    },
+    block_parameters::MAX_BLOCK_SIZE_IN_BYTES,
+    state_exposer::STATE_EXPOSER,
     PeerInfo, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
+use keccak_hash::keccak;
+use libra_crypto::secp256k1::Secp256k1PublicKey;
+use libra_types::{
+    account_address::AccountAddress, transaction::SignedTransaction,
+    validator_public_keys::ValidatorPublicKeys,
+    validator_set::ValidatorSet as RawValidatorSet,
+};
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
+use parking_lot::RwLock;
 use primitives::TransactionWithSignature;
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
@@ -40,6 +51,9 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     block_gen: Arc<TGBlockGenerator>,
     // tx_gen: SharedTransactionGenerator,
+    executor: Arc<Executor>,
+    // The manager for administrator transaction (for epoch change).
+    admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
 }
 
 impl RpcImpl {
@@ -47,6 +61,8 @@ impl RpcImpl {
         _consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
         _tx_gen: SharedTransactionGenerator, _config: RpcImplConfiguration,
+        executor: Arc<Executor>,
+        admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Self
     {
         RpcImpl {
@@ -56,6 +72,8 @@ impl RpcImpl {
             block_gen,
             /* tx_gen,
              *config, */
+            executor,
+            admin_transaction,
         }
     }
 
@@ -87,6 +105,33 @@ impl RpcImpl {
         })?;
 
         self.send_transaction_with_signature(tx)
+    }
+
+    fn set_consortium_administrators(
+        &self, admins: Vec<Public>,
+    ) -> RpcResult<bool> {
+        let mut vec_keys = Vec::new();
+        for pubkey in admins {
+            let account_address = AccountAddress::new(keccak(&pubkey).into());
+            let pubkey = Secp256k1PublicKey::from_public(pubkey);
+            let val_pub_key = ValidatorPublicKeys::new(
+                account_address,
+                pubkey,
+                1, /* consensus_voting_power */
+            );
+            vec_keys.push(val_pub_key);
+        }
+
+        let validator_set = RawValidatorSet::new(vec_keys);
+        self.executor.set_administrators((&validator_set).into());
+        Ok(true)
+    }
+
+    fn send_new_consortium_member_trans(
+        &self, admin_trans: SignedTransaction,
+    ) -> RpcResult<()> {
+        *self.admin_transaction.write() = Some(admin_trans);
+        Ok(())
     }
 
     fn send_transaction_with_signature(
@@ -155,6 +200,8 @@ impl Cfx for CfxHandler {
 
         target self.rpc_impl {
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn set_consortium_administrators(&self, admins: Vec<Public>) -> RpcResult<bool>;
+            fn send_new_consortium_member_trans(&self, admin_trans: SignedTransaction) -> RpcResult<()>;
         }
     }
 
