@@ -95,6 +95,7 @@ pub type ValidatorSigner = RawValidatorSigner<Secp256k1PrivateKey>;
 pub type ValidatorPublicKeys = RawValidatorPublicKeys<Secp256k1PublicKey>;
 pub type ValidatorSet = RawValidatorSet<Secp256k1PublicKey>;
 pub use crate::validator_change::ValidatorChangeProof;
+use anyhow::Result;
 use libra_crypto::secp256k1::{
     Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
@@ -154,4 +155,16 @@ pub fn random_validator_verifier(
             None => ValidatorVerifier::new(account_address_to_validator_info),
         },
     )
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NextValidatorSetProposal {
+    pub this_epoch: u64,
+    pub next_validator_set: ValidatorSet,
+}
+
+impl NextValidatorSetProposal {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        lcs::from_bytes(bytes).map_err(Into::into)
+    }
 }
