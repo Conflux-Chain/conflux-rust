@@ -87,8 +87,8 @@ class WithdrawDepositTest(ConfluxTestFramework):
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
         duration = withdraw_time - deposit_time
-        total_num_blocks = 4 * 60 * 60 * 24 * 365
-        interest = 5 * 10 ** 17 * duration * 504576000 // (total_num_blocks * 100) // total_num_blocks
+        total_num_blocks = 2 * 60 * 60 * 24 * 365
+        interest = 5 * 10 ** 17 * duration * 252288000 // (total_num_blocks * 100) // total_num_blocks
         service_charge = 5 * 10 ** 17 * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
         assert_equal(node.cfx_getStakingBalance(addr), hex(5 * 10 ** 17))
         assert_equal(node.cfx_getBalance(addr), hex(balance + 5 * 10 ** 17 + interest - service_charge - gas))
@@ -128,7 +128,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
         duration = withdraw_time - deposit_time
-        interest = 10 ** 17 * duration * 504576000 // (total_num_blocks * 100) // total_num_blocks
+        interest = 10 ** 17 * duration * 252288000 // (total_num_blocks * 100) // total_num_blocks
         service_charge = 10 ** 17 * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
         assert_equal(node.cfx_getBalance(addr), hex(balance + 10 ** 17 + interest - service_charge - gas))
         assert_equal(node.cfx_getStakingBalance(addr), hex(4 * 10 ** 17))
