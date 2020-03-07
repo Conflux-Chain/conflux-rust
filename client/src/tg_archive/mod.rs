@@ -44,7 +44,6 @@ use cfxcore::{
 };
 use ctrlc::CtrlC;
 use keccak_hash::keccak;
-use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
@@ -58,10 +57,7 @@ use std::{
     time::{Duration, Instant},
 };
 use threadpool::ThreadPool;
-use txgen::{
-    propagate::DataPropagation, SpecialTransactionGenerator,
-    TransactionGenerator,
-};
+use txgen::{propagate::DataPropagation, TransactionGenerator};
 
 pub struct TgArchiveClientHandle {
     pub debug_rpc_http_server: Option<HttpServer>,
@@ -70,7 +66,7 @@ pub struct TgArchiveClientHandle {
     pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
     pub sync: SharedSynchronizationService,
-    pub txgen: Arc<TransactionGenerator>,
+    pub txgen: Option<Arc<TransactionGenerator>>,
     pub txgen_join_handle: Option<thread::JoinHandle<()>>,
     pub blockgen: Arc<TGBlockGenerator>,
     pub secret_store: Arc<SecretStore>,
@@ -286,21 +282,13 @@ impl TgArchiveClient {
             DataPropagation::register(dp, network.clone())?;
         }
 
-        let txgen = Arc::new(TransactionGenerator::new(
+        let txgen = Some(Arc::new(TransactionGenerator::new(
             tg_consensus.clone(),
             txpool.clone(),
             sync.clone(),
             secret_store.clone(),
             network.net_key_pair().ok(),
-        ));
-
-        let _special_txgen =
-            Arc::new(Mutex::new(SpecialTransactionGenerator::new(
-                network.net_key_pair().unwrap(),
-                &public_to_address(secret_store.get_keypair(0).public()),
-                U256::from_dec_str("10000000000000000").unwrap(),
-                U256::from_dec_str("10000000000000000").unwrap(),
-            )));
+        )));
 
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(TGBlockGenerator::new(
@@ -340,7 +328,10 @@ impl TgArchiveClient {
 
         let tx_conf = conf.tx_gen_config();
         let txgen_handle = if tx_conf.generate_tx {
-            let txgen_clone = txgen.clone();
+            if !conf.is_test_or_dev_mode() {
+                panic!("generate_tx is only allowed in test or dev mode");
+            }
+            let txgen_clone = txgen.clone().unwrap();
             let t = if conf.is_test_mode() {
                 match conf.raw_conf.genesis_secrets {
                     Some(ref _file) => {
@@ -389,7 +380,6 @@ impl TgArchiveClient {
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
-            txgen.clone(),
             conf.rpc_impl_config(),
             executor,
             admin_transaction,

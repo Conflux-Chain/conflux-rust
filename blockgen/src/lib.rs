@@ -43,8 +43,8 @@ pub struct BlockGenerator {
     mining_author: Address,
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
-    txgen: SharedTransactionGenerator,
-    special_txgen: Arc<Mutex<SpecialTransactionGenerator>>,
+    txgen: Option<SharedTransactionGenerator>,
+    special_txgen: Option<Arc<Mutex<SpecialTransactionGenerator>>>,
     sync: SharedSynchronizationService,
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
@@ -122,8 +122,9 @@ impl Worker {
 impl BlockGenerator {
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
-        sync: SharedSynchronizationService, txgen: SharedTransactionGenerator,
-        special_txgen: Arc<Mutex<SpecialTransactionGenerator>>,
+        sync: SharedSynchronizationService,
+        txgen: Option<SharedTransactionGenerator>,
+        special_txgen: Option<Arc<Mutex<SpecialTransactionGenerator>>>,
         pow_config: ProofOfWorkConfig, mining_author: Address,
     ) -> Self
     {
@@ -147,7 +148,9 @@ impl BlockGenerator {
             let mut write = bg.state.write();
             *write = MiningState::Stop;
         }
-        bg.txgen.stop()
+        if let Some(txgen) = &bg.txgen {
+            txgen.stop();
+        }
     }
 
     /// Send new PoW problem to workers
@@ -441,29 +444,33 @@ impl BlockGenerator {
     pub fn generate_special_transactions(
         &self, block_size_limit: &mut usize, num_txs_simple: usize,
         num_txs_erc20: usize,
-    ) -> Vec<Arc<SignedTransaction>>
+    ) -> Result<Vec<Arc<SignedTransaction>>, String>
     {
-        self.special_txgen.lock().generate_transactions(
+        let special_txgen = self.special_txgen.as_ref()
+            .ok_or("generate_special_transactions is only allowed in test or dev mode with special_txgen set")?;
+        Ok(special_txgen.lock().generate_transactions(
             block_size_limit,
             num_txs_simple,
             num_txs_erc20,
-        )
+        ))
     }
 
     /// Generate a block with fake transactions
     pub fn generate_block_with_transactions(
         &self, num_txs: usize, block_size_limit: usize,
-    ) -> H256 {
+    ) -> Result<H256, String> {
+        let txgen = self.txgen.as_ref()
+            .ok_or("generate_block_with_transactions is only allowed in test or dev mode with txgen set")?;
         let mut txs = Vec::new();
         for _ in 0..num_txs {
-            let tx = self.txgen.generate_transaction();
+            let tx = txgen.generate_transaction();
             txs.push(tx);
         }
-        self.generate_block(
+        Ok(self.generate_block(
             num_txs,
             block_size_limit,
             txs.into_iter().map(Arc::new).collect(),
-        )
+        ))
     }
 
     pub fn generate_fixed_block(

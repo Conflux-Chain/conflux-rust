@@ -50,14 +50,15 @@ pub struct RpcImpl {
     sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
-    tx_gen: Arc<TransactionGenerator>,
+    tx_gen: Option<Arc<TransactionGenerator>>,
 }
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
-        tx_gen: Arc<TransactionGenerator>, config: RpcImplConfiguration,
+        tx_gen: Option<Arc<TransactionGenerator>>,
+        config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
@@ -337,6 +338,10 @@ impl RpcImpl {
             account_start_index
         );
         self.tx_gen
+            .as_ref()
+            .ok_or(
+                RpcError::invalid_params("send_usable_genesis_accounts only allowed in test or dev mode with txgen set")
+            )?
             .set_genesis_accounts_start_index(account_start_index);
         Ok(Bytes::new("1".into()))
     }
@@ -424,10 +429,14 @@ impl RpcImpl {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
-            hashes.push(self.block_gen.generate_block_with_transactions(
-                num_txs,
-                MAX_BLOCK_SIZE_IN_BYTES,
-            ));
+            hashes.push(
+                self.block_gen
+                    .generate_block_with_transactions(
+                        num_txs,
+                        MAX_BLOCK_SIZE_IN_BYTES,
+                    )
+                    .map_err(RpcError::invalid_params)?,
+            );
         }
         Ok(hashes)
     }
@@ -471,11 +480,13 @@ impl RpcImpl {
         info!("RPC Request: generate_one_block_special()");
 
         let block_gen = &self.block_gen;
-        let special_transactions = block_gen.generate_special_transactions(
-            &mut block_size_limit,
-            num_txs_simple,
-            num_txs_erc20,
-        );
+        let special_transactions = block_gen
+            .generate_special_transactions(
+                &mut block_size_limit,
+                num_txs_simple,
+                num_txs_erc20,
+            )
+            .map_err(RpcError::invalid_params)?;
 
         block_gen.generate_block(
             num_txs,

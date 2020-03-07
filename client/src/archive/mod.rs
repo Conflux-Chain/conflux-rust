@@ -49,7 +49,7 @@ pub struct ArchiveClientHandle {
     pub consensus: Arc<ConsensusGraph>,
     pub txpool: Arc<TransactionPool>,
     pub sync: Arc<SynchronizationService>,
-    pub txgen: Arc<TransactionGenerator>,
+    pub txgen: Option<Arc<TransactionGenerator>>,
     pub txgen_join_handle: Option<thread::JoinHandle<()>>,
     pub blockgen: Arc<BlockGenerator>,
     pub secret_store: Arc<SecretStore>,
@@ -233,21 +233,27 @@ impl ArchiveClient {
             DataPropagation::register(dp, network.clone())?;
         }
 
-        let txgen = Arc::new(TransactionGenerator::new(
-            consensus.clone(),
-            txpool.clone(),
-            sync.clone(),
-            secret_store.clone(),
-            network.net_key_pair().ok(),
-        ));
+        // txgen is only needed in testing or debugging
+        let (txgen, special_txgen) = if conf.is_test_or_dev_mode() {
+            let txgen = Arc::new(TransactionGenerator::new(
+                consensus.clone(),
+                txpool.clone(),
+                sync.clone(),
+                secret_store.clone(),
+                network.net_key_pair().ok(),
+            ));
 
-        let special_txgen =
-            Arc::new(Mutex::new(SpecialTransactionGenerator::new(
-                network.net_key_pair().unwrap(),
-                &public_to_address(secret_store.get_keypair(0).public()),
-                U256::from_dec_str("10000000000000000").unwrap(),
-                U256::from_dec_str("10000000000000000").unwrap(),
-            )));
+            let special_txgen =
+                Arc::new(Mutex::new(SpecialTransactionGenerator::new(
+                    network.net_key_pair().unwrap(),
+                    &public_to_address(secret_store.get_keypair(0).public()),
+                    U256::from_dec_str("10000000000000000").unwrap(),
+                    U256::from_dec_str("10000000000000000").unwrap(),
+                )));
+            (Some(txgen), Some(special_txgen))
+        } else {
+            (None, None)
+        };
 
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(BlockGenerator::new(
@@ -287,7 +293,10 @@ impl ArchiveClient {
 
         let tx_conf = conf.tx_gen_config();
         let txgen_handle = if tx_conf.generate_tx {
-            let txgen_clone = txgen.clone();
+            if !conf.is_test_or_dev_mode() {
+                panic!("generate_tx is only allowed in test or dev mode");
+            }
+            let txgen_clone = txgen.clone().unwrap();
             let t = if conf.is_test_mode() {
                 match conf.raw_conf.genesis_secrets {
                     Some(ref _file) => {
