@@ -28,7 +28,7 @@ fn txgen_benchmark(c: &mut Criterion) {
     let handler = ArchiveClient::start(conf, exit).unwrap();
     c.bench_function("Randomly generate 1 transaction", move |b| {
         b.iter(|| {
-            handler.txgen.generate_transaction();
+            handler.txgen.as_ref().unwrap().generate_transaction();
         });
     });
 }

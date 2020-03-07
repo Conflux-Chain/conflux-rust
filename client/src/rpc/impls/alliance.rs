@@ -42,7 +42,6 @@ use parking_lot::RwLock;
 use primitives::TransactionWithSignature;
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-use txgen::SharedTransactionGenerator;
 
 pub struct RpcImpl {
     //config: RpcImplConfiguration,
@@ -60,8 +59,7 @@ impl RpcImpl {
     pub fn new(
         _consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
-        _tx_gen: SharedTransactionGenerator, _config: RpcImplConfiguration,
-        executor: Arc<Executor>,
+        _config: RpcImplConfiguration, executor: Arc<Executor>,
         admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Self
     {
