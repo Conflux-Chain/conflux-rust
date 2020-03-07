@@ -11,7 +11,8 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     hash::keccak,
     machine::Machine,
-    state::{CleanupMode, State, Substate},
+    parameters::staking::*,
+    state::{CleanupMode, CollateralCheckResult, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
         CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
@@ -308,12 +309,15 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn deposit(
-        params: &ActionParams, state: &mut State, val: &U256, deposit_time: u64,
+        params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
-        if state.balance(&params.sender)? < *val {
+        // FIXME: we should find a reasonable lowerbound.
+        if *val < U256::one() {
+            Err(vm::Error::InternalContract("invalid deposit amount"))
+        } else if state.balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
         } else {
-            state.deposit(&params.sender, &val, deposit_time)?;
+            state.deposit(&params.sender, &val)?;
             Ok(())
         }
     }
@@ -321,15 +325,32 @@ impl<'a> CallCreateExecutive<'a> {
     fn withdraw(
         params: &ActionParams, state: &mut State, val: &U256,
     ) -> vm::Result<()> {
-        if state.bank_balance(&params.sender)?
-            - state.storage_balance(&params.sender)?
-            < *val
-        {
+        if state.withdrawable_staking_balance(&params.sender)? < *val {
             Err(vm::Error::InternalContract(
-                "not enough bank balance to withdraw",
+                "not enough withdrawable staking balance to withdraw",
             ))
         } else {
             state.withdraw(&params.sender, &val)?;
+            Ok(())
+        }
+    }
+
+    fn lock(
+        params: &ActionParams, state: &mut State, val: &U256,
+        duration_in_day: u64,
+    ) -> vm::Result<()>
+    {
+        if duration_in_day == 0
+            || duration_in_day
+                > (std::u64::MAX - state.block_number()) / BLOCKS_PER_DAY
+        {
+            Err(vm::Error::InternalContract("invalid lock duration"))
+        } else if state.staking_balance(&params.sender)? < *val {
+            Err(vm::Error::InternalContract(
+                "not enough staking balance to lock",
+            ))
+        } else {
+            state.lock(&params.sender, val, duration_in_day)?;
             Ok(())
         }
     }
@@ -366,10 +387,10 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn enact_result(
-        result: &vm::Result<FinalizationResult>, env: &'a Env,
-        state: &mut State, substate: &mut Substate,
-        unconfirmed_substate: Substate,
-    )
+        result: &vm::Result<FinalizationResult>, state: &mut State,
+        substate: &mut Substate, unconfirmed_substate: Substate,
+        sender: &Address, storage_limit: &U256,
+    ) -> CollateralCheckResult
     {
         match *result {
             Err(vm::Error::OutOfGas)
@@ -380,7 +401,8 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::InternalContract { .. })
             | Err(vm::Error::Wasm { .. })
             | Err(vm::Error::OutOfStack { .. })
-            | Err(vm::Error::OutOfStaking)
+            | Err(vm::Error::ExceedStorageLimit)
+            | Err(vm::Error::NotEnoughBalanceForStorage { .. })
             | Err(vm::Error::MutableCallInStaticContext)
             | Err(vm::Error::OutOfBounds)
             | Err(vm::Error::Reverted)
@@ -388,15 +410,24 @@ impl<'a> CallCreateExecutive<'a> {
                 apply_state: false, ..
             }) => {
                 state.revert_to_checkpoint();
+                CollateralCheckResult::Valid
             }
             Ok(_) | Err(vm::Error::Internal(_)) => {
-                if state.check_storage_balance(env.timestamp) {
-                    state.discard_checkpoint();
-                    substate.accrue(unconfirmed_substate);
-                } else {
-                    // FIXME: return error details.
-                    state.revert_to_checkpoint();
+                let check_result =
+                    state.check_collateral_for_storage(sender, storage_limit);
+                match check_result {
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        state.revert_to_checkpoint();
+                    }
+                    CollateralCheckResult::NotEnoughBalance { .. } => {
+                        state.revert_to_checkpoint();
+                    }
+                    CollateralCheckResult::Valid => {
+                        state.discard_checkpoint();
+                        substate.accrue(unconfirmed_substate);
+                    }
                 }
+                check_result
             }
         }
     }
@@ -426,10 +457,12 @@ impl<'a> CallCreateExecutive<'a> {
     /// Implementation of deposit and withdraw tokens in bank.
     fn exec_storage_interest_staking_contract(
         params: &ActionParams, state: &mut State, gas_cost: &U256,
-        timestamp: u64,
-    ) -> vm::Result<()>
-    {
-        // FIXME: make sure params.sender is a normal account.
+    ) -> vm::Result<()> {
+        if state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract(
+                "contract accounts are not allowed to deposit or withdraw",
+            ));
+        }
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -439,7 +472,7 @@ impl<'a> CallCreateExecutive<'a> {
             return Err(vm::Error::InternalContract("invalid data"));
         };
 
-        if data[0..4] == [182, 181, 95, 37] {
+        if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
             // The first 4 bytes of
             // keccak('deposit(uint256)') is
             // `0xb6b55f25`.
@@ -448,9 +481,9 @@ impl<'a> CallCreateExecutive<'a> {
                 Err(vm::Error::InternalContract("invalid data"))
             } else {
                 let amount = U256::from(&data[4..36]);
-                Self::deposit(params, state, &amount, timestamp)
+                Self::deposit(params, state, &amount)
             }
-        } else if data[0..4] == [46, 26, 125, 77] {
+        } else if data[0..4] == [0x2e, 0x1a, 0x7d, 0x4d] {
             // The first 4 bytes of
             // keccak('withdraw(uint256)') is `0x2e1a7d4d`.
             // 4 bytes `Method ID` + 32 bytes `amount`.
@@ -459,6 +492,18 @@ impl<'a> CallCreateExecutive<'a> {
             } else {
                 let amount = U256::from(&data[4..36]);
                 Self::withdraw(params, state, &amount)
+            }
+        } else if data[0..4] == [0x13, 0x38, 0x73, 0x6f] {
+            // The first 4 bytes of
+            // keccak('lock(uint256,uint256)') is `0x1338736f`.
+            // 4 bytes `Method ID` + 32 bytes `amount` + 32 bytes
+            // `duration_in_day`.
+            if data.len() != 68 {
+                Err(vm::Error::InternalContract("invalid data"))
+            } else {
+                let amount = U256::from(&data[4..36]);
+                let duration_in_day = U256::from(&data[36..68]).low_u64();
+                Self::lock(params, state, &amount, duration_in_day)
             }
         } else {
             Ok(())
@@ -513,7 +558,11 @@ impl<'a> CallCreateExecutive<'a> {
     fn exec_commission_privilege_control_contract(
         params: &ActionParams, state: &mut State, gas_cost: &U256,
     ) -> vm::Result<()> {
-        // FIXME: params.sender should be address of a contract.
+        if !state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract(
+                "normal account is not allowed to set commission_privilege",
+            ));
+        }
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -523,7 +572,7 @@ impl<'a> CallCreateExecutive<'a> {
             return Err(vm::Error::InternalContract("invalid data"));
         };
 
-        if data[0..4] == [219, 203, 249, 80] {
+        if data[0..4] == [0xdb, 0xcb, 0xf9, 0x50] {
             // The first 4 bytes of keccak('commission_balance(uint256)')
             // is `0xdbcbf950`.
             // 4 bytes `Method ID` + 32 bytes `balance`.
@@ -538,7 +587,7 @@ impl<'a> CallCreateExecutive<'a> {
                     &balance,
                 )?)
             }
-        } else if data[0..4] == [254, 21, 21, 108] {
+        } else if data[0..4] == [0xfe, 0x15, 0x15, 0x6c] {
             // The first 4 bytes of keccak('add_privilege(address[])') is
             // `0xfe15156c`.
             // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
@@ -570,7 +619,7 @@ impl<'a> CallCreateExecutive<'a> {
                     Ok(())
                 }
             }
-        } else if data[0..4] == [68, 192, 189, 33] {
+        } else if data[0..4] == [0x44, 0xc0, 0xbd, 0x21] {
             // The first 4 bytes of keccak('remove_privilege(address[])')
             // is `0x44c0bd21`.
             // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
@@ -610,7 +659,9 @@ impl<'a> CallCreateExecutive<'a> {
     fn exec_storage_commission_privilege_control_contract(
         params: &ActionParams, state: &mut State, gas_cost: &U256,
     ) -> vm::Result<()> {
-        // FIXME: params.sender should be address of a contract.
+        if !state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract("normal account is not allowed to set storage_commission_privilege"));
+        }
         if *gas_cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -620,7 +671,7 @@ impl<'a> CallCreateExecutive<'a> {
             return Err(vm::Error::InternalContract("invalid data"));
         };
 
-        if data[0..4] == [254, 21, 21, 108] {
+        if data[0..4] == [0xfe, 0x15, 0x15, 0x6c] {
             // The first 4 bytes of keccak('add_privilege(address[])') is
             // `0xfe15156c`.
             // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
@@ -652,7 +703,7 @@ impl<'a> CallCreateExecutive<'a> {
                     Ok(())
                 }
             }
-        } else if data[0..4] == [68, 192, 189, 33] {
+        } else if data[0..4] == [0x44, 0xc0, 0xbd, 0x21] {
             // The first 4 bytes of keccak('remove_privilege(address[])')
             // is `0x44c0bd21`.
             // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
@@ -806,7 +857,6 @@ impl<'a> CallCreateExecutive<'a> {
                             &params,
                             state,
                             &gas_cost,
-                            self.env.timestamp,
                         )
                     } else if params.code_address
                         == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
@@ -826,23 +876,43 @@ impl<'a> CallCreateExecutive<'a> {
                     if let Err(e) = result {
                         state.revert_to_checkpoint();
                         Err(e.into())
-                    } else if state.check_storage_balance(self.env.timestamp) {
-                        state.discard_checkpoint();
-                        let internal_contract_out_buffer = Vec::new();
-                        let out_len = internal_contract_out_buffer.len();
-                        Ok(FinalizationResult {
-                            gas_left: params.gas - gas_cost,
-                            return_data: ReturnData::new(
-                                internal_contract_out_buffer,
-                                0,
-                                out_len,
-                            ),
-                            apply_state: true,
-                        })
                     } else {
-                        state.revert_to_checkpoint();
-                        // FIXME: add more details.
-                        Err(vm::Error::OutOfStaking)
+                        match state.check_collateral_for_storage(
+                            &params.original_sender,
+                            &params.storage_limit,
+                        ) {
+                            CollateralCheckResult::ExceedStorageLimit {
+                                ..
+                            } => {
+                                state.revert_to_checkpoint();
+                                Err(vm::Error::ExceedStorageLimit)
+                            }
+                            CollateralCheckResult::NotEnoughBalance {
+                                required,
+                                got,
+                            } => {
+                                state.revert_to_checkpoint();
+                                Err(vm::Error::NotEnoughBalanceForStorage {
+                                    required,
+                                    got,
+                                })
+                            }
+                            CollateralCheckResult::Valid => {
+                                state.discard_checkpoint();
+                                let internal_contract_out_buffer = Vec::new();
+                                let out_len =
+                                    internal_contract_out_buffer.len();
+                                Ok(FinalizationResult {
+                                    gas_left: params.gas - gas_cost,
+                                    return_data: ReturnData::new(
+                                        internal_contract_out_buffer,
+                                        0,
+                                        out_len,
+                                    ),
+                                    apply_state: true,
+                                })
+                            }
+                        }
                     }
                 };
 
@@ -881,6 +951,8 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
                 let out = {
                     let mut context = Self::as_context(
@@ -923,14 +995,26 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                match Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                    &sender,
+                    &storage_limit,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
 
             CallCreateExecutiveKind::ExecCreate(
@@ -965,6 +1049,8 @@ impl<'a> CallCreateExecutive<'a> {
 
                 let origin = OriginInfo::from(&params);
                 let exec = self.factory.create(params, self.spec, self.depth);
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
 
                 let out = {
                     let mut context = Self::as_context(
@@ -1007,14 +1093,26 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                match Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                    &sender,
+                    &storage_limit,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
 
             CallCreateExecutiveKind::ResumeCall(..)
@@ -1061,6 +1159,9 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
+
                 let res = match out {
                     Ok(val) => val,
                     Err(TrapError::Call(subparams, resume)) => {
@@ -1083,14 +1184,26 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                match Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                    &sender,
+                    &storage_limit,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
             CallCreateExecutiveKind::ResumeCreate(..) => {
                 panic!("Resumable as create, but called resume_call")
@@ -1117,6 +1230,9 @@ impl<'a> CallCreateExecutive<'a> {
                 resume,
                 mut unconfirmed_substate,
             ) => {
+                let sender = *origin.original_sender();
+                let storage_limit = *origin.storage_limit();
+
                 let out = {
                     let exec = resume.resume_create(result);
 
@@ -1164,14 +1280,26 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Self::enact_result(
+                match Self::enact_result(
                     &res,
-                    &self.env,
                     state,
                     substate,
                     unconfirmed_substate,
-                );
-                Ok(res)
+                    &sender,
+                    &storage_limit,
+                ) {
+                    CollateralCheckResult::Valid => Ok(res),
+                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                        Ok(Err(vm::Error::ExceedStorageLimit))
+                    }
+                    CollateralCheckResult::NotEnoughBalance {
+                        required,
+                        got,
+                    } => Ok(Err(vm::Error::NotEnoughBalanceForStorage {
+                        required,
+                        got,
+                    })),
+                }
             }
             CallCreateExecutiveKind::ResumeCall(..) => {
                 panic!("Resumable as call, but called resume_create")
@@ -1427,15 +1555,17 @@ impl<'a> Executive<'a> {
                         self.state.commission_balance(&params.code_address)?;
                     if gas_cost <= commission_balance && gas_cost <= balance {
                         self.state.checkpoint();
-                        // FIXME: If there are some db errors, should we panic
-                        // here?
                         self.state.sub_commission_balance(
                             &params.code_address,
                             &gas_cost,
                         )?;
-                        assert!(self
-                            .state
-                            .check_storage_balance(self.env.timestamp));
+                        assert_eq!(
+                            self.state.check_collateral_for_storage(
+                                &params.original_sender,
+                                &params.storage_limit
+                            ),
+                            CollateralCheckResult::Valid
+                        );
                         self.state.sub_balance(
                             &params.code_address,
                             &gas_cost,
@@ -1572,6 +1702,15 @@ impl<'a> Executive<'a> {
             &mut substate.to_cleanup_mode(&spec),
         )?;
 
+        let collateral_for_storage =
+            self.state.collateral_for_storage(&sender)?;
+        let storage_limit =
+            if tx.storage_limit <= U256::MAX - collateral_for_storage {
+                tx.storage_limit + collateral_for_storage
+            } else {
+                U256::MAX
+            };
+
         let (result, output) = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
@@ -1594,6 +1733,7 @@ impl<'a> Executive<'a> {
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
+                    storage_limit,
                 };
                 let res = self.create(params, &mut substate);
                 let out = match &res {
@@ -1617,6 +1757,7 @@ impl<'a> Executive<'a> {
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
+                    storage_limit,
                 };
 
                 let res = self.call(params, &mut substate);
@@ -1648,15 +1789,7 @@ impl<'a> Executive<'a> {
 
         // perform suicides
         for address in &substate.suicides {
-            // If the `bank_balance` of the address is not zero, it means it
-            // owns some storages. We should not kill this account, unless all
-            // the storages are released.
-            //
-            // FIXME: some db errors should be handled here.
-            assert!(self.state.exists(address)?);
-            if self.state.bank_balance(address)?.is_zero() {
-                self.state.kill_account(address);
-            }
+            self.state.kill_account(address);
         }
 
         // TODO should be added back after enabling dust collection
@@ -1703,1013 +1836,5 @@ impl<'a> Executive<'a> {
                 output,
             }),
         }
-    }
-}
-
-#[cfg(test)]
-#[allow(unused_imports)]
-mod tests {
-    use super::*;
-    use crate::{
-        evm::{Factory, VMType},
-        machine::Machine,
-        parameters::consensus_internal::{
-            CONFLUX_TOKEN, RENTAL_PRICE_PER_STORAGE_KEY,
-        },
-        state::{CleanupMode, State, Substate},
-        statedb::StateDb,
-        storage::{
-            tests::new_state_manager_for_unit_test, StorageManager,
-            StorageManagerTrait,
-        },
-        test_helpers::{
-            get_state_for_genesis_write,
-            get_state_for_genesis_write_with_factory,
-        },
-    };
-    use cfx_types::{Address, BigEndianHash, H256, U256, U512};
-    use keylib::{Generator, Random};
-    use primitives::Transaction;
-    use rustc_hex::FromHex;
-    use std::{cmp, str::FromStr};
-
-    fn make_byzantium_machine(max_depth: usize) -> Machine {
-        let mut machine = crate::machine::new_machine_with_builtin();
-        machine.set_spec_creation_rules(Box::new(move |s, _| {
-            s.max_depth = max_depth
-        }));
-        machine
-    }
-
-    #[test]
-    fn test_contract_address() {
-        let address =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-        let expected_address =
-            Address::from_str("8f09c73a5ed19289fb9bdc72f1742566df146f56")
-                .unwrap();
-        assert_eq!(
-            expected_address,
-            contract_address(
-                CreateContractAddress::FromSenderAndNonce,
-                &address,
-                &U256::from(88),
-                &[]
-            )
-            .0
-        );
-    }
-
-    #[test]
-    fn test_sender_balance() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-        let sender =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        let mut params = ActionParams::default();
-        params.address = address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = address;
-        params.gas = U256::from(100_000);
-        params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
-        params.value = ActionValue::Transfer(U256::from(0x7));
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(
-                &sender,
-                &U256::from(CONFLUX_TOKEN),
-                CleanupMode::NoEmpty,
-            )
-            .ok();
-        state
-            .deposit(
-                &sender,
-                &U256::from(CONFLUX_TOKEN),
-                1, /* duration_in_sec */
-            )
-            .ok();
-        state
-            .add_balance(&sender, &U256::from(0x100u64), CleanupMode::NoEmpty)
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params, &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(79_595));
-        assert_eq!(
-            state.storage_at(&address, &H256::zero()).unwrap(),
-            BigEndianHash::from_uint(&U256::from(0xf9u64))
-        );
-        assert_eq!(state.balance(&sender).unwrap(), U256::from(0xf9));
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
-        assert_eq!(substate.contracts_created.len(), 0);
-    }
-
-    #[test]
-    fn test_create_contract_out_of_depth() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        // code:
-        //
-        // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
-        // 29 bytes? 60 00 - push 0
-        // 52
-        // 60 1d - push 29
-        // 60 03 - push 3
-        // 60 17 - push 17
-        // f0 - create
-        // 60 00 - push 0
-        // 55 sstore
-        //
-        // other code:
-        //
-        // 60 10 - push 16
-        // 80 - duplicate first stack item
-        // 60 0c - push 12
-        // 60 00 - push 0
-        // 39 - copy current code to memory
-        // 60 00 - push 0
-        // f3 - return
-
-        let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
-
-        let sender =
-            Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-
-        let mut params = ActionParams::default();
-        params.address = address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = address;
-        params.gas = U256::from(100_000);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::from(100));
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params, &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(substate.contracts_created.len(), 0);
-    }
-
-    #[test]
-    // Tracing is not suported in JIT
-    fn test_call_to_create() {
-        // code:
-        //
-        // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
-        // 29 bytes? 60 00 - push 0
-        // 52
-        // 60 1d - push 29
-        // 60 03 - push 3
-        // 60 17 - push 23
-        // f0 - create
-        // 60 00 - push 0
-        // 55 sstore
-        //
-        // other code:
-        //
-        // 60 10 - push 16
-        // 80 - duplicate first stack item
-        // 60 0c - push 12
-        // 60 00 - push 0
-        // 39 - copy current code to memory
-        // 60 00 - push 0
-        // f3 - return
-
-        let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
-
-        let sender =
-            Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        // TODO: add tests for 'callcreate'
-        //let next_address = contract_address(&address, &U256::zero());
-        let mut params = ActionParams::default();
-        params.address = address;
-        params.code_address = address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = address;
-        params.gas = U256::from(100_000);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::from(100));
-        params.call_type = CallType::Call;
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write(&storage_manager);
-        state
-            .add_balance(&sender, &U256::from(100), CleanupMode::NoEmpty)
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(5);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params, &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(44_752));
-    }
-
-    #[test]
-    fn test_revert() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        let contract_address =
-            Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681")
-                .unwrap();
-        let sender =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-
-        let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
-        let returns = "726576657274206d657373616765".from_hex().unwrap();
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state = get_state_for_genesis_write_with_factory(
-            &storage_manager,
-            factory.clone(),
-        );
-        state
-            .add_balance(
-                &sender,
-                &U256::from_str("152d02c7e14af68000000").unwrap(),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state
-            .commit(BigEndianHash::from_uint(&U256::from(1)))
-            .unwrap();
-
-        let mut params = ActionParams::default();
-        params.address = contract_address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = contract_address;
-        params.gas = U256::from(20025);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::zero());
-        let env = Env::default();
-        let machine = crate::machine::new_machine_with_builtin();
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let mut output = [0u8; 14];
-        let FinalizationResult {
-            gas_left: result,
-            return_data,
-            ..
-        } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params, &mut substate).unwrap()
-        };
-        (&mut output)
-            .copy_from_slice(&return_data[..(cmp::min(14, return_data.len()))]);
-
-        assert_eq!(result, U256::from(1));
-        assert_eq!(output[..], returns[..]);
-        assert_eq!(
-            state
-                .storage_at(
-                    &contract_address,
-                    &BigEndianHash::from_uint(&U256::zero())
-                )
-                .unwrap(),
-            BigEndianHash::from_uint(&U256::from(0))
-        );
-    }
-
-    #[test]
-    fn test_keccak() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        let code = "6064640fffffffff20600055".from_hex().unwrap();
-
-        let sender =
-            Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6")
-                .unwrap();
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        // TODO: add tests for 'callcreate'
-        //let next_address = contract_address(&address, &U256::zero());
-        let mut params = ActionParams::default();
-        params.address = address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = address;
-        params.gas = U256::from(0x0186a0);
-        params.code = Some(Arc::new(code));
-        params.value =
-            ActionValue::Transfer(U256::from_str("0de0b6b3a7640000").unwrap());
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(
-                &sender,
-                &U256::from_str("152d02c7e14af6800000").unwrap(),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        let result = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params, &mut substate)
-        };
-
-        match result {
-            Err(_) => {}
-            _ => panic!("Expected OutOfGas"),
-        }
-    }
-
-    #[test]
-    fn test_not_enough_cash() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-
-        let keypair = Random.generate().unwrap();
-        let t = Transaction {
-            action: Action::Create,
-            value: U256::from(18),
-            data: "3331600055".from_hex().unwrap(),
-            gas: U256::from(100_000),
-            gas_price: U256::one(),
-            nonce: U256::zero(),
-        }
-        .sign(keypair.secret());
-        let sender = t.sender();
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        state
-            .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
-            .unwrap();
-        let mut env = Env::default();
-        env.gas_limit = U256::from(100_000);
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-
-        let res = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            let mut nonce_increased = false;
-            ex.transact(&t, &mut nonce_increased)
-        };
-
-        match res {
-            Err(ExecutionError::NotEnoughCash { required, got })
-                if required == U512::from(100_018)
-                    && got == U512::from(100_017) =>
-            {
-                ()
-            }
-            _ => assert!(false, "Expected not enough cash error. {:?}", res),
-        }
-    }
-
-    #[test]
-    fn test_deposit_withdraw() {
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-        let sender = Address::zero();
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-        state
-            .add_balance(
-                &sender,
-                &U256::from(1_000_000_000_000u64),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-
-        let mut params = ActionParams::default();
-        params.code_address = STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS.clone();
-        params.address = params.code_address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = params.code_address;
-        params.gas = U256::from(100000);
-        params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e800".from_hex().unwrap());
-
-        // wrong call type
-        let result = Executive::new(&mut state, &env, &machine, &spec)
-            .call(params.clone(), &mut substate);
-        assert!(result.is_err());
-        assert_eq!(
-            state.balance(&sender).unwrap(),
-            U256::from(1_000_000_000_000u64)
-        );
-        assert_eq!(state.bank_balance(&sender).unwrap(), U256::from(0));
-
-        // everything is fine
-        params.call_type = CallType::Call;
-        let result = Executive::new(&mut state, &env, &machine, &spec)
-            .call(params.clone(), &mut substate);
-        assert!(result.is_ok());
-        assert_eq!(
-            state.balance(&sender).unwrap(),
-            U256::from(900_000_000_000u64)
-        );
-        assert_eq!(
-            state.bank_balance(&sender).unwrap(),
-            U256::from(100_000_000_000u64)
-        );
-
-        // empty data
-        params.data = None;
-        let result = Executive::new(&mut state, &env, &machine, &spec)
-            .call(params.clone(), &mut substate);
-        assert!(result.is_err());
-        assert_eq!(
-            state.balance(&sender).unwrap(),
-            U256::from(900_000_000_000u64)
-        );
-        assert_eq!(
-            state.bank_balance(&sender).unwrap(),
-            U256::from(100_000_000_000u64)
-        );
-
-        // less data
-        params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
-        let result = Executive::new(&mut state, &env, &machine, &spec)
-            .call(params.clone(), &mut substate);
-        assert!(result.is_err());
-        assert_eq!(
-            state.balance(&sender).unwrap(),
-            U256::from(900_000_000_000u64)
-        );
-        assert_eq!(
-            state.bank_balance(&sender).unwrap(),
-            U256::from(100_000_000_000u64)
-        );
-
-        // more data
-        params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e80000".from_hex().unwrap());
-        let result = Executive::new(&mut state, &env, &machine, &spec)
-            .call(params.clone(), &mut substate);
-        assert!(result.is_err());
-        assert_eq!(
-            state.balance(&sender).unwrap(),
-            U256::from(900_000_000_000u64)
-        );
-        assert_eq!(
-            state.bank_balance(&sender).unwrap(),
-            U256::from(100_000_000_000u64)
-        );
-
-        // withdraw
-        params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
-        let result = Executive::new(&mut state, &env, &machine, &spec)
-            .call(params.clone(), &mut substate);
-        assert!(result.is_ok());
-        assert_eq!(
-            state.balance(&sender).unwrap(),
-            U256::from(950_000_000_000u64)
-        );
-        assert_eq!(
-            state.bank_balance(&sender).unwrap(),
-            U256::from(50_000_000_000u64)
-        );
-    }
-
-    #[test]
-    fn test_commission_privilege() {
-        // code:
-        //
-        // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
-        // 29 bytes? 60 00 - push 0
-        // 52
-        // 60 1d - push 29
-        // 60 03 - push 3
-        // 60 17 - push 23
-        // f0 - create
-        // 60 00 - push 0
-        // 55 sstore
-
-        let privilege_control_address =
-            &COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS;
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-        let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
-
-        let sender = Address::from_low_u64_ne(0);
-        let caller1 = Address::from_low_u64_le(1);
-        let caller2 = Address::from_low_u64_le(2);
-        let caller3 = Address::from_low_u64_le(3);
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        let mut params = ActionParams::default();
-        params.address = address;
-        params.code_address = address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = address;
-        params.gas = U256::from(100_000);
-        params.gas_price = U256::from(1);
-        params.code = Some(Arc::new(code));
-        params.value = ActionValue::Transfer(U256::from(1000000));
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        state
-            .add_balance(
-                &sender,
-                &U256::from(2_000_000_000_000_000_000u64),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state
-            .deposit(&sender, &U256::from(1_000_000_000_000_000_000u64), 100)
-            .unwrap();
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params.clone(), &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(substate.contracts_created.len(), 0);
-        assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
-
-        state
-            .add_balance(&caller1, &U256::from(100_000), CleanupMode::NoEmpty)
-            .unwrap();
-        state
-            .add_balance(&caller2, &U256::from(100_000), CleanupMode::NoEmpty)
-            .unwrap();
-        state
-            .add_balance(&caller3, &U256::from(100_000), CleanupMode::NoEmpty)
-            .unwrap();
-        // add commission privilege to caller1 and caller2
-        state
-            .add_commission_privilege(
-                privilege_control_address,
-                address,
-                sender,
-                caller1,
-            )
-            .unwrap();
-        state
-            .add_commission_privilege(
-                privilege_control_address,
-                address,
-                sender,
-                caller2,
-            )
-            .unwrap();
-        assert!(state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller1
-            )
-            .unwrap());
-        assert!(state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller2
-            )
-            .unwrap());
-        assert!(!state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller3
-            )
-            .unwrap());
-        // set commission balance to 110000
-        state
-            .set_commission_balance(&address, &sender, &U256::from(110_000))
-            .unwrap();
-        assert_eq!(
-            state.commission_balance(&address).unwrap(),
-            U256::from(110_000)
-        );
-
-        params.call_type = CallType::Call;
-        params.value = ActionValue::Transfer(U256::from(0));
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
-        // call with no commission privilege
-        params.sender = caller3;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
-        assert_eq!(
-            state.commission_balance(&address).unwrap(),
-            U256::from(110_000)
-        );
-
-        assert_eq!(state.balance(&caller1).unwrap(), U256::from(100_000));
-        // call with commission privilege and enough commission balance
-        params.sender = caller1;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(state.balance(&caller1).unwrap(), U256::from(200_000));
-        assert_eq!(
-            state.commission_balance(&address).unwrap(),
-            U256::from(10_000)
-        );
-
-        assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
-        // call with commission privilege and not enough commission balance
-        params.sender = caller2;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
-        assert_eq!(
-            state.commission_balance(&address).unwrap(),
-            U256::from(10_000)
-        );
-
-        // add more commission balance
-        state
-            .set_commission_balance(&address, &sender, &U256::from(200_000))
-            .unwrap();
-        assert_eq!(
-            state.commission_balance(&address).unwrap(),
-            U256::from(200_000)
-        );
-
-        assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
-        // call with commission privilege and enough commission balance
-        params.sender = caller2;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(state.balance(&caller2).unwrap(), U256::from(200_000));
-        assert_eq!(
-            state.commission_balance(&address).unwrap(),
-            U256::from(100_000)
-        );
-
-        // add commission privilege to caller3
-        state
-            .add_commission_privilege(
-                privilege_control_address,
-                address,
-                sender,
-                caller3,
-            )
-            .unwrap();
-        assert!(state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller3
-            )
-            .unwrap());
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
-        // call with commission privilege and enough commission balance
-        params.sender = caller3;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(62_976));
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(200_000));
-        assert_eq!(state.commission_balance(&address).unwrap(), U256::from(0));
-    }
-
-    #[test]
-    fn test_storage_commission_privilege() {
-        // code:
-        //
-        // 7c 601080600c6000396000f3006000355415600957005b60203560003555 - push
-        // 29 bytes? 60 01 - push 0
-        // 52
-        // 33 - caller
-        // 60 01 - push 1
-        // 55 sstore
-
-        let privilege_control_address =
-            &STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS;
-        let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-        let code = "7c601080600c6000396000f3006000355415600957005b6020356000355560005233600155".from_hex().unwrap();
-
-        let sender = Address::from_low_u64_ne(1);
-        let caller1 = Address::from_low_u64_le(2);
-        let caller2 = Address::from_low_u64_le(3);
-        let caller3 = Address::from_low_u64_le(4);
-        let address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
-            &sender,
-            &U256::zero(),
-            &[],
-        )
-        .0;
-        let mut params = ActionParams::default();
-        params.address = address;
-        params.code_address = address;
-        params.sender = sender;
-        params.original_sender = sender;
-        params.original_receiver = address;
-        params.gas = U256::from(100_000);
-        params.gas_price = U256::from(1);
-        params.code = Some(Arc::new(code));
-        params.value =
-            ActionValue::Transfer(U256::from(RENTAL_PRICE_PER_STORAGE_KEY));
-
-        let storage_manager = new_state_manager_for_unit_test();
-        let mut state =
-            get_state_for_genesis_write_with_factory(&storage_manager, factory);
-        let env = Env::default();
-        let machine = make_byzantium_machine(0);
-        let spec = machine.spec(env.number);
-        let mut substate = Substate::new();
-
-        state
-            .add_balance(
-                &sender,
-                &U256::from(2_000_000_000_000_000_000u64),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.create(params.clone(), &mut substate).unwrap()
-        };
-
-        assert_eq!(gas_left, U256::from(79983));
-        assert_eq!(substate.contracts_created.len(), 0);
-        assert_eq!(
-            state.balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-
-        state
-            .add_balance(
-                &caller1,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state
-            .add_balance(
-                &caller2,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-        state
-            .add_balance(
-                &caller3,
-                &U256::from(RENTAL_PRICE_PER_STORAGE_KEY),
-                CleanupMode::NoEmpty,
-            )
-            .unwrap();
-
-        // add privilege to caller1 and caller2
-        state.checkpoint();
-        state
-            .add_commission_privilege(
-                privilege_control_address,
-                address,
-                sender,
-                caller1,
-            )
-            .unwrap();
-        state
-            .add_commission_privilege(
-                privilege_control_address,
-                address,
-                sender,
-                caller2,
-            )
-            .unwrap();
-        assert!(state.check_storage_balance(0 /* timestamp */));
-        state.discard_checkpoint();
-        assert!(state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller1
-            )
-            .unwrap());
-        assert!(state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller2
-            )
-            .unwrap());
-        assert!(!state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller3
-            )
-            .unwrap());
-
-        params.call_type = CallType::Call;
-        params.value = ActionValue::Transfer(U256::from(0));
-
-        // call with no privilege
-        assert_eq!(
-            state.balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        params.sender = caller3;
-        params.original_sender = caller3;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(94983));
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(0));
-        assert_eq!(
-            state.bank_balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(
-            state.storage_balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-
-        // call with privilege
-        assert_eq!(
-            state.balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        params.sender = caller1;
-        params.original_sender = caller1;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(94983));
-        assert_eq!(
-            state.balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(state.bank_balance(&caller1).unwrap(), U256::from(0));
-        assert_eq!(state.storage_balance(&caller1).unwrap(), U256::from(0));
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0));
-        assert_eq!(
-            state.bank_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(
-            state.storage_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(state.balance(&caller3).unwrap(), U256::from(0));
-        assert_eq!(
-            state.bank_balance(&caller3).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(state.storage_balance(&caller3).unwrap(), U256::from(0));
-
-        // another caller call with commission privilege
-        assert_eq!(
-            state.balance(&caller2).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        params.sender = caller2;
-        params.original_sender = caller2;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(94983));
-        assert_eq!(
-            state.balance(&caller2).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(state.bank_balance(&caller2).unwrap(), U256::from(0));
-        assert_eq!(state.storage_balance(&caller2).unwrap(), U256::from(0));
-        assert_eq!(state.balance(&address).unwrap(), U256::from(0));
-        assert_eq!(
-            state.bank_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(
-            state.storage_balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-
-        // remove privilege from caller1
-        state
-            .remove_commission_privilege(
-                privilege_control_address,
-                address,
-                sender,
-                caller1,
-            )
-            .unwrap();
-        assert!(!state
-            .check_commission_privilege(
-                privilege_control_address,
-                &address,
-                &caller1
-            )
-            .unwrap());
-        assert_eq!(
-            state.balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        params.sender = caller1;
-        params.original_sender = caller1;
-        let FinalizationResult { gas_left, .. } = {
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-            ex.call(params.clone(), &mut substate).unwrap()
-        };
-        assert_eq!(gas_left, U256::from(94983));
-        assert_eq!(state.balance(&caller1).unwrap(), U256::from(0));
-        assert_eq!(
-            state.bank_balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(
-            state.storage_balance(&caller1).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(
-            state.balance(&address).unwrap(),
-            U256::from(RENTAL_PRICE_PER_STORAGE_KEY)
-        );
-        assert_eq!(state.bank_balance(&address).unwrap(), U256::from(0));
-        assert_eq!(state.storage_balance(&address).unwrap(), U256::from(0));
     }
 }

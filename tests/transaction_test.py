@@ -118,14 +118,15 @@ class TransactionTest(DefaultConfluxTestFramework):
         addr = eth_utils.encode_hex(privtoaddr(k))
         try:
             balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-            bank_balance = parse_as_int(self.nodes[0].cfx_getBankBalance(addr))
+            staking_balance = parse_as_int(self.nodes[0].cfx_getStakingBalance(addr))
+            collateral_for_storage = parse_as_int(self.nodes[0].cfx_getCollateralForStorage(addr))
         except Exception as e:
             self.log.info("Fail to get balance, error=%s", str(e))
             return False
-        if balance + bank_balance == balance_map[k]:
+        if balance + staking_balance + collateral_for_storage == balance_map[k]:
             return True
         else:
-            self.log.info("Remote balance:%d, local balance:%d", balance + bank_balance, balance_map[k])
+            self.log.info("Remote balance:%d, local balance:%d", balance + staking_balance + collateral_for_storage, balance_map[k])
             time.sleep(1)
             return False
 

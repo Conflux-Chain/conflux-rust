@@ -31,21 +31,6 @@ class VoteTokenTest(SmartContractBenchBase):
     def setup_contract(self):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        staking_contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
-            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
-        )
-
-        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
-        self.tx_conf["to"] = staking_contract_addr
-        tx_data = decode_hex(staking_contract.functions.deposit(1000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
-        node = self.nodes[0]
-        client = RpcClient(node)
-        genesis_key = default_config["GENESIS_PRI_KEY"]
-        genesis_addr = privtoaddr(genesis_key)
-        tx = client.new_tx(value=0, receiver=staking_contract_addr, nonce=self.get_nonce(genesis_addr), data=tx_data, gas=self.gas, gas_price=self.gas_price)
-        client.send_tx(tx)
-        self.wait_for_tx([tx], False)
 
         self.token_contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
                                                          contract_name="DummyErc20")

@@ -20,6 +20,20 @@ class WithdrawDepositTest(ConfluxTestFramework):
     def setup_network(self):
         self.setup_nodes()
         sync_blocks(self.nodes)
+    
+    def get_block_number(self, client, tx_hash):
+        receipt = client.get_transaction_receipt(tx_hash)
+        epoch_number = receipt['epochNumber']
+        assert epoch_number is not None
+        block_hash = receipt['blockHash']
+        blocks = []
+        for epoch in range(epoch_number + 1):
+            blocks.extend(client.block_hashes_by_epoch(client.EPOCH_NUM(epoch)))
+        for (i, block) in enumerate(blocks):
+            if block == block_hash:
+                return i + 1
+        return None
+
 
     def run_test(self):
         # Prevent easysolc from configuring the root logger to print to stderr
@@ -49,26 +63,75 @@ class WithdrawDepositTest(ConfluxTestFramework):
         client = RpcClient(node)
         (addr, priv_key) = client.rand_account()
         self.log.info("addr=%s priv_key=%s", addr, priv_key)
-        tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=0)
+        tx = client.new_tx(value=5 * 10 ** 18, receiver=addr)
         client.send_tx(tx)
         self.wait_for_tx([tx])
         assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
-        assert_equal(node.cfx_getBankBalance(addr), hex(0))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(0))
 
         self.tx_conf["to"] = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
         # deposit 10**18
         tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(self.tx_conf)["data"])
-        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], nonce=0, gas=gas, data=tx_data, priv_key=priv_key)
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(node.cfx_getBankBalance(addr), hex(10 ** 18))
+        deposit_time = self.get_block_number(client, tx.hash_hex())
+        assert_equal(node.cfx_getStakingBalance(addr), hex(10 ** 18))
+        assert_equal(node.cfx_getBalance(addr), hex(4 * 10 ** 18 - gas))
 
         # withdraw 5 * 10**17
+        balance = int(node.cfx_getBalance(addr), 16)
         tx_data = decode_hex(staking_contract.functions.withdraw(5 * 10 ** 17).buildTransaction(self.tx_conf)["data"])
-        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], nonce=1, gas=gas, data=tx_data, priv_key=priv_key)
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(node.cfx_getBankBalance(addr), hex(5 * 10 ** 17))
+        withdraw_time = self.get_block_number(client, tx.hash_hex())
+        duration = withdraw_time - deposit_time
+        total_num_blocks = 2 * 60 * 60 * 24 * 365
+        interest = 5 * 10 ** 17 * duration * 252288000 // (total_num_blocks * 100) // total_num_blocks
+        service_charge = 5 * 10 ** 17 * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
+        assert_equal(node.cfx_getStakingBalance(addr), hex(5 * 10 ** 17))
+        assert_equal(node.cfx_getBalance(addr), hex(balance + 5 * 10 ** 17 + interest - service_charge - gas))
+
+        # lock 4 * 10 ** 17 for 1 day
+        balance = int(node.cfx_getBalance(addr), 16)
+        tx_data = decode_hex(staking_contract.functions.lock(4 * 10 ** 17, 1).buildTransaction(self.tx_conf)["data"])
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        assert_equal(node.cfx_getBalance(addr), hex(balance - gas))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(5 * 10 ** 17))
+
+        # withdraw 5 * 10**17 and it should fail
+        balance = int(node.cfx_getBalance(addr), 16)
+        tx_data = decode_hex(staking_contract.functions.withdraw(5 * 10 ** 17).buildTransaction(self.tx_conf)["data"])
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        assert_equal(node.cfx_getBalance(addr), hex(balance - gas))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(5 * 10 ** 17))
+
+        # withdraw 10**17 + 1 and it should fail
+        balance = int(node.cfx_getBalance(addr), 16)
+        tx_data = decode_hex(staking_contract.functions.withdraw(10 ** 17 + 1).buildTransaction(self.tx_conf)["data"])
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        assert_equal(node.cfx_getBalance(addr), hex(balance - gas))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(5 * 10 ** 17))
+
+        # withdraw 10**17 and it should succeed
+        balance = int(node.cfx_getBalance(addr), 16)
+        tx_data = decode_hex(staking_contract.functions.withdraw(10 ** 17).buildTransaction(self.tx_conf)["data"])
+        tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
+        client.send_tx(tx)
+        self.wait_for_tx([tx])
+        withdraw_time = self.get_block_number(client, tx.hash_hex())
+        duration = withdraw_time - deposit_time
+        interest = 10 ** 17 * duration * 252288000 // (total_num_blocks * 100) // total_num_blocks
+        service_charge = 10 ** 17 * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
+        assert_equal(node.cfx_getBalance(addr), hex(balance + 10 ** 17 + interest - service_charge - gas))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(4 * 10 ** 17))
 
         block_gen_thread.stop()
         block_gen_thread.join()

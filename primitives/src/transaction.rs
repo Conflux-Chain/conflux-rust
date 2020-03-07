@@ -181,6 +181,8 @@ pub struct Transaction {
     pub action: Action,
     /// Transferred value.
     pub value: U256,
+    /// Maximum storage increasement in this execution.
+    pub storage_limit: U256,
     /// Transaction data.
     pub data: Bytes,
 }

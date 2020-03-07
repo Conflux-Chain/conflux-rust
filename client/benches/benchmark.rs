@@ -52,6 +52,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         gas: U256::from(21000u64),
         value: 1.into(),
         action: Action::Call(receiver_kp.address()),
+        storage_limit: U256::MAX,
         data: Bytes::new(),
     };
     let tx = tx.sign(kp.secret());
@@ -86,6 +87,7 @@ fn txexe_benchmark(c: &mut Criterion) {
                 ),
                 0.into(), /* account_start_nonce */
                 VmFactory::new(1024 * 32),
+                0, /* block_number */
             );
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
             let mut nonce_increased = false;

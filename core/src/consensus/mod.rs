@@ -415,17 +415,17 @@ impl ConsensusGraph {
         };
 
         match state_db.get_code(&address, &acc.code_hash) {
-            Some(code) => Ok(code),
-            None => Ok(vec![]),
+            Ok(Some(code)) => Ok(code.code),
+            _ => Ok(vec![]),
         }
     }
 
     /// Get the interest rate at an epoch
-    pub fn get_interest_rate(
+    pub fn get_annual_interest_rate(
         &self, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        if let Ok(interest_rate) = state_db.get_interest_rate() {
+        if let Ok(interest_rate) = state_db.get_annual_interest_rate() {
             Ok(interest_rate)
         } else {
             Err("db error occurred".into())
@@ -486,13 +486,13 @@ impl ConsensusGraph {
     }
 
     /// Get the current bank balance of an address
-    pub fn get_bank_balance(
+    pub fn get_staking_balance(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
             maybe_acc
-                .map_or(U256::zero(), |acc| acc.bank_balance)
+                .map_or(U256::zero(), |acc| acc.staking_balance)
                 .into()
         } else {
             0.into()
@@ -500,13 +500,13 @@ impl ConsensusGraph {
     }
 
     /// Get the current storage balance of an address
-    pub fn get_storage_balance(
+    pub fn get_collateral_for_storage(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<U256, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
         Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
             maybe_acc
-                .map_or(U256::zero(), |acc| acc.storage_balance)
+                .map_or(U256::zero(), |acc| acc.collateral_for_storage)
                 .into()
         } else {
             0.into()
@@ -609,10 +609,12 @@ impl ConsensusGraph {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        // FIXME: check if we should fill the correct `block_number`.
         let state = State::new(
             state_db,
             0.into(),           /* account_start_nonce */
             Default::default(), /* vm */
+            0,                  /* block_number */
         );
         state
             .nonce(&address)
@@ -1024,7 +1026,13 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// Wait until the best state has been executed, and return the state
     fn get_best_state(&self) -> State {
-        let best_state_hash = self.inner.read().best_state_block_hash();
+        let (best_state_hash, past_num_blocks) = {
+            let inner = self.inner.read();
+            let best_state_hash = inner.best_state_block_hash();
+            let arena_index = inner.hash_to_arena_indices[&best_state_hash];
+            let past_num_blocks = inner.arena[arena_index].past_num_blocks();
+            (best_state_hash, past_num_blocks)
+        };
         self.executor.wait_for_result(best_state_hash);
         // FIXME: it's only absolute safe with lock, otherwise storage /
         // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
@@ -1043,6 +1051,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                         StateDb::new(db),
                         0.into(),           /* account_start_nonce */
                         Default::default(), /* vm */
+                        past_num_blocks,    /* block_numer */
                     )
                 })
                 .expect("Best state has been executed")

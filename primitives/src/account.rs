@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::hash::KECCAK_EMPTY;
+use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 use cfx_types::{Address, H256, U256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -10,8 +10,33 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
 pub struct DepositInfo {
+    /// This is the number of tokens in this deposit.
     pub amount: U256,
+    /// This is the timestamp when this deposit happened, measured in the
+    /// number of past blocks. It will be used to calculate
+    /// the service charge.
     pub deposit_time: u64,
+    /// This is the accumulated interest rate when this deposit happened.
+    pub accumulated_interest_rate: U256,
+}
+
+#[derive(
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+)]
+pub struct StakingVoteInfo {
+    /// This is the number of tokens should be locked before `unlock_time`.
+    pub amount: U256,
+    /// This is the timestamp when the vote right will be invalid, measured in
+    /// the number of past blocks.
+    pub unlock_time: u64,
+}
+
+#[derive(
+    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
+)]
+pub struct CodeInfo {
+    pub code: Bytes,
+    pub owner: Address,
 }
 
 #[derive(
@@ -22,16 +47,20 @@ pub struct Account {
     pub balance: U256,
     pub nonce: U256,
     pub code_hash: H256,
-    /// This is the number of tokens in bank and part of this will be used for
-    /// storage.
-    pub bank_balance: U256,
-    /// This is the number of tokens in bank used for storage.
-    pub storage_balance: U256,
-    /// This is the accumulated interest rate.
-    pub bank_ar: U256,
-    /// This is a list of deposit history (`amount`, `deposit_time`), in sorted
-    /// order of `deposit_time`.
+    /// This is the number of tokens used in staking.
+    pub staking_balance: U256,
+    /// This is the number of tokens used as collateral for storage, which will
+    /// be returned to balance if the storage is released.
+    pub collateral_for_storage: U256,
+    /// This is the accumulated interest return.
+    pub accumulated_interest_return: U256,
+    /// This is the list of deposit info, sorted in increasing order of
+    /// `deposit_time`.
     pub deposit_list: Vec<DepositInfo>,
+    /// This is the list of vote info. The `unlock_time` sorted in increasing
+    /// order and the `amount` is sorted in decreasing order. All the
+    /// `unlock_time` and `amount` is unique in the list.
+    pub staking_vote_list: Vec<StakingVoteInfo>,
     // TODO: check if we need the storage root, and if so, implement.
     pub admin: Address,
 }
@@ -45,10 +74,11 @@ impl Account {
             balance: *balance,
             nonce: *nonce,
             code_hash: KECCAK_EMPTY,
-            bank_balance: 0.into(),
-            storage_balance: 0.into(),
-            bank_ar: 0.into(),
+            staking_balance: 0.into(),
+            collateral_for_storage: 0.into(),
+            accumulated_interest_return: 0.into(),
             deposit_list: Vec::new(),
+            staking_vote_list: Vec::new(),
             admin: Address::zero(),
         }
     }

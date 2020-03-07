@@ -27,6 +27,8 @@ pub struct CallRequest {
     pub data: Option<Bytes>,
     /// Nonce
     pub nonce: Option<U256>,
+    /// StorageLimit
+    pub storage_limit: Option<U256>,
 }
 
 pub fn sign_call(request: CallRequest) -> Result<SignedTransaction, Error> {
@@ -40,6 +42,7 @@ pub fn sign_call(request: CallRequest) -> Result<SignedTransaction, Error> {
         gas,
         gas_price: request.gas_price.unwrap_or_default(),
         value: request.value.unwrap_or_default(),
+        storage_limit: request.storage_limit.unwrap_or(U256::MAX),
         data: request.data.unwrap_or_default().into_vec(),
     }
     .fake_sign(from))
@@ -62,6 +65,7 @@ mod tests {
             "gas":"0x2",
             "value":"0x3",
             "data":"0x123456",
+            "storageLimit":"0x7b",
             "nonce":"0x4"
         }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
@@ -75,6 +79,7 @@ mod tests {
                 gas: Some(U256::from(2)),
                 value: Some(U256::from(3)),
                 data: Some(vec![0x12, 0x34, 0x56].into()),
+                storage_limit: Some(U256::from(123)),
                 nonce: Some(U256::from(4)),
             }
         );
@@ -88,6 +93,7 @@ mod tests {
             "gas": "0x76c0",
             "gasPrice": "0x9184e72a000",
             "value": "0x9184e72a",
+            "storageLimit":"0x3344adf",
             "data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
         }"#;
         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
@@ -98,6 +104,7 @@ mod tests {
             gas_price: Some(U256::from_str("9184e72a000").unwrap()),
             gas: Some(U256::from_str("76c0").unwrap()),
             value: Some(U256::from_str("9184e72a").unwrap()),
+            storage_limit: Some(U256::from_str("3344adf").unwrap()),
             data: Some("d46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675".from_hex().unwrap().into()),
             nonce: None
         });
@@ -117,6 +124,7 @@ mod tests {
                 gas: None,
                 value: None,
                 data: None,
+                storage_limit: None,
                 nonce: None,
             }
         );

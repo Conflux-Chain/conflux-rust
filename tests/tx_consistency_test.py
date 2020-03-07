@@ -36,7 +36,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         retry = num_txs
         for sender in senders:
             while True:
-                receipt = client.get_receipt(sender.last_tx_hash)
+                receipt = client.get_transaction_receipt(sender.last_tx_hash)
                 if receipt is not None:
                     break
 
@@ -67,7 +67,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             node_client = RpcClient(self.nodes[idx])
 
             for tx_hash in [sent_tx.hash_hex() for sent_tx in txs]:
-                receipt = node_client.get_receipt(tx_hash)
+                receipt = node_client.get_transaction_receipt(tx_hash)
                 assert_equal(receipt is None, False)
 
         # check balance and nonce for all accounts

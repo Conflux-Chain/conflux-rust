@@ -332,8 +332,8 @@ impl TreeGraphConsensus {
         };
 
         match state_db.get_code(&address, &acc.code_hash) {
-            Some(code) => Ok(code),
-            None => Ok(vec![]),
+            Ok(Some(code)) => Ok(code.code),
+            _ => Ok(vec![]),
         }
     }
 
@@ -807,7 +807,18 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
 
     /// Wait until the best state has been executed, and return the state
     fn get_best_state(&self) -> State {
-        let best_state_hash = self.inner.read().best_block_hash();
+        let (best_state_hash, past_num_blocks) = {
+            let inner = self.inner.read();
+            let best_state_hash = inner.best_block_hash();
+            let arena_index = inner.hash_to_arena_indices[&best_state_hash];
+            let past_num_blocks = inner.arena[arena_index]
+                .data
+                .as_ref()
+                .expect("consensus graph node data exists")
+                .past_num_blocks;
+            (best_state_hash, past_num_blocks)
+        };
+
         self.executor.wait_for_result(best_state_hash);
         // FIXME: it's only absolute safe with lock, otherwise storage /
         // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
@@ -826,6 +837,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                         StateDb::new(db),
                         0.into(),           /* account_start_nonce */
                         Default::default(), /* vm */
+                        past_num_blocks,    /* block_number */
                     )
                 })
                 .expect("Best state has been executed")

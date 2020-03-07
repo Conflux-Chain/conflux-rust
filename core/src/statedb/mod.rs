@@ -3,16 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    bytes::Bytes,
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    parameters::consensus_internal::INITIAL_INTEREST_RATE,
+    parameters::staking::*,
     storage::{
         Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
         StateRootWithAuxInfo, StorageState, StorageStateTrait,
     },
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey};
+use primitives::{Account, CodeInfo, EpochId, StorageKey};
 
 mod error;
 
@@ -26,9 +25,9 @@ impl StateDb {
     const ACCUMULATE_INTEREST_RATE_KEY: &'static [u8] =
         b"accumulate_interest_rate";
     const INTEREST_RATE_KEY: &'static [u8] = b"interest_rate";
-    const TOTAL_BANK_TOKENS_KEY: &'static [u8] = b"total_bank_tokens";
+    const TOTAL_BANK_TOKENS_KEY: &'static [u8] = b"total_staking_tokens";
     const TOTAL_STORAGE_TOKENS_KEY: &'static [u8] = b"total_storage_tokens";
-    const TOTAL_TOKENS_KEY: &'static [u8] = b"total_tokens";
+    const TOTAL_TOKENS_KEY: &'static [u8] = b"total_issued_tokens";
 
     pub fn new(storage: StorageState) -> Self { StateDb { storage } }
 
@@ -46,20 +45,13 @@ impl StateDb {
                 return Err(e.into());
             }
         };
-        //        println!("get key={:?} value={:?}", key, raw);
         Ok(Some(::rlp::decode::<T>(raw.as_ref())?))
     }
 
     pub fn get_code(
         &self, address: &Address, code_hash: &H256,
-    ) -> Option<Bytes> {
-        match self.get_raw(StorageKey::new_code_key(address, code_hash)) {
-            Ok(Some(code)) => Some(code.to_vec()),
-            _ => {
-                warn!("Failed reverse get of {}", code_hash);
-                None
-            }
-        }
+    ) -> Result<Option<CodeInfo>> {
+        self.get::<CodeInfo>(StorageKey::new_code_key(address, code_hash))
     }
 
     pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {
@@ -123,14 +115,13 @@ impl StateDb {
         result
     }
 
-    pub fn get_interest_rate(&self) -> Result<U256> {
+    pub fn get_annual_interest_rate(&self) -> Result<U256> {
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::INTEREST_RATE_KEY,
         );
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
-        // This number is 0.04 * INTEREST_RATE_SCALE
-        Ok(interest_rate_opt.unwrap_or(U256::from(INITIAL_INTEREST_RATE)))
+        Ok(interest_rate_opt.unwrap_or(*INITIAL_ANNUAL_INTEREST_RATE))
     }
 
     pub fn get_accumulate_interest_rate(&self) -> Result<U256> {
@@ -142,22 +133,24 @@ impl StateDb {
         Ok(acc_interest_rate_opt.unwrap_or(U256::zero()))
     }
 
-    pub fn get_total_tokens(&self) -> Result<U256> {
-        let total_tokens_key = StorageKey::new_storage_key(
+    pub fn get_total_issued_tokens(&self) -> Result<U256> {
+        let total_issued_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::TOTAL_TOKENS_KEY,
         );
-        let total_tokens_opt = self.get::<U256>(total_tokens_key)?;
-        Ok(total_tokens_opt.unwrap_or(U256::zero()))
+        let total_issued_tokens_opt =
+            self.get::<U256>(total_issued_tokens_key)?;
+        Ok(total_issued_tokens_opt.unwrap_or(U256::zero()))
     }
 
-    pub fn get_total_bank_tokens(&self) -> Result<U256> {
-        let total_bank_tokens_key = StorageKey::new_storage_key(
+    pub fn get_total_staking_tokens(&self) -> Result<U256> {
+        let total_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::TOTAL_BANK_TOKENS_KEY,
         );
-        let total_bank_tokens_opt = self.get::<U256>(total_bank_tokens_key)?;
-        Ok(total_bank_tokens_opt.unwrap_or(U256::zero()))
+        let total_staking_tokens_opt =
+            self.get::<U256>(total_staking_tokens_key)?;
+        Ok(total_staking_tokens_opt.unwrap_or(U256::zero()))
     }
 
     pub fn get_total_storage_tokens(&self) -> Result<U256> {
@@ -170,7 +163,9 @@ impl StateDb {
         Ok(total_storage_tokens_opt.unwrap_or(U256::zero()))
     }
 
-    pub fn set_interest_rate(&mut self, interest_rate: &U256) -> Result<()> {
+    pub fn set_annual_interest_rate(
+        &mut self, interest_rate: &U256,
+    ) -> Result<()> {
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::INTEREST_RATE_KEY,
@@ -188,22 +183,24 @@ impl StateDb {
         self.set::<U256>(acc_interest_rate_key, accumulate_interest_rate)
     }
 
-    pub fn set_total_tokens(&mut self, total_tokens: &U256) -> Result<()> {
-        let total_tokens_key = StorageKey::new_storage_key(
+    pub fn set_total_issued_tokens(
+        &mut self, total_issued_tokens: &U256,
+    ) -> Result<()> {
+        let total_issued_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::TOTAL_TOKENS_KEY,
         );
-        self.set::<U256>(total_tokens_key, total_tokens)
+        self.set::<U256>(total_issued_tokens_key, total_issued_tokens)
     }
 
-    pub fn set_total_bank_tokens(
-        &mut self, total_bank_tokens: &U256,
+    pub fn set_total_staking_tokens(
+        &mut self, total_staking_tokens: &U256,
     ) -> Result<()> {
-        let total_bank_tokens_key = StorageKey::new_storage_key(
+        let total_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             Self::TOTAL_BANK_TOKENS_KEY,
         );
-        self.set::<U256>(total_bank_tokens_key, total_bank_tokens)
+        self.set::<U256>(total_staking_tokens_key, total_staking_tokens)
     }
 
     pub fn set_total_storage_tokens(

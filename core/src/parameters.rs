@@ -44,18 +44,6 @@ pub mod consensus_internal {
     pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
-    /// This is the renting fee for one key/value pair in storage.
-    /// 1 token for 1024B, the storage for one key/value pair is 64B = 1/16
-    /// token.
-    pub const RENTAL_PRICE_PER_STORAGE_KEY: u64 = CONFLUX_TOKEN / 16;
-    /// This is the scale factor for interest rate: 10^18. The interest rate per
-    /// epoch will be `interest of year * epoch_duration_fraction *
-    /// INTEREST_RATE_SCALE`.
-    pub const INTEREST_RATE_SCALE: u64 = 1_000_000_000_000_000_000;
-    /// This is the initial interest with scale: 0.04 * INTEREST_RATE_SCALE
-    pub const INITIAL_INTEREST_RATE: u64 = 40_000_000_000_000_000;
-    /// This is the number seconds per year
-    pub const SECONDS_PER_YEAR: u64 = 60 * 60 * 24 * 365;
 
     /// This is the cap of the size of the anticone barrier. If we have more
     /// than this number we will use the brute_force O(n) algorithm instead.
@@ -169,6 +157,41 @@ pub mod block {
     pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
     // FIXME: a block generator parameter only. We should remove this later
     pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
+}
+
+pub mod staking {
+    use super::{
+        consensus_internal::CONFLUX_TOKEN,
+        pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
+    };
+    use cfx_types::U256;
+
+    /// This is the exchange unit between storage and CFX.
+    pub const NUM_BYTES_PER_CONFLUX_TOKEN: u64 = 1024;
+
+    /// This is the number of blocks per second.
+    pub const BLOCKS_PER_SECOND: u64 =
+        1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    /// This is the number of blocks per day.
+    pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
+    /// This is the number of blocks per year.
+    pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
+
+    lazy_static! {
+        /// This is the renting fee for one key/value pair in storage.
+        /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
+        /// This is the scale factor for interest rate: `BLOCKS_PER_YEAR * 100`.
+        /// The actual interest rate per block will be `INITIAL_ANNUAL_INTEREST_RATE /
+        /// INTEREST_RATE_SCALE / BLOCKS_PER_YEAR`.
+        pub static ref INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR * 100);
+        /// This is the initial annual interest rate with scale: `0.04 * INTEREST_RATE_SCALE`
+        pub static ref INITIAL_ANNUAL_INTEREST_RATE: U256 = U256::from(BLOCKS_PER_YEAR * 4);
+        /// This is the service charge rate for withdraw, `SERVICE_CHARGE_RATE /
+        /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
+        pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
+        pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+    }
 }
 
 pub mod light {

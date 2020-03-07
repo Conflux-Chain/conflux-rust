@@ -69,7 +69,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         for _ in range(5):
             client.generate_block()
-        receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
@@ -141,14 +141,14 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
         client.send_tx(tx, True)
         assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
-        assert_equal(node.cfx_getBankBalance(addr), hex(0))
+        assert_equal(node.cfx_getStakingBalance(addr), hex(0))
 
         self.tx_conf["to"] = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
         # deposit 2 * 10**18 / 16
         tx_data = decode_hex(staking_contract.functions.deposit(2 * 10 ** 18 // 16).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, receiver=self.tx_conf["to"], nonce=self.get_nonce(genesis_addr), gas=gas, data=tx_data)
         client.send_tx(tx, True)
-        assert_equal(node.cfx_getBankBalance(encode_hex(genesis_addr)), hex(2 * 10 ** 18 // 16))
+        assert_equal(node.cfx_getStakingBalance(encode_hex(genesis_addr)), hex(2 * 10 ** 18 // 16))
 
         # setup contract
         transaction = self.call_contract_function(
