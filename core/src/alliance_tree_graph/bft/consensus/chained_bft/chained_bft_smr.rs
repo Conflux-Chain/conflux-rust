@@ -30,10 +30,11 @@ use crate::{
     sync::{ProtocolConfiguration, SharedSynchronizationService},
 };
 use cfx_types::H256;
-use libra_types::crypto_proxies::EpochInfo;
+use libra_types::{crypto_proxies::EpochInfo, transaction::SignedTransaction};
 use network::NetworkService;
+use parking_lot::RwLock;
 use std::{
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::runtime::{Handle, Runtime};
@@ -185,6 +186,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
         network: Arc<NetworkService>, own_node_hash: H256,
         protocol_config: ProtocolConfiguration,
         tg_sync: SharedSynchronizationService,
+        admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Result<()>
     {
         let mut initial_setup = self
@@ -249,6 +251,7 @@ impl<T: Payload> StateMachineReplication for ChainedBftSMR<T> {
             self.storage.clone(),
             safety_rules_manager,
             tg_sync,
+            admin_transaction,
         );
 
         // Step 2

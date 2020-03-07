@@ -12,7 +12,7 @@ mod executive_tests;
 pub use self::{
     executed::{Executed, ExecutionError, ExecutionResult},
     executive::{
-        contract_address, Executive,
+        contract_address, Executive, ADMIN_CONTROL_CONTRACT_ADDRESS,
         COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, INTERNAL_CONTRACT_CODE,
         INTERNAL_CONTRACT_CODE_HASH,
         STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS,

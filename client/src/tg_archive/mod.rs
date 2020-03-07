@@ -274,6 +274,10 @@ impl TgArchiveClient {
             protocol_config.clone(),
         );
 
+        let executor = consensus_provider.as_ref().unwrap().get_executor();
+        let admin_transaction =
+            consensus_provider.as_ref().unwrap().get_admin_transaction();
+
         if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
             let dp = Arc::new(DataPropagation::new(
                 conf.raw_conf.data_propagate_interval_ms,
@@ -387,6 +391,8 @@ impl TgArchiveClient {
             txpool.clone(),
             txgen.clone(),
             conf.rpc_impl_config(),
+            executor,
+            admin_transaction,
         ));
 
         let common_impl = Arc::new(CommonImpl::new(

@@ -20,6 +20,7 @@ fn test_overlay_account_create() {
         accumulated_interest_return: 0.into(),
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
+        admin: Address::zero(),
     };
     // test new from account 1
     let overlay_account = OverlayAccount::new(&address, account, 0);
@@ -44,6 +45,7 @@ fn test_overlay_account_create() {
         accumulated_interest_return: 2.into(),
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
+        admin: Address::zero(),
     };
 
     // test new from account 2
@@ -112,6 +114,7 @@ fn test_deposit_and_withdraw() {
         accumulated_interest_return: 0.into(),
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
+        admin: Address::zero(),
     };
     let interest_rate_per_block =
         *INITIAL_ANNUAL_INTEREST_RATE / U256::from(BLOCKS_PER_YEAR);
@@ -286,6 +289,7 @@ fn test_deposit_and_withdraw() {
     );
 
     // withdraw
+    // 500_000_000_000_000 from `block_number = 1`
     let (interest, service_charge) = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
         interest_rate_per_block,
@@ -312,6 +316,7 @@ fn test_deposit_and_withdraw() {
         U256::from(500_000_000_000_000u64)
     );
 
+    // 500_000_000_000_000 from `block_number = 1`
     let (interest, service_charge) = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
         interest_rate_per_block * U256::from(BLOCKS_PER_YEAR + 1),
@@ -341,20 +346,23 @@ fn test_deposit_and_withdraw() {
         U256::from(100_000_000_000_000u64)
     );
 
+    // 100_000_000_000_000 from `block_number = 2`
+    // 10_000_000_000_000 from `block_number = 3`
+    // 250_000_000_000 from `block_number = 4`
     let (interest, service_charge) = overlay_account.withdraw(
         110_250_000_000_000u64.into(), /* amount */
         interest_rate_per_block * U256::from(100),
         100, /* withdraw_time */
     );
-    assert_eq!(interest, U256::from(3_422_753u64));
-    assert_eq!(service_charge, U256::from(55_124_957_214u64));
+    assert_eq!(interest, U256::from(6_845_508u64));
+    assert_eq!(service_charge, U256::from(55_124_914_430u64));
     assert_eq!(
         *overlay_account.accumulated_interest_return(),
-        U256::from(20_000_003_422_753u64)
+        U256::from(20_000_006_845_508u64)
     );
     assert_eq!(
         *overlay_account.balance(),
-        U256::from(2_018_833_878_465_539u64)
+        U256::from(2_018_833_881_931_078u64)
     );
     assert_eq!(
         *overlay_account.staking_balance(),
@@ -394,6 +402,7 @@ fn test_vote_lock() {
         accumulated_interest_return: 0.into(),
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
+        admin: Address::zero(),
     };
     account.deposit_list.push(DepositInfo {
         amount: 10000000.into(),
@@ -547,6 +556,7 @@ fn test_clone_overwrite() {
             amount: 1236.into(),
             unlock_time: 335,
         }],
+        admin: Address::zero(),
     };
 
     let account2 = Account {
@@ -566,6 +576,7 @@ fn test_clone_overwrite() {
             amount: 1237.into(),
             unlock_time: 338,
         }],
+        admin: Address::zero(),
     };
 
     let mut overlay_account1 =

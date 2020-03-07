@@ -92,13 +92,14 @@ pub struct EpochExecutionTask {
     pub start_block_number: u64,
     pub reward_info: Option<RewardExecutionInfo>,
     pub debug_record: Arc<Mutex<Option<ComputeEpochDebugRecord>>>,
+    pub force_recompute: bool,
 }
 
 impl EpochExecutionTask {
     pub fn new(
         epoch_hash: H256, epoch_block_hashes: Vec<H256>,
         start_block_number: u64, reward_info: Option<RewardExecutionInfo>,
-        debug_record: bool,
+        debug_record: bool, force_recompute: bool,
     ) -> Self
     {
         Self {
@@ -112,6 +113,7 @@ impl EpochExecutionTask {
             } else {
                 Arc::new(Mutex::new(None))
             },
+            force_recompute,
         }
     }
 }
@@ -402,6 +404,7 @@ impl ConsensusExecutor {
                 inner.get_epoch_start_block_number(pivot_arena_index),
                 None,  /* reward_info */
                 false, /* debug_record */
+                false, /* force_recompute */
             ));
         }
 
@@ -473,6 +476,7 @@ impl ConsensusExecutionHandler {
             task.start_block_number,
             &task.reward_info,
             &mut *task.debug_record.lock(),
+            task.force_recompute,
         );
     }
 
@@ -511,6 +515,7 @@ impl ConsensusExecutionHandler {
         start_block_number: u64,
         reward_execution_info: &Option<RewardExecutionInfo>,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
+        force_recompute: bool,
     )
     {
         // FIXME: Question: where to calculate if we should make a snapshot?
@@ -518,7 +523,8 @@ impl ConsensusExecutionHandler {
         // FIXME: a new state.
 
         // Check if the state has been computed
-        if debug_record.is_none()
+        if !force_recompute
+            && debug_record.is_none()
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,

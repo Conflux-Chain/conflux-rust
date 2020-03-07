@@ -9,15 +9,21 @@ use libra_crypto::{
 };
 use libra_types::{
     block_info::{BlockInfo, PivotBlockDecision, Round},
-    crypto_proxies::{LedgerInfoWithSignatures, ValidatorSet},
+    contract_event::ContractEvent,
+    crypto_proxies::{
+        LedgerInfoWithSignatures, NextValidatorSetProposal, ValidatorSet,
+        ValidatorVerifier,
+    },
     ledger_info::LedgerInfo,
     transaction::{
         Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
     },
+    validator_verifier::VerifyError,
     vm_error::{StatusCode, VMStatus},
     write_set::WriteSet,
 };
 use libradb::LibraDB;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -195,12 +201,16 @@ impl ProcessedVMOutput {
 /// provide.
 pub struct Executor {
     db: Arc<LibraDB>,
+    administrators: RwLock<Option<ValidatorVerifier>>,
 }
 
 impl Executor {
     /// Constructs an `Executor`.
     pub fn new(config: &NodeConfig, db: Arc<LibraDB>) -> Self {
-        let mut executor = Executor { db };
+        let mut executor = Executor {
+            db,
+            administrators: RwLock::new(None),
+        };
 
         if executor
             .db
@@ -236,6 +246,7 @@ impl Executor {
                 None, /* last_pivot */
                 *PRE_GENESIS_BLOCK_ID,
                 *GENESIS_BLOCK_ID,
+                GENESIS_EPOCH,
             )
             .expect("Failed to execute genesis block.");
 
@@ -266,11 +277,28 @@ impl Executor {
 
     pub fn get_libra_db(&self) -> Arc<LibraDB> { self.db.clone() }
 
+    pub fn set_administrators(&self, admins: ValidatorVerifier) {
+        let mut administrators = self.administrators.write();
+        *administrators = Some(admins);
+    }
+
+    fn gen_output(events: Vec<ContractEvent>) -> TransactionOutput {
+        let vm_status = VMStatus {
+            major_status: StatusCode::EXECUTED,
+            sub_status: None,
+            message: None,
+        };
+
+        let status = TransactionStatus::Keep(vm_status);
+
+        TransactionOutput::new(WriteSet::default(), events, 0, status)
+    }
+
     /// Executes a block.
     pub fn execute_block(
         &self, transactions: Vec<Transaction>,
         last_pivot: Option<PivotBlockDecision>, parent_id: HashValue,
-        id: HashValue,
+        id: HashValue, current_epoch: u64,
     ) -> Result<ProcessedVMOutput>
     {
         debug!(
@@ -289,6 +317,28 @@ impl Executor {
                 Transaction::BlockMetadata(_data) => {}
                 Transaction::UserTransaction(trans) => {
                     let trans = trans.check_signature()?;
+                    if trans.is_admin_type() {
+                        // Check the voting power of signers in administrators.
+                        let admins = self.administrators.read();
+                        if admins.is_none() {
+                            bail!("Administrators are not set.");
+                        }
+                        let admins = admins.as_ref().unwrap();
+                        let signers = trans.pubkey_account_addresses();
+                        match admins.check_voting_power(signers.iter()) {
+                            Ok(_) => {}
+                            Err(VerifyError::TooLittleVotingPower {
+                                ..
+                            }) => {
+                                bail!("Not enough voting power in administrators.");
+                            }
+                            Err(_) => {
+                                bail!(
+                                    "There are signers not in administrators."
+                                );
+                            }
+                        }
+                    }
                     let payload = trans.payload();
                     let events = match payload {
                         TransactionPayload::WriteSet(change_set) => {
@@ -302,23 +352,7 @@ impl Executor {
                         "One transaction can contain exactly 1 event."
                     );
 
-                    // Real execution
-
-                    let vm_status = VMStatus {
-                        major_status: StatusCode::EXECUTED,
-                        sub_status: None,
-                        message: None,
-                    };
-
-                    let status = TransactionStatus::Keep(vm_status);
-
-                    let output = TransactionOutput::new(
-                        WriteSet::default(),
-                        events,
-                        0,
-                        status,
-                    );
-
+                    let output = Self::gen_output(events);
                     vm_outputs.push(output);
                 }
                 Transaction::WriteSet(change_set) => {
@@ -327,21 +361,8 @@ impl Executor {
                         events.len() == 1,
                         "One transaction can contain exactly 1 event."
                     );
-                    let vm_status = VMStatus {
-                        major_status: StatusCode::EXECUTED,
-                        sub_status: None,
-                        message: None,
-                    };
 
-                    let status = TransactionStatus::Keep(vm_status);
-
-                    let output = TransactionOutput::new(
-                        WriteSet::default(),
-                        events,
-                        0,
-                        status,
-                    );
-
+                    let output = Self::gen_output(events);
                     vm_outputs.push(output);
                 }
             }
@@ -356,8 +377,11 @@ impl Executor {
             debug!("Execution status: {:?}", status);
         }
 
-        let output = Self::process_vm_outputs(vm_outputs, last_pivot)
-            .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+        let output =
+            Self::process_vm_outputs(vm_outputs, last_pivot, current_epoch)
+                .map_err(|err| {
+                    format_err!("Failed to execute block: {}", err)
+                })?;
 
         Ok(output)
     }
@@ -583,7 +607,7 @@ impl Executor {
     /// output.
     fn process_vm_outputs(
         vm_outputs: Vec<TransactionOutput>,
-        last_pivot: Option<PivotBlockDecision>,
+        last_pivot: Option<PivotBlockDecision>, current_epoch: u64,
     ) -> Result<ProcessedVMOutput>
     {
         ensure!(
@@ -603,8 +627,16 @@ impl Executor {
             for event in vm_output.events() {
                 // check for change in validator set
                 if *event.key() == validator_set_change_event_key {
+                    let next_validator_set_proposal =
+                        NextValidatorSetProposal::from_bytes(
+                            event.event_data(),
+                        )?;
+                    ensure!(
+                        current_epoch == next_validator_set_proposal.this_epoch,
+                        "Wrong epoch proposal."
+                    );
                     next_validator_set =
-                        Some(ValidatorSet::from_bytes(event.event_data())?);
+                        Some(next_validator_set_proposal.next_validator_set);
                     break;
                 }
                 // check for pivot block selection.

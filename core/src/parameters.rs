@@ -160,15 +160,18 @@ pub mod block {
 }
 
 pub mod staking {
-    use super::consensus_internal::CONFLUX_TOKEN;
-    use super::pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    use super::{
+        consensus_internal::CONFLUX_TOKEN,
+        pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
+    };
     use cfx_types::U256;
 
     /// This is the exchange unit between storage and CFX.
     pub const NUM_BYTES_PER_CONFLUX_TOKEN: u64 = 1024;
 
     /// This is the number of blocks per second.
-    pub const BLOCKS_PER_SECOND: u64 = 1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    pub const BLOCKS_PER_SECOND: u64 =
+        1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
     /// This is the number of blocks per day.
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
     /// This is the number of blocks per year.

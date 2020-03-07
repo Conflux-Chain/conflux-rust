@@ -31,16 +31,14 @@ impl<P: Payload> Handleable<P> for VoteMsg {
             return Ok(());
         }
 
-        self.verify(
-            &ctx.manager.network_task.epoch_info.read().unwrap().verifier,
-        )
-        .map_err(|e| {
-            security_log(SecurityEvent::InvalidConsensusVote)
-                .error(&e)
-                .data(&self)
-                .log();
-            e
-        })?;
+        self.verify(&ctx.manager.network_task.epoch_info.read().verifier)
+            .map_err(|e| {
+                security_log(SecurityEvent::InvalidConsensusVote)
+                    .error(&e)
+                    .data(&self)
+                    .log();
+                e
+            })?;
         ctx.manager.network_task.vote_tx.push(peer_address, self)?;
         Ok(())
     }

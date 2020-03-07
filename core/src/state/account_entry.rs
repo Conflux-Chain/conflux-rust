@@ -41,6 +41,9 @@ pub struct OverlayAccount {
     // Nonce of the account,
     nonce: U256,
 
+    // Administrator of the account
+    admin: Address,
+
     // This is a cache for storage change.
     storage_cache: RefCell<HashMap<H256, H256>>,
     storage_changes: HashMap<H256, H256>,
@@ -73,7 +76,7 @@ pub struct OverlayAccount {
     code_cache: Arc<Bytes>,
     code_owner: Address,
 
-    pub reset_storage: bool,
+    reset_storage: bool,
     // Whether it is a contract address.
     is_contract: bool,
 }
@@ -84,6 +87,7 @@ impl OverlayAccount {
             address: address.clone(),
             balance: account.balance,
             nonce: account.nonce,
+            admin: account.admin,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -132,6 +136,7 @@ impl OverlayAccount {
             address: address.clone(),
             balance,
             nonce,
+            admin: Address::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -158,6 +163,36 @@ impl OverlayAccount {
             address: address.clone(),
             balance,
             nonce,
+            admin: Address::zero(),
+            storage_cache: RefCell::new(HashMap::new()),
+            storage_changes: HashMap::new(),
+            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_changes: HashMap::new(),
+            staking_balance: 0.into(),
+            withdrawable_staking_balance: 0.into(),
+            collateral_for_storage: 0.into(),
+            accumulated_interest_return: 0.into(),
+            deposit_list: Vec::new(),
+            staking_vote_list: Vec::new(),
+            code_hash: KECCAK_EMPTY,
+            code_size: None,
+            code_cache: Arc::new(vec![]),
+            code_owner: Address::zero(),
+            reset_storage,
+            is_contract: true,
+        }
+    }
+
+    pub fn new_contract_with_admin(
+        address: &Address, balance: U256, nonce: U256, reset_storage: bool,
+        admin: &Address,
+    ) -> Self
+    {
+        OverlayAccount {
+            address: address.clone(),
+            balance,
+            nonce,
+            admin: admin.clone(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -188,6 +223,7 @@ impl OverlayAccount {
             accumulated_interest_return: self.accumulated_interest_return,
             deposit_list: self.deposit_list.clone(),
             staking_vote_list: self.staking_vote_list.clone(),
+            admin: self.admin,
         }
     }
 
@@ -249,6 +285,14 @@ impl OverlayAccount {
         rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
         let key = keccak(rlp_stream.out());
         self.set_storage(key, BigEndianHash::from_uint(val), *contract_owner);
+    }
+
+    pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
+        if self.is_contract {
+            if self.admin.is_zero() || self.admin == *requester {
+                self.admin = admin.clone();
+            }
+        }
     }
 
     pub fn check_commission_privilege(
@@ -529,6 +573,7 @@ impl OverlayAccount {
             address: self.address,
             balance: self.balance,
             nonce: self.nonce,
+            admin: self.admin,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -646,6 +691,7 @@ impl OverlayAccount {
     pub fn overwrite_with(&mut self, other: OverlayAccount) {
         self.balance = other.balance;
         self.nonce = other.nonce;
+        self.admin = other.admin;
         self.code_hash = other.code_hash;
         self.code_cache = other.code_cache;
         self.code_owner = other.code_owner;

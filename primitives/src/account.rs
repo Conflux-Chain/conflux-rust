@@ -62,6 +62,7 @@ pub struct Account {
     /// `unlock_time` and `amount` is unique in the list.
     pub staking_vote_list: Vec<StakingVoteInfo>,
     // TODO: check if we need the storage root, and if so, implement.
+    pub admin: Address,
 }
 
 impl Account {
@@ -78,6 +79,7 @@ impl Account {
             accumulated_interest_return: 0.into(),
             deposit_list: Vec::new(),
             staking_vote_list: Vec::new(),
+            admin: Address::zero(),
         }
     }
 }

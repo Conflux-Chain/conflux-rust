@@ -3,12 +3,11 @@
 
 use crate::{
     account_address::AccountAddress,
-    proto::types::SignedTransaction as ProtoSignedTransaction,
-    transaction::{RawTransaction, SignedTransaction, TransactionPayload},
+    transaction::{RawTransaction, TransactionPayload},
 };
 use chrono::Utc;
-use libra_crypto::{hash::TestOnlyHash, HashValue};
 
+/*
 /// Used to get the digest of a set of signed transactions.  This is used by a
 /// validator to sign a block and to verify the signatures of other validators
 /// on a block
@@ -25,6 +24,7 @@ pub fn get_signed_transactions_digest(
     }
     signatures.test_only_hash()
 }
+*/
 
 pub fn create_unsigned_txn(
     payload: TransactionPayload,
@@ -33,6 +33,7 @@ pub fn create_unsigned_txn(
     max_gas_amount: u64,
     gas_unit_price: u64,
     txn_expiration: i64, // for compatibility with UTC's timestamp.
+    is_admin_type: bool,
 ) -> RawTransaction
 {
     RawTransaction::new(
@@ -45,6 +46,7 @@ pub fn create_unsigned_txn(
             (Utc::now().timestamp() + txn_expiration) as u64,
             0,
         ),
+        is_admin_type,
     )
 }
 

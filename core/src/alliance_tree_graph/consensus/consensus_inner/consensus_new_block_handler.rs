@@ -642,6 +642,7 @@ impl ConsensusNewBlockHandler {
                 inner.get_epoch_start_block_number(pivot_arena_index),
                 None,  /* reward_info */
                 false, /* debug_record */
+                false, /* force_recompute */
             ));
         }
     }
@@ -752,6 +753,7 @@ impl ConsensusNewBlockHandler {
                     inner.get_epoch_start_block_number(pivot_arena_index),
                     None,  /* reward_info */
                     false, /* debug_record */
+                    true,  /* force_recompute */
                 ));
             }
         }

@@ -82,6 +82,7 @@ impl StateComputer for ExecutionProxy {
             last_pivot,
             block.parent_id(),
             block.id(),
+            block.epoch(),
         )?;
 
         // Check whether pivot block selection is valid.
@@ -106,7 +107,7 @@ impl StateComputer for ExecutionProxy {
             debug!("on_new_candidate_pivot returned in time");
             ensure!(valid_pivot_decision, "Invalid pivot block proposal!");
         }
-        // FIXME: Check whether new membership is valid.
+
         Ok(output)
     }
 
@@ -188,4 +189,6 @@ impl StateComputer for ExecutionProxy {
     }
 
     fn get_peers(&self) -> Arc<Peers<PeerState, H256>> { self.peers.clone() }
+
+    fn get_executor(&self) -> Arc<Executor> { self.executor.clone() }
 }

@@ -15,10 +15,11 @@ use crate::{
     write_set::WriteSet,
 };
 use anyhow::{bail, ensure, format_err, Error, Result};
-use ethkey::{verify_public, Secret, Signature};
+use ethkey::Secret;
+use keccak_hash::keccak;
 use libra_crypto::{
     hash::{CryptoHash, CryptoHasher, EventAccumulatorHasher},
-    HashValue,
+    HashValue, Signature as SignatureTrait,
 };
 use libra_crypto_derive::CryptoHasher;
 use serde::{de, ser, Deserialize, Serialize};
@@ -39,7 +40,8 @@ pub use change_set::ChangeSet;
 pub use module::Module;
 pub use script::{Script, SCRIPT_HASH_LENGTH};
 
-use cfx_types::{BigEndianHash, Public, H256, U256};
+use cfx_types::{Public, H256};
+use libra_crypto::secp256k1::{Secp256k1PublicKey, Secp256k1Signature};
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_as_transaction_argument, TransactionArgument,
@@ -60,6 +62,9 @@ pub struct RawTransaction {
     sequence_number: u64,
     // The transaction script to execute.
     payload: TransactionPayload,
+
+    // Whether the transaction is for epoch change.
+    is_admin_type: bool,
 
     // Maximal total gas specified by wallet to spend for this transaction.
     max_gas_amount: u64,
@@ -113,13 +118,14 @@ impl RawTransaction {
     pub fn new(
         sender: AccountAddress, sequence_number: u64,
         payload: TransactionPayload, max_gas_amount: u64, gas_unit_price: u64,
-        expiration_time: Duration,
+        expiration_time: Duration, is_admin_type: bool,
     ) -> Self
     {
         RawTransaction {
             sender,
             sequence_number,
             payload,
+            is_admin_type,
             max_gas_amount,
             gas_unit_price,
             expiration_time,
@@ -133,12 +139,14 @@ impl RawTransaction {
     pub fn new_script(
         sender: AccountAddress, sequence_number: u64, script: Script,
         max_gas_amount: u64, gas_unit_price: u64, expiration_time: Duration,
+        is_admin_type: bool,
     ) -> Self
     {
         RawTransaction {
             sender,
             sequence_number,
             payload: TransactionPayload::Script(script),
+            is_admin_type,
             max_gas_amount,
             gas_unit_price,
             expiration_time,
@@ -152,12 +160,14 @@ impl RawTransaction {
     pub fn new_module(
         sender: AccountAddress, sequence_number: u64, module: Module,
         max_gas_amount: u64, gas_unit_price: u64, expiration_time: Duration,
+        is_admin_type: bool,
     ) -> Self
     {
         RawTransaction {
             sender,
             sequence_number,
             payload: TransactionPayload::Module(module),
+            is_admin_type,
             max_gas_amount,
             gas_unit_price,
             expiration_time,
@@ -166,7 +176,9 @@ impl RawTransaction {
 
     pub fn new_write_set(
         sender: AccountAddress, sequence_number: u64, write_set: WriteSet,
-    ) -> Self {
+        is_admin_type: bool,
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
@@ -174,6 +186,7 @@ impl RawTransaction {
                 write_set,
                 vec![],
             )),
+            is_admin_type,
             // Since write-set transactions bypass the VM, these fields aren't
             // relevant.
             max_gas_amount: 0,
@@ -186,11 +199,14 @@ impl RawTransaction {
 
     pub fn new_change_set(
         sender: AccountAddress, sequence_number: u64, change_set: ChangeSet,
-    ) -> Self {
+        is_admin_type: bool,
+    ) -> Self
+    {
         RawTransaction {
             sender,
             sequence_number,
             payload: TransactionPayload::WriteSet(change_set),
+            is_admin_type,
             // Since write-set transactions bypass the VM, these fields aren't
             // relevant.
             max_gas_amount: 0,
@@ -216,10 +232,8 @@ impl RawTransaction {
         .expect("data is valid and context has signing capabilities; qed");
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
             self,
-            public_key,
-            signature.v(),
-            signature.r().into(),
-            signature.s().into(),
+            vec![Secp256k1PublicKey::from_public(public_key)],
+            vec![Secp256k1Signature::from_signature(signature)],
         )))
     }
 
@@ -284,6 +298,8 @@ impl RawTransaction {
 
     /// Return the sender of this transaction.
     pub fn sender(&self) -> AccountAddress { self.sender }
+
+    pub fn is_admin_type(&self) -> bool { self.is_admin_type }
 }
 
 impl CryptoHash for RawTransaction {
@@ -330,18 +346,11 @@ pub struct SignedTransaction {
     /// check whether this key is indeed the pre-image of the pubkey hash
     /// stored under sender's account.
     //public_key: Ed25519PublicKey,
-    pub public_key: Public,
+    pub public_keys: Vec<Secp256k1PublicKey>,
 
     /// Signature of the transaction that correspond to the public key
     //signature: Ed25519Signature,
-
-    /// The V field of the signature; helps describe which half of the curve
-    /// our point falls in.
-    pub v: u8,
-    /// The R field of the signature; helps describe the point on the curve.
-    pub r: U256,
-    /// The S field of the signature; helps describe the point on the curve.
-    pub s: U256,
+    pub signatures: Vec<Secp256k1Signature>,
 }
 
 /// A transaction for which the signature has been verified. Created by
@@ -371,46 +380,38 @@ impl fmt::Debug for SignedTransaction {
             f,
             "SignedTransaction {{ \n \
              {{ raw_txn: {:#?}, \n \
-             public_key: {:#?}, \n \
-             signature: {:#?}, \n \
+             public_keys: {:#?}, \n \
+             signatures: {:#?}, \n \
              }} \n \
              }}",
             self.raw_txn,
-            self.public_key,
-            self.signature(),
+            self.public_keys,
+            self.signatures(),
         )
     }
 }
 
 impl SignedTransaction {
     pub fn new(
-        raw_txn: RawTransaction,
-        //public_key: Ed25519PublicKey,
-        //signature: Ed25519Signature,
-        public_key: Public,
-        v: u8,
-        r: U256,
-        s: U256,
+        raw_txn: RawTransaction, public_keys: Vec<Secp256k1PublicKey>,
+        signatures: Vec<Secp256k1Signature>,
     ) -> SignedTransaction
     {
         SignedTransaction {
             raw_txn,
-            public_key,
-            v,
-            r,
-            s,
+            public_keys,
+            signatures,
         }
     }
 
-    //pub fn public_key(&self) -> Ed25519PublicKey { self.public_key.clone() }
-    pub fn public_key(&self) -> Public { self.public_key.clone() }
+    pub fn public_keys(&self) -> Vec<Secp256k1PublicKey> {
+        self.public_keys.clone()
+    }
 
     //pub fn signature(&self) -> Ed25519Signature { self.signature.clone() }
     /// Construct a signature object from the sig.
-    pub fn signature(&self) -> Signature {
-        let r: H256 = BigEndianHash::from_uint(&self.r);
-        let s: H256 = BigEndianHash::from_uint(&self.s);
-        Signature::from_rsv(&r, &s, self.v)
+    pub fn signatures(&self) -> Vec<Secp256k1Signature> {
+        self.signatures.clone()
     }
 
     pub fn sender(&self) -> AccountAddress { self.raw_txn.sender }
@@ -420,6 +421,8 @@ impl SignedTransaction {
     pub fn sequence_number(&self) -> u64 { self.raw_txn.sequence_number }
 
     pub fn payload(&self) -> &TransactionPayload { &self.raw_txn.payload }
+
+    pub fn is_admin_type(&self) -> bool { self.raw_txn.is_admin_type() }
 
     pub fn max_gas_amount(&self) -> u64 { self.raw_txn.max_gas_amount }
 
@@ -436,18 +439,26 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns
     /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        //self.public_key
-        //    .verify_signature(&self.raw_txn.hash(), &self.signature)?;
-        let verify_result = verify_public(
-            &self.public_key,
-            &self.signature(),
-            &H256::from_slice(self.raw_txn.hash().to_vec().as_slice()),
-        )?;
-        if verify_result {
-            Ok(SignatureCheckedTransaction(self))
-        } else {
-            bail!("Incorrect signature");
+        if self.signatures.len() != self.public_keys.len() {
+            bail!("Different numbers of public keys and signatures");
         }
+
+        let tx_hash = self.raw_txn.hash();
+        for (public_key, signature) in
+            self.public_keys.iter().zip(self.signatures.iter())
+        {
+            signature.verify(&tx_hash, public_key)?;
+        }
+        Ok(SignatureCheckedTransaction(self))
+    }
+
+    pub fn pubkey_account_addresses(&self) -> Vec<AccountAddress> {
+        let mut account_addresses = Vec::new();
+        for pubkey in self.public_keys.iter() {
+            let account = AccountAddress::new(keccak(pubkey.public()).into());
+            account_addresses.push(account);
+        }
+        account_addresses
     }
 
     /*
@@ -468,6 +479,7 @@ impl SignedTransaction {
     */
 }
 
+/*
 impl TryFrom<crate::proto::types::SignedTransaction> for SignedTransaction {
     type Error = Error;
 
@@ -489,9 +501,9 @@ impl From<SignatureCheckedTransaction>
 {
     fn from(txn: SignatureCheckedTransaction) -> Self { txn.0.into() }
 }
+*/
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-
 pub struct TransactionWithProof {
     pub version: Version,
     pub transaction: Transaction,

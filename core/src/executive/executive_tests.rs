@@ -657,8 +657,8 @@ fn test_deposit_withdraw_lock() {
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    // lock 1 for 53375995583651 days
-    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000308b91419ca3".from_hex().unwrap());
+    // lock 1 for 106751991167301 days should failed
+    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833945".from_hex().unwrap());
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate);
     assert!(result.is_err());
@@ -680,8 +680,8 @@ fn test_deposit_withdraw_lock() {
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    // lock 1 for 53375995583650 days
-    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000308b91419ca2".from_hex().unwrap());
+    // lock 1 for 106751991167301 days, should succeed
+    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate);
     assert!(result.is_ok());
