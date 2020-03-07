@@ -2,7 +2,7 @@ use crate::{
     message::RequestId,
     sync::{
         message::{Context, DynamicCapability, Handleable, KeyContainer},
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         state::{
             state_sync_candidate_response::StateSyncCandidateResponse,
             storage::SnapshotSyncCandidate,
@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Clone, RlpEncodable, RlpDecodable, Debug)]
 pub struct StateSyncCandidateRequest {
@@ -75,9 +75,15 @@ impl Handleable for StateSyncCandidateRequest {
     }
 }
 
+impl AsAny for StateSyncCandidateRequest {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 impl Request for StateSyncCandidateRequest {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
-        conf.snapshot_candidate_request_timeout_ms
+        conf.snapshot_candidate_request_timeout
     }
 
     fn on_removed(&self, _inflight_keys: &KeyContainer) {}
@@ -86,7 +92,9 @@ impl Request for StateSyncCandidateRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> { None }
+    fn resend(&self) -> Option<Box<dyn Request>> {
+        Some(Box::new(self.clone()))
+    }
 
     fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

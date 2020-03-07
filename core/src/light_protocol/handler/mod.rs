@@ -5,9 +5,9 @@
 mod sync;
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         handle_error,
         message::{
             msgid, BlockHashes as GetBlockHashesResponse,
@@ -27,6 +27,7 @@ use crate::{
         CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
     sync::{message::Throttled, SynchronizationGraph},
+    UniqueId,
 };
 use cfx_types::H256;
 use io::TimerToken;
@@ -61,7 +62,7 @@ pub struct Handler {
     pub blooms: Blooms,
 
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // epoch sync manager
     epochs: Epochs,
@@ -96,7 +97,7 @@ pub struct Handler {
 
 impl Handler {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+        consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         throttling_config_file: Option<String>,
     ) -> Self
     {
@@ -225,7 +226,7 @@ impl Handler {
 
     #[inline]
     fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.consensus.data_man.true_genesis.hash() {
+        match self.consensus.get_data_manager().true_genesis.hash() {
             h if h == genesis => Ok(()),
             h => {
                 debug!(
@@ -320,7 +321,7 @@ impl Handler {
         &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(StatusPing {
-            genesis_hash: self.consensus.data_man.true_genesis.hash(),
+            genesis_hash: self.consensus.get_data_manager().true_genesis.hash(),
             node_type: NodeType::Light,
             protocol_version: LIGHT_PROTOCOL_VERSION,
         });

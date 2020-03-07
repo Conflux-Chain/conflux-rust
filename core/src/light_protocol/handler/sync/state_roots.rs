@@ -11,7 +11,7 @@ use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         message::{msgid, GetStateRoots, StateRootWithEpoch},
         Error, ErrorKind,
     },
@@ -21,6 +21,7 @@ use crate::{
         CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
         STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
     },
+    UniqueId,
 };
 
 use super::{

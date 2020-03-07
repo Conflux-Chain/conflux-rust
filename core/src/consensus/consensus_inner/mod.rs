@@ -18,53 +18,74 @@ use crate::{
 };
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
-use link_cut_tree::{
-    CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
-};
+use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
-    TransactionAddress,
+    SignedTransaction, TransactionAddress,
 };
 use slab::Slab;
 use std::{
-    cmp::max,
+    cmp::{max, Reverse},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
     sync::Arc,
 };
 
-const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
-
 #[derive(Copy, Clone)]
 pub struct ConsensusInnerConfig {
-    // num/den is the actual adaptive alpha parameter in GHAST. We use a
-    // fraction to get around the floating point problem
-    pub adaptive_weight_alpha_num: u64,
-    pub adaptive_weight_alpha_den: u64,
-    // Beta is the threshold in GHAST algorithm
+    /// Beta is the threshold in GHAST algorithm
     pub adaptive_weight_beta: u64,
-    // The heavy block ratio (h) in GHAST algorithm
+    /// The heavy block ratio (h) in GHAST algorithm
     pub heavy_block_difficulty_ratio: u64,
-    // The number of epochs per era. Each era is a potential checkpoint
-    // position. The parent_edge checking and adaptive checking are defined
-    // relative to the era start blocks.
+    /// The timer block ratio in timer chain algorithm
+    pub timer_chain_block_difficulty_ratio: u64,
+    /// The timer chain beta ratio
+    pub timer_chain_beta: u64,
+    /// The number of epochs per era. Each era is a potential checkpoint
+    /// position. The parent_edge checking and adaptive checking are defined
+    /// relative to the era start blocks.
     pub era_epoch_count: u64,
-    // FIXME: We should replace this to use confirmation risk instead
-    pub era_checkpoint_gap: u64,
-    // Optimistic execution is the feature to execute ahead of the deferred
-    // execution boundary. The goal is to pipeline the transaction
-    // execution and the block packaging and verification.
-    // optimistic_executed_height is the number of step to go ahead
+    /// Optimistic execution is the feature to execute ahead of the deferred
+    /// execution boundary. The goal is to pipeline the transaction
+    /// execution and the block packaging and verification.
+    /// optimistic_executed_height is the number of step to go ahead
     pub enable_optimistic_execution: bool,
+    /// Control whether we enable the state exposer for the testing purpose.
     pub enable_state_expose: bool,
 }
 
+/// ConsensusGraphNodeData contains all extra information of a block that will
+/// change as the consensus graph state evolves (e.g., pivot chain changes).
+/// Unlike the ConsensusGraphNode fields, fields in ConsensusGraphNodeData will
+/// only be available after the block is *preactivated* (after calling
+/// preactivate_block().
 pub struct ConsensusGraphNodeData {
+    /// It indicates the epoch number of the block, i.e., the height of the
+    /// corresponding pivot chain block of this one
     pub epoch_number: u64,
+    /// It indicates whether the block is partial invalid or not. A block
+    /// is partial invalid if it selects an incorrect parent or filling an
+    /// incorrect adaptive field.
     partial_invalid: bool,
+    /// It indicates whether the block is pending or not. A block is pending if
+    /// the consensus engine determines that it is not necessary to determine
+    /// its partial invalid status.
     pending: bool,
+    /// This is a special counter marking whether the block is active or not.
+    /// A block is active only if the counter is zero
+    /// A partial invalid block will get a NULL counter
+    /// A normal block which referenced directly or indirectly will have a
+    /// positive counter
+    active_cnt: usize,
+    /// This is an implementation flag indicate whether the node is active or
+    /// not. Because multiple blocks may have their `active_cnt` turning
+    /// zero in the same time, we need this flag to process them correctly
+    /// one by one.
+    activated: bool,
+    /// This records the force confirm point in the past view of this block.
+    force_confirm: usize,
     /// The indices set of the blocks in the epoch when the current
     /// block is as pivot chain block. This set does not contain
     /// the block itself.
@@ -74,17 +95,32 @@ pub struct ConsensusGraphNodeData {
     ///
     /// For cur_era_genesis, this field should NOT be used because they contain
     /// out-of-era blocks not maintained in the memory.
-    pub ordered_executable_epoch_blocks: Vec<usize>,
-    /// It indicates whether `blockset_in_own_view_of_epoch` is cleared due to
-    /// its size.
-    pub blockset_cleared: bool,
-    pub sequence_number: u64,
+    ordered_executable_epoch_blocks: Vec<usize>,
+    /// It indicates whether `blockset_in_own_view_of_epoch` and
+    /// `ordered_executable_epoch_blocks` are cleared due to its size.
+    blockset_cleared: bool,
+    /// The sequence number is used to identify the order of each block
+    /// entering the consensus. The sequence number of the genesis is used
+    /// by the syncronization layer to determine whether a block exists in
+    /// the consensus or not.
+    sequence_number: u64,
+    /// The longest chain of all timer blocks.
+    past_view_timer_longest_difficulty: i128,
+    /// The last timer block index in the chain.
+    past_view_last_timer_block_arena_index: usize,
+    /// The height of the closest timer block in the longest timer chain.
+    /// Note that this only considers the current longest timer chain and
+    /// ingores the remaining timer blocks.
+    ledger_view_timer_chain_height: u64,
     /// vote_valid_lca_height indicates the fork_at height that the vote_valid
     /// field corresponds to.
     vote_valid_lca_height: u64,
     /// It indicates whether the blame voting information of this block is
     /// correct or not.
     vote_valid: bool,
+    /// It denotes the height of the last pivot chain in the past set of this
+    /// block.
+    last_pivot_in_past: u64,
     /// It indicates whether the states stored in header is correct or not.
     /// It's evaluated when needed, i.e., when we need the blame information to
     /// generate a new block or to compute rewards.
@@ -94,17 +130,24 @@ pub struct ConsensusGraphNodeData {
 }
 
 impl ConsensusGraphNodeData {
-    fn new(epoch_number: u64, sequence_number: u64) -> Self {
+    fn new(epoch_number: u64, sequence_number: u64, active_cnt: usize) -> Self {
         ConsensusGraphNodeData {
             epoch_number,
             partial_invalid: false,
             pending: false,
+            active_cnt,
+            activated: false,
+            force_confirm: NULL,
             blockset_in_own_view_of_epoch: Default::default(),
             ordered_executable_epoch_blocks: Default::default(),
-            blockset_cleared: false,
+            blockset_cleared: true,
             sequence_number,
+            past_view_timer_longest_difficulty: 0,
+            past_view_last_timer_block_arena_index: NULL,
+            ledger_view_timer_chain_height: 0,
             vote_valid_lca_height: NULLU64,
             vote_valid: true,
+            last_pivot_in_past: 0,
             state_valid: None,
         }
     }
@@ -114,17 +157,21 @@ struct ConsensusGraphPivotData {
     /// The set of blocks whose last_pivot_in_past point to this pivot chain
     /// location
     last_pivot_in_past_blocks: HashSet<usize>,
+    /// The total weight of the past set of the pivot block. This value
+    /// is used by the confirmation meter.
+    past_weight: i128,
 }
 
 impl Default for ConsensusGraphPivotData {
     fn default() -> Self {
         ConsensusGraphPivotData {
             last_pivot_in_past_blocks: HashSet::new(),
+            past_weight: 0,
         }
     }
 }
 
-/// [Implementation details of Eras and Checkpoints]
+/// # Implementation details of Eras, Timer chain and Checkpoints
 ///
 /// Era in Conflux is defined based on the height of a block. Every
 /// epoch_block_count height corresponds to one era. For example, if
@@ -133,89 +180,109 @@ impl Default for ConsensusGraphPivotData {
 /// genesis blocks of the following era. Note that it is possible to have
 /// multiple era genesis blocks for one era period. Eventually, only
 /// one era genesis block and its subtree will become dominant and all other
-/// genesis blocks together with their subtrees will be discarded.
+/// genesis blocks together with their subtrees will be discarded. The
+/// definition of Era enables Conflux to form checkpoints at the stabilized
+/// era genesis blocks.
 ///
-/// The definition of Era enables Conflux to form checkpoints at the stabilized
-/// era genesis blocks. To do that, we had the following modifications to the
-/// original GHAST algorithm. First of all, full nodes will validate the parent
-/// edge choice of each block but only *with in* its EraGenesis subtree. For
-/// example, for a block at height 100100 (era_epoch_count = 50000), its
-/// EraGenesis corresponds to its ancestor block at the height 100000 and
-/// its LastEraGenesis corresponds to its ancestor block at the height 50000.
-/// The anticone cut point for reward calculation will also stay within one era.
-/// Also the adaptive rule in GHAST is modified as well (described below) to
-/// reflect the era boundary.
+/// # Implementation details of the Timer chain
 ///
-/// Implementation details of the GHAST algorithm
+/// Timer chain contains special blocks whose PoW qualities are significantly
+/// higher than normal blocks. The goal of timer chain is to enable a slowly
+/// growing longest chain to indicate the time elapsed between two blocks.
+/// Timer chain also provides a force confirmation rule which will enable us
+/// to safely form the checkpoint.
+///
+/// Any block whose PoW quality is timer_chain_block_difficulty_ratio times
+/// higher than its supposed difficulty is *timer block*. The longest chain of
+/// timer blocks (counting both parent edges and reference edges) is the timer
+/// chain. When timer_chain_beta is large enough, malicious attackers can
+/// neither control the timer chain nor stop its growth. We use Timer(G) to
+/// denote the number of timer chain blocks in G. We use TimerDis(b_1, b_2) to
+/// denote Timer(Past(B_1)) - Timer(Past(B_2)). In case that b_2 \in
+/// Future(b_1), TimerDis(b_1, b_2) is a good indicator about how long it has
+/// past between the generation of the two blocks.
+///
+/// A block b in G is considered force-confirm if 1) there are *consecutively*
+/// timer_chain_beta timer chain blocks under the subtree of b and 2) there are
+/// at least timer_chain_beta blocks after these blocks (not necessarily in the
+/// subtree of b). Force-confirm rule overrides any GHAST weight rule, i.e.,
+/// new blocks will always be generated under b.
+///
+///
+/// # Implementation details of the GHAST algorithm
 ///
 /// Conflux uses the Greedy Heaviest Adaptive SubTree (GHAST) algorithm to
 /// select a chain from the genesis block to one of the leaf blocks as the pivot
-/// chain. For each block b, GHAST algorithm computes two values: stable and
-/// adaptive. Let's take stable as an example:
+/// chain. For each block b, GHAST algorithm computes it is adaptive
 ///
-/// 1   B = Past(b)
-/// 2   a = b.parent
-/// 3   stable = True
-/// 4   Let f(x) = PastW(b) - PastW(x.parent) - x.parent.weight
-/// 5   Let g(x) = SubTW(B, x)
-/// 6   while a != EraGenesis do
-/// 7       if f(a) > beta and g(a) / f(a) < alpha then
-/// 8           stable = False
-/// 9       a = a.parent
+/// ```python
+/// B = Past(b)
+/// f is the force confirm point of b in the view of Past(b)
+/// a = b.parent
+/// adaptive = False
+/// Let f(x) = 2 * SubTW(B, x) - SubTW(B, x.parent) + x.parent.weight
+/// Let g(x) = adaptive_weight_beta * b.diff
+/// while a != force_confirm do
+///     if TimerDis(a, b) >= timer_chain_beta and f(a) < g(a) then
+///         adaptive = True
+///     a = a.parent
+/// ```
 ///
-/// To efficiently compute stable, we maintain a link-cut tree called
-/// stable_tree.
-///
-/// Assume alpha = n / d, then g(a) / f(a) < n / d
-///   => d * g(a) < n * f(a)
-///   => d * SubTW(B, x) < n * (PastW(b) - PastW(x.parent) - x.parent.weight)
-///   => d * SubTW(B, x) + n * PastW(x.parent) + n * x.parent.weight < n *
-/// PastW(b)
-///
-/// Note that for a given block b, PastW(b) is a constant,
-/// so in order to calculate stable, it is sufficient to calculate
-/// argmin{d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent)}.
-/// Therefore, in the stable_tree, the value for x is
-/// d * SubTW(B, x) + n * x.parent.weight + n * PastW(x.parent).
-///
-/// adaptive could be computed in a similar manner:
-///
-/// 1   B = Past(b)
-/// 2   a = b.parent
-/// 3   Let f(x) = SubTW(B, x.parent)
-/// 4   Let g(x) = SubStableTW(B, x)
-/// 5   adaptive = False
-/// 6   while a != EraGenesis do
-/// 7       if f(a) > beta and g(a) / f(a) < alpha then
-/// 8           adaptive = True
-/// 9       a = a.parent
-///10   let f1(x) = InclusiveSubTW(B, x.parent)
-///11   let g1(x) = InclusiveSubTW(B, x)
-///12   while a != LastEraGenesis do
-///13       if f1(a) > beta and g1(a) / f1(a) < alpha then
-///14           adaptive = True
-///15       a = a.parent
-///
-/// The only difference is that when maintaining g(x) * d - f(x) * n, we need to
+/// To efficiently compute adaptive, we maintain a link-cut tree called
+/// adaptive_weight_tree. The value for x in the link-cut-tree is
+/// 2 * SubTW(B, x) + x.parent.weight - SubTW(B, x.parent). Note that we need to
 /// do special caterpillar update in the Link-Cut-Tree, i.e., given a node X, we
 /// need to update the values of all of those nodes A such that A is the child
 /// of one of the node in the path from Genesis to X.
 ///
-/// Note that when computing stable we only consider the view under the single
-/// current era, while when computing adaptive we consider both the current and
-/// the last eras. The reason is as follows. Here we are going to handle split
-/// attack and balance attack. The split attack requires stable detection since
-/// it requires information about non-past. And it also requires attacker to
-/// keep creating unstable situations along with graph growing, therefore it
-/// can be detected in the current latest era. In contrast, balance attack may
-/// only require subtree information, so it mainly needs to detect adaptive. And
-/// balance attack may incurs adaptive case only once, which could be just
-/// before the beginning of the latest current era, to generate two balanced era
-/// subtrees, while these two era trees themselves can look healthy. Therefore,
-/// to handle balance attack, we also need to consider adaptive situation in the
-/// last/previous era.
-
-/// [Introduction of blaming mechanism]
+/// For an adaptive block, its weights will be calculated in a special way. If
+/// its PoW quality is adaptive_heavy_weight_ratio times higher than the normal
+/// difficulty, its weight will be adaptive_heavy_weight_ratio instead of one.
+/// Otherwise, the weight will be zero. The goal of adaptive weight is to deal
+/// with potential liveness attacks that balance two subtrees. Note that when
+/// computing adaptive we only consider the nodes after force_confirm.
+///
+/// # Implementation details of partial invalid blocks
+///
+/// One block may become partial invalid because 1) it chooses incorrect parent
+/// or 2) it generates an adaptive block when it should not. In normal
+/// situations, we should verify every block we receive and determine whether it
+/// is partial invalid or not. For a partial invalid block b, it will not
+/// receive any reward. Normal nodes will also refrain from *directly or
+/// indirectly* referencing b until TimerDis(*b*, new_block) is greater than or
+/// equal to timer_dis_delta. Normal nodes essentially ignores partial invalid
+/// blocks for a while. We implement this via our active_cnt field. Last but not
+/// least, we exclude *partial invalid* blocks from the timer chain
+/// consideration. They are not timer blocks!
+///
+/// # Implementation details of checkpoints
+///
+/// Our consensus engine will form a checkpoint pair (a, b) given a DAG state G
+/// if:
+///
+/// 1) b is force confirmed in G
+/// 2) a is force confirmed in Past(b)
+///
+/// Now we are safe to remove all blocks that are not in Future(a). For those
+/// blocks that are in the Future(a) but not in Subtree(a), we can also redirect
+/// a as their parents. We call *a* the cur_era_genesis_block and *b* the
+/// cur_era_stable_block.
+///
+/// We no longer need to check the partial invalid block which does not
+/// referencing b (directly and indirectly), because such block would never go
+/// into the timer chain. Our assumption is that the timer chain will not reorg
+/// on a length greater than timer_chain_beta. For those blocks which
+/// referencing *b* but also not under the subtree of a, they are by default
+/// partial invalid. We can ignore them as well. Therefore *a* can be treated as
+/// a new genesis block. We are going to check the possibility of making
+/// checkpoints only at the era boundary.
+///
+/// Note that we have the assumption that the force confirmation point will
+/// always move along parental edges, i.e., it is not possible for the point
+/// to move to a sibling tree. This assumption is true if the timer_chain_beta
+/// and the timer_chain_difficulty_ratio are set to large enough values.
+///
+/// # Introduction of blaming mechanism
 ///
 /// Blaming is used to provide proof for state root of a specific pivot block.
 /// The rationale behind is as follows. Verifying state roots of blocks off
@@ -261,6 +328,7 @@ impl Default for ConsensusGraphPivotData {
 /// Computing the reward for a block relies on correct blaming behavior of
 /// the block. If the block is a pivot block when computing its reward,
 /// it is required that:
+///
 /// 1. the block correctly chooses its parent;
 /// 2. the block contains the correct deferred state root;
 /// 3. the block correctly blames all its previous blocks following parent
@@ -278,6 +346,7 @@ impl Default for ConsensusGraphPivotData {
 /// to recover from a checkpoint), the protocol goes through the following
 /// steps. Let's assume the verifier has a subtree of block headers which
 /// includes the block whose state root is to be verified.
+///
 /// 1. The verifier node gets a merkle path whose merkle root corresponds
 /// to the state root after executing block Bi. Let's call it the path root
 /// which is to be verified.
@@ -303,88 +372,107 @@ impl Default for ConsensusGraphPivotData {
 /// 6. The verifier verifies the keccak hash of [..., DSRi+2, ...] equals
 /// to deferred state root of Bk, and then verifies that DSRi+2 equals to the
 /// path root of Bi.
-
+///
 /// In ConsensusGraphInner, every block corresponds to a ConsensusGraphNode and
 /// each node has an internal index. This enables fast internal implementation
 /// to use integer index instead of H256 block hashes.
 pub struct ConsensusGraphInner {
-    // This slab hold consensus graph node data and the array index is the
-    // internal index.
+    /// This slab hold consensus graph node data and the array index is the
+    /// internal index.
     pub arena: Slab<ConsensusGraphNode>,
-    // indices maps block hash to internal index.
+    /// indices maps block hash to internal index.
     pub hash_to_arena_indices: HashMap<H256, usize>,
-    // The current pivot chain indexes.
-    pub pivot_chain: Vec<usize>,
-    // The metadata associated with each pivot chain block
+    /// The current pivot chain indexes.
+    pivot_chain: Vec<usize>,
+    /// The metadata associated with each pivot chain block
     pivot_chain_metadata: Vec<ConsensusGraphPivotData>,
-    // The set of *graph* tips in the TreeGraph.
+    /// The longest timer chain block indexes
+    timer_chain: Vec<usize>,
+    /// The accumulative LCA of timer_chain for consecutive
+    timer_chain_accumulative_lca: Vec<usize>,
+    /// The set of *graph* tips in the TreeGraph for mining.
+    /// Note that this set does not include non-active partial invalid blocks
     terminal_hashes: HashSet<H256>,
-    // The ``current'' era_genesis block index. It will start being the
-    // original genesis. As time goes, it will move to future era genesis
-    // checkpoint.
-    pub cur_era_genesis_block_arena_index: usize,
-    // The height of the ``current'' era_genesis block
+    /// The ``current'' era_genesis block index. It will start being the
+    /// original genesis. As time goes, it will move to future era genesis
+    /// checkpoint.
+    cur_era_genesis_block_arena_index: usize,
+    /// The height of the ``current'' era_genesis block
     cur_era_genesis_height: u64,
-    // The height of the ``stable'' era block, unless from the start, it is
-    // always era_epoch_count higher than era_genesis_height
+    /// The height of the ``stable'' era block, unless from the start, it is
+    /// always era_epoch_count higher than era_genesis_height
     cur_era_stable_height: u64,
-    // weight_tree maintains the subtree weight of each node in the TreeGraph
-    weight_tree: DefaultMinLinkCutTree,
-    inclusive_weight_tree: SizeMinLinkCutTree,
-    stable_weight_tree: DefaultMinLinkCutTree,
-    // stable_tree maintains d * SubTW(B, x) + n * x.parent.weight + n *
-    // PastW(x.parent)
-    stable_tree: DefaultMinLinkCutTree,
-    // adaptive_tree maintains d * SubStableTW(B, x) - n * SubTW(B, P(x))
+    /// If this value is not none, then we are still expecting the initial
+    /// stable block to come. This value would equal to the expected hash of
+    /// the block.
+    cur_era_stable_block_hash: H256,
+    /// If this value is not none, then we are manually maintain the future set
+    /// of the expected stable block. We have to do this because during the
+    /// initial stage it may not be always on the pivot chain.
+    initial_stable_future: Option<BitSet>,
+    /// The timer chain height of the ``current'' era_genesis block
+    cur_era_genesis_timer_chain_height: u64,
+    /// The best timer chain difficulty and hash in the current graph
+    best_timer_chain_difficulty: i128,
+    best_timer_chain_hash: H256,
+    /// weight_tree maintains the subtree weight of each node in the TreeGraph
+    weight_tree: SizeMinLinkCutTree,
+    /// adaptive_tree maintains 2 * SubStableTW(B, x) - SubTW(B, P(x)) +
+    /// Weight(P(x))
     adaptive_tree: CaterpillarMinLinkCutTree,
-    // inclusive_adaptive_tree maintains d * SubInclusiveTW(B, x) - n *
-    // SubInclusiveTW(B, P(x))
-    inclusive_adaptive_tree: CaterpillarMinLinkCutTree,
+    /// A priority that holds for every non-active partial invalid block, the
+    /// timer chain stamp that will become valid
+    invalid_block_queue: BinaryHeap<(i128, usize)>,
+    /// This cache is to store all passed block body parameters of non-active
+    /// blocks
+    block_body_caches: HashMap<usize, Option<Vec<Arc<SignedTransaction>>>>,
     pub pow_config: ProofOfWorkConfig,
-    // It maintains the expected difficulty of the next local mined block.
+    /// It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
-    // data_man is the handle to access raw block data
+    /// data_man is the handle to access raw block data
     data_man: Arc<BlockDataManager>,
     pub inner_conf: ConsensusInnerConfig,
-    // The cache to store Anticone information of each node. This could be very
-    // large so we periodically remove old ones in the cache.
+    /// The cache to store Anticone information of each node. This could be
+    /// very large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
     pastset_cache: PastSetCache,
     sequence_number_of_block_entrance: u64,
     last_recycled_era_block: usize,
-    /// Block set of each old era. It will garbage collected by sync graph
-    pub old_era_block_set: Mutex<VecDeque<H256>>,
+    /// Block set of each old era. It will garbage collected by sync graph via
+    /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
+    /// which blocks it can safely remove
+    old_era_block_set: Mutex<VecDeque<H256>>,
 }
 
 pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,
-    is_heavy: bool,
-    difficulty: U256,
-    /// The total weight of its past set (exclude itself)
-    past_weight: i128,
-    past_num_blocks: u64,
-    /// The total weight of its past set in its own era
-    past_era_weight: i128,
-    stable: bool,
-    adaptive: bool,
     pub parent: usize,
+    difficulty: U256,
+    is_heavy: bool,
+    is_timer: bool,
+    /// The total weight of its past set in the era (exclude itself)
+    past_num_blocks: u64,
+    /// The total weight of its past set in its own era (exclude itself)
+    past_era_weight: i128,
+    adaptive: bool,
 
     /// The genesis arena index of the era that `self` is in.
     ///
     /// It is `NULL` if `self` is not in the subtree of `cur_era_genesis`.
     era_block: usize,
-    last_pivot_in_past: u64,
     children: Vec<usize>,
     referrers: Vec<usize>,
     referees: Vec<usize>,
+    /// data contains all extra information of a block that will change as the
+    /// consensus graph state evolves (e.g., pivot chain changes). Unlike the
+    /// above fields, this information will only be available after the
+    /// block is *preactivated* (after calling preactivate_block().
     pub data: ConsensusGraphNodeData,
 }
 
 impl ConsensusGraphNode {
     pub fn past_era_weight(&self) -> i128 { self.past_era_weight }
-
-    pub fn stable(&self) -> bool { self.stable }
 
     pub fn adaptive(&self) -> bool { self.adaptive }
 
@@ -399,33 +487,40 @@ impl ConsensusGraphInner {
     pub fn with_era_genesis(
         pow_config: ProofOfWorkConfig, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
+        cur_era_stable_block_hash: &H256,
     ) -> Self
     {
         let genesis_block_header = data_man
             .block_header_by_hash(cur_era_genesis_block_hash)
             .expect("genesis block header should exist here");
         let cur_era_genesis_height = genesis_block_header.height();
-        let cur_era_stable_height = if cur_era_genesis_height == 0 {
-            0
-        } else {
-            cur_era_genesis_height + inner_conf.era_epoch_count
-        };
+        let stable_block_header = data_man
+            .block_header_by_hash(cur_era_stable_block_hash)
+            .expect("stable genesis block header should exist here");
+        let cur_era_stable_height = stable_block_header.height();
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
+            timer_chain: Vec::new(),
+            timer_chain_accumulative_lca: Vec::new(),
             terminal_hashes: Default::default(),
             cur_era_genesis_block_arena_index: NULL,
             cur_era_genesis_height,
             cur_era_stable_height,
-            weight_tree: DefaultMinLinkCutTree::new(),
-            inclusive_weight_tree: SizeMinLinkCutTree::new(),
-            stable_weight_tree: DefaultMinLinkCutTree::new(),
-            stable_tree: DefaultMinLinkCutTree::new(),
+            // Timer chain height is an internal number. We always start from
+            // zero.
+            cur_era_stable_block_hash: cur_era_stable_block_hash.clone(),
+            initial_stable_future: Some(BitSet::new()),
+            cur_era_genesis_timer_chain_height: 0,
+            best_timer_chain_difficulty: 0,
+            best_timer_chain_hash: Default::default(),
+            weight_tree: SizeMinLinkCutTree::new(),
             adaptive_tree: CaterpillarMinLinkCutTree::new(),
-            inclusive_adaptive_tree: CaterpillarMinLinkCutTree::new(),
+            invalid_block_queue: BinaryHeap::new(),
+            block_body_caches: HashMap::new(),
             pow_config,
             current_difficulty: initial_difficulty.into(),
             data_man: data_man.clone(),
@@ -443,10 +538,19 @@ impl ConsensusGraphInner {
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
         let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
+        if cur_era_genesis_block_hash == cur_era_stable_block_hash {
+            inner
+                .initial_stable_future
+                .as_mut()
+                .unwrap()
+                .add(genesis_arena_index as u32);
+        }
+        inner.arena[genesis_arena_index].data.blockset_cleared = false;
         if genesis_block_header.height() == 0 {
             inner.arena[genesis_arena_index].data.state_valid = Some(true);
         }
         inner.cur_era_genesis_block_arena_index = genesis_arena_index;
+        inner.arena[genesis_arena_index].data.activated = true;
         let genesis_block_weight = genesis_block_header.difficulty().low_u128();
         inner
             .weight_tree
@@ -456,41 +560,12 @@ impl ConsensusGraphInner {
             genesis_block_weight as i128,
         );
         inner
-            .inclusive_weight_tree
-            .make_tree(inner.cur_era_genesis_block_arena_index);
-        inner.inclusive_weight_tree.path_apply(
-            inner.cur_era_genesis_block_arena_index,
-            genesis_block_weight as i128,
-        );
-        inner
-            .stable_weight_tree
-            .make_tree(inner.cur_era_genesis_block_arena_index);
-        inner.stable_weight_tree.path_apply(
-            inner.cur_era_genesis_block_arena_index,
-            genesis_block_weight as i128,
-        );
-        inner
-            .stable_tree
-            .make_tree(inner.cur_era_genesis_block_arena_index);
-        // The genesis node can be zero in stable_tree because it is never used!
-        inner
-            .stable_tree
-            .set(inner.cur_era_genesis_block_arena_index, 0);
-        inner
             .adaptive_tree
             .make_tree(inner.cur_era_genesis_block_arena_index);
         // The genesis node can be zero in adaptive_tree because it is never
         // used!
         inner
             .adaptive_tree
-            .set(inner.cur_era_genesis_block_arena_index, 0);
-        inner
-            .inclusive_adaptive_tree
-            .make_tree(inner.cur_era_genesis_block_arena_index);
-        // The genesis node can be zero in adaptive_tree because it is never
-        // used!
-        inner
-            .inclusive_adaptive_tree
             .set(inner.cur_era_genesis_block_arena_index, 0);
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .data
@@ -502,6 +577,7 @@ impl ConsensusGraphInner {
                 .expect("ExecutionContext for cur_era_genesis exists")
                 .start_block_number;
         inner.arena[inner.cur_era_genesis_block_arena_index]
+            .data
             .last_pivot_in_past = cur_era_genesis_height;
         inner
             .pivot_chain
@@ -511,7 +587,18 @@ impl ConsensusGraphInner {
             .insert(inner.cur_era_genesis_block_arena_index);
         inner.pivot_chain_metadata.push(ConsensusGraphPivotData {
             last_pivot_in_past_blocks,
+            past_weight: genesis_block_weight as i128,
         });
+        if inner.arena[inner.cur_era_genesis_block_arena_index].is_timer {
+            inner
+                .timer_chain
+                .push(inner.cur_era_genesis_block_arena_index);
+        }
+        inner.arena[inner.cur_era_genesis_block_arena_index]
+            .data
+            .ledger_view_timer_chain_height = 0;
+        inner.best_timer_chain_difficulty =
+            inner.get_timer_difficulty(inner.cur_era_genesis_block_arena_index);
 
         inner
             .anticone_cache
@@ -520,17 +607,23 @@ impl ConsensusGraphInner {
         inner
     }
 
-    pub fn persist_epoch_set_hashes(&self, pivot_index: usize) {
+    fn persist_epoch_set_hashes(&self, pivot_index: usize) {
         let height = self.pivot_index_to_height(pivot_index);
         let arena_index = self.pivot_chain[pivot_index];
-        let epoch_set_hashes = self.arena[arena_index]
-            .data
-            .ordered_executable_epoch_blocks
+        let epoch_set_hashes = self
+            .get_ordered_executable_epoch_blocks(arena_index)
             .iter()
             .map(|arena_index| self.arena[*arena_index].hash)
             .collect();
         self.data_man
             .insert_epoch_set_hashes_to_db(height, &epoch_set_hashes);
+    }
+
+    #[inline]
+    pub fn current_era_genesis_seq_num(&self) -> u64 {
+        self.arena[self.cur_era_genesis_block_arena_index]
+            .data
+            .sequence_number
     }
 
     #[inline]
@@ -578,29 +671,24 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    pub fn ancestor_at(&self, me: usize, height: u64) -> usize {
+    fn ancestor_at(&self, me: usize, height: u64) -> usize {
         let height_index = self.height_to_pivot_index(height);
-        self.inclusive_weight_tree.ancestor_at(me, height_index)
+        self.weight_tree.ancestor_at(me, height_index)
     }
 
     #[inline]
     /// for outside era block, consider the lca is NULL
-    pub fn lca(&self, me: usize, v: usize) -> usize {
+    fn lca(&self, me: usize, v: usize) -> usize {
         if self.arena[v].era_block == NULL || self.arena[me].era_block == NULL {
             return NULL;
         }
-        self.inclusive_weight_tree.lca(me, v)
+        self.weight_tree.lca(me, v)
     }
 
     #[inline]
-    fn get_era_genesis_height(&self, parent_height: u64, offset: u64) -> u64 {
-        let era_genesis_height = if parent_height > offset {
-            (parent_height - offset) / self.inner_conf.era_epoch_count
-                * self.inner_conf.era_epoch_count
-        } else {
-            0
-        };
-        era_genesis_height
+    fn get_era_genesis_height(&self, parent_height: u64) -> u64 {
+        parent_height / self.inner_conf.era_epoch_count
+            * self.inner_conf.era_epoch_count
     }
 
     #[inline]
@@ -609,14 +697,12 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_era_genesis_block_with_parent(
-        &self, parent: usize, offset: u64,
-    ) -> usize {
+    fn get_era_genesis_block_with_parent(&self, parent: usize) -> usize {
         if parent == NULL {
             return 0;
         }
         let height = self.arena[parent].height;
-        let era_genesis_height = self.get_era_genesis_height(height, offset);
+        let era_genesis_height = self.get_era_genesis_height(height);
         trace!(
             "height={} era_height={} era_genesis_height={}",
             height,
@@ -628,9 +714,7 @@ impl ConsensusGraphInner {
 
     #[inline]
     fn get_epoch_block_hashes(&self, epoch_arena_index: usize) -> Vec<H256> {
-        self.arena[epoch_arena_index]
-            .data
-            .ordered_executable_epoch_blocks
+        self.get_ordered_executable_epoch_blocks(epoch_arena_index)
             .iter()
             .map(|idx| self.arena[*idx].hash)
             .collect()
@@ -646,6 +730,142 @@ impl ConsensusGraphInner {
     #[inline]
     fn is_legacy_block(&self, index: usize) -> bool {
         self.arena[index].era_block == NULL
+    }
+
+    fn compute_blockset_in_own_view_of_epoch_impl(
+        &mut self, lca: usize, pivot: usize,
+    ) {
+        let pastset = self.pastset_cache.get(lca, false).unwrap();
+        let mut path_to_lca = Vec::new();
+        let mut cur = pivot;
+        while cur != lca {
+            path_to_lca.push(cur);
+            cur = self.arena[cur].parent;
+        }
+        path_to_lca.reverse();
+        let mut visited = BitSet::new();
+        for ancestor_arena_index in path_to_lca {
+            visited.add(ancestor_arena_index as u32);
+            if ancestor_arena_index == pivot
+                || self.arena[ancestor_arena_index].data.blockset_cleared
+            {
+                let mut queue = VecDeque::new();
+                for referee in &self.arena[ancestor_arena_index].referees {
+                    if !pastset.contains(*referee as u32)
+                        && !visited.contains(*referee as u32)
+                    {
+                        visited.add(*referee as u32);
+                        queue.push_back(*referee);
+                    }
+                }
+                while let Some(index) = queue.pop_front() {
+                    if ancestor_arena_index == pivot {
+                        self.arena[pivot]
+                            .data
+                            .blockset_in_own_view_of_epoch
+                            .push(index);
+                    }
+                    let parent = self.arena[index].parent;
+                    if parent != NULL
+                        && !pastset.contains(parent as u32)
+                        && !visited.contains(parent as u32)
+                    {
+                        visited.add(parent as u32);
+                        queue.push_back(parent);
+                    }
+                    for referee in &self.arena[index].referees {
+                        if !pastset.contains(*referee as u32)
+                            && !visited.contains(*referee as u32)
+                        {
+                            visited.add(*referee as u32);
+                            queue.push_back(*referee);
+                        }
+                    }
+                }
+            } else {
+                for index in &self.arena[ancestor_arena_index]
+                    .data
+                    .blockset_in_own_view_of_epoch
+                {
+                    visited.add(*index as u32);
+                }
+            }
+        }
+    }
+
+    fn compute_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
+        if !self.arena[pivot].data.blockset_cleared {
+            return;
+        }
+        // TODO: consider the speed for recovery from db
+        let parent = self.arena[pivot].parent;
+        if parent != NULL {
+            let last = *self.pivot_chain.last().unwrap();
+            let lca = self.lca(last, parent);
+            assert!(lca != NULL);
+            if self.pastset_cache.get(lca, true).is_none() {
+                let pastset = self.compute_pastset_brutal(lca);
+                self.pastset_cache.update(lca, pastset);
+            }
+            self.compute_blockset_in_own_view_of_epoch_impl(lca, pivot);
+        }
+
+        let filtered_blockset = self.arena[pivot]
+            .data
+            .blockset_in_own_view_of_epoch
+            .iter()
+            .filter(|idx| self.is_same_era(**idx, pivot))
+            .map(|idx| *idx)
+            .collect();
+
+        self.arena[pivot].data.ordered_executable_epoch_blocks =
+            self.topological_sort(&filtered_blockset);
+        self.arena[pivot]
+            .data
+            .ordered_executable_epoch_blocks
+            .push(pivot);
+        self.arena[pivot].data.blockset_cleared = false;
+    }
+
+    #[inline]
+    fn exchange_or_compute_blockset_in_own_view_of_epoch(
+        &mut self, index: usize, blockset_opt: Option<Vec<usize>>,
+    ) -> Vec<usize> {
+        if let Some(blockset) = blockset_opt {
+            mem::replace(
+                &mut self.arena[index].data.blockset_in_own_view_of_epoch,
+                blockset,
+            )
+        } else {
+            if self.arena[index].data.blockset_cleared {
+                self.compute_blockset_in_own_view_of_epoch(index);
+            }
+            mem::replace(
+                &mut self.arena[index].data.blockset_in_own_view_of_epoch,
+                Default::default(),
+            )
+        }
+    }
+
+    #[inline]
+    fn get_or_compute_ordered_executable_epoch_blocks(
+        &mut self, index: usize,
+    ) -> Vec<usize> {
+        if self.arena[index].data.blockset_cleared {
+            self.compute_blockset_in_own_view_of_epoch(index);
+        }
+        self.arena[index]
+            .data
+            .ordered_executable_epoch_blocks
+            .clone()
+    }
+
+    #[inline]
+    pub fn get_ordered_executable_epoch_blocks(
+        &self, index: usize,
+    ) -> &Vec<usize> {
+        assert!(!self.arena[index].data.blockset_cleared);
+        &self.arena[index].data.ordered_executable_epoch_blocks
     }
 
     fn get_blame(&self, arena_index: usize) -> u32 {
@@ -828,33 +1048,27 @@ impl ConsensusGraphInner {
             }
         }
 
-        let (_stable, adaptive) = self.adaptive_weight_impl(
+        self.adaptive_weight_impl(
             parent_arena_index,
             &anticone_barrier,
             None,
+            None,
             i128::try_from(difficulty.low_u128()).unwrap(),
-        );
-        adaptive
+        )
     }
 
     fn compute_subtree_weights(
         &self, me: usize, anticone_barrier: &BitSet,
-    ) -> (Vec<i128>, Vec<i128>, Vec<i128>) {
+    ) -> Vec<i128> {
         let mut subtree_weight = Vec::new();
-        let mut subtree_inclusive_weight = Vec::new();
-        let mut subtree_stable_weight = Vec::new();
         let n = self.arena.capacity();
         subtree_weight.resize_with(n, Default::default);
-        subtree_inclusive_weight.resize_with(n, Default::default);
-        subtree_stable_weight.resize_with(n, Default::default);
         let mut stack = Vec::new();
         stack.push((0, self.cur_era_genesis_block_arena_index));
         while let Some((stage, index)) = stack.pop() {
             if stage == 0 {
                 stack.push((1, index));
                 subtree_weight[index] = 0;
-                subtree_inclusive_weight[index] = 0;
-                subtree_stable_weight[index] = 0;
                 for child in &self.arena[index].children {
                     if !anticone_barrier.contains(*child as u32) && *child != me
                     {
@@ -862,218 +1076,159 @@ impl ConsensusGraphInner {
                     }
                 }
             } else {
-                let weight =
-                    self.block_weight(index, false /* inclusive */);
+                let weight = self.block_weight(index);
                 subtree_weight[index] += weight;
-                subtree_inclusive_weight[index] +=
-                    self.block_weight(index, true /* inclusive */);
-                if self.arena[index].stable {
-                    subtree_stable_weight[index] += weight;
-                }
                 let parent = self.arena[index].parent;
                 if parent != NULL {
                     subtree_weight[parent] += subtree_weight[index];
-                    subtree_inclusive_weight[parent] +=
-                        subtree_inclusive_weight[index];
-                    subtree_stable_weight[parent] +=
-                        subtree_stable_weight[index];
                 }
             }
         }
-        (
-            subtree_weight,
-            subtree_inclusive_weight,
-            subtree_stable_weight,
-        )
+        subtree_weight
+    }
+
+    fn get_best_timer_tick(
+        &self,
+        timer_chain_tuple: Option<&(
+            u64,
+            HashMap<usize, u64>,
+            Vec<usize>,
+            Vec<usize>,
+        )>,
+    ) -> u64
+    {
+        if let Some((fork_at, _, _, c)) = timer_chain_tuple {
+            *fork_at + c.len() as u64
+        } else {
+            self.cur_era_genesis_timer_chain_height
+                + self.timer_chain.len() as u64
+        }
+    }
+
+    fn get_timer_tick(
+        &self, me: usize,
+        timer_chain_tuple: Option<&(
+            u64,
+            HashMap<usize, u64>,
+            Vec<usize>,
+            Vec<usize>,
+        )>,
+    ) -> u64
+    {
+        if let Some((fork_at, m, _, _)) = timer_chain_tuple {
+            if let Some(t) = m.get(&me) {
+                return *t;
+            } else {
+                assert!(
+                    self.arena[me].data.ledger_view_timer_chain_height
+                        <= *fork_at
+                );
+            }
+        }
+        return self.arena[me].data.ledger_view_timer_chain_height;
     }
 
     fn adaptive_weight_impl_brutal(
         &self, parent_0: usize, subtree_weight: &Vec<i128>,
-        subtree_inclusive_weight: &Vec<i128>,
-        subtree_stable_weight: &Vec<i128>, difficulty: i128,
-    ) -> (bool, bool)
+        timer_chain_tuple: Option<&(
+            u64,
+            HashMap<usize, u64>,
+            Vec<usize>,
+            Vec<usize>,
+        )>,
+        force_confirm: usize, difficulty: i128,
+    ) -> bool
     {
         let mut parent = parent_0;
-        let mut stable = true;
 
-        let height = self.arena[parent].height;
-        let era_genesis_height = self.get_era_genesis_height(height, 0);
-        let two_era_genesis_height = self
-            .get_era_genesis_height(height, self.inner_conf.era_epoch_count);
-        let era_genesis = self.ancestor_at(parent, era_genesis_height);
+        let force_confirm_height = self.arena[force_confirm].height;
+        let timer_me = self.get_best_timer_tick(timer_chain_tuple);
 
-        let total_weight = subtree_weight[era_genesis];
         let adjusted_beta =
             (self.inner_conf.adaptive_weight_beta as i128) * difficulty;
 
-        while self.arena[parent].height != era_genesis_height {
+        let mut adaptive = false;
+        while self.arena[parent].height != force_confirm_height {
             let grandparent = self.arena[parent].parent;
-            let past_era_weight = if grandparent == era_genesis {
-                0
-            } else {
-                self.arena[grandparent].past_era_weight
-            };
-            let w = total_weight
-                - past_era_weight
-                - self.block_weight(grandparent, false /* inclusive */);
-            if w > adjusted_beta {
-                let a = subtree_weight[parent];
-                if self.inner_conf.adaptive_weight_alpha_den as i128 * a
-                    - self.inner_conf.adaptive_weight_alpha_num as i128 * w
-                    < 0
-                {
-                    stable = false;
+            let timer_parent = self.get_timer_tick(parent, timer_chain_tuple);
+            assert!(timer_me >= timer_parent);
+            if timer_me - timer_parent >= self.inner_conf.timer_chain_beta {
+                let w = 2 * subtree_weight[parent]
+                    - subtree_weight[grandparent]
+                    + self.block_weight(grandparent);
+                if w < adjusted_beta {
+                    adaptive = true;
                     break;
                 }
             }
             parent = grandparent;
         }
-        let mut adaptive = false;
-        if !stable {
-            parent = parent_0;
-            while self.arena[parent].height != era_genesis_height {
-                let grandparent = self.arena[parent].parent;
-                let w = subtree_weight[grandparent];
-                if w > adjusted_beta {
-                    let a = subtree_stable_weight[parent];
-                    if self.inner_conf.adaptive_weight_alpha_den as i128 * a
-                        - self.inner_conf.adaptive_weight_alpha_num as i128 * w
-                        < 0
-                    {
-                        adaptive = true;
-                        break;
-                    }
-                }
-                parent = grandparent;
-            }
-        }
-        if !adaptive {
-            while self.arena[parent].height != two_era_genesis_height {
-                let grandparent = self.arena[parent].parent;
-                let w = subtree_inclusive_weight[grandparent];
-                if w > adjusted_beta {
-                    let a = subtree_inclusive_weight[parent];
-                    if self.inner_conf.adaptive_weight_alpha_den as i128 * a
-                        - self.inner_conf.adaptive_weight_alpha_num as i128 * w
-                        < 0
-                    {
-                        adaptive = true;
-                        break;
-                    }
-                }
-                parent = grandparent;
-            }
-        }
 
-        (stable, adaptive)
+        adaptive
     }
 
     fn adaptive_weight_impl(
         &mut self, parent_0: usize, anticone_barrier: &BitSet,
-        weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
+        weight_tuple: Option<&Vec<i128>>,
+        timer_chain_tuple: Option<&(
+            u64,
+            HashMap<usize, u64>,
+            Vec<usize>,
+            Vec<usize>,
+        )>,
         difficulty: i128,
-    ) -> (bool, bool)
+    ) -> bool
     {
-        if let Some((
-            subtree_weight,
-            subtree_inclusive_weight,
-            subtree_stable_weight,
-        )) = weight_tuple
+        let mut parent = parent_0;
+        let force_confirm = self.compute_force_confirm(timer_chain_tuple);
+        let force_confirm_height = self.arena[force_confirm].height;
+        // This may happen if we are forced to generate at a position choosing
+        // incorrect parent. We should return false here.
+        if self.arena[parent].height < force_confirm_height
+            || self.ancestor_at(parent, force_confirm_height) != force_confirm
         {
+            return false;
+        }
+        if let Some(subtree_weight) = weight_tuple {
             return self.adaptive_weight_impl_brutal(
                 parent_0,
                 subtree_weight,
-                subtree_inclusive_weight,
-                subtree_stable_weight,
+                timer_chain_tuple,
+                force_confirm,
                 difficulty,
             );
         }
-        let mut parent = parent_0;
 
         let mut weight_delta = HashMap::new();
-        let mut inclusive_weight_delta = HashMap::new();
-        let mut stable_weight_delta = HashMap::new();
 
         for index in anticone_barrier.iter() {
             assert!(!self.is_legacy_block(index as usize));
             weight_delta
                 .insert(index as usize, self.weight_tree.get(index as usize));
-            inclusive_weight_delta.insert(
-                index as usize,
-                self.inclusive_weight_tree.get(index as usize),
-            );
-            stable_weight_delta.insert(
-                index as usize,
-                self.stable_weight_tree.get(index as usize),
-            );
         }
 
         for (index, delta) in &weight_delta {
-            self.weight_tree.path_apply(*index, -delta);
-            self.stable_tree.path_apply(
-                *index,
-                -delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
-            );
+            self.weight_tree.path_apply(*index, -*delta);
             let parent = self.arena[*index].parent;
             assert!(parent != NULL);
-            self.adaptive_tree.caterpillar_apply(
-                parent,
-                delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
-            );
-        }
-        for (index, delta) in &inclusive_weight_delta {
-            let parent = self.arena[*index].parent;
-            assert!(parent != NULL);
-            self.inclusive_weight_tree.path_apply(*index, -delta);
-            self.inclusive_adaptive_tree.caterpillar_apply(
-                parent,
-                delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
-            );
-            self.inclusive_adaptive_tree.path_apply(
-                *index,
-                -delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
-            );
-        }
-        for (index, delta) in &stable_weight_delta {
-            self.adaptive_tree.path_apply(
-                *index,
-                -delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
-            );
+            self.adaptive_tree.caterpillar_apply(parent, *delta);
+            self.adaptive_tree.path_apply(*index, -*delta * 2);
         }
 
-        let era_genesis_height =
-            self.get_era_genesis_height(self.arena[parent].height, 0);
-        let two_era_genesis_height = self.get_era_genesis_height(
-            self.arena[parent].height,
-            self.inner_conf.era_epoch_count,
-        );
-        let era_genesis = self.ancestor_at(parent, era_genesis_height);
-        let two_era_genesis = self.ancestor_at(parent, two_era_genesis_height);
-
-        let total_weight = self.weight_tree.get(era_genesis);
-        debug!("total_weight before insert: {}", total_weight);
-
-        let adjusted_beta =
-            (self.inner_conf.adaptive_weight_beta as i128) * difficulty;
+        let timer_me = self.get_best_timer_tick(timer_chain_tuple);
+        let adjusted_beta = self.inner_conf.timer_chain_beta;
 
         let mut high = self.arena[parent].height;
-        let mut low = era_genesis_height + 1;
+        let mut low = force_confirm_height + 1;
         // [low, high]
-        let mut best = era_genesis_height;
+        let mut best = force_confirm_height;
 
         while low <= high {
             let mid = (low + high) / 2;
             let p = self.ancestor_at(parent, mid);
-            let gp = self.arena[p].parent;
-            let past_era_weight = if gp == era_genesis {
-                0
-            } else {
-                self.arena[gp].past_era_weight
-            };
-            let w = total_weight
-                - past_era_weight
-                - self.block_weight(gp, false /* inclusive */);
-            if w > adjusted_beta {
+            let timer_mid = self.get_timer_tick(p, timer_chain_tuple);
+            assert!(timer_me >= timer_mid);
+            if timer_me - timer_mid >= adjusted_beta {
                 best = mid;
                 low = mid + 1;
             } else {
@@ -1081,129 +1236,45 @@ impl ConsensusGraphInner {
             }
         }
 
-        let stable = if best != era_genesis_height {
+        let adaptive = if best != force_confirm_height {
             parent = self.ancestor_at(parent, best);
 
-            let a = self.stable_tree.path_aggregate_chop(parent, era_genesis);
-            let b = total_weight
-                * (self.inner_conf.adaptive_weight_alpha_num as i128);
+            let a = self
+                .adaptive_tree
+                .path_aggregate_chop(parent, force_confirm);
+            let b = self.inner_conf.adaptive_weight_beta as i128 * difficulty;
+
             if a < b {
-                debug!("block is unstable: {:?} < {:?}!", a, b);
+                debug!("block is adaptive: {:?} < {:?}!", a, b);
             } else {
-                debug!("block is stable: {:?} >= {:?}!", a, b);
+                debug!("block is not adaptive: {:?} >= {:?}!", a, b);
             }
-            !(a < b)
+            a < b
         } else {
             debug!(
-                "block is stable: too close to genesis, adjusted beta {:?}",
-                adjusted_beta
+                "block is not adaptive: too close to genesis, timer tick {:?}",
+                timer_me
             );
-            true
+            false
         };
-        let mut adaptive = false;
-
-        if !stable {
-            parent = parent_0;
-
-            let mut high = self.arena[parent].height;
-            let mut low = era_genesis_height + 1;
-            let mut best = era_genesis_height;
-
-            while low <= high {
-                let mid = (low + high) / 2;
-                let p = self.ancestor_at(parent, mid);
-                let gp = self.arena[p].parent;
-                let w = self.weight_tree.get(gp);
-                if w > adjusted_beta {
-                    best = mid;
-                    low = mid + 1;
-                } else {
-                    high = mid - 1;
-                }
-            }
-
-            if best != era_genesis_height {
-                parent = self.ancestor_at(parent, best);
-                let min_agg =
-                    self.adaptive_tree.path_aggregate_chop(parent, era_genesis);
-                if min_agg < 0 {
-                    debug!("block is adaptive (intra-era): {:?}", min_agg);
-                    adaptive = true;
-                }
-            }
-        }
-
-        if !adaptive {
-            let mut high = era_genesis_height;
-            let mut low = two_era_genesis_height + 1;
-            let mut best = two_era_genesis_height;
-
-            while low <= high {
-                let mid = (low + high) / 2;
-                let p = self.ancestor_at(parent, mid);
-                let gp = self.arena[p].parent;
-                let w = self.inclusive_weight_tree.get(gp);
-
-                if w > adjusted_beta {
-                    best = mid;
-                    low = mid + 1;
-                } else {
-                    high = mid - 1;
-                }
-            }
-
-            if best != two_era_genesis_height {
-                parent = self.ancestor_at(parent, best);
-                let min_agg = self
-                    .inclusive_adaptive_tree
-                    .path_aggregate_chop(parent, two_era_genesis);
-                if min_agg < 0 {
-                    debug!("block is adaptive (inter-era): {:?}", min_agg);
-                    adaptive = true;
-                }
-            }
-        }
 
         for (index, delta) in &weight_delta {
             self.weight_tree.path_apply(*index, *delta);
-            self.stable_tree.path_apply(
-                *index,
-                delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
-            );
             let parent = self.arena[*index].parent;
-            self.adaptive_tree.caterpillar_apply(
-                parent,
-                -delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
-            );
-        }
-        for (index, delta) in &inclusive_weight_delta {
-            let parent = self.arena[*index].parent;
-            self.inclusive_weight_tree.path_apply(*index, *delta);
-            self.inclusive_adaptive_tree.caterpillar_apply(
-                parent,
-                -delta * (self.inner_conf.adaptive_weight_alpha_num as i128),
-            );
-            self.inclusive_adaptive_tree.path_apply(
-                *index,
-                delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
-            );
-        }
-        for (index, delta) in &stable_weight_delta {
-            self.adaptive_tree.path_apply(
-                *index,
-                delta * (self.inner_conf.adaptive_weight_alpha_den as i128),
-            );
+            self.adaptive_tree.caterpillar_apply(parent, -*delta);
+            self.adaptive_tree.path_apply(*index, *delta * 2)
         }
 
-        (stable, adaptive)
+        adaptive
     }
 
     /// Determine whether we should generate adaptive blocks or not. It is used
     /// both for block generations and for block validations.
     fn adaptive_weight(
         &mut self, me: usize, anticone_barrier: &BitSet,
-        weight_tuple: Option<&(Vec<i128>, Vec<i128>, Vec<i128>)>,
-    ) -> (bool, bool)
+        weight_tuple: Option<&Vec<i128>>,
+        timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
+    ) -> bool
     {
         let parent = self.arena[me].parent;
         assert!(parent != NULL);
@@ -1215,6 +1286,7 @@ impl ConsensusGraphInner {
             parent,
             anticone_barrier,
             weight_tuple,
+            Some(timer_chain_tuple),
             difficulty,
         )
     }
@@ -1222,67 +1294,6 @@ impl ConsensusGraphInner {
     #[inline]
     fn is_same_era(&self, me: usize, pivot: usize) -> bool {
         self.arena[me].era_block == self.arena[pivot].era_block
-    }
-
-    fn collect_blockset_in_own_view_of_epoch_brutal(
-        &mut self, lca: usize, pivot: usize,
-    ) {
-        let pastset = self.pastset_cache.get(lca, false).unwrap();
-        let mut path_to_lca = Vec::new();
-        let mut cur = pivot;
-        while cur != lca {
-            path_to_lca.push(cur);
-            cur = self.arena[cur].parent;
-        }
-        path_to_lca.reverse();
-        let mut visited = BitSet::new();
-        for ancestor_arena_index in path_to_lca {
-            visited.add(ancestor_arena_index as u32);
-            if ancestor_arena_index == pivot
-                || self.arena[ancestor_arena_index].data.blockset_cleared
-            {
-                let mut queue = VecDeque::new();
-                for referee in &self.arena[ancestor_arena_index].referees {
-                    if !pastset.contains(*referee as u32)
-                        && !visited.contains(*referee as u32)
-                    {
-                        visited.add(*referee as u32);
-                        queue.push_back(*referee);
-                    }
-                }
-                while let Some(index) = queue.pop_front() {
-                    if ancestor_arena_index == pivot {
-                        self.arena[pivot]
-                            .data
-                            .blockset_in_own_view_of_epoch
-                            .push(index);
-                    }
-                    let parent = self.arena[index].parent;
-                    if parent != NULL
-                        && !pastset.contains(parent as u32)
-                        && !visited.contains(parent as u32)
-                    {
-                        visited.add(parent as u32);
-                        queue.push_back(parent);
-                    }
-                    for referee in &self.arena[index].referees {
-                        if !pastset.contains(*referee as u32)
-                            && !visited.contains(*referee as u32)
-                        {
-                            visited.add(*referee as u32);
-                            queue.push_back(*referee);
-                        }
-                    }
-                }
-            } else {
-                for index in &self.arena[ancestor_arena_index]
-                    .data
-                    .blockset_in_own_view_of_epoch
-                {
-                    visited.add(*index as u32);
-                }
-            }
-        }
     }
 
     fn compute_pastset_brutal(&mut self, me: usize) -> BitSet {
@@ -1317,60 +1328,26 @@ impl ConsensusGraphInner {
                     }
                 }
             } else {
-                for index in &self.arena[ancestor_arena_index]
-                    .data
-                    .blockset_in_own_view_of_epoch
-                {
+                let blockset = self
+                    .exchange_or_compute_blockset_in_own_view_of_epoch(
+                        ancestor_arena_index,
+                        None,
+                    );
+                for index in &blockset {
                     result.add(*index as u32);
                 }
+                self.exchange_or_compute_blockset_in_own_view_of_epoch(
+                    ancestor_arena_index,
+                    Some(blockset),
+                );
             }
         }
         result
     }
 
-    fn collect_blockset_in_own_view_of_epoch(&mut self, pivot: usize) {
-        // TODO: consider the speed for recovery from db
-        let parent = self.arena[pivot].parent;
-        // This indicates `pivot` is partial_invalid and for partial invalid
-        // block we don't need to calculate and store the blockset
-        if parent != NULL && self.arena[parent].data.partial_invalid {
-            return;
-        }
-        if parent != NULL {
-            let last = *self.pivot_chain.last().unwrap();
-            let lca = self.lca(last, parent);
-            assert!(lca != NULL);
-            if self.pastset_cache.get(lca, true).is_none() {
-                let pastset = self.compute_pastset_brutal(lca);
-                self.pastset_cache.update(lca, pastset);
-            }
-            self.collect_blockset_in_own_view_of_epoch_brutal(lca, pivot);
-        }
-
-        let filtered_blockset = self.arena[pivot]
-            .data
-            .blockset_in_own_view_of_epoch
-            .iter()
-            .filter(|idx| self.is_same_era(**idx, pivot))
-            .map(|idx| *idx)
-            .collect();
-
-        self.arena[pivot].data.ordered_executable_epoch_blocks =
-            self.topological_sort(&filtered_blockset);
-        self.arena[pivot]
-            .data
-            .ordered_executable_epoch_blocks
-            .push(pivot);
-        self.arena[pivot].data.blockset_cleared = false;
-    }
-
     fn insert_referee_if_not_duplicate(
         &self, referees: &mut Vec<usize>, me: usize,
     ) {
-        // We do not insert current genesis
-        if self.cur_era_genesis_block_arena_index == me {
-            return;
-        }
         // TODO: maybe consider a more vigorous mechanism
         let mut found = false;
         for i in 0..referees.len() {
@@ -1393,7 +1370,9 @@ impl ConsensusGraphInner {
     /// Try to insert an outside era block, return it's sequence number. If both
     /// it's parent and referees are empty, we will not insert it into
     /// `arena`.
-    pub fn insert_out_era_block(&mut self, block_header: &BlockHeader) -> u64 {
+    pub fn insert_out_era_block(
+        &mut self, block_header: &BlockHeader, partial_invalid: bool,
+    ) -> u64 {
         let sn = self.get_next_sequence_number();
         let hash = block_header.hash();
         // we make cur_era_genesis be it's parent if it doesn‘t has one.
@@ -1401,7 +1380,7 @@ impl ConsensusGraphInner {
             .hash_to_arena_indices
             .get(block_header.parent_hash())
             .cloned()
-            .unwrap_or(self.cur_era_genesis_block_arena_index);
+            .unwrap_or(NULL);
 
         let mut referees: Vec<usize> = Vec::new();
         for hash in block_header.referee_hashes().iter() {
@@ -1410,9 +1389,7 @@ impl ConsensusGraphInner {
             }
         }
 
-        if parent == self.cur_era_genesis_block_arena_index
-            && referees.is_empty()
-        {
+        if parent == NULL && referees.is_empty() {
             self.old_era_block_set.lock().push_back(hash);
             return sn;
         }
@@ -1424,39 +1401,79 @@ impl ConsensusGraphInner {
             height: block_header.height(),
             is_heavy: true,
             difficulty: *block_header.difficulty(),
-            past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
-            stable: true,
+            is_timer: false,
             // Block header contains an adaptive field, we will verify with our
             // own computation
             adaptive: block_header.adaptive(),
             parent,
-            last_pivot_in_past: 0,
             era_block: NULL,
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn),
+            data: ConsensusGraphNodeData::new(NULLU64, sn, 0),
         });
+        self.arena[index].data.pending = true;
+        self.arena[index].data.activated = true;
+        self.arena[index].data.partial_invalid = partial_invalid;
         self.hash_to_arena_indices.insert(hash, index);
 
         let referees = self.arena[index].referees.clone();
         for referee in referees {
             self.arena[referee].referrers.push(index);
         }
-        if parent != self.cur_era_genesis_block_arena_index {
+        if parent != NULL {
             self.arena[parent].children.push(index);
         }
 
         self.weight_tree.make_tree(index);
-        self.inclusive_weight_tree.make_tree(index);
-        self.stable_tree.make_tree(index);
-        self.stable_weight_tree.make_tree(index);
         self.adaptive_tree.make_tree(index);
-        self.inclusive_adaptive_tree.make_tree(index);
 
         sn
+    }
+
+    fn get_timer_difficulty(&self, me: usize) -> i128 {
+        if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
+            i128::try_from(self.arena[me].difficulty.low_u128()).unwrap()
+        } else {
+            0
+        }
+    }
+
+    fn compute_force_confirm(
+        &self,
+        timer_chain_tuple_opt: Option<&(
+            u64,
+            HashMap<usize, u64>,
+            Vec<usize>,
+            Vec<usize>,
+        )>,
+    ) -> usize
+    {
+        if let Some((fork_at, _, extra_lca, tmp_chain)) = timer_chain_tuple_opt
+        {
+            let fork_end_index =
+                (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
+                    + tmp_chain.len();
+            let acc_lca_ref = extra_lca;
+            if let Some(x) = acc_lca_ref.last() {
+                *x
+            } else if fork_end_index > self.inner_conf.timer_chain_beta as usize
+            {
+                self.timer_chain_accumulative_lca[fork_end_index
+                    - self.inner_conf.timer_chain_beta as usize
+                    - 1]
+            } else {
+                self.cur_era_genesis_block_arena_index
+            }
+        } else {
+            if let Some(x) = self.timer_chain_accumulative_lca.last() {
+                *x
+            } else {
+                self.cur_era_genesis_block_arena_index
+            }
+        }
     }
 
     fn insert(&mut self, block_header: &BlockHeader) -> (usize, usize) {
@@ -1464,6 +1481,9 @@ impl ConsensusGraphInner {
 
         let is_heavy = U512::from(block_header.pow_quality)
             >= U512::from(self.inner_conf.heavy_block_difficulty_ratio)
+                * U512::from(block_header.difficulty());
+        let is_timer = U512::from(block_header.pow_quality)
+            >= U512::from(self.inner_conf.timer_chain_block_difficulty_ratio)
                 * U512::from(block_header.difficulty());
 
         let parent =
@@ -1483,9 +1503,18 @@ impl ConsensusGraphInner {
             }
         }
 
+        let mut active_cnt =
+            if parent != NULL && !self.arena[parent].data.activated {
+                1
+            } else {
+                0
+            };
         for referee in &referees {
-            self.terminal_hashes.remove(&self.arena[*referee].hash);
+            if !self.arena[*referee].data.activated {
+                active_cnt += 1;
+            }
         }
+
         let my_height = block_header.height();
         let sn = self.get_next_sequence_number();
         let index = self.arena.insert(ConsensusGraphNode {
@@ -1493,63 +1522,47 @@ impl ConsensusGraphInner {
             height: my_height,
             is_heavy,
             difficulty: *block_header.difficulty(),
-            past_weight: 0, // will be updated later below
             past_num_blocks: 0,
             past_era_weight: 0, // will be updated later below
-            stable: true,
+            is_timer,
             // Block header contains an adaptive field, we will verify with our
             // own computation
             adaptive: block_header.adaptive(),
             parent,
-            last_pivot_in_past: 0,
-            era_block: self.get_era_genesis_block_with_parent(parent, 0),
+            era_block: self.get_era_genesis_block_with_parent(parent),
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn),
+            data: ConsensusGraphNodeData::new(NULLU64, sn, active_cnt),
         });
         self.hash_to_arena_indices.insert(hash, index);
 
         if parent != NULL {
-            self.terminal_hashes.remove(&self.arena[parent].hash);
             self.arena[parent].children.push(index);
         }
-        self.terminal_hashes.insert(hash);
         let referees = self.arena[index].referees.clone();
         for referee in referees {
             self.arena[referee].referrers.push(index);
         }
 
-        self.collect_blockset_in_own_view_of_epoch(index);
+        let blockset =
+            self.exchange_or_compute_blockset_in_own_view_of_epoch(index, None);
+        let executed_epoch_len =
+            self.get_ordered_executable_epoch_blocks(index).len();
 
         if parent != NULL {
-            let era_genesis = self.get_era_genesis_block_with_parent(parent, 0);
-            let graph_era_stable_genesis =
-                self.ancestor_at(parent, self.cur_era_stable_height);
+            let era_genesis = self.get_era_genesis_block_with_parent(parent);
 
-            let weight_in_my_epoch = self.total_weight_in_own_epoch(
-                &self.arena[index].data.blockset_in_own_view_of_epoch,
-                false,
-                graph_era_stable_genesis,
-            );
-            let weight_era_in_my_epoch = self.total_weight_in_own_epoch(
-                &self.arena[index].data.blockset_in_own_view_of_epoch,
-                false,
-                era_genesis,
-            );
-            let past_weight = self.arena[parent].past_weight
-                + self.block_weight(parent, false /* inclusive */)
-                + weight_in_my_epoch;
-            let past_num_blocks = self.arena[parent].past_num_blocks
-                + self.arena[index].data.ordered_executable_epoch_blocks.len()
-                    as u64;
+            let weight_era_in_my_epoch =
+                self.total_weight_in_own_epoch(&blockset, era_genesis);
+            let past_num_blocks =
+                self.arena[parent].past_num_blocks + executed_epoch_len as u64;
             let past_era_weight = if parent != era_genesis {
                 self.arena[parent].past_era_weight
-                    + self.block_weight(parent, false /* inclusive */)
+                    + self.block_weight(parent)
                     + weight_era_in_my_epoch
             } else {
-                self.block_weight(parent, false /* inclusive */)
-                    + weight_era_in_my_epoch
+                self.block_weight(parent) + weight_era_in_my_epoch
             };
 
             self.data_man.insert_epoch_execution_context(
@@ -1561,14 +1574,17 @@ impl ConsensusGraphInner {
                 true, /* persistent to db */
             );
 
-            self.arena[index].past_weight = past_weight;
             self.arena[index].past_num_blocks = past_num_blocks;
             self.arena[index].past_era_weight = past_era_weight;
         }
+        self.exchange_or_compute_blockset_in_own_view_of_epoch(
+            index,
+            Some(blockset),
+        );
 
         debug!(
-            "Block {} inserted into Consensus with index={} past_weight={}",
-            hash, index, self.arena[index].past_weight
+            "Block {} inserted into Consensus with index={} past_era_weight={}",
+            hash, index, self.arena[index].past_era_weight
         );
 
         (index, self.hash_to_arena_indices.len())
@@ -1582,13 +1598,17 @@ impl ConsensusGraphInner {
         visited.add(me as u32);
         while let Some(index) = queue.pop_front() {
             for child in &self.arena[index].children {
-                if !visited.contains(*child as u32) {
+                if !visited.contains(*child as u32)
+                    && self.arena[*child].data.activated
+                {
                     visited.add(*child as u32);
                     queue.push_back(*child);
                 }
             }
             for referrer in &self.arena[index].referrers {
-                if !visited.contains(*referrer as u32) {
+                if !visited.contains(*referrer as u32)
+                    && self.arena[*referrer].data.activated
+                {
                     visited.add(*referrer as u32);
                     queue.push_back(*referrer);
                 }
@@ -1714,14 +1734,11 @@ impl ConsensusGraphInner {
         reward_index
     }
 
-    pub fn get_executable_epoch_blocks(
+    fn get_executable_epoch_blocks(
         &self, epoch_arena_index: usize,
     ) -> Vec<Arc<Block>> {
         let mut epoch_blocks = Vec::new();
-        for idx in &self.arena[epoch_arena_index]
-            .data
-            .ordered_executable_epoch_blocks
-        {
+        for idx in self.get_ordered_executable_epoch_blocks(epoch_arena_index) {
             let block = self
                 .data_man
                 .block_by_hash(
@@ -1744,7 +1761,7 @@ impl ConsensusGraphInner {
         let mut queue = VecDeque::new();
         queue.push_back(pivot_block_arena_index);
         visited.add(pivot_block_arena_index as u32);
-        let last_pivot = self.arena[me].last_pivot_in_past;
+        let last_pivot = self.arena[me].data.last_pivot_in_past;
         while let Some(index) = queue.pop_front() {
             let parent = self.arena[index].parent;
             if self.arena[parent].data.epoch_number > last_pivot
@@ -1786,14 +1803,10 @@ impl ConsensusGraphInner {
         let mut total_weight = self.arena[pivot_block_arena_index]
             .past_era_weight
             - self.arena[me].past_era_weight
-            + self.block_weight(
-                pivot_block_arena_index,
-                false, /* inclusive */
-            );
+            + self.block_weight(pivot_block_arena_index);
         for index in visited2.iter() {
             if self.is_same_era(index as usize, pivot_block_arena_index) {
-                total_weight -= self
-                    .block_weight(index as usize, false /* inclusive */);
+                total_weight -= self.block_weight(index as usize);
             }
         }
         total_weight
@@ -1837,10 +1850,7 @@ impl ConsensusGraphInner {
                     &self.arena[parent_arena_index].hash,
                     |h| {
                         let index = self.hash_to_arena_indices.get(h).unwrap();
-                        self.arena[*index]
-                            .data
-                            .ordered_executable_epoch_blocks
-                            .len()
+                        self.get_ordered_executable_epoch_blocks(*index).len()
                     },
                 )
             }
@@ -1871,10 +1881,7 @@ impl ConsensusGraphInner {
                 &new_best_hash,
                 |h| {
                     let index = self.hash_to_arena_indices.get(h).unwrap();
-                    self.arena[*index]
-                        .data
-                        .ordered_executable_epoch_blocks
-                        .len()
+                    self.get_ordered_executable_epoch_blocks(*index).len()
                 },
             );
         } else {
@@ -1970,6 +1977,11 @@ impl ConsensusGraphInner {
         self.cur_era_genesis_height + self.pivot_chain.len() as u64 - 1
     }
 
+    pub fn best_timer_chain_height(&self) -> u64 {
+        self.cur_era_genesis_timer_chain_height + self.timer_chain.len() as u64
+            - 1
+    }
+
     fn get_arena_index_from_epoch_number(
         &self, epoch_number: u64,
     ) -> Result<usize, String> {
@@ -1987,9 +1999,10 @@ impl ConsensusGraphInner {
         }
     }
 
-    // FIXME: There is another function epoch_hash(&self).. What's the
-    // difference?
-    pub fn get_hash_from_epoch_number(
+    /// Get the pivot hash from an epoch number. This function will try to query
+    /// the data manager if it is not available in the ConsensusGraph due to
+    /// out of the current era.
+    pub fn get_pivot_hash_from_epoch_number(
         &self, epoch_number: u64,
     ) -> Result<H256, String> {
         let height = epoch_number;
@@ -2010,6 +2023,15 @@ impl ConsensusGraphInner {
         }
     }
 
+    /// This function differs from `ge_pivot_hash_from_epoch_number` in that it
+    /// only returns the hash if it is in the current consensus graph.
+    fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
+        let pivot_index = self.height_to_pivot_index(epoch_number);
+        self.pivot_chain
+            .get(pivot_index)
+            .map(|idx| self.arena[*idx].hash)
+    }
+
     pub fn block_hashes_by_epoch(
         &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
@@ -2025,9 +2047,8 @@ impl ConsensusGraphInner {
                         .epoch_set_hashes_from_db(epoch_number)
                         .ok_or("Fail to load the epoch set for current era genesis in db".into())
                 } else {
-                    Ok(self.arena[pivot_arena_index]
-                        .data
-                        .ordered_executable_epoch_blocks
+                    Ok(self
+                        .get_ordered_executable_epoch_blocks(pivot_arena_index)
                         .iter()
                         .map(|index| self.arena[*index].hash)
                         .collect())
@@ -2043,13 +2064,6 @@ impl ConsensusGraphInner {
                 )
             }
         }
-    }
-
-    fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
-        let pivot_index = self.height_to_pivot_index(epoch_number);
-        self.pivot_chain
-            .get(pivot_index)
-            .map(|idx| self.arena[*idx].hash)
     }
 
     fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {
@@ -2116,10 +2130,10 @@ impl ConsensusGraphInner {
         }
     }
 
-    pub fn is_stable(&self, block_hash: &H256) -> Option<bool> {
+    pub fn is_timer_block(&self, block_hash: &H256) -> Option<bool> {
         self.hash_to_arena_indices
             .get(block_hash)
-            .and_then(|index| Some(self.arena[*index].stable))
+            .and_then(|index| Some(self.arena[*index].is_timer))
     }
 
     pub fn is_adaptive(&self, block_hash: &H256) -> Option<bool> {
@@ -2168,7 +2182,7 @@ impl ConsensusGraphInner {
         &self, pivot_hash: &H256, epoch: u64,
     ) -> Result<(), String> {
         let last_number = self.best_epoch_number();
-        let hash = self.get_hash_from_epoch_number(epoch)?;
+        let hash = self.get_pivot_hash_from_epoch_number(epoch)?;
         if epoch > last_number || hash != *pivot_hash {
             return Err("Error: pivot chain assumption failed".to_owned());
         }
@@ -2176,12 +2190,11 @@ impl ConsensusGraphInner {
     }
 
     /// Compute the block weight following the GHAST algorithm:
-    /// For partially invalid block, the weight is always 0
     /// If a block is not adaptive, the weight is its difficulty
     /// If a block is adaptive, then for the heavy blocks, it equals to
-    /// the heavy block ratio. Otherwise, it is zero.
-    fn block_weight(&self, me: usize, inclusive: bool) -> i128 {
-        if self.arena[me].data.partial_invalid && !inclusive {
+    /// the heavy block ratio times the difficulty. Otherwise, it is zero.
+    fn block_weight(&self, me: usize) -> i128 {
+        if !self.arena[me].data.activated {
             return 0 as i128;
         }
         let is_heavy = self.arena[me].is_heavy;
@@ -2479,11 +2492,10 @@ impl ConsensusGraphInner {
 
     /// Compute the total weight in the epoch represented by the block of
     /// my_hash.
+    /// FIXME: check inclusive parameter and its usage
     fn total_weight_in_own_epoch(
-        &self, blockset_in_own_epoch: &Vec<usize>, inclusive: bool,
-        genesis: usize,
-    ) -> i128
-    {
+        &self, blockset_in_own_epoch: &Vec<usize>, genesis: usize,
+    ) -> i128 {
         let gen_arena_index = if genesis != NULL {
             genesis
         } else {
@@ -2502,13 +2514,13 @@ impl ConsensusGraphInner {
                     continue;
                 }
             }
-            total_weight += self.block_weight(*index, inclusive);
+            total_weight += self.block_weight(*index);
         }
         total_weight
     }
 
     /// Recompute metadata associated information on pivot chain changes
-    pub fn recompute_metadata(
+    fn recompute_metadata(
         &mut self, start_at: u64, mut to_update: HashSet<usize>,
     ) {
         self.pivot_chain_metadata
@@ -2516,7 +2528,7 @@ impl ConsensusGraphInner {
         let pivot_height = self.get_pivot_height();
         for i in start_at..pivot_height {
             let me = self.get_pivot_block_arena_index(i);
-            self.arena[me].last_pivot_in_past = i;
+            self.arena[me].data.last_pivot_in_past = i;
             let i_pivot_index = self.height_to_pivot_index(i);
             self.pivot_chain_metadata[i_pivot_index]
                 .last_pivot_in_past_blocks
@@ -2524,6 +2536,26 @@ impl ConsensusGraphInner {
             self.pivot_chain_metadata[i_pivot_index]
                 .last_pivot_in_past_blocks
                 .insert(me);
+            self.pivot_chain_metadata[i_pivot_index].past_weight =
+                if i_pivot_index > 0 {
+                    let blockset = self
+                        .exchange_or_compute_blockset_in_own_view_of_epoch(
+                            me, None,
+                        );
+                    let blockset_weight = self.total_weight_in_own_epoch(
+                        &blockset,
+                        self.cur_era_genesis_block_arena_index,
+                    );
+                    self.exchange_or_compute_blockset_in_own_view_of_epoch(
+                        me,
+                        Some(blockset),
+                    );
+                    self.pivot_chain_metadata[i_pivot_index - 1].past_weight
+                        + blockset_weight
+                        + self.block_weight(me)
+                } else {
+                    self.block_weight(me)
+                };
             to_update.remove(&me);
         }
         let mut stack = Vec::new();
@@ -2533,7 +2565,7 @@ impl ConsensusGraphInner {
         }
         while !stack.is_empty() {
             let (stage, me) = stack.pop().unwrap();
-            if !to_visit.contains(&me) || self.arena[me].era_block == NULL {
+            if !to_visit.contains(&me) {
                 continue;
             }
             let parent = self.arena[me].parent;
@@ -2551,13 +2583,13 @@ impl ConsensusGraphInner {
                 let mut last_pivot = if parent == NULL {
                     0
                 } else {
-                    self.arena[parent].last_pivot_in_past
+                    self.arena[parent].data.last_pivot_in_past
                 };
                 for referee in &self.arena[me].referees {
-                    let x = self.arena[*referee].last_pivot_in_past;
+                    let x = self.arena[*referee].data.last_pivot_in_past;
                     last_pivot = max(last_pivot, x);
                 }
-                self.arena[me].last_pivot_in_past = last_pivot;
+                self.arena[me].data.last_pivot_in_past = last_pivot;
                 let last_pivot_index = self.height_to_pivot_index(last_pivot);
                 self.pivot_chain_metadata[last_pivot_index]
                     .last_pivot_in_past_blocks
@@ -2566,41 +2598,301 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// This function force the pivot chain to follow our previous stable
-    /// genesis choice. It assumes that the era_genesis_block should be the
-    /// ancestor of stable_block, and the past of stable_block should have
-    /// been inserted into consensus.
-    pub fn set_pivot_to_stable(&mut self, stable: &H256) {
-        let stable_index = *self
-            .hash_to_arena_indices
-            .get(stable)
-            .expect("Era stable genesis inserted");
-        let mut new_pivot_chain = Vec::new();
-        let mut to_update = HashSet::new();
-        let mut pivot = stable_index;
-        while pivot != NULL {
-            new_pivot_chain.push(pivot);
-            to_update.insert(pivot);
-            pivot = self.arena[pivot].parent;
+    fn get_timer_chain_index(&self, me: usize) -> usize {
+        if !self.arena[me].is_timer || self.arena[me].data.partial_invalid {
+            return NULL;
         }
-        new_pivot_chain.reverse();
-        self.pivot_chain.clear();
-        for index in &new_pivot_chain {
-            self.pivot_chain.push(*index);
-            if self.arena[*index].data.blockset_cleared {
-                self.collect_blockset_in_own_view_of_epoch(*index);
+        let timer_chain_index =
+            (self.arena[me].data.ledger_view_timer_chain_height
+                - self.cur_era_genesis_timer_chain_height) as usize;
+        if self.timer_chain.len() > timer_chain_index
+            && self.timer_chain[timer_chain_index] == me
+        {
+            timer_chain_index
+        } else {
+            NULL
+        }
+    }
+
+    fn compute_timer_chain_tuple(
+        &self, me: usize, anticone_opt: Option<&BitSet>,
+    ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>) {
+        let empty_set = BitSet::new();
+        let anticone = if let Some(a) = anticone_opt {
+            a
+        } else {
+            &empty_set
+        };
+        let mut tmp_chain = Vec::new();
+        let mut tmp_chain_set = HashSet::new();
+        let mut i = self.arena[me].data.past_view_last_timer_block_arena_index;
+        while i != NULL && self.get_timer_chain_index(i) == NULL {
+            tmp_chain.push(i);
+            tmp_chain_set.insert(i);
+            i = self.arena[i].data.past_view_last_timer_block_arena_index;
+        }
+        tmp_chain.reverse();
+        let fork_at;
+        let fork_at_index;
+        if i != NULL {
+            fork_at = self.arena[i].data.ledger_view_timer_chain_height + 1;
+            assert!(fork_at >= self.cur_era_genesis_timer_chain_height);
+            fork_at_index =
+                (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
+        } else {
+            fork_at = self.cur_era_genesis_timer_chain_height;
+            fork_at_index = 0;
+        }
+
+        let mut res = HashMap::new();
+        if fork_at_index == self.timer_chain.len() {
+            // Extending the newest timer chain, simple case
+            res.insert(me, fork_at);
+        } else {
+            debug!("New block {} not extending timer chain (len = {}), fork at timer chain height {}, timer chain index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
+            // Now we need to update the timer_chain_height field of the
+            // remaining blocks with topological sort
+            let mut queue = VecDeque::new();
+            let mut visited = BitSet::new();
+            if i == NULL {
+                queue.push_back(self.cur_era_genesis_block_arena_index);
+                visited.add(self.cur_era_genesis_block_arena_index as u32);
+            } else {
+                queue.push_back(self.timer_chain[fork_at_index - 1]);
+                visited.add(self.timer_chain[fork_at_index - 1] as u32);
             }
-            self.set_epoch_number_in_epoch(*index, self.arena[*index].height);
+            while let Some(x) = queue.pop_front() {
+                for succ in self.arena[x]
+                    .children
+                    .iter()
+                    .chain(self.arena[x].referrers.iter())
+                {
+                    if anticone.contains(*succ as u32) {
+                        continue;
+                    }
+                    if !visited.contains(*succ as u32) {
+                        queue.push_back(*succ);
+                        visited.add(*succ as u32);
+                    }
+                }
+            }
+            let mut counter = HashMap::new();
+            for x in &visited {
+                let mut cnt = 0;
+                if self.arena[x as usize].parent != NULL {
+                    if visited.contains(self.arena[x as usize].parent as u32) {
+                        cnt = 1;
+                    }
+                }
+                for referee in &self.arena[x as usize].referees {
+                    if visited.contains(*referee as u32) {
+                        cnt += 1;
+                    }
+                }
+                counter.insert(x as usize, cnt);
+            }
+            if i == NULL {
+                queue.push_back(self.cur_era_genesis_block_arena_index);
+            } else {
+                queue.push_back(self.timer_chain[fork_at_index - 1]);
+            }
+            while let Some(x) = queue.pop_front() {
+                let mut timer_chain_height = 0;
+                let mut preds = self.arena[x].referees.clone();
+                if self.arena[x].parent != NULL {
+                    preds.push(self.arena[x].parent);
+                }
+                for pred in &preds {
+                    let mut height = if let Some(v) = res.get(pred) {
+                        *v
+                    } else {
+                        self.arena[*pred].data.ledger_view_timer_chain_height
+                    };
+                    if tmp_chain_set.contains(pred)
+                        || self.get_timer_chain_index(*pred) < fork_at_index
+                    {
+                        height += 1;
+                    }
+                    if height > timer_chain_height {
+                        timer_chain_height = height;
+                    }
+                }
+                res.insert(x, timer_chain_height);
+                for succ in self.arena[x]
+                    .children
+                    .iter()
+                    .chain(self.arena[x].referrers.iter())
+                {
+                    if !visited.contains(*succ as u32) {
+                        continue;
+                    }
+                    let cnt = counter.get(succ).unwrap() - 1;
+                    if cnt == 0 {
+                        queue.push_back(*succ);
+                    }
+                    counter.insert(*succ, cnt);
+                }
+            }
+        }
+
+        // We compute the accumulative lca list after this
+        let mut tmp_lca = Vec::new();
+        if tmp_chain.len() > self.inner_conf.timer_chain_beta as usize {
+            let mut last_lca = if fork_at_index == 0 {
+                self.cur_era_genesis_block_arena_index
+            } else {
+                // This is guaranteed to be inside the bound because: 1) fork_at
+                // + tmp_chain.len() cannot be longer than the current
+                // maintained longest timer chain. 2) tmp_chain.len() is greater
+                // than timer_chain_beta.
+                self.timer_chain_accumulative_lca[fork_at_index - 1]
+            };
+            for i in 0..(tmp_chain.len()
+                - (self.inner_conf.timer_chain_beta as usize))
+            {
+                if fork_at_index + i + 1
+                    < self.inner_conf.timer_chain_beta as usize
+                {
+                    tmp_lca.push(self.cur_era_genesis_block_arena_index)
+                } else {
+                    let mut lca = tmp_chain[i];
+                    // We only go over timer_chain_beta elements to compute lca
+                    let s = if i < self.inner_conf.timer_chain_beta as usize - 1
+                    {
+                        0
+                    } else {
+                        i + 1 - self.inner_conf.timer_chain_beta as usize
+                    };
+                    for j in s..i {
+                        // Note that we may have timer_chain blocks that are
+                        // outside the genesis tree temporarily.
+                        // Therefore we have to deal with the case that lca
+                        // becomes NULL
+                        if lca == NULL {
+                            break;
+                        }
+                        lca = self.lca(lca, tmp_chain[j]);
+                    }
+                    for j in (fork_at_index + i + 1
+                        - self.inner_conf.timer_chain_beta as usize)
+                        ..fork_at_index
+                    {
+                        // Note that we may have timer_chain blocks that are
+                        // outside the genesis tree temporarily.
+                        // Therefore we have to deal with the case that lca
+                        // becomes NULL
+                        if lca == NULL {
+                            break;
+                        }
+                        lca = self.lca(lca, self.timer_chain[j]);
+                    }
+                    // Note that we have the assumption that the force
+                    // confirmation point will always move
+                    // along parental edges, i.e., it is not possible for the
+                    // point to move to a sibling tree. This
+                    // assumption is true if the timer_chain_beta
+                    // and the timer_chain_difficulty_ratio are set to large
+                    // enough values.
+                    //
+                    // It is therefore safe here to use the height to compare.
+                    if lca != NULL
+                        && self.arena[last_lca].height < self.arena[lca].height
+                    {
+                        last_lca = lca;
+                    }
+                    tmp_lca.push(last_lca);
+                }
+            }
+        }
+
+        (fork_at, res, tmp_lca, tmp_chain)
+    }
+
+    fn update_timer_chain(&mut self, me: usize) {
+        let (fork_at, res, extra_lca, tmp_chain) =
+            self.compute_timer_chain_tuple(me, None);
+
+        let fork_at_index =
+            (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
+        self.timer_chain.resize(fork_at_index + tmp_chain.len(), 0);
+        let new_chain_lca_size = if self.timer_chain.len()
+            > self.inner_conf.timer_chain_beta as usize
+        {
+            self.timer_chain.len() - self.inner_conf.timer_chain_beta as usize
+        } else {
+            0
+        };
+        self.timer_chain_accumulative_lca
+            .resize(new_chain_lca_size, 0);
+        for i in 0..tmp_chain.len() {
+            self.timer_chain[fork_at_index + i] = tmp_chain[i];
+        }
+        for i in 0..extra_lca.len() {
+            self.timer_chain_accumulative_lca
+                [new_chain_lca_size - extra_lca.len() + i] = extra_lca[i];
+        }
+        assert!(res.contains_key(&me));
+        for (k, v) in res {
+            self.arena[k].data.ledger_view_timer_chain_height = v;
+        }
+        if self.arena[me].is_timer && !self.arena[me].data.partial_invalid {
+            self.timer_chain.push(me);
+            if self.timer_chain.len()
+                >= 2 * self.inner_conf.timer_chain_beta as usize
+            {
+                let s = self.timer_chain.len()
+                    - 2 * self.inner_conf.timer_chain_beta as usize;
+                let e = self.timer_chain.len()
+                    - self.inner_conf.timer_chain_beta as usize;
+                let mut lca = self.timer_chain[e - 1];
+                for i in s..(e - 1) {
+                    // Note that we may have timer_chain blocks that are outside
+                    // the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca becomes
+                    // NULL
+                    if lca == NULL {
+                        break;
+                    }
+                    lca = self.lca(lca, self.timer_chain[i]);
+                }
+                let last_lca =
+                    if let Some(x) = self.timer_chain_accumulative_lca.last() {
+                        *x
+                    } else {
+                        self.cur_era_genesis_block_arena_index
+                    };
+                // Note that we have the assumption that the force confirmation
+                // point will always move along parental edges,
+                // i.e., it is not possible for the point
+                // to move to a sibling tree. This assumption is true if the
+                // timer_chain_beta
+                // and the timer_chain_difficulty_ratio are set to large enough
+                // values.
+                //
+                // It is therefore safe here to use the height to compare.
+                if lca != NULL
+                    && self.arena[last_lca].height < self.arena[lca].height
+                {
+                    self.timer_chain_accumulative_lca.push(lca);
+                } else {
+                    self.timer_chain_accumulative_lca.push(last_lca);
+                }
+                assert_eq!(
+                    self.timer_chain_accumulative_lca.len(),
+                    self.timer_chain.len()
+                        - self.inner_conf.timer_chain_beta as usize
+                );
+            } else if self.timer_chain.len()
+                > self.inner_conf.timer_chain_beta as usize
+            {
+                self.timer_chain_accumulative_lca
+                    .push(self.cur_era_genesis_block_arena_index);
+            }
         }
         debug!(
-            "set_pivot_to_stable: stable={:?}, chain_len={}",
-            stable,
-            self.pivot_chain.len()
+            "Timer chain updated to {:?} accumulated lca {:?}",
+            self.timer_chain, self.timer_chain_accumulative_lca
         );
-        self.recompute_metadata(self.cur_era_genesis_height, to_update);
-        // We should clear anticone cache since the anticone is not computed
-        // correctly before stable.
-        self.anticone_cache = AnticoneCache::new();
     }
 
     pub fn total_processed_block_count(&self) -> u64 {
@@ -2726,15 +3018,11 @@ impl ConsensusGraphInner {
         Ok(())
     }
 
-    pub fn split_root(&mut self, me: usize) {
+    fn split_root(&mut self, me: usize) {
         let parent = self.arena[me].parent;
         assert!(parent != NULL);
         self.weight_tree.split_root(parent, me);
-        self.inclusive_weight_tree.split_root(parent, me);
-        self.stable_weight_tree.split_root(parent, me);
-        self.stable_tree.split_root(parent, me);
         self.adaptive_tree.split_root(parent, me);
-        self.inclusive_adaptive_tree.split_root(parent, me);
         self.arena[me].parent = NULL;
     }
 
@@ -2742,26 +3030,22 @@ impl ConsensusGraphInner {
         self.set_epoch_number_in_epoch(pivot_arena_index, NULLU64);
     }
 
-    pub fn set_epoch_number_in_epoch(
+    fn set_epoch_number_in_epoch(
         &mut self, pivot_arena_index: usize, epoch_number: u64,
     ) {
         assert!(!self.arena[pivot_arena_index].data.blockset_cleared);
-        let block_set = mem::replace(
-            &mut self.arena[pivot_arena_index]
-                .data
-                .blockset_in_own_view_of_epoch,
-            Default::default(),
+        let block_set = self.exchange_or_compute_blockset_in_own_view_of_epoch(
+            pivot_arena_index,
+            None,
         );
         for idx in &block_set {
             self.arena[*idx].data.epoch_number = epoch_number
         }
-        self.arena[pivot_arena_index].data.epoch_number = epoch_number;
-        mem::replace(
-            &mut self.arena[pivot_arena_index]
-                .data
-                .blockset_in_own_view_of_epoch,
-            block_set,
+        self.exchange_or_compute_blockset_in_own_view_of_epoch(
+            pivot_arena_index,
+            Some(block_set),
         );
+        self.arena[pivot_arena_index].data.epoch_number = epoch_number;
     }
 
     fn get_deferred_state_arena_index(
@@ -2849,5 +3133,30 @@ impl ConsensusGraphInner {
         self.hash_to_arena_indices
             .get(block_hash)
             .and_then(|arena_index| self.arena.get(*arena_index))
+    }
+
+    /// Return the list of best terminals when respecting a bound (for
+    /// referencing edges). We sort the terminals based on its lca so that
+    /// it will not change the parent selection results if we exclude last
+    /// few terminals in the sorted order.
+    pub fn best_terminals(&self, ref_bound: usize) -> Vec<H256> {
+        let mut tmp = Vec::new();
+        let best_idx = self.pivot_chain.last().unwrap();
+        for hash in self.terminal_hashes.iter() {
+            let a_idx = self.hash_to_arena_indices.get(hash).unwrap();
+            let a_lca = self.lca(*a_idx, *best_idx);
+            tmp.push((self.arena[a_lca].height, hash));
+        }
+        tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
+        tmp.split_off(ref_bound);
+        let bounded_hashes = tmp.iter().map(|(_, b)| (*b).clone()).collect();
+        bounded_hashes
+    }
+
+    /// This function is used by the synchronization layer to garbege collect
+    /// `old_era_block_set`. The set contains all the blocks that should be
+    /// eliminated by full nodes
+    pub fn pop_old_era_block_set(&self) -> Option<H256> {
+        self.old_era_block_set.lock().pop_front()
     }
 }

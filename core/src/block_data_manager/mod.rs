@@ -265,6 +265,11 @@ impl BlockDataManager {
                 }
             };
 
+        debug!(
+            "BlockDataManager::new() cur_era_genesis_hash: {:?}",
+            &cur_era_genesis_hash
+        );
+
         if cur_era_genesis_hash == data_man.true_genesis.hash() {
             // Only insert block body for true genesis
             data_man.insert_block(
@@ -369,7 +374,6 @@ impl BlockDataManager {
             .unwrap()
             .unwrap()
             .get_state_root()
-            .unwrap()
             .unwrap()
     }
 
@@ -598,6 +602,13 @@ impl BlockDataManager {
             .note_used(CacheId::BlockReceipts(hash));
     }
 
+    pub fn remove_block_results(&self, hash: &H256, remove_db: bool) {
+        self.block_receipts.write().remove(hash);
+        if remove_db {
+            self.db_manager.remove_block_execution_result_from_db(hash);
+        }
+    }
+
     pub fn transaction_address_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<TransactionAddress> {
@@ -769,9 +780,7 @@ impl BlockDataManager {
             &self.epoch_execution_commitments,
             |key, value| {
                 self.db_manager
-                    .insert_consensus_graph_epoch_execution_commitment_to_db(
-                        key, value,
-                    )
+                    .insert_epoch_execution_commitment_to_db(key, value)
             },
             None,
             true,
@@ -798,7 +807,7 @@ impl BlockDataManager {
     ) -> Option<EpochExecutionCommitment> {
         let commitment = self
             .db_manager
-            .consensus_graph_epoch_execution_commitment_from_db(block_hash)?;
+            .epoch_execution_commitment_from_db(block_hash)?;
         self.epoch_execution_commitments
             .write()
             .insert(*block_hash, commitment.clone());
@@ -813,9 +822,7 @@ impl BlockDataManager {
         self.get_epoch_execution_commitment(block_hash).map_or_else(
             || {
                 self.db_manager
-                    .consensus_graph_epoch_execution_commitment_from_db(
-                        block_hash,
-                    )
+                    .epoch_execution_commitment_from_db(block_hash)
             },
             |maybe_ref| Some(maybe_ref.clone()),
         )
@@ -825,8 +832,18 @@ impl BlockDataManager {
         self.epoch_execution_commitments.write().remove(block_hash);
     }
 
+    pub fn remove_epoch_execution_commitment_from_db(&self, block_hash: &H256) {
+        self.db_manager
+            .remove_epoch_execution_commitment_from_db(block_hash);
+    }
+
     pub fn remove_epoch_execution_context(&self, block_hash: &H256) {
         self.epoch_execution_contexts.write().remove(block_hash);
+    }
+
+    pub fn remove_epoch_execution_context_from_db(&self, block_hash: &H256) {
+        self.db_manager
+            .remove_block_execution_result_from_db(block_hash);
     }
 
     pub fn epoch_executed(&self, epoch_hash: &H256) -> bool {
@@ -952,7 +969,7 @@ impl BlockDataManager {
         let mut tx_address = self.transaction_addresses.write();
         let mut exeuction_contexts = self.epoch_execution_contexts.write();
         let mut cache_man = self.cache_man.lock();
-        info!(
+        debug!(
             "Before gc cache_size={} {} {} {} {}",
             current_size,
             blocks.len(),
@@ -1069,7 +1086,7 @@ impl BlockDataManager {
     ) -> (EpochId, Vec<EpochId>) {
         let mut epochs_reverse_order = vec![];
         while count > 0 {
-            info!("getting parent for block {:?}", block);
+            debug!("getting parent for block {:?}", block);
             epochs_reverse_order.push(block);
             block = *self.block_header_by_hash(&block).unwrap().parent_hash();
             if block == NULL_EPOCH
@@ -1080,7 +1097,7 @@ impl BlockDataManager {
             count -= 1;
         }
 
-        info!("get_parent_epochs stopped at block {:?}", block);
+        debug!("get_parent_epochs stopped at block {:?}", block);
         epochs_reverse_order.reverse();
         (block, epochs_reverse_order)
     }

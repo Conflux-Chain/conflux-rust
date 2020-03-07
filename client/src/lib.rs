@@ -24,7 +24,8 @@ pub mod light;
 pub mod rpc;
 #[cfg(test)]
 mod tests;
+pub mod tg_archive;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
-const TESTNET_VERSION: &str = "0000000000000000000000000000000000000010";
+const TESTNET_VERSION: &str = "0000000000000000000000000000000000000011";

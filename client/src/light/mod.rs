@@ -13,6 +13,7 @@ use cfx_types::{Address, U256};
 use ctrlc::CtrlC;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
+use runtime::Runtime;
 use secret_store::SecretStore;
 use threadpool::ThreadPool;
 
@@ -20,14 +21,16 @@ use crate::{
     configuration::Configuration,
     rpc::{
         extractor::RpcExtractor,
-        impls::{common::RpcImpl as CommonImpl, light::RpcImpl},
+        impls::{
+            common::RpcImpl as CommonImpl, light::RpcImpl, pubsub::PubSubClient,
+        },
         setup_debug_rpc_apis_light, setup_public_rpc_apis_light,
     },
 };
 use cfxcore::{
     block_data_manager::BlockDataManager, genesis, statistics::Statistics,
     storage::StorageManager, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    vm_factory::VmFactory, ConsensusGraph, LightQueryService,
+    vm_factory::VmFactory, ConsensusGraph, LightQueryService, Notifications,
     SynchronizationGraph, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use std::str::FromStr;
@@ -45,6 +48,7 @@ pub struct LightClientHandle {
     pub rpc_tcp_server: Option<TcpServer>,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
+    pub runtime: Runtime,
 }
 
 impl LightClientHandle {
@@ -84,11 +88,9 @@ impl LightClient {
         let cache_config = conf.cache_config();
 
         let db_config = conf.db_config();
-        let ledger_db = db::open_database(
-            conf.raw_conf.db_dir.as_ref().unwrap(),
-            &db_config,
-        )
-        .map_err(|e| format!("Failed to open database {:?}", e))?;
+        let ledger_db =
+            db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
+                .map_err(|e| format!("Failed to open database {:?}", e))?;
 
         let secret_store = Arc::new(SecretStore::new());
         let storage_manager = Arc::new(
@@ -159,6 +161,8 @@ impl LightClient {
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
+        let notifications = Notifications::init();
+
         let consensus = Arc::new(ConsensusGraph::new(
             conf.consensus_config(),
             vm,
@@ -166,6 +170,7 @@ impl LightClient {
             statistics,
             data_man.clone(),
             pow_config.clone(),
+            notifications.clone(),
         ));
 
         let _protocol_config = conf.protocol_config();
@@ -177,6 +182,7 @@ impl LightClient {
             verification_config,
             pow_config,
             sync_config,
+            notifications.clone(),
             false,
         ));
 
@@ -203,6 +209,13 @@ impl LightClient {
             txpool.clone(),
         ));
 
+        let runtime = Runtime::with_default_thread_count();
+        let pubsub = PubSubClient::new(
+            runtime.executor(),
+            consensus.clone(),
+            notifications,
+        );
+
         let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(
                 Some((127, 0, 0, 1)),
@@ -210,7 +223,11 @@ impl LightClient {
                 conf.raw_conf.jsonrpc_cors.clone(),
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
-            setup_debug_rpc_apis_light(common_impl.clone(), rpc_impl.clone()),
+            setup_debug_rpc_apis_light(
+                common_impl.clone(),
+                rpc_impl.clone(),
+                None,
+            ),
         )?;
 
         let rpc_tcp_server = super::rpc::start_tcp(
@@ -222,11 +239,13 @@ impl LightClient {
                 setup_debug_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
+                    Some(pubsub),
                 )
             } else {
                 setup_public_rpc_apis_light(
                     common_impl.clone(),
                     rpc_impl.clone(),
+                    Some(pubsub),
                     &conf,
                 )
             },
@@ -241,9 +260,9 @@ impl LightClient {
                 conf.raw_conf.jsonrpc_http_keep_alive,
             ),
             if conf.is_test_mode() {
-                setup_debug_rpc_apis_light(common_impl, rpc_impl)
+                setup_debug_rpc_apis_light(common_impl, rpc_impl, None)
             } else {
-                setup_public_rpc_apis_light(common_impl, rpc_impl, &conf)
+                setup_public_rpc_apis_light(common_impl, rpc_impl, None, &conf)
             },
         )?;
 
@@ -256,6 +275,7 @@ impl LightClient {
             rpc_tcp_server,
             secret_store,
             txpool,
+            runtime,
         })
     }
 

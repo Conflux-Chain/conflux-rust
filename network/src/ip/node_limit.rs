@@ -226,6 +226,20 @@ impl NodeIpLimit {
         false
     }
 
+    /// Demote `id` from trusted to untrusted
+    pub fn demote(&mut self, id: &NodeId) {
+        if let Some(ip) = self.node_index.get(id) {
+            let subnet = self.subnet_type.subnet(ip);
+            if let Some(b) = self.trusted_buckets.get_mut(&subnet) {
+                if b.remove(id) {
+                    if let Some(b) = self.untrusted_buckets.get_mut(&subnet) {
+                        b.add(id.clone());
+                    }
+                }
+            }
+        }
+    }
+
     /// Add or update a node with new IP address. It assumes that the bucket
     /// of corresponding subnet have enough quota.
     fn add_or_update(&mut self, ip: IpAddr, id: NodeId, trusted: bool) {

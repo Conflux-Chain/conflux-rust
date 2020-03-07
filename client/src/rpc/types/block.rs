@@ -6,6 +6,7 @@ use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
+    SharedConsensusGraph,
 };
 use jsonrpc_core::Error as RpcError;
 use primitives::{
@@ -14,7 +15,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block as PrimitiveBlock, BlockHeaderBuilder, TransactionAddress,
+    Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
+    BlockHeaderBuilder, TransactionAddress,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -109,10 +111,11 @@ pub struct Block {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
+    // TODO: We should change python test script and remove this field
+    /// PoW Quality
+    pub pow_quality: Option<U256>,
     /// Referee hashes
     pub referee_hashes: Vec<H256>,
-    /// Stable
-    pub stable: Option<bool>,
     /// Adaptive
     pub adaptive: bool,
     /// Nonce of the block
@@ -211,8 +214,7 @@ impl Block {
             gas_limit: b.block_header.gas_limit().into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
-            // PrimitiveBlock does not contain this information
-            stable: consensus_inner.is_stable(&block_hash),
+            pow_quality: Some(b.block_header.pow_quality.clone().into()),
             adaptive: b.block_header.adaptive(),
             referee_hashes: b
                 .block_header
@@ -277,7 +279,7 @@ impl Block {
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: H256,
     /// Hash of the parent
     pub parent_hash: H256,
     /// Distance to genesis
@@ -305,21 +307,57 @@ pub struct Header {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
+    // TODO: We should change python test script and remove this field
+    /// PoW Quality
+    pub pow_quality: Option<U256>,
     /// Referee hashes
     pub referee_hashes: Vec<H256>,
-    /// Stable
-    pub stable: Option<bool>,
     /// Adaptive
     pub adaptive: bool,
     /// Nonce of the block
     pub nonce: U256,
-    /// Size in bytes
-    pub size: Option<U256>,
+}
+
+impl Header {
+    pub fn new(
+        h: &PrimitiveBlockHeader, consensus: SharedConsensusGraph,
+    ) -> Self {
+        let hash = h.hash();
+
+        let epoch_number = consensus
+            .get_block_epoch_number(&hash)
+            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
+            .map(Into::into);
+
+        let referee_hashes =
+            h.referee_hashes().iter().map(|x| H256::from(*x)).collect();
+
+        Header {
+            hash: H256::from(hash),
+            parent_hash: H256::from(*h.parent_hash()),
+            height: h.height().into(),
+            miner: H160::from(*h.author()),
+            deferred_state_root: H256::from(*h.deferred_state_root()),
+            deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
+            deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
+            blame: h.blame(),
+            transactions_root: H256::from(*h.transactions_root()),
+            epoch_number,
+            gas_limit: h.gas_limit().into(),
+            timestamp: h.timestamp().into(),
+            difficulty: h.difficulty().into(),
+            adaptive: h.adaptive(),
+            referee_hashes,
+            nonce: h.nonce().into(),
+            pow_quality: Some(h.pow_quality.into()), /* TODO(thegaram):
+                                                      * include custom */
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Block, BlockTransactions};
+    use super::{Block, BlockTransactions, Header};
     use crate::rpc::types::{Transaction, H160, H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
@@ -368,8 +406,8 @@ mod tests {
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
+            pow_quality: None,
             referee_hashes: Vec::new(),
-            stable: None,
             adaptive: false,
             nonce: 0.into(),
             transactions: BlockTransactions::Hashes(vec![]),
@@ -377,7 +415,7 @@ mod tests {
         };
         let serialized_block = serde_json::to_string(&block).unwrap();
 
-        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45"}"#);
     }
 
     #[test]
@@ -397,8 +435,8 @@ mod tests {
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
+            pow_quality: None,
             referee_hashes: Vec::new(),
-            stable: None,
             adaptive: false,
             nonce: 0.into(),
             transactions: BlockTransactions::Full(vec![]),
@@ -407,5 +445,31 @@ mod tests {
         let deserialized_block: Block =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_block, result_block);
+    }
+
+    #[test]
+    fn test_serialize_header() {
+        let header = Header {
+            hash: H256::default(),
+            parent_hash: H256::default(),
+            height: 0.into(),
+            miner: H160::default(),
+            deferred_state_root: Default::default(),
+            deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
+            deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
+            blame: 0,
+            transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
+            epoch_number: None,
+            gas_limit: U256::default(),
+            timestamp: 0.into(),
+            difficulty: U256::default(),
+            pow_quality: None,
+            referee_hashes: Vec::new(),
+            adaptive: false,
+            nonce: 0.into(),
+        };
+        let serialized_header = serde_json::to_string(&header).unwrap();
+
+        assert_eq!(serialized_header, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"0x0000000000000000000000000000000000000000","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":0,"transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#);
     }
 }

@@ -285,6 +285,26 @@ impl State {
         }
     }
 
+    pub fn new_contract_with_admin(
+        &mut self, contract: &Address, admin: &Address, balance: U256,
+        nonce_offset: U256,
+    ) -> DbResult<()>
+    {
+        self.insert_cache(
+            contract,
+            AccountEntry::new_dirty(Some(
+                OverlayAccount::new_contract_with_admin(
+                    contract,
+                    balance,
+                    self.account_start_nonce + nonce_offset,
+                    true,
+                    admin,
+                ),
+            )),
+        );
+        Ok(())
+    }
+
     pub fn new_contract(
         &mut self, contract: &Address, balance: U256, nonce_offset: U256,
     ) -> DbResult<()> {
@@ -328,6 +348,15 @@ impl State {
             .map(|mut x| {
                 x.set_commission_balance(contract_address, contract_owner, val)
             })
+    }
+
+    pub fn set_admin(
+        &mut self, requester: &Address, contract_address: &Address,
+        admin: &Address,
+    ) -> DbResult<()>
+    {
+        self.require(&contract_address, false)
+            .map(|mut x| x.set_admin(requester, admin))
     }
 
     pub fn sub_commission_balance(

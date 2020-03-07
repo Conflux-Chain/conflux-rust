@@ -23,6 +23,10 @@ pub fn public_to_address(public: &Public) -> Address {
     let hash = public.keccak256();
     let mut result = Address::zero();
     result.as_bytes_mut().copy_from_slice(&hash[12..]);
+    // In Conflux, we reserve the first four bits to indicate the type of the
+    // address. For user address, the first four bits will be 0x1.
+    result.as_bytes_mut()[0] &= 0x0f;
+    result.as_bytes_mut()[0] |= 0x10;
     result
 }
 
@@ -99,7 +103,7 @@ mod tests {
         let expected =
 "secret:  a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65
 public:  8ce0db0b0359ffc5866ba61903cc2518c3675ef2cf380a7e54bde7ea20e6fa1ab45b7617346cd11b7610001ee6ae5b0155c41cad9527cbcdff44ec67848943a4
-address: 5b073e9233944b5e729e46d618f0d8edf3d9c34a".to_owned();
+address: 1b073e9233944b5e729e46d618f0d8edf3d9c34a".to_owned();
         let secret = Secret::from_str(
             "a100df7a048e50ed308ea696dc600215098141cb391e9527329df289f9383f65",
         )

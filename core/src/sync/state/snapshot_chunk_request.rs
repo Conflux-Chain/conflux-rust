@@ -4,7 +4,7 @@
 
 use crate::sync::{
     message::{Context, DynamicCapability, Handleable, KeyContainer},
-    request_manager::Request,
+    request_manager::{AsAny, Request},
     state::{
         snapshot_chunk_response::SnapshotChunkResponse,
         storage::{Chunk, ChunkKey},
@@ -13,7 +13,7 @@ use crate::sync::{
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkRequest {
@@ -50,9 +50,15 @@ impl Handleable for SnapshotChunkRequest {
     }
 }
 
+impl AsAny for SnapshotChunkRequest {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
 impl Request for SnapshotChunkRequest {
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration {
-        conf.blocks_request_timeout
+        conf.snapshot_chunk_request_timeout
     }
 
     fn on_removed(&self, _inflight_keys: &KeyContainer) {}
@@ -61,7 +67,9 @@ impl Request for SnapshotChunkRequest {
 
     fn is_empty(&self) -> bool { false }
 
-    fn resend(&self) -> Option<Box<dyn Request>> { None }
+    fn resend(&self) -> Option<Box<dyn Request>> {
+        Some(Box::new(self.clone()))
+    }
 
     fn required_capability(&self) -> Option<DynamicCapability> { None }
 }

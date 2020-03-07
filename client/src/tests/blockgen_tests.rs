@@ -61,14 +61,12 @@ fn test_mining_10_epochs() {
     let tmp_dir = TempDir::new("conflux-test").unwrap();
     conf.raw_conf.conflux_data_dir =
         tmp_dir.path().to_str().unwrap().to_string() + "/";
-    conf.raw_conf.db_dir = Some(
-        tmp_dir
-            .path()
-            .join("db")
-            .into_os_string()
-            .into_string()
-            .unwrap(),
-    );
+    conf.raw_conf.block_db_dir = tmp_dir
+        .path()
+        .join("db")
+        .into_os_string()
+        .into_string()
+        .unwrap();
     conf.raw_conf.netconf_dir = Some(
         tmp_dir
             .path()

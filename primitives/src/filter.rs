@@ -122,6 +122,19 @@ impl Clone for Filter {
     }
 }
 
+impl Default for Filter {
+    fn default() -> Self {
+        Filter {
+            from_epoch: EpochNumber::Earliest,
+            to_epoch: EpochNumber::LatestMined,
+            block_hashes: None,
+            address: None,
+            topics: vec![None, None, None, None],
+            limit: None,
+        }
+    }
+}
+
 impl Filter {
     /// Returns combinations of each address and topic.
     pub fn bloom_possibilities(&self) -> Vec<Bloom> {

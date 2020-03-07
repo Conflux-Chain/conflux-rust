@@ -64,7 +64,7 @@ pub struct LocalizedLogEntry {
     pub transaction_hash: H256,
     /// Index of transaction within block.
     pub transaction_index: usize,
-    /// Log position in the block.
+    /// Log position in the epoch.
     pub log_index: usize,
     /// Log position in the transaction.
     pub transaction_log_index: usize,

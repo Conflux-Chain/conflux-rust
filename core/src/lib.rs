@@ -3,12 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 // Recursion limit raised for error_chain
-#![recursion_limit = "128"]
+#![recursion_limit = "512"]
 #![allow(deprecated)]
 
 extern crate cfx_bytes as bytes;
 extern crate core;
-extern crate elastic_array;
 extern crate ethkey as keylib;
 extern crate io;
 extern crate keccak_hash as hash;
@@ -30,13 +29,18 @@ extern crate lazy_static;
 extern crate bit_set;
 extern crate bn;
 extern crate byteorder;
+extern crate libra_canonical_serialization as lcs;
 extern crate memory_cache;
 extern crate num;
 extern crate parity_crypto;
-extern crate serde_derive;
-
+#[macro_use]
+extern crate prometheus;
+extern crate futures;
 #[cfg(test)]
 extern crate rustc_hex;
+extern crate schemadb;
+extern crate serde;
+extern crate serde_derive;
 extern crate unexpected;
 
 pub mod block_data_manager;
@@ -53,6 +57,7 @@ mod parameters;
 #[macro_use]
 pub mod message;
 pub mod alliance_tree_graph;
+pub mod channel;
 pub mod client;
 pub mod light_protocol;
 pub mod machine;
@@ -65,6 +70,7 @@ pub mod statistics;
 pub mod storage;
 pub mod sync;
 pub mod transaction_pool;
+pub mod unique_id;
 pub mod verification;
 pub mod vm;
 pub mod vm_factory;
@@ -73,7 +79,11 @@ pub mod test_helpers;
 
 pub use crate::{
     block_data_manager::BlockDataManager,
-    consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
+    channel::Notifications,
+    consensus::{
+        BestInformation, ConsensusGraph, ConsensusGraphTrait,
+        SharedConsensusGraph,
+    },
     light_protocol::{
         Provider as LightProvider, QueryService as LightQueryService,
     },
@@ -82,6 +92,7 @@ pub use crate::{
         SynchronizationGraph, SynchronizationService,
     },
     transaction_pool::{SharedTransactionPool, TransactionPool},
+    unique_id::UniqueId,
 };
 pub use network::PeerInfo;
 pub use parameters::{

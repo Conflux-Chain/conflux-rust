@@ -460,13 +460,11 @@ class ConfluxTracing(ConfluxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 11
         self.conf_parameters = {
-            "log_level": "\"debug\"",
             "generate_tx": "true",
             "generate_tx_period_us": "100000",
             "enable_state_expose": "true",
             "era_epoch_count": 100,
             "dev_snapshot_epoch_count": 50,
-            "era_checkpoint_gap": 100
         }
 
     def setup_nodes(self):

@@ -5,10 +5,17 @@
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
 use cfxcore::{
+    alliance_tree_graph::consensus::{
+        consensus_inner::ConsensusInnerConfig as TreeGraphConsensusInnerConfig,
+        ConsensusConfig as TreeGraphConsensusConfig,
+    },
     block_data_manager::{DataManagerConfiguration, DbType},
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
-    storage::{self, ConsensusParam, StorageConfiguration},
+    storage::{
+        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
+        StorageConfiguration,
+    },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -62,11 +69,16 @@ build_config! {
         //
         (mode, (Option<String>), None)
         // Development related section.
+        (data_propagate_enabled, (bool), false)
+        (data_propagate_interval_ms, (u64), 1_000)
+        (data_propagate_size, (usize), 1_000)
         (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
         // Only effective in `dev` mode and `start_mining` is false
         (dev_block_interval_ms, (u64), 250)
         (enable_state_expose, (bool), false)
+        (generate_tx, (bool), false)
+        (generate_tx_period_us, (Option<u64>), Some(100_000))
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (metrics_enabled, (bool), false)
@@ -76,26 +88,23 @@ build_config! {
         (metrics_influxdb_password, (Option<String>), None)
         (metrics_influxdb_node, (Option<String>), None)
         (metrics_output_file, (Option<String>), None)
-        (metrics_report_interval_ms, (u64), 3000)
-        (generate_tx, (bool), false)
-        (generate_tx_period_us, (Option<u64>), Some(100_000))
-        (txgen_account_count, (usize), 10)
+        (metrics_report_interval_ms, (u64), 3_000)
         (rocksdb_disable_wal, (bool), false)
+        (txgen_account_count, (usize), 10)
 
         // Genesis section.
-        (adaptive_weight_alpha_num, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_NUM)
-        (adaptive_weight_alpha_den, (u64), ADAPTIVE_WEIGHT_DEFAULT_ALPHA_DEN)
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
-        (era_checkpoint_gap, (u64), ERA_DEFAULT_CHECKPOINT_GAP)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (network_id, (u64), 1)
+        (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
+        (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -111,45 +120,47 @@ build_config! {
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
-        (udp_port, (Option<u16>), Some(32323))
         (port, (Option<u16>), Some(32323))
+        (public_address, (Option<String>), None)
+        (udp_port, (Option<u16>), Some(32323))
 
         // Network parameters section.
-        (blocks_request_timeout_ms, (u64), 60_000)
-        (check_request_period_ms, (u64), 1000)
+        (blocks_request_timeout_ms, (u64), 20_000)
+        (check_request_period_ms, (u64), 1_000)
         (chunk_size_byte, (u64), DEFAULT_CHUNK_SIZE)
-        (data_propagate_enabled, (bool), false)
-        (data_propagate_interval_ms, (u64), 1000)
-        (data_propagate_size, (usize), 1000)
+        (demote_peer_for_timeout, (bool), false)
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
-        (headers_request_timeout_ms, (u64), 30_000)
+        (headers_request_timeout_ms, (u64), 10_000)
+        (heartbeat_period_interval_ms, (u64), 30_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
-        (min_peers_propagation, (usize), 8)
+        (max_allowed_timeout_in_observing_period, (u64), 10)
+        (max_download_state_peers, (usize), 8)
         (max_inflight_request_count, (u64), 64)
-        (max_peers_propagation, (usize), 128)
+        (max_peers_tx_propagation, (usize), 128)
+        (min_peers_tx_propagation, (usize), 8)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
-        (snapshot_candidate_request_timeout_ms, (u64), 30_000)
+        (snapshot_candidate_request_timeout_ms, (u64), 10_000)
         (snapshot_chunk_request_timeout_ms, (u64), 30_000)
         (snapshot_manifest_request_timeout_ms, (u64), 30_000)
         (throttling_conf, (Option<String>), None)
+        (timeout_observing_period_s, (u64), 600)
         (transaction_request_timeout_ms, (u64), 30_000)
         (tx_maintained_for_peer_timeout_ms, (u64), 600_000)
 
         // Peer management section.
         (bootnodes, (Option<String>), None)
-        (discovery_fast_refresh_timeout_ms, (u64), 10000)
-        (discovery_housekeeping_timeout_ms, (u64), 1000)
+        (discovery_fast_refresh_timeout_ms, (u64), 10_000)
+        (discovery_housekeeping_timeout_ms, (u64), 1_000)
         (discovery_round_timeout_ms, (u64), 500)
         (enable_discovery, (bool), true)
         (netconf_dir, (Option<String>), Some("./net_config".to_string()))
         (net_key, (Option<String>), None)
-        (node_table_timeout, (Option<u64>), Some(300))
-        (node_table_promotion_timeout, (Option<u64>), Some(3 * 24 * 3600))
-        (public_address, (Option<String>), None)
+        (node_table_timeout_s, (u64), 300)
+        (node_table_promotion_timeout_s, (u64), 3 * 24 * 3600)
         (session_ip_limits, (String), "1,8,4,2".into())
         (subnet_quota, (usize), 32)
 
@@ -160,6 +171,15 @@ build_config! {
         (tx_pool_min_tx_gas_price, (u64), 1)
 
         // Storage Section.
+        (block_cache_gc_period_ms, (u64), 5_000)
+        (block_db_type, (String), "rocksdb".to_string())
+        // The conflux data dir, if unspecified, is the workdir where conflux is started.
+        (conflux_data_dir, (String), "./".to_string())
+        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
+        (block_db_dir, (String), "./blockchain_db".to_string())
+        (ledger_cache_size, (usize), 1024)
+        (rocksdb_cache_size, (Option<usize>), Some(128))
+        (rocksdb_compaction_profile, (Option<String>), None)
         (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
         (storage_delta_mpts_cache_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE)
         (storage_delta_mpts_cache_start_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
@@ -167,21 +187,15 @@ build_config! {
         (storage_delta_mpts_slab_idle_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
 
         // General/Unclassified section.
-        (block_cache_gc_period_ms, (u64), 5000)
-        (block_db_type, (String), "rocksdb".to_string())
-        // The conflux data dir, if unspecified, is the workdir where conflux is started.
-        (conflux_data_dir, (String), "./".to_string())
-        (db_cache_size, (Option<usize>), Some(128))
-        (db_compaction_profile, (Option<String>), None)
-        // FIXME: use a fixed sub-dir of conflux_data_dir instead.
-        (db_dir, (Option<String>), Some("./blockchain_db".to_string()))
         (enable_optimistic_execution, (bool), true)
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
-        (is_consortium, (bool), false)
-        (ledger_cache_size, (Option<usize>), Some(1024))
         (max_trans_count_received_in_catch_up, (u64), 60_000)
-        (max_download_state_peers, (usize), 8)
+
+        // TreeGraph Section.
+        (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
+        (is_consortium, (bool), false)
+        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
     }
     {
         (
@@ -225,6 +239,7 @@ impl Configuration {
             None => NetworkConfiguration::default(),
         };
 
+        network_config.is_consortium = self.raw_conf.is_consortium;
         network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
@@ -250,15 +265,10 @@ impl Configuration {
                 }
             };
         }
-        if let Some(nt_timeout) = self.raw_conf.node_table_timeout {
-            network_config.node_table_timeout = Duration::from_secs(nt_timeout);
-        }
-        if let Some(nt_promotion_timeout) =
-            self.raw_conf.node_table_promotion_timeout
-        {
-            network_config.connection_lifetime_for_promotion =
-                Duration::from_secs(nt_promotion_timeout);
-        }
+        network_config.node_table_timeout =
+            Duration::from_secs(self.raw_conf.node_table_timeout_s);
+        network_config.connection_lifetime_for_promotion =
+            Duration::from_secs(self.raw_conf.node_table_promotion_timeout_s);
         network_config.test_mode = self.is_test_mode();
         network_config.subnet_quota = self.raw_conf.subnet_quota;
         network_config.session_ip_limit_config =
@@ -278,34 +288,45 @@ impl Configuration {
 
     pub fn cache_config(&self) -> CacheConfig {
         let mut cache_config = CacheConfig::default();
-
-        if let Some(db_cache_size) = self.raw_conf.db_cache_size {
-            cache_config.db = db_cache_size;
-        }
-        if let Some(ledger_cache_size) = self.raw_conf.ledger_cache_size {
-            cache_config.ledger = ledger_cache_size;
-        }
+        cache_config.ledger = self.raw_conf.ledger_cache_size;
         cache_config
     }
 
     pub fn db_config(&self) -> DatabaseConfig {
-        let db_dir = self.raw_conf.db_dir.as_ref().unwrap();
+        let db_dir = &self.raw_conf.block_db_dir;
         if let Err(e) = fs::create_dir_all(&db_dir) {
             panic!("Error creating database directory: {:?}", e);
         }
 
-        let compact_profile = match self.raw_conf.db_compaction_profile.as_ref()
-        {
-            Some(p) => db::DatabaseCompactionProfile::from_str(p).unwrap(),
-            None => db::DatabaseCompactionProfile::default(),
-        };
+        let compact_profile =
+            match self.raw_conf.rocksdb_compaction_profile.as_ref() {
+                Some(p) => db::DatabaseCompactionProfile::from_str(p).unwrap(),
+                None => db::DatabaseCompactionProfile::default(),
+            };
         db::db_config(
             Path::new(db_dir),
-            self.raw_conf.db_cache_size.clone(),
+            self.raw_conf.rocksdb_cache_size.clone(),
             compact_profile,
             NUM_COLUMNS.clone(),
             self.raw_conf.rocksdb_disable_wal,
         )
+    }
+
+    pub fn tg_consensus_config(&self) -> TreeGraphConsensusConfig {
+        TreeGraphConsensusConfig {
+            debug_dump_dir_invalid_state_root: self
+                .raw_conf
+                .debug_dump_dir_invalid_state_root
+                .clone(),
+            inner_conf: TreeGraphConsensusInnerConfig {
+                era_epoch_count: self.raw_conf.era_epoch_count,
+                enable_state_expose: self.raw_conf.enable_state_expose,
+                candidate_pivot_waiting_timeout_ms: self
+                    .raw_conf
+                    .candidate_pivot_waiting_timeout_ms,
+            },
+            bench_mode: false,
+        }
     }
 
     pub fn consensus_config(&self) -> ConsensusConfig {
@@ -320,18 +341,15 @@ impl Configuration {
                 .debug_dump_dir_invalid_state_root
                 .clone(),
             inner_conf: ConsensusInnerConfig {
-                adaptive_weight_alpha_num: self
-                    .raw_conf
-                    .adaptive_weight_alpha_num,
-                adaptive_weight_alpha_den: self
-                    .raw_conf
-                    .adaptive_weight_alpha_den,
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
                     .raw_conf
                     .heavy_block_difficulty_ratio,
+                timer_chain_block_difficulty_ratio: self
+                    .raw_conf
+                    .timer_chain_block_difficulty_ratio,
+                timer_chain_beta: self.raw_conf.timer_chain_beta,
                 era_epoch_count: self.raw_conf.era_epoch_count,
-                era_checkpoint_gap: self.raw_conf.era_checkpoint_gap,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
             },
@@ -385,6 +403,8 @@ impl Configuration {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
             },
+            debug_snapshot_checker_threads:
+                DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
             delta_mpts_cache_recent_lfu_factor: self
                 .raw_conf
                 .storage_delta_mpts_cache_recent_lfu_factor,
@@ -418,6 +438,9 @@ impl Configuration {
             check_request_period: Duration::from_millis(
                 self.raw_conf.check_request_period_ms,
             ),
+            heartbeat_period_interval: Duration::from_millis(
+                self.raw_conf.heartbeat_period_interval_ms,
+            ),
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,
             ),
@@ -446,8 +469,8 @@ impl Configuration {
             max_trans_count_received_in_catch_up: self
                 .raw_conf
                 .max_trans_count_received_in_catch_up,
-            min_peers_propagation: self.raw_conf.min_peers_propagation,
-            max_peers_propagation: self.raw_conf.max_peers_propagation,
+            min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
+            max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
             future_block_buffer_capacity: self
                 .raw_conf
                 .future_block_buffer_capacity,
@@ -455,16 +478,23 @@ impl Configuration {
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
-            snapshot_candidate_request_timeout_ms: Duration::from_millis(
+            snapshot_candidate_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_candidate_request_timeout_ms,
             ),
-            snapshot_manifest_request_timeout_ms: Duration::from_millis(
+            snapshot_manifest_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_manifest_request_timeout_ms,
             ),
-            snapshot_chunk_request_timeout_ms: Duration::from_millis(
+            snapshot_chunk_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_chunk_request_timeout_ms,
             ),
             chunk_size_byte: self.raw_conf.chunk_size_byte,
+            timeout_observing_period_s: self
+                .raw_conf
+                .timeout_observing_period_s,
+            max_allowed_timeout_in_observing_period: self
+                .raw_conf
+                .max_allowed_timeout_in_observing_period,
+            demote_peer_for_timeout: self.raw_conf.demote_peer_for_timeout,
         }
     }
 

@@ -61,6 +61,24 @@ impl State {
         }
     }
 
+    fn state_root(&self, merkle_root: MerkleHash) -> StateRootWithAuxInfo {
+        StateRootWithAuxInfo {
+            state_root: StateRoot {
+                snapshot_root: self.snapshot_merkle_root,
+                intermediate_delta_root: self.intermediate_trie_root_merkle,
+                delta_root: merkle_root,
+            },
+            aux_info: StateRootAuxInfo {
+                snapshot_epoch_id: self.snapshot_epoch_id.clone(),
+                intermediate_epoch_id: self.intermediate_epoch_id.clone(),
+                maybe_intermediate_mpt_key_padding: self
+                    .maybe_intermediate_trie_key_padding
+                    .clone(),
+                delta_mpt_key_padding: self.delta_trie_key_padding.clone(),
+            },
+        }
+    }
+
     fn get_from_delta(
         &self, mpt: &DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
         access_key: &[u8], with_proof: bool,
@@ -207,6 +225,8 @@ impl Drop for State {
 
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+        self.ensure_temp_slab_for_db_load();
+
         self.get_from_all_tries(access_key, false)
             .map(|(value, _)| value)
     }
@@ -214,6 +234,8 @@ impl StateTrait for State {
     fn get_with_proof(
         &self, access_key: StorageKey,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        self.ensure_temp_slab_for_db_load();
+
         self.get_from_all_tries(access_key, true)
     }
 
@@ -409,54 +431,27 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
-        let merkle_root = self.compute_merkle_root()?;
+        self.ensure_temp_slab_for_db_load();
 
-        Ok(StateRootWithAuxInfo {
-            state_root: StateRoot {
-                snapshot_root: self.snapshot_merkle_root,
-                intermediate_delta_root: self.intermediate_trie_root_merkle,
-                delta_root: merkle_root,
-            },
-            aux_info: StateRootAuxInfo {
-                snapshot_epoch_id: self.snapshot_epoch_id.clone(),
-                intermediate_epoch_id: self.intermediate_epoch_id.clone(),
-                maybe_intermediate_mpt_key_padding: self
-                    .maybe_intermediate_trie_key_padding
-                    .clone(),
-                delta_mpt_key_padding: self.delta_trie_key_padding.clone(),
-            },
-        })
+        let merkle_root = self.compute_merkle_root()?;
+        Ok(self.state_root(merkle_root))
     }
 
-    fn get_state_root(&self) -> Result<Option<StateRootWithAuxInfo>> {
-        let merkle_root = self.get_merkle_root()?;
-        Ok(merkle_root.map(|merkle_hash| StateRootWithAuxInfo {
-            state_root: StateRoot {
-                snapshot_root: self.snapshot_merkle_root,
-                intermediate_delta_root: self.intermediate_trie_root_merkle,
-                delta_root: merkle_hash,
-            },
-            aux_info: StateRootAuxInfo {
-                snapshot_epoch_id: self.snapshot_epoch_id.clone(),
-                intermediate_epoch_id: self.intermediate_epoch_id.clone(),
-                maybe_intermediate_mpt_key_padding: self
-                    .maybe_intermediate_trie_key_padding
-                    .clone(),
-                delta_mpt_key_padding: self.delta_trie_key_padding.clone(),
-            },
-        }))
+    fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
+        self.ensure_temp_slab_for_db_load();
+
+        Ok(self.state_root(self.state_root_check()?))
     }
 
     // TODO(yz): replace coarse lock with a queue.
-    fn commit(&mut self, epoch_id: EpochId) -> Result<()> {
+    fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
+        self.ensure_temp_slab_for_db_load();
+
         let merkle_root = self.state_root_check()?;
 
         // TODO(yz): Think about leaving these node dirty and only commit when
         // the dirty node is removed from cache.
         let commit_result = self.do_db_commit(epoch_id, &merkle_root);
-        if commit_result.is_err() {
-            self.revert();
-        }
         debug!(
             "commit state for epoch {:?}: delta_trie_height={:?} \
             has_intermediate={}, height={:?}, snapshot_epoch_id={:?}, \
@@ -470,6 +465,12 @@ impl StateTrait for State {
             self.maybe_intermediate_trie.as_ref().map(|mpt| mpt.get_mpt_id()),
             self.delta_trie.get_mpt_id(),
         );
+        if commit_result.is_err() {
+            self.revert();
+            debug!("State commitment failed.");
+
+            commit_result?;
+        }
         if self.delta_trie_height.unwrap()
             >= self
                 .manager
@@ -489,7 +490,7 @@ impl StateTrait for State {
             )?;
         }
 
-        commit_result
+        Ok(self.state_root(merkle_root))
     }
 
     fn revert(&mut self) {
@@ -507,6 +508,10 @@ impl StateTrait for State {
 }
 
 impl State {
+    fn ensure_temp_slab_for_db_load(&self) {
+        self.delta_trie.get_node_memory_manager().enlarge().ok();
+    }
+
     fn pre_modification(&mut self) {
         if !self.dirty {
             self.dirty = true
@@ -570,20 +575,14 @@ impl State {
         }
     }
 
-    fn get_merkle_root(&self) -> Result<Option<MerkleHash>> {
-        self.delta_trie.get_merkle(self.delta_trie_root.clone())
-    }
-
     fn do_db_commit(
         &mut self, epoch_id: EpochId, merkle_root: &MerkleHash,
     ) -> Result<()> {
-        self.dirty = false;
-
         let maybe_existing_merkle_root =
             self.delta_trie.get_merkle_root_by_epoch_id(&epoch_id)?;
         if maybe_existing_merkle_root.is_some() {
             // TODO This may happen for genesis when we restart
-            error!(
+            info!(
                 "Overwriting computed state for epoch {:?}, \
                  committed merkle root {:?}, new merkle root {:?}",
                 epoch_id,
@@ -595,6 +594,7 @@ impl State {
                 Some(*merkle_root),
                 "Overwriting computed state with a different merkle root."
             );
+            self.revert();
             return Ok(());
         }
 
@@ -712,11 +712,14 @@ impl State {
             self.delta_trie_root.clone(),
         );
 
+        self.dirty = false;
+
         Ok(())
     }
 
     fn state_root_check(&self) -> Result<MerkleHash> {
-        let maybe_merkle_root = self.get_merkle_root()?;
+        let maybe_merkle_root =
+            self.delta_trie.get_merkle(self.delta_trie_root.clone())?;
         match maybe_merkle_root {
             // Empty state.
             None => (Ok(MERKLE_NULL_NODE)),

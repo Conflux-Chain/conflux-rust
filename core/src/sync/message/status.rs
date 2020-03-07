@@ -85,6 +85,8 @@ impl Handleable for Status {
 
             let mut peer_state = SynchronizationPeerState {
                 id: ctx.peer,
+                node_id: ctx.node_id(),
+                is_validator: false,
                 protocol_version: self.protocol_version,
                 genesis_hash,
                 best_epoch: self.best_epoch,

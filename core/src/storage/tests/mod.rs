@@ -15,16 +15,17 @@ const TEST_NUMBER_OF_KEYS: usize = 100000;
 #[derive(Default)]
 pub struct FakeDbForStateTest {}
 
+// Compatible hack for KeyValueDB
+impl MallocSizeOf for FakeDbForStateTest {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
+
 impl KeyValueDB for FakeDbForStateTest {
-    fn get(
-        &self, _col: Option<u32>, _key: &[u8],
-    ) -> std::io::Result<Option<ElasticArray128<u8>>> {
+    fn get(&self, _col: u32, _key: &[u8]) -> std::io::Result<Option<DBValue>> {
         Ok(None)
     }
 
-    fn get_by_prefix(
-        &self, _col: Option<u32>, _prefix: &[u8],
-    ) -> Option<Box<[u8]>> {
+    fn get_by_prefix(&self, _col: u32, _prefix: &[u8]) -> Option<Box<[u8]>> {
         unreachable!()
     }
 
@@ -35,13 +36,13 @@ impl KeyValueDB for FakeDbForStateTest {
     fn flush(&self) -> std::io::Result<()> { Ok(()) }
 
     fn iter<'a>(
-        &'a self, _col: Option<u32>,
+        &'a self, _col: u32,
     ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
         unreachable!()
     }
 
     fn iter_from_prefix<'a>(
-        &'a self, _col: Option<u32>, _prefix: &'a [u8],
+        &'a self, _col: u32, _prefix: &'a [u8],
     ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)>> {
         unreachable!()
     }
@@ -79,6 +80,7 @@ impl FakeStateManager {
                     consensus_param: ConsensusParam {
                         snapshot_epoch_count: 10_000_000,
                     },
+                    debug_snapshot_checker_threads: 0,
                     delta_mpts_cache_recent_lfu_factor: 4.0,
                     delta_mpts_cache_size: 20_000_000,
                     delta_mpts_cache_start_size: 1_000_000,
@@ -210,8 +212,8 @@ use crate::storage::{
     impls::{errors::*, merkle_patricia_trie::CompressedPathRaw},
     KVInserter,
 };
-use elastic_array::ElasticArray128;
-use kvdb::{DBTransaction, KeyValueDB};
+use kvdb::{DBTransaction, DBValue, KeyValueDB};
+use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
 use primitives::StorageKey;
 #[cfg(test)]
 use rand::{seq::SliceRandom, Rng, SeedableRng};

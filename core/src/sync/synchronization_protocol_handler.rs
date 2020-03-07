@@ -7,6 +7,7 @@ use super::{
     ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
+    alliance_tree_graph::consensus::TreeGraphConsensus,
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
@@ -26,13 +27,15 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
+use libra_types::crypto_proxies::ValidatorVerifier;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
-    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-    NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
+    node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
+    HandlerWorkType, NetworkContext, NetworkProtocolHandler, PeerId,
+    UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Block, BlockHeader, SignedTransaction};
+use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::{
@@ -66,6 +69,8 @@ const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
 const HEARTBEAT_TIMER: TimerToken = 9;
+const EXPIRE_BFT_EXECUTION_TIMER: TimerToken = 10;
+pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
@@ -103,6 +108,7 @@ impl<T> AsyncTaskQueue<T> {
 pub struct RecoverPublicTask {
     blocks: Vec<Block>,
     requested: HashSet<H256>,
+    delay: Option<Duration>,
     failed_peer: PeerId,
     compact: bool,
 }
@@ -110,7 +116,7 @@ pub struct RecoverPublicTask {
 impl RecoverPublicTask {
     pub fn new(
         blocks: Vec<Block>, requested: HashSet<H256>, failed_peer: PeerId,
-        compact: bool,
+        compact: bool, delay: Option<Duration>,
     ) -> Self
     {
         RecoverPublicTask {
@@ -118,6 +124,7 @@ impl RecoverPublicTask {
             requested,
             failed_peer,
             compact,
+            delay,
         }
     }
 }
@@ -238,6 +245,10 @@ pub struct SynchronizationProtocolHandler {
     // state sync for any checkpoint
     pub state_sync: Arc<SnapshotChunkSync>,
 
+    /// The epoch id of the remotely synchronized state.
+    /// This is always `None` for archive nodes.
+    pub synced_epoch_id: Mutex<Option<EpochId>>,
+
     // provider for serving light protocol queries
     light_provider: Arc<LightProvider>,
 }
@@ -247,27 +258,31 @@ pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,
     pub check_request_period: Duration,
+    pub heartbeat_period_interval: Duration,
     pub block_cache_gc_period: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
-    pub snapshot_candidate_request_timeout_ms: Duration,
-    pub snapshot_manifest_request_timeout_ms: Duration,
-    pub snapshot_chunk_request_timeout_ms: Duration,
+    pub snapshot_candidate_request_timeout: Duration,
+    pub snapshot_manifest_request_timeout: Duration,
+    pub snapshot_chunk_request_timeout: Duration,
     pub tx_maintained_for_peer_timeout: Duration,
     pub max_inflight_request_count: u64,
     pub received_tx_index_maintain_timeout: Duration,
     pub inflight_pending_tx_index_maintain_timeout: Duration,
     pub request_block_with_public: bool,
     pub max_trans_count_received_in_catch_up: u64,
-    pub min_peers_propagation: usize,
-    pub max_peers_propagation: usize,
+    pub min_peers_tx_propagation: usize,
+    pub max_peers_tx_propagation: usize,
     pub future_block_buffer_capacity: usize,
     pub max_download_state_peers: usize,
     pub test_mode: bool,
     pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
     pub chunk_size_byte: u64,
+    pub timeout_observing_period_s: u64,
+    pub max_allowed_timeout_in_observing_period: u64,
+    pub demote_peer_for_timeout: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -280,6 +295,7 @@ impl SynchronizationProtocolHandler {
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(
+            protocol_config.is_consortium,
             is_full_node,
             protocol_config.dev_mode,
         ));
@@ -314,11 +330,19 @@ impl SynchronizationProtocolHandler {
                 SyncHandlerWorkType::LocalMessage,
             ),
             state_sync,
+            synced_epoch_id: Default::default(),
             light_provider,
         }
     }
 
     pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
+
+    pub fn update_validator_info(
+        &self, validators: &ValidatorVerifier,
+    ) -> HashSet<NodeId> {
+        assert!(self.is_consortium());
+        self.syn.update_validator_info(validators)
+    }
 
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
         self.graph.get_to_propagate_trans()
@@ -351,6 +375,10 @@ impl SynchronizationProtocolHandler {
 
     pub fn get_synchronization_graph(&self) -> SharedSynchronizationGraph {
         self.graph.clone()
+    }
+
+    pub fn get_request_manager(&self) -> Arc<RequestManager> {
+        self.request_manager.clone()
     }
 
     pub fn append_received_transactions(
@@ -484,6 +512,9 @@ impl SynchronizationProtocolHandler {
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
             }
+            ErrorKind::InternalError(_) => {}
+            ErrorKind::RpcCancelledByDisconnection => {}
+            ErrorKind::RpcTimeout => {}
             ErrorKind::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
@@ -557,7 +588,10 @@ impl SynchronizationProtocolHandler {
 
                 let to_request = terminals
                     .difference(&requested)
-                    .filter(|h| !self.graph.contains_block_header(&h))
+                    .filter(|h| {
+                        // Request never-seen blocks
+                        self.graph.data_man.block_header_by_hash(*h).is_none()
+                    })
                     .cloned()
                     .collect::<Vec<H256>>();
 
@@ -652,7 +686,8 @@ impl SynchronizationProtocolHandler {
                 peer
             );
 
-            self.request_manager.request_epoch_hashes(io, peer, epochs);
+            self.request_manager
+                .request_epoch_hashes(io, peer, epochs, None);
             *latest_requested = until - 1;
         }
 
@@ -674,8 +709,12 @@ impl SynchronizationProtocolHandler {
         // Headers may have been inserted into sync graph before as dependent
         // blocks
         header_hashes.retain(|h| !self.graph.contains_block_header(h));
-        self.request_manager
-            .request_block_headers(io, peer, header_hashes);
+        self.request_manager.request_block_headers(
+            io,
+            peer,
+            header_hashes,
+            None,
+        );
     }
 
     /// Try to get the block header from db. Return `true` if the block header
@@ -715,7 +754,7 @@ impl SynchronizationProtocolHandler {
             debug!("Recovered header {:?} from db", hash);
             // Process headers from db
             let mut block_headers_resp = GetBlockHeadersResponse::default();
-            block_headers_resp.set_request_id(0);
+            block_headers_resp.request_id = 0;
             let mut headers = Vec::new();
             headers.push((*header).clone());
             block_headers_resp.headers = headers;
@@ -821,6 +860,7 @@ impl SynchronizationProtocolHandler {
             received_blocks,
             !task.compact,
             chosen_peer,
+            task.delay,
         );
         self.request_blocks(io, chosen_peer, missing_dependencies);
 
@@ -895,7 +935,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn produce_status_message(&self) -> Status {
-        let best_info = self.graph.consensus.get_best_info();
+        let best_info = self.graph.consensus.best_info();
 
         let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
         {
@@ -968,8 +1008,8 @@ impl SynchronizationProtocolHandler {
             .round() as usize;
 
         let num_peers = chosen_size
-            .max(self.protocol_config.min_peers_propagation)
-            .min(self.protocol_config.max_peers_propagation);
+            .max(self.protocol_config.min_peers_tx_propagation)
+            .min(self.protocol_config.max_peers_tx_propagation);
 
         PeerFilter::new(msgid::TRANSACTION_DIGESTS)
             .select_n(num_peers, &self.syn)
@@ -1166,7 +1206,8 @@ impl SynchronizationProtocolHandler {
             io,
             chosen_peer,
             missed_body_block_hashes.into_iter().collect(),
-        );
+        )
+        .ok();
 
         // relay if necessary
         self.relay_blocks(io, need_to_relay.into_iter().collect())
@@ -1202,8 +1243,8 @@ impl SynchronizationProtocolHandler {
 
     fn log_statistics(&self) { self.graph.log_statistics(); }
 
-    fn update_total_weight_in_past(&self) {
-        self.graph.update_total_weight_in_past();
+    fn update_total_weight_delta_heartbeat(&self) {
+        self.graph.update_total_weight_delta_heartbeat();
     }
 
     pub fn update_sync_phase(&self, io: &dyn NetworkContext) {
@@ -1247,7 +1288,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_missing_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
         hashes: Vec<H256>,
-    )
+    ) -> Result<(), Error>
     {
         // FIXME: This is a naive strategy. Need to
         // make it more sophisticated.
@@ -1256,8 +1297,9 @@ impl SynchronizationProtocolHandler {
             self.request_blocks(io, peer_id, hashes);
         } else {
             self.request_manager
-                .request_compact_blocks(io, peer_id, hashes);
+                .request_compact_blocks(io, peer_id, hashes, None);
         }
+        Ok(())
     }
 
     pub fn request_blocks(
@@ -1274,6 +1316,7 @@ impl SynchronizationProtocolHandler {
             peer_id,
             hashes,
             self.request_block_need_public(),
+            None,
         );
     }
 
@@ -1350,6 +1393,7 @@ impl SynchronizationProtocolHandler {
                     requested,
                     0,
                     false,
+                    None,
                 ),
             );
             return true;
@@ -1361,7 +1405,7 @@ impl SynchronizationProtocolHandler {
     pub fn blocks_received(
         &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
-        peer: Option<PeerId>,
+        peer: Option<PeerId>, delay: Option<Duration>,
     )
     {
         self.request_manager.blocks_received(
@@ -1371,6 +1415,7 @@ impl SynchronizationProtocolHandler {
             ask_full_block,
             peer,
             self.request_block_need_public(),
+            delay,
         )
     }
 
@@ -1388,6 +1433,19 @@ impl SynchronizationProtocolHandler {
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
     }
+
+    fn remove_expired_bft_execution(&self) {
+        let sync_graph = self.get_synchronization_graph();
+        if !sync_graph.is_consortium() {
+            return;
+        }
+        let tg_consensus = sync_graph
+            .consensus
+            .as_any()
+            .downcast_ref::<TreeGraphConsensus>()
+            .expect("downcast to TreeGraphConsensus should success");
+        tg_consensus.remove_expired_bft_execution();
+    }
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
@@ -1399,8 +1457,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.protocol_config.check_request_period,
         )
         .expect("Error registering check request timer");
-        io.register_timer(HEARTBEAT_TIMER, Duration::from_secs(30))
-            .expect("Error registering heartbeat timer");
+        io.register_timer(
+            HEARTBEAT_TIMER,
+            self.protocol_config.heartbeat_period_interval,
+        )
+        .expect("Error registering heartbeat timer");
         io.register_timer(
             BLOCK_CACHE_GC_TIMER,
             self.protocol_config.block_cache_gc_period,
@@ -1413,8 +1474,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering check_catch_up_mode timer");
         io.register_timer(LOG_STATISTIC_TIMER, Duration::from_millis(5000))
             .expect("Error registering log_statistics timer");
-        io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(60))
-            .expect("Error registering total_weight_in_past timer");
+        io.register_timer(
+            TOTAL_WEIGHT_IN_PAST_TIMER,
+            Duration::from_secs(BLOCK_PROPAGATION_DELAY * 2),
+        )
+        .expect("Error registering total_weight_in_past timer");
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
         io.register_timer(
@@ -1424,6 +1488,14 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
         io.register_timer(EXPIRE_BLOCK_GC_TIMER, Duration::from_secs(60 * 15))
             .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
+
+        if self.is_consortium() {
+            io.register_timer(
+                EXPIRE_BFT_EXECUTION_TIMER,
+                Duration::from_millis(4_000),
+            )
+            .expect("Error registering log_statistics timer");
+        }
     }
 
     fn send_local_message(&self, io: &dyn NetworkContext, message: Vec<u8>) {
@@ -1517,7 +1589,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.log_statistics();
             }
             TOTAL_WEIGHT_IN_PAST_TIMER => {
-                self.update_total_weight_in_past();
+                self.update_total_weight_delta_heartbeat();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
                 let timeout = Duration::from_secs(180);
@@ -1534,6 +1606,10 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             EXPIRE_BLOCK_GC_TIMER => {
                 // remove expire blocks every 450 seconds
                 self.expire_block_gc(io, 30).ok();
+            }
+            EXPIRE_BFT_EXECUTION_TIMER => {
+                debug!("timeout: remove_expired_bft_execution");
+                self.remove_expired_bft_execution();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

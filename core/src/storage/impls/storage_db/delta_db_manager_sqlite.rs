@@ -3,16 +3,29 @@
 // See http://www.gnu.org/licenses/
 
 pub struct DeltaDbManagerSqlite {
-    pub delta_db_path: String,
+    num_shards: u16,
+    delta_db_path: String,
+    creation_mutex: Mutex<()>,
 }
 
 impl DeltaDbManagerSqlite {
+    #[allow(unused)]
+    pub const DB_SHARDS: u16 = 32;
     const DELTA_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
     const DELTA_DB_TABLE_NAME: &'static str = "delta_mpt";
 
     #[allow(unused)]
-    pub fn new(_num_shards: u16, delta_db_path: String) -> Self {
-        Self { delta_db_path }
+    pub fn new(num_shards: u16, delta_db_path: String) -> Result<Self> {
+        let delta_db_dir = Path::new(delta_db_path.as_str());
+        if !delta_db_dir.exists() {
+            fs::create_dir_all(delta_db_path.clone())?;
+        }
+
+        Ok(Self {
+            num_shards,
+            delta_db_path,
+            creation_mutex: Default::default(),
+        })
     }
 
     pub fn kvdb_sqlite_statements() -> Arc<KvdbSqliteStatements> {
@@ -29,7 +42,7 @@ impl DeltaDbManagerSqlite {
 }
 
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
-    type DeltaDb = KvdbSqlite<Box<[u8]>>;
+    type DeltaDb = KvdbSqliteSharded<Box<[u8]>>;
 
     fn get_delta_db_dir(&self) -> String { self.delta_db_path.clone() }
 
@@ -43,31 +56,50 @@ impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
     }
 
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
-        KvdbSqlite::create_and_open(
-            delta_db_name,
-            Self::kvdb_sqlite_statements(),
-            /* create_table = */ true,
-        )
+        let _lock = self.creation_mutex.lock();
+
+        let path_str = self.get_delta_db_path(delta_db_name);
+        if Path::new(&path_str).exists() {
+            Err(ErrorKind::DeltaMPTAlreadyExists.into())
+        } else {
+            fs::create_dir_all(&path_str).ok();
+            KvdbSqliteSharded::create_and_open(
+                self.num_shards,
+                path_str,
+                Self::kvdb_sqlite_statements(),
+                /* create_table = */ true,
+            )
+        }
     }
 
     fn get_delta_db(
-        &self, _delta_db_name: &str,
+        &self, delta_db_name: &str,
     ) -> Result<Option<Self::DeltaDb>> {
-        unimplemented!()
+        let path_str = self.get_delta_db_path(delta_db_name);
+        if Path::new(&path_str).exists() {
+            Ok(Some(KvdbSqliteSharded::open(
+                self.num_shards,
+                delta_db_name,
+                /* readonly = */ false,
+                Self::kvdb_sqlite_statements(),
+            )?))
+        } else {
+            Ok(None)
+        }
     }
 
     fn destroy_delta_db(&self, delta_db_name: &str) -> Result<()> {
-        Ok(remove_file(delta_db_name)?)
+        Ok(fs::remove_dir_all(self.get_delta_db_path(delta_db_name))?)
     }
 }
 
-use super::{
-    super::{
-        super::storage_db::delta_db_manager::DeltaDbManagerTrait, errors::*,
-    },
-    kvdb_sqlite::KvdbSqlite,
+use super::super::{
+    super::storage_db::delta_db_manager::DeltaDbManagerTrait, errors::*,
 };
-use crate::storage::impls::storage_db::kvdb_sqlite::KvdbSqliteStatements;
+use crate::storage::impls::storage_db::{
+    kvdb_sqlite::KvdbSqliteStatements, kvdb_sqlite_sharded::KvdbSqliteSharded,
+};
 use parity_bytes::ToPretty;
+use parking_lot::Mutex;
 use primitives::EpochId;
-use std::{fs::remove_file, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
