@@ -161,33 +161,34 @@ pub mod block {
 
 pub mod staking {
     use super::consensus_internal::CONFLUX_TOKEN;
+    use super::pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
     use cfx_types::U256;
 
     /// This is the exchange unit between storage and CFX.
     pub const NUM_BYTES_PER_CONFLUX_TOKEN: u64 = 1024;
 
-    lazy_static! {
-        /// This is the renting fee for one key/value pair in storage.
-        /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
-        /// This is the scale factor for interest rate: `BLOCKS_PER_YEAR` * 100.
-        /// The actual interest rate per block will be `INITIAL_ANNUAL_INTEREST_RATE /
-        /// INTEREST_RATE_SCALE / BLOCKS_PER_YEAR`.
-        pub static ref INTEREST_RATE_SCALE: U256 = U256::from(12_614_400_000u64);
-        /// This is the initial annual interest rate with scale: `0.04 * INTEREST_RATE_SCALE`
-        pub static ref INITIAL_ANNUAL_INTEREST_RATE: U256 = U256::from(504_576_000);
-        /// This is the service change rate for withdraw, `SERVICE_CHARGE_RATE /
-        /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
-        pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
-        pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
-    }
-
     /// This is the number of blocks per second.
-    pub const BLOCKS_PER_SECOND: u64 = 4;
+    pub const BLOCKS_PER_SECOND: u64 = 1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
     /// This is the number of blocks per day.
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
+
+    lazy_static! {
+        /// This is the renting fee for one key/value pair in storage.
+        /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
+        /// This is the scale factor for interest rate: `BLOCKS_PER_YEAR * 100`.
+        /// The actual interest rate per block will be `INITIAL_ANNUAL_INTEREST_RATE /
+        /// INTEREST_RATE_SCALE / BLOCKS_PER_YEAR`.
+        pub static ref INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR * 100);
+        /// This is the initial annual interest rate with scale: `0.04 * INTEREST_RATE_SCALE`
+        pub static ref INITIAL_ANNUAL_INTEREST_RATE: U256 = U256::from(BLOCKS_PER_YEAR * 4);
+        /// This is the service charge rate for withdraw, `SERVICE_CHARGE_RATE /
+        /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
+        pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
+        pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+    }
 }
 
 pub mod light {
