@@ -68,7 +68,7 @@ class AdminControlTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         for _ in range(5):
             client.generate_block()
-        receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
@@ -158,6 +158,7 @@ class AdminControlTest(ConfluxTestFramework):
         assert_equal(node.cfx_getBalance(contract_addr), hex(0))
 
         # deposit 10**18
+        b0 = int(node.cfx_getBalance(addr), 16)
         tx = self.call_contract_function(
             contract=pay_contract,
             name="recharge",
@@ -168,8 +169,8 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(node.cfx_getBalance(contract_addr), hex(10 ** 18))
-        assert_equal(node.cfx_getBalance(addr), hex(3999999999900000000))
-        assert_equal(node.cfx_getAdmin(contract_addr), addr);
+        assert_equal(node.cfx_getBalance(addr), hex(b0 - 10 ** 18 - gas))
+        assert_equal(node.cfx_getAdmin(contract_addr), addr)
 
         # transfer admin (fail)
         tx = self.call_contract_function(
@@ -180,7 +181,7 @@ class AdminControlTest(ConfluxTestFramework):
             contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
             wait=True,
             check_status=True)
-        assert_equal(node.cfx_getAdmin(contract_addr), addr);
+        assert_equal(node.cfx_getAdmin(contract_addr), addr)
 
         # transfer admin (success)
         tx = self.call_contract_function(
