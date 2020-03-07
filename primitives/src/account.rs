@@ -33,6 +33,7 @@ pub struct Account {
     /// order of `deposit_time`.
     pub deposit_list: Vec<DepositInfo>,
     // TODO: check if we need the storage root, and if so, implement.
+    pub admin: Address,
 }
 
 impl Account {
@@ -48,6 +49,7 @@ impl Account {
             storage_balance: 0.into(),
             bank_ar: 0.into(),
             deposit_list: Vec::new(),
+            admin: Address::zero(),
         }
     }
 }

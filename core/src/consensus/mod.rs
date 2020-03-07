@@ -473,6 +473,18 @@ impl ConsensusGraph {
         })
     }
 
+    /// Get the current admin of a contract
+    pub fn get_admin(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<H160, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc.map_or(H160::zero(), |acc| acc.admin).into()
+        } else {
+            H160::zero()
+        })
+    }
+
     /// Get the current bank balance of an address
     pub fn get_bank_balance(
         &self, address: H160, epoch_number: EpochNumber,

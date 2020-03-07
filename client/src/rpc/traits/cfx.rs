@@ -48,6 +48,12 @@ pub trait Cfx {
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256>;
 
+    /// Returns admin of the given contract
+    #[rpc(name = "cfx_getAdmin")]
+    fn admin(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<RpcH160>;
+
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBankBalance")]
     fn bank_balance(
