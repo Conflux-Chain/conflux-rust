@@ -11,6 +11,12 @@ from test_framework.util import *
 from web3 import Web3
 from easysolc import Solc
 
+def signed_bytes_to_int256(input):
+    v = bytes_to_int(input)
+    if v >= 2 ** 255:
+        v -= 2 ** 256
+    return v
+
 class Issue988Test(ConfluxTestFramework):
     REQUEST_BASE = {
         'gas': 50000000,
@@ -103,6 +109,24 @@ class Issue988Test(ConfluxTestFramework):
         self.send_transaction(transaction, wait, check_status)
         return transaction
 
+    def call_contract_function_rpc(self, contract, name, args, sender_key, contract_addr, value=None):
+        func = getattr(contract.functions, name)
+        attrs = {}
+        attrs["from"] = Web3.toChecksumAddress(encode_hex_0x(privtoaddr(sender_key)));
+        attrs["nonce"] = int_to_hex(1)
+        gas_price = 1
+        gas = 50000000
+        attrs["gas"] = int_to_hex(gas)
+        attrs["gasPrice"] = int_to_hex(gas_price)
+        attrs["chainId"] = 0
+        attrs["to"] = Web3.toChecksumAddress(contract_addr)
+        tx = func(*args).buildTransaction(attrs)
+        tx["value"] = int_to_hex(tx["value"])
+        tx["v"] = "0x0"
+        tx["r"] = "0x0"
+        tx["s"] = "0x0"
+        return self.nodes[0].cfx_call(tx)
+
     def run_test(self):
         self.log.propagate = False
 
@@ -115,6 +139,62 @@ class Issue988Test(ConfluxTestFramework):
         )
 
         start_p2p_connection(self.nodes)
+
+        genesis_key = self.genesis_priv_key
+        genesis_addr = self.genesis_addr
+        self.log.info("genesis_addr={}".format(encode_hex_0x(genesis_addr)))
+        nonce = 0
+        gas_price = 1
+        gas = 50000000
+        block_gen_thread = BlockGenThread(self.nodes, self.log)
+        block_gen_thread.start()
+        self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+
+        # setup balance for node 0
+        node = self.nodes[0]
+        client = RpcClient(node)
+        (addr, priv_key) = client.rand_account()
+        self.log.info("addr=%s priv_key=%s", addr, priv_key)
+        tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
+        client.send_tx(tx, True)
+        assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
+
+        # deploy test contract
+        tx = self.call_contract_function(
+            contract=test_contract,
+            name="constructor",
+            args=[],
+            sender_key=priv_key)
+        contract_addr = self.wait_for_tx([tx], True)[0]['contractCreated']
+        self.log.info("contract_addr={}".format(contract_addr))
+        assert_equal(node.cfx_getBalance(contract_addr), hex(0))
+
+        raw_result = self.call_contract_function_rpc(
+            contract=test_contract,
+            name="ktrriiwhlx",
+            args=[],
+            sender_key=priv_key,
+            contract_addr=contract_addr)
+        result = signed_bytes_to_int256(decode_hex(raw_result))
+        assert_equal(result, -12076)
+
+        raw_result = self.call_contract_function_rpc(
+            contract=test_contract,
+            name="qiwmzrxuhd",
+            args=[],
+            sender_key=priv_key,
+            contract_addr=contract_addr)
+        result = signed_bytes_to_int256(decode_hex(raw_result))
+        assert_equal(result, -2)
+
+        raw_result = self.call_contract_function_rpc(
+            contract=test_contract,
+            name="wxqpwecckl",
+            args=[],
+            sender_key=priv_key,
+            contract_addr=contract_addr)
+        result = signed_bytes_to_int256(decode_hex(raw_result))
+        assert_equal(result, -1)
 
         self.log.info("Pass")
 
