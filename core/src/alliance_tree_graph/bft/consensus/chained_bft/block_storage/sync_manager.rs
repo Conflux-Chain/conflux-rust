@@ -32,6 +32,7 @@ use crate::{
 use cfx_types::H256;
 use futures::channel::oneshot;
 use io::IoContext;
+use libra_crypto::HashValue;
 use libra_types::validator_change::ValidatorChangeProof;
 use mirai_annotations::checked_precondition;
 use network::{service::NetworkContext, PeerId};
@@ -177,7 +178,10 @@ impl<T: Payload> BlockStore<T> {
         while let Some(block) = pending.pop() {
             let block_qc = block.quorum_cert().clone();
             self.insert_single_quorum_cert(block_qc)?;
-            while let Err(e) = self.execute_and_insert_block(block.clone()) {
+            while let Err(e) = self.execute_and_insert_block(
+                block.clone(),
+                false, /* verify_admin_transaction */
+            ) {
                 match e.downcast_ref::<ConsensusError>() {
                     Some(ConsensusError::VerifyPivotTimeout) => {
                         debug!(
@@ -282,18 +286,20 @@ pub struct BlockRetriever<P> {
     network: Arc<NetworkSender<P>>,
     deadline: Instant,
     preferred_peer: Author,
+    peers: Vec<AccountAddress>,
 }
 
 impl<P: Payload> BlockRetriever<P> {
     pub fn new(
         network: Arc<NetworkSender<P>>, deadline: Instant,
-        preferred_peer: Author,
+        preferred_peer: Author, peers: Vec<AccountAddress>,
     ) -> Self
     {
         Self {
             network,
             deadline,
             preferred_peer,
+            peers,
         }
     }
 
@@ -341,8 +347,7 @@ impl<P: Payload> BlockRetriever<P> {
     ) -> anyhow::Result<Vec<Block<T>>>
     where T: Payload {
         let block_id = qc.certified_block().id();
-        let mut peers: Vec<&AccountAddress> =
-            qc.ledger_info().signatures().keys().collect();
+        let mut peers: Vec<&AccountAddress> = self.peers.iter().collect();
         let mut attempt = 0_u32;
         loop {
             if peers.is_empty() {
@@ -412,6 +417,104 @@ impl<P: Payload> BlockRetriever<P> {
                                         peer.short_str(),
                                         r.response.status()
                                     );
+                                continue;
+                            }
+                            return Ok(r.response.blocks().clone());
+                        }
+                        None => {
+                            continue;
+                        }
+                    }
+                }
+                Err(_) => {
+                    continue;
+                }
+            }
+        }
+    }
+
+    pub async fn retrieve_block<T>(
+        &self, block_id: HashValue, num_blocks: u64,
+    ) -> anyhow::Result<Vec<Block<T>>>
+    where T: Payload {
+        let mut peers: Vec<&AccountAddress> = self.peers.iter().collect();
+        let mut attempt = 0_u32;
+        loop {
+            if peers.is_empty() {
+                bail!(
+                    "Failed to fetch block {} in {} attempts: no more peers available",
+                    block_id,
+                    attempt
+                );
+            }
+            let peer = self.pick_peer(attempt, &mut peers);
+            attempt += 1;
+
+            let timeout = retrieval_timeout(&self.deadline, attempt);
+            let timeout = timeout.ok_or_else(|| {
+                format_err!("Failed to fetch block {} from {}, attempt {}: round deadline was reached, won't make more attempts", block_id, peer, attempt)
+            })?;
+
+            debug!(
+                "Fetching {} from {}, attempt {}",
+                block_id,
+                peer.short_str(),
+                attempt
+            );
+
+            let request = BlockRetrievalRpcRequest {
+                request_id: 0,
+                request: BlockRetrievalRequest::new(block_id, num_blocks),
+                is_empty: false,
+                response_tx: None,
+                timeout,
+            };
+
+            let peer_hash = H256::from_slice(peer.to_vec().as_slice());
+            let peer_state =
+                self.network.protocol_handler.peers.get(&peer_hash);
+            if peer_state.is_none() {
+                continue;
+            }
+
+            let peer_state = peer_state.unwrap();
+            let peer_id = peer_state.read().get_id();
+
+            let response_rx =
+                self.issue_unary_rpc(Some(peer_id), Box::new(request));
+            let response = response_rx.await;
+
+            let res = match response {
+                Ok(res) => res,
+                _ => {
+                    continue;
+                }
+            };
+
+            match res {
+                Ok(response) => {
+                    match response
+                        .as_any()
+                        .downcast_ref::<BlockRetrievalRpcResponse<T>>()
+                    {
+                        Some(r) => {
+                            if r.response.status()
+                                != BlockRetrievalStatus::Succeeded
+                            {
+                                warn!(
+                                    "Failed to fetch block {} from {}: {:?}, trying another peer",
+                                    block_id,
+                                    peer.short_str(),
+                                    r.response.status()
+                                );
+                                continue;
+                            }
+                            if r.response.blocks().len() != num_blocks as usize
+                            {
+                                warn!("Failed to fetch {} blocks from {}: {:?}, trying another peer",
+                                      num_blocks,
+                                      peer.short_str(),
+                                      r.response.status());
                                 continue;
                             }
                             return Ok(r.response.blocks().clone());

@@ -247,6 +247,7 @@ impl Executor {
                 *PRE_GENESIS_BLOCK_ID,
                 *GENESIS_BLOCK_ID,
                 GENESIS_EPOCH,
+                false, /* verify_admin_transaction */
             )
             .expect("Failed to execute genesis block.");
 
@@ -298,7 +299,7 @@ impl Executor {
     pub fn execute_block(
         &self, transactions: Vec<Transaction>,
         last_pivot: Option<PivotBlockDecision>, parent_id: HashValue,
-        id: HashValue, current_epoch: u64,
+        id: HashValue, current_epoch: u64, verify_admin_transaction: bool,
     ) -> Result<ProcessedVMOutput>
     {
         debug!(
@@ -317,7 +318,7 @@ impl Executor {
                 Transaction::BlockMetadata(_data) => {}
                 Transaction::UserTransaction(trans) => {
                     let trans = trans.check_signature()?;
-                    if trans.is_admin_type() {
+                    if verify_admin_transaction && trans.is_admin_type() {
                         // Check the voting power of signers in administrators.
                         let admins = self.administrators.read();
                         if admins.is_none() {

@@ -223,8 +223,11 @@ pub fn verify_update_to_latest_ledger_response(
 
     // Verify ledger info signatures and potential epoch changes
     if ledger_info.epoch() > current_epoch_info.epoch {
-        let epoch_change_li = validator_change_proof
-            .verify(current_epoch_info.epoch, &current_epoch_info.verifier)?;
+        let epoch_change_li = validator_change_proof.verify(
+            current_epoch_info.epoch,
+            &current_epoch_info.verifier,
+            false, /* return_first */
+        )?;
         let new_epoch_info = EpochInfo {
             epoch: epoch_change_li.ledger_info().epoch() + 1,
             verifier: Arc::new(

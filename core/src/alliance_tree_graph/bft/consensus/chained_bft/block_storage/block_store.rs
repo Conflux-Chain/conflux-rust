@@ -159,6 +159,7 @@ impl<T: Payload> BlockStore<T> {
                     &block,
                     last_pivot.clone(),
                     false, /* ignore_db */
+                    false, /* verify_admin_transaction */
                 );
                 if res.is_ok() {
                     break res.unwrap();
@@ -302,12 +303,13 @@ impl<T: Payload> BlockStore<T> {
     /// happen if a validator receives a certificate for a block that is
     /// currently being added).
     pub fn execute_and_insert_block(
-        &self, block: Block<T>,
+        &self, block: Block<T>, verify_admin_transaction: bool,
     ) -> anyhow::Result<Arc<ExecutedBlock<T>>> {
         if let Some(existing_block) = self.get_block(block.id()) {
             return Ok(existing_block);
         }
-        let executed_block = self.execute_block(block)?;
+        let executed_block =
+            self.execute_block(block, verify_admin_transaction)?;
         self.storage
             .save_tree(vec![executed_block.block().clone()], vec![])
             .context("Insert block failed when saving block")?;
@@ -315,7 +317,7 @@ impl<T: Payload> BlockStore<T> {
     }
 
     fn execute_block(
-        &self, block: Block<T>,
+        &self, block: Block<T>, verify_admin_transaction: bool,
     ) -> anyhow::Result<ExecutedBlock<T>> {
         ensure!(
             self.inner.read().unwrap().root().round() < block.round(),
@@ -349,6 +351,7 @@ impl<T: Payload> BlockStore<T> {
                     &block, /* , &parent_trees, self.root().executed_trees() */
                     parent_block.executed_pivot(),
                     true, /* ignore_db */
+                    verify_admin_transaction,
                 )
                 .with_context(|| {
                     format!("Execution failure for block {}", block)

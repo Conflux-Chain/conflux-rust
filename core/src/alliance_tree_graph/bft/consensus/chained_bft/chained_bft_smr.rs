@@ -146,10 +146,13 @@ impl<T: Payload> ChainedBftSMR<T> {
                     }
                     ledger_info = network_receivers.epoch_change.select_next_some() => {
                         idle_duration = pre_select_instant.elapsed();
-                        event_processor = epoch_manager.start_new_epoch(ledger_info, event_processor.get_network());
-                        // clean up all the previous messages from the old epochs
-                        network_receivers.clear_prev_epoch_msgs();
-                        event_processor.start().await;
+                        if ledger_info.ledger_info().epoch() >= epoch_manager.epoch() {
+                            event_processor.sync_up_to_end_epoch_ledger_info(ledger_info).await;
+                            event_processor = epoch_manager.start_new_epoch(event_processor.get_network());
+                            // clean up all the previous messages from the old epochs
+                            network_receivers.clear_prev_epoch_msgs();
+                            event_processor.start().await;
+                        }
                     }
                     different_epoch_and_peer = network_receivers.different_epoch.select_next_some() => {
                         idle_duration = pre_select_instant.elapsed();

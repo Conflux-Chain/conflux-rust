@@ -330,8 +330,11 @@ impl<T: Payload> NetworkTask<T> {
         match msg_epoch.cmp(&self.epoch()) {
             Ordering::Equal => {
                 let rlock = self.epoch_info.read();
-                let target_ledger_info =
-                    proof.verify(rlock.epoch, &rlock.verifier)?;
+                let target_ledger_info = proof.verify(
+                    rlock.epoch,
+                    &rlock.verifier,
+                    true, /* return_first */
+                )?;
                 debug!(
                     "Received epoch change to {}",
                     target_ledger_info.ledger_info().epoch() + 1
