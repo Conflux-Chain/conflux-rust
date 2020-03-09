@@ -1385,9 +1385,6 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-        meter.update_confirmation_risks(inner);
-
         // Only process blocks in the subtree of stable
         if (inner.arena[me].height <= inner.cur_era_stable_height
             || (inner.arena[me].height > inner.cur_era_stable_height
@@ -1408,6 +1405,9 @@ impl ConsensusNewBlockHandler {
             return;
         }
         fork_at = max(inner.cur_era_stable_height + 1, fork_at);
+
+        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
+        meter.update_confirmation_risks(inner);
 
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
