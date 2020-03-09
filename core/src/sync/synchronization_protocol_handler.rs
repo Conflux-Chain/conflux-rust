@@ -260,6 +260,7 @@ pub struct ProtocolConfiguration {
     pub check_request_period: Duration,
     pub heartbeat_period_interval: Duration,
     pub block_cache_gc_period: Duration,
+    pub expire_block_gc_period: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
@@ -1486,8 +1487,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             Duration::from_millis(1000),
         )
         .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
-        io.register_timer(EXPIRE_BLOCK_GC_TIMER, Duration::from_secs(60 * 15))
-            .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
+        io.register_timer(
+            EXPIRE_BLOCK_GC_TIMER,
+            self.protocol_config.expire_block_gc_period,
+        )
+        .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
 
         if self.is_consortium() {
             io.register_timer(

@@ -146,6 +146,10 @@ jsonrpc_local_http_port=12539
 #
 # egress_max_throttle = 10
 
+# Time interval to to garbage-collect not block-graph-ready blocks periodically.
+#
+# expire_block_gc_period_s = 900
+
 # Timeout for header-related requests (GetBlockHeaders)
 #
 # headers_request_timeout_ms=10_000
