@@ -5,15 +5,16 @@ import random
 import multiprocessing
 from statistics import mean
 import time
+from strategy_fixed_peer_latency import StrategyFixedPeerLatency
 
 class Parameters:
-
     def __init__(self):
         return
 
+    def __repr__(self):
+        return f"latency:{self.latency} num_nodes:{self.num_nodes} out_degree:{self.out_degree} withhold:{self.withhold}"
 
 class NodeLocalView:
-
     def __init__(self, node_id):
         self.node_id = node_id
         self.left_subtree_weight = 0
@@ -41,57 +42,54 @@ class NodeLocalView:
 
 
 class Simulator:
+    EVENT_BLOCK_DELIVER = "1. block_delivery_event"
+    EVENT_MINE_BLOCK = "0. mine_block_event"
+    EVENT_CHECK_MERGE = "3. test_check_merge"
+    EVENT_ADV_RECEIVED_BLOCK = "2. adversary_received_honest_mined_block"
+    EVENT_ADV_STRATEGY_TRIGGER = "5. run_adv_strategy"
+    EVENT_QUEUE_EMPTY = "4. event_queue_empty"
 
     def __init__(self, env, attack_params):
         self.env = env
+        self.adversary = StrategyFixedPeerLatency(
+            env.debug_allow_borrow,
+            attack_params["withhold"],
+            attack_params["extra_send"],
+            attack_params["one_way_latency"])
         # Parameters checker
         for attr in ["num_nodes","average_block_period","evil_rate","latency","out_degree","termination_time"]:
-            if not hasattr(self.env,  attr):
+            if not hasattr(self.env, attr):
                 print("{} unset".format(attr))
                 exit()
 
         self.attack_params = attack_params
-        self.message_queue = queue.PriorityQueue()
+        self.event_queue = queue.PriorityQueue()
 
     def setup_chain(self):
         self.nodes = []
         for i in range(self.env.num_nodes):
             self.nodes.append(NodeLocalView(i))
 
-        # Initialize adversary.
-        self.debug_allow_borrow = self.env.debug_allow_borrow
-        self.left_subtree_weight = 0
-        self.right_subtree_weight = 0
-        self.left_withheld_blocks_queue = queue.Queue()
-        self.right_withheld_blocks_queue = queue.Queue()
-        self.total_borrowed_blocks = 0
-        self.left_borrowed_blocks = 0
-        self.right_borrowed_blocks = 0
-        self.withhold_done = False
-        # The number of recent blocks mined under left side sent to the network.
-        self.adv_left_recent_sent_blocks = collections.deque()
-        self.adv_right_recent_sent_blocks = collections.deque()
-        self.honest_left_recent_sent_blocks = collections.deque()
-        self.honest_right_recent_sent_blocks = collections.deque()
-
     def setup_network(self):
-        self.neighbors = []
-        self.neighbor_latencies = []
+        self.neighbors = [[]] * self.env.num_nodes
+        self.neighbor_latencies = [[]] * self.env.num_nodes
         for i in range(self.env.num_nodes):
-            peers = set()
-            latencies = []
-            for j in range(self.env.out_degree):
+            peer_set = set(self.neighbors[i])
+            peers = self.neighbors[i]
+            latencies = self.neighbor_latencies[i]
+            for j in range(self.env.out_degree - len(peer_set)):
                 peer = random.randint(0, self.env.num_nodes-1)
-                while peer in peers or peer == i:
+                while peer in peer_set or peer == i:
                     peer = random.randint(0, self.env.num_nodes-1)
-                peers.add(peer)
-                latencies.append(self.env.latency)
-            self.neighbors.append(list(peers))
-            self.neighbor_latencies.append(latencies)
+                latency = self.env.latency #*random.uniform(0.75,1.25)
+                peer_set.add(peer)
+                peers.append(peer)
+                latencies.append(latency)
+                self.neighbors[peer].append(i)
+                self.neighbor_latencies[peer].append(latency)
 
+        #print(self.neighbors)
     def run_test(self):
-
-
         # Initialize the target's tree
         nodes_to_keep_left = list(range(0, self.env.num_nodes, 2))
         nodes_to_keep_right = list(range(1, self.env.num_nodes, 2))
@@ -101,154 +99,111 @@ class Simulator:
         for i in nodes_to_keep_right:
             self.nodes[i].chirality = "R"
             self.nodes[i].deliver_block(0, "R")
-            self.broadcast(0, i, "R", 0)
-        self.honest_right_recent_sent_blocks.append((0, 0))
-        self.right_subtree_weight += 1
+            self.honest_node_broadcast_block(0, i, "R", 0)
+
+        # FIXME: start up condition
+        self.adversary.start_attack()
 
         # Executed the simulation
         block_id = 1
         timestamp = 0
+        self.event_queue.put((0, Simulator.EVENT_MINE_BLOCK, None))
         while timestamp < self.env.termination_time:
-            timestamp += random.expovariate(1 / self.env.average_block_period)
-            self.process_network_events(timestamp)
+            event_type, time, event = self.process_network_events()
+            timestamp = time
+            trigger_adversary_action = False
 
-            adversary_mined = random.random() < self.env.evil_rate
-            if adversary_mined:
-                #print("At %s, Adversary mined block %s" % (timestamp, block_id))
-                # Decide attack target
-                withhold_queue, chirality, target = (self.left_withheld_blocks_queue, "L", nodes_to_keep_left) \
-                    if self.left_withheld_blocks_queue.qsize() + self.left_subtree_weight \
-                       < self.right_withheld_blocks_queue.qsize() + self.right_subtree_weight else\
-                    (self.right_withheld_blocks_queue, "R", nodes_to_keep_right)
-                withhold_queue.put(block_id)
-            else:
-                # Pick a number from 0 to num_nodes - 1 inclusive.
-                miner = random.randint(0, self.env.num_nodes-1)
-                #print("At %s, Miner %s mined block %s" % (timestamp, miner, block_id))
-                chirality = self.nodes[miner].chirality
-                # Update attacker and miner's views
-                self.nodes[miner].deliver_block(block_id, chirality)
-                if chirality == "L":
-                    self.left_subtree_weight += 1
-                    self.honest_left_recent_sent_blocks.append((timestamp, block_id))
+            if event_type == Simulator.EVENT_MINE_BLOCK:
+                time_to_next_block = random.expovariate(1 / self.env.average_block_period)
+                self.event_queue.put((time + time_to_next_block, Simulator.EVENT_MINE_BLOCK, None))
+
+                adversary_mined = random.random() < self.env.evil_rate
+                if adversary_mined:
+                    print("MINED %s by adversary at %s" % (block_id, time))
+                    #print("At %s, Adversary mined block %s" % (timestamp, block_id))
+                    # Decide attack target
+                    side = self.adversary.adversary_side_to_mine()
+                    self.adversary.adversary_mined(side, block_id)
+                    trigger_adversary_action = True
                 else:
-                    self.right_subtree_weight += 1
-                    self.honest_right_recent_sent_blocks.append((timestamp, block_id))
-                # Broadcast new blocks to neighbours
-                self.broadcast(timestamp, miner, chirality, block_id)
+                    # Pick a number from 0 to num_nodes - 1 inclusive.
+                    miner = random.randint(0, self.env.num_nodes-1)
+                    #print("At %s, Miner %s mined block %s" % (timestamp, miner, block_id))
+                    side = self.nodes[miner].chirality
+                    print("MINED %s %s by node %s at %s" % (block_id, side, miner, time))
+                    # Update attacker and miner's views
+                    self.nodes[miner].deliver_block(block_id, side)
+                    # Broadcast new blocks to neighbours
+                    self.honest_node_broadcast_block(timestamp, miner, side, block_id)
 
-            self.maintain_recent_blocks(timestamp)
+                    self.event_queue.put((
+                        time + self.attack_params["one_way_latency"],
+                        Simulator.EVENT_ADV_RECEIVED_BLOCK,
+                        (side, block_id)))
+                    # Other miners receive this at timestamp + latency, attacker runs the strategy
+                    # earlier so that adversary can deliver blocks before it (or right after it,
+                    # it doesn't matter too much).
+                    # TODO: for random latency, the adversary can only try to run its strategy more often.
+                    self.event_queue.put((
+                        time + self.env.latency - self.attack_params["one_way_latency"] - 0.01,
+                        Simulator.EVENT_ADV_STRATEGY_TRIGGER,
+                        None
+                    ))
+                block_id += 1
 
-            self.adversary_strategy(
-                adversary_mined,
-                self.left_subtree_weight - self.right_subtree_weight
-                - len(self.honest_left_recent_sent_blocks) + len(self.honest_right_recent_sent_blocks),
-                timestamp, [nodes_to_keep_left, nodes_to_keep_right],
-                [self.left_withheld_blocks_queue, self.right_withheld_blocks_queue])
-            block_id += 1
+            elif event_type == Simulator.EVENT_CHECK_MERGE:
+                #"""
+                print(f"At {timestamp} local views after action:\n\tleft targets: %s,\n\tright targets: %s\n" % (
+                    repr([self.nodes[i] for i in nodes_to_keep_left]),
+                    repr([self.nodes[i] for i in nodes_to_keep_right]),
+                ))
+                #"""
 
-            self.process_network_events(timestamp)
+                if self.is_chain_merged():
+                    print(f"Chain merged after {timestamp} seconds")
+                    return timestamp
+            elif event_type == Simulator.EVENT_QUEUE_EMPTY:
+                # Can't happen because of mining.
+                pass
+            elif event_type == Simulator.EVENT_ADV_RECEIVED_BLOCK:
+                honest_mined_side, honest_mined_block = event
+                self.adversary.honest_mined(
+                    honest_mined_side, timestamp - self.attack_params["one_way_latency"], honest_mined_block)
+                adversary_mined = False
+            elif event_type == Simulator.EVENT_ADV_STRATEGY_TRIGGER:
+                trigger_adversary_action = True
 
-            """
-            print(f"local views after action:\n\tleft targets: %s,\n\tright targets: %s\n" % (
-                repr([self.nodes[i] for i in targets[0]]),
-                repr([self.nodes[i] for i in targets[1]]),
-            ))
-            """
+            if trigger_adversary_action:
+                blocks_to_send = []
+                debug_borrow_blocks_count, debug_borrow_blocks_withhold_queue = self.adversary.adversary_strategy(
+                    adversary_mined,
+                    timestamp,
+                    self.attack_params["recent_timeout"],
+                    blocks_to_send
+                )
+                if self.env.debug_allow_borrow:
+                    for i in range(debug_borrow_blocks_count):
+                        debug_borrow_blocks_withhold_queue.put(i - self.adversary.total_borrowed_blocks)
+                    self.adversary.adversary_strategy(
+                        adversary_mined,
+                        timestamp,
+                        self.attack_params["recent_timeout"],
+                        blocks_to_send
+                    )
 
-            if self.is_chain_merged():
-                print(f"Chain merged after {timestamp} seconds")
-                return timestamp
+                print(f"blocks_to_send {blocks_to_send}")
+                time_delivery = timestamp + self.attack_params["one_way_latency"]
+                for side, block in blocks_to_send:
+                    if side == "L":
+                        targets = nodes_to_keep_left
+                    else:
+                        targets = nodes_to_keep_right
+                    for node in targets:
+                        self.event_queue.put((time_delivery, Simulator.EVENT_BLOCK_DELIVER, (node, side, block)))
+                self.event_queue.put((time_delivery, Simulator.EVENT_CHECK_MERGE, None))
 
-        print(f"Chain unmerged after {self.env.termination_time} seconds... ")
+        #print(f"Chain unmerged after {self.env.termination_time} seconds... ")
         return self.env.termination_time
-
-    def maintain_recent_blocks(self, timestamp):
-        non_recent_timestamp = timestamp - self.attack_params["recent_timeout"]
-        for recent_sent_blocks in [
-            self.adv_left_recent_sent_blocks, self.adv_right_recent_sent_blocks,
-            self.honest_left_recent_sent_blocks, self.honest_right_recent_sent_blocks,
-        ]:
-            while len(recent_sent_blocks) > 0 \
-                and recent_sent_blocks[0][0] <= non_recent_timestamp:
-                recent_sent_blocks.popleft()
-
-
-    def adversary_send_withheld_block(self, chirality, target, timestamp):
-        if chirality == "L":
-            withheld_queue = self.left_withheld_blocks_queue
-            recent_sent_blocks = self.adv_left_recent_sent_blocks
-        else:
-            withheld_queue = self.right_withheld_blocks_queue
-            recent_sent_blocks = self.adv_right_recent_sent_blocks
-        if withheld_queue.empty():
-            if self.debug_allow_borrow:
-                self.total_borrowed_blocks += 1
-                if chirality == "L":
-                    self.left_borrowed_blocks += 1
-                else:
-                    self.right_borrowed_blocks += 1
-                blk = -self.total_borrowed_blocks
-            else:
-                return
-        else:
-            blk = withheld_queue.get()
-
-        if chirality == "L":
-            self.left_subtree_weight += 1
-        else:
-            self.right_subtree_weight += 1
-
-        for node in target:
-            self.message_queue.put((timestamp, node, chirality, blk))
-
-        recent_sent_blocks.append((timestamp, blk))
-        self.maintain_recent_blocks(timestamp)
-
-
-    def adversary_strategy(self, adversary_mined, global_subtree_weight_diff, timestamp, targets, withhold_queues):
-            if withhold_queues[0].qsize() + withhold_queues[1].qsize() >= self.attack_params["withhold"]:
-                self.withhold_done = True
-
-            adv_recent_sent_left = len(self.adv_left_recent_sent_blocks)
-            adv_recent_sent_right = len(self.adv_right_recent_sent_blocks)
-            approx_right_target_subtree_weight_diff = global_subtree_weight_diff - adv_recent_sent_left
-            approx_left_target_subtree_weight_diff = global_subtree_weight_diff + adv_recent_sent_right
-            extra_send = self.attack_params["extra_send"]
-            left_send_count = -approx_left_target_subtree_weight_diff + extra_send
-            right_send_count = approx_right_target_subtree_weight_diff + 1 + extra_send
-
-            # Debug output only, estimation.
-            """
-            honest_recent_mined_left = len(self.honest_left_recent_sent_blocks)
-            honest_recent_mined_right = len(self.honest_right_recent_sent_blocks)
-            all_received_left = self.left_subtree_weight - adv_recent_sent_left - honest_recent_mined_left
-            all_received_right = self.right_subtree_weight - adv_recent_sent_right - honest_recent_mined_right
-            left_target_received_left = self.left_subtree_weight - honest_recent_mined_left
-            right_target_received_right = self.right_subtree_weight - honest_recent_mined_right
-
-            print(f"Global view before action: ({self.left_subtree_weight}, {self.right_subtree_weight}); "
-                  f"Honest recent mined: ({honest_recent_mined_left}, {honest_recent_mined_right}), "
-                  f"Adv recent sent: ({adv_recent_sent_left}, {adv_recent_sent_right}), "
-                  f"Est. all received: ({all_received_left}, {all_received_right}), "
-                  f"left received: ({left_target_received_left}, {all_received_right}), "
-                  f"right received: ({all_received_left}, {right_target_received_right}); "
-                  f"Adv to send: ({left_send_count}, {right_send_count}) in which extra_send {extra_send}, "
-                  f"adv withhold: ({self.left_withheld_blocks_queue.qsize()}, {self.right_withheld_blocks_queue.qsize()}); "
-                  f"adv borrowed blocks: ({self.left_borrowed_blocks}, {self.right_borrowed_blocks})."
-            )
-            """
-
-            if (self.debug_allow_borrow or self.withhold_done) and left_send_count > 0:
-                anti_chirality = "L"
-                for i in range(left_send_count):
-                    self.adversary_send_withheld_block(anti_chirality, targets[0], timestamp)
-
-            if (self.debug_allow_borrow or self.withhold_done) and right_send_count > 0:
-                anti_chirality = "R"
-                for i in range(right_send_count):
-                    self.adversary_send_withheld_block(anti_chirality, targets[1], timestamp)
-
 
     def is_chain_merged(self):
         side_per_node = list(map(
@@ -258,30 +213,33 @@ class Simulator:
         return (not "L" in side_per_node) or (not "R" in side_per_node)
 
 
-    def broadcast(self, time, index, chirality, blk):
+    def honest_node_broadcast_block(self, time, index, chirality, blk):
         peers = self.neighbors[index]
         for i in range(len(peers)):
             peer = peers[i]
             latency = self.neighbor_latencies[index][i]
             deliver_time = time + latency
-            self.message_queue.put((deliver_time, peer, chirality, blk))
+            self.event_queue.put((deliver_time, Simulator.EVENT_BLOCK_DELIVER, (peer, chirality, blk)))
 
 
-    def process_network_events(self, current_stamp):
+    def process_network_events(self, current_time = None):
         # Parse events and generate new ones in a BFS way
         while True:
-            # Safely get valid event from history
-            if self.message_queue.empty():
-                return
-            stamp, index, chirality, blk = self.message_queue.get()
-            if stamp > current_stamp:
-                self.message_queue.put((stamp, index, chirality, blk))
-                return
+            if self.event_queue.empty():
+                return (Simulator.EVENT_QUEUE_EMPTY, self.env.termination_time, None)
 
-            # Only new blocks will modify the memory
-            if not blk in self.nodes[index].received:
-                self.nodes[index].deliver_block(blk, chirality)
-                self.broadcast(stamp, index, chirality, blk)
+            time, event_type, event = self.event_queue.get()
+
+            if current_time is not None and time > current_time:
+                self.event_queue.put((time, event_type, event))
+
+            if event_type == Simulator.EVENT_BLOCK_DELIVER:
+                index, chirality, blk = event
+                if not blk in self.nodes[index].received:
+                    self.nodes[index].deliver_block(blk, chirality)
+                    self.honest_node_broadcast_block(time, index, chirality, blk)
+            else:
+                return (event_type, time, event)
 
     def main(self):
         self.setup_chain()
@@ -290,26 +248,37 @@ class Simulator:
 
 
 
-def slave_simulator():
-    env = Parameters()
-    env.num_nodes = 100
-    env.average_block_period = 0.25
-    env.evil_rate = 0.218
-    env.latency = 10
-    env.out_degree = 99
-    env.termination_time = 5400
-    env.debug_allow_borrow = False
-
-    return Simulator(env, {"withhold": 10, "recent_timeout": 10, "extra_send": 1}).main()
+def slave_simulator(env):
+    return Simulator(env, {
+        "withhold": env.withhold,
+        "recent_timeout": env.recent_timeout,
+        "extra_send": 0,
+        "one_way_latency": 0.1}).main()
 
 if __name__=="__main__":
     cpu_num = multiprocessing.cpu_count()
-    repeats = 20
+    repeats = 10
     p = multiprocessing.Pool(cpu_num)
-    begin = time.time()
-    attack_last_time = sorted(map(lambda x: x.get(), [p.apply_async(slave_simulator) for x in range(repeats)]))
-    samples = 10
-    print("len: %s" % len(attack_last_time))
-    print(list(map(lambda percentile: attack_last_time[int((repeats - 1) * percentile / samples)], range(samples + 1))))
-    end = time.time()
-    print("Executed in {} seconds".format(end-begin))
+
+    for num_nodes in [16]:
+        for latency in [10]:
+            for out_degree in [5]:
+                for withhold in [5]:
+                    test_params = Parameters()
+                    test_params.num_nodes = num_nodes
+                    test_params.average_block_period = 0.25
+                    test_params.evil_rate = 0.25
+                    test_params.latency = latency
+                    test_params.out_degree = out_degree
+                    test_params.termination_time = 5400
+                    test_params.debug_allow_borrow = False
+                    #test_params.debug_allow_borrow = True
+                    test_params.withhold = withhold
+                    test_params.recent_timeout = 10
+                    print(test_params)
+                    begin = time.time()
+                    attack_last_time = sorted(p.map(slave_simulator, [test_params] * repeats))
+                    samples = 10
+                    print(list(map(lambda percentile: attack_last_time[int((repeats - 1) * percentile / samples)], range(samples + 1))))
+                    end = time.time()
+                    print("Executed in %.2f seconds" % (end - begin))
