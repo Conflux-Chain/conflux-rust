@@ -4,6 +4,8 @@
 
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
+use cfxcore::cache_config::DEFAULT_LEDGER_CACHE_SIZE;
+
 use cfxcore::{
     alliance_tree_graph::consensus::{
         consensus_inner::ConsensusInnerConfig as TreeGraphConsensusInnerConfig,
@@ -178,7 +180,7 @@ build_config! {
         (conflux_data_dir, (String), "./".to_string())
         // FIXME: use a fixed sub-dir of conflux_data_dir instead.
         (block_db_dir, (String), "./blockchain_db".to_string())
-        (ledger_cache_size, (usize), 1024)
+        (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
         (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)

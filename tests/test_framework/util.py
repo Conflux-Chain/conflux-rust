@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from base64 import b64encode
 from binascii import hexlify, unhexlify
+import conflux.config
 from decimal import Decimal, ROUND_DOWN
 import hashlib
 import inspect
@@ -293,27 +294,14 @@ def initialize_datadir(dirname, n, conf_parameters):
         os.makedirs(datadir)
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
-        local_conf = {"port": str(p2p_port(n)),
-                        "jsonrpc_local_http_port": str(rpc_port(n)),
-                        "jsonrpc_http_port": str(remote_rpc_port(n)),
-                        "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
-                        "mode": "\'test\'",
-                        "log_level": "\"debug\"",
-                        "storage_delta_mpts_cache_size": "200000",
-                        "storage_delta_mpts_cache_start_size": "200000",
-                        "storage_delta_mpts_node_map_vec_size": "200000",
-                        "start_mining":"false",
-                        "subnet_quota": "0",
-                        "session_ip_limits": "\"0,0,0,0\"",
-                        "enable_discovery": "false",
-                        "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
-                        "metrics_enabled": "true",
-                        # "block_db_type": "\'sqlite\'"
-                        "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
-                        "expire_block_gc_period_s": "5",
-                      }
-        for k in conf_parameters:
-            local_conf[k] = conf_parameters[k]
+        local_conf = {
+            "port": str(p2p_port(n)),
+            "jsonrpc_local_http_port": str(rpc_port(n)),
+            "jsonrpc_http_port": str(remote_rpc_port(n)),
+            "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
+        }
+        local_conf.update(conflux.config.small_local_test_conf)
+        local_conf.update(conf_parameters)
         for k in local_conf:
             f.write("{}={}\n".format(k, local_conf[k]))
         os.makedirs(os.path.join(datadir, 'stderr'), exist_ok=True)
