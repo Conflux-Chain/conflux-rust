@@ -74,7 +74,7 @@ class Issue988Test(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         for _ in range(5):
             client.generate_block()
-        receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
@@ -155,9 +155,9 @@ class Issue988Test(ConfluxTestFramework):
         client = RpcClient(node)
         (addr, priv_key) = client.rand_account()
         self.log.info("addr=%s priv_key=%s", addr, priv_key)
-        tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
+        tx = client.new_tx(value=20 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
         client.send_tx(tx, True)
-        assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
+        assert_equal(node.cfx_getBalance(addr), hex(20000000000000000000))
 
         # deploy test contract
         tx = self.call_contract_function(
