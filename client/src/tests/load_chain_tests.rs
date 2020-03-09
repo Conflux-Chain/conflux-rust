@@ -7,6 +7,7 @@ extern crate tempdir;
 use self::tempdir::TempDir;
 use crate::{
     archive::{ArchiveClient, Configuration},
+    common::client_methods,
     rpc::RpcBlock,
 };
 use cfx_types::H256;
@@ -100,7 +101,7 @@ fn test_load_chain() {
         let primitive_block: Block = rpc_block.into_primitive().map_err(|e| {
             format!("Failed to convert from a rpc_block to primitive block {:?}", e)
         }).ok().unwrap();
-        handle.sync.on_mined_block(primitive_block);
+        handle.other_components.sync.on_mined_block(primitive_block);
     }
 
     let expected = get_expected_best_hash();
@@ -113,6 +114,7 @@ fn test_load_chain() {
 
     while instant.elapsed() < max_timeout {
         if handle
+            .other_components
             .consensus
             .get_block_epoch_number(&best_block_hash)
             .is_some()
@@ -122,7 +124,10 @@ fn test_load_chain() {
         thread::sleep(sleep_duration);
     }
 
-    assert_eq!(best_block_hash, handle.consensus.best_block_hash());
+    assert_eq!(
+        best_block_hash,
+        handle.other_components.consensus.best_block_hash()
+    );
 
-    ArchiveClient::close(handle);
+    client_methods::shutdown(handle);
 }

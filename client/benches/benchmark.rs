@@ -9,7 +9,7 @@ use cfxcore::{
     machine::new_machine_with_builtin,
     state::State,
     statedb::StateDb,
-    storage::state_manager::{StateIndex, StateManagerTrait},
+    storage::{state_manager::StateIndex, StorageManagerTrait},
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };
@@ -19,19 +19,6 @@ use ethkey::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
 use std::{sync::Arc, time::Duration};
-
-#[allow(dead_code)]
-fn txgen_benchmark(c: &mut Criterion) {
-    let mut conf = Configuration::default();
-    conf.raw_conf.mode = Some("test".to_owned());
-    let exit = Arc::new((Mutex::new(false), Condvar::new()));
-    let handler = ArchiveClient::start(conf, exit).unwrap();
-    c.bench_function("Randomly generate 1 transaction", move |b| {
-        b.iter(|| {
-            handler.txgen.as_ref().unwrap().generate_transaction();
-        });
-    });
-}
 
 fn txexe_benchmark(c: &mut Criterion) {
     let mut conf = Configuration::default();
@@ -73,13 +60,17 @@ fn txexe_benchmark(c: &mut Criterion) {
             let mut state = State::new(
                 StateDb::new(
                     handler
+                        .other_components
                         .consensus
                         .data_man
                         .storage_manager
                         .get_state_for_next_epoch(
                             // FIXME: delta height
                             StateIndex::new_for_test_only_delta_mpt(
-                                &handler.consensus.best_block_hash(),
+                                &handler
+                                    .other_components
+                                    .consensus
+                                    .best_block_hash(),
                             ),
                         )
                         .unwrap()

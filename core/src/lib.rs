@@ -125,3 +125,7 @@ pub mod test_context {
         }
     }
 }
+
+pub trait Stopable {
+    fn stop(&self);
+}

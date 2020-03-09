@@ -68,8 +68,7 @@ impl RpcImpl {
             sync,
             tx_pool,
             block_gen,
-            /* tx_gen,
-             *config, */
+            /* config, */
             executor,
             admin_transaction,
         }
@@ -163,13 +162,11 @@ impl RpcImpl {
             .generate_block(num_txs, block_size_limit, vec![]))
     }
 
-    fn generate(
-        &self, num_blocks: usize, num_txs: usize,
-    ) -> RpcResult<Vec<H256>> {
+    fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>> {
         let mut result = Vec::new();
         for _ in 0..num_blocks {
             result.push(self.block_gen.generate_block(
-                num_txs,
+                0,
                 MAX_BLOCK_SIZE_IN_BYTES,
                 vec![],
             ));
@@ -256,7 +253,7 @@ impl TestRpc for TestRpcImpl {
 
         target self.rpc_impl {
             fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
-            fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
+            fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
         }
     }
 
@@ -269,7 +266,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
-        fn generate_one_block_special(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
+        fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
         fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;

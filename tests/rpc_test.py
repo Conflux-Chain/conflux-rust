@@ -26,7 +26,7 @@ class RpcTest(ConfluxTestFramework):
         time.sleep(7)
         self._test_sayhello()
 
-        blocks = self.nodes[0].generate(1, 0)
+        blocks = self.nodes[0].generate_empty_blocks(1)
         self.best_block_hash = blocks[-1] #make_genesis().block_header.hash
 
         self._test_getblockcount()

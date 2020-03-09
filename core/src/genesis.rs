@@ -12,29 +12,27 @@ use std::{
 };
 use toml::Value;
 
-pub fn default(secret_store: &SecretStore) -> HashMap<Address, U256> {
-    let balance = U256::from_dec_str("5000000000000000000000000000000000")
-        .expect("Not overflow"); // 5*10^33
+pub const DEV_GENESIS_PRI_KEY: &'static str =
+    "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
+/// Used in Ethereum replay e2e test.
+pub const DEV_GENESIS_PRI_KEY_2: &'static str =
+    "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471";
 
-    let kp = KeyPair::from_secret(
-        "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"
-            .parse()
-            .unwrap(),
-    )
-    .unwrap();
-    let kp2 = KeyPair::from_secret(
-        "9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"
-            .parse()
-            .unwrap(),
-    )
-    .unwrap();
+lazy_static! {
+    pub static ref DEV_GENESIS_KEY_PAIR: KeyPair =
+        KeyPair::from_secret(DEV_GENESIS_PRI_KEY.parse().unwrap(),).unwrap();
+    pub static ref DEV_GENESIS_KEY_PAIR_2: KeyPair =
+        KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap(),).unwrap();
+}
 
+pub fn default(dev_or_test_mode: bool) -> HashMap<Address, U256> {
     let mut accounts: HashMap<Address, U256> = HashMap::new();
-    accounts.insert(kp.address(), balance);
-    accounts.insert(kp2.address(), balance);
-
-    secret_store.insert(kp2);
-
+    if dev_or_test_mode {
+        let balance = U256::from_dec_str("5000000000000000000000000000000000")
+            .expect("Not overflow"); // 5*10^33
+        accounts.insert(DEV_GENESIS_KEY_PAIR.address(), balance);
+        accounts.insert(DEV_GENESIS_KEY_PAIR_2.address(), balance);
+    }
     accounts
 }
 
