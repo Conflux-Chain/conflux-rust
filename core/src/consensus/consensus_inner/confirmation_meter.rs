@@ -338,8 +338,11 @@ impl ConfirmationMeter {
                 - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
                 - y;
             let x = x_1 + x_2 + x_3;
+            let y_n = y / g_inner.arena[me].difficulty;
+            let x_n = x / g_inner.arena[me].difficulty;
 
-            let i_risk = 10f64.powf(-(3 * y - 2 * x - 18000) as f64 / 3500f64);
+            let i_risk =
+                10f64.powf(-(3 * y_n - 2 * x_n - 18000) as f64 / 3500f64);
             adaptive_risk += i_risk;
         }
 
