@@ -74,6 +74,7 @@ impl StateComputer for ExecutionProxy {
         // The last pivot selection after executing the parent block.
         last_pivot: Option<PivotBlockDecision>,
         ignore_db: bool,
+        verify_admin_transaction: bool,
     ) -> Result<ProcessedVMOutput>
     {
         // TODO: figure out error handling for the prologue txn
@@ -83,6 +84,7 @@ impl StateComputer for ExecutionProxy {
             block.parent_id(),
             block.id(),
             block.epoch(),
+            verify_admin_transaction,
         )?;
 
         // Check whether pivot block selection is valid.

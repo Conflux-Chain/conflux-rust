@@ -30,7 +30,7 @@ use libra_config::config::ConsensusProposerType;
 //use libra_logger::prelude::*;
 use libra_types::{
     account_address::AccountAddress,
-    crypto_proxies::{EpochInfo, LedgerInfoWithSignatures, ValidatorVerifier},
+    crypto_proxies::{EpochInfo, ValidatorVerifier},
 };
 //use network::proto::ConsensusMsg;
 //use network::proto::ConsensusMsg_oneof;
@@ -43,7 +43,6 @@ use crate::{
     },
     sync::SharedSynchronizationService,
 };
-use futures::executor::block_on;
 use libra_types::transaction::SignedTransaction;
 use parking_lot::RwLock;
 use std::{cmp::Ordering, sync::Arc};
@@ -102,7 +101,7 @@ where
         }
     }
 
-    fn epoch(&self) -> u64 { self.epoch_info.read().epoch }
+    pub fn epoch(&self) -> u64 { self.epoch_info.read().epoch }
 
     fn create_pacemaker(
         &self, time_service: Arc<dyn TimeService>,
@@ -192,17 +191,20 @@ where
     }
 
     pub fn start_new_epoch(
-        &mut self, ledger_info: LedgerInfoWithSignatures,
+        &mut self,
+        /* ledger_info: LedgerInfoWithSignatures, */
         network: Arc<NetworkSender<T>>,
     ) -> EventProcessor<TT, T>
     {
         // make sure storage is on this ledger_info too, it should be no-op if
         // it's already committed
+        /*
         if let Err(e) =
             block_on(self.state_computer.sync_to(ledger_info.clone()))
         {
             error!("State sync to new epoch {} failed with {:?}, we'll try to start from current libradb", ledger_info, e);
         }
+        */
         let initial_data = self.storage.start();
         *self.epoch_info.write() = EpochInfo {
             epoch: initial_data.epoch(),

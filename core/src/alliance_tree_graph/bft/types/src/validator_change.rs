@@ -39,7 +39,9 @@ impl ValidatorChangeProof {
     /// verifier and return the LedgerInfo to start target epoch
     pub fn verify(
         &self, epoch: u64, validator_verifier: &ValidatorVerifier,
-    ) -> Result<LedgerInfoWithSignatures> {
+        return_first: bool,
+    ) -> Result<LedgerInfoWithSignatures>
+    {
         ensure!(
             !self.ledger_info_with_sigs.is_empty(),
             "Empty ValidatorChangeProof"
@@ -61,7 +63,16 @@ impl ValidatorChangeProof {
                     })
             },
         )?;
-        Ok(self.ledger_info_with_sigs.last().unwrap().clone())
+
+        if return_first {
+            // We change it to return first() due to the sync process across
+            // epochs. Currently, we leverage start_new_epoch() to
+            // complete this process. That is we sync epoch-by-epoch
+            // driven by discovery of different epochs at each step.
+            return Ok(self.ledger_info_with_sigs.first().unwrap().clone());
+        } else {
+            return Ok(self.ledger_info_with_sigs.last().unwrap().clone());
+        }
     }
 }
 
@@ -155,19 +166,35 @@ mod tests {
             valid_ledger_info.clone(),
             /* more = */ false,
         );
-        assert!(proof_1.verify(all_epoch[0], &validator_verifier[0]).is_ok());
+        assert!(proof_1
+            .verify(
+                all_epoch[0],
+                &validator_verifier[0],
+                false /* return_first */
+            )
+            .is_ok());
 
         let proof_2 = ValidatorChangeProof::new(
             valid_ledger_info[2..5].to_vec(),
             /* more = */ false,
         );
-        assert!(proof_2.verify(all_epoch[2], &validator_verifier[2]).is_ok());
+        assert!(proof_2
+            .verify(
+                all_epoch[2],
+                &validator_verifier[2],
+                false /* return_first */
+            )
+            .is_ok());
 
         // Test empty proof will fail verification
         let proof_3 =
             ValidatorChangeProof::new(vec![], /* more = */ false);
         assert!(proof_3
-            .verify(all_epoch[0], &validator_verifier[0])
+            .verify(
+                all_epoch[0],
+                &validator_verifier[0],
+                false /* return_first */
+            )
             .is_err());
 
         // Test non contiguous proof will fail
@@ -175,7 +202,11 @@ mod tests {
         list.extend_from_slice(&valid_ledger_info[8..9]);
         let proof_4 = ValidatorChangeProof::new(list, /* more = */ false);
         assert!(proof_4
-            .verify(all_epoch[3], &validator_verifier[3])
+            .verify(
+                all_epoch[3],
+                &validator_verifier[3],
+                false /* return_first */
+            )
             .is_err());
 
         // Test non increasing proof will fail
@@ -183,7 +214,11 @@ mod tests {
         list.reverse();
         let proof_5 = ValidatorChangeProof::new(list, /* more = */ false);
         assert!(proof_5
-            .verify(all_epoch[9], &validator_verifier[9])
+            .verify(
+                all_epoch[9],
+                &validator_verifier[9],
+                false /* return_first */
+            )
             .is_err());
 
         // Test proof with invalid signatures will fail
@@ -195,7 +230,11 @@ mod tests {
             /* more = */ false,
         );
         assert!(proof_6
-            .verify(all_epoch[0], &validator_verifier[0])
+            .verify(
+                all_epoch[0],
+                &validator_verifier[0],
+                false /* return_first */
+            )
             .is_err());
     }
 }
