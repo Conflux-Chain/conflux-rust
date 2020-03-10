@@ -21,7 +21,7 @@ use std::{
 #[test]
 fn test_remove_expire_blocks() {
     {
-        let (sync, _, _) = initialize_synchronization_graph(
+        let (sync, _, _, _) = initialize_synchronization_graph(
             "./test.db/",
             1,
             1,
@@ -104,6 +104,7 @@ fn test_remove_expire_blocks() {
                     i as u64,
                     U256::from(10),
                     1,
+                    false,
                 );
                 blocks.push(block);
             }

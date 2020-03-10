@@ -13,7 +13,6 @@ pub struct ConsensusGraphBlockState {
     pub block_status: u8,
     pub past_era_weight: U256,
     pub era_block_hash: H256,
-    pub stable: bool,
     pub adaptive: bool,
 }
 
@@ -47,7 +46,6 @@ impl ConsensusGraphStates {
                 block_status: block_state.block_status as u8,
                 past_era_weight: U256::from(block_state.past_era_weight),
                 era_block_hash: block_state.era_block_hash.into(),
-                stable: block_state.stable,
                 adaptive: block_state.adaptive,
             })
         }

@@ -61,6 +61,7 @@ lazy_static! {
 /// The RewardExecutionInfo struct includes most information to compute rewards
 /// for old epochs
 pub struct RewardExecutionInfo {
+    pub past_block_count: u64,
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_no_reward: Vec<bool>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
@@ -73,9 +74,11 @@ impl Debug for RewardExecutionInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "RewardExecutionInfo{{ epoch_blocks: {:?} \
+            "RewardExecutionInfo{{ past_block_count: {} \
+             epoch_blocks: {:?} \
              epoch_block_no_reward: {:?} \
              epoch_block_anticone_difficulties: {:?}}}",
+            self.past_block_count,
             self.epoch_blocks
                 .iter()
                 .map(|b| b.hash())
@@ -105,13 +108,14 @@ pub struct EpochExecutionTask {
     pub reward_info: Option<RewardExecutionInfo>,
     pub on_local_pivot: bool,
     pub debug_record: Arc<Mutex<Option<ComputeEpochDebugRecord>>>,
+    pub force_recompute: bool,
 }
 
 impl EpochExecutionTask {
     pub fn new(
         epoch_hash: H256, epoch_block_hashes: Vec<H256>,
         start_block_number: u64, reward_info: Option<RewardExecutionInfo>,
-        on_local_pivot: bool, debug_record: bool,
+        on_local_pivot: bool, debug_record: bool, force_recompute: bool,
     ) -> Self
     {
         Self {
@@ -126,6 +130,7 @@ impl EpochExecutionTask {
             } else {
                 Arc::new(Mutex::new(None))
             },
+            force_recompute,
         }
     }
 }
@@ -312,8 +317,9 @@ impl ConsensusExecutor {
             inner.get_epoch_block_hashes(epoch_arena_index),
             inner.get_epoch_start_block_number(epoch_arena_index),
             self.get_reward_execution_info(inner, epoch_arena_index),
-            true,
-            false,
+            true,  /* on_local_pivot */
+            false, /* debug_record */
+            false, /* force_compute */
         );
         Some(execution_task)
     }
@@ -325,19 +331,15 @@ impl ConsensusExecutor {
     {
         reward_index.map(
             |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
-                // FIXME: this is hard to understand due to lack of
-                // FIXME: documentation. Under which scenarios
-                // FIXME: it is absolute necessary to wait? Are
-                // FIXME: there other mechanisms to avoid the wait?
-                // FIXME: Wait for the execution info populated for all blocks
-                // FIXME: before pivot_arena_index
+                // We have to wait here because blame information will determine the reward of each block.
+                // In order to compute the correct blame information locally, we have to wait for the execution to return.
                 let height = inner.arena[pivot_arena_index].height;
                 if !self.consensus_graph_bench_mode
                 {
                     debug!(
                         "wait_and_compute_state_valid_locked, idx = {}, \
-                         height = {}, era stable height = {}",
-                        pivot_arena_index, height, inner.cur_era_stable_height
+                         height = {}, era_genesis_height = {} era_stable_height = {}",
+                        pivot_arena_index, height, inner.cur_era_genesis_height, inner.cur_era_stable_height
                     );
                     self.wait_and_compute_state_valid_locked(
                         pivot_arena_index,
@@ -382,10 +384,7 @@ impl ConsensusExecutor {
                 } else {
                     anticone_cutoff_epoch_anticone_set_opt = None;
                 }
-                let ordered_epoch_blocks = inner.arena[pivot_arena_index]
-                    .data
-                    .ordered_executable_epoch_blocks
-                    .clone();
+                let ordered_epoch_blocks = inner.get_or_compute_ordered_executable_epoch_blocks(pivot_arena_index);
                 for index in ordered_epoch_blocks.iter() {
                     let block_consensus_node = &inner.arena[*index];
 
@@ -453,7 +452,7 @@ impl ConsensusExecutor {
                                 // Check with the spec!
                                 anticone_difficulty +=
                                     U512::from(U256::from(inner.block_weight(
-                                        a_index, false, /* inclusive */
+                                        a_index
                                     )));
                             }
                         };
@@ -474,6 +473,7 @@ impl ConsensusExecutor {
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
                 }
                 RewardExecutionInfo {
+                    past_block_count: inner.arena[pivot_arena_index].past_num_blocks + 1,
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
@@ -739,8 +739,9 @@ impl ConsensusExecutor {
                     inner.get_epoch_block_hashes(epoch_arena_index),
                     inner.get_epoch_start_block_number(epoch_arena_index),
                     reward_execution_info,
-                    false,
-                    false,
+                    false, /* on_local_pivot */
+                    false, /* debug_record */
+                    false, /* force_recompute */
                 ));
                 last_state_height += 1;
             }
@@ -757,8 +758,9 @@ impl ConsensusExecutor {
                 inner.get_epoch_block_hashes(epoch_arena_index),
                 inner.get_epoch_start_block_number(epoch_arena_index),
                 reward_execution_info,
-                false,
-                false,
+                false, /* on_local_pivot */
+                false, /* debug_record */
+                false, /* force_recompute */
             ));
         }
 
@@ -773,10 +775,27 @@ impl ConsensusExecutor {
     }
 }
 
+fn build_base_reward_table() -> Vec<u64> {
+    let mut base_reward_table = Vec::new();
+    base_reward_table.resize(MINING_REWARD_DECAY_PERIOD_IN_QUARTER, 0);
+    for i in 0..MINING_REWARD_DECAY_PERIOD_IN_QUARTER {
+        let reward = if i == 0 {
+            INITIAL_BASE_MINING_REWARD_IN_UCFX
+        } else {
+            (base_reward_table[i - 1] as f64
+                * MINING_REWARD_DECAY_RATIO_PER_QUARTER)
+                .round() as u64
+        };
+        base_reward_table[i] = reward;
+    }
+    base_reward_table
+}
+
 pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
+    base_reward_table_in_ucfx: Vec<u64>,
 }
 
 impl ConsensusExecutionHandler {
@@ -785,10 +804,12 @@ impl ConsensusExecutionHandler {
         vm: VmFactory,
     ) -> Self
     {
+        let base_reward_table_in_ucfx = build_base_reward_table();
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
             vm,
+            base_reward_table_in_ucfx,
         }
     }
 
@@ -829,6 +850,7 @@ impl ConsensusExecutionHandler {
             &task.reward_info,
             task.on_local_pivot,
             &mut *task.debug_record.lock(),
+            task.force_recompute,
         );
     }
 
@@ -868,6 +890,7 @@ impl ConsensusExecutionHandler {
         reward_execution_info: &Option<RewardExecutionInfo>,
         on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
+        force_recompute: bool,
     )
     {
         // FIXME: Question: where to calculate if we should make a snapshot?
@@ -875,7 +898,8 @@ impl ConsensusExecutionHandler {
         // FIXME: a new state.
 
         // Check if the state has been computed
-        if debug_record.is_none()
+        if !force_recompute
+            && debug_record.is_none()
             && self.data_man.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
@@ -886,6 +910,7 @@ impl ConsensusExecutionHandler {
                 .data_man
                 .block_header_by_hash(epoch_hash)
                 .expect("must exists");
+
             if on_local_pivot {
                 // Unwrap is safe here because it's guaranteed by outer if.
                 let state_root = &self
@@ -922,6 +947,7 @@ impl ConsensusExecutionHandler {
                 .write()
                 .adjust_upper_bound(pivot_block_header.as_ref());
             debug!("Skip execution in prefix {:?}", epoch_hash);
+
             return;
         }
 
@@ -1136,6 +1162,7 @@ impl ConsensusExecutionHandler {
                 block_receipts.clone(),
                 on_local_pivot,
             );
+
             epoch_receipts.push(block_receipts);
         }
 
@@ -1145,6 +1172,19 @@ impl ConsensusExecutionHandler {
 
         debug!("Finish processing tx for epoch");
         epoch_receipts
+    }
+
+    fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
+        let reward_table_index =
+            (past_block_count / MINED_BLOCK_COUNT_PER_QUARTER) as usize;
+        let reward_in_ucfx =
+            if reward_table_index < self.base_reward_table_in_ucfx.len() {
+                self.base_reward_table_in_ucfx[reward_table_index]
+            } else {
+                ULTIMATE_BASE_MINING_REWARD_IN_UCFX
+            };
+
+        U512::from(reward_in_ucfx) * U512::from(CONFLUX_TOKEN / 1_000_000)
     }
 
     /// `epoch_block_states` includes if a block is partial invalid and its
@@ -1172,6 +1212,9 @@ impl ConsensusExecutionHandler {
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
+        let base_reward_per_block =
+            self.compute_block_base_reward(reward_info.past_block_count);
+
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let no_reward = reward_info.epoch_block_no_reward[enum_idx];
@@ -1186,7 +1229,7 @@ impl ConsensusExecutionHandler {
                 let mut reward = if block.block_header.pow_quality
                     >= *epoch_difficulty
                 {
-                    U512::from(BASE_MINING_REWARD) * U512::from(CONFLUX_TOKEN)
+                    base_reward_per_block
                 } else {
                     debug!(
                         "Block {} pow_quality {} is less than epoch_difficulty {}!",
@@ -1521,7 +1564,14 @@ impl ConsensusExecutionHandler {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
-        r.map(|r| (r.output, r.gas_used))
-            .map_err(|e| format!("execution error: {:?}", e))
+        match r {
+            Ok(executed) => match executed.exception {
+                Some(vm_err) => {
+                    Err(format!("exception thrown in execution: {:?}", vm_err))
+                }
+                None => Ok((executed.output, executed.gas_used)),
+            },
+            Err(e) => Err(format!("execution error: {:?}", e)),
+        }
     }
 }

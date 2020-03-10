@@ -9,7 +9,7 @@ import logging
 import os
 import random
 import re
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, check_call
 import time
 import socket
 import threading
@@ -254,6 +254,38 @@ def wait_until(predicate,
 # Node functions
 ################
 
+def initialize_tg_config(dirname, nodes):
+    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/tg_config_gen")
+    check_call([tg_config_gen, "random", "--num-validator={}".format(nodes)], cwd=dirname)
+    consensus_peers_config = open(os.path.join(dirname, "consensus_peers.config.toml")).readlines()
+    private_keys = open(os.path.join(dirname, "private_key")).readlines()
+    print('consensus_peers_config: {}'.format(consensus_peers_config))
+    print('private_keys: {}'.format(private_keys))
+    for n in range(nodes):
+        datadir = get_datadir_path(dirname, n)
+        if not os.path.isdir(datadir):
+            os.makedirs(datadir)
+        os.makedirs(os.path.join(datadir, 'net_config'))
+        os.makedirs(os.path.join(datadir, 'tg_config'))
+        with open(os.path.join(datadir, 'tg_config', 'tg_config.conf'), 'w') as f:
+            base_local_conf = {
+                "role": "\"validator\""
+            }
+            f.write("enable_state_expose=true\n")
+            f.write("[base]\n")
+            for k in base_local_conf:
+                f.write("{}={}\n".format(k, base_local_conf[k]))
+            consensus_local_conf = {
+                "consensus_peers_file": "\"consensus_peers.config.toml\""
+            }
+            f.write("\n[consensus]\n")
+            for k in consensus_local_conf:
+                f.write("{}={}\n".format(k, consensus_local_conf[k]))
+        with open(os.path.join(datadir, 'tg_config', 'consensus_peers.config.toml'), 'w') as f:
+            for line in consensus_peers_config:
+                f.write(line)
+        with open(os.path.join(datadir, 'net_config', 'key'), 'w') as f:
+            f.write(private_keys[n])
 
 def initialize_datadir(dirname, n, conf_parameters):
     datadir = get_datadir_path(dirname, n)
@@ -266,7 +298,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "jsonrpc_http_port": str(remote_rpc_port(n)),
                         "log_file": "\'{}\'".format(os.path.join(datadir, "conflux.log")),
                         "mode": "\'test\'",
-                        "log_level": "\"trace\"",
+                        "log_level": "\"debug\"",
                         "storage_delta_mpts_cache_size": "200000",
                         "storage_delta_mpts_cache_start_size": "200000",
                         "storage_delta_mpts_node_map_vec_size": "200000",
@@ -277,7 +309,8 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "metrics_output_file": "\'{}\'".format(os.path.join(datadir, "metrics.log")),
                         "metrics_enabled": "true",
                         # "block_db_type": "\'sqlite\'"
-                        "expire_block_gc_period_s": "45",
+                        "expire_block_gc_period_s": "5",
+                        "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]

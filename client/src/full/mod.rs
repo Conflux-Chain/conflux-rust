@@ -20,7 +20,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager, genesis, statistics::Statistics,
     storage::StorageManager, sync::SyncPhaseType,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
-    ConsensusGraph, LightProvider, SynchronizationGraph,
+    ConsensusGraph, LightProvider, Notifications, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
 use ctrlc::CtrlC;
@@ -99,11 +99,9 @@ impl FullClient {
         let cache_config = conf.cache_config();
 
         let db_config = conf.db_config();
-        let ledger_db = db::open_database(
-            conf.raw_conf.db_dir.as_ref().unwrap(),
-            &db_config,
-        )
-        .map_err(|e| format!("Failed to open database {:?}", e))?;
+        let ledger_db =
+            db::open_database(conf.raw_conf.block_db_dir.as_str(), &db_config)
+                .map_err(|e| format!("Failed to open database {:?}", e))?;
 
         let secret_store = Arc::new(SecretStore::new());
         let storage_manager = Arc::new(
@@ -174,6 +172,8 @@ impl FullClient {
 
         let vm = VmFactory::new(1024 * 32);
         let pow_config = conf.pow_config();
+        let notifications = Notifications::init();
+
         let consensus = Arc::new(ConsensusGraph::new(
             conf.consensus_config(),
             vm,
@@ -181,6 +181,7 @@ impl FullClient {
             statistics,
             data_man.clone(),
             pow_config.clone(),
+            notifications.clone(),
         ));
 
         let protocol_config = conf.protocol_config();
@@ -192,6 +193,7 @@ impl FullClient {
             verification_config,
             pow_config.clone(),
             sync_config,
+            notifications.clone(),
             true,
         ));
 
@@ -345,7 +347,11 @@ impl FullClient {
         ));
 
         let runtime = Runtime::with_default_thread_count();
-        let pubsub = PubSubClient::new(runtime.executor());
+        let pubsub = PubSubClient::new(
+            runtime.executor(),
+            consensus.clone(),
+            notifications,
+        );
 
         let debug_rpc_http_server = super::rpc::start_http(
             super::rpc::HttpConfiguration::new(

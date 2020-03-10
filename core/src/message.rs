@@ -33,6 +33,7 @@ pub trait Message: Send + Sync {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
     fn get_request_id(&self) -> Option<RequestId> { None }
+    // TODO Refactor: Avoid using this for responses.
     fn set_request_id(&mut self, _id: RequestId) {}
 
     fn encode(&self) -> Vec<u8>;
@@ -62,9 +63,11 @@ pub trait Message: Send + Sync {
         };
 
         debug!(
-            "Send message({}) to {:?}",
+            "Send message({}) to peer {} {:?}, protocol {:?}",
             self.msg_name(),
-            io.get_peer_node_id(peer)
+            peer,
+            io.get_peer_node_id(peer),
+            io.get_protocol(),
         );
 
         metric_message(peer, self.msg_id(), size);

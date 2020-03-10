@@ -11,7 +11,7 @@ use cfx_types::H256;
 use primitives::{SignedTransaction, TransactionWithSignature};
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
         common::{LedgerInfo, LightPeerState, Peers},
         handle_error,
@@ -48,7 +48,7 @@ use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 pub struct Provider {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // shared synchronization graph
     graph: Arc<SynchronizationGraph>,
@@ -71,7 +71,7 @@ pub struct Provider {
 
 impl Provider {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, graph: Arc<SynchronizationGraph>,
+        consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Weak<NetworkService>, tx_pool: Arc<TransactionPool>,
         throttling_config_file: Option<String>,
     ) -> Self
@@ -233,8 +233,8 @@ impl Provider {
     fn send_status(
         &self, io: &dyn NetworkContext, peer: PeerId,
     ) -> Result<(), Error> {
-        let best_info = self.consensus.get_best_info();
-        let genesis_hash = self.consensus.data_man.true_genesis.hash();
+        let best_info = self.consensus.best_info();
+        let genesis_hash = self.graph.data_man.true_genesis.hash();
 
         let terminals = match &best_info.terminal_block_hashes {
             Some(x) => x.clone(),
@@ -263,7 +263,7 @@ impl Provider {
 
     #[inline]
     fn validate_genesis_hash(&self, genesis: H256) -> Result<(), Error> {
-        match self.consensus.data_man.true_genesis.hash() {
+        match self.graph.data_man.true_genesis.hash() {
             h if h == genesis => Ok(()),
             h => {
                 debug!(

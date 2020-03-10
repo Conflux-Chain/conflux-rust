@@ -10,18 +10,24 @@ use crate::{
             msgid, Context, GetBlocks, GetCompactBlocksResponse, Handleable,
             Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetCompactBlocks {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
+}
+
+impl AsAny for GetCompactBlocks {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetCompactBlocks {

@@ -23,7 +23,7 @@ igd = "0.7"
 libc = "0.2.66"
 rand = "0.7"
 parity-path = "0.1"
-keccak-hash = "0.3.0"
+keccak-hash = "0.4"
 enum-map = "0.4.0"
 enum-map-derive = "0.4.0"
 strum = "0.11.0"
@@ -33,5 +33,4 @@ lazy_static = "1.2.0"
 byte-unit = "1.1.0"
 priority-send-queue = { path = "../util/priority-send-queue" }
 metrics = { path = "../util/metrics" }
-rustc-hex = "1.0"
 throttling = { path = "../util/throttling" }

@@ -1,4 +1,9 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::{
+    alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     message::Message,
     sync::{
         message::{DynamicCapability, KeyContainer},
@@ -7,6 +12,7 @@ use crate::{
         Error, ErrorKind,
     },
 };
+use futures::channel::oneshot;
 use network::{NetworkContext, PeerId, UpdateNodeOperation};
 use parking_lot::Mutex;
 use std::{
@@ -21,9 +27,6 @@ use std::{
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
-const TIMEOUT_OBSERVING_PERIOD_IN_SEC: u64 = 600;
-const MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD: u64 = 10;
 
 pub struct RequestHandler {
     protocol_config: ProtocolConfiguration,
@@ -157,28 +160,36 @@ impl RequestHandler {
         let mut timeout_requests = Vec::new();
         let mut peers_to_disconnect = HashSet::new();
         for sync_req in self.get_timeout_sync_requests() {
-            if let Ok(req) =
+            if let Ok(mut req) =
                 self.match_request(io, sync_req.peer_id, sync_req.request_id)
             {
                 let peer_id = sync_req.peer_id;
                 if let Some(request_container) =
                     self.peers.lock().get_mut(&peer_id)
                 {
-                    if request_container.on_timeout_should_disconnect() {
+                    if request_container
+                        .on_timeout_should_disconnect(&self.protocol_config)
+                    {
                         peers_to_disconnect.insert(peer_id);
                     }
                 }
+                req.request.notify_timeout();
                 timeout_requests.push(req);
             } else {
                 debug!("Timeout a removed request {:?}", sync_req);
             }
         }
+        let op = if self.protocol_config.demote_peer_for_timeout {
+            Some(UpdateNodeOperation::Demotion)
+        } else {
+            Some(UpdateNodeOperation::Failure)
+        };
         for peer_id in peers_to_disconnect {
             // Note `self.peers` will be used in `disconnect_peer`, so we must
             // call it without locking `self.peers`.
             io.disconnect_peer(
                 peer_id,
-                Some(UpdateNodeOperation::Demotion),
+                op,
                 "too many timeout requests", /* reason */
             );
         }
@@ -206,7 +217,9 @@ struct RequestContainer {
 }
 
 impl RequestContainer {
-    pub fn on_timeout_should_disconnect(&mut self) -> bool {
+    pub fn on_timeout_should_disconnect(
+        &mut self, config: &ProtocolConfiguration,
+    ) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -219,14 +232,14 @@ impl RequestContainer {
         self.timeout_statistics.push_back(now);
         loop {
             let old_time = *self.timeout_statistics.front().unwrap();
-            if now - old_time <= TIMEOUT_OBSERVING_PERIOD_IN_SEC {
+            if now - old_time <= config.timeout_observing_period_s {
                 break;
             }
             self.timeout_statistics.pop_front();
         }
 
         if self.timeout_statistics.len()
-            <= MAX_ALLOWED_TIMEOUT_IN_OBSERVING_PERIOD as usize
+            <= config.max_allowed_timeout_in_observing_period as usize
         {
             return false;
         } else {
@@ -365,10 +378,7 @@ pub struct SynchronizationPeerRequest {
 /// Support to downcast trait to concrete request type.
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
-}
-
-impl<T: 'static + Request> AsAny for T {
-    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Trait of request message
@@ -386,6 +396,8 @@ pub trait Request: Send + Debug + AsAny + Message {
     /// If all requested items are already in flight, then do not send request
     /// to remote peer.
     fn is_empty(&self) -> bool;
+    /// Notify the handler when the request gets cancelled by empty.
+    fn notify_empty(&mut self) {}
     /// When a request failed (send fail, invalid response or timeout), it will
     /// be resend automatically.
     ///
@@ -399,6 +411,17 @@ pub trait Request: Send + Debug + AsAny + Message {
 
     /// Required peer capability to send this request
     fn required_capability(&self) -> Option<DynamicCapability> { None }
+
+    /// Notify the handler when the request gets timeout.
+    fn notify_timeout(&mut self) {}
+
+    /// This is for RPC request. Set the notification handle for the request.
+    fn set_response_notification(
+        &mut self,
+        _res_tx: oneshot::Sender<Result<Box<dyn RpcResponse>, Error>>,
+    )
+    {
+    }
 }
 
 #[derive(Debug)]
@@ -431,6 +454,18 @@ impl RequestMessage {
                 if remove_on_mismatch {
                     request_manager.remove_mismatch_request(io, self);
                 }
+                Err(ErrorKind::UnexpectedResponse.into())
+            }
+        }
+    }
+
+    pub fn downcast_mut<T: Request + Any>(
+        &mut self, _io: &dyn NetworkContext, _request_manager: &RequestManager,
+    ) -> Result<&mut T, Error> {
+        match self.request.as_any_mut().downcast_mut::<T>() {
+            Some(req) => Ok(req),
+            None => {
+                warn!("failed to downcast general request to concrete request type");
                 Err(ErrorKind::UnexpectedResponse.into())
             }
         }
@@ -472,12 +507,15 @@ impl Ord for TimedSyncRequests {
         other.timeout_time.cmp(&self.timeout_time)
     }
 }
+
 impl PartialOrd for TimedSyncRequests {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         other.timeout_time.partial_cmp(&self.timeout_time)
     }
 }
+
 impl Eq for TimedSyncRequests {}
+
 impl PartialEq for TimedSyncRequests {
     fn eq(&self, other: &Self) -> bool {
         self.timeout_time == other.timeout_time

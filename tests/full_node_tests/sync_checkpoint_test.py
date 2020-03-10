@@ -17,10 +17,11 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.num_nodes = 3
         self.conf_parameters = {
             "dev_snapshot_epoch_count": "10",
+            "adaptive_weight_beta": "1",
+            "timer_chain_block_difficulty_ratio": "2",
+            "timer_chain_beta": "6",
             "era_epoch_count": "50",
-            "era_checkpoint_gap": "50",
             "chunk_size_byte": "1000",
-            "log_level": '"debug"',
         }
 
     def setup_network(self):
@@ -42,7 +43,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
     def run_test(self):
         num_blocks = 200
-        snapshot_epoch = 100
+        snapshot_epoch = 150
 
         # Generate checkpoint on node[0]
         archive_node_client = RpcClient(self.nodes[0])
@@ -63,7 +64,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, full_node_index, i)
 
-        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=30)
+        self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=60)
 
         sync_blocks(self.nodes, sync_count=False)
 

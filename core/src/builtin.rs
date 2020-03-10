@@ -29,8 +29,9 @@ use byteorder::{BigEndian, ByteOrder};
 use num::{BigUint, One, Zero};
 use parity_crypto::digest;
 
-use crate::{bytes::BytesRef, hash::keccak};
+use crate::bytes::BytesRef;
 use cfx_types::{H256, U256};
+use ethkey::{public_to_address, Address};
 use keylib::{recover as ec_recover, Signature};
 
 /// Execution error.
@@ -291,6 +292,7 @@ impl Impl for EcRecover {
         let r = H256::from_slice(&input[64..96]);
         let s = H256::from_slice(&input[96..128]);
 
+        // FIXME: this is the chain_id part, we need to fix it
         let bit = match v[31] {
             27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
             _ => {
@@ -301,9 +303,10 @@ impl Impl for EcRecover {
         let s = Signature::from_rsv(&r, &s, bit);
         if s.is_valid() {
             if let Ok(p) = ec_recover(&s, &hash) {
-                let r = keccak(p);
+                // We use public_to_address() here
+                let addr = public_to_address(&p);
                 output.write(0, &[0; 12]);
-                output.write(12, &r[12..H256::len_bytes()]);
+                output.write(12, &addr[0..Address::len_bytes()]);
             }
         }
 
@@ -789,7 +792,7 @@ mod tests {
         let mut o = [255u8; 32];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o[..], &(FromHex::from_hex("000000000000000000000000c08b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
+        assert_eq!(&o[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
 
         let mut o8 = [255u8; 8];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o8[..]))
@@ -802,7 +805,7 @@ mod tests {
         let mut o34 = [255u8; 34];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o34[..]))
             .expect("Builtin should not fail");
-        assert_eq!(&o34[..], &(FromHex::from_hex("000000000000000000000000c08b5542d177ac6686946920409741463a15dddbffff").unwrap())[..]);
+        assert_eq!(&o34[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddbffff").unwrap())[..]);
 
         let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001a650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
         let mut o = [255u8; 32];

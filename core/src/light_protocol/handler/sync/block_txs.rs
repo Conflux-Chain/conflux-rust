@@ -9,9 +9,9 @@ use super::{
     Txs,
 };
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{FullPeerState, LedgerInfo, Peers, UniqueId},
+        common::{FullPeerState, LedgerInfo, Peers},
         message::{msgid, BlockTxsWithHash, GetBlockTxs},
         Error, ErrorKind,
     },
@@ -21,6 +21,7 @@ use crate::{
         BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOCK_TXS_IN_FLIGHT,
     },
+    UniqueId,
 };
 use cfx_types::H256;
 use lru_time_cache::LruCache;
@@ -57,7 +58,7 @@ pub struct BlockTxs {
 
 impl BlockTxs {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, peers: Arc<Peers<FullPeerState>>,
+        consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, txs: Arc<Txs>,
     ) -> Self
     {

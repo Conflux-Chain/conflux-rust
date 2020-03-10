@@ -3,11 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::ConsensusGraph,
+    consensus::SharedConsensusGraph,
     light_protocol::{
-        common::{
-            max_of_collection, FullPeerFilter, FullPeerState, Peers, UniqueId,
-        },
+        common::{max_of_collection, FullPeerFilter, FullPeerState, Peers},
         handler::sync::headers::Headers,
         message::{msgid, GetBlockHashesByEpoch},
         Error,
@@ -19,6 +17,7 @@ use crate::{
         MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
         NUM_WAITING_HEADERS_THRESHOLD,
     },
+    UniqueId,
 };
 use parking_lot::RwLock;
 use std::{
@@ -53,7 +52,7 @@ impl EpochRequest {
 
 pub struct Epochs {
     // shared consensus graph
-    consensus: Arc<ConsensusGraph>,
+    consensus: SharedConsensusGraph,
 
     // header sync manager
     headers: Arc<Headers>,
@@ -73,7 +72,7 @@ pub struct Epochs {
 
 impl Epochs {
     pub fn new(
-        consensus: Arc<ConsensusGraph>, headers: Arc<Headers>,
+        consensus: SharedConsensusGraph, headers: Arc<Headers>,
         peers: Arc<Peers<FullPeerState>>, request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {

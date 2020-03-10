@@ -18,17 +18,17 @@ contract CommissionPrivilegeControl {
 
 contract CommissionPrivilegeTest {
     function set() public payable {
-        CommissionPrivilegeControl cpc = CommissionPrivilegeControl(0x5ad036480160591706c831f0da19D1a424e39469);
+        CommissionPrivilegeControl cpc = CommissionPrivilegeControl(0x8ad036480160591706c831f0DA19D1a424e39469);
         cpc.commission_balance(10 ** 18);
         address[] memory a = new address[](1);
-        a[0] = address(0xfbe45681Ac6C53D5a40475F7526baC1FE7590fb8);
+        a[0] = address(0x1BE45681aC6C53D5A40475f7526baC1Fe7590fb8);
         cpc.add_privilege(a);
     }
 
     function remove() public payable {
-        CommissionPrivilegeControl cpc = CommissionPrivilegeControl(0x5ad036480160591706c831f0da19D1a424e39469);
+        CommissionPrivilegeControl cpc = CommissionPrivilegeControl(0x8ad036480160591706c831f0DA19D1a424e39469);
         address[] memory a = new address[](1);
-        a[0] = address(0xfbe45681Ac6C53D5a40475F7526baC1FE7590fb8);
+        a[0] = address(0x1BE45681aC6C53D5A40475f7526baC1Fe7590fb8);
         cpc.remove_privilege(a);
     }
 

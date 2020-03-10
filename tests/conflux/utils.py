@@ -215,14 +215,25 @@ assert encode_hex(sha3(b'\x00' * 256)) == 'd397b3b043d87fcd6fad1291ff0bfd16401c2
 def privtoaddr(k):
     k = normalize_key(k)
     x, y = privtopub(k)
-    return sha3(encode_int32(x) + encode_int32(y))[12:]
+    addr = bytearray(sha3(encode_int32(x) + encode_int32(y))[12:])
+    addr[0] &= 0x0f
+    addr[0] |= 0x10
+    return bytes(addr)
 
 
 def pubtoaddr(k):
     x = big_endian_to_int(decode_hex(k[2:34]))
     y = big_endian_to_int(decode_hex(k[34:66]))
-    return sha3(encode_int32(x) + encode_int32(y))[12:]
+    addr = sha3(encode_int32(x) + encode_int32(y))[12:]
+    addr[0] &= 0x0f
+    addr[0] |= 0x10
+    return bytes(addr)
 
+def contractaddr(sender, nonce):
+    contract_addr = bytearray(sha3_256(rlp.encode([sender, nonce]))[-20:])
+    contract_addr[0] &= 0x0f
+    contract_addr[0] |= 0x80
+    return bytes(contract_addr)
 
 def checksum_encode(addr):  # Takes a 20-byte binary address as input
     addr = normalize_address(addr)

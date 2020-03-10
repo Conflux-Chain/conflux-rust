@@ -48,7 +48,7 @@ impl Generator for Brain {
                     if let Ok(pair) = Secret::from_unsafe_slice(&secret)
                         .and_then(KeyPair::from_secret)
                     {
-                        if pair.address()[0] == 0 {
+                        if pair.address()[0] == 0x10 {
                             trace!(
                                 "Testing: {}, got: {:?}",
                                 self.0,

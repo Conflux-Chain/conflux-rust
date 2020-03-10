@@ -4,13 +4,16 @@
 
 use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
-    consensus::{ConsensusGraphInner, SharedConsensusGraph},
+    channel::Channel,
+    consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
     machine::new_machine_with_builtin,
+    parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
     pow::ProofOfWorkConfig,
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     verification::*,
+    Notifications,
 };
 use cfx_types::{H256, U256};
 use metrics::{
@@ -25,10 +28,7 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
     mem, panic,
-    sync::{
-        mpsc::{self, Sender},
-        Arc,
-    },
+    sync::Arc,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -169,8 +169,12 @@ impl SynchronizationGraphInner {
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
         };
+        let genesis_hash = genesis_header.hash();
         let genesis_block_index = inner.insert(genesis_header);
-        debug!("genesis_block_index in sync graph: {}", genesis_block_index);
+        debug!(
+            "genesis block {:?} has index {} in sync graph",
+            genesis_hash, genesis_block_index
+        );
 
         inner.old_era_blocks_frontier.push_back(genesis_block_index);
         inner
@@ -191,6 +195,19 @@ impl SynchronizationGraphInner {
             self.arena[era_genesis].block_header.hash(),
             self.arena[era_genesis].block_header.height(),
         )
+    }
+
+    pub fn get_stable_hash_and_height_in_current_era(&self) -> (H256, u64) {
+        let stable_hash = self.data_man.get_cur_consensus_era_stable_hash();
+        // The stable block may not be in the sync-graph when this function is
+        // invoked during the synchronization phase, let's query the
+        // data from data manager
+        let height = self
+            .data_man
+            .block_header_by_hash(&stable_hash)
+            .expect("stable block must exist in data manager")
+            .height();
+        (stable_hash, height)
     }
 
     fn try_clear_old_era_blocks(&mut self) {
@@ -925,9 +942,10 @@ pub struct SynchronizationGraph {
     /// Since the critical section is very short, a `Mutex` is enough.
     pub latest_graph_ready_block: Mutex<H256>,
 
-    /// Channel used to send work to `ConsensusGraph`
+    /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
-    consensus_sender: Mutex<Sender<(H256, bool)>>,
+    new_block_hashes: Arc<Channel<(H256, bool)>>,
+
     /// whether it is a archive node or full node
     is_full_node: bool,
 }
@@ -938,15 +956,17 @@ impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        sync_config: SyncGraphConfig, is_full_node: bool,
+        sync_config: SyncGraphConfig, notifications: Arc<Notifications>,
+        is_full_node: bool,
     ) -> Self
     {
-        let data_man = consensus.data_man.clone();
+        let data_man = consensus.get_data_manager().clone();
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
             .block_header_by_hash(&genesis_hash)
             .expect("genesis block header should exist here");
-        let (consensus_sender, consensus_receiver) = mpsc::channel();
+
+        let mut consensus_receiver = notifications.new_block_hashes.subscribe();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
                 genesis_block_header.clone(),
@@ -962,9 +982,9 @@ impl SynchronizationGraph {
             verification_config,
             sync_config,
             consensus: consensus.clone(),
-            statistics: consensus.statistics.clone(),
+            statistics: consensus.get_statistics().clone(),
             latest_graph_ready_block: Mutex::new(genesis_hash),
-            consensus_sender: Mutex::new(consensus_sender),
+            new_block_hashes: notifications.new_block_hashes.clone(),
             is_full_node,
         };
 
@@ -973,8 +993,8 @@ impl SynchronizationGraph {
         thread::Builder::new()
             .name("Consensus Worker".into())
             .spawn(move || loop {
-                match consensus_receiver.recv() {
-                    Ok((hash, ignore_body)) => {
+                match consensus_receiver.recv_blocking() {
+                    Some((hash, ignore_body)) => {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
                         consensus.on_new_block(
                             &hash,
@@ -982,7 +1002,7 @@ impl SynchronizationGraph {
                             true, /* update_best_info */
                         )
                     }
-                    Err(_) => break,
+                    _ => break,
                 }
             })
             .expect("Cannot fail");
@@ -1006,30 +1026,37 @@ impl SynchronizationGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.consensus.txpool.get_to_be_propagated_transactions()
+        self.consensus
+            .get_tx_pool()
+            .get_to_be_propagated_transactions()
     }
 
     pub fn set_to_propagate_trans(
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         self.consensus
-            .txpool
+            .get_tx_pool()
             .set_to_be_propagated_transactions(transactions);
     }
 
     pub fn try_remove_old_era_blocks_from_disk(&self) {
-        let mut num_of_blocks_to_remove = 2;
+        let mut num_of_blocks_to_remove = OLD_ERA_BLOCK_GC_BATCH_SIZE;
         while let Some(hash) = self.consensus.retrieve_old_era_blocks() {
-            // only full node should remove blocks in old eras
+            // only full node should remove blocks and receipts in old eras
             if self.is_full_node {
-                // TODO: remove state root
-                // remove block header in memory cache
-                self.data_man
-                    .remove_block_header(&hash, false /* remove_db */);
                 // remove block body in memory cache and db
                 self.data_man
                     .remove_block_body(&hash, true /* remove_db */);
+                self.data_man
+                    .remove_block_results(&hash, true /* remove_db */);
             }
+            // All nodes will not maintain old era states, so related data can
+            // be removed safely. The in-memory data is already
+            // removed in `make_checkpoint`.
+            // TODO Only call remove for executed epochs.
+            self.data_man
+                .remove_epoch_execution_commitment_from_db(&hash);
+            self.data_man.remove_epoch_execution_context_from_db(&hash);
             num_of_blocks_to_remove -= 1;
             if num_of_blocks_to_remove == 0 {
                 break;
@@ -1058,10 +1085,7 @@ impl SynchronizationGraph {
             );
         }
         let genesis_seq_num = genesis_local_info.unwrap().get_seq_num();
-        self.consensus
-            .inner
-            .write()
-            .set_initial_sequence_number(genesis_seq_num);
+        self.consensus.set_initial_sequence_number(genesis_seq_num);
         let genesis_header =
             self.data_man.block_header_by_hash(&genesis_hash).unwrap();
         debug!(
@@ -1175,35 +1199,17 @@ impl SynchronizationGraph {
         );
 
         info!("Finish reading {} blocks from db, start to reconstruct the pivot chain and the state", visited_blocks.len());
-        if !header_only {
+        if !header_only && !self.is_consortium() {
             // Rebuild pivot chain state info.
             self.consensus.construct_pivot_state();
         }
+        self.consensus.update_best_info();
         self.consensus
-            .update_best_info(&*self.consensus.inner.read());
-        self.consensus
-            .txpool
+            .get_tx_pool()
             .notify_new_best_info(self.consensus.best_info())
             // FIXME: propogate error.
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         info!("Finish reconstructing the pivot chain of length {}, start to sync from peers", self.consensus.best_epoch_number());
-    }
-
-    pub fn check_mining_adaptive_block(
-        &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
-        referees: &Vec<H256>, difficulty: &U256,
-    ) -> bool
-    {
-        if !self.is_consortium() {
-            self.consensus.check_mining_adaptive_block(
-                inner,
-                parent_hash,
-                referees,
-                difficulty,
-            )
-        } else {
-            false
-        }
     }
 
     /// Return None if `hash` is not in sync graph
@@ -1319,13 +1325,15 @@ impl SynchronizationGraph {
                         CONSENSUS_WORKER_QUEUE.enqueue(1);
                         *self.latest_graph_ready_block.lock() =
                             inner.arena[index].block_header.hash();
-                        self.consensus_sender
-                            .lock()
-                            .send((
+
+                        assert!(
+                            self.new_block_hashes.send((
                                 inner.arena[index].block_header.hash(),
-                                true,
-                            ))
-                            .expect("Receiver not dropped");
+                                true, /* ignore_body */
+                            )),
+                            "consensus receiver dropped"
+                        );
+
                         // maintain not_ready_blocks_frontier
                         inner.not_ready_blocks_count -= 1;
                         inner.not_ready_blocks_frontier.remove(&index);
@@ -1417,7 +1425,7 @@ impl SynchronizationGraph {
                 < self.consensus.current_era_genesis_seq_num()
                 || info.get_instance_id() == self.data_man.get_instance_id();
             if already_processed {
-                if need_to_verify {
+                if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
                     VerificationConfig::compute_header_pow_quality(header);
@@ -1435,14 +1443,17 @@ impl SynchronizationGraph {
             return (true, Vec::new());
         }
 
+        // skip check for consortium currently
+        debug!("is_consortium={:?}", self.is_consortium());
         let verification_passed = if need_to_verify {
-            !(self.parent_or_referees_invalid(header)
-                || self
-                    .verification_config
-                    .verify_header_params(header)
-                    .is_err())
+            self.is_consortium()
+                || !(self.parent_or_referees_invalid(header)
+                    || self
+                        .verification_config
+                        .verify_header_params(header)
+                        .is_err())
         } else {
-            if !bench_mode {
+            if !bench_mode && !self.is_consortium() {
                 self.verification_config
                     .verify_pow(header)
                     .expect("local mined block should pass this check!");
@@ -1554,10 +1565,11 @@ impl SynchronizationGraph {
         *self.latest_graph_ready_block.lock() = h;
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
-            self.consensus_sender
-                .lock()
-                .send((h, false /* ignore_body */))
-                .expect("Cannot fail");
+            assert!(
+                self.new_block_hashes.send((h, false /* ignore_body */)),
+                "consensus receiver dropped"
+            );
+
             if inner.config.enable_state_expose {
                 STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(
                     SyncGraphBlockState {
@@ -1751,8 +1763,8 @@ impl SynchronizationGraph {
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
 
-    pub fn update_total_weight_in_past(&self) {
-        self.consensus.update_total_weight_in_past();
+    pub fn update_total_weight_delta_heartbeat(&self) {
+        self.consensus.update_total_weight_delta_heartbeat();
     }
 
     /// Get the current number of blocks in the synchronization graph

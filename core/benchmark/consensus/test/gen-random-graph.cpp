@@ -8,10 +8,11 @@
 
 const int MAXN = 100000;
 const int MAXM = 5;
+const int LOGN = 15;
 
 int N = 10000;
-int ALPHA_NUM = 2;
-int ALPHA_DEN = 3;
+int TIMER_RATIO = 50;
+int TIMER_BETA = 20;
 int BETA = 150;
 int HEAVY_BLOCK_RATIO = 10;
 int M = 3;
@@ -23,15 +24,38 @@ std::vector<int> refs[MAXN + 1], children[MAXN + 1];
 int local_clock[MAXN + 1][MAXM];
 int current_clock[MAXM];
 int parent[MAXN + 1];
-int height[MAXN + 1], era_block[MAXN + 1];
+int p_table[MAXN + 1][LOGN];
+int height[MAXN + 1];
 int block_group[MAXN + 1], block_gidx[MAXN + 1];
-int is_valid[MAXN + 1], is_stable[MAXN + 1], is_adaptive[MAXN + 1];
+int is_valid[MAXN + 1], is_timer[MAXN + 1], is_adaptive[MAXN + 1];
 int weight[MAXN + 1];
+int longest_timer_weight[MAXN + 1], last_timer[MAXN + 1];
 
-int subtree_weight[MAXN + 1], subtree_stable_weight[MAXN + 1];
-int subtree_inclusive_weight[MAXN + 1];
-int past_era_weight[MAXN + 1];
+int subtree_weight[MAXN + 1];
+int is_timer_chain[MAXN + 1];
+int past_timer[MAXN + 1];
 bool consider[MAXN + 1];
+
+int compute_lca(int a, int b) {
+    if (height[a] < height[b])
+        return compute_lca(b, a);
+    int x = height[a] - height[b];
+    int a1 = a;
+    for (int i = LOGN - 1; i >=0; i--) {
+        if ((x & (1 << i)) != 0)
+            a1 = p_table[a1][i];
+    }
+    if (a1 == b)
+        return a1;
+    int b1 = b;
+    for (int i = LOGN - 1; i >= 0; i--) {
+        if (p_table[a1][i] != p_table[b1][i]) {
+            a1 = p_table[a1][i];
+            b1 = p_table[b1][i];
+        }
+    }
+    return parent[a1];
+}
 
 bool should_consider(int v, int g) {
     if (v == 0) return true;
@@ -51,42 +75,104 @@ void mark_consider(int v, int g) {
 void compute_subtree(int v) {
     if (!consider[v]) {
         subtree_weight[v] = 0;
-        subtree_stable_weight[v] = 0;
-        subtree_inclusive_weight[v] = 0;
         return;
     }
     int sum = weight[v];
-    int sums = weight[v];
-    int sumi = weight[v];
-    if (!is_stable[v])
-        sums = 0;
     for (int i = 0; i < children[v].size(); i++) {
         compute_subtree(children[v][i]);
         sum += subtree_weight[children[v][i]];
-        sums += subtree_stable_weight[children[v][i]];
-        sumi += subtree_inclusive_weight[children[v][i]];
     }
-    if (is_valid[v]) {
-        subtree_weight[v] = sum;
-        subtree_stable_weight[v] = sums;
-    } else {
-        subtree_weight[v] = 0;
-        subtree_stable_weight[v] = 0;
+    subtree_weight[v] = sum;
+}
+
+int get_past_timer(int v) {
+    if (past_timer[v] != -1) {
+        return past_timer[v];
     }
-    subtree_inclusive_weight[v] = sumi;
+    past_timer[v] = 0;
+    for (int i = 0; i < refs[v].size(); i++) {
+        int res = get_past_timer(refs[v][i]);
+        if (is_timer_chain[refs[v][i]] && is_valid[refs[v][i]]) {
+            res += 1;
+        }
+        if (past_timer[v] < res) {
+            past_timer[v] = res;
+        }
+    }
+    return past_timer[v];
 }
 
 void process(int n, int g) {
     memset(subtree_weight, 0, sizeof(subtree_weight));
-    memset(subtree_inclusive_weight, 0, sizeof(subtree_inclusive_weight));
-    memset(subtree_stable_weight, 0, sizeof(subtree_stable_weight));
+    memset(is_timer_chain, 0, sizeof(is_timer_chain));
+    memset(past_timer, -1, sizeof(past_timer));
     memset(consider, 0, sizeof(consider));
     mark_consider(0, g);
     compute_subtree(0);
 
+    int longest_weight = -1;
+    int best_last_timer = -1;
+    for (int i = 0; i < refs[n].size(); i++) {
+        int pred = refs[n][i];
+        int w = longest_timer_weight[pred];
+        if (is_timer[pred] && is_valid[pred]) w += 1;
+        if (w > longest_weight) {
+            longest_weight = w;
+            if (is_timer[pred] && is_valid[pred])
+                best_last_timer = pred;
+            else
+                best_last_timer = last_timer[pred];
+        }
+    }
+    // Avoid same timer chain length with different header
+    for (int i = 0; i < refs[n].size(); i++) {
+        int pred = refs[n][i];
+        int w = longest_timer_weight[pred];
+        if (is_timer[pred] && is_valid[pred]) w += 1;
+        if (w == longest_weight) {
+            longest_weight = w;
+            if (is_timer[pred] && is_valid[pred]) {
+                if (pred != best_last_timer) {
+                    parent[n] = -1;
+                    return;
+                }
+            }
+            else {
+                if (last_timer[pred] != best_last_timer) {
+                    parent[n] = -1;
+                    return;
+                }
+            }
+        }
+    }
+    longest_timer_weight[n] = longest_weight;
+    last_timer[n] = best_last_timer;
+    std::vector<int> timer_chain_vec;
+    timer_chain_vec.clear();
+
+    int current = last_timer[n];
+    while (current != -1) {
+        is_timer_chain[current] = 1;
+        timer_chain_vec.push_back(current);
+        current = last_timer[current];
+    }
+    int best_timer = timer_chain_vec.size();
+
+    // Compute the force confirm position
+    int force_confirm = 0;
+    if (timer_chain_vec.size() > TIMER_BETA) {
+        for (int i = TIMER_BETA; i < timer_chain_vec.size() - TIMER_BETA + 1; i++) {
+            int lca = timer_chain_vec[i];
+            for (int j = i + 1; j < i + TIMER_BETA; j++)
+                lca = compute_lca(lca, timer_chain_vec[j]);
+            // Because we are doing it in the reverse way, we will prioritize old ones, it includes equal sign here.
+            if (height[lca] >= height[force_confirm])
+                force_confirm = lca;
+        }
+    }
+
     int last = -1;
-    int current = 0;
-    is_stable[n] = 1;
+    current = force_confirm;
     std::vector<std::pair<int, int> > tmp;
     tmp.clear();
     // fprintf(stderr, "Process %d\n", n);
@@ -94,18 +180,17 @@ void process(int n, int g) {
         int largest_child = -1;
         int largest_weight = -1;
         for (int i = 0; i < children[current].size(); i++)
-            if (consider[children[current][i]] && is_valid[children[current][i]] && subtree_weight[children[current][i]] > largest_weight) {
+            if (consider[children[current][i]] && subtree_weight[children[current][i]] > largest_weight) {
                 largest_child = children[current][i];
                 largest_weight = subtree_weight[children[current][i]];
             }
         // We want to avoid to have equal weights!!!
         int cnt = 0;
         for (int i = 0; i < children[current].size(); i++)
-            if (consider[children[current][i]] && is_valid[children[current][i]] && subtree_weight[children[current][i]] == largest_weight) {
+            if (consider[children[current][i]] && subtree_weight[children[current][i]] == largest_weight) {
                 cnt ++;
             }
         if (cnt > 1) {
-            //fprintf(stderr, "current %d weight %d\n", current, largest_weight);
             parent[n] = -1;
             return;
         }
@@ -117,62 +202,21 @@ void process(int n, int g) {
     }
 
     int parent_height = height[current];
-    int era_height = parent_height / ERA_BLOCK_COUNT * ERA_BLOCK_COUNT;
-    int era_block;
-    if (era_height == 0) {
-        era_block = 0;
-    } else {
-        era_block = tmp[era_height - 1].second;
-    }
-    int tot_weight = subtree_weight[era_block];
-
-    for (int i = era_height; i < tmp.size(); i++) {
-        int last = tmp[i].first;
-        int current = tmp[i].second;
-        int past_e_weight = past_era_weight[last];
-        if (height[last] % ERA_BLOCK_COUNT == 0) {
-            past_e_weight = 0;
-        }
-        int g = tot_weight - past_e_weight - weight[last];
-        int f = subtree_weight[current];
-        if (g > BETA && f * ALPHA_DEN - g * ALPHA_NUM < 0) {
-            // fprintf(stderr, "%d %d %d %d\n", last, current, g, f);
-            is_stable[n] = 0;
-            break;
-        }
-    }
 
     is_adaptive[n] = 0;
-    if (!is_stable[n]) {
-        for (int i = era_height; i < tmp.size(); i++) {
-            int px = tmp[i].first;
-            int x = tmp[i].second;
-            // fprintf(stderr, "%d %d %d %d\n", x, px, subtree_stable_weight[x], subtree_weight[px]);
-            if (subtree_weight[px] > BETA &&
-                subtree_stable_weight[x] * ALPHA_DEN - subtree_weight[px] * ALPHA_NUM < 0) {
+    for (int i = 0; i < tmp.size(); i++) {
+        int last = tmp[i].first;
+        int current = tmp[i].second;
+        int current_timer = get_past_timer(current);
+        assert(current_timer <= best_timer);
+        if (best_timer - current_timer >= TIMER_BETA)
+            if (2 * subtree_weight[current] - subtree_weight[last] + weight[last] < BETA) {
                 is_adaptive[n] = 1;
                 break;
             }
-        }
-    }
-
-    int two_era_height = era_height;
-    if (two_era_height >= ERA_BLOCK_COUNT)
-        two_era_height -= ERA_BLOCK_COUNT;
-    if (!is_adaptive[n]) {
-        for (int i = two_era_height; i < era_height && i < tmp.size(); i++) {
-            int px = tmp[i].first;
-            int x = tmp[i].second;
-            if (subtree_inclusive_weight[px] > BETA &&
-                subtree_inclusive_weight[x] * ALPHA_DEN - subtree_inclusive_weight[px] * ALPHA_NUM < 0) {
-                is_adaptive[n] = 1;
-                break;
-            }
-        }
     }
 
     parent[n] = current;
-    past_era_weight[n] = tot_weight;
     if (is_adaptive[n]) {
         int x = rand() % HEAVY_BLOCK_RATIO;
         if (x == 0)
@@ -182,7 +226,6 @@ void process(int n, int g) {
     } else {
         weight[n] = 1;
     }
-
 }
 
 int main(int argc, char* argv[]) {
@@ -190,8 +233,8 @@ int main(int argc, char* argv[]) {
         N = atoi(argv[1]);
     }
     if (argc > 5) {
-        ALPHA_NUM = atoi(argv[2]);
-        ALPHA_DEN = atoi(argv[3]);
+        TIMER_RATIO = atoi(argv[2]);
+        TIMER_BETA = atoi(argv[3]);
         BETA = atoi(argv[4]);
         HEAVY_BLOCK_RATIO = atoi(argv[5]);
     }
@@ -202,24 +245,32 @@ int main(int argc, char* argv[]) {
         MAX_GAP = atoi(argv[8]);
     }
 
+    unsigned seed;
+    char* seed_env = getenv("SEED");
+    if (seed_env != NULL)
+        seed = atoi(seed_env);
+    else
+        seed = (unsigned) time(NULL) * getpid();
+    // unsigned seed = 448648640;
+    srand( seed );
+    fprintf(stdout, "Random Seed: %u\n", seed);
+
+back_track:
+
     // Initialize genesis
     refs[0].clear();
     children[0].clear();
     parent[0] = -1;
+    memset(p_table, -1, sizeof(p_table));
     is_valid[0] = 1;
-    is_stable[0] = 1;
+    is_timer[0] = 0;
     is_adaptive[0] = 0;
     block_group[0] = -1;
     block_gidx[0] = -1;
     weight[0] = 1;
-    past_era_weight[0] = 0;
     height[0] = 0;
-    era_block[0] = 0;
-
-    unsigned seed = (unsigned) time(NULL) * getpid();
-    // unsigned seed = 448648640;
-    srand( seed );
-    fprintf(stdout, "Random Seed: %u\n", seed);
+    longest_timer_weight[0] = 0;
+    last_timer[0] = -1;
 
     // Initialize the first M blocks for each branch
     for (int i = 1; i <= M; i++) {
@@ -228,8 +279,12 @@ int main(int argc, char* argv[]) {
         children[i].clear();
         children[0].push_back(i);
         parent[i] = 0;
+        p_table[i][0] = 0;
+        for (int j = 1; j < LOGN; j++)
+            p_table[i][j] = -1;
         is_valid[i] = 1;
-        is_stable[i] = 1;
+        is_timer[i] = 0;
+        groups[i - 1].clear();
         groups[i - 1].push_back(0);
         groups[i - 1].push_back(i);
         for (int j = 0; j < M; j++)
@@ -237,16 +292,18 @@ int main(int argc, char* argv[]) {
 
         block_group[i] = i - 1;
         block_gidx[i] = 1;
-        past_era_weight[i] = 1;
         is_adaptive[i] = 0;
         weight[i] = 1;
         height[i] = 1;
-        era_block[i] = 0;
+
+        longest_timer_weight[i] = 0;
+        last_timer[i] = -1;
     }
 
     // Randomly generate the remaining blocks
     for (int i = M + 1; i <= N; i++) {
         int g;
+        int retry_cnt = 0;
         do {
             g = rand() % M;
             int last_bidx = groups[g][groups[g].size() - 1];
@@ -282,14 +339,21 @@ int main(int argc, char* argv[]) {
                 }
             }
             process(i, g);
-        } while (parent[i] == -1);
+            retry_cnt ++;
+        } while ((parent[i] == -1) && (retry_cnt < 100));
+        children[i].clear();
+
+        if (retry_cnt >= 100) {
+            fprintf(stdout, "Back Tracking...\n");
+            goto back_track;
+        }
 
         is_valid[i] = 1;
 
         if (rand() % 4 == 0) {
             int x = -1;
             for (int j = 0; j < refs[i].size(); j++)
-                if ((refs[i][j] != parent[i]) && (era_block[refs[i][j]] == era_block[parent[i]]) &&
+                if ((refs[i][j] != parent[i]) &&
                     (height[parent[i]] % ERA_BLOCK_COUNT != 0) && (height[refs[i][j]] % ERA_BLOCK_COUNT != 0)) {
                     x = refs[i][j];
                     break;
@@ -297,16 +361,24 @@ int main(int argc, char* argv[]) {
             if (x != -1) {
                 parent[i] = x;
                 is_valid[i] = 0;
-                weight[i] = 1;
+            }
+        }
+        p_table[i][0] = parent[i];
+        for (int j = 1; j < LOGN; j++)
+            if (p_table[i][j - 1] == -1)
+                p_table[i][j] = -1;
+            else
+                p_table[i][j] = p_table[p_table[i][j-1]][j-1];
+
+        if (weight[i] >= TIMER_RATIO) {
+            is_timer[i] = 1;
+        } else {
+            if (rand() % TIMER_RATIO == 0) {
+                is_timer[i] = 1;
             }
         }
 
         height[i] = height[parent[i]] + 1;
-        if (height[i] % ERA_BLOCK_COUNT == 1) {
-            era_block[i] = parent[i];
-        } else {
-            era_block[i] = era_block[parent[i]];
-        }
 
         for (int j = 0; j < M; j++)
             local_clock[i][j] = current_clock[j];
@@ -323,13 +395,18 @@ int main(int argc, char* argv[]) {
         block_gidx[i] = groups[g].size() - 1;
     }
 
-
     std::ofstream fout;
     fout.open("rand.in", std::ios::out);
-    fout << ALPHA_NUM << " " << ALPHA_DEN << " " << BETA << " " << HEAVY_BLOCK_RATIO << " " << ERA_BLOCK_COUNT << "\n";
+    fout << TIMER_RATIO << " " << TIMER_BETA << " " << BETA << " " << HEAVY_BLOCK_RATIO << " " << ERA_BLOCK_COUNT << "\n";
     for (int i = 1; i <=N; i++) {
-        fout << is_valid[i] << " " << is_stable[i] << " " << is_adaptive[i] << " "
-             << ((weight[i] < 1) ? 1 : weight[i])
+        int diff = 1;
+        if (is_timer[i]) {
+            diff = TIMER_RATIO;
+        }
+        if (weight[i] > 1 && HEAVY_BLOCK_RATIO > diff)
+            diff = HEAVY_BLOCK_RATIO;
+        fout << is_valid[i] << " " << is_timer[i] << " " << is_adaptive[i] << " "
+             << diff
              << " " << parent[i];
         for (int j = 0; j < refs[i].size(); j++)
             if (refs[i][j] != parent[i])

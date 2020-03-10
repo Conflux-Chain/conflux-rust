@@ -16,6 +16,9 @@ pub(super) mod storage_manager;
 
 pub mod defaults {
     pub use super::delta_mpt::DEFAULT_NODE_MAP_SIZE;
+    // By default do not check for data-integrity for snapshot mpt for
+    // production runs.
+    pub const DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS: u16 = 0;
     pub const DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR: f64 =
         DeltaMptsNodeMemoryManager::R_LFU_FACTOR;
     pub const DEFAULT_DELTA_MPTS_CACHE_SIZE: u32 =

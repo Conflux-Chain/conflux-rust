@@ -17,7 +17,6 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["generate_tx"] = "true"
         # Every node generates 1 tx every second
         self.conf_parameters["generate_tx_period_us"] = "100000"
-        self.conf_parameters["log_level"] = "\"debug\""
         self.stop_probability = 0.02
         self.clean_probability = 0.5
 

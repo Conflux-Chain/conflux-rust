@@ -6,7 +6,7 @@ use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
-        Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
         SendTxRequest, Status as RpcStatus, SyncGraphStates,
@@ -14,11 +14,12 @@ use crate::rpc::{
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
-use cfx_types::{H160, H256, U256};
+use cfx_types::{Public, H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
 use delegate::delegate;
 use futures::future::{FutureExt, TryFutureExt};
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
+use libra_types::transaction::SignedTransaction;
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -88,6 +89,34 @@ impl RpcImpl {
 
             Ok(account
                 .map(|account| account.balance.into())
+                .unwrap_or_default())
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn admin(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> BoxFuture<RpcH160> {
+        let address: H160 = address.into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
+
+            Ok(account
+                .map(|account| account.admin.into())
                 .unwrap_or_default())
         };
 
@@ -331,20 +360,6 @@ impl RpcImpl {
     }
 }
 
-// macro for reducing boilerplate for unsupported methods
-macro_rules! not_supported {
-    () => {};
-    ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> $ret:ty )? ; $($tail:tt)* ) => {
-        #[allow(unused_variables)]
-        fn $fn ( &self $(, $name : $type)* ) $( -> $ret )? {
-            Err(RpcError::method_not_found())
-        }
-
-        not_supported!($($tail)*);
-    };
-}
-
-#[allow(dead_code)]
 pub struct CfxHandler {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
@@ -372,6 +387,7 @@ impl Cfx for CfxHandler {
         target self.rpc_impl {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
             fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
@@ -387,18 +403,21 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn set_consortium_administrators(&self, admins: Vec<Public>) -> RpcResult<bool>;
+        fn send_new_consortium_member_trans(&self, admin_trans: SignedTransaction) -> RpcResult<()>;
     }
 }
 
-#[allow(dead_code)]
 pub struct TestRpcImpl {
     common: Arc<CommonImpl>,
-    rpc_impl: Arc<RpcImpl>,
+    // rpc_impl: Arc<RpcImpl>,
 }
 
 impl TestRpcImpl {
-    pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
-        TestRpcImpl { common, rpc_impl }
+    pub fn new(common: Arc<CommonImpl>, _rpc_impl: Arc<RpcImpl>) -> Self {
+        TestRpcImpl {
+            common, /* , rpc_impl */
+        }
     }
 }
 
@@ -437,7 +456,6 @@ impl TestRpc for TestRpcImpl {
     }
 }
 
-#[allow(dead_code)]
 pub struct DebugRpcImpl {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
@@ -477,5 +495,6 @@ impl DebugRpc for DebugRpcImpl {
         fn current_sync_phase(&self) -> RpcResult<String>;
         fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
         fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
+        fn bft_state(&self) -> RpcResult<BFTStates>;
     }
 }

@@ -12,7 +12,7 @@ use std::{future::Future, sync::Arc};
 
 use crate::{
     light_protocol::{
-        common::{FullPeerState, Peers, UniqueId},
+        common::{FullPeerState, Peers},
         message::{msgid, GetTxs},
         Error, ErrorKind,
     },
@@ -22,6 +22,7 @@ use crate::{
         CACHE_TIMEOUT, MAX_TXS_IN_FLIGHT, TX_REQUEST_BATCH_SIZE,
         TX_REQUEST_TIMEOUT,
     },
+    UniqueId,
 };
 
 use super::common::{FutureItem, PendingItem, SyncManager, TimeOrdered};

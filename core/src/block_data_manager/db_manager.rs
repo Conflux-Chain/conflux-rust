@@ -31,7 +31,7 @@ enum DBTable {
     EpochNumbers,
 }
 
-fn rocks_db_col(table: DBTable) -> Option<u32> {
+fn rocks_db_col(table: DBTable) -> u32 {
     match table {
         DBTable::Misc => COL_MISC,
         DBTable::Blocks => COL_BLOCKS,
@@ -225,6 +225,10 @@ impl DBManager {
         )
     }
 
+    pub fn remove_block_execution_result_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::Blocks, &block_execution_result_key(hash))
+    }
+
     pub fn insert_checkpoint_hashes_to_db(
         &self, checkpoint_prev: &H256, checkpoint_cur: &H256,
     ) {
@@ -266,7 +270,7 @@ impl DBManager {
         self.load_decodable_list(DBTable::Misc, b"terminals")
     }
 
-    pub fn insert_consensus_graph_epoch_execution_commitment_to_db(
+    pub fn insert_epoch_execution_commitment_to_db(
         &self, hash: &H256, ctx: &EpochExecutionCommitment,
     ) {
         self.insert_encodable_val(
@@ -276,13 +280,20 @@ impl DBManager {
         );
     }
 
-    pub fn consensus_graph_epoch_execution_commitment_from_db(
+    pub fn epoch_execution_commitment_from_db(
         &self, hash: &H256,
     ) -> Option<EpochExecutionCommitment> {
         self.load_decodable_val(
             DBTable::Blocks,
             &epoch_consensus_epoch_execution_commitment_key(hash),
         )
+    }
+
+    pub fn remove_epoch_execution_commitment_from_db(&self, hash: &H256) {
+        self.remove_from_db(
+            DBTable::Blocks,
+            &epoch_consensus_epoch_execution_commitment_key(hash),
+        );
     }
 
     pub fn insert_instance_id_to_db(&self, instance_id: u64) {
@@ -310,6 +321,10 @@ impl DBManager {
             DBTable::Blocks,
             &epoch_execution_context_key(hash),
         )
+    }
+
+    pub fn remove_execution_context_from_db(&self, hash: &H256) {
+        self.remove_from_db(DBTable::Blocks, &epoch_execution_context_key(hash))
     }
 
     /// The functions below are private utils used by the DBManager to access

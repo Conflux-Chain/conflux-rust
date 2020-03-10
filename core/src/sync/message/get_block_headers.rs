@@ -9,18 +9,24 @@ use crate::{
         message::{
             Context, GetBlockHeadersResponse, Handleable, Key, KeyContainer,
         },
-        request_manager::Request,
+        request_manager::{AsAny, Request},
         Error, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::time::Duration;
+use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Clone, RlpDecodable, RlpEncodable)]
 pub struct GetBlockHeaders {
     pub request_id: RequestId,
     pub hashes: Vec<H256>,
+}
+
+impl AsAny for GetBlockHeaders {
+    fn as_any(&self) -> &dyn Any { self }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Request for GetBlockHeaders {
@@ -49,6 +55,7 @@ impl Request for GetBlockHeaders {
 
 impl Handleable for GetBlockHeaders {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!("Received GetBlockHeaders {:?}", self);
         let headers = self
             .hashes
             .iter()
@@ -65,7 +72,7 @@ impl Handleable for GetBlockHeaders {
             .collect();
 
         let mut block_headers_resp = GetBlockHeadersResponse::default();
-        block_headers_resp.set_request_id(self.request_id);
+        block_headers_resp.request_id = self.request_id;
         block_headers_resp.headers = headers;
 
         debug!(
