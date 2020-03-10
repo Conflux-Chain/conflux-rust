@@ -8,12 +8,15 @@ use super::{
 pub use crate::configuration::Configuration;
 use blockgen::BlockGenerator;
 
-use crate::rpc::{
-    extractor::RpcExtractor,
-    impls::{
-        cfx::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
+use crate::{
+    common::{initialize_txgens, ClientComponents},
+    rpc::{
+        extractor::RpcExtractor,
+        impls::{
+            cfx::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
+        },
+        setup_debug_rpc_apis, setup_public_rpc_apis,
     },
-    setup_debug_rpc_apis, setup_public_rpc_apis,
 };
 use cfx_types::{Address, U256};
 use cfxcore::{
@@ -23,60 +26,23 @@ use cfxcore::{
     ConsensusGraph, LightProvider, Notifications, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
-use ctrlc::CtrlC;
-use keylib::public_to_address;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::SecretStore;
-use std::{
-    any::Any,
-    str::FromStr,
-    sync::{Arc, Weak},
-    thread,
-    time::{Duration, Instant},
-};
+use std::{str::FromStr, sync::Arc, thread, time::Duration};
 use threadpool::ThreadPool;
-use txgen::{
-    propagate::DataPropagation, SpecialTransactionGenerator,
-    TransactionGenerator,
-};
+use txgen::propagate::DataPropagation;
 
-pub struct ArchiveClientHandle {
+pub struct ArchiveClientExtraComponents {
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_http_server: Option<HttpServer>,
     pub consensus: Arc<ConsensusGraph>,
     pub txpool: Arc<TransactionPool>,
     pub sync: Arc<SynchronizationService>,
-    pub txgen: Option<Arc<TransactionGenerator>>,
-    pub txgen_join_handle: Option<thread::JoinHandle<()>>,
-    pub blockgen: Arc<BlockGenerator>,
     pub secret_store: Arc<SecretStore>,
-    pub block_data_manager: Weak<BlockDataManager>,
     pub runtime: Runtime,
-}
-
-impl ArchiveClientHandle {
-    pub fn into_be_dropped(
-        self,
-    ) -> (Weak<BlockDataManager>, Arc<BlockGenerator>, Box<dyn Any>) {
-        (
-            self.block_data_manager,
-            self.blockgen,
-            Box::new((
-                self.consensus,
-                self.debug_rpc_http_server,
-                self.rpc_tcp_server,
-                self.rpc_http_server,
-                self.txpool,
-                self.sync,
-                self.txgen,
-                self.secret_store,
-                self.txgen_join_handle,
-            )),
-        )
-    }
 }
 
 pub struct ArchiveClient {}
@@ -85,7 +51,10 @@ impl ArchiveClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
         mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
-    ) -> Result<ArchiveClientHandle, String> {
+    ) -> Result<
+        Box<ClientComponents<BlockGenerator, ArchiveClientExtraComponents>>,
+        String,
+    > {
         info!("Working directory: {:?}", std::env::current_dir());
 
         metrics::initialize(conf.metrics_config());
@@ -133,15 +102,14 @@ impl ArchiveClient {
         let genesis_accounts = if conf.is_test_or_dev_mode() {
             match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
-                    genesis::default(secret_store.as_ref());
                     genesis::load_secrets_file(file, secret_store.as_ref())?
                 }
-                None => genesis::default(secret_store.as_ref()),
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         } else {
             match conf.raw_conf.genesis_accounts {
                 Some(ref file) => genesis::load_file(file)?,
-                None => genesis::default(secret_store.as_ref()),
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         };
 
@@ -233,35 +201,21 @@ impl ArchiveClient {
             DataPropagation::register(dp, network.clone())?;
         }
 
-        // txgen is only needed in testing or debugging
-        let (txgen, special_txgen) = if conf.is_test_or_dev_mode() {
-            let txgen = Arc::new(TransactionGenerator::new(
-                consensus.clone(),
-                txpool.clone(),
-                sync.clone(),
-                secret_store.clone(),
-                network.net_key_pair().ok(),
-            ));
-
-            let special_txgen =
-                Arc::new(Mutex::new(SpecialTransactionGenerator::new(
-                    network.net_key_pair().unwrap(),
-                    &public_to_address(secret_store.get_keypair(0).public()),
-                    U256::from_dec_str("10000000000000000").unwrap(),
-                    U256::from_dec_str("10000000000000000").unwrap(),
-                )));
-            (Some(txgen), Some(special_txgen))
-        } else {
-            (None, None)
-        };
+        let (maybe_txgen, maybe_direct_txgen) = initialize_txgens(
+            consensus.clone(),
+            txpool.clone(),
+            sync.clone(),
+            secret_store.clone(),
+            &conf,
+            network.net_key_pair().unwrap(),
+        );
 
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(BlockGenerator::new(
             sync_graph,
             txpool.clone(),
             sync.clone(),
-            txgen.clone(),
-            special_txgen,
+            maybe_txgen.clone(),
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));
@@ -291,61 +245,13 @@ impl ArchiveClient {
             }
         }
 
-        let tx_conf = conf.tx_gen_config();
-        let txgen_handle = if tx_conf.generate_tx {
-            if !conf.is_test_or_dev_mode() {
-                panic!("generate_tx is only allowed in test or dev mode");
-            }
-            let txgen_clone = txgen.clone().unwrap();
-            let t = if conf.is_test_mode() {
-                match conf.raw_conf.genesis_secrets {
-                    Some(ref _file) => {
-                        thread::Builder::new()
-                            .name("txgen".into())
-                            .spawn(move || {
-                                TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
-                                    txgen_clone,
-                                    tx_conf,
-                                );
-                            })
-                            .expect("should succeed")
-                    }
-                    None =>{
-                        thread::Builder::new()
-                            .name("txgen".into())
-                            .spawn(move || {
-                                TransactionGenerator::generate_transactions(
-                                    txgen_clone,
-                                    tx_conf,
-                                )
-                                    .unwrap();
-                            })
-                            .expect("should succeed")
-                    }
-                }
-            } else {
-                thread::Builder::new()
-                    .name("txgen".into())
-                    .spawn(move || {
-                        TransactionGenerator::generate_transactions(
-                            txgen_clone,
-                            tx_conf,
-                        )
-                        .unwrap();
-                    })
-                    .expect("should succeed")
-            };
-            Some(t)
-        } else {
-            None
-        };
-
         let rpc_impl = Arc::new(RpcImpl::new(
             consensus.clone(),
             sync.clone(),
             blockgen.clone(),
             txpool.clone(),
-            txgen.clone(),
+            maybe_txgen.clone(),
+            maybe_direct_txgen,
             conf.rpc_impl_config(),
         ));
 
@@ -423,69 +329,19 @@ impl ArchiveClient {
             },
         )?;
 
-        Ok(ArchiveClientHandle {
-            block_data_manager: Arc::downgrade(&data_man),
-            debug_rpc_http_server,
-            rpc_http_server,
-            rpc_tcp_server,
-            txpool,
-            txgen,
-            txgen_join_handle: txgen_handle,
-            blockgen,
-            consensus,
-            secret_store,
-            sync,
-            runtime,
-        })
-    }
-
-    /// Use a Weak pointer to ensure that other Arc pointers are released
-    fn wait_for_drop<T>(w: Weak<T>) {
-        let sleep_duration = Duration::from_secs(1);
-        let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(10);
-        let instant = Instant::now();
-        let mut warned = false;
-        while instant.elapsed() < max_timeout {
-            if w.upgrade().is_none() {
-                return;
-            }
-            if !warned && instant.elapsed() > warn_timeout {
-                warned = true;
-                warn!("Shutdown is taking longer than expected.");
-            }
-            thread::sleep(sleep_duration);
-        }
-        eprintln!("Shutdown timeout reached, exiting uncleanly.");
-    }
-
-    pub fn close(handle: ArchiveClientHandle) {
-        let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
-        BlockGenerator::stop(&blockgen);
-        drop(blockgen);
-        drop(to_drop);
-
-        // Make sure ledger_db is properly dropped, so rocksdb can be closed
-        // cleanly
-        ArchiveClient::wait_for_drop(ledger_db);
-    }
-
-    pub fn run_until_closed(
-        exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: ArchiveClientHandle,
-    ) {
-        CtrlC::set_handler({
-            let e = exit.clone();
-            move || {
-                *e.0.lock() = true;
-                e.1.notify_all();
-            }
-        });
-
-        let mut lock = exit.0.lock();
-        if !*lock {
-            exit.1.wait(&mut lock);
-        }
-
-        ArchiveClient::close(keep_alive);
+        Ok(Box::new(ClientComponents {
+            data_manager_weak_ptr: Arc::downgrade(&data_man),
+            blockgen: Some(blockgen),
+            other_components: ArchiveClientExtraComponents {
+                debug_rpc_http_server,
+                rpc_http_server,
+                rpc_tcp_server,
+                txpool,
+                consensus,
+                secret_store,
+                sync,
+                runtime,
+            },
+        }))
     }
 }

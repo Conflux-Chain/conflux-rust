@@ -472,7 +472,7 @@ class ConfluxTestFramework:
                 for peer in range(4):
                     for j in range(25):
                         set_node_times(self.nodes, block_time)
-                        self.nodes[peer].generate(1)
+                        self.nodes[peer].generate_empty_blocks(1)
                         block_time += 10 * 60
                     # Must sync before next peer starts generating blocks
                     sync_blocks(self.nodes)

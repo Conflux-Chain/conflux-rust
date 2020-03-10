@@ -389,12 +389,19 @@ impl Configuration {
         VerificationConfig::new(self.is_test_mode())
     }
 
-    pub fn tx_gen_config(&self) -> TransactionGeneratorConfig {
-        TransactionGeneratorConfig::new(
-            self.raw_conf.generate_tx,
-            self.raw_conf.generate_tx_period_us.expect("has default"),
-            self.raw_conf.txgen_account_count,
-        )
+    pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {
+        if self.is_test_mode() &&
+            // FIXME: this is not a good condition to check.
+            self.raw_conf.genesis_secrets.is_some()
+        {
+            Some(TransactionGeneratorConfig::new(
+                self.raw_conf.generate_tx,
+                self.raw_conf.generate_tx_period_us.expect("has default"),
+                self.raw_conf.txgen_account_count,
+            ))
+        } else {
+            None
+        }
     }
 
     pub fn storage_config(&self) -> StorageConfiguration {

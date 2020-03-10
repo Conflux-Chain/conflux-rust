@@ -9,7 +9,7 @@
 use crate::{
     alliance_tree_graph::consensus::TreeGraphConsensus, block_parameters::*,
     pow::*, transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, BlockDataManager,
-    SharedSynchronizationService, SharedTransactionPool,
+    SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
 use cfx_types::{Address, H256, U256};
 use log::trace;
@@ -19,7 +19,6 @@ use primitives::*;
 use rand::Rng;
 use std::{cmp::max, sync::Arc, thread, time};
 use time::{Duration, SystemTime, UNIX_EPOCH};
-//use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
 
 pub struct TGBlockGenerator {
     pub pow_config: ProofOfWorkConfig,
@@ -27,7 +26,6 @@ pub struct TGBlockGenerator {
     data_man: Arc<BlockDataManager>,
     txpool: SharedTransactionPool,
     //txgen: SharedTransactionGenerator,
-    //special_txgen: Arc<Mutex<SpecialTransactionGenerator>>,
     sync: SharedSynchronizationService,
     stopped: RwLock<bool>,
     //workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
@@ -36,9 +34,8 @@ pub struct TGBlockGenerator {
 impl TGBlockGenerator {
     pub fn new(
         data_man: Arc<BlockDataManager>, txpool: SharedTransactionPool,
-        sync: SharedSynchronizationService, /* txgen: SharedTransactionGenerator, */
-        /* special_txgen: Arc<Mutex<SpecialTransactionGenerator>>, */
-        pow_config: ProofOfWorkConfig, mining_author: Address,
+        sync: SharedSynchronizationService, pow_config: ProofOfWorkConfig,
+        mining_author: Address,
     ) -> Self
     {
         TGBlockGenerator {
@@ -46,8 +43,6 @@ impl TGBlockGenerator {
             mining_author,
             data_man,
             txpool,
-            // txgen,
-            // special_txgen,
             sync,
             stopped: RwLock::new(false),
         }
@@ -245,4 +240,8 @@ impl TGBlockGenerator {
             thread::sleep(interval);
         }
     }
+}
+
+impl Stopable for TGBlockGenerator {
+    fn stop(&self) { Self::stop(self) }
 }

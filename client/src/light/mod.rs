@@ -2,15 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{
-    any::Any,
-    sync::{Arc, Weak},
-    thread,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, thread, time::Duration};
 
 use cfx_types::{Address, U256};
-use ctrlc::CtrlC;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
@@ -38,11 +32,12 @@ use std::str::FromStr;
 use super::{
     http::Server as HttpServer, tcp::Server as TcpServer, TESTNET_VERSION,
 };
+use crate::common::ClientComponents;
+use blockgen::BlockGenerator;
 
-pub struct LightClientHandle {
+pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
     pub debug_rpc_http_server: Option<HttpServer>,
-    pub block_data_manager: Weak<BlockDataManager>,
     pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
@@ -51,30 +46,16 @@ pub struct LightClientHandle {
     pub runtime: Runtime,
 }
 
-impl LightClientHandle {
-    pub fn into_be_dropped(self) -> (Weak<BlockDataManager>, Box<dyn Any>) {
-        (
-            self.block_data_manager,
-            Box::new((
-                self.consensus,
-                self.debug_rpc_http_server,
-                self.light,
-                self.rpc_http_server,
-                self.rpc_tcp_server,
-                self.secret_store,
-                self.txpool,
-            )),
-        )
-    }
-}
-
 pub struct LightClient {}
 
 impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
         conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
-    ) -> Result<LightClientHandle, String> {
+    ) -> Result<
+        Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
+        String,
+    > {
         info!("Working directory: {:?}", std::env::current_dir());
 
         metrics::initialize(conf.metrics_config());
@@ -121,15 +102,14 @@ impl LightClient {
         let genesis_accounts = if conf.is_test_mode() {
             match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
-                    genesis::default(secret_store.as_ref());
                     genesis::load_secrets_file(file, secret_store.as_ref())?
                 }
-                None => genesis::default(secret_store.as_ref()),
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         } else {
             match conf.raw_conf.genesis_accounts {
                 Some(ref file) => genesis::load_file(file)?,
-                None => genesis::default(secret_store.as_ref()),
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         };
 
@@ -266,64 +246,19 @@ impl LightClient {
             },
         )?;
 
-        Ok(LightClientHandle {
-            consensus,
-            debug_rpc_http_server,
-            block_data_manager: Arc::downgrade(&data_man),
-            light,
-            rpc_http_server,
-            rpc_tcp_server,
-            secret_store,
-            txpool,
-            runtime,
-        })
-    }
-
-    /// Use a Weak pointer to ensure that other Arc pointers are released
-    fn wait_for_drop<T>(w: Weak<T>) {
-        let sleep_duration = Duration::from_secs(1);
-        let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(10);
-        let instant = Instant::now();
-        let mut warned = false;
-        while instant.elapsed() < max_timeout {
-            if w.upgrade().is_none() {
-                return;
-            }
-            if !warned && instant.elapsed() > warn_timeout {
-                warned = true;
-                warn!("Shutdown is taking longer than expected.");
-            }
-            thread::sleep(sleep_duration);
-        }
-        eprintln!("Shutdown timeout reached, exiting uncleanly.");
-    }
-
-    pub fn close(handle: LightClientHandle) {
-        let (ledger_db, to_drop) = handle.into_be_dropped();
-        drop(to_drop);
-
-        // Make sure ledger_db is properly dropped, so rocksdb can be closed
-        // cleanly
-        LightClient::wait_for_drop(ledger_db);
-    }
-
-    pub fn run_until_closed(
-        exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: LightClientHandle,
-    ) {
-        CtrlC::set_handler({
-            let e = exit.clone();
-            move || {
-                *e.0.lock() = true;
-                e.1.notify_all();
-            }
-        });
-
-        let mut lock = exit.0.lock();
-        if !*lock {
-            exit.1.wait(&mut lock);
-        }
-
-        LightClient::close(keep_alive);
+        Ok(Box::new(ClientComponents {
+            data_manager_weak_ptr: Arc::downgrade(&data_man),
+            blockgen: None,
+            other_components: LightClientExtraComponents {
+                consensus,
+                debug_rpc_http_server,
+                light,
+                rpc_http_server,
+                rpc_tcp_server,
+                secret_store,
+                txpool,
+                runtime,
+            },
+        }))
     }
 }

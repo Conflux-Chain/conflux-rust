@@ -7,8 +7,12 @@ mod command;
 use crate::command::rpc::RpcCommand;
 use clap::{load_yaml, App, ArgMatches};
 use client::{
-    archive::ArchiveClient, configuration::Configuration, full::FullClient,
-    light::LightClient, tg_archive::TgArchiveClient,
+    archive::ArchiveClient,
+    common::{client_methods, ClientTrait},
+    configuration::Configuration,
+    full::FullClient,
+    light::LightClient,
+    tg_archive::TgArchiveClient,
 };
 use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
 use log::{info, LevelFilter};
@@ -127,35 +131,32 @@ fn main() -> Result<(), String> {
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
 
-    if matches.is_present("light") {
+    let client_handle: Box<dyn ClientTrait>;
+    client_handle = if matches.is_present("light") {
         //FIXME: implement light client later
         info!("Starting light client...");
-        let client_handle = LightClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start light client: {:?}", e))?;
-        LightClient::run_until_closed(exit, client_handle);
+        LightClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start light client: {:?}", e))?
     } else if matches.is_present("archive") {
         info!("Starting archive client...");
-        let client_handle = ArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start archive client: {:?}", e))?;
-        ArchiveClient::run_until_closed(exit, client_handle);
+        ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start archive client: {:?}", e))?
     } else if matches.is_present("full") {
         // todo this is to test full node in python code
         // remove this branch when starts full node by default.
         info!("Starting full client...");
-        let client_handle = FullClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start full client: {:?}", e))?;
-        FullClient::run_until_closed(exit, client_handle);
+        FullClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start full client: {:?}", e))?
     } else if matches.is_present("tg_archive") {
         info!("Starting TreeGraph consortium archive client...");
-        let client_handle = TgArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start archive client: {:?}", e))?;
-        TgArchiveClient::run_until_closed(exit, client_handle);
+        TgArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start TgA/run/media/yangzhe/SSDDATA/conflux_project/conflux-rust/client/src/tg_archive/mod.rs:470:5rchive client: {:?}", e))?
     } else {
         info!("Starting archive client...");
-        let client_handle = ArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start archive client: {:?}", e))?;
-        ArchiveClient::run_until_closed(exit, client_handle);
-    }
+        ArchiveClient::start(conf, exit.clone())
+            .map_err(|e| format!("failed to start archive client: {:?}", e))?
+    };
+    client_methods::run(client_handle, exit);
 
     Ok(())
 }
