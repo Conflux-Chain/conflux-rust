@@ -1397,6 +1397,18 @@ impl ConsensusNewBlockHandler {
             if has_body {
                 self.persist_terminals(inner);
             }
+            if pivot_changed {
+                // If we switch to a chain without stable block,
+                // we should avoid execute unavailable states.
+                // TODO It is handled by processing
+                // `state_availability_boundary` at the end,
+                // we can probably refactor to move that part of code before
+                // this skip and remove this special case.
+                self.data_man
+                    .state_availability_boundary
+                    .write()
+                    .optimistic_executed_height = None;
+            }
             debug!(
                 "Finish activating block in ConsensusGraph: index={:?} hash={:?},\
                  block is not in the subtree of stable",
@@ -1642,7 +1654,9 @@ impl ConsensusNewBlockHandler {
                         }
                     }
                     state_availability_boundary.optimistic_executed_height =
-                        if to_state_pos > 0 {
+                        if to_state_pos
+                            > state_availability_boundary.lower_bound
+                        {
                             Some(to_state_pos)
                         } else {
                             None
