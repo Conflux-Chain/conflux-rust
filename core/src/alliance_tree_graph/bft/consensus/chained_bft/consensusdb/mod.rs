@@ -20,6 +20,8 @@ use schemadb::{
     DEFAULT_CF_NAME,
 };
 use std::{collections::HashMap, iter::Iterator, path::Path, time::Instant};
+use crate::alliance_tree_graph::bft::consensus::chained_bft::consensusdb::schema::LEDGER_BLOCK_CF_NAME;
+use crate::alliance_tree_graph::bft::consensus::chained_bft::consensusdb::schema::ledger_block::{LedgerBlockSchema, SchemaLedgerBlock};
 
 type HighestTimeoutCertificate = Vec<u8>;
 type VoteMsgData = Vec<u8>;
@@ -36,6 +38,7 @@ impl ConsensusDB {
                 ColumnFamilyOptions::default(),
             ),
             (BLOCK_CF_NAME, ColumnFamilyOptions::default()),
+            (LEDGER_BLOCK_CF_NAME, ColumnFamilyOptions::default()),
             (QC_CF_NAME, ColumnFamilyOptions::default()),
             (SINGLE_ENTRY_CF_NAME, ColumnFamilyOptions::default()),
         ]
@@ -129,6 +132,37 @@ impl ConsensusDB {
             .map(|qc| batch.put::<QCSchema>(&qc.certified_block().id(), qc))
             .collect::<Result<()>>()?;
         self.commit(batch)
+    }
+
+    pub fn save_ledger_blocks<T: Payload>(
+        &self, block_data: Vec<Block<T>>,
+    ) -> Result<()> {
+        ensure!(
+            !block_data.is_empty(),
+            "Consensus block and qc data is empty!"
+        );
+        let mut batch = SchemaBatch::new();
+        block_data
+            .iter()
+            .map(|block| {
+                batch.put::<LedgerBlockSchema<T>>(
+                    &block.id(),
+                    &SchemaLedgerBlock::<T>::from_block(block.clone()),
+                )
+            })
+            .collect::<Result<()>>()?;
+        self.commit(batch)
+    }
+
+    /// Get committed block.
+    pub fn get_ledger_block<T: Payload>(
+        &self, block_id: &HashValue,
+    ) -> Result<Option<Block<T>>> {
+        let result = self.db.get::<LedgerBlockSchema<T>>(block_id)?;
+        match result {
+            Some(block) => Ok(Some(block.borrow_into_block().clone())),
+            None => Ok(None),
+        }
     }
 
     pub fn delete_blocks_and_quorum_certificates<T: Payload>(
