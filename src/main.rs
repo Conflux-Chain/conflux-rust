@@ -78,7 +78,13 @@ fn main() -> Result<(), String> {
                     conf_builder.appender(Appender::builder().build(
                         "logfile",
                         Box::new(
-                            FileAppender::builder().encoder(Box::new(PatternEncoder::new("{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"))).build(log_file).map_err(|e|format!("failed to build log pattern: {:?}", e))?,
+                            FileAppender::builder().encoder(
+                                Box::new(
+                                    PatternEncoder::new(
+                                        "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}")))
+                                .build(log_file)
+                                .map_err(
+                                    |e| format!("failed to build log pattern: {:?}", e))?,
                         ),
                     ));
                 root_builder = root_builder.appender("logfile");
