@@ -15,8 +15,10 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 lazy_static! {
-    static ref COMMISSION_BALANCE_STORAGE_KEY: H256 =
-        keccak("commission_balance");
+    static ref SPONSOR_ADDRESS_STORAGE_KEY: H256 =
+        keccak("sponsor_address");
+    static ref SPONSOR_BALANCE_STORAGE_KEY: H256 =
+        keccak("sponsor_balance");
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: H256 =
         H256::from_low_u64_le(1);
     /// If we set this key, it means every account has commission privilege.
@@ -233,58 +235,96 @@ impl OverlayAccount {
 
     pub fn balance(&self) -> &U256 { &self.balance }
 
-    pub fn commission_balance(
+    pub fn sponsor_balance(
         &self, db: &StateDb, contract_address: &Address,
     ) -> U256 {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
-        let key = keccak(rlp_stream.out());
+        let key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
+            keccak(rlp_stream.out())
+        };
         BigEndianHash::into_uint(
             &self.storage_at(db, &key).unwrap_or(H256::zero()),
         )
     }
 
-    /// Subtract `by` from current commission balance.
-    /// The caller will make sure the minimum value of current commission
-    /// balance and current balance will be greater than or equal to `by`.
-    pub fn sub_commission_balance(
-        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
-    ) {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
-        let key = keccak(rlp_stream.out());
-        let balance = BigEndianHash::into_uint(
-            &self.storage_at(db, &key).unwrap_or(H256::zero()),
-        ) - by;
-        let contract_owner = if self.ownership_changes.contains_key(&key) {
-            *self.ownership_changes.get(&key).expect("key exists")
-        } else {
-            self.ownership_cache
-                .borrow()
-                .get(&key)
-                .expect("key exists")
-                .expect("value not none")
-                .clone()
+    pub fn set_sponsor(
+        &mut self, contract_address: &Address, sponsor: Address,
+        sponsor_balance: U256,
+    )
+    {
+        let sponsor_address_key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(SPONSOR_ADDRESS_STORAGE_KEY.as_ref());
+            keccak(rlp_stream.out())
         };
         self.set_storage(
-            key,
-            BigEndianHash::from_uint(&balance),
-            contract_owner,
+            sponsor_address_key,
+            H256::from(*contract_address),
+            sponsor,
+        );
+
+        let sponsor_balance_key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
+            keccak(rlp_stream.out())
+        };
+
+        self.set_storage(
+            sponsor_balance_key,
+            BigEndianHash::from_uint(&sponsor_balance),
+            sponsor,
         );
     }
 
-    pub fn set_commission_balance(
-        &mut self, contract_address: &Address, contract_owner: &Address,
-        val: &U256,
-    )
-    {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
-        let key = keccak(rlp_stream.out());
-        self.set_storage(key, BigEndianHash::from_uint(val), *contract_owner);
+    pub fn sponsor(&self, db: &StateDb, contract_address: &Address) -> Address {
+        let sponsor_address_key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(SPONSOR_ADDRESS_STORAGE_KEY.as_ref());
+            keccak(rlp_stream.out())
+        };
+        Address::from(
+            self.storage_at(db, &sponsor_address_key)
+                .unwrap_or(H256::zero()),
+        )
+    }
+
+    pub fn sub_sponsor_balance(
+        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
+    ) {
+        let key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
+            keccak(rlp_stream.out())
+        };
+        let balance = BigEndianHash::into_uint(
+            &self.storage_at(db, &key).unwrap_or(H256::zero()),
+        ) - by;
+        let sponsor = self.sponsor(db, contract_address);
+        assert!(!sponsor.is_zero());
+        self.set_storage(key, BigEndianHash::from_uint(&balance), sponsor);
+    }
+
+    pub fn add_sponsor_balance(
+        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
+    ) {
+        let key = {
+            let mut rlp_stream = RlpStream::new_list(2);
+            rlp_stream.append_list(contract_address.as_ref());
+            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
+            keccak(rlp_stream.out())
+        };
+        let balance = BigEndianHash::into_uint(
+            &self.storage_at(db, &key).unwrap_or(H256::zero()),
+        ) + by;
+        let sponsor = self.sponsor(db, contract_address);
+        assert!(!sponsor.is_zero());
+        self.set_storage(key, BigEndianHash::from_uint(&balance), sponsor);
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
@@ -304,16 +344,16 @@ impl OverlayAccount {
             rlp_stream.append_list(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_ref());
             keccak(rlp_stream.out())
         };
-        let key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(user.as_ref());
-            keccak(rlp_stream.out())
-        };
         let special_value = self.storage_at(db, &special_key)?;
         if !special_value.is_zero() {
             Ok(true)
         } else {
+            let key = {
+                let mut rlp_stream = RlpStream::new_list(2);
+                rlp_stream.append_list(contract_address.as_ref());
+                rlp_stream.append_list(user.as_ref());
+                keccak(rlp_stream.out())
+            };
             self.storage_at(db, &key).map(|x| !x.is_zero())
         }
     }

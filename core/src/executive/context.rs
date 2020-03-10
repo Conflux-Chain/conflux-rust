@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::executive::*;
+use super::{executive::*, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
@@ -75,6 +75,7 @@ pub struct Context<'a> {
     spec: &'a Spec,
     output: OutputPolicy,
     static_flag: bool,
+    internal_contract_map: &'a InternalContractMap,
 }
 
 impl<'a> Context<'a> {
@@ -84,6 +85,7 @@ impl<'a> Context<'a> {
         spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
+        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         Context {
@@ -97,6 +99,7 @@ impl<'a> Context<'a> {
             spec,
             output,
             static_flag,
+            internal_contract_map,
         }
     }
 }
@@ -115,7 +118,6 @@ impl<'a> ContextTrait for Context<'a> {
             let owner = if self
                 .state
                 .check_commission_privilege(
-                    &STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS,
                     &self.origin.original_receiver,
                     &self.origin.original_sender,
                 )
@@ -214,6 +216,7 @@ impl<'a> ContextTrait for Context<'a> {
             self.spec,
             self.depth,
             self.static_flag,
+            self.internal_contract_map,
         );
         let out = ex.create_with_stack_depth(
             params,
@@ -233,9 +236,15 @@ impl<'a> ContextTrait for Context<'a> {
 
         assert!(trap);
 
-        let code_with_hash = self.state.code(code_address).and_then(|code| {
-            self.state.code_hash(code_address).map(|hash| (code, hash))
-        });
+        let code_with_hash = if let Some(contract) =
+            self.internal_contract_map.contract(code_address)
+        {
+            Ok((Some(contract.code()), Some(contract.code_hash())))
+        } else {
+            self.state.code(code_address).and_then(|code| {
+                self.state.code_hash(code_address).map(|hash| (code, hash))
+            })
+        };
 
         let (code, code_hash) = match code_with_hash {
             Ok((code, hash)) => (code, hash),
@@ -267,15 +276,27 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        Ok(self.state.code(address)?)
+        if let Some(contract) = self.internal_contract_map.contract(address) {
+            Ok(Some(contract.code()))
+        } else {
+            Ok(self.state.code(address)?)
+        }
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        Ok(self.state.code_hash(address)?)
+        if let Some(contract) = self.internal_contract_map.contract(address) {
+            Ok(Some(contract.code_hash()))
+        } else {
+            Ok(self.state.code_hash(address)?)
+        }
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        Ok(self.state.code_size(address)?)
+        if let Some(contract) = self.internal_contract_map.contract(address) {
+            Ok(Some(contract.code_size()))
+        } else {
+            Ok(self.state.code_size(address)?)
+        }
     }
 
     fn ret(

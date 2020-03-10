@@ -8,7 +8,7 @@ use crate::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
     consensus::ConsensusGraphInner,
-    executive::{ExecutionError, Executive},
+    executive::{ExecutionError, Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
     state::{CleanupMode, State},
@@ -1036,6 +1036,7 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
+        let internal_contract_map = InternalContractMap::new();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
@@ -1067,8 +1068,14 @@ impl ConsensusExecutionHandler {
                 let mut nonce_increased = false;
 
                 let r = {
-                    Executive::new(state, &env, &machine, &spec)
-                        .transact(transaction, &mut nonce_increased)
+                    Executive::new(
+                        state,
+                        &env,
+                        &machine,
+                        &spec,
+                        &internal_contract_map,
+                    )
+                    .transact(transaction, &mut nonce_increased)
                 };
                 // TODO Store fine-grained output status in receipts.
                 // Note now NotEnoughCash has
@@ -1474,6 +1481,7 @@ impl ConsensusExecutionHandler {
     ) -> Result<(Vec<u8>, U256), String> {
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
+        let internal_contract_map = InternalContractMap::new();
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
             return Err("invalid epoch id".to_string());
@@ -1519,7 +1527,13 @@ impl ConsensusExecutionHandler {
             gas_limit: tx.gas.clone(),
         };
         assert_eq!(state.block_number(), env.number);
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         match r {

@@ -6,7 +6,7 @@ use super::CleanupMode;
 use crate::evm::{CleanDustMode, Spec};
 use cfx_types::Address;
 use primitives::LogEntry;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// State changes which should be applied in finalize,
 /// after transaction is fully executed.
@@ -17,6 +17,12 @@ pub struct Substate {
 
     /// Any accounts that are touched.
     pub touched: HashSet<Address>,
+
+    /// Any accounts that occupy some storage.
+    pub storage_occupied: HashMap<Address, u64>,
+
+    /// Any accounts that release some storage.
+    pub storage_released: HashMap<Address, u64>,
 
     /// Any logs.
     pub logs: Vec<LogEntry>,
@@ -40,6 +46,12 @@ impl Substate {
         self.logs.extend(s.logs);
         self.sstore_clears_refund += s.sstore_clears_refund;
         self.contracts_created.extend(s.contracts_created);
+        for (address, amount) in s.storage_occupied {
+            *self.storage_occupied.entry(address).or_insert(0) += amount;
+        }
+        for (address, amount) in s.storage_released {
+            *self.storage_released.entry(address).or_insert(0) += amount;
+        }
     }
 
     /// Get the cleanup mode object from this.

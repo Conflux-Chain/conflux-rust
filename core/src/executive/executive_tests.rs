@@ -879,10 +879,10 @@ fn test_commission_privilege() {
         .unwrap());
     // set commission balance to 110000
     state
-        .set_commission_balance(&address, &sender, &U256::from(110_000))
+        .set_sponsor_balance(&address, &sender, &U256::from(110_000))
         .unwrap();
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(110_000)
     );
 
@@ -898,7 +898,7 @@ fn test_commission_privilege() {
     assert_eq!(gas_left, U256::from(62_976));
     assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(110_000)
     );
 
@@ -911,10 +911,7 @@ fn test_commission_privilege() {
     };
     assert_eq!(gas_left, U256::from(62_976));
     assert_eq!(state.balance(&caller1).unwrap(), U256::from(200_000));
-    assert_eq!(
-        state.commission_balance(&address).unwrap(),
-        U256::from(10_000)
-    );
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::from(10_000));
 
     assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
     // call with commission privilege and not enough commission balance
@@ -925,17 +922,14 @@ fn test_commission_privilege() {
     };
     assert_eq!(gas_left, U256::from(62_976));
     assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
-    assert_eq!(
-        state.commission_balance(&address).unwrap(),
-        U256::from(10_000)
-    );
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::from(10_000));
 
     // add more commission balance
     state
-        .set_commission_balance(&address, &sender, &U256::from(200_000))
+        .set_sponsor_balance(&address, &sender, &U256::from(200_000))
         .unwrap();
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(200_000)
     );
 
@@ -949,7 +943,7 @@ fn test_commission_privilege() {
     assert_eq!(gas_left, U256::from(62_976));
     assert_eq!(state.balance(&caller2).unwrap(), U256::from(200_000));
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(100_000)
     );
 
@@ -978,7 +972,7 @@ fn test_commission_privilege() {
     };
     assert_eq!(gas_left, U256::from(62_976));
     assert_eq!(state.balance(&caller3).unwrap(), U256::from(200_000));
-    assert_eq!(state.commission_balance(&address).unwrap(), U256::zero());
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::zero());
 }
 
 #[test]
