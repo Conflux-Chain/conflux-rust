@@ -298,6 +298,12 @@ impl ConsensusExecutor {
                 >= inner.pivot_index_to_height(inner.pivot_chain.len())
             {
                 state_availability_boundary.optimistic_executed_height = None;
+                // This means that we have a large pivot chain re-organization.
+                // In this case, maybe even the pivot chain
+                // block at opt_height is changed as well. In this case, we will
+                // wait for the normal execution to reset the
+                // optimistic_executed_height before we continue here.
+                return None;
             } else {
                 state_availability_boundary.optimistic_executed_height =
                     Some(next_opt_height);
