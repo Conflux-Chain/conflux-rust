@@ -1176,6 +1176,7 @@ impl ConsensusNewBlockHandler {
         let my_weight = inner.block_weight(me);
         let mut extend_pivot = false;
         let mut pivot_changed = false;
+        // FIXME Clarify the meaning of `fork_at` through this function.
         let mut fork_at;
         let old_pivot_chain_len = inner.pivot_chain.len();
 
@@ -1320,10 +1321,9 @@ impl ConsensusNewBlockHandler {
             }
         };
         debug!(
-            "Forked at height {}, fork parent block {} index {}",
+            "Forked at height {}, fork parent block {}",
             fork_at,
             &inner.arena[inner.get_pivot_block_arena_index(fork_at - 1)].hash,
-            parent,
         );
 
         // Now compute last_pivot_in_block and update pivot_metadata.
