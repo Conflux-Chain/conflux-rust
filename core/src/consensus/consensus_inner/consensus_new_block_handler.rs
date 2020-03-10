@@ -83,8 +83,16 @@ impl ConsensusNewBlockHandler {
         // chain checkpoint mechanism (`RecoverBlockFromDb` or
         // `Normal`), ensure all blocks on the pivot chain before
         // stable_era_genesis have state_valid computed
-        if will_execute {
-            // Make sure state execution is finished before setting lower_bound
+        if will_execute
+            && new_era_height
+                >= inner
+                    .data_man
+                    .state_availability_boundary
+                    .read()
+                    .lower_bound
+        {
+            // If new_era_genesis should have available state,
+            // make sure state execution is finished before setting lower_bound
             // to the new_checkpoint_era_genesis.
             executor
                 .wait_for_result(inner.arena[new_era_block_arena_index].hash);
@@ -1377,16 +1385,29 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        if fork_at <= inner.cur_era_stable_height && !self.conf.bench_mode {
+        // Only process blocks in the subtree of stable
+        if (inner.arena[me].height <= inner.cur_era_stable_height
+            || (inner.arena[me].height > inner.cur_era_stable_height
+                && inner.arena
+                    [inner.ancestor_at(me, inner.cur_era_stable_height)]
+                .hash
+                    != inner.cur_era_stable_block_hash))
+            && !self.conf.bench_mode
+        {
             if has_body {
                 self.persist_terminals(inner);
             }
             debug!(
-                "Finish activating block in ConsensusGraph: index={:?} hash={:?}, block is earlier than stable, skip execution.",
+                "Finish activating block in ConsensusGraph: index={:?} hash={:?},\
+                 block is not in the subtree of stable",
                 me, inner.arena[me].hash
             );
             return;
         }
+        fork_at = max(inner.cur_era_stable_height + 1, fork_at);
+
+        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
+        meter.update_confirmation_risks(inner);
 
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
@@ -1414,9 +1435,6 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
-
-        inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-        meter.update_confirmation_risks(inner);
 
         // Note that after the checkpoint (if happens), the old_pivot_chain_len
         // value will become obsolete
