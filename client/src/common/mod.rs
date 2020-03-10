@@ -108,18 +108,21 @@ pub fn initialize_txgens(
     conf: &Configuration, network_key_pair: KeyPair,
 ) -> (
     Option<Arc<TransactionGenerator>>,
-    Arc<Mutex<DirectTransactionGenerator>>,
+    Option<Arc<Mutex<DirectTransactionGenerator>>>,
 )
 {
     // This tx generator directly push simple transactions and erc20
     // transactions into blocks.
-    let direct_txgen_with_contract =
-        Arc::new(Mutex::new(DirectTransactionGenerator::new(
+    let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {
+        Some(Arc::new(Mutex::new(DirectTransactionGenerator::new(
             network_key_pair,
             &public_to_address(DEV_GENESIS_KEY_PAIR_2.public()),
             U256::from_dec_str("10000000000000000").unwrap(),
             U256::from_dec_str("10000000000000000").unwrap(),
-        )));
+        ))))
+    } else {
+        None
+    };
 
     // This tx generator generates transactions from preconfigured multiple
     // genesis accounts and it pushes transactions into transaction pool.
@@ -152,7 +155,7 @@ pub fn initialize_txgens(
         None
     };
 
-    (maybe_multi_genesis_txgen, direct_txgen_with_contract)
+    (maybe_multi_genesis_txgen, maybe_direct_txgen_with_contract)
 }
 
 pub use crate::configuration::Configuration;

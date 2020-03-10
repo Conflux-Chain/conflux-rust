@@ -52,7 +52,7 @@ pub struct RpcImpl {
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
-    direct_txgen: Arc<Mutex<DirectTransactionGenerator>>,
+    maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
 }
 
 impl RpcImpl {
@@ -60,7 +60,7 @@ impl RpcImpl {
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
-        direct_txgen: Arc<Mutex<DirectTransactionGenerator>>,
+        maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration,
     ) -> Self
     {
@@ -70,7 +70,7 @@ impl RpcImpl {
             block_gen,
             tx_pool,
             maybe_txgen,
-            direct_txgen,
+            maybe_direct_txgen,
             config,
         }
     }
@@ -341,13 +341,17 @@ impl RpcImpl {
             "RPC Request: send_usable_genesis_accounts start from {:?}",
             account_start_index
         );
-        self.maybe_txgen
-            .as_ref()
-            .ok_or(
-                RpcError::invalid_params("send_usable_genesis_accounts only allowed in test or dev mode with txgen set")
-            )?
-            .set_genesis_accounts_start_index(account_start_index);
-        Ok(Bytes::new("1".into()))
+        match self.maybe_txgen.as_ref() {
+            None => {
+                let mut rpc_error = RpcError::method_not_found();
+                rpc_error.message = "send_usable_genesis_accounts only allowed in test or dev mode with txgen set.".into();
+                Err(rpc_error)
+            }
+            Some(txgen) => {
+                txgen.set_genesis_accounts_start_index(account_start_index);
+                Ok(Bytes::new("1".into()))
+            }
+        }
     }
 
     pub fn transaction_by_hash(
@@ -479,20 +483,28 @@ impl RpcImpl {
         info!("RPC Request: generate_one_block_with_direct_txgen()");
 
         let block_gen = &self.block_gen;
-        let generated_transactions =
-            self.direct_txgen.lock().generate_transactions(
-                &mut block_size_limit,
-                num_txs_simple,
-                num_txs_erc20,
-            );
+        match self.maybe_direct_txgen.as_ref() {
+            None => {
+                let mut rpc_error = RpcError::method_not_found();
+                rpc_error.message = "generate_one_block_with_direct_txgen only allowed in test or dev mode.".into();
+                Err(rpc_error)
+            }
+            Some(direct_txgen) => {
+                let generated_transactions =
+                    direct_txgen.lock().generate_transactions(
+                        &mut block_size_limit,
+                        num_txs_simple,
+                        num_txs_erc20,
+                    );
 
-        block_gen.generate_block(
-            num_txs,
-            block_size_limit,
-            generated_transactions,
-        );
-
-        Ok(())
+                block_gen.generate_block(
+                    num_txs,
+                    block_size_limit,
+                    generated_transactions,
+                );
+                Ok(())
+            }
+        }
     }
 
     fn generate_custom_block(

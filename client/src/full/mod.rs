@@ -200,7 +200,7 @@ impl FullClient {
             DataPropagation::register(dp, network.clone())?;
         }
 
-        let (maybe_txgen, direct_txgen) = initialize_txgens(
+        let (maybe_txgen, maybe_direct_txgen) = initialize_txgens(
             consensus.clone(),
             txpool.clone(),
             sync.clone(),
@@ -250,7 +250,7 @@ impl FullClient {
             blockgen.clone(),
             txpool.clone(),
             maybe_txgen.clone(),
-            direct_txgen,
+            maybe_direct_txgen,
             conf.rpc_impl_config(),
         ));
 
