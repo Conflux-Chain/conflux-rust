@@ -132,6 +132,7 @@ build_config! {
         (egress_queue_capacity, (usize), 256)
         (egress_min_throttle, (usize), 10)
         (egress_max_throttle, (usize), 64)
+        (expire_block_gc_period_s, (u64), 900)
         (headers_request_timeout_ms, (u64), 10_000)
         (heartbeat_period_interval_ms, (u64), 30_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
@@ -443,6 +444,9 @@ impl Configuration {
             ),
             block_cache_gc_period: Duration::from_millis(
                 self.raw_conf.block_cache_gc_period_ms,
+            ),
+            expire_block_gc_period: Duration::from_secs(
+                self.raw_conf.expire_block_gc_period_s,
             ),
             headers_request_timeout: Duration::from_millis(
                 self.raw_conf.headers_request_timeout_ms,

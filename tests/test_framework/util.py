@@ -310,6 +310,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         "metrics_enabled": "true",
                         # "block_db_type": "\'sqlite\'"
                         "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
+                        "expire_block_gc_period_s": "5",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]
