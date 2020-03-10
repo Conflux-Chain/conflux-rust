@@ -578,8 +578,15 @@ impl SynchronizationProtocolHandler {
 
         let mut requested = HashSet::new();
 
+        let (_, era_genesis_height) =
+            self.graph.get_genesis_hash_and_height_in_current_era();
         for peer in peers {
             if let Ok(info) = self.syn.get_peer_info(&peer) {
+                if info.read().best_epoch < era_genesis_height {
+                    // This peer is probably in catch-up mode, so we do not need
+                    // to request these old terminal blocks.
+                    continue;
+                }
                 let terminals = {
                     let mut info = info.write();
                     let ts = info.latest_block_hashes.clone();
@@ -589,10 +596,12 @@ impl SynchronizationProtocolHandler {
 
                 let to_request = terminals
                     .difference(&requested)
-                    .filter(|h| {
-                        // Request never-seen blocks
-                        self.graph.data_man.block_header_by_hash(*h).is_none()
-                    })
+                    // We cannot filter out block headers with `data_man` here,
+                    // otherwise if we crash before inserting a terminal into
+                    // consensus, we will never process it
+                    // after restarting in the tests where
+                    // no new blocks are generated.
+                    .filter(|h| !self.graph.contains_block_header(&h))
                     .cloned()
                     .collect::<Vec<H256>>();
 
