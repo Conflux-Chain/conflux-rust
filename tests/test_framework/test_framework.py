@@ -365,9 +365,11 @@ class ConfluxTestFramework:
                 coverage.write_all_rpc_commands(self.options.coveragedir,
                                                 node.rpc)
 
-    def stop_node(self, i, expected_stderr='', kill=False, wait=True):
+    def stop_node(self, i, expected_stderr='', kill=False, wait=True, clean=False):
         """Stop a bitcoind test node"""
         self.nodes[i].stop_node(expected_stderr, kill, wait)
+        if clean:
+            self.nodes[i].clean_data()
 
     def stop_nodes(self):
         """Stop multiple bitcoind test nodes"""
@@ -377,6 +379,13 @@ class ConfluxTestFramework:
 
     def wait_for_node_exit(self, i, timeout):
         self.nodes[i].process.wait(timeout)
+
+    def maybe_restart_node(self, i, stop_probability, clean_probability):
+        if random.random() <= stop_probability:
+            self.log.info("stop %s", i)
+            clean_data = True if random.random() <= clean_probability else False
+            self.stop_node(i, clean=clean_data)
+            self.start_node(i, wait_time=120, phase_to_wait=("NormalSyncPhase"))
 
     # Private helper methods. These should not be accessed by the subclass test scripts.
 

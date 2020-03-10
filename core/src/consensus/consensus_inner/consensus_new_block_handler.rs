@@ -1477,6 +1477,10 @@ impl ConsensusNewBlockHandler {
                     stable_hash,
                 );
                 inner.initial_stable_future = None;
+                debug!(
+                    "Move era stable genesis to height={} hash={:?}",
+                    new_stable_height, stable_hash
+                );
             }
         }
 

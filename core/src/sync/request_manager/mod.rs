@@ -860,8 +860,7 @@ impl RequestManager {
             batcher.insert(delay, request);
         }
 
-        for (delay, request) in batcher.get_batched_requests() {
-            let next_delay = delay + *REQUEST_START_WAITING_TIME;
+        for (next_delay, request) in batcher.get_batched_requests() {
             let mut filter = PeerFilter::new(request.msg_id());
             if let Some(cap) = request.required_capability() {
                 filter = filter.with_cap(cap);
@@ -871,7 +870,7 @@ impl RequestManager {
                 None => {
                     debug!("No peer to send request, wait for next time");
                     waiting_requests.push(TimedWaitingRequest::new(
-                        Instant::now() + delay,
+                        Instant::now() + next_delay,
                         WaitingRequest(request, next_delay),
                         None,
                     ));
@@ -890,7 +889,7 @@ impl RequestManager {
                 Some(next_delay),
             ) {
                 waiting_requests.push(TimedWaitingRequest::new(
-                    Instant::now() + delay,
+                    Instant::now() + next_delay,
                     WaitingRequest(request, next_delay),
                     None,
                 ));

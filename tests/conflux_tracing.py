@@ -368,7 +368,8 @@ class ConfluxTracing(ConfluxTestFramework):
                 # retrieve new ready blocks before stopping it
                 new_blocks = self.nodes[chosen_peer].sync_graph_state()
                 self._snapshots[chosen_peer].new_blocks(new_blocks['readyBlockVec'])
-                self.stop_node(chosen_peer)
+                clean_data = True if random.random() <= 0.5 else False
+                self.stop_node(chosen_peer, clean=clean_data)
                 self._stopped_peers.append(chosen_peer)
                 self._snapshots[chosen_peer].stop()
                 self.log.info("stopped {}".format(chosen_peer))
