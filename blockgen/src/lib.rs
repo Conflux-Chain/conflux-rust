@@ -12,7 +12,7 @@ use cfxcore::{
     pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     ConsensusGraph, SharedSynchronizationGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    SharedTransactionPool, Stopable,
 };
 use lazy_static::lazy_static;
 use log::{debug, trace, warn};
@@ -26,7 +26,7 @@ use std::{
     thread, time,
 };
 use time::{Duration, SystemTime, UNIX_EPOCH};
-use txgen::{SharedTransactionGenerator, SpecialTransactionGenerator};
+use txgen::SharedTransactionGenerator;
 lazy_static! {
     static ref PACKED_ACCOUNT_SIZE: Arc<dyn Gauge<usize>> =
         GaugeUsize::register_with_group("txpool", "packed_account_size");
@@ -43,8 +43,7 @@ pub struct BlockGenerator {
     mining_author: Address,
     graph: SharedSynchronizationGraph,
     txpool: SharedTransactionPool,
-    txgen: Option<SharedTransactionGenerator>,
-    special_txgen: Option<Arc<Mutex<SpecialTransactionGenerator>>>,
+    maybe_txgen: Option<SharedTransactionGenerator>,
     sync: SharedSynchronizationService,
     state: RwLock<MiningState>,
     workers: Mutex<Vec<(Worker, mpsc::Sender<ProofOfWorkProblem>)>>,
@@ -123,8 +122,7 @@ impl BlockGenerator {
     pub fn new(
         graph: SharedSynchronizationGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService,
-        txgen: Option<SharedTransactionGenerator>,
-        special_txgen: Option<Arc<Mutex<SpecialTransactionGenerator>>>,
+        maybe_txgen: Option<SharedTransactionGenerator>,
         pow_config: ProofOfWorkConfig, mining_author: Address,
     ) -> Self
     {
@@ -133,8 +131,7 @@ impl BlockGenerator {
             mining_author,
             graph,
             txpool,
-            txgen,
-            special_txgen,
+            maybe_txgen,
             sync,
             state: RwLock::new(MiningState::Start),
             workers: Mutex::new(Vec::new()),
@@ -143,13 +140,13 @@ impl BlockGenerator {
     }
 
     /// Stop mining
-    pub fn stop(bg: &BlockGenerator) {
+    pub fn stop(&self) {
         {
-            let mut write = bg.state.write();
+            let mut write = self.state.write();
             *write = MiningState::Stop;
         }
-        if let Some(txgen) = &bg.txgen {
-            txgen.stop();
+        if let Some(txgen) = self.maybe_txgen.as_ref() {
+            txgen.stop()
         }
     }
 
@@ -439,38 +436,6 @@ impl BlockGenerator {
         // TODO: 2nd check: if the referee hashes changed
         // TODO: 3rd check: if we want to pack a new set of transactions
         false
-    }
-
-    pub fn generate_special_transactions(
-        &self, block_size_limit: &mut usize, num_txs_simple: usize,
-        num_txs_erc20: usize,
-    ) -> Result<Vec<Arc<SignedTransaction>>, String>
-    {
-        let special_txgen = self.special_txgen.as_ref()
-            .ok_or("generate_special_transactions is only allowed in test or dev mode with special_txgen set")?;
-        Ok(special_txgen.lock().generate_transactions(
-            block_size_limit,
-            num_txs_simple,
-            num_txs_erc20,
-        ))
-    }
-
-    /// Generate a block with fake transactions
-    pub fn generate_block_with_transactions(
-        &self, num_txs: usize, block_size_limit: usize,
-    ) -> Result<H256, String> {
-        let txgen = self.txgen.as_ref()
-            .ok_or("generate_block_with_transactions is only allowed in test or dev mode with txgen set")?;
-        let mut txs = Vec::new();
-        for _ in 0..num_txs {
-            let tx = txgen.generate_transaction();
-            txs.push(tx);
-        }
-        Ok(self.generate_block(
-            num_txs,
-            block_size_limit,
-            txs.into_iter().map(Arc::new).collect(),
-        ))
     }
 
     pub fn generate_fixed_block(
@@ -830,4 +795,8 @@ impl BlockGenerator {
             thread::sleep(interval);
         }
     }
+}
+
+impl Stopable for BlockGenerator {
+    fn stop(&self) { Self::stop(self) }
 }

@@ -6,7 +6,7 @@
 /// All	values are represented in MB.
 use std::cmp::max;
 
-const DEFAULT_LEDGER_CACHE_SIZE: usize = 1024;
+pub const DEFAULT_LEDGER_CACHE_SIZE: usize = 1024;
 const MIN_LEDGER_CACHE_MB: usize = 4;
 
 #[derive(Debug, PartialEq)]

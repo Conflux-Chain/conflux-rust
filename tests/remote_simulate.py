@@ -8,6 +8,7 @@ import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
 from conflux import utils
+import conflux.config
 from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int, pubtoaddr
 from test_framework.blocktools import create_block, create_transaction
@@ -19,6 +20,9 @@ from scripts.exp_latency import pscp, pssh, kill_remote_conflux
 import csv
 import os
 
+"""
+FIXME: Describe this class.
+"""
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -81,8 +85,8 @@ class RemoteSimulate(ConfluxTestFramework):
             type=str
         )
         parser.add_argument(
-            "--storage-memory-mb",
-            dest="storage_memory_mb",
+            "--storage-memory-gb",
+            dest="storage_memory_gb",
             default=2,
             type=int
         )
@@ -103,10 +107,11 @@ class RemoteSimulate(ConfluxTestFramework):
             default=1000,
             type=int
         )
+        # FIXME: renaming..
         # Tx generation will also be enabled if we enable tx propagation
         parser.add_argument(
             "--enable-tx-propagation",
-            dest="tx_propagation_enabled",
+            dest="enable_tx_propagation",
             action="store_true"
         )
         # options for LAT_LATEST
@@ -142,16 +147,18 @@ class RemoteSimulate(ConfluxTestFramework):
             default=1300,
             type=int,
         )
+        # FIXME: why?
         parser.add_argument(
             "--txgen-account-count",
             dest="txgen_account_count",
             default=1000,
             type=int,
         )
+        # FIXME: it feels stupid to repeat everything.
         parser.add_argument(
             "--tx-pool-size",
             dest="tx_pool_size",
-            default=1000000,
+            default=500_000,
             type=int,
         )
         parser.add_argument(
@@ -177,10 +184,15 @@ class RemoteSimulate(ConfluxTestFramework):
                 line = line[:-1]
                 self.ips.append(line)
 
+        # FIXME: What's the point to forward self.options to conf_parameters? It feels so stupid to copy
+        # FIXME: everything.
+
         # experiment name
-        self.tx_propagation_enabled = self.options.tx_propagation_enabled
+        self.enable_tx_propagation = self.options.enable_tx_propagation
 
         # throttling
+        # FIXME: why it's much larger than default, and why the default value is configured
+        # in exp_latency again.
         egress_settings = self.options.throttling.split(",")
         self.conf_parameters["egress_queue_capacity"] = egress_settings[2]
         self.conf_parameters["egress_max_throttle"] = egress_settings[1]
@@ -190,24 +202,24 @@ class RemoteSimulate(ConfluxTestFramework):
         target_memory = 16
 
         # storage
-        self.conf_parameters["ledger_cache_size"] = str(2000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["db_cache_size"] = str(128 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_delta_mpts_cache_size"] = str(20000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_delta_mpts_cache_start_size"] = str(10000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_delta_mpts_node_map_vec_size"] = str(80000000 // target_memory * self.options.storage_memory_mb)
-        self.conf_parameters["storage_delta_mpts_slab_idle_size"] = str(2000000 // target_memory * self.options.storage_memory_mb)
+        for k in ["db_cache_size", "ledger_cache_size"
+            "storage_delta_mpts_cache_size", "storage_delta_mpts_cache_start_size",
+            "storage_delta_mpts_slab_idle_size"]:
+            self.conf_parameters[k] = str(
+                conflux.config.production_conf[k] // target_memory * self.options.storage_memory_gb)
 
         # txpool
-        self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_mb)
+        self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_gb)
 
         # data propagation
+        # FIXME: options?
         self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
         self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
         self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
 
         # Do not keep track of tx address to save CPU/Disk costs because they are not used in the experiments
         self.conf_parameters["record_tx_address"] = "false"
-        if self.tx_propagation_enabled:
+        if self.enable_tx_propagation:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
             self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
@@ -267,7 +279,7 @@ class RemoteSimulate(ConfluxTestFramework):
     def run_test(self):
         num_nodes = len(self.nodes)
 
-        if self.tx_propagation_enabled:
+        if self.enable_tx_propagation:
             #setup usable accounts
 
             start_time = time.time()
@@ -307,7 +319,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
-            if self.tx_propagation_enabled:
+            if self.enable_tx_propagation:
                 # Generate a block with the transactions in the node's local tx pool
                 thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
             else:

@@ -12,12 +12,16 @@ use libra_crypto::secp256k1::Secp256k1PrivateKey;
 use libra_metrics::metric_server;
 use libradb::LibraDB;
 
-use crate::rpc::{
-    extractor::RpcExtractor,
-    impls::{
-        alliance::RpcImpl, common::RpcImpl as CommonImpl, pubsub::PubSubClient,
+use crate::{
+    common::ClientComponents,
+    rpc::{
+        extractor::RpcExtractor,
+        impls::{
+            alliance::RpcImpl, common::RpcImpl as CommonImpl,
+            pubsub::PubSubClient,
+        },
+        setup_debug_rpc_apis_alliance, setup_public_rpc_apis_alliance,
     },
-    setup_debug_rpc_apis_alliance, setup_public_rpc_apis_alliance,
 };
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
@@ -42,58 +46,30 @@ use cfxcore::{
     SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,
 };
-use ctrlc::CtrlC;
 use keccak_hash::keccak;
 use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::SecretStore;
 use std::{
-    any::Any,
     path::PathBuf,
     str::FromStr,
-    sync::{Arc, Weak},
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
 use threadpool::ThreadPool;
-use txgen::{propagate::DataPropagation, TransactionGenerator};
+use txgen::propagate::DataPropagation;
 
-pub struct TgArchiveClientHandle {
+pub struct TgArchiveClientExtraComponents {
     pub debug_rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_http_server: Option<HttpServer>,
     pub tg_consensus_provider: Option<Box<dyn ConsensusProvider>>,
     pub txpool: Arc<TransactionPool>,
     pub sync: SharedSynchronizationService,
-    pub txgen: Option<Arc<TransactionGenerator>>,
-    pub txgen_join_handle: Option<thread::JoinHandle<()>>,
-    pub blockgen: Arc<TGBlockGenerator>,
     pub secret_store: Arc<SecretStore>,
-    pub block_data_manager: Weak<BlockDataManager>,
     pub runtime: Runtime,
-}
-
-impl TgArchiveClientHandle {
-    pub fn into_be_dropped(
-        self,
-    ) -> (Weak<BlockDataManager>, Arc<TGBlockGenerator>, Box<dyn Any>) {
-        (
-            self.block_data_manager,
-            self.blockgen,
-            Box::new((
-                self.tg_consensus_provider,
-                self.debug_rpc_http_server,
-                self.rpc_tcp_server,
-                self.rpc_http_server,
-                self.txpool,
-                self.sync,
-                self.txgen,
-                self.secret_store,
-                self.txgen_join_handle,
-            )),
-        )
-    }
 }
 
 pub struct TgArchiveClient {}
@@ -102,7 +78,10 @@ impl TgArchiveClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
         mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
-    ) -> Result<TgArchiveClientHandle, String> {
+    ) -> Result<
+        Box<ClientComponents<TGBlockGenerator, TgArchiveClientExtraComponents>>,
+        String,
+    > {
         info!("Working directory: {:?}", std::env::current_dir());
 
         metrics::initialize(conf.metrics_config());
@@ -150,15 +129,14 @@ impl TgArchiveClient {
         let genesis_accounts = if conf.is_test_or_dev_mode() {
             match conf.raw_conf.genesis_secrets {
                 Some(ref file) => {
-                    genesis::default(secret_store.as_ref());
                     genesis::load_secrets_file(file, secret_store.as_ref())?
                 }
-                None => genesis::default(secret_store.as_ref()),
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         } else {
             match conf.raw_conf.genesis_accounts {
                 Some(ref file) => genesis::load_file(file)?,
-                None => genesis::default(secret_store.as_ref()),
+                None => genesis::default(conf.is_test_or_dev_mode()),
             }
         };
 
@@ -282,21 +260,11 @@ impl TgArchiveClient {
             DataPropagation::register(dp, network.clone())?;
         }
 
-        let txgen = Some(Arc::new(TransactionGenerator::new(
-            tg_consensus.clone(),
-            txpool.clone(),
-            sync.clone(),
-            secret_store.clone(),
-            network.net_key_pair().ok(),
-        )));
-
         let maybe_author: Option<Address> = conf.raw_conf.mining_author.clone().map(|hex_str| Address::from_str(hex_str.as_str()).expect("mining-author should be 40-digit hex string without 0x prefix"));
         let blockgen = Arc::new(TGBlockGenerator::new(
             data_man.clone(),
             txpool.clone(),
             sync.clone(),
-            //txgen.clone(),
-            //special_txgen,
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));
@@ -325,55 +293,6 @@ impl TgArchiveClient {
                     .expect("Mining thread spawn error");
             }
         }
-
-        let tx_conf = conf.tx_gen_config();
-        let txgen_handle = if tx_conf.generate_tx {
-            if !conf.is_test_or_dev_mode() {
-                panic!("generate_tx is only allowed in test or dev mode");
-            }
-            let txgen_clone = txgen.clone().unwrap();
-            let t = if conf.is_test_mode() {
-                match conf.raw_conf.genesis_secrets {
-                    Some(ref _file) => {
-                        thread::Builder::new()
-                            .name("txgen".into())
-                            .spawn(move || {
-                                TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
-                                    txgen_clone,
-                                    tx_conf,
-                                );
-                            })
-                            .expect("should succeed")
-                    }
-                    None =>{
-                        thread::Builder::new()
-                            .name("txgen".into())
-                            .spawn(move || {
-                                TransactionGenerator::generate_transactions(
-                                    txgen_clone,
-                                    tx_conf,
-                                )
-                                    .unwrap();
-                            })
-                            .expect("should succeed")
-                    }
-                }
-            } else {
-                thread::Builder::new()
-                    .name("txgen".into())
-                    .spawn(move || {
-                        TransactionGenerator::generate_transactions(
-                            txgen_clone,
-                            tx_conf,
-                        )
-                        .unwrap();
-                    })
-                    .expect("should succeed")
-            };
-            Some(t)
-        } else {
-            None
-        };
 
         let rpc_impl = Arc::new(RpcImpl::new(
             tg_consensus.clone(),
@@ -469,20 +388,20 @@ impl TgArchiveClient {
             },
         )?;
 
-        Ok(TgArchiveClientHandle {
-            block_data_manager: Arc::downgrade(&data_man),
-            debug_rpc_http_server,
-            rpc_http_server,
-            rpc_tcp_server,
-            txpool,
-            txgen,
-            txgen_join_handle: txgen_handle,
-            blockgen,
-            tg_consensus_provider: consensus_provider,
-            secret_store,
-            sync,
-            runtime,
-        })
+        Ok(Box::new(ClientComponents {
+            data_manager_weak_ptr: Arc::downgrade(&data_man),
+            blockgen: Some(blockgen),
+            other_components: TgArchiveClientExtraComponents {
+                debug_rpc_http_server,
+                rpc_http_server,
+                rpc_tcp_server,
+                txpool,
+                tg_consensus_provider: consensus_provider,
+                secret_store,
+                sync,
+                runtime,
+            },
+        }))
     }
 
     fn setup_tg_environment(
@@ -536,55 +455,5 @@ impl TgArchiveClient {
         debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
         Some(consensus_provider)
-    }
-
-    /// Use a Weak pointer to ensure that other Arc pointers are released
-    fn wait_for_drop<T>(w: Weak<T>) {
-        let sleep_duration = Duration::from_secs(1);
-        let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(10);
-        let instant = Instant::now();
-        let mut warned = false;
-        while instant.elapsed() < max_timeout {
-            if w.upgrade().is_none() {
-                return;
-            }
-            if !warned && instant.elapsed() > warn_timeout {
-                warned = true;
-                warn!("Shutdown is taking longer than expected.");
-            }
-            thread::sleep(sleep_duration);
-        }
-        eprintln!("Shutdown timeout reached, exiting uncleanly.");
-    }
-
-    pub fn close(handle: TgArchiveClientHandle) {
-        let (ledger_db, blockgen, to_drop) = handle.into_be_dropped();
-        blockgen.stop();
-        drop(blockgen);
-        drop(to_drop);
-
-        // Make sure ledger_db is properly dropped, so rocksdb can be closed
-        // cleanly
-        TgArchiveClient::wait_for_drop(ledger_db);
-    }
-
-    pub fn run_until_closed(
-        exit: Arc<(Mutex<bool>, Condvar)>, keep_alive: TgArchiveClientHandle,
-    ) {
-        CtrlC::set_handler({
-            let e = exit.clone();
-            move || {
-                *e.0.lock() = true;
-                e.1.notify_all();
-            }
-        });
-
-        let mut lock = exit.0.lock();
-        if !*lock {
-            exit.1.wait(&mut lock);
-        }
-
-        TgArchiveClient::close(keep_alive);
     }
 }
