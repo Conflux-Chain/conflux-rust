@@ -11,6 +11,8 @@ import os
 import re
 import subprocess
 import tempfile
+import shutil
+
 import requests
 import time
 import urllib.parse
@@ -208,6 +210,10 @@ class TestNode:
         self.addr = sha3(encode_int32(x) + encode_int32(y))[12:]
         self.log.debug("Get node {} nodeid {}".format(self.index, self.key))
 
+    def clean_data(self):
+        shutil.rmtree(os.path.join(self.datadir, "blockchain_db"))
+        shutil.rmtree(os.path.join(self.datadir, "storage_db"))
+        self.log.info("Cleanup data for node %d", self.index)
 
     def stop_node(self, expected_stderr='', kill=False, wait=True):
         """Stop the node."""

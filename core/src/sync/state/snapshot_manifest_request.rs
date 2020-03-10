@@ -115,12 +115,19 @@ impl SnapshotManifestRequest {
                                     epoch_receipts.push(block_execution_result);
                                 }
                                 None => {
+                                    debug!("Cannot get execution result for hash={:?} epoch_hash={:?}",
+                                        hash, epoch_hash
+                                    );
                                     return None;
                                 }
                             }
                         }
                     }
                     Err(_) => {
+                        debug!(
+                            "Cannot get block hashes for epoch {}",
+                            block.height()
+                        );
                         return None;
                     }
                 }
