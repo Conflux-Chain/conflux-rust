@@ -375,8 +375,6 @@ impl TgArchiveClient {
             None
         };
 
-        debug!("starting RPC.");
-
         let rpc_impl = Arc::new(RpcImpl::new(
             tg_consensus.clone(),
             sync.clone(),
