@@ -24,7 +24,7 @@ class MessageTest(ConfluxTestFramework):
         default_node = start_p2p_connection([self.nodes[0]])[0]
 
         # Use the mininode and blocktools functionality to manually build a block
-        # Calling the generate() rpc is easier, but this allows us to exactly
+        # Calling the generate_empty_blocks() rpc is easier, but this allows us to exactly
         # control the blocks and transactions.
         blocks = [default_node.genesis.block_header.hash]
         new_block = create_block(blocks[0], 1)

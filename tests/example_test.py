@@ -19,19 +19,19 @@ class ExampleTest(ConfluxTestFramework):
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
-        self.nodes[0].generate(1, 0)
+        self.nodes[0].generate_empty_blocks(1)
         assert (self.nodes[0].getblockcount() == 2)
         besthash = self.nodes[0].best_block_hash()
 
-        self.nodes[1].generate(2, 0)
+        self.nodes[1].generate_empty_blocks(2)
         assert (self.nodes[1].getblockcount() == 3)
 
         connect_nodes(self.nodes, 0, 1)
         sync_blocks(self.nodes[0:2])
         assert (self.nodes[0].getblockcount() == 4)
 
-        self.nodes[0].generate(1, 0)
-        self.nodes[1].generate(1, 0)
+        self.nodes[0].generate_empty_blocks(1)
+        self.nodes[1].generate_empty_blocks(1)
         sync_blocks(self.nodes[0:2])
         assert (self.nodes[0].getblockcount() == 6)
         assert (self.nodes[1].getblockcount() == 6)

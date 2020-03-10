@@ -34,10 +34,11 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
+use parking_lot::Mutex;
 use primitives::{filter::Filter, SignedTransaction, TransactionWithSignature};
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-use txgen::TransactionGenerator;
+use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 #[derive(Default)]
 pub struct RpcImplConfiguration {
@@ -50,14 +51,16 @@ pub struct RpcImpl {
     sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
-    tx_gen: Option<Arc<TransactionGenerator>>,
+    maybe_txgen: Option<Arc<TransactionGenerator>>,
+    maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
 }
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
-        tx_gen: Option<Arc<TransactionGenerator>>,
+        maybe_txgen: Option<Arc<TransactionGenerator>>,
+        maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration,
     ) -> Self
     {
@@ -66,7 +69,8 @@ impl RpcImpl {
             sync,
             block_gen,
             tx_pool,
-            tx_gen,
+            maybe_txgen,
+            maybe_direct_txgen,
             config,
         }
     }
@@ -337,13 +341,17 @@ impl RpcImpl {
             "RPC Request: send_usable_genesis_accounts start from {:?}",
             account_start_index
         );
-        self.tx_gen
-            .as_ref()
-            .ok_or(
-                RpcError::invalid_params("send_usable_genesis_accounts only allowed in test or dev mode with txgen set")
-            )?
-            .set_genesis_accounts_start_index(account_start_index);
-        Ok(Bytes::new("1".into()))
+        match self.maybe_txgen.as_ref() {
+            None => {
+                let mut rpc_error = RpcError::method_not_found();
+                rpc_error.message = "send_usable_genesis_accounts only allowed in test or dev mode with txgen set.".into();
+                Err(rpc_error)
+            }
+            Some(txgen) => {
+                txgen.set_genesis_accounts_start_index(account_start_index);
+                Ok(Bytes::new("1".into()))
+            }
+        }
     }
 
     pub fn transaction_by_hash(
@@ -423,20 +431,15 @@ impl RpcImpl {
         self.prepare_receipt(hash).into_future().boxed()
     }
 
-    fn generate(
-        &self, num_blocks: usize, num_txs: usize,
-    ) -> RpcResult<Vec<H256>> {
+    fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>> {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
-            hashes.push(
-                self.block_gen
-                    .generate_block_with_transactions(
-                        num_txs,
-                        MAX_BLOCK_SIZE_IN_BYTES,
-                    )
-                    .map_err(RpcError::invalid_params)?,
-            );
+            hashes.push(self.block_gen.generate_block(
+                0,
+                MAX_BLOCK_SIZE_IN_BYTES,
+                vec![],
+            ));
         }
         Ok(hashes)
     }
@@ -472,29 +475,36 @@ impl RpcImpl {
         Ok(hash)
     }
 
-    fn generate_one_block_special(
+    fn generate_one_block_with_direct_txgen(
         &self, num_txs: usize, mut block_size_limit: usize,
         num_txs_simple: usize, num_txs_erc20: usize,
     ) -> RpcResult<()>
     {
-        info!("RPC Request: generate_one_block_special()");
+        info!("RPC Request: generate_one_block_with_direct_txgen()");
 
         let block_gen = &self.block_gen;
-        let special_transactions = block_gen
-            .generate_special_transactions(
-                &mut block_size_limit,
-                num_txs_simple,
-                num_txs_erc20,
-            )
-            .map_err(RpcError::invalid_params)?;
+        match self.maybe_direct_txgen.as_ref() {
+            None => {
+                let mut rpc_error = RpcError::method_not_found();
+                rpc_error.message = "generate_one_block_with_direct_txgen only allowed in test or dev mode.".into();
+                Err(rpc_error)
+            }
+            Some(direct_txgen) => {
+                let generated_transactions =
+                    direct_txgen.lock().generate_transactions(
+                        &mut block_size_limit,
+                        num_txs_simple,
+                        num_txs_erc20,
+                    );
 
-        block_gen.generate_block(
-            num_txs,
-            block_size_limit,
-            special_transactions,
-        );
-
-        Ok(())
+                block_gen.generate_block(
+                    num_txs,
+                    block_size_limit,
+                    generated_transactions,
+                );
+                Ok(())
+            }
+        }
     }
 
     fn generate_custom_block(
@@ -806,10 +816,10 @@ impl TestRpc for TestRpcImpl {
             fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
             fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
             fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
-            fn generate_one_block_special(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
+            fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
             fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
             fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
-            fn generate(&self, num_blocks: usize, num_txs: usize) -> RpcResult<Vec<H256>>;
+            fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
             fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
             fn send_usable_genesis_accounts(& self, account_start_index: usize) -> RpcResult<Bytes>;
             fn set_db_crash(&self, crash_probability: f64, crash_exit_code: i32) -> RpcResult<()>;

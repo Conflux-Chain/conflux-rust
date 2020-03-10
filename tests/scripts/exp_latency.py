@@ -16,11 +16,11 @@ def execute(cmd, retry, cmd_description):
         time.sleep(1)
 
 def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
-    cmd = 'parallel-ssh -O "StrictHostKeyChecking no" -h {} -p 400 \"{}\" > /dev/null 2>&1'.format(ips_file, remote_cmd)
+    cmd = f'parallel-ssh -O "StrictHostKeyChecking no" -h "{ips_file}" -p 400 "{remote_cmd}" > /dev/null 2>&1'
     execute(cmd, retry, cmd_description)
 
 def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
-    cmd = 'parallel-scp -O "StrictHostKeyChecking no" -h {} -p 400 {} {} > /dev/null 2>&1'.format(ips_file, local, remote)
+    cmd = f'parallel-scp -O "StrictHostKeyChecking no" -h "{ips_file}" -p 400 "{local}" "{remote}" > /dev/null 2>&1'
     execute(cmd, retry, cmd_description)
 
 def kill_remote_conflux(ips_file:str):
@@ -69,10 +69,6 @@ class RemoteSimulateConfig:
         self.tx_size = tx_size
         self.num_blocks = num_blocks
 
-        self.data_propagate_enabled = False
-        self.data_propagate_interval_ms = 500
-        self.data_propagate_size = 1000
-
     def __str__(self):
         return str(self.__dict__)
 
@@ -115,10 +111,7 @@ class LatencyExperiment(ArgumentHolder):
         self.connect_peers = 8
         self.ips_file = "ips"
         self.throttling = "512,1024,2048"
-        self.data_propagate_enabled = False
-        self.data_propagate_interval_ms = 1000
-        self.data_propagate_size = 1000
-        self.storage_memory_mb = 2
+        self.storage_memory_gb = 2
         self.bandwidth = 20
         self.tps = 4000
         self.enable_tx_propagation = False
@@ -126,17 +119,18 @@ class LatencyExperiment(ArgumentHolder):
         self.max_peers_propagate = 128
         self.metrics_report_interval_ms = 3000
         self.send_tx_period_ms = 1300
-        self.txgen_account_count = 1000
+        self.txgen_account_count= int((os.path.getsize("./genesis_secrets.txt")/65)//self.slave_count)
         self.slave_count=10
 
         self.batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
 
+        # FIXME: we must specify what can be passed as arg.
         ArgumentHolder.__init__(self)
+
         if os.path.getsize("./genesis_secrets.txt") % 65 != 0:
             print("genesis secrets account error, file size should be multiple of 65")
             exit()
 
-        self.txgen_account_count= int((os.path.getsize("./genesis_secrets.txt")/65)//self.slave_count)
 
     def run(self):
         for config in RemoteSimulateConfig.parse(self.batch_config):
@@ -198,8 +192,9 @@ class LatencyExperiment(ArgumentHolder):
             "--connect-peers", str(self.connect_peers),
             "--ips-file", self.ips_file,
             "--throttling", self.throttling,
-            "--storage-memory-mb", str(self.storage_memory_mb),
+            "--storage-memory-gb", str(self.storage_memory_gb),
             "--tps", str(self.tps),
+            "--tx-pool-size", str(1_000_000),
             "--bandwidth", str(self.bandwidth),
             "--metrics-report-interval-ms", str(self.metrics_report_interval_ms),
             "--send-tx-period-ms", str(self.send_tx_period_ms),

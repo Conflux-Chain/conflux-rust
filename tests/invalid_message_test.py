@@ -111,7 +111,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         for i in range(1000):
             r = random.randint(0, self.num_nodes)
             if r < self.num_nodes:
-                self.nodes[r].generate(1, 0)
+                self.nodes[r].generate_empty_blocks(1)
             else:
                 partial_invalid_block = create_block(new_block.hash, 2, deferred_state_root=trie.UNINITIALIZED_STATE_ROOT, timestamp=i)
                 self.send_msg(NewBlock(block=partial_invalid_block))

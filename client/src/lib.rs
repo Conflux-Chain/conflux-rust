@@ -18,6 +18,7 @@ extern crate ethkey as keylib;
 mod config_macro;
 pub mod accounts;
 pub mod archive;
+pub mod common;
 pub mod configuration;
 pub mod full;
 pub mod light;

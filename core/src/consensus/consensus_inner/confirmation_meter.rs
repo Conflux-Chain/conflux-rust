@@ -313,6 +313,7 @@ impl ConfirmationMeter {
             total_weight - g_inner.pivot_chain_metadata[me_index].past_weight;
 
         let mut adaptive_risk = 0f64;
+        let d = i128::try_from(g_inner.current_difficulty.low_u128()).unwrap();
         for i in 0..n {
             let a_pivot_index = g_inner.height_to_pivot_index(
                 g_inner.cur_era_stable_height + i * psi as u64,
@@ -338,8 +339,11 @@ impl ConfirmationMeter {
                 - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
                 - y;
             let x = x_1 + x_2 + x_3;
+            let y_n = y / d;
+            let x_n = x / d;
 
-            let i_risk = 10f64.powf(-(3 * y - 2 * x - 18000) as f64 / 3500f64);
+            let i_risk =
+                10f64.powf(-(3 * y_n - 2 * x_n - 18000) as f64 / 3500f64);
             adaptive_risk += i_risk;
         }
 

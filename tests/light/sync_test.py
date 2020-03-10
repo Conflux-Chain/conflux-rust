@@ -44,7 +44,7 @@ class LightSyncTest(ConfluxTestFramework):
     def generate_blocks(self, num):
         for _ in range(num):
             chosen_peer = self.random_full_node()
-            block_hash = self.nodes[chosen_peer].generate(1, 0)
+            block_hash = self.nodes[chosen_peer].generate_empty_blocks(1)
             self.log.info("%s generate block %s", chosen_peer, block_hash)
 
     def run_test(self):
