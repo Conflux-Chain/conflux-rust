@@ -58,6 +58,7 @@ use crate::alliance_tree_graph::{
     bft::consensus::{
         chained_bft::network::NetworkSender, state_replication::TxnTransformer,
     },
+    consensus::error::ConsensusError,
     hsb_sync_protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
 };
 use libra_types::validator_change::ValidatorChangeProof;
@@ -131,9 +132,9 @@ where
     pub fn get_network(&self) -> Arc<NetworkSender<T>> { self.network.clone() }
 
     fn create_block_retriever(
-        &self, deadline: Instant, author: Author,
+        &self, deadline: Instant, author: Author, peers: Vec<AccountAddress>,
     ) -> BlockRetriever<T> {
-        BlockRetriever::new(self.network.clone(), deadline, author)
+        BlockRetriever::new(self.network.clone(), deadline, author, peers)
     }
 
     /// Leader:
@@ -380,8 +381,18 @@ where
             sync_info.hqc_round(),
             deadline_repr,
         );
+        let peers: Vec<AccountAddress> = sync_info
+            .highest_quorum_cert()
+            .ledger_info()
+            .signatures()
+            .keys()
+            .map(|k| k.clone())
+            .collect();
         self.block_store
-            .sync_to(&sync_info, self.create_block_retriever(deadline, author))
+            .sync_to(
+                &sync_info,
+                self.create_block_retriever(deadline, author, peers),
+            )
             .await
             .map_err(|e| {
                 warn!(
@@ -413,6 +424,86 @@ where
             error!("Fail to process sync info: {}", e);
         }
         debug!("process_sync_info_msg finish");
+    }
+
+    pub async fn sync_up_to_end_epoch_ledger_info(
+        &mut self, ledger_info: LedgerInfoWithSignatures,
+    ) {
+        if self
+            .block_store
+            .block_exists(ledger_info.ledger_info().commit_info().id())
+        {
+            return;
+        }
+
+        let deadline = self.pacemaker.current_round_deadline();
+        let peers = self
+            .network
+            .protocol_handler
+            .peers
+            .all_peers_satisfying(|_| true);
+        let mut account_addresses = Vec::new();
+        for peer in peers {
+            account_addresses.push(AccountAddress::new(peer.into()));
+        }
+
+        let retriever = self.create_block_retriever(
+            deadline,
+            AccountAddress::default(),
+            account_addresses,
+        );
+        let response = retriever
+            .retrieve_block(ledger_info.ledger_info().commit_info().id(), 1)
+            .await;
+        if response.is_err() {
+            error!("Failed to sync the ledger_info block");
+        }
+        let mut blocks = response.unwrap();
+        if blocks.len() != 1 {
+            error!("Failed to sync one block of ledger_info");
+        }
+        let block = blocks.pop().unwrap();
+
+        let result = self
+            .block_store
+            .sync_to(
+                &SyncInfo::new(
+                    block.quorum_cert().clone(),
+                    block.quorum_cert().clone(),
+                    None,
+                ),
+                retriever,
+            )
+            .await;
+        if result.is_err() {
+            error!("Failed to sync the epoch blocks");
+        }
+
+        let block_qc = block.quorum_cert().clone();
+        self.block_store
+            .insert_single_quorum_cert(block_qc)
+            .expect("Error inserting qc.");
+        while let Err(e) = self.block_store.execute_and_insert_block(
+            block.clone(),
+            false, /* verify_admin_transaction */
+        ) {
+            match e.downcast_ref::<ConsensusError>() {
+                Some(ConsensusError::VerifyPivotTimeout) => {
+                    debug!(
+                        "fetch_quorum_cert: Execute block {} timed out",
+                        block.id()
+                    );
+                    continue;
+                }
+                _ => error!("execute_and_insert_block Error"),
+            }
+        }
+
+        self.process_commit(
+            ledger_info,
+            false, /* broadcast_finality_proof */
+        )
+        .await;
     }
 
     /// The replica broadcasts a "timeout vote message", which includes the
@@ -530,7 +621,11 @@ where
                     highest_committed_proposal_round = Some(block.round());
                 }
                 let finality_proof = qc.ledger_info().clone();
-                self.process_commit(finality_proof).await;
+                self.process_commit(
+                    finality_proof,
+                    true, /* broadcast_finality_proof */
+                )
+                .await;
             }
         }
         let mut tc_round = None;
@@ -760,7 +855,10 @@ where
     ) -> anyhow::Result<Vote> {
         let executed_block = self
             .block_store
-            .execute_and_insert_block(proposed_block)
+            .execute_and_insert_block(
+                proposed_block,
+                true, /* verify_admin_transaction */
+            )
             .context("Failed to execute_and_insert the block")?;
         let block = executed_block.block();
 
@@ -892,6 +990,12 @@ where
         &mut self, qc: Arc<QuorumCert>, preferred_peer: Author,
     ) -> anyhow::Result<()> {
         let deadline = self.pacemaker.current_round_deadline();
+        let peers: Vec<AccountAddress> = qc
+            .ledger_info()
+            .signatures()
+            .keys()
+            .map(|k| k.clone())
+            .collect();
         // Process local highest commit cert should be no-op, this will sync us
         // to the QC
         self.block_store
@@ -901,7 +1005,7 @@ where
                     self.block_store.highest_commit_cert().as_ref().clone(),
                     None,
                 ),
-                self.create_block_retriever(deadline, preferred_peer),
+                self.create_block_retriever(deadline, preferred_peer, peers),
             )
             .await
             .context("Failed to process a newly aggregated QC")?;
@@ -941,7 +1045,9 @@ where
     /// of the committed transactions.
     async fn process_commit(
         &mut self, finality_proof: LedgerInfoWithSignatures,
-    ) {
+        broadcast_finality_proof: bool,
+    )
+    {
         let blocks_to_commit =
             match self.block_store.commit(finality_proof.clone()).await {
                 Ok(blocks) => blocks,
@@ -982,7 +1088,10 @@ where
                 })
             }
         }
-        if finality_proof.ledger_info().next_validator_set().is_some() {
+
+        if broadcast_finality_proof
+            && finality_proof.ledger_info().next_validator_set().is_some()
+        {
             let message = ValidatorChangeProof::new(
                 vec![finality_proof],
                 /* more = */ false,

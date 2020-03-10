@@ -42,7 +42,6 @@ use parking_lot::RwLock;
 use primitives::TransactionWithSignature;
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-use txgen::SharedTransactionGenerator;
 
 pub struct RpcImpl {
     //config: RpcImplConfiguration,
@@ -60,8 +59,7 @@ impl RpcImpl {
     pub fn new(
         _consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
-        _tx_gen: SharedTransactionGenerator, _config: RpcImplConfiguration,
-        executor: Arc<Executor>,
+        _config: RpcImplConfiguration, executor: Arc<Executor>,
         admin_transaction: Arc<RwLock<Option<SignedTransaction>>>,
     ) -> Self
     {
@@ -216,8 +214,8 @@ impl Cfx for CfxHandler {
         fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
         fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
         fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-        fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-        fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+        fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+        fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
         fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
@@ -265,7 +263,6 @@ impl TestRpc for TestRpcImpl {
     not_supported! {
         fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
         fn get_goodput(&self) -> RpcResult<String>;
-        fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
 
         fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
         fn generate_block_with_blame_info(&self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo) -> RpcResult<H256>;

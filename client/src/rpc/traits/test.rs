@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::{
-    BlameInfo, Block, Bytes, Receipt as RpcReceipt, Status as RpcStatus,
-};
+use super::super::types::{BlameInfo, Block, Bytes, Status as RpcStatus};
 use cfx_types::H256;
 use cfxcore::PeerInfo;
 use jsonrpc_core::Result as RpcResult;
@@ -94,11 +92,6 @@ pub trait TestRpc {
 
     #[rpc(name = "get_block_status")]
     fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)>;
-
-    #[rpc(name = "gettransactionreceipt")]
-    fn get_transaction_receipt(
-        &self, tx_hash: H256,
-    ) -> RpcResult<Option<RpcReceipt>>;
 
     #[rpc(name = "expireblockgc")]
     fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;

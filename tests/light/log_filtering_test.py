@@ -141,7 +141,7 @@ class LogFilteringTest(ConfluxTestFramework):
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
+        receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
         assert_is_hex_string(address)
         return receipt, address
@@ -149,7 +149,7 @@ class LogFilteringTest(ConfluxTestFramework):
     def call_contract(self, sender, priv_key, contract, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc[FULLNODE0].get_receipt(tx.hash_hex())
+        receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         return receipt
 
 if __name__ == "__main__":

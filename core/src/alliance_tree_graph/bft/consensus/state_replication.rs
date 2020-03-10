@@ -92,6 +92,7 @@ pub trait StateComputer: Send + Sync {
         // stored in the local storage of this node. In this case, it
         // has to check the local storage first.
         ignore_db: bool,
+        verify_admin_transaction: bool,
     ) -> Result<ProcessedVMOutput>;
 
     /// Send a successful commit. A future is fulfilled when the state is

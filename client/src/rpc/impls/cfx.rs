@@ -50,14 +50,15 @@ pub struct RpcImpl {
     sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
     tx_pool: SharedTransactionPool,
-    tx_gen: Arc<TransactionGenerator>,
+    tx_gen: Option<Arc<TransactionGenerator>>,
 }
 
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
-        tx_gen: Arc<TransactionGenerator>, config: RpcImplConfiguration,
+        tx_gen: Option<Arc<TransactionGenerator>>,
+        config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
@@ -140,13 +141,13 @@ impl RpcImpl {
             .boxed()
     }
 
-    fn bank_balance(
+    fn staking_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
-            "RPC Request: cfx_getBankBalance address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getStakingBalance address={:?} epoch_num={:?}",
             address, num
         );
 
@@ -157,20 +158,20 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         consensus_graph
-            .get_bank_balance(address, num.into())
+            .get_staking_balance(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
             .into_future()
             .boxed()
     }
 
-    fn storage_balance(
+    fn collateral_for_storage(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
-            "RPC Request: cfx_getStorageBalance address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getCollateralForStorage address={:?} epoch_num={:?}",
             address, num
         );
 
@@ -181,7 +182,7 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         consensus_graph
-            .get_storage_balance(address, num.into())
+            .get_collateral_for_storage(address, num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
             .into_future()
@@ -225,7 +226,7 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         consensus_graph
-            .get_interest_rate(epoch_num.into())
+            .get_annual_interest_rate(epoch_num.into())
             .map(|x| x.into())
             .map_err(RpcError::invalid_params)
     }
@@ -337,6 +338,10 @@ impl RpcImpl {
             account_start_index
         );
         self.tx_gen
+            .as_ref()
+            .ok_or(
+                RpcError::invalid_params("send_usable_genesis_accounts only allowed in test or dev mode with txgen set")
+            )?
             .set_genesis_accounts_start_index(account_start_index);
         Ok(Bytes::new("1".into()))
     }
@@ -424,10 +429,14 @@ impl RpcImpl {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
-            hashes.push(self.block_gen.generate_block_with_transactions(
-                num_txs,
-                MAX_BLOCK_SIZE_IN_BYTES,
-            ));
+            hashes.push(
+                self.block_gen
+                    .generate_block_with_transactions(
+                        num_txs,
+                        MAX_BLOCK_SIZE_IN_BYTES,
+                    )
+                    .map_err(RpcError::invalid_params)?,
+            );
         }
         Ok(hashes)
     }
@@ -471,11 +480,13 @@ impl RpcImpl {
         info!("RPC Request: generate_one_block_special()");
 
         let block_gen = &self.block_gen;
-        let special_transactions = block_gen.generate_special_transactions(
-            &mut block_size_limit,
-            num_txs_simple,
-            num_txs_erc20,
-        );
+        let special_transactions = block_gen
+            .generate_special_transactions(
+                &mut block_size_limit,
+                num_txs_simple,
+                num_txs_erc20,
+            )
+            .map_err(RpcError::invalid_params)?;
 
         block_gen.generate_block(
             num_txs,
@@ -743,8 +754,8 @@ impl Cfx for CfxHandler {
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
@@ -784,7 +795,6 @@ impl TestRpc for TestRpcImpl {
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
-            fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
             fn save_node_db(&self) -> RpcResult<()>;

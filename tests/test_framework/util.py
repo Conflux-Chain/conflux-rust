@@ -311,6 +311,7 @@ def initialize_datadir(dirname, n, conf_parameters):
                         # "block_db_type": "\'sqlite\'"
                         "expire_block_gc_period_s": "5",
                         "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
+                        "expire_block_gc_period_s": "5",
                       }
         for k in conf_parameters:
             local_conf[k] = conf_parameters[k]
@@ -556,7 +557,7 @@ def get_ip_address():
 
 
 def checktx(node, tx_hash):
-    return node.gettransactionreceipt(tx_hash) is not None
+    return node.cfx_getTransactionReceipt(tx_hash) is not None
 
 
 def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):

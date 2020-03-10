@@ -5,5 +5,8 @@ contract StorageInterestStaking {
 
     function withdraw(uint amount) external {
     }
+
+    function lock(uint amount, uint duration) external {
+    }
 }
 

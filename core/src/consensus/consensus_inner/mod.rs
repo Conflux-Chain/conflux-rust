@@ -474,6 +474,8 @@ pub struct ConsensusGraphNode {
 impl ConsensusGraphNode {
     pub fn past_era_weight(&self) -> i128 { self.past_era_weight }
 
+    pub fn past_num_blocks(&self) -> u64 { self.past_num_blocks }
+
     pub fn adaptive(&self) -> bool { self.adaptive }
 
     pub fn pending(&self) -> bool { self.data.pending }

@@ -123,14 +123,14 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    fn bank_balance(
+    fn staking_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
-            "RPC Request: cfx_getBankBalance address={:?} epoch={:?}",
+            "RPC Request: cfx_getStakingBalance address={:?} epoch={:?}",
             address, epoch
         );
 
@@ -144,21 +144,21 @@ impl RpcImpl {
                 .map_err(RpcError::invalid_params)?;
 
             Ok(account
-                .map(|account| account.bank_balance.into())
+                .map(|account| account.staking_balance.into())
                 .unwrap_or_default())
         };
 
         Box::new(fut.boxed().compat())
     }
 
-    fn storage_balance(
+    fn collateral_for_storage(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
-            "RPC Request: cfx_getStorageBalance address={:?} epoch={:?}",
+            "RPC Request: cfx_getCollateralForStorage address={:?} epoch={:?}",
             address, epoch
         );
 
@@ -172,7 +172,7 @@ impl RpcImpl {
                 .map_err(RpcError::invalid_params)?;
 
             Ok(account
-                .map(|account| account.storage_balance.into())
+                .map(|account| account.collateral_for_storage.into())
                 .unwrap_or_default())
         };
 
@@ -387,9 +387,9 @@ impl Cfx for CfxHandler {
         target self.rpc_impl {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-            fn bank_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn storage_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
@@ -433,7 +433,6 @@ impl TestRpc for TestRpcImpl {
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
             fn get_status(&self) -> RpcResult<RpcStatus>;
-            fn get_transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
             fn save_node_db(&self) -> RpcResult<()>;

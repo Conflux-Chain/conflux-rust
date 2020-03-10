@@ -26,7 +26,7 @@ pub mod transaction;
 pub mod transaction_address;
 
 pub use crate::{
-    account::{Account, DepositInfo},
+    account::{Account, CodeInfo, DepositInfo, StakingVoteInfo},
     block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},

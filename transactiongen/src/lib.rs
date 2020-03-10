@@ -156,6 +156,7 @@ impl TransactionGenerator {
             gas: U256::from(1u64),
             value: balance_to_transfer,
             action: Action::Call(receiver_address),
+            storage_limit: U256::MAX,
             data: Bytes::new(),
         };
         let r = tx.sign(sender_kp.secret());
@@ -264,6 +265,7 @@ impl TransactionGenerator {
                 gas: U256::from(21000u64),
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
+                storage_limit: U256::MAX,
                 data: Bytes::new(),
             };
 
@@ -398,6 +400,7 @@ impl TransactionGenerator {
                     gas: U256::from(21000u64),
                     value: balance_to_transfer,
                     action: Action::Call(receiver_address.clone()),
+                    storage_limit: U256::MAX,
                     data: Bytes::new(),
                 };
                 *sender_nonce += U256::one();
@@ -469,6 +472,7 @@ impl TransactionGenerator {
                 gas: U256::from(21000u64),
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
+                storage_limit: U256::MAX,
                 data: Bytes::new(),
             };
 
@@ -648,6 +652,7 @@ impl SpecialTransactionGenerator {
                 gas,
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
+                storage_limit: U256::MAX,
                 data: vec![0u8; 128],
             };
             let signed_transaction = tx.sign(sender_kp.secret());
@@ -733,6 +738,7 @@ impl SpecialTransactionGenerator {
                 gas,
                 value: 0.into(),
                 action: Action::Call(self.erc20_address.clone()),
+                storage_limit: U256::MAX,
                 data: tx_data,
             };
             let signed_transaction = tx.sign(sender_kp.secret());

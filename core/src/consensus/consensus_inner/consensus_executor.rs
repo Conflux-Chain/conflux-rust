@@ -30,11 +30,10 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, BlockHeaderBuilder, SignedTransaction,
-    TransactionAddress, MERKLE_NULL_NODE,
+    Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
+    MERKLE_NULL_NODE,
 };
 use std::{
-    cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::From,
     fmt::{Debug, Formatter},
@@ -65,9 +64,6 @@ pub struct RewardExecutionInfo {
     pub epoch_blocks: Vec<Arc<Block>>,
     pub epoch_block_no_reward: Vec<bool>,
     pub epoch_block_anticone_difficulties: Vec<U512>,
-    /// This block is used to estimate interest rate in current epoch. Usually,
-    /// it is a pivot block and it is 100 epochs before current epoch.
-    pub interest_rate_est_block_header: Arc<BlockHeader>,
 }
 
 impl Debug for RewardExecutionInfo {
@@ -348,23 +344,6 @@ impl ConsensusExecutor {
                     .unwrap();
                 }
 
-                let interest_rate_est_block_height = if height > 100 {
-                   height - 100
-                } else {
-                    1
-                };
-
-                let interest_rate_est_block_hash = if interest_rate_est_block_height < inner.cur_era_genesis_height {
-                    let mut block_hash = inner.arena[inner.cur_era_genesis_block_arena_index].hash;
-                    for _ in 0..inner.cur_era_genesis_height - interest_rate_est_block_height {
-                        block_hash = *inner.data_man.block_header_by_hash(&block_hash).expect("block header must exists").parent_hash();
-                    }
-                    block_hash
-                } else {
-                    inner.arena[inner.pivot_chain[inner.height_to_pivot_index(interest_rate_est_block_height)]].hash
-                };
-                let interest_rate_est_block_header = inner.data_man.block_header_by_hash(&interest_rate_est_block_hash).expect("interest_rate_est_block must exist");
-
                 let epoch_blocks =
                     inner.get_executable_epoch_blocks(pivot_arena_index);
 
@@ -477,7 +456,6 @@ impl ConsensusExecutor {
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
-                    interest_rate_est_block_header,
                 }
             },
         )
@@ -988,15 +966,17 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .expect("State exists"),
             ),
-            0.into(),
+            0.into(), /* account_start_nonce */
             self.vm.clone(),
+            start_block_number - 1, /* block_number */
         );
-        let epoch_receipts = self.process_epoch_transactions(
-            &mut state,
-            &epoch_blocks,
-            start_block_number,
-            on_local_pivot,
-        );
+        let (epoch_receipts, secondary_reward) = self
+            .process_epoch_transactions(
+                &mut state,
+                &epoch_blocks,
+                start_block_number,
+                on_local_pivot,
+            );
 
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
@@ -1004,6 +984,7 @@ impl ConsensusExecutionHandler {
             self.process_rewards_and_fees(
                 &mut state,
                 &reward_execution_info,
+                secondary_reward,
                 on_local_pivot,
                 debug_record,
             );
@@ -1054,7 +1035,7 @@ impl ConsensusExecutionHandler {
     fn process_epoch_transactions(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64, on_local_pivot: bool,
-    ) -> Vec<Arc<Vec<Receipt>>>
+    ) -> (Vec<Arc<Vec<Receipt>>>, U256)
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
@@ -1062,6 +1043,7 @@ impl ConsensusExecutionHandler {
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
+        let mut secondary_reward: U256 = U256::zero();
         for block in epoch_blocks.iter() {
             let mut receipts = Vec::new();
             debug!(
@@ -1078,6 +1060,9 @@ impl ConsensusExecutionHandler {
                 last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
+            secondary_reward += state.increase_block_number();
+            assert_eq!(state.block_number(), env.number);
+
             block_number += 1;
             for (idx, transaction) in block.transactions.iter().enumerate() {
                 let mut tx_outcome_status =
@@ -1171,7 +1156,7 @@ impl ConsensusExecutionHandler {
         }
 
         debug!("Finish processing tx for epoch");
-        epoch_receipts
+        (epoch_receipts, secondary_reward)
     }
 
     fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
@@ -1191,7 +1176,7 @@ impl ConsensusExecutionHandler {
     /// anticone difficulty
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
-        on_local_pivot: bool,
+        secondary_reward: U256, on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
@@ -1292,34 +1277,6 @@ impl ConsensusExecutionHandler {
                 }
             }
         }
-
-        let epoch_delta = max(
-            1,
-            pivot_block.block_header.height()
-                - reward_info.interest_rate_est_block_header.height(),
-        );
-        let timestamp_delta = pivot_block.block_header.timestamp()
-            - reward_info.interest_rate_est_block_header.timestamp();
-
-        // Use actutal time to calculate the interest
-        let interest_rate = state.interest_rate() * U256::from(timestamp_delta)
-            / U256::from(epoch_delta)
-            / U256::from(SECONDS_PER_YEAR);
-        // Calculate the new total tokens.
-        let total_tokens = state.total_tokens()
-            + state.total_bank_tokens() * interest_rate
-                / U256::from(INTEREST_RATE_SCALE)
-            + total_base_reward;
-        state.set_total_tokens(total_tokens);
-
-        // Calculate the new accumulate interest rate.
-        let accumulate_interest_rate =
-            state.accumulate_interest_rate() + interest_rate;
-        state.set_accumulate_interest_rate(accumulate_interest_rate);
-
-        // Calculate
-        let secondary_reward = state.total_storage_tokens() * interest_rate
-            / U256::from(INTEREST_RATE_SCALE);
 
         // Tx fee for each block in this epoch
         let mut tx_fee = HashMap::new();
@@ -1468,6 +1425,7 @@ impl ConsensusExecutionHandler {
                 });
             }
         }
+        state.add_block_rewards(total_base_reward + secondary_reward);
     }
 
     fn recompute_states(
@@ -1502,8 +1460,9 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .unwrap(),
             ),
-            0.into(),
+            0.into(), /* account_start_nonce */
             self.vm.clone(),
+            start_block_number - 1, /* block_number */
         );
         self.process_epoch_transactions(
             &mut state,
@@ -1511,6 +1470,7 @@ impl ConsensusExecutionHandler {
             start_block_number,
             false,
         )
+        .0
     }
 
     pub fn call_virtual(
@@ -1547,8 +1507,9 @@ impl ConsensusExecutionHandler {
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
-            0.into(),
+            0.into(), /* account_start_nonce */
             self.vm.clone(),
+            0, /* block_number */
         );
         drop(state_availability_boundary);
 
@@ -1561,6 +1522,7 @@ impl ConsensusExecutionHandler {
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
         };
+        assert_eq!(state.block_number(), env.number);
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);

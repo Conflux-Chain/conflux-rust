@@ -116,9 +116,11 @@ class RpcClient:
         logs = self.node.cfx_getLogs(filter.__dict__)
         return logs
 
-    def get_code(self, address: str, epoch: str) -> str:
-        assert_is_hash_string(address, length=40)
-        code = self.node.cfx_getCode(address, epoch)
+    def get_code(self, address: str, epoch: str = None) -> str:
+        if epoch is None:
+            code = self.node.cfx_getCode(address)
+        else:
+            code = self.node.cfx_getCode(address, epoch)
         assert_is_hex_string(code)
         return code
 
@@ -136,6 +138,18 @@ class RpcClient:
             return int(self.node.cfx_getBalance(addr), 0)
         else:
             return int(self.node.cfx_getBalance(addr, epoch), 0)
+
+    def get_staking_balance(self, addr: str, epoch: str = None) -> int:
+        if epoch is None:
+            return int(self.node.cfx_getStakingBalance(addr), 0)
+        else:
+            return int(self.node.cfx_getStakingBalance(addr, epoch), 0)
+
+    def get_collateral_for_storage(self, addr: str, epoch: str = None) -> int:
+        if epoch is None:
+            return int(self.node.cfx_getCollateralForStorage(addr), 0)
+        else:
+            return int(self.node.cfx_getCollateralForStorage(addr, epoch), 0)
 
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
@@ -188,7 +202,7 @@ class RpcClient:
     def get_tx(self, tx_hash: str) -> dict:
         return self.node.cfx_getTransactionByHash(tx_hash)
 
-    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None):
+    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None):
         if sender is None:
             sender = self.GENESIS_ADDR
             if priv_key is None:
@@ -200,15 +214,18 @@ class RpcClient:
         if nonce is None:
             nonce = self.get_nonce(sender)
 
+        if storage_limit is None:
+            storage_limit = 2 ** 256 - 1
+
         action = eth_utils.decode_hex(receiver)
-        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit)
         
         if sign:
             return tx.sign(priv_key)
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0):
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=None):
         if sender is None:
             sender = self.GENESIS_ADDR
 
@@ -218,9 +235,12 @@ class RpcClient:
         if nonce is None:
             nonce = self.get_nonce(sender)
 
+        if storage_limit is None:
+            storage_limit = 2 ** 256 - 1
+
         action = eth_utils.decode_hex(receiver)
         data = eth_utils.decode_hex(data_hex)
-        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit)
 
         return tx.sign(priv_key)
 
@@ -251,9 +271,6 @@ class RpcClient:
 
     def chain(self) -> list:
         return self.node.cfx_getChain()
-
-    def get_receipt(self, tx_hash: str) -> dict:
-        return self.node.gettransactionreceipt(tx_hash)
 
     def get_transaction_receipt(self, tx_hash: str) -> dict:
         assert_is_hash_string(tx_hash)

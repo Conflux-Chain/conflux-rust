@@ -70,7 +70,7 @@ class ReentrancyTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         for _ in range(5):
             client.generate_block()
-        receipts = [self.nodes[0].gettransactionreceipt(tx.hash_hex()) for tx in all_txs]
+        receipts = [client.get_transaction_receipt(tx.hash_hex()) for tx in all_txs]
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             map(lambda x: assert_equal(x['outcomeStatus'], 0), receipts)
@@ -153,39 +153,6 @@ class ReentrancyTest(ConfluxTestFramework):
         addr = eth_utils.encode_hex(user2_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
         assert_equal(balance, value)
-
-        # lock balance in bank
-        node = self.nodes[0]
-        client = RpcClient(node)
-        staking_contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
-            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
-        )
-        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
-        tx_conf = copy.deepcopy(ReentrancyTest.REQUEST_BASE)
-        tx_conf['to'] = staking_contract_addr
-        tx_data = decode_hex(staking_contract.functions.deposit(2000 * 10 ** 18).buildTransaction(tx_conf)["data"])
-        tx1 = client.new_tx(
-            value=0,
-            sender=eth_utils.encode_hex(user1_addr),
-            receiver=staking_contract_addr,
-            nonce=self.get_nonce(user1_addr),
-            data=tx_data,
-            gas=ReentrancyTest.REQUEST_BASE['gas'],
-            gas_price=ReentrancyTest.REQUEST_BASE['gasPrice'],
-            priv_key=eth_utils.encode_hex(user1))
-        tx2 = client.new_tx(
-            value=0,
-            sender=eth_utils.encode_hex(user2_addr),
-            receiver=staking_contract_addr,
-            nonce=self.get_nonce(user2_addr),
-            data=tx_data,
-            gas=ReentrancyTest.REQUEST_BASE['gas'],
-            gas_price=ReentrancyTest.REQUEST_BASE['gasPrice'],
-            priv_key=eth_utils.encode_hex(user2))
-        client.send_tx(tx1)
-        client.send_tx(tx2)
-        self.wait_for_tx([tx1, tx2], False)
 
         transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.genesis_priv_key)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']

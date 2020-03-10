@@ -24,8 +24,8 @@ use futures::{
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, EpochNumber, Receipt, SignedTransaction, StateRoot, StorageKey,
-    TransactionAddress,
+    Account, CodeInfo, EpochNumber, Receipt, SignedTransaction, StateRoot,
+    StorageKey, TransactionAddress,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
@@ -239,7 +239,13 @@ impl QueryService {
         );
 
         let key = Self::code_key(&address, &code_hash);
-        self.retrieve_state_entry(epoch, key).await
+        let entry = match self.retrieve_state_entry(epoch, key).await? {
+            None => return Ok(None),
+            Some(entry) => entry,
+        };
+        let code_info: CodeInfo =
+            rlp::decode(&entry[..]).map_err(|e| format!("{}", e))?;
+        Ok(Some(code_info.code))
     }
 
     pub async fn get_account(
