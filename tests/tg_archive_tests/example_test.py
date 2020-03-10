@@ -22,7 +22,7 @@ class ExampleTest(ConfluxTestFramework):
         }
 
     def setup_network(self):
-        self.add_nodes(self.num_nodes)
+        self.add_nodes(self.num_nodes, is_consortium=True)
         for i in range(self.num_nodes):
             self.start_node(i, ["--tg_archive"], phase_to_wait=None)
         connect_sample_nodes(self.nodes, self.log, latency_max=1)

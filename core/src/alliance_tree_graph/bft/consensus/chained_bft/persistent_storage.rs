@@ -40,6 +40,14 @@ pub trait PersistentStorage<T>: Send + Sync {
     /// Persist consensus' state
     fn save_state(&self, vote: &Vote) -> Result<()>;
 
+    /// Persist committed blocks.
+    fn save_ledger_blocks(&self, blocks: Vec<Block<T>>) -> Result<()>;
+
+    /// Get committed block.
+    fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> Result<Option<Block<T>>>;
+
     /// Construct necessary data to start consensus.
     fn start(&self) -> RecoveryData<T>;
 
@@ -294,6 +302,16 @@ impl<T: Payload> PersistentStorage<T> for StorageWriteProxy {
 
     fn save_state(&self, vote: &Vote) -> Result<()> {
         self.db.save_state(lcs::to_bytes(vote)?)
+    }
+
+    fn save_ledger_blocks(&self, blocks: Vec<Block<T>>) -> Result<()> {
+        self.db.save_ledger_blocks(blocks)
+    }
+
+    fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> Result<Option<Block<T>>> {
+        self.db.get_ledger_block(block_id)
     }
 
     fn start(&self) -> RecoveryData<T> {

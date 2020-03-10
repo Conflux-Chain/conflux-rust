@@ -199,6 +199,12 @@ impl<T: Payload> BlockStore<T> {
         tree
     }
 
+    pub fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> anyhow::Result<Option<Block<T>>> {
+        self.storage.get_ledger_block(block_id)
+    }
+
     /// Commit the given block id with the proof, returns the path from current
     /// root or error
     pub async fn commit(
@@ -219,6 +225,12 @@ impl<T: Payload> BlockStore<T> {
         let blocks_to_commit = self
             .path_from_root(block_id_to_commit)
             .unwrap_or_else(Vec::new);
+
+        let ledger_blocks: Vec<Block<T>> =
+            blocks_to_commit.iter().map(|b| b.block().clone()).collect();
+        self.storage
+            .save_ledger_blocks(ledger_blocks)
+            .expect("Failed to persist committed blocks");
 
         self.state_computer
             .commit(

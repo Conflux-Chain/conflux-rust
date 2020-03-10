@@ -1131,6 +1131,9 @@ where
             if let Some(executed_block) = self.block_store.get_block(id) {
                 id = executed_block.parent_id();
                 blocks.push(executed_block.block().clone());
+            } else if let Ok(Some(b)) = self.block_store.get_ledger_block(&id) {
+                id = b.quorum_cert().certified_block().id();
+                blocks.push(b);
             } else {
                 status = BlockRetrievalStatus::NotEnoughBlocks;
                 break;
