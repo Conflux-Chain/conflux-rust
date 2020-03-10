@@ -136,7 +136,7 @@ impl EpochExecutionTask {
 #[derive(Debug)]
 struct GetExecutionResultTask {
     pub epoch_hash: H256,
-    pub sender: Sender<EpochExecutionCommitment>,
+    pub sender: Sender<Option<EpochExecutionCommitment>>,
 }
 
 /// ConsensusExecutor processes transaction execution tasks.
@@ -249,24 +249,23 @@ impl ConsensusExecutor {
     // TODO Release Consensus inner lock if possible when the function is called
     pub fn wait_for_result(
         &self, epoch_hash: H256,
-    ) -> EpochExecutionCommitment {
+    ) -> Result<EpochExecutionCommitment, String> {
         // In consensus_graph_bench_mode execution is skipped.
         if self.consensus_graph_bench_mode {
-            EpochExecutionCommitment {
+            Ok(EpochExecutionCommitment {
                 state_root_with_aux_info: StateRootWithAuxInfo::genesis(
                     &MERKLE_NULL_NODE,
                 ),
                 receipts_root: KECCAK_EMPTY_LIST_RLP,
                 logs_bloom_hash: KECCAK_EMPTY_BLOOM,
-            }
+            })
         } else {
             if self.handler.data_man.epoch_executed(&epoch_hash) {
                 // The epoch already executed, so we do not need wait for the
                 // queue to be empty
                 return self
                     .handler
-                    .get_execution_result(&epoch_hash)
-                    .expect("it should success");
+                    .get_execution_result(&epoch_hash).ok_or("Cannot get expected execution results from the data base. Probably the database is corrupted!".to_string());
             }
             let (sender, receiver) = channel();
             debug!("Wait for execution result of epoch {:?}", epoch_hash);
@@ -277,7 +276,10 @@ impl ConsensusExecutor {
                     sender,
                 }))
                 .expect("Cannot fail");
-            receiver.recv().unwrap()
+            receiver.recv().unwrap().ok_or(
+                "Waiting for an execution result that is not enqueued!"
+                    .to_string(),
+            )
         }
     }
 
@@ -483,11 +485,9 @@ impl ConsensusExecutor {
         // Now we wait without holding the inner lock
         // Note that we must use hash instead of index because once we release
         // the lock, there might be a checkpoint coming in to break
-        // index FIXME: There could be situations that in the
-        // data_manager, the result is removed due to checkpoint, FIXME:
-        // for this rare case, we should make wait_for_result to pop up errors!
+        // index
         for state_block_hash in waiting_blocks {
-            self.wait_for_result(state_block_hash);
+            self.wait_for_result(state_block_hash)?;
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
@@ -508,7 +508,7 @@ impl ConsensusExecutor {
         );
         // for this rare case, we should make wait_for_result to pop up errors!
         for state_block_hash in waiting_blocks {
-            self.wait_for_result(state_block_hash);
+            self.wait_for_result(state_block_hash)?;
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
@@ -540,7 +540,7 @@ impl ConsensusExecutor {
                     .clone(),
             )
         };
-        let last_result = self.wait_for_result(last_state_block);
+        let last_result = self.wait_for_result(last_state_block)?;
         self.wait_and_compute_state_valid(parent_arena_index, inner_lock)?;
         {
             let inner = &mut *inner_lock.write();
@@ -742,7 +742,7 @@ impl ConsensusExecutor {
             ));
         }
 
-        let epoch_execution_result = self.wait_for_result(*block_hash);
+        let epoch_execution_result = self.wait_for_result(*block_hash)?;
         debug!(
             "Epoch {:?} has state_root={:?} receipts_root={:?} logs_bloom_hash={:?}",
             inner.arena[me].hash, epoch_execution_result.state_root_with_aux_info,
@@ -834,11 +834,7 @@ impl ConsensusExecutionHandler {
 
     fn handle_get_result_task(&self, task: GetExecutionResultTask) {
         task.sender
-            .send(
-                self.get_execution_result(&task.epoch_hash).expect(
-                    "The caller of wait_for_result ensures the existence",
-                ),
-            )
+            .send(self.get_execution_result(&task.epoch_hash))
             .expect("Consensus Worker fails");
     }
 

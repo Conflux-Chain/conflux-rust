@@ -95,7 +95,8 @@ impl ConsensusNewBlockHandler {
             // make sure state execution is finished before setting lower_bound
             // to the new_checkpoint_era_genesis.
             executor
-                .wait_for_result(inner.arena[new_era_block_arena_index].hash);
+                .wait_for_result(inner.arena[new_era_block_arena_index].hash)
+                .expect("Execution state of the pivot chain is corrupted!");
             inner
                 .compute_state_valid(stable_era_genesis)
                 .expect("Old cur_era_stable_height has available state_valid");
@@ -689,7 +690,7 @@ impl ConsensusNewBlockHandler {
                 .collect::<Vec<_>>();
         }
         self.executor.enqueue_epoch(task);
-        self.executor.wait_for_result(epoch_block_hash);
+        self.executor.wait_for_result(epoch_block_hash).unwrap();
 
         Arc::try_unwrap(debug_record_data)
             .unwrap()
