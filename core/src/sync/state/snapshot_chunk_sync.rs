@@ -596,6 +596,7 @@ impl SnapshotChunkSync {
             - (snapshot_block_header.height() + DEFERRED_STATE_EPOCH_COUNT))
             as usize;
         if offset >= state_root_vec.len() {
+            warn!("validate_blame_states: not enough state_root");
             return None;
         }
 
@@ -641,7 +642,7 @@ impl SnapshotChunkSync {
         }
         // verify the length of vector
         if vec_len != state_root_vec.len() {
-            debug!(
+            warn!(
                 "wrong length of state_root_vec, expected {}, but {} found",
                 vec_len,
                 state_root_vec.len()
@@ -685,6 +686,15 @@ impl SnapshotChunkSync {
                 || deferred_logs_bloom_hash
                     != *trusted_block.deferred_logs_bloom_hash()
             {
+                warn!("root mismatch: (state_root, receipts_root, logs_bloom_hash) \
+                should be ({:?} {:?} {:?}), get ({:?} {:?} {:?})",
+                       trusted_block.deferred_state_root(),
+                       trusted_block.deferred_receipts_root(),
+                       trusted_block.deferred_logs_bloom_hash(),
+                       deferred_state_root,
+                       deferred_receipts_root,
+                       deferred_logs_bloom_hash,
+                );
                 return None;
             }
             slice_begin = slice_end;
