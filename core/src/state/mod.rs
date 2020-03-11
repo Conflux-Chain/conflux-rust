@@ -160,7 +160,7 @@ impl State {
     pub fn check_collateral_for_storage(
         &mut self, sender: &Address, storage_limit: &U256,
         substate: &mut Substate,
-    ) -> CollateralCheckResult
+    ) -> DbResult<CollateralCheckResult>
     {
         let mut collateral_for_storage_sub = HashMap::new();
         let mut collateral_for_storage_inc = HashMap::new();
@@ -193,36 +193,48 @@ impl State {
         }
         for (addr, sub) in &collateral_for_storage_sub {
             let delta = U256::from(*sub) * *COLLATERAL_PER_STORAGE_KEY;
-            assert!(self.exists(addr).expect("no db error"));
-            self.sub_collateral_for_storage(addr, &delta)
-                .expect("no db error");
-            // TODO: handle sponsor case
+            assert!(self.exists(addr)?);
+            self.sub_collateral_for_storage(addr, &delta)?;
         }
         for (addr, inc) in &collateral_for_storage_inc {
             let delta = U256::from(*inc) * *COLLATERAL_PER_STORAGE_KEY;
-            let balance = self.balance(addr).expect("no db error");
-            // balance is not enough to cover storage incremental.
-            if delta > balance {
-                return CollateralCheckResult::NotEnoughBalance {
-                    required: delta,
-                    got: balance,
-                };
+            if self.is_contract(addr) {
+                assert!(!self.sponsor(addr)?.is_zero());
+                let sponsor_balance = self.sponsor_balance(addr)?;
+                // sponsor_balance is not enough to cover storage incremental.
+                if delta > sponsor_balance {
+                    return Ok(CollateralCheckResult::NotEnoughBalance {
+                        required: delta,
+                        got: sponsor_balance,
+                    });
+                }
+            } else {
+                let balance = self.balance(addr).expect("no db error");
+                // balance is not enough to cover storage incremental.
+                if delta > balance {
+                    return Ok(CollateralCheckResult::NotEnoughBalance {
+                        required: delta,
+                        got: balance,
+                    });
+                }
             }
-            self.add_collateral_for_storage(addr, &delta)
-                .expect("no db error");
-            // TODO: handle sponsor case
+            self.add_collateral_for_storage(addr, &delta)?
         }
 
-        let collateral_for_storage =
-            self.collateral_for_storage(sender).expect("no db error");
+        let collateral_for_storage = self.collateral_for_storage(sender)?;
         if collateral_for_storage > *storage_limit {
-            return CollateralCheckResult::ExceedStorageLimit {
+            return Ok(CollateralCheckResult::ExceedStorageLimit {
                 limit: *storage_limit,
                 required: collateral_for_storage,
-            };
+            });
         } else {
-            // TODO: summarize storage usage to substate.
-            CollateralCheckResult::Valid
+            for (addr, sub) in collateral_for_storage_sub {
+                *substate.storage_released.entry(addr).or_insert(0) += sub;
+            }
+            for (addr, inc) in collateral_for_storage_inc {
+                *substate.storage_occupied.entry(addr).or_insert(0) += inc;
+            }
+            Ok(CollateralCheckResult::Valid)
         }
     }
 
@@ -352,26 +364,18 @@ impl State {
     }
 
     pub fn sponsor(&self, address: &Address) -> DbResult<Address> {
-        self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|x| x.sponsor(&self.db, address))
+        self.require(address, false).map(|x| *x.sponsor())
     }
 
     pub fn set_sponsor(
-        &self, contract_address: &Address, sponsor: &Address,
-        sponsor_balance: &U256,
-    ) -> DbResult<()>
-    {
-        self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|mut x| {
-                x.set_sponsor(contract_address, *sponsor, *sponsor_balance)
-            })
+        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+    ) -> DbResult<()> {
+        self.require(address, false)
+            .map(|mut x| x.set_sponsor(*sponsor, *sponsor_balance))
     }
 
-    pub fn sponsor_balance(
-        &self, contract_address: &Address,
-    ) -> DbResult<U256> {
-        self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|x| x.sponsor_balance(&self.db, contract_address))
+    pub fn sponsor_balance(&self, address: &Address) -> DbResult<U256> {
+        self.require(address, false).map(|x| *x.sponsor_balance())
     }
 
     pub fn set_admin(
@@ -384,17 +388,17 @@ impl State {
     }
 
     pub fn sub_sponsor_balance(
-        &mut self, contract_address: &Address, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|mut x| x.sub_sponsor_balance(&self.db, contract_address, by))
+        self.require(address, false)
+            .map(|mut x| x.sub_sponsor_balance(by))
     }
 
     pub fn add_sponsor_balance(
-        &mut self, contract_address: &Address, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|mut x| x.add_sponsor_balance(&self.db, contract_address, by))
+        self.require(address, false)
+            .map(|mut x| x.add_sponsor_balance(by))
     }
 
     pub fn check_commission_privilege(

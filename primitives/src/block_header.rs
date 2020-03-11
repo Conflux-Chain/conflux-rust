@@ -528,6 +528,8 @@ mod tests {
             logs: vec![],
             outcome_status: 0,
             log_bloom: Bloom::zero(),
+            storage_occupied: vec![],
+            storage_released: vec![],
         };
 
         // 10 blocks with 10 empty receipts each
@@ -564,6 +566,8 @@ mod tests {
                      00000000000000000000000000000000",
                 )
                 .unwrap(),
+                storage_occupied: vec![],
+                storage_released: vec![],
             },
             Receipt {
                 gas_used: 0.into(),
@@ -588,6 +592,8 @@ mod tests {
                      00000000000000000000000000000000",
                 )
                 .unwrap(),
+                storage_occupied: vec![],
+                storage_released: vec![],
             },
         ];
 
@@ -614,6 +620,8 @@ mod tests {
                  00000000000000000000000000000000",
             )
             .unwrap(),
+            storage_occupied: vec![],
+            storage_released: vec![],
         }];
 
         let expected = keccak(

@@ -11,6 +11,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     hash::keccak,
     machine::Machine,
+    parameters::staking::COLLATERAL_PER_STORAGE_KEY,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
@@ -21,7 +22,11 @@ use crate::{
 };
 use cfx_types::{Address, H256, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
-use std::{convert::TryFrom, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+    sync::Arc,
+};
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -365,18 +370,23 @@ impl<'a> CallCreateExecutive<'a> {
                     &mut unconfirmed_substate,
                 );
                 match check_result {
-                    CollateralCheckResult::ExceedStorageLimit { .. } => {
+                    Ok(CollateralCheckResult::ExceedStorageLimit {
+                        ..
+                    }) => {
                         state.revert_to_checkpoint();
                     }
-                    CollateralCheckResult::NotEnoughBalance { .. } => {
+                    Ok(CollateralCheckResult::NotEnoughBalance { .. }) => {
                         state.revert_to_checkpoint();
                     }
-                    CollateralCheckResult::Valid => {
+                    Ok(CollateralCheckResult::Valid) => {
                         state.discard_checkpoint();
                         substate.accrue(unconfirmed_substate);
                     }
+                    Err(_) => {
+                        panic!("db error occurred during execution");
+                    }
                 }
-                check_result
+                check_result.unwrap()
             }
         }
     }
@@ -503,7 +513,7 @@ impl<'a> CallCreateExecutive<'a> {
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
-                let mut inner = || {
+                let inner = || {
                     if params.call_type != CallType::Call {
                         return Err(vm::Error::InternalContract(
                             "Incorrect call type.",
@@ -543,24 +553,25 @@ impl<'a> CallCreateExecutive<'a> {
                             &params.storage_limit,
                             &mut unconfirmed_substate,
                         ) {
-                            CollateralCheckResult::ExceedStorageLimit {
+                            Ok(CollateralCheckResult::ExceedStorageLimit {
                                 ..
-                            } => {
+                            }) => {
                                 state.revert_to_checkpoint();
                                 Err(vm::Error::ExceedStorageLimit)
                             }
-                            CollateralCheckResult::NotEnoughBalance {
+                            Ok(CollateralCheckResult::NotEnoughBalance {
                                 required,
                                 got,
-                            } => {
+                            }) => {
                                 state.revert_to_checkpoint();
                                 Err(vm::Error::NotEnoughBalanceForStorage {
                                     required,
                                     got,
                                 })
                             }
-                            CollateralCheckResult::Valid => {
+                            Ok(CollateralCheckResult::Valid) => {
                                 state.discard_checkpoint();
+                                substate.accrue(unconfirmed_substate);
                                 let internal_contract_out_buffer = Vec::new();
                                 let out_len =
                                     internal_contract_out_buffer.len();
@@ -573,6 +584,9 @@ impl<'a> CallCreateExecutive<'a> {
                                     ),
                                     apply_state: true,
                                 })
+                            }
+                            Err(_) => {
+                                panic!("db error occurred during execution");
                             }
                         }
                     }
@@ -1190,7 +1204,7 @@ impl<'a> Executive<'a> {
     ) -> vm::Result<FinalizationResult>
     {
         let vm_factory = self.state.vm_factory();
-        let mut call_exec = CallCreateExecutive::new_call_raw(
+        let result = CallCreateExecutive::new_call_raw(
             params,
             self.env,
             self.machine,
@@ -1200,64 +1214,8 @@ impl<'a> Executive<'a> {
             stack_depth,
             self.static_flag,
             self.internal_contract_map,
-        );
-        match call_exec.kind {
-            CallCreateExecutiveKind::ExecCall(ref params, ref mut substate) => {
-                // This is the acutal gas_cost for the caller.
-                let gas = match &params.data {
-                    Some(ref data) => {
-                        params.gas
-                            + Self::gas_required_for(
-                                false, /* is_create */
-                                data, self.spec,
-                            )
-                    }
-                    None => params.gas,
-                };
-                // If the sender has `commission_privilege` and the contract has
-                // enough `sponsor_balance`, we will refund `gas_cost` to the
-                // sender and use `sponsor_balance` to pay the `gas_cost`.
-                let gas_cost = gas * params.gas_price;
-                let has_privilege = self.state.check_commission_privilege(
-                    &params.code_address,
-                    &params.sender,
-                )?;
-                if has_privilege {
-                    let balance = self.state.balance(&params.code_address)?;
-                    let sponsor_balance =
-                        self.state.sponsor_balance(&params.code_address)?;
-                    if gas_cost <= sponsor_balance && gas_cost <= balance {
-                        self.state.checkpoint();
-                        self.state.sub_sponsor_balance(
-                            &params.code_address,
-                            &gas_cost,
-                        )?;
-                        assert_eq!(
-                            self.state.check_collateral_for_storage(
-                                &params.original_sender,
-                                &params.storage_limit,
-                                substate,
-                            ),
-                            CollateralCheckResult::Valid
-                        );
-                        self.state.sub_balance(
-                            &params.code_address,
-                            &gas_cost,
-                            &mut substate.to_cleanup_mode(&self.spec),
-                        )?;
-                        self.state.discard_checkpoint();
-                        self.state.add_balance(
-                            &params.sender,
-                            &gas_cost,
-                            substate.to_cleanup_mode(&self.spec),
-                        )?;
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        let result = call_exec.consume(self.state, substate);
+        )
+        .consume(self.state, substate);
 
         result
     }
@@ -1338,11 +1296,8 @@ impl<'a> Executive<'a> {
             });
         }
 
-        // TODO: check commission privilege
-
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
-        let total_cost = U512::from(tx.value) + gas_cost;
 
         // Increase nonce even sender does not have enough balance
         if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
@@ -1350,42 +1305,80 @@ impl<'a> Executive<'a> {
             *nonce_increased = true;
         }
 
+        // Check if contract will pay transaction fee for the sender.
         let mut substate = Substate::new();
+        let mut code_address = Address::zero();
+        let free_of_charge = match tx.action {
+            Action::Call(ref address) => {
+                code_address = *address;
+                // TODO: add upper bound check.
+                self.state.is_contract(address)
+                    && self
+                        .state
+                        .check_commission_privilege(&code_address, &sender)?
+                    && U512::from(self.state.sponsor_balance(address)?)
+                        >= gas_cost
+            }
+            Action::Create => false,
+        };
+
+        // Find the storage upper bound in this execution for the sender.
+        let storage_limit = {
+            let collateral_for_storage =
+                self.state.collateral_for_storage(&sender)?;
+            if tx.storage_limit <= U256::MAX - collateral_for_storage {
+                tx.storage_limit + collateral_for_storage
+            } else {
+                U256::MAX
+            }
+        };
+
         // Avoid unaffordable transactions
         let balance512 = U512::from(balance);
+        let total_cost = if free_of_charge {
+            U512::from(tx.value)
+        } else {
+            U512::from(tx.value) + gas_cost
+        };
         if balance512 < total_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
-            let actual_cost = if gas_cost > balance512 {
-                balance512
+            if !free_of_charge {
+                let actual_cost = if gas_cost > balance512 {
+                    balance512
+                } else {
+                    gas_cost
+                };
+                self.state.sub_balance(
+                    &sender,
+                    &U256::try_from(actual_cost).unwrap(),
+                    &mut substate.to_cleanup_mode(&spec),
+                )?;
             } else {
-                gas_cost
-            };
-            self.state.sub_balance(
-                &sender,
-                &U256::try_from(actual_cost).unwrap(),
-                &mut substate.to_cleanup_mode(&spec),
-            )?;
+                self.state.sub_sponsor_balance(
+                    &code_address,
+                    &U256::try_from(gas_cost).unwrap(),
+                )?;
+            }
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
             });
         }
 
-        self.state.sub_balance(
-            &sender,
-            &U256::try_from(gas_cost).unwrap(),
-            &mut substate.to_cleanup_mode(&spec),
-        )?;
-
-        let collateral_for_storage =
-            self.state.collateral_for_storage(&sender)?;
-        let storage_limit =
-            if tx.storage_limit <= U256::MAX - collateral_for_storage {
-                tx.storage_limit + collateral_for_storage
-            } else {
-                U256::MAX
-            };
+        // Subtract the transaction fee from sender or contract.
+        if !free_of_charge {
+            self.state.sub_balance(
+                &sender,
+                &U256::try_from(gas_cost).unwrap(),
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+        } else {
+            self.state.sub_sponsor_balance(
+                &code_address,
+                &U256::try_from(gas_cost).unwrap(),
+            )?;
+        }
 
         let (result, output) = match tx.action {
             Action::Create => {
@@ -1496,22 +1489,61 @@ impl<'a> Executive<'a> {
                 cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
+                storage_occupied: HashMap::new(),
+                storage_released: HashMap::new(),
                 output,
             }),
-            Ok(r) => Ok(Executed {
-                exception: if r.apply_state {
-                    None
-                } else {
-                    Some(vm::Error::Reverted)
-                },
-                gas: tx.gas,
-                gas_used,
-                fee: fees_value,
-                cumulative_gas_used: self.env.gas_used + tx.gas,
-                logs: substate.logs,
-                contracts_created: substate.contracts_created,
-                output,
-            }),
+            Ok(r) => {
+                let mut storage_occupied = HashMap::new();
+                let mut storage_released = HashMap::new();
+                if r.apply_state {
+                    let affected_address1: HashSet<_> =
+                        substate.storage_occupied.keys().cloned().collect();
+                    let affected_address2: HashSet<_> =
+                        substate.storage_released.keys().cloned().collect();
+                    for address in affected_address1.union(&affected_address2) {
+                        let inc = substate
+                            .storage_occupied
+                            .get(address)
+                            .cloned()
+                            .unwrap_or(0);
+                        let sub = substate
+                            .storage_released
+                            .get(address)
+                            .cloned()
+                            .unwrap_or(0);
+                        if inc > sub {
+                            storage_occupied.insert(
+                                *address,
+                                U256::from(inc - sub)
+                                    * *COLLATERAL_PER_STORAGE_KEY,
+                            );
+                        } else if inc < sub {
+                            storage_released.insert(
+                                *address,
+                                U256::from(sub - inc)
+                                    * *COLLATERAL_PER_STORAGE_KEY,
+                            );
+                        }
+                    }
+                }
+                Ok(Executed {
+                    exception: if r.apply_state {
+                        None
+                    } else {
+                        Some(vm::Error::Reverted)
+                    },
+                    gas: tx.gas,
+                    gas_used,
+                    fee: fees_value,
+                    cumulative_gas_used: self.env.gas_used + tx.gas,
+                    logs: substate.logs,
+                    contracts_created: substate.contracts_created,
+                    storage_occupied,
+                    storage_released,
+                    output,
+                })
+            }
         }
     }
 }

@@ -488,6 +488,7 @@ mod tests {
         storage_manager: Option<Box<FakeStateManager>>,
         state: Option<State>,
         machine: Machine,
+        internal_contract_map: InternalContractMap,
         spec: Spec,
         substate: Substate,
         env: Env,
@@ -503,11 +504,13 @@ mod tests {
             let machine = new_machine_with_builtin();
             let env = get_test_env();
             let spec = machine.spec(env.number);
+            let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
                 storage_manager: None,
                 state: None,
                 machine,
+                internal_contract_map,
                 spec,
                 substate: Substate::new(),
                 env,
@@ -546,6 +549,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            &setup.internal_contract_map,
         );
 
         assert_eq!(ctx.env().number, 100);
@@ -568,6 +572,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            &setup.internal_contract_map,
         );
 
         let hash = ctx.blockhash(
@@ -639,6 +644,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            &setup.internal_contract_map,
         );
 
         // this should panic because we have no balance on any account
@@ -686,6 +692,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
             ctx.log(log_topics, &log_data).unwrap();
         }
@@ -713,6 +720,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
             ctx.suicide(refund_account).unwrap();
         }
@@ -740,6 +748,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
             match ctx.create(
                 &U256::max_value(),
@@ -782,6 +791,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
 
             match ctx.create(

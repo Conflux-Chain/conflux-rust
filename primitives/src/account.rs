@@ -61,8 +61,12 @@ pub struct Account {
     /// order and the `amount` is sorted in decreasing order. All the
     /// `unlock_time` and `amount` is unique in the list.
     pub staking_vote_list: Vec<StakingVoteInfo>,
-    // TODO: check if we need the storage root, and if so, implement.
+    /// This is the address of the administrator of the contract.
     pub admin: Address,
+    /// This is the address of the sponsor of the contract.
+    pub sponsor: Address,
+    /// This is the amount of tokens sponsor to the contract.
+    pub sponsor_balance: U256,
 }
 
 impl Account {
@@ -80,6 +84,8 @@ impl Account {
             deposit_list: Vec::new(),
             staking_vote_list: Vec::new(),
             admin: Address::zero(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
         }
     }
 }

@@ -140,16 +140,16 @@ impl SponsorWhitelistControl {
         }
 
         let contract_address = params.sender;
-        let location = U256::from(&input[4..36]);
-        let expected_length = U256::from(&input[36..68]);
-        let actual_length = (input.len() - 68) / 32;
+        let location = U256::from(&input[0..32]);
+        let expected_length = U256::from(&input[32..64]);
+        let actual_length = (input.len() - 64) / 32;
         if location != U256::from(32)
             || U256::from(actual_length) != expected_length
         {
             return Err(vm::Error::InternalContract("invalid length"));
         }
 
-        let mut offset = 68;
+        let mut offset = 64;
         for _ in 0..actual_length {
             let user_addr =
                 Address::from_slice(&input[offset + 12..offset + 32]);

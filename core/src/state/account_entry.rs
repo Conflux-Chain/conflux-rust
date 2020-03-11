@@ -46,6 +46,11 @@ pub struct OverlayAccount {
     // Administrator of the account
     admin: Address,
 
+    // This is the address of the sponsor of the contract.
+    sponsor: Address,
+    // This is the amount of tokens sponsor to the contract.
+    sponsor_balance: U256,
+
     // This is a cache for storage change.
     storage_cache: RefCell<HashMap<H256, H256>>,
     storage_changes: HashMap<H256, H256>,
@@ -90,6 +95,8 @@ impl OverlayAccount {
             balance: account.balance,
             nonce: account.nonce,
             admin: account.admin,
+            sponsor: account.sponsor,
+            sponsor_balance: account.sponsor_balance,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -139,6 +146,8 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: Address::zero(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -166,6 +175,8 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: Address::zero(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -195,6 +206,8 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: admin.clone(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -226,6 +239,8 @@ impl OverlayAccount {
             deposit_list: self.deposit_list.clone(),
             staking_vote_list: self.staking_vote_list.clone(),
             admin: self.admin,
+            sponsor: self.sponsor,
+            sponsor_balance: self.sponsor_balance,
         }
     }
 
@@ -235,96 +250,25 @@ impl OverlayAccount {
 
     pub fn balance(&self) -> &U256 { &self.balance }
 
-    pub fn sponsor_balance(
-        &self, db: &StateDb, contract_address: &Address,
-    ) -> U256 {
-        let key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
-        BigEndianHash::into_uint(
-            &self.storage_at(db, &key).unwrap_or(H256::zero()),
-        )
+    pub fn sponsor_balance(&self) -> &U256 { &self.sponsor_balance }
+
+    pub fn set_sponsor(&mut self, sponsor: Address, sponsor_balance: U256) {
+        self.sponsor = sponsor;
+        self.sponsor_balance = sponsor_balance;
     }
 
-    pub fn set_sponsor(
-        &mut self, contract_address: &Address, sponsor: Address,
-        sponsor_balance: U256,
-    )
-    {
-        let sponsor_address_key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(SPONSOR_ADDRESS_STORAGE_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
-        self.set_storage(
-            sponsor_address_key,
-            H256::from(*contract_address),
-            sponsor,
-        );
+    pub fn sponsor(&self) -> &Address { &self.sponsor }
 
-        let sponsor_balance_key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
+    #[cfg(test)]
+    pub fn admin(&self) -> &Address { &self.admin }
 
-        self.set_storage(
-            sponsor_balance_key,
-            BigEndianHash::from_uint(&sponsor_balance),
-            sponsor,
-        );
+    pub fn sub_sponsor_balance(&mut self, by: &U256) {
+        assert!(self.sponsor_balance >= *by);
+        self.sponsor_balance -= *by;
     }
 
-    pub fn sponsor(&self, db: &StateDb, contract_address: &Address) -> Address {
-        let sponsor_address_key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(SPONSOR_ADDRESS_STORAGE_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
-        Address::from(
-            self.storage_at(db, &sponsor_address_key)
-                .unwrap_or(H256::zero()),
-        )
-    }
-
-    pub fn sub_sponsor_balance(
-        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
-    ) {
-        let key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
-        let balance = BigEndianHash::into_uint(
-            &self.storage_at(db, &key).unwrap_or(H256::zero()),
-        ) - by;
-        let sponsor = self.sponsor(db, contract_address);
-        assert!(!sponsor.is_zero());
-        self.set_storage(key, BigEndianHash::from_uint(&balance), sponsor);
-    }
-
-    pub fn add_sponsor_balance(
-        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
-    ) {
-        let key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(SPONSOR_BALANCE_STORAGE_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
-        let balance = BigEndianHash::into_uint(
-            &self.storage_at(db, &key).unwrap_or(H256::zero()),
-        ) + by;
-        let sponsor = self.sponsor(db, contract_address);
-        assert!(!sponsor.is_zero());
-        self.set_storage(key, BigEndianHash::from_uint(&balance), sponsor);
+    pub fn add_sponsor_balance(&mut self, by: &U256) {
+        self.sponsor_balance += *by;
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
@@ -577,13 +521,21 @@ impl OverlayAccount {
     }
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {
-        self.sub_balance(by);
+        if self.is_contract {
+            self.sub_sponsor_balance(by);
+        } else {
+            self.sub_balance(by);
+        }
         self.collateral_for_storage += *by;
     }
 
     pub fn sub_collateral_for_storage(&mut self, by: &U256) {
         assert!(self.collateral_for_storage >= *by);
-        self.add_balance(by);
+        if self.is_contract {
+            self.add_sponsor_balance(by);
+        } else {
+            self.add_balance(by);
+        }
         self.collateral_for_storage -= *by;
     }
 
@@ -614,6 +566,8 @@ impl OverlayAccount {
             balance: self.balance,
             nonce: self.nonce,
             admin: self.admin,
+            sponsor: self.sponsor,
+            sponsor_balance: self.sponsor_balance,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -732,6 +686,8 @@ impl OverlayAccount {
         self.balance = other.balance;
         self.nonce = other.nonce;
         self.admin = other.admin;
+        self.sponsor = other.sponsor;
+        self.sponsor_balance = other.sponsor_balance;
         self.code_hash = other.code_hash;
         self.code_cache = other.code_cache;
         self.code_owner = other.code_owner;
@@ -785,7 +741,7 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change(
         &mut self, db: &StateDb,
-    ) -> HashMap<Address, (usize, usize)> {
+    ) -> HashMap<Address, (u64, u64)> {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();

@@ -150,6 +150,24 @@ class RpcClient:
             return int(self.node.cfx_getCollateralForStorage(addr), 0)
         else:
             return int(self.node.cfx_getCollateralForStorage(addr, epoch), 0)
+    
+    def get_sponsor(self, addr: str, epoch: str = None) -> str:
+        if epoch is None:
+            return self.node.cfx_getSponsor(addr)
+        else:
+            return self.node.cfx_getSponsor(addr, epoch)
+
+    def get_sponsor_balance(self, addr: str, epoch: str = None) -> int:
+        if epoch is None:
+            return int(self.node.cfx_getSponsorBalance(addr), 0)
+        else:
+            return int(self.node.cfx_getSponsorBalance(addr, epoch), 0)
+
+    def get_admin(self, addr: str, epoch: str = None) -> str:
+        if epoch is None:
+            return self.node.cfx_getAdmin(addr)
+        else:
+            return self.node.cfx_getAdmin(addr, epoch)
 
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:

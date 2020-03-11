@@ -488,6 +488,32 @@ impl ConsensusGraph {
         })
     }
 
+    /// Get the current sponsor of a contract
+    pub fn get_sponsor(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<H160, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc.map_or(H160::zero(), |acc| acc.sponsor).into()
+        } else {
+            H160::zero()
+        })
+    }
+
+    /// Get the current sponsor balance of a contract
+    pub fn get_sponsor_balance(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<U256, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
+            maybe_acc
+                .map_or(U256::zero(), |acc| acc.sponsor_balance)
+                .into()
+        } else {
+            U256::zero()
+        })
+    }
+
     /// Get the current bank balance of an address
     pub fn get_staking_balance(
         &self, address: H160, epoch_number: EpochNumber,

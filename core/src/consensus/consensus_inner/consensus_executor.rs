@@ -26,7 +26,8 @@ use parity_bytes::ToPretty;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        Receipt, StorageChange,
+        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
@@ -1066,6 +1067,8 @@ impl ConsensusExecutionHandler {
                     TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                 let mut transaction_logs = Vec::new();
                 let mut nonce_increased = false;
+                let mut storage_released = Vec::new();
+                let mut storage_occupied = Vec::new();
 
                 let r = {
                     Executive::new(
@@ -1098,6 +1101,22 @@ impl ConsensusExecutionHandler {
                     Ok(ref executed) => {
                         env.gas_used = executed.cumulative_gas_used;
                         transaction_logs = executed.logs.clone();
+                        storage_occupied = executed
+                            .storage_occupied
+                            .iter()
+                            .map(|(addr, amount)| StorageChange {
+                                address: *addr,
+                                amount: *amount,
+                            })
+                            .collect();
+                        storage_released = executed
+                            .storage_released
+                            .iter()
+                            .map(|(addr, amount)| StorageChange {
+                                address: *addr,
+                                amount: *amount,
+                            })
+                            .collect();
                         if executed.exception.is_some() {
                             warn!(
                                 "tx execution error: transaction={:?}, err={:?}",
@@ -1125,6 +1144,8 @@ impl ConsensusExecutionHandler {
                     tx_outcome_status,
                     env.gas_used,
                     transaction_logs,
+                    storage_occupied,
+                    storage_released,
                 );
                 receipts.push(receipt);
 

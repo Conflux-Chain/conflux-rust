@@ -776,6 +776,8 @@ impl ConsensusExecutionHandler {
                     tx_outcome_status,
                     cumulative_gas_used,
                     transaction_logs,
+                    Vec::new(), /* storage_occupied */
+                    Vec::new(), /* storage_released */
                 );
                 receipts.push(receipt);
 

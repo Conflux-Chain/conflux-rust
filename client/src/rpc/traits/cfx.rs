@@ -54,6 +54,18 @@ pub trait Cfx {
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<RpcH160>;
 
+    /// Returns sponsor of the given contract
+    #[rpc(name = "cfx_getSponsor")]
+    fn sponsor(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<RpcH160>;
+
+    /// Returns sponsor balance of the given contract
+    #[rpc(name = "cfx_getSponsorBalance")]
+    fn sponsor_balance(
+        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<RpcU256>;
+
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
     fn staking_balance(
