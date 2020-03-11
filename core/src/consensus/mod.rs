@@ -235,7 +235,10 @@ impl ConsensusGraph {
         }
         let best_state_block =
             self.inner.read_recursive().best_state_block_hash();
-        self.executor.wait_for_result(best_state_block);
+        match self.executor.wait_for_result(best_state_block) {
+            Ok(_) => (),
+            Err(msg) => warn!("wait_for_generation() gets the following error from the ConsensusExecutor: {}", msg)
+        }
     }
 
     /// Determine whether the next mined block should have adaptive weight or
@@ -582,16 +585,22 @@ impl ConsensusGraph {
             )
         };
         let epoch_hash = results_with_epoch.0;
-        // FIXME handle state_root in snapshot
-        // We already has transaction address with epoch_hash executed, so we
-        // can always get the state_root with `wait_for_result`
-        let state_root = self
-            .executor
-            .wait_for_result(epoch_hash)
-            .state_root_with_aux_info
-            .state_root
-            .compute_state_root_hash();
-        Some((results_with_epoch, address, state_root))
+        match self.executor.wait_for_result(epoch_hash) {
+            Ok(execution_commitment) => {
+                // We already has transaction address with epoch_hash executed,
+                // so we can always get the state_root with
+                // `wait_for_result`
+                let state_root = execution_commitment
+                    .state_root_with_aux_info
+                    .state_root
+                    .compute_state_root_hash();
+                Some((results_with_epoch, address, state_root))
+            }
+            Err(msg) => {
+                warn!("get_transaction_receipt_and_block_info() gets the following error from ConsensusExecutor: {}", msg);
+                None
+            }
+        }
     }
 
     pub fn transaction_count(
@@ -1026,37 +1035,46 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// Wait until the best state has been executed, and return the state
     fn get_best_state(&self) -> State {
-        let (best_state_hash, past_num_blocks) = {
-            let inner = self.inner.read();
-            let best_state_hash = inner.best_state_block_hash();
-            let arena_index = inner.hash_to_arena_indices[&best_state_hash];
-            let past_num_blocks = inner.arena[arena_index].past_num_blocks();
-            (best_state_hash, past_num_blocks)
-        };
-        self.executor.wait_for_result(best_state_hash);
-        // FIXME: it's only absolute safe with lock, otherwise storage /
-        // FIXME: epoch_id may be gone due to snapshotting / checkpointing?
-        let (_state_index_guard, best_state_index) = self
-            .data_man
-            .get_state_readonly_index(&best_state_hash)
-            .into();
-        if let Ok(state) = self
-            .data_man
-            .storage_manager
-            .get_state_no_commit(best_state_index.unwrap())
-        {
-            state
-                .map(|db| {
-                    State::new(
-                        StateDb::new(db),
-                        0.into(),           /* account_start_nonce */
-                        Default::default(), /* vm */
-                        past_num_blocks,    /* block_numer */
-                    )
-                })
-                .expect("Best state has been executed")
-        } else {
-            panic!("get_best_state: Error for hash {}", best_state_hash);
+        // To handle the extremely rare case that the large chain
+        // reorganization/checkpoint happens in this call (because we do
+        // not hold the inner lock). We are going to use a loop to retry
+        // here if wait_for_result() fails.
+        loop {
+            let (best_state_hash, past_num_blocks) = {
+                let inner = self.inner.read();
+                let best_state_hash = inner.best_state_block_hash();
+                let arena_index = inner.hash_to_arena_indices[&best_state_hash];
+                let past_num_blocks =
+                    inner.arena[arena_index].past_num_blocks();
+                (best_state_hash, past_num_blocks)
+            };
+            if self.executor.wait_for_result(best_state_hash).is_ok() {
+                let (_state_index_guard, best_state_index) = self
+                    .data_man
+                    .get_state_readonly_index(&best_state_hash)
+                    .into();
+                if let Ok(state) = self
+                    .data_man
+                    .storage_manager
+                    .get_state_no_commit(best_state_index.unwrap())
+                {
+                    return state
+                        .map(|db| {
+                            State::new(
+                                StateDb::new(db),
+                                0.into(), /* account_start_nonce */
+                                Default::default(), /* vm */
+                                past_num_blocks, /* block_numer */
+                            )
+                        })
+                        .expect("Best state has been executed");
+                } else {
+                    panic!(
+                        "get_best_state: Error for hash {}",
+                        best_state_hash
+                    );
+                }
+            }
         }
     }
 
