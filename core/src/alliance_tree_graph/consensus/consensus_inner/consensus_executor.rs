@@ -773,14 +773,14 @@ impl ConsensusExecutionHandler {
                 receipts.push(receipt);
 
                 let hash = transaction.hash();
-                let tx_addr = TransactionIndex {
+                let tx_index = TransactionIndex {
                     block_hash: block.hash(),
                     index: idx,
                 };
                 if tx_outcome_status
                     != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
                 {
-                    self.data_man.insert_transaction_address(&hash, &tx_addr);
+                    self.data_man.insert_transaction_index(&hash, &tx_index);
                 }
             }
 

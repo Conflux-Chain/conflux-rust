@@ -400,7 +400,7 @@ impl TreeGraphConsensus {
     ) -> Option<(BlockExecutionResultWithEpoch, TransactionIndex, H256)> {
         let (results_with_epoch, address) = {
             let inner = self.inner.read();
-            let address = self.data_man.transaction_address_by_hash(
+            let address = self.data_man.transaction_index_by_hash(
                 tx_hash, false, /* update_cache */
             )?;
             (
@@ -784,18 +784,18 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, Receipt, TransactionIndex)> {
-        // We need to hold the inner lock to ensure that tx_address and receipts
+        // We need to hold the inner lock to ensure that tx_index and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((receipt, address)) =
-            inner.get_transaction_receipt_with_address(hash)
+        if let Some((receipt, tx_index)) =
+            inner.get_transaction_receipt_with_index(hash)
         {
             let block = self.data_man.block_by_hash(
-                &address.block_hash,
+                &tx_index.block_hash,
                 false, /* update_cache */
             )?;
-            let transaction = (*block.transactions[address.index]).clone();
-            Some((transaction, receipt, address))
+            let transaction = (*block.transactions[tx_index.index]).clone();
+            Some((transaction, receipt, tx_index))
         } else {
             None
         }

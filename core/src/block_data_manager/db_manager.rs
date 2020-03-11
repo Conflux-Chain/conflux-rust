@@ -3,7 +3,7 @@ use crate::{
         BlockExecutionResultWithEpoch, CheckpointHashes,
         EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
     },
-    db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_ADDRESS},
+    db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
     storage::{
         storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite,
         KvdbSqliteStatements,
@@ -35,7 +35,7 @@ fn rocks_db_col(table: DBTable) -> u32 {
     match table {
         DBTable::Misc => COL_MISC,
         DBTable::Blocks => COL_BLOCKS,
-        DBTable::Transactions => COL_TX_ADDRESS,
+        DBTable::Transactions => COL_TX_INDEX,
         DBTable::EpochNumbers => COL_EPOCH_NUMBER,
     }
 }
@@ -142,13 +142,13 @@ impl DBManager {
         self.remove_from_db(DBTable::Blocks, hash.as_bytes());
     }
 
-    pub fn insert_transaction_address_to_db(
+    pub fn insert_transaction_index_to_db(
         &self, hash: &H256, value: &TransactionIndex,
     ) {
         self.insert_encodable_val(DBTable::Transactions, hash.as_bytes(), value)
     }
 
-    pub fn transaction_address_from_db(
+    pub fn transaction_index_from_db(
         &self, hash: &H256,
     ) -> Option<TransactionIndex> {
         self.load_decodable_val(DBTable::Transactions, hash.as_bytes())
