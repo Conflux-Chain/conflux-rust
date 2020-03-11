@@ -1884,6 +1884,11 @@ impl ConsensusNewBlockHandler {
             self.data_man.state_availability_boundary.read().lower_bound;
         let start_pivot_index =
             (state_boundary_height - inner.cur_era_genesis_height) as usize;
+        if start_pivot_index >= inner.pivot_chain.len() {
+            // The pivot chain of recovered blocks is before state lower_bound,
+            // so we do not need to construct any pivot state.
+            return;
+        }
         let start_hash = inner.arena[inner.pivot_chain[start_pivot_index]].hash;
         // Here, we should ensure the epoch_execution_commitment for stable hash
         // must be loaded into memory. Since, in some rare cases, the number of
