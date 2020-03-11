@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use self::account_entry::{
-    AccountEntry, AccountState, OverlayAccount, StorageValue,
-};
+use self::account_entry::{AccountEntry, AccountState, OverlayAccount};
 use crate::{
     bytes::Bytes,
     executive::{
@@ -19,7 +17,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey};
+use primitives::{Account, EpochId, StorageKey, StorageValue};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},

@@ -27,7 +27,6 @@ class LogFilteringTest(ConfluxTestFramework):
         self.setup_nodes()
 
     def run_test(self):
-        time.sleep(7)
         priv_key = default_config["GENESIS_PRI_KEY"]
         sender = eth_utils.encode_hex(privtoaddr(priv_key))
 
