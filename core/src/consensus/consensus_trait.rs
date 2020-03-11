@@ -10,8 +10,7 @@ use crate::{
 
 use cfx_types::{H256, U256};
 use primitives::{
-    receipt::Receipt, EpochId, EpochNumber, SignedTransaction,
-    TransactionAddress,
+    receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
 use std::{any::Any, sync::Arc};
 
@@ -57,7 +56,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionAddress)>;
+    ) -> Option<(SignedTransaction, Receipt, TransactionIndex)>;
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
 

@@ -16,7 +16,7 @@ use primitives::{
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
-    BlockHeaderBuilder, TransactionAddress,
+    BlockHeaderBuilder, TransactionIndex,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -157,7 +157,7 @@ impl Block {
                                         Some(Receipt::new(
                                             (**tx).clone(),
                                             receipt.clone(),
-                                            TransactionAddress {
+                                            TransactionIndex {
                                                 block_hash: b.hash(),
                                                 index: idx,
                                             },

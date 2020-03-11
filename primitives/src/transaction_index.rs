@@ -10,13 +10,13 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 #[derive(
     Debug, PartialEq, Eq, Hash, Clone, RlpEncodable, RlpDecodable, Default,
 )]
-pub struct TransactionAddress {
+pub struct TransactionIndex {
     /// Block hash
     pub block_hash: H256,
     /// Transaction index within the block
     pub index: usize,
 }
 
-impl MallocSizeOf for TransactionAddress {
+impl MallocSizeOf for TransactionIndex {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }

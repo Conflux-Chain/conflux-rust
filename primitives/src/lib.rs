@@ -23,7 +23,7 @@ pub mod receipt;
 pub mod state_root;
 pub mod storage_key;
 pub mod transaction;
-pub mod transaction_address;
+pub mod transaction_index;
 
 pub use crate::{
     account::{Account, CodeInfo, DepositInfo, StakingVoteInfo},
@@ -38,5 +38,5 @@ pub use crate::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,
         TransactionWithSignatureSerializePart, TxPropagateId,
     },
-    transaction_address::TransactionAddress,
+    transaction_index::TransactionIndex,
 };

@@ -13,7 +13,7 @@ use crate::{
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::H256;
 use db::SystemDB;
-use primitives::{Block, BlockHeader, SignedTransaction, TransactionAddress};
+use primitives::{Block, BlockHeader, SignedTransaction, TransactionIndex};
 use rlp::{Decodable, Encodable, Rlp};
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
@@ -143,14 +143,14 @@ impl DBManager {
     }
 
     pub fn insert_transaction_address_to_db(
-        &self, hash: &H256, value: &TransactionAddress,
+        &self, hash: &H256, value: &TransactionIndex,
     ) {
         self.insert_encodable_val(DBTable::Transactions, hash.as_bytes(), value)
     }
 
     pub fn transaction_address_from_db(
         &self, hash: &H256,
-    ) -> Option<TransactionAddress> {
+    ) -> Option<TransactionIndex> {
         self.load_decodable_val(DBTable::Transactions, hash.as_bytes())
     }
 

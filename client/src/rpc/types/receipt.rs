@@ -7,7 +7,7 @@ use cfx_types::{Address, Bloom};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::Receipt as PrimitiveReceipt, transaction::Action,
-    SignedTransaction as PrimitiveTransaction, TransactionAddress,
+    SignedTransaction as PrimitiveTransaction, TransactionIndex,
 };
 use serde_derive::Serialize;
 
@@ -44,7 +44,7 @@ pub struct Receipt {
 impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
-        transaction_address: TransactionAddress,
+        transaction_address: TransactionIndex,
     ) -> Receipt
     {
         let mut address = None;

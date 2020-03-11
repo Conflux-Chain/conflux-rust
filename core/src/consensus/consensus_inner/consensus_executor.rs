@@ -30,7 +30,7 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, SignedTransaction, TransactionAddress,
+    Block, BlockHeaderBuilder, SignedTransaction, TransactionIndex,
     MERKLE_NULL_NODE,
 };
 use std::{
@@ -1127,7 +1127,7 @@ impl ConsensusExecutionHandler {
 
                 if on_local_pivot {
                     let hash = transaction.hash();
-                    let tx_addr = TransactionAddress {
+                    let tx_addr = TransactionIndex {
                         block_hash: block.hash(),
                         index: idx,
                     };

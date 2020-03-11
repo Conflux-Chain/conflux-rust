@@ -23,7 +23,7 @@ use hibitset::BitSet;
 use link_cut_tree::SizeMinLinkCutTree;
 use parking_lot::Mutex;
 use primitives::{
-    receipt::Receipt, Block, BlockHeader, EpochId, TransactionAddress,
+    receipt::Receipt, Block, BlockHeader, EpochId, TransactionIndex,
 };
 use slab::Slab;
 use std::{
@@ -878,7 +878,7 @@ impl ConsensusGraphInner {
 
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionAddress)> {
+    ) -> Option<(Receipt, TransactionIndex)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
         let address = self.data_man.transaction_address_by_hash(
             tx_hash, false, /* update_cache */

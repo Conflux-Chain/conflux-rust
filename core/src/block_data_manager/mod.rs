@@ -22,7 +22,7 @@ use primitives::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, EpochId, SignedTransaction, TransactionAddress,
+    Block, BlockHeader, EpochId, SignedTransaction, TransactionIndex,
     TransactionWithSignature, NULL_EPOCH,
 };
 use rlp::DecoderError;
@@ -145,7 +145,7 @@ pub struct BlockDataManager {
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
-    transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    transaction_addresses: RwLock<HashMap<H256, TransactionIndex>>,
     /// Caching for receipts_root and logs_bloom for epochs after
     /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
     /// the pivot block that produces the result when executed.
@@ -611,7 +611,7 @@ impl BlockDataManager {
 
     pub fn transaction_address_by_hash(
         &self, hash: &H256, update_cache: bool,
-    ) -> Option<TransactionAddress> {
+    ) -> Option<TransactionIndex> {
         self.get(
             hash,
             &self.transaction_addresses,
@@ -625,9 +625,9 @@ impl BlockDataManager {
     }
 
     pub fn insert_transaction_address(
-        &self, hash: &H256, tx_address: &TransactionAddress,
+        &self, hash: &H256, tx_address: &TransactionIndex,
     ) {
-        if !self.config.record_tx_address {
+        if !self.config.record_tx_index {
             return;
         }
         // tx_address will not be updated if it's not inserted before
@@ -861,7 +861,7 @@ impl BlockDataManager {
             return false;
         }
 
-        if self.config.record_tx_address && on_local_pivot {
+        if self.config.record_tx_index && on_local_pivot {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
@@ -889,7 +889,7 @@ impl BlockDataManager {
                         | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
                             self.insert_transaction_address(
                                 &tx.hash,
-                                &TransactionAddress {
+                                &TransactionIndex {
                                     block_hash: *block_hash,
                                     index: tx_idx,
                                 },
@@ -1125,19 +1125,19 @@ pub enum DbType {
 }
 
 pub struct DataManagerConfiguration {
-    record_tx_address: bool,
+    record_tx_index: bool,
     tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
 }
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_address: bool, tx_cache_index_maintain_timeout: Duration,
+        record_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
         db_type: DbType,
     ) -> Self
     {
         Self {
-            record_tx_address,
+            record_tx_index,
             tx_cache_index_maintain_timeout,
             db_type,
         }

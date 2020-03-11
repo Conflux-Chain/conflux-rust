@@ -39,7 +39,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    Account, EpochId, EpochNumber, SignedTransaction, TransactionAddress,
+    Account, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
 use rayon::prelude::*;
 use std::{
@@ -567,7 +567,7 @@ impl ConsensusGraph {
 
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
-    ) -> Option<(BlockExecutionResultWithEpoch, TransactionAddress, H256)> {
+    ) -> Option<(BlockExecutionResultWithEpoch, TransactionIndex, H256)> {
         let (results_with_epoch, address) = {
             let inner = self.inner.read();
             let address = self.data_man.transaction_address_by_hash(
@@ -1002,7 +1002,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionAddress)> {
+    ) -> Option<(SignedTransaction, Receipt, TransactionIndex)> {
         // We need to hold the inner lock to ensure that tx_address and receipts
         // are consistent
         let inner = self.inner.read();
