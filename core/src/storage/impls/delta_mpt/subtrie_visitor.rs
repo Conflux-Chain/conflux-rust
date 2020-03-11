@@ -183,6 +183,9 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let compressed_path = trie_node.compressed_path_ref().into();
 
                 let children = trie_node.children_table.clone();
+                let path_without_first_nibble =
+                    trie_node.compressed_path_ref().end_mask()
+                        == CompressedPathRaw::HAS_SECOND_NIBBLE;
                 drop(trie_node);
                 let children_merkles =
                     self.retrieve_children_hashes(children)?;
@@ -190,6 +193,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                     children_merkles.into(),
                     maybe_value,
                     compressed_path,
+                    path_without_first_nibble,
                 )
             });
         }

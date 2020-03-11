@@ -253,7 +253,10 @@ impl CowNodeRef {
     {
         if self.owned {
             if guarded_trie_node.as_ref().as_ref().has_value() {
-                assert_eq!(key_prefix.end_mask(), 0);
+                assert_eq!(
+                    key_prefix.end_mask(),
+                    CompressedPathRaw::HAS_SECOND_NIBBLE
+                );
                 values.push((
                     key_prefix.path_slice().to_vec(),
                     guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
@@ -355,10 +358,11 @@ impl CowNodeRef {
 
     fn set_merkle(
         &mut self, children_merkles: MaybeMerkleTableRef,
-        trie_node: &mut TrieNodeDeltaMpt,
+        path_without_first_nibble: bool, trie_node: &mut TrieNodeDeltaMpt,
     ) -> MerkleHash
     {
-        let path_merkle = trie_node.compute_merkle(children_merkles);
+        let path_merkle = trie_node
+            .compute_merkle(children_merkles, path_without_first_nibble);
         trie_node.set_merkle(&path_merkle);
 
         path_merkle
@@ -385,6 +389,7 @@ impl CowNodeRef {
             .sum()
     }
 
+    // FIXME: depth should be changed to path_steps.
     /// Get if unowned, compute if owned.
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
@@ -410,7 +415,11 @@ impl CowNodeRef {
                 depth,
             )?;
 
-            let merkle = self.set_merkle(children_merkles.as_ref(), trie_node);
+            let merkle = self.set_merkle(
+                children_merkles.as_ref(),
+                (depth % 2) != 0,
+                trie_node,
+            );
 
             Ok(merkle)
         } else {
@@ -573,7 +582,10 @@ impl CowNodeRef {
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
-            assert_eq!(key_prefix.end_mask(), 0);
+            assert_eq!(
+                key_prefix.end_mask(),
+                CompressedPathRaw::HAS_SECOND_NIBBLE
+            );
             values.push((
                 key_prefix.path_slice().to_vec(),
                 guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
