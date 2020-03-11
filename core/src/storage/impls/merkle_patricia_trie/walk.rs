@@ -121,7 +121,9 @@ pub(super) fn walk<
     // included because even if it's the second-half, it must be
     // already matched before entering this TrieNode.
     let memcmp_len = min(
-        path_slice.len() - ((path_end_mask != 0) as usize),
+        path_slice.len()
+            - ((path_end_mask != CompressedPathRaw::HAS_SECOND_NIBBLE)
+                as usize),
         key.len(),
     );
 
