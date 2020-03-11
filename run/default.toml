@@ -288,10 +288,10 @@ jsonrpc_local_http_port=12539
 
 # ---------------- Transaction Cache Parameters -----------------
 
-# Whether to record transaction addresses.
+# Whether to record transaction indices.
 # This only needs to be enabled if you want to answer transaction-related RPCs.
 #
-# record_tx_address = true
+# record_tx_index = true
 
 # Time to keep transactions in in-memory transaction cache.
 #

@@ -32,7 +32,7 @@ pub const COL_MISC: u32 = 0;
 /// Column for Blocks.
 pub const COL_BLOCKS: u32 = 1;
 /// Column for Transaction Index
-pub const COL_TX_ADDRESS: u32 = 2;
+pub const COL_TX_INDEX: u32 = 2;
 /// Column for Transaction Index
 pub const COL_EPOCH_NUMBER: u32 = 3;
 /// Number of columns in DB

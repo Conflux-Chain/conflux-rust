@@ -361,8 +361,8 @@ impl RpcImpl {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, receipt, tx_addr) = info;
-            let rpc_receipt = RpcReceipt::new(tx.clone(), receipt, tx_addr);
+            let (tx, receipt, tx_index) = info;
+            let rpc_receipt = RpcReceipt::new(tx.clone(), receipt, tx_index);
             let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
             return Ok(Some(rpc_tx)).into_future().boxed();
         }
