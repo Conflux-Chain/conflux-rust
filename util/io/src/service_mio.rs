@@ -42,6 +42,7 @@ use std::{
     time::Duration,
 };
 
+// FIXME: Use a enum type instead for function calls.
 /// Timer ID
 pub type TimerToken = usize;
 /// Timer ID
