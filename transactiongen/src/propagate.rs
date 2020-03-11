@@ -51,6 +51,7 @@ impl NetworkProtocolHandler for DataPropagation {
     fn initialize(&self, io: &dyn NetworkContext) {
         info!("DataPropagation.initialize: register timers");
 
+        // FIXME: should use TX_TIMER instead of magic number 0.
         if let Err(e) = io.register_timer(0, self.interval) {
             error!(
                 "DataPropagation.initialize: failed to register timer, {:?}",
