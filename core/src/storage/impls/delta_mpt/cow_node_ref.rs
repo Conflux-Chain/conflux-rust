@@ -18,7 +18,7 @@ const CHILDREN_MERKLE_UNCACHED_THRESHOLD: u32 = 4;
 /// Depth 5 = 69905 (70k) nodes.
 /// Depth 6 = 1118481 (1.1 million) nodes.
 /// Depth 7 = 17895697 (18 million) nodes.
-const CHILDREN_MERKLE_DEPTH_THRESHOLD: u8 = 4;
+const CHILDREN_MERKLE_DEPTH_THRESHOLD: u16 = 4;
 
 /// CowNodeRef facilities access and modification to trie nodes in multi-version
 /// MPT. It offers read-only access to the original trie node, and creates an
@@ -253,7 +253,10 @@ impl CowNodeRef {
     {
         if self.owned {
             if guarded_trie_node.as_ref().as_ref().has_value() {
-                assert_eq!(key_prefix.end_mask(), 0);
+                assert_eq!(
+                    key_prefix.end_mask(),
+                    CompressedPathRaw::HAS_SECOND_NIBBLE
+                );
                 values.push((
                     key_prefix.path_slice().to_vec(),
                     guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
@@ -355,10 +358,11 @@ impl CowNodeRef {
 
     fn set_merkle(
         &mut self, children_merkles: MaybeMerkleTableRef,
-        trie_node: &mut TrieNodeDeltaMpt,
+        path_without_first_nibble: bool, trie_node: &mut TrieNodeDeltaMpt,
     ) -> MerkleHash
     {
-        let path_merkle = trie_node.compute_merkle(children_merkles);
+        let path_merkle = trie_node
+            .compute_merkle(children_merkles, path_without_first_nibble);
         trie_node.set_merkle(&path_merkle);
 
         path_merkle
@@ -390,7 +394,8 @@ impl CowNodeRef {
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt,
         db: &mut DeltaDbOwnedReadTraitObj,
-        children_merkle_map: &mut ChildrenMerkleMap, depth: u8,
+        children_merkle_map: &mut ChildrenMerkleMap,
+        parent_node_path_steps: u16,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -400,6 +405,10 @@ impl CowNodeRef {
                     &mut self.node_ref,
                 )
             };
+            // node_path_steps = 2 * parent_node_path_size_in_bytes +
+            // compressed_path_path_steps.
+            let node_path_steps = ((parent_node_path_steps + 1) & (!1))
+                + trie_node.compressed_path_ref().path_steps();
             let children_merkles = self.get_or_compute_children_merkles(
                 trie,
                 owned_node_set,
@@ -407,10 +416,14 @@ impl CowNodeRef {
                 allocator_ref,
                 db,
                 children_merkle_map,
-                depth,
+                node_path_steps,
             )?;
 
-            let merkle = self.set_merkle(children_merkles.as_ref(), trie_node);
+            let merkle = self.set_merkle(
+                children_merkles.as_ref(),
+                (parent_node_path_steps % 2) == 0,
+                trie_node,
+            );
 
             Ok(merkle)
         } else {
@@ -439,7 +452,7 @@ impl CowNodeRef {
         trie_node: &mut TrieNodeDeltaMpt,
         allocator_ref: AllocatorRefRefDeltaMpt,
         db: &mut DeltaDbOwnedReadTraitObj,
-        children_merkle_map: &mut ChildrenMerkleMap, depth: u8,
+        children_merkle_map: &mut ChildrenMerkleMap, node_path_steps: u16,
     ) -> Result<MaybeMerkleTable>
     {
         match trie_node.children_table.get_children_count() {
@@ -453,7 +466,8 @@ impl CowNodeRef {
                 };
                 let known_merkles = match original_db_key {
                     Some(original_db_key)
-                        if depth > CHILDREN_MERKLE_DEPTH_THRESHOLD =>
+                        if node_path_steps
+                            > CHILDREN_MERKLE_DEPTH_THRESHOLD =>
                     {
                         let node_memory_manager =
                             trie.get_node_memory_manager();
@@ -478,7 +492,7 @@ impl CowNodeRef {
                     db,
                     children_merkle_map,
                     known_merkles,
-                    depth,
+                    node_path_steps,
                 )
             }
             _ => self.compute_children_merkles(
@@ -489,7 +503,7 @@ impl CowNodeRef {
                 db,
                 children_merkle_map,
                 None,
-                depth,
+                node_path_steps,
             ),
         }
     }
@@ -501,13 +515,15 @@ impl CowNodeRef {
         allocator_ref: AllocatorRefRefDeltaMpt,
         db: &mut DeltaDbOwnedReadTraitObj,
         children_merkle_map: &mut ChildrenMerkleMap,
-        known_merkles: Option<CompactedChildrenTable<MerkleHash>>, depth: u8,
+        known_merkles: Option<CompactedChildrenTable<MerkleHash>>,
+        node_path_steps: u16,
     ) -> Result<MaybeMerkleTable>
     {
         let known = known_merkles.is_some();
         let known_merkles = known_merkles.unwrap_or_default();
         let mut merkles = [MERKLE_NULL_NODE; CHILDREN_COUNT];
-        let record_children_merkles = depth > CHILDREN_MERKLE_DEPTH_THRESHOLD
+        let record_children_merkles = node_path_steps
+            > CHILDREN_MERKLE_DEPTH_THRESHOLD
             && self.uncached_children_count(trie, trie_node)
                 > CHILDREN_MERKLE_UNCACHED_THRESHOLD;
 
@@ -534,7 +550,7 @@ impl CowNodeRef {
                                 allocator_ref,
                                 db,
                                 children_merkle_map,
-                                depth + 1,
+                                node_path_steps,
                             );
                             // There is no change to the child reference so the
                             // return value is dropped.
@@ -573,7 +589,10 @@ impl CowNodeRef {
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
-            assert_eq!(key_prefix.end_mask(), 0);
+            assert_eq!(
+                key_prefix.end_mask(),
+                CompressedPathRaw::HAS_SECOND_NIBBLE
+            );
             values.push((
                 key_prefix.path_slice().to_vec(),
                 guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
@@ -698,10 +717,7 @@ impl CowNodeRef {
             CowNodeRef::new(child_node_ref, owned_node_set, self.mpt_id);
         let compressed_path_ref =
             trie_node.as_ref().as_ref().compressed_path_ref();
-        let path_prefix = CompressedPathRaw::new(
-            compressed_path_ref.path_slice(),
-            compressed_path_ref.end_mask(),
-        );
+        let path_prefix = CompressedPathRaw::from(compressed_path_ref);
         // FIXME: Here we may hold the lock and get the trie node for the child
         // FIXME: node. think about it.
         drop(trie_node);
