@@ -25,14 +25,14 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, CodeInfo, EpochNumber, Receipt, SignedTransaction, StateRoot,
-    StorageKey, TransactionAddress,
+    StorageKey, TransactionIndex,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
 type TxInfo = (
     SignedTransaction,
     Receipt,
-    TransactionAddress,
+    TransactionIndex,
     Option<u64>,  /* maybe_epoch */
     Option<H256>, /* maybe_state_root */
 );
@@ -180,7 +180,7 @@ impl QueryService {
 
     async fn retrieve_tx_info(
         &self, hash: H256,
-    ) -> Result<(SignedTransaction, Receipt, TransactionAddress), String> {
+    ) -> Result<(SignedTransaction, Receipt, TransactionIndex), String> {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         with_timeout(

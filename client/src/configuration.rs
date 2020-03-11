@@ -168,7 +168,6 @@ build_config! {
         (subnet_quota, (usize), 32)
 
         // Transaction cache/transaction pool section.
-        (record_tx_address, (bool), true)
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
         (tx_pool_size, (usize), 500_000)
         (tx_pool_min_tx_gas_price, (u64), 1)
@@ -194,6 +193,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
+        (record_tx_index, (bool), true)
 
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
@@ -528,7 +528,7 @@ impl Configuration {
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
         DataManagerConfiguration::new(
-            self.raw_conf.record_tx_address,
+            self.raw_conf.record_tx_index,
             Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),

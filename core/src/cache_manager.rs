@@ -122,8 +122,8 @@ pub struct CacheSize {
     pub blocks: usize,
     /// Block Receipts cache size.
     pub block_receipts: usize,
-    /// Transaction Addresses cache size.
-    pub transaction_addresses: usize,
+    /// Transaction indices cache size.
+    pub transaction_indices: usize,
     /// Compact blocks cache size.
     pub compact_blocks: usize,
 }
@@ -133,7 +133,7 @@ impl CacheSize {
     pub fn total(&self) -> usize {
         self.blocks
             + self.block_receipts
-            + self.transaction_addresses
+            + self.transaction_indices
             + self.compact_blocks
     }
 }

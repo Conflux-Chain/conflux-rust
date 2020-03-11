@@ -22,7 +22,7 @@ use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
-    SignedTransaction, TransactionAddress,
+    SignedTransaction, TransactionIndex,
 };
 use slab::Slab;
 use std::{
@@ -2158,25 +2158,25 @@ impl ConsensusGraphInner {
 
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionAddress)> {
+    ) -> Option<(Receipt, TransactionIndex)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
-        let address = self.data_man.transaction_address_by_hash(
+        let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if address is not None because
         let receipts = self
             .block_execution_results_by_hash(
-                &address.block_hash,
+                &tx_index.block_hash,
                 false, /* update_cache */
             )?
             .1
             .receipts;
         Some((
             receipts
-                .get(address.index)
-                .expect("Error: can't get receipt by tx_address ")
+                .get(tx_index.index)
+                .expect("Error: can't get receipt by tx_index ")
                 .clone(),
-            address,
+            tx_index,
         ))
     }
 

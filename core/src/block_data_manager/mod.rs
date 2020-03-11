@@ -22,7 +22,7 @@ use primitives::{
         Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeader, EpochId, SignedTransaction, TransactionAddress,
+    Block, BlockHeader, EpochId, SignedTransaction, TransactionIndex,
     TransactionWithSignature, NULL_EPOCH,
 };
 use rlp::DecoderError;
@@ -145,7 +145,7 @@ pub struct BlockDataManager {
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
-    transaction_addresses: RwLock<HashMap<H256, TransactionAddress>>,
+    transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
     /// Caching for receipts_root and logs_bloom for epochs after
     /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
     /// the pivot block that produces the result when executed.
@@ -232,7 +232,7 @@ impl BlockDataManager {
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
-            transaction_addresses: Default::default(),
+            transaction_indices: Default::default(),
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
             invalid_block_set: Default::default(),
@@ -380,14 +380,14 @@ impl BlockDataManager {
     pub fn transaction_by_hash(
         &self, hash: &H256,
     ) -> Option<Arc<SignedTransaction>> {
-        let address = self
-            .transaction_address_by_hash(hash, false /* update_cache */)?;
+        let tx_index = self
+            .transaction_index_by_hash(hash, false /* update_cache */)?;
         let block = self.block_by_hash(
-            &address.block_hash,
+            &tx_index.block_hash,
             false, /* update_cache */
         )?;
-        assert!(address.index < block.transactions.len());
-        Some(block.transactions[address.index].clone())
+        assert!(tx_index.index < block.transactions.len());
+        Some(block.transactions[tx_index.index].clone())
     }
 
     /// insert block body in memory cache and db
@@ -609,13 +609,13 @@ impl BlockDataManager {
         }
     }
 
-    pub fn transaction_address_by_hash(
+    pub fn transaction_index_by_hash(
         &self, hash: &H256, update_cache: bool,
-    ) -> Option<TransactionAddress> {
+    ) -> Option<TransactionIndex> {
         self.get(
             hash,
-            &self.transaction_addresses,
-            |key| self.db_manager.transaction_address_from_db(key),
+            &self.transaction_indices,
+            |key| self.db_manager.transaction_index_from_db(key),
             if update_cache {
                 Some(CacheId::TransactionAddress(*hash))
             } else {
@@ -624,24 +624,24 @@ impl BlockDataManager {
         )
     }
 
-    pub fn insert_transaction_address(
-        &self, hash: &H256, tx_address: &TransactionAddress,
+    pub fn insert_transaction_index(
+        &self, hash: &H256, tx_index: &TransactionIndex,
     ) {
-        if !self.config.record_tx_address {
+        if !self.config.record_tx_index {
             return;
         }
-        // tx_address will not be updated if it's not inserted before
-        self.transaction_addresses
+        // transaction_indices will not be updated if it's not inserted before
+        self.transaction_indices
             .write()
             .entry(*hash)
             .and_modify(|v| {
-                *v = tx_address.clone();
+                *v = tx_index.clone();
                 self.cache_man
                     .lock()
                     .note_used(CacheId::TransactionAddress(*hash));
             });
         self.db_manager
-            .insert_transaction_address_to_db(hash, tx_address);
+            .insert_transaction_index_to_db(hash, tx_index);
     }
 
     fn insert<K, V, InsertF>(
@@ -861,7 +861,7 @@ impl BlockDataManager {
             return false;
         }
 
-        if self.config.record_tx_address && on_local_pivot {
+        if self.config.record_tx_index && on_local_pivot {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
@@ -887,9 +887,9 @@ impl BlockDataManager {
                     {
                         TRANSACTION_OUTCOME_SUCCESS
                         | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
-                            self.insert_transaction_address(
+                            self.insert_transaction_index(
                                 &tx.hash,
-                                &TransactionAddress {
+                                &TransactionIndex {
                                     block_hash: *block_hash,
                                     index: tx_idx,
                                 },
@@ -948,13 +948,13 @@ impl BlockDataManager {
         let blocks = self.blocks.read().size_of(malloc_ops);
         let compact_blocks = self.compact_blocks.read().size_of(malloc_ops);
         let block_receipts = self.block_receipts.read().size_of(malloc_ops);
-        let transaction_addresses =
-            self.transaction_addresses.read().size_of(malloc_ops);
+        let transaction_indices =
+            self.transaction_indices.read().size_of(malloc_ops);
         CacheSize {
             block_headers,
             blocks,
             block_receipts,
-            transaction_addresses,
+            transaction_indices,
             compact_blocks,
         }
     }
@@ -966,7 +966,7 @@ impl BlockDataManager {
         let mut blocks = self.blocks.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
-        let mut tx_address = self.transaction_addresses.write();
+        let mut tx_indices = self.transaction_indices.write();
         let mut exeuction_contexts = self.epoch_execution_contexts.write();
         let mut cache_man = self.cache_man.lock();
         debug!(
@@ -975,7 +975,7 @@ impl BlockDataManager {
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
-            tx_address.len(),
+            tx_indices.len(),
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -988,7 +988,7 @@ impl BlockDataManager {
                         executed_results.remove(h);
                     }
                     CacheId::TransactionAddress(ref h) => {
-                        tx_address.remove(h);
+                        tx_indices.remove(h);
                     }
                     CacheId::CompactBlock(ref h) => {
                         compact_blocks.remove(h);
@@ -1002,14 +1002,14 @@ impl BlockDataManager {
             block_headers.size_of(malloc_ops)
                 + blocks.size_of(malloc_ops)
                 + executed_results.size_of(malloc_ops)
-                + tx_address.size_of(malloc_ops)
+                + tx_indices.size_of(malloc_ops)
                 + compact_blocks.size_of(malloc_ops)
         });
 
         block_headers.shrink_to_fit();
         blocks.shrink_to_fit();
         executed_results.shrink_to_fit();
-        tx_address.shrink_to_fit();
+        tx_indices.shrink_to_fit();
         compact_blocks.shrink_to_fit();
         exeuction_contexts.shrink_to_fit();
     }
@@ -1125,19 +1125,19 @@ pub enum DbType {
 }
 
 pub struct DataManagerConfiguration {
-    record_tx_address: bool,
+    record_tx_index: bool,
     tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
 }
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_address: bool, tx_cache_index_maintain_timeout: Duration,
+        record_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
         db_type: DbType,
     ) -> Self
     {
         Self {
-            record_tx_address,
+            record_tx_index,
             tx_cache_index_maintain_timeout,
             db_type,
         }
