@@ -13,10 +13,8 @@ fn test_rlp() {
     let node1 = TrieProofNode::new(
         Default::default(),
         Some(Box::new([0x03, 0x04, 0x05])),
-        CompressedPathRaw::new(
-            &[0x00, 0x01, 0x02],
-            CompressedPathRaw::second_nibble_mask(),
-        ),
+        (&[0x00, 0x01, 0x02][..]).into(),
+        /* path_without_first_nibble = */ true,
     );
     assert_eq!(node1, rlp::decode(&rlp::encode(&node1)).unwrap());
 
@@ -26,7 +24,12 @@ fn test_rlp() {
             *children_table.get_child_mut_unchecked(2) = *node1.get_merkle();
             *children_table.get_children_count_mut() = 1;
         }
-        TrieProofNode::new(children_table, None, CompressedPathRaw::default())
+        TrieProofNode::new(
+            children_table,
+            None,
+            CompressedPathRaw::default(),
+            /* path_without_first_nibble = */ false,
+        )
     };
 
     assert_eq!(root_node, rlp::decode(&rlp::encode(&root_node)).unwrap());
@@ -60,12 +63,14 @@ fn test_proofs() {
         Default::default(),
         Some(Box::new(value1)),
         (&[0x20u8][..]).into(),
+        /* path_without_first_nibble = */ true,
     );
 
     let leaf2 = TrieProofNode::new(
         Default::default(),
         Some(Box::new(value2)),
         (&[0x30u8][..]).into(),
+        /* path_without_first_nibble = */ true,
     );
 
     let ext = {
@@ -74,8 +79,11 @@ fn test_proofs() {
 
         TrieProofNode::new(
             children.into(),
-            None,
+            // There must be some value for this node otherwise it contradicts
+            // with path compression.
+            Some(Default::default()),
             (&[0x00u8, 0x00u8][..]).into(),
+            /* path_without_first_nibble = */ true,
         )
     };
 
@@ -84,7 +92,12 @@ fn test_proofs() {
         children[0x00] = ext.get_merkle().clone();
         children[0x02] = leaf1.get_merkle().clone();
 
-        TrieProofNode::new(children.into(), None, Default::default())
+        TrieProofNode::new(
+            children.into(),
+            None,
+            Default::default(),
+            /* path_without_first_nibble = */ false,
+        )
     };
 
     let leaf1_hash = leaf1.get_merkle();

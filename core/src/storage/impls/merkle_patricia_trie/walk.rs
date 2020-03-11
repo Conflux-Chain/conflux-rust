@@ -10,16 +10,14 @@ use std::cmp::min;
 pub type KeyPart<'a> = &'a [u8];
 
 pub enum WalkStop<'key, ChildIdType> {
-    // path matching fails at some point. Want the new path_steps,
-    // path_end_mask, ..., etc Basically, a new node should be created to
-    // replace the current node from parent children table;
-    // modify this node or create a new node to insert as children of new
-    // node, (update path) then
-    // the child that should be followed is nil at the new node.
-    // if put single version, this node changes, this node replaced, parent
-    // update child and merkle. Before merkle update, this node must be saved
-    // in mem or into disk db (not that expensive). if get / delete (not
-    // found)
+    // Path matching fails on the compressed path.
+    //
+    // if put, a new node should be created to replace the current node from
+    // parent children table; modify this node or create a new node to
+    // insert as children of new node, (update path) then the child that
+    // should be followed is nil at the new node.
+    //
+    // if get / delete (not found)
     PathDiverted {
         /// Key may terminate on the path.
         key_child_index: Option<u8>,
@@ -43,9 +41,10 @@ pub enum WalkStop<'key, ChildIdType> {
 
     // To descent, however child doesn't exists:
     // to modify this node or create a new node to replace this node (update
-    // child) Then create a new node for remaining key_part (we don't care
-    // about begin_mask). if put single version, this node changes, parent
-    // update merkle. if get / delete (not found)
+    // child) Then create a new node for remaining key_part. if put single
+    // version, this node changes, parent update merkle.
+    //
+    // if get / delete (not found)
     ChildNotFound {
         key_remaining: KeyPart<'key>,
         child_index: u8,
@@ -121,7 +120,9 @@ pub(super) fn walk<
     // included because even if it's the second-half, it must be
     // already matched before entering this TrieNode.
     let memcmp_len = min(
-        path_slice.len() - ((path_end_mask != 0) as usize),
+        path_slice.len()
+            - ((path_end_mask != CompressedPathRaw::HAS_SECOND_NIBBLE)
+                as usize),
         key.len(),
     );
 
@@ -179,8 +180,7 @@ pub(super) fn walk<
             } else {
                 return WalkStop::PathDiverted {
                     // key_remaining is empty, and key_child_index doesn't
-                    // make sense, but we need to
-                    // mark it.
+                    // make sense, but we need to mark it.
                     key_remaining: Default::default(),
                     key_child_index: None,
                     matched_path: CompressedPathRaw::new(
@@ -202,8 +202,7 @@ pub(super) fn walk<
     } else {
         // Key is not fully consumed.
 
-        // When path is fully consumed, check if child exists under
-        // child_index.
+        // When path is fully consumed, check if child exists under child_index.
         let child_index;
         let key_remaining;
 
