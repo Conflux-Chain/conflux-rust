@@ -17,6 +17,7 @@ fn test_rlp() {
             &[0x00, 0x01, 0x02],
             CompressedPathRaw::first_nibble_mask(),
         ),
+        /* path_without_first_nibble = */ true,
     );
     assert_eq!(node1, rlp::decode(&rlp::encode(&node1)).unwrap());
 
@@ -26,7 +27,12 @@ fn test_rlp() {
             *children_table.get_child_mut_unchecked(2) = *node1.get_merkle();
             *children_table.get_children_count_mut() = 1;
         }
-        TrieProofNode::new(children_table, None, CompressedPathRaw::default())
+        TrieProofNode::new(
+            children_table,
+            None,
+            CompressedPathRaw::default(),
+            /* path_without_first_nibble = */ false,
+        )
     };
 
     assert_eq!(root_node, rlp::decode(&rlp::encode(&root_node)).unwrap());
@@ -60,12 +66,14 @@ fn test_proofs() {
         Default::default(),
         Some(Box::new(value1)),
         (&[0x20u8][..]).into(),
+        /* path_without_first_nibble = */ false,
     );
 
     let leaf2 = TrieProofNode::new(
         Default::default(),
         Some(Box::new(value2)),
         (&[0x30u8][..]).into(),
+        /* path_without_first_nibble = */ false,
     );
 
     let ext = {
@@ -76,6 +84,7 @@ fn test_proofs() {
             children.into(),
             None,
             (&[0x00u8, 0x00u8][..]).into(),
+            /* path_without_first_nibble = */ false,
         )
     };
 
@@ -84,7 +93,12 @@ fn test_proofs() {
         children[0x00] = ext.get_merkle().clone();
         children[0x02] = leaf1.get_merkle().clone();
 
-        TrieProofNode::new(children.into(), None, Default::default())
+        TrieProofNode::new(
+            children.into(),
+            None,
+            Default::default(),
+            /* path_without_first_nibble = */ false,
+        )
     };
 
     let leaf1_hash = leaf1.get_merkle();

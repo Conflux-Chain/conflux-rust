@@ -24,10 +24,12 @@ impl TrieProofNode {
     pub fn new(
         children_table: VanillaChildrenTable<MerkleHash>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
+        path_without_first_nibble: bool,
     ) -> Self
     {
         let merkle = compute_merkle(
             compressed_path.as_ref(),
+            path_without_first_nibble,
             if children_table.get_children_count() == 0 {
                 None
             } else {

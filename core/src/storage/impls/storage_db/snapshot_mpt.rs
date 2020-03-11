@@ -18,7 +18,7 @@ pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
     let path_slice = path.path_slice();
     let end_mask = path.end_mask();
 
-    let full_slice = if end_mask == 0 {
+    let full_slice = if end_mask == CompressedPathRaw::HAS_SECOND_NIBBLE {
         path_slice
     } else {
         &path_slice[0..path_slice.len() - 1]
@@ -33,7 +33,7 @@ pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
         result.push(CompressedPathRaw::first_nibble(*full_byte));
         result.push(CompressedPathRaw::second_nibble(*full_byte));
     }
-    if end_mask != 0 {
+    if end_mask != CompressedPathRaw::HAS_SECOND_NIBBLE {
         result
             .push(CompressedPathRaw::first_nibble(*path_slice.last().unwrap()));
     }

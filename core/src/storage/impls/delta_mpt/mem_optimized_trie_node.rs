@@ -508,7 +508,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
                 ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT,
             children_table: Default::default(),
             merkle_hash: Default::default(),
-            path_end_mask: 0,
+            path_end_mask: CompressedPathRaw::HAS_SECOND_NIBBLE,
             path_size: 0,
             path: Default::default(),
             path_memory_manager: Default::default(),
