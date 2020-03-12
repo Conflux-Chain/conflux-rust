@@ -1032,6 +1032,24 @@ impl ConsensusNewBlockHandler {
 
         // Because the following computation relies on all previous blocks being
         // active, We have to delay it till now
+        let era_genesis = inner.get_era_genesis_block_with_parent(parent);
+        let blockset =
+            inner.exchange_or_compute_blockset_in_own_view_of_epoch(me, None);
+        let weight_era_in_my_epoch =
+            inner.total_weight_in_own_epoch(&blockset, era_genesis);
+        inner.exchange_or_compute_blockset_in_own_view_of_epoch(
+            me,
+            Some(blockset),
+        );
+        let past_era_weight = if parent != era_genesis {
+            inner.arena[parent].past_era_weight
+                + inner.block_weight(parent)
+                + weight_era_in_my_epoch
+        } else {
+            inner.block_weight(parent) + weight_era_in_my_epoch
+        };
+        inner.arena[me].past_era_weight = past_era_weight;
+
         let mut timer_longest_difficulty = 0;
         let mut longest_referee = parent;
         if parent != NULL {
@@ -1135,8 +1153,8 @@ impl ConsensusNewBlockHandler {
         }
 
         debug!(
-            "Finish preactivation block {} index = {}",
-            inner.arena[me].hash, me
+            "Finish preactivation block {} index = {} past_era_weight={}",
+            inner.arena[me].hash, me, inner.arena[me].past_era_weight
         );
         let block_status = if pending {
             BlockStatus::Pending
