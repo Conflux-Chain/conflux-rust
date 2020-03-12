@@ -125,12 +125,16 @@ impl DeferredPool {
 
 struct ReadyAccountPool {
     treap: TreapMap<Address, Arc<SignedTransaction>, U512>,
+    tx_weight_scaling: u64,
+    tx_weight_exp: u8,
 }
 
 impl ReadyAccountPool {
-    fn new() -> Self {
+    fn new(tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
         ReadyAccountPool {
             treap: TreapMap::new(),
+            tx_weight_scaling,
+            tx_weight_exp,
         }
     }
 
@@ -167,8 +171,17 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap
-            .insert(tx.sender(), tx.clone(), U512::from(tx.gas_price))
+        let mut base = U512::from(tx.gas_price) / self.tx_weight_scaling;
+        if base == U512::from(0) {
+            base = U512::from(1);
+        }
+
+        let mut weight: U512 = U512::from(1);
+        for _ in 0..self.tx_weight_exp {
+            weight *= base;
+        }
+
+        self.treap.insert(tx.sender(), tx.clone(), weight)
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
@@ -203,13 +216,18 @@ pub struct TransactionPoolInner {
 }
 
 impl TransactionPoolInner {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn new(
+        capacity: usize, tx_weight_scaling: u64, tx_weight_exp: u8,
+    ) -> Self {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
             unpacked_transaction_count: 0,
             deferred_pool: DeferredPool::new(),
-            ready_account_pool: ReadyAccountPool::new(),
+            ready_account_pool: ReadyAccountPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+            ),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: GarbageCollector::default(),
             txs: HashMap::new(),

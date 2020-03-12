@@ -171,6 +171,8 @@ build_config! {
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
         (tx_pool_size, (usize), 500_000)
         (tx_pool_min_tx_gas_price, (u64), 1)
+        (tx_weight_scaling, (u64), 1)
+        (tx_weight_exp, (u8), 1)
 
         // Storage Section.
         (block_cache_gc_period_ms, (u64), 5_000)
@@ -573,6 +575,8 @@ impl Configuration {
 
         config.capacity = self.raw_conf.tx_pool_size;
         config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
+        config.tx_weight_scaling = self.raw_conf.tx_weight_scaling;
+        config.tx_weight_exp = self.raw_conf.tx_weight_exp;
 
         config
     }

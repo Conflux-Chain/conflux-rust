@@ -67,6 +67,8 @@ pub struct TxPoolConfig {
     pub min_tx_price: u64,
     pub max_tx_gas: u64,
     pub max_block_gas: u64,
+    pub tx_weight_scaling: u64,
+    pub tx_weight_exp: u8,
 }
 
 impl Default for TxPoolConfig {
@@ -76,6 +78,8 @@ impl Default for TxPoolConfig {
             min_tx_price: 1,
             max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
             max_block_gas: DEFAULT_MAX_BLOCK_GAS_LIMIT,
+            tx_weight_scaling: 1,
+            tx_weight_exp: 1,
         }
     }
 }
@@ -97,7 +101,11 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 impl TransactionPool {
     pub fn new(config: TxPoolConfig, data_man: Arc<BlockDataManager>) -> Self {
         let genesis_hash = data_man.true_genesis.hash();
-        let inner = TransactionPoolInner::with_capacity(config.capacity);
+        let inner = TransactionPoolInner::new(
+            config.capacity,
+            config.tx_weight_scaling,
+            config.tx_weight_exp,
+        );
         TransactionPool {
             config,
             inner: RwLock::new(inner),
