@@ -123,6 +123,62 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
+    fn sponsor(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> BoxFuture<RpcH160> {
+        let address: H160 = address.into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
+
+            Ok(account
+                .map(|account| account.sponsor.into())
+                .unwrap_or_default())
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn sponsor_balance(
+        &self, address: RpcH160, num: Option<EpochNumber>,
+    ) -> BoxFuture<RpcU256> {
+        let address: H160 = address.into();
+        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
+
+        info!(
+            "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
+            address, epoch
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let account = light
+                .get_account(epoch, address)
+                .await
+                .map_err(RpcError::invalid_params)?;
+
+            Ok(account
+                .map(|account| account.sponsor_balance.into())
+                .unwrap_or_default())
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
     fn staking_balance(
         &self, address: RpcH160, num: Option<EpochNumber>,
     ) -> BoxFuture<RpcU256> {
@@ -390,6 +446,8 @@ impl Cfx for CfxHandler {
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
+            fn sponsor(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
+            fn sponsor_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;

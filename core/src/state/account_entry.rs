@@ -15,8 +15,10 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 lazy_static! {
-    static ref COMMISSION_BALANCE_STORAGE_KEY: H256 =
-        keccak("commission_balance");
+    static ref SPONSOR_ADDRESS_STORAGE_KEY: H256 =
+        keccak("sponsor_address");
+    static ref SPONSOR_BALANCE_STORAGE_KEY: H256 =
+        keccak("sponsor_balance");
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: H256 =
         H256::from_low_u64_le(1);
     /// If we set this key, it means every account has commission privilege.
@@ -43,6 +45,11 @@ pub struct OverlayAccount {
 
     // Administrator of the account
     admin: Address,
+
+    // This is the address of the sponsor of the contract.
+    sponsor: Address,
+    // This is the amount of tokens sponsor to the contract.
+    sponsor_balance: U256,
 
     // This is a cache for storage change.
     storage_cache: RefCell<HashMap<H256, H256>>,
@@ -88,6 +95,8 @@ impl OverlayAccount {
             balance: account.balance,
             nonce: account.nonce,
             admin: account.admin,
+            sponsor: account.sponsor,
+            sponsor_balance: account.sponsor_balance,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -137,6 +146,8 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: Address::zero(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -164,6 +175,8 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: Address::zero(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -193,6 +206,8 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: admin.clone(),
+            sponsor: Address::zero(),
+            sponsor_balance: U256::zero(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -224,6 +239,8 @@ impl OverlayAccount {
             deposit_list: self.deposit_list.clone(),
             staking_vote_list: self.staking_vote_list.clone(),
             admin: self.admin,
+            sponsor: self.sponsor,
+            sponsor_balance: self.sponsor_balance,
         }
     }
 
@@ -233,58 +250,25 @@ impl OverlayAccount {
 
     pub fn balance(&self) -> &U256 { &self.balance }
 
-    pub fn commission_balance(
-        &self, db: &StateDb, contract_address: &Address,
-    ) -> U256 {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
-        let key = keccak(rlp_stream.out());
-        BigEndianHash::into_uint(
-            &self.storage_at(db, &key).unwrap_or(H256::zero()),
-        )
+    pub fn sponsor_balance(&self) -> &U256 { &self.sponsor_balance }
+
+    pub fn set_sponsor(&mut self, sponsor: Address, sponsor_balance: U256) {
+        self.sponsor = sponsor;
+        self.sponsor_balance = sponsor_balance;
     }
 
-    /// Subtract `by` from current commission balance.
-    /// The caller will make sure the minimum value of current commission
-    /// balance and current balance will be greater than or equal to `by`.
-    pub fn sub_commission_balance(
-        &mut self, db: &StateDb, contract_address: &Address, by: &U256,
-    ) {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
-        let key = keccak(rlp_stream.out());
-        let balance = BigEndianHash::into_uint(
-            &self.storage_at(db, &key).unwrap_or(H256::zero()),
-        ) - by;
-        let contract_owner = if self.ownership_changes.contains_key(&key) {
-            *self.ownership_changes.get(&key).expect("key exists")
-        } else {
-            self.ownership_cache
-                .borrow()
-                .get(&key)
-                .expect("key exists")
-                .expect("value not none")
-                .clone()
-        };
-        self.set_storage(
-            key,
-            BigEndianHash::from_uint(&balance),
-            contract_owner,
-        );
+    pub fn sponsor(&self) -> &Address { &self.sponsor }
+
+    #[cfg(test)]
+    pub fn admin(&self) -> &Address { &self.admin }
+
+    pub fn sub_sponsor_balance(&mut self, by: &U256) {
+        assert!(self.sponsor_balance >= *by);
+        self.sponsor_balance -= *by;
     }
 
-    pub fn set_commission_balance(
-        &mut self, contract_address: &Address, contract_owner: &Address,
-        val: &U256,
-    )
-    {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(COMMISSION_BALANCE_STORAGE_KEY.as_ref());
-        let key = keccak(rlp_stream.out());
-        self.set_storage(key, BigEndianHash::from_uint(val), *contract_owner);
+    pub fn add_sponsor_balance(&mut self, by: &U256) {
+        self.sponsor_balance += *by;
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
@@ -304,16 +288,16 @@ impl OverlayAccount {
             rlp_stream.append_list(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_ref());
             keccak(rlp_stream.out())
         };
-        let key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(user.as_ref());
-            keccak(rlp_stream.out())
-        };
         let special_value = self.storage_at(db, &special_key)?;
         if !special_value.is_zero() {
             Ok(true)
         } else {
+            let key = {
+                let mut rlp_stream = RlpStream::new_list(2);
+                rlp_stream.append_list(contract_address.as_ref());
+                rlp_stream.append_list(user.as_ref());
+                keccak(rlp_stream.out())
+            };
             self.storage_at(db, &key).map(|x| !x.is_zero())
         }
     }
@@ -537,13 +521,21 @@ impl OverlayAccount {
     }
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {
-        self.sub_balance(by);
+        if self.is_contract {
+            self.sub_sponsor_balance(by);
+        } else {
+            self.sub_balance(by);
+        }
         self.collateral_for_storage += *by;
     }
 
     pub fn sub_collateral_for_storage(&mut self, by: &U256) {
         assert!(self.collateral_for_storage >= *by);
-        self.add_balance(by);
+        if self.is_contract {
+            self.add_sponsor_balance(by);
+        } else {
+            self.add_balance(by);
+        }
         self.collateral_for_storage -= *by;
     }
 
@@ -574,6 +566,8 @@ impl OverlayAccount {
             balance: self.balance,
             nonce: self.nonce,
             admin: self.admin,
+            sponsor: self.sponsor,
+            sponsor_balance: self.sponsor_balance,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -692,6 +686,8 @@ impl OverlayAccount {
         self.balance = other.balance;
         self.nonce = other.nonce;
         self.admin = other.admin;
+        self.sponsor = other.sponsor;
+        self.sponsor_balance = other.sponsor_balance;
         self.code_hash = other.code_hash;
         self.code_cache = other.code_cache;
         self.code_owner = other.code_owner;
@@ -745,7 +741,7 @@ impl OverlayAccount {
     /// account in current execution.
     pub fn commit_ownership_change(
         &mut self, db: &StateDb,
-    ) -> HashMap<Address, (usize, usize)> {
+    ) -> HashMap<Address, (u64, u64)> {
         let mut storage_delta = HashMap::new();
         let ownership_changes: Vec<_> =
             self.ownership_changes.drain().collect();

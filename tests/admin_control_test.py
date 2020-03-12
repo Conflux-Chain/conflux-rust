@@ -139,13 +139,13 @@ class AdminControlTest(ConfluxTestFramework):
         self.log.info("addr=%s priv_key=%s", addr, priv_key)
         tx = client.new_tx(value=5 * 10 ** 18, receiver=addr, nonce=self.get_nonce(genesis_addr))
         client.send_tx(tx, True)
-        assert_equal(node.cfx_getBalance(addr), hex(5000000000000000000))
+        assert_equal(client.get_balance(addr), 5000000000000000000)
 
         (addr2, priv_key2) = client.rand_account()
         self.log.info("addr2=%s priv_key2=%s", addr2, priv_key2)
         tx = client.new_tx(value=5 * 10 ** 18, receiver=addr2, nonce=self.get_nonce(genesis_addr))
         client.send_tx(tx, True)
-        assert_equal(node.cfx_getBalance(addr2), hex(5000000000000000000))
+        assert_equal(client.get_balance(addr2), 5000000000000000000)
 
         # deploy pay contract
         tx = self.call_contract_function(
@@ -155,7 +155,7 @@ class AdminControlTest(ConfluxTestFramework):
             sender_key=priv_key)
         contract_addr = self.wait_for_tx([tx], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
-        assert_equal(node.cfx_getBalance(contract_addr), hex(0))
+        assert_equal(client.get_balance(contract_addr), 0)
 
         # deposit 10**18
         b0 = int(node.cfx_getBalance(addr), 16)
@@ -168,9 +168,9 @@ class AdminControlTest(ConfluxTestFramework):
             value=10 ** 18,
             wait=True,
             check_status=True)
-        assert_equal(node.cfx_getBalance(contract_addr), hex(10 ** 18))
-        assert_equal(node.cfx_getBalance(addr), hex(b0 - 10 ** 18 - gas))
-        assert_equal(node.cfx_getAdmin(contract_addr), addr)
+        assert_equal(client.get_balance(contract_addr), 10 ** 18)
+        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - gas)
+        assert_equal(client.get_admin(contract_addr), addr)
 
         # transfer admin (fail)
         tx = self.call_contract_function(
@@ -181,7 +181,7 @@ class AdminControlTest(ConfluxTestFramework):
             contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
             wait=True,
             check_status=True)
-        assert_equal(node.cfx_getAdmin(contract_addr), addr)
+        assert_equal(client.get_admin(contract_addr), addr)
 
         # transfer admin (success)
         tx = self.call_contract_function(
@@ -192,7 +192,7 @@ class AdminControlTest(ConfluxTestFramework):
             contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
             wait=True,
             check_status=True)
-        assert_equal(node.cfx_getAdmin(contract_addr), addr2);
+        assert_equal(client.get_admin(contract_addr), addr2)
 
         self.log.info("Pass")
 

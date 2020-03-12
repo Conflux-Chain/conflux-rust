@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{executive::*, ExecutionError};
+use super::{executive::*, internal_contract::*, Executed, ExecutionError};
 use crate::{
     evm::{Factory, FinalizationResult, VMType},
     machine::Machine,
@@ -82,11 +82,18 @@ fn test_sender_balance() {
     );
     let env = Env::default();
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.create(params, &mut substate).unwrap()
     };
 
@@ -162,11 +169,18 @@ fn test_create_contract_out_of_depth() {
         .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.create(params, &mut substate).unwrap()
     };
 
@@ -247,11 +261,18 @@ fn test_call_to_create() {
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     let env = Env::default();
     let machine = make_byzantium_machine(5);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.call(params, &mut substate).unwrap()
     };
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
@@ -305,6 +326,7 @@ fn test_revert() {
     params.value = ActionValue::Transfer(U256::zero());
     let env = Env::default();
     let machine = crate::machine::new_machine_with_builtin();
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
@@ -314,7 +336,13 @@ fn test_revert() {
         return_data,
         ..
     } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.call(params, &mut substate).unwrap()
     };
     (&mut output)
@@ -372,11 +400,18 @@ fn test_keccak() {
         .unwrap();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let result = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.create(params, &mut substate)
     };
 
@@ -412,10 +447,17 @@ fn test_not_enough_cash() {
     let mut env = Env::default();
     env.gas_limit = U256::from(100_000);
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let res = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         let mut nonce_increased = false;
         ex.transact(&t, &mut nonce_increased)
     };
@@ -440,6 +482,7 @@ fn test_deposit_withdraw_lock() {
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
     let env = Env::default();
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
     state
@@ -472,8 +515,14 @@ fn test_deposit_withdraw_lock() {
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e800".from_hex().unwrap());
 
     // wrong call type
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -493,8 +542,14 @@ fn test_deposit_withdraw_lock() {
 
     // everything is fine
     params.call_type = CallType::Call;
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -516,8 +571,14 @@ fn test_deposit_withdraw_lock() {
 
     // empty data
     params.data = None;
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -543,8 +604,14 @@ fn test_deposit_withdraw_lock() {
 
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -570,8 +637,14 @@ fn test_deposit_withdraw_lock() {
 
     // more data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e80000".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -597,8 +670,14 @@ fn test_deposit_withdraw_lock() {
 
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -613,8 +692,14 @@ fn test_deposit_withdraw_lock() {
     assert_eq!(state.block_number(), 0);
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7401".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -636,8 +721,14 @@ fn test_deposit_withdraw_lock() {
 
     // lock 1 for 0 days
     params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -659,8 +750,14 @@ fn test_deposit_withdraw_lock() {
     );
     // lock 1 for 106751991167301 days should failed
     params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833945".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -682,8 +779,14 @@ fn test_deposit_withdraw_lock() {
     );
     // lock 1 for 106751991167301 days, should succeed
     params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -701,8 +804,14 @@ fn test_deposit_withdraw_lock() {
     );
     // lock 2 for 1 days
     params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -720,8 +829,14 @@ fn test_deposit_withdraw_lock() {
     );
     // withdraw more than withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -746,8 +861,14 @@ fn test_deposit_withdraw_lock() {
 
     // withdraw exact withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b73fe".from_hex().unwrap());
-    let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate);
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -776,209 +897,287 @@ fn test_commission_privilege() {
     // 60 00 - push 0
     // 55 sstore
 
-    let privilege_control_address =
-        &COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS;
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
-
-    let sender = Address::from_low_u64_ne(0);
-    let caller1 = Address::from_low_u64_le(1);
-    let caller2 = Address::from_low_u64_le(2);
-    let caller3 = Address::from_low_u64_le(3);
-    let address = contract_address(
-        CreateContractAddress::FromSenderAndNonce,
-        &sender,
-        &U256::zero(),
-        &[],
-    )
-    .0;
-    let mut params = ActionParams::default();
-    params.address = address;
-    params.code_address = address;
-    params.sender = sender;
-    params.original_sender = sender;
-    params.original_receiver = address;
-    params.gas = U256::from(100_000);
-    params.gas_price = U256::from(1);
-    params.code = Some(Arc::new(code));
-    params.value = ActionValue::Transfer(U256::from(1000000));
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state =
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
-    let env = Env::default();
+    let mut env = Env::default();
+    env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
-    let mut substate = Substate::new();
+
+    let sender = Random.generate().unwrap();
+    let caller1 = Random.generate().unwrap();
+    let caller2 = Random.generate().unwrap();
+    let caller3 = Random.generate().unwrap();
+    let address = contract_address(
+        CreateContractAddress::FromSenderAndNonce,
+        &sender.address(),
+        &U256::zero(),
+        &[],
+    )
+    .0;
+
+    state.init_code(&address, code, sender.address()).unwrap();
+    state
+        .add_balance(
+            &sender.address(),
+            &U256::from(1_000_000_000_000_000_000u64),
+            CleanupMode::NoEmpty,
+        )
+        .unwrap();
+
+    let mut nonce_increased: bool = false;
+    let tx = Transaction {
+        nonce: 0.into(),
+        gas_price: U256::from(1),
+        gas: U256::from(100_000),
+        value: U256::from(1000000),
+        action: Action::Call(address),
+        storage_limit: U256::MAX,
+        data: vec![],
+    }
+    .sign(sender.secret());
+    assert_eq!(tx.sender(), sender.address());
+    let Executed { gas_used, .. } = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .transact(&tx, &mut nonce_increased)
+    .unwrap();
+
+    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(state.nonce(&sender.address()).unwrap(), U256::from(1));
+    assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
+    assert_eq!(
+        state.balance(&sender.address()).unwrap(),
+        U256::from(999_999_999_998_900_000u64)
+    );
 
     state
         .add_balance(
-            &sender,
-            &U256::from(2_000_000_000_000_000_000u64),
+            &caller1.address(),
+            &U256::from(100_000),
             CleanupMode::NoEmpty,
         )
         .unwrap();
     state
-        .deposit(&sender, &U256::from(1_000_000_000_000_000_000u64))
-        .unwrap();
-    let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.create(params.clone(), &mut substate).unwrap()
-    };
-
-    assert_eq!(gas_left, U256::from(62_976));
-    assert_eq!(substate.contracts_created.len(), 0);
-    assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
-
-    state
-        .add_balance(&caller1, &U256::from(100_000), CleanupMode::NoEmpty)
+        .add_balance(
+            &caller2.address(),
+            &U256::from(100_000),
+            CleanupMode::NoEmpty,
+        )
         .unwrap();
     state
-        .add_balance(&caller2, &U256::from(100_000), CleanupMode::NoEmpty)
-        .unwrap();
-    state
-        .add_balance(&caller3, &U256::from(100_000), CleanupMode::NoEmpty)
+        .add_balance(
+            &caller3.address(),
+            &U256::from(100_000),
+            CleanupMode::NoEmpty,
+        )
         .unwrap();
     // add commission privilege to caller1 and caller2
     state
-        .add_commission_privilege(
-            privilege_control_address,
-            address,
-            sender,
-            caller1,
-        )
+        .add_commission_privilege(address, sender.address(), caller1.address())
         .unwrap();
     state
-        .add_commission_privilege(
-            privilege_control_address,
-            address,
-            sender,
-            caller2,
-        )
+        .add_commission_privilege(address, sender.address(), caller2.address())
         .unwrap();
     assert!(state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller1
-        )
+        .check_commission_privilege(&address, &caller1.address())
         .unwrap());
     assert!(state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller2
-        )
+        .check_commission_privilege(&address, &caller2.address())
         .unwrap());
     assert!(!state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller3
-        )
+        .check_commission_privilege(&address, &caller3.address())
         .unwrap());
-    // set commission balance to 110000
     state
-        .set_commission_balance(&address, &sender, &U256::from(110_000))
+        .set_sponsor(&address, &sender.address(), &U256::from(110_000))
         .unwrap();
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(110_000)
     );
 
-    params.call_type = CallType::Call;
-    params.value = ActionValue::Transfer(U256::zero());
-    assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
     // call with no commission privilege
-    params.sender = caller3;
-    let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.call(params.clone(), &mut substate).unwrap()
-    };
-    assert_eq!(gas_left, U256::from(62_976));
-    assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
+    let tx = Transaction {
+        nonce: 0.into(),
+        gas_price: U256::from(1),
+        gas: U256::from(100_000),
+        value: U256::zero(),
+        action: Action::Call(address),
+        storage_limit: U256::MAX,
+        data: vec![],
+    }
+    .sign(caller3.secret());
+    assert_eq!(tx.sender(), caller3.address());
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(100_000)
+    );
+    let Executed { gas_used, .. } = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .transact(&tx, &mut nonce_increased)
+    .unwrap();
+
+    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
+    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.sponsor_balance(&address).unwrap(),
         U256::from(110_000)
     );
 
-    assert_eq!(state.balance(&caller1).unwrap(), U256::from(100_000));
     // call with commission privilege and enough commission balance
-    params.sender = caller1;
-    let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.call(params.clone(), &mut substate).unwrap()
-    };
-    assert_eq!(gas_left, U256::from(62_976));
-    assert_eq!(state.balance(&caller1).unwrap(), U256::from(200_000));
+    let tx = Transaction {
+        nonce: 0.into(),
+        gas_price: U256::from(1),
+        gas: U256::from(100_000),
+        value: U256::zero(),
+        action: Action::Call(address),
+        storage_limit: U256::MAX,
+        data: vec![],
+    }
+    .sign(caller1.secret());
+    assert_eq!(tx.sender(), caller1.address());
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
-        U256::from(10_000)
+        state.balance(&caller1.address()).unwrap(),
+        U256::from(100_000)
     );
+    let Executed { gas_used, .. } = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .transact(&tx, &mut nonce_increased)
+    .unwrap();
 
-    assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
-    // call with commission privilege and not enough commission balance
-    params.sender = caller2;
-    let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.call(params.clone(), &mut substate).unwrap()
-    };
-    assert_eq!(gas_left, U256::from(62_976));
-    assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
+    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(state.nonce(&caller1.address()).unwrap(), U256::from(1));
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
-        U256::from(10_000)
+        state.balance(&caller1.address()).unwrap(),
+        U256::from(100_000)
     );
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::from(10_000));
+
+    // call with commission privilege and not enough commission balance
+    let tx = Transaction {
+        nonce: 0.into(),
+        gas_price: U256::from(1),
+        gas: U256::from(100_000),
+        value: U256::zero(),
+        action: Action::Call(address),
+        storage_limit: U256::MAX,
+        data: vec![],
+    }
+    .sign(caller2.secret());
+    assert_eq!(tx.sender(), caller2.address());
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(100_000)
+    );
+    let Executed { gas_used, .. } = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .transact(&tx, &mut nonce_increased)
+    .unwrap();
+
+    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
+    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::from(10_000));
 
     // add more commission balance
     state
-        .set_commission_balance(&address, &sender, &U256::from(200_000))
+        .set_sponsor(&address, &sender.address(), &U256::from(200_000))
         .unwrap();
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(200_000)
     );
 
-    assert_eq!(state.balance(&caller2).unwrap(), U256::from(100_000));
     // call with commission privilege and enough commission balance
-    params.sender = caller2;
-    let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.call(params.clone(), &mut substate).unwrap()
-    };
-    assert_eq!(gas_left, U256::from(62_976));
-    assert_eq!(state.balance(&caller2).unwrap(), U256::from(200_000));
+    let tx = Transaction {
+        nonce: 1.into(),
+        gas_price: U256::from(1),
+        gas: U256::from(100_000),
+        value: U256::zero(),
+        action: Action::Call(address),
+        storage_limit: U256::MAX,
+        data: vec![],
+    }
+    .sign(caller2.secret());
+    assert_eq!(tx.sender(), caller2.address());
+    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    let Executed { gas_used, .. } = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .transact(&tx, &mut nonce_increased)
+    .unwrap();
+
+    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
+    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
     assert_eq!(
-        state.commission_balance(&address).unwrap(),
+        state.sponsor_balance(&address).unwrap(),
         U256::from(100_000)
     );
 
     // add commission privilege to caller3
     state
-        .add_commission_privilege(
-            privilege_control_address,
-            address,
-            sender,
-            caller3,
-        )
+        .add_commission_privilege(address, sender.address(), caller3.address())
         .unwrap();
     assert!(state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller3
-        )
+        .check_commission_privilege(&address, &caller3.address())
         .unwrap());
-    assert_eq!(state.balance(&caller3).unwrap(), U256::from(100_000));
     // call with commission privilege and enough commission balance
-    params.sender = caller3;
-    let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.call(params.clone(), &mut substate).unwrap()
-    };
-    assert_eq!(gas_left, U256::from(62_976));
-    assert_eq!(state.balance(&caller3).unwrap(), U256::from(200_000));
-    assert_eq!(state.commission_balance(&address).unwrap(), U256::zero());
+    let tx = Transaction {
+        nonce: 1.into(),
+        gas_price: U256::from(1),
+        gas: U256::from(100_000),
+        value: U256::zero(),
+        action: Action::Call(address),
+        storage_limit: U256::MAX,
+        data: vec![],
+    }
+    .sign(caller3.secret());
+    assert_eq!(tx.sender(), caller3.address());
+    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    let Executed { gas_used, .. } = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .transact(&tx, &mut nonce_increased)
+    .unwrap();
+
+    assert_eq!(gas_used, U256::from(58_024));
+    assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
+    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::zero());
 }
 
 #[test]
@@ -992,8 +1191,7 @@ fn test_storage_commission_privilege() {
     // 60 01 - push 1
     // 55 sstore
 
-    let privilege_control_address =
-        &STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS;
+    let privilege_control_address = &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let code = "7c601080600c6000396000f3006000355415600957005b6020356000355560005233600155".from_hex().unwrap();
 
@@ -1024,6 +1222,7 @@ fn test_storage_commission_privilege() {
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
     let env = Env::default();
     let machine = make_byzantium_machine(0);
+    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
@@ -1035,10 +1234,25 @@ fn test_storage_commission_privilege() {
         )
         .unwrap();
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.create(params.clone(), &mut substate).unwrap()
     };
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&sender], 1);
 
+    state
+        .set_sponsor(&address, &sender, &COLLATERAL_PER_STORAGE_KEY)
+        .unwrap();
+    assert_eq!(
+        state.sponsor_balance(&address).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY,
+    );
     assert_eq!(gas_left, U256::from(79983));
     assert_eq!(substate.contracts_created.len(), 0);
     assert_eq!(
@@ -1080,29 +1294,24 @@ fn test_storage_commission_privilege() {
     // add privilege to caller1 and caller2
     state.checkpoint();
     state
-        .add_commission_privilege(
-            privilege_control_address,
-            address,
-            sender,
-            caller1,
-        )
+        .add_commission_privilege(address, sender, caller1)
         .unwrap();
     state
-        .add_commission_privilege(
-            privilege_control_address,
-            address,
-            sender,
-            caller2,
-        )
+        .add_commission_privilege(address, sender, caller2)
         .unwrap();
     assert_eq!(
-        state.check_collateral_for_storage(
-            &privilege_control_address,
-            &U256::MAX
-        ),
+        state
+            .check_collateral_for_storage(
+                &privilege_control_address,
+                &U256::MAX,
+                &mut substate
+            )
+            .unwrap(),
         CollateralCheckResult::Valid
     );
     state.discard_checkpoint();
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&sender], 3);
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
@@ -1116,25 +1325,13 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY * U256::from(3),
     );
     assert!(state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller1
-        )
+        .check_commission_privilege(&address, &caller1)
         .unwrap());
     assert!(state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller2
-        )
+        .check_commission_privilege(&address, &caller2)
         .unwrap());
     assert!(!state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller3
-        )
+        .check_commission_privilege(&address, &caller3)
         .unwrap());
 
     params.call_type = CallType::Call;
@@ -1147,10 +1344,21 @@ fn test_storage_commission_privilege() {
     );
     params.sender = caller3;
     params.original_sender = caller3;
+    let mut substate = Substate::new();
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.call(params.clone(), &mut substate).unwrap()
     };
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&caller3], 1);
+    assert_eq!(substate.storage_released.len(), 1);
+    assert_eq!(substate.storage_released[&sender], 1);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(state.balance(&caller3).unwrap(), U256::zero());
     assert_eq!(state.staking_balance(&caller3).unwrap(), U256::zero());
@@ -1178,10 +1386,21 @@ fn test_storage_commission_privilege() {
     );
     params.sender = caller1;
     params.original_sender = caller1;
+    let mut substate = Substate::new();
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.call(params.clone(), &mut substate).unwrap()
     };
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&address], 1);
+    assert_eq!(substate.storage_released.len(), 1);
+    assert_eq!(substate.storage_released[&caller3], 1);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(
         state.balance(&caller1).unwrap(),
@@ -1192,7 +1411,11 @@ fn test_storage_commission_privilege() {
         state.collateral_for_storage(&caller1).unwrap(),
         U256::zero()
     );
-    assert_eq!(state.balance(&address).unwrap(), U256::zero());
+    assert_eq!(
+        state.balance(&address).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
+    );
+    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::zero());
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
@@ -1220,32 +1443,48 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
     );
 
-    // another caller call with commission privilege
+    // another caller call with commission privilege and not enough sponsor
+    // balance, the owner will transfer to caller2.
     assert_eq!(
         state.balance(&caller2).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
     );
     params.sender = caller2;
     params.original_sender = caller2;
+    let mut substate = Substate::new();
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.call(params.clone(), &mut substate).unwrap()
     };
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&caller2], 1);
+    assert_eq!(substate.storage_released.len(), 1);
+    assert_eq!(substate.storage_released[&address], 1);
     assert_eq!(gas_left, U256::from(94983));
-    assert_eq!(
-        state.balance(&caller2).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
-    );
+    assert_eq!(state.balance(&caller2).unwrap(), U256::from(0),);
     assert_eq!(state.staking_balance(&caller2).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&caller2).unwrap(),
-        U256::zero()
+        *COLLATERAL_PER_STORAGE_KEY,
     );
-    assert_eq!(state.balance(&address).unwrap(), U256::zero());
+    assert_eq!(
+        state.balance(&address).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
+    );
+    assert_eq!(
+        state.sponsor_balance(&address).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
+    );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        U256::from(0),
     );
     assert_eq!(
         *state.total_storage_tokens(),
@@ -1262,19 +1501,10 @@ fn test_storage_commission_privilege() {
 
     // remove privilege from caller1
     state
-        .remove_commission_privilege(
-            privilege_control_address,
-            address,
-            sender,
-            caller1,
-        )
+        .remove_commission_privilege(address, sender, caller1)
         .unwrap();
     assert!(!state
-        .check_commission_privilege(
-            privilege_control_address,
-            &address,
-            &caller1
-        )
+        .check_commission_privilege(&address, &caller1)
         .unwrap());
     assert_eq!(
         state.balance(&caller1).unwrap(),
@@ -1282,10 +1512,22 @@ fn test_storage_commission_privilege() {
     );
     params.sender = caller1;
     params.original_sender = caller1;
+    let mut substate = Substate::new();
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = Executive::new(
+            &mut state,
+            &env,
+            &machine,
+            &spec,
+            &internal_contract_map,
+        );
         ex.call(params.clone(), &mut substate).unwrap()
     };
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&caller1], 1);
+    assert_eq!(substate.storage_released.len(), 2);
+    assert_eq!(substate.storage_released[&sender], 1);
+    assert_eq!(substate.storage_released[&caller2], 1);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(state.balance(&caller1).unwrap(), U256::zero());
     assert_eq!(state.staking_balance(&caller1).unwrap(), U256::zero());
@@ -1294,7 +1536,19 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY,
     );
     assert_eq!(
+        state.collateral_for_storage(&caller2).unwrap(),
+        U256::from(0),
+    );
+    assert_eq!(
+        state.balance(&caller2).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
+    );
+    assert_eq!(
         state.balance(&address).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
+    );
+    assert_eq!(
+        state.sponsor_balance(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
     );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());

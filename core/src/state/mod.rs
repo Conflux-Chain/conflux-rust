@@ -7,10 +7,7 @@ use self::account_entry::{
 };
 use crate::{
     bytes::Bytes,
-    executive::{
-        COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, INTERNAL_CONTRACT_CODE,
-        INTERNAL_CONTRACT_CODE_HASH, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    },
+    executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     hash::KECCAK_EMPTY,
     parameters::staking::*,
     statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb},
@@ -162,7 +159,9 @@ impl State {
 
     pub fn check_collateral_for_storage(
         &mut self, sender: &Address, storage_limit: &U256,
-    ) -> CollateralCheckResult {
+        substate: &mut Substate,
+    ) -> DbResult<CollateralCheckResult>
+    {
         let mut collateral_for_storage_sub = HashMap::new();
         let mut collateral_for_storage_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.borrow().last() {
@@ -192,35 +191,50 @@ impl State {
                 }
             }
         }
-        for (addr, sub) in collateral_for_storage_sub {
-            let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
-            assert!(self.exists(&addr).expect("no db error"));
-            self.sub_collateral_for_storage(&addr, &delta)
-                .expect("no db error");
+        for (addr, sub) in &collateral_for_storage_sub {
+            let delta = U256::from(*sub) * *COLLATERAL_PER_STORAGE_KEY;
+            assert!(self.exists(addr)?);
+            self.sub_collateral_for_storage(addr, &delta)?;
         }
-        for (addr, inc) in collateral_for_storage_inc {
-            let delta = U256::from(inc) * *COLLATERAL_PER_STORAGE_KEY;
-            let balance = self.balance(&addr).expect("no db error");
-            // balance is not enough to cover storage incremental.
-            if delta > balance {
-                return CollateralCheckResult::NotEnoughBalance {
-                    required: delta,
-                    got: balance,
-                };
+        for (addr, inc) in &collateral_for_storage_inc {
+            let delta = U256::from(*inc) * *COLLATERAL_PER_STORAGE_KEY;
+            if self.is_contract(addr) {
+                assert!(!self.sponsor(addr)?.is_zero());
+                let sponsor_balance = self.sponsor_balance(addr)?;
+                // sponsor_balance is not enough to cover storage incremental.
+                if delta > sponsor_balance {
+                    return Ok(CollateralCheckResult::NotEnoughBalance {
+                        required: delta,
+                        got: sponsor_balance,
+                    });
+                }
+            } else {
+                let balance = self.balance(addr).expect("no db error");
+                // balance is not enough to cover storage incremental.
+                if delta > balance {
+                    return Ok(CollateralCheckResult::NotEnoughBalance {
+                        required: delta,
+                        got: balance,
+                    });
+                }
             }
-            self.add_collateral_for_storage(&addr, &delta)
-                .expect("no db error");
+            self.add_collateral_for_storage(addr, &delta)?
         }
 
-        let collateral_for_storage =
-            self.collateral_for_storage(sender).expect("no db error");
+        let collateral_for_storage = self.collateral_for_storage(sender)?;
         if collateral_for_storage > *storage_limit {
-            return CollateralCheckResult::ExceedStorageLimit {
+            return Ok(CollateralCheckResult::ExceedStorageLimit {
                 limit: *storage_limit,
                 required: collateral_for_storage,
-            };
+            });
         } else {
-            CollateralCheckResult::Valid
+            for (addr, sub) in collateral_for_storage_sub {
+                *substate.storage_released.entry(addr).or_insert(0) += sub;
+            }
+            for (addr, inc) in collateral_for_storage_inc {
+                *substate.storage_occupied.entry(addr).or_insert(0) += inc;
+            }
+            Ok(CollateralCheckResult::Valid)
         }
     }
 
@@ -349,22 +363,19 @@ impl State {
             .unwrap_or(false)
     }
 
-    pub fn commission_balance(
-        &self, contract_address: &Address,
-    ) -> DbResult<U256> {
-        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|x| x.commission_balance(&self.db, contract_address))
+    pub fn sponsor(&self, address: &Address) -> DbResult<Address> {
+        self.require(address, false).map(|x| *x.sponsor())
     }
 
-    pub fn set_commission_balance(
-        &mut self, contract_address: &Address, contract_owner: &Address,
-        val: &U256,
-    ) -> DbResult<()>
-    {
-        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|mut x| {
-                x.set_commission_balance(contract_address, contract_owner, val)
-            })
+    pub fn set_sponsor(
+        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+    ) -> DbResult<()> {
+        self.require(address, false)
+            .map(|mut x| x.set_sponsor(*sponsor, *sponsor_balance))
+    }
+
+    pub fn sponsor_balance(&self, address: &Address) -> DbResult<U256> {
+        self.require(address, false).map(|x| *x.sponsor_balance())
     }
 
     pub fn set_admin(
@@ -376,30 +387,34 @@ impl State {
             .map(|mut x| x.set_admin(requester, admin))
     }
 
-    pub fn sub_commission_balance(
-        &mut self, contract_address: &Address, by: &U256,
+    pub fn sub_sponsor_balance(
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        self.require(&COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS, false)
-            .map(|mut x| {
-                x.sub_commission_balance(&self.db, contract_address, by)
-            })
+        self.require(address, false)
+            .map(|mut x| x.sub_sponsor_balance(by))
+    }
+
+    pub fn add_sponsor_balance(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.require(address, false)
+            .map(|mut x| x.add_sponsor_balance(by))
     }
 
     pub fn check_commission_privilege(
-        &self, privilege_control_address: &Address, contract_address: &Address,
-        user: &Address,
-    ) -> DbResult<bool>
-    {
-        self.require(privilege_control_address, false)?
+        &self, contract_address: &Address, user: &Address,
+    ) -> DbResult<bool> {
+        self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)?
             .check_commission_privilege(&self.db, contract_address, user)
     }
 
     pub fn add_commission_privilege(
-        &mut self, privilege_control_address: &Address,
-        contract_address: Address, contract_owner: Address, user: Address,
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
     ) -> DbResult<()>
     {
-        let mut account = self.require(privilege_control_address, false)?;
+        let mut account =
+            self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)?;
         Ok(account.add_commission_privilege(
             contract_address,
             contract_owner,
@@ -408,11 +423,12 @@ impl State {
     }
 
     pub fn remove_commission_privilege(
-        &mut self, privilege_control_address: &Address,
-        contract_address: Address, contract_owner: Address, user: Address,
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
     ) -> DbResult<()>
     {
-        let mut account = self.require(privilege_control_address, false)?;
+        let mut account =
+            self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)?;
         Ok(account.remove_commission_privilege(
             contract_address,
             contract_owner,
@@ -427,27 +443,15 @@ impl State {
     }
 
     pub fn code_hash(&self, address: &Address) -> DbResult<Option<H256>> {
-        if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
-            || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
-        {
-            Ok(Some(*INTERNAL_CONTRACT_CODE_HASH))
-        } else {
-            self.ensure_cached(address, RequireCache::None, |acc| {
-                acc.and_then(|acc| Some(acc.code_hash()))
-            })
-        }
+        self.ensure_cached(address, RequireCache::None, |acc| {
+            acc.and_then(|acc| Some(acc.code_hash()))
+        })
     }
 
     pub fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
-        if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
-            || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
-        {
-            Ok(Some(INTERNAL_CONTRACT_CODE.len()))
-        } else {
-            self.ensure_cached(address, RequireCache::CodeSize, |acc| {
-                acc.and_then(|acc| acc.code_size())
-            })
-        }
+        self.ensure_cached(address, RequireCache::CodeSize, |acc| {
+            acc.and_then(|acc| acc.code_size())
+        })
     }
 
     pub fn code_owner(&self, address: &Address) -> DbResult<Option<Address>> {
@@ -457,15 +461,9 @@ impl State {
     }
 
     pub fn code(&self, address: &Address) -> DbResult<Option<Arc<Bytes>>> {
-        if *address == *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS
-            || *address == *COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS
-        {
-            Ok(Some(Arc::new(INTERNAL_CONTRACT_CODE.to_vec())))
-        } else {
-            self.ensure_cached(address, RequireCache::Code, |acc| {
-                acc.as_ref().map_or(None, |acc| acc.code())
-            })
-        }
+        self.ensure_cached(address, RequireCache::Code, |acc| {
+            acc.as_ref().map_or(None, |acc| acc.code())
+        })
     }
 
     pub fn staking_balance(&self, address: &Address) -> DbResult<U256> {

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::executive::*;
+use super::{executive::*, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
@@ -75,6 +75,7 @@ pub struct Context<'a> {
     spec: &'a Spec,
     output: OutputPolicy,
     static_flag: bool,
+    internal_contract_map: &'a InternalContractMap,
 }
 
 impl<'a> Context<'a> {
@@ -84,6 +85,7 @@ impl<'a> Context<'a> {
         spec: &'a Spec, depth: usize, stack_depth: usize,
         origin: &'a OriginInfo, substate: &'a mut Substate,
         output: OutputPolicy, static_flag: bool,
+        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         Context {
@@ -97,6 +99,7 @@ impl<'a> Context<'a> {
             spec,
             output,
             static_flag,
+            internal_contract_map,
         }
     }
 }
@@ -112,14 +115,21 @@ impl<'a> ContextTrait for Context<'a> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
+            // If the `original_sender` is not in the whitelist or the
+            // sponsor_balance is not enough for one single key, the owner
+            // should be the `original_sender`.
             let owner = if self
                 .state
                 .check_commission_privilege(
-                    &STORAGE_COMMISSION_PRIVILEGE_CONTROL_CONTRACT_ADDRESS,
                     &self.origin.original_receiver,
                     &self.origin.original_sender,
                 )
                 .expect("no db error")
+                && self
+                    .state
+                    .sponsor_balance(&self.origin.original_receiver)
+                    .expect("no db error")
+                    >= *COLLATERAL_PER_STORAGE_KEY
             {
                 self.origin.original_receiver
             } else {
@@ -214,6 +224,7 @@ impl<'a> ContextTrait for Context<'a> {
             self.spec,
             self.depth,
             self.static_flag,
+            self.internal_contract_map,
         );
         let out = ex.create_with_stack_depth(
             params,
@@ -233,9 +244,15 @@ impl<'a> ContextTrait for Context<'a> {
 
         assert!(trap);
 
-        let code_with_hash = self.state.code(code_address).and_then(|code| {
-            self.state.code_hash(code_address).map(|hash| (code, hash))
-        });
+        let code_with_hash = if let Some(contract) =
+            self.internal_contract_map.contract(code_address)
+        {
+            Ok((Some(contract.code()), Some(contract.code_hash())))
+        } else {
+            self.state.code(code_address).and_then(|code| {
+                self.state.code_hash(code_address).map(|hash| (code, hash))
+            })
+        };
 
         let (code, code_hash) = match code_with_hash {
             Ok((code, hash)) => (code, hash),
@@ -267,15 +284,27 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        Ok(self.state.code(address)?)
+        if let Some(contract) = self.internal_contract_map.contract(address) {
+            Ok(Some(contract.code()))
+        } else {
+            Ok(self.state.code(address)?)
+        }
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        Ok(self.state.code_hash(address)?)
+        if let Some(contract) = self.internal_contract_map.contract(address) {
+            Ok(Some(contract.code_hash()))
+        } else {
+            Ok(self.state.code_hash(address)?)
+        }
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        Ok(self.state.code_size(address)?)
+        if let Some(contract) = self.internal_contract_map.contract(address) {
+            Ok(Some(contract.code_size()))
+        } else {
+            Ok(self.state.code_size(address)?)
+        }
     }
 
     fn ret(
@@ -467,6 +496,7 @@ mod tests {
         storage_manager: Option<Box<FakeStateManager>>,
         state: Option<State>,
         machine: Machine,
+        internal_contract_map: InternalContractMap,
         spec: Spec,
         substate: Substate,
         env: Env,
@@ -482,11 +512,13 @@ mod tests {
             let machine = new_machine_with_builtin();
             let env = get_test_env();
             let spec = machine.spec(env.number);
+            let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
                 storage_manager: None,
                 state: None,
                 machine,
+                internal_contract_map,
                 spec,
                 substate: Substate::new(),
                 env,
@@ -525,6 +557,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            &setup.internal_contract_map,
         );
 
         assert_eq!(ctx.env().number, 100);
@@ -547,6 +580,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            &setup.internal_contract_map,
         );
 
         let hash = ctx.blockhash(
@@ -618,6 +652,7 @@ mod tests {
             &mut setup.substate,
             OutputPolicy::InitContract,
             false,
+            &setup.internal_contract_map,
         );
 
         // this should panic because we have no balance on any account
@@ -665,6 +700,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
             ctx.log(log_topics, &log_data).unwrap();
         }
@@ -692,6 +728,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
             ctx.suicide(refund_account).unwrap();
         }
@@ -719,6 +756,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
             match ctx.create(
                 &U256::max_value(),
@@ -761,6 +799,7 @@ mod tests {
                 &mut setup.substate,
                 OutputPolicy::InitContract,
                 false,
+                &setup.internal_contract_map,
             );
 
             match ctx.create(
