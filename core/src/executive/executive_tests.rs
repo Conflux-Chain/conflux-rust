@@ -1443,7 +1443,8 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY * U256::from(2),
     );
 
-    // another caller call with commission privilege
+    // another caller call with commission privilege and not enough sponsor
+    // balance, the owner will transfer to caller2.
     assert_eq!(
         state.balance(&caller2).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
@@ -1461,27 +1462,29 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 0);
-    assert_eq!(substate.storage_released.len(), 0);
+    assert_eq!(substate.storage_occupied.len(), 1);
+    assert_eq!(substate.storage_occupied[&caller2], 1);
+    assert_eq!(substate.storage_released.len(), 1);
+    assert_eq!(substate.storage_released[&address], 1);
     assert_eq!(gas_left, U256::from(94983));
-    assert_eq!(
-        state.balance(&caller2).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
-    );
+    assert_eq!(state.balance(&caller2).unwrap(), U256::from(0),);
     assert_eq!(state.staking_balance(&caller2).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&caller2).unwrap(),
-        U256::zero()
+        *COLLATERAL_PER_STORAGE_KEY,
     );
     assert_eq!(
         state.balance(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY
     );
-    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::zero());
+    assert_eq!(
+        state.sponsor_balance(&address).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
+    );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY,
+        U256::from(0),
     );
     assert_eq!(
         *state.total_storage_tokens(),
@@ -1524,13 +1527,21 @@ fn test_storage_commission_privilege() {
     assert_eq!(substate.storage_occupied[&caller1], 1);
     assert_eq!(substate.storage_released.len(), 2);
     assert_eq!(substate.storage_released[&sender], 1);
-    assert_eq!(substate.storage_released[&address], 1);
+    assert_eq!(substate.storage_released[&caller2], 1);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(state.balance(&caller1).unwrap(), U256::zero());
     assert_eq!(state.staking_balance(&caller1).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&caller1).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
+    );
+    assert_eq!(
+        state.collateral_for_storage(&caller2).unwrap(),
+        U256::from(0),
+    );
+    assert_eq!(
+        state.balance(&caller2).unwrap(),
+        *COLLATERAL_PER_STORAGE_KEY
     );
     assert_eq!(
         state.balance(&address).unwrap(),
