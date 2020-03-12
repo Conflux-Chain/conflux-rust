@@ -9,9 +9,10 @@ use crate::{
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
-use primitives::{Account, CodeInfo, DepositInfo, StakingVoteInfo, StorageKey};
+use primitives::{
+    Account, CodeInfo, DepositInfo, StakingVoteInfo, StorageKey, StorageValue,
+};
 use rlp::RlpStream;
-use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 lazy_static! {
@@ -23,12 +24,6 @@ lazy_static! {
         H256::from_low_u64_le(1);
     /// If we set this key, it means every account has commission privilege.
     static ref COMMISSION_PRIVILEGE_SPECIAL_KEY: Address = Address::zero();
-}
-
-#[derive(Default, Clone, Debug, RlpDecodable, RlpEncodable)]
-pub struct StorageValue {
-    pub value: H256,
-    pub owner: Address,
 }
 
 #[derive(Debug)]

@@ -308,6 +308,34 @@ impl RpcImpl {
         self.send_transaction_with_signature(tx)
     }
 
+    fn storage_at(
+        &self, address: RpcH160, position: RpcH256,
+        epoch_num: Option<EpochNumber>,
+    ) -> BoxFuture<Option<RpcH256>>
+    {
+        let address: H160 = address.into();
+        let position: H256 = position.into();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+
+        info!(
+            "RPC Request: cfx_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
+            address, position, epoch_num
+        );
+
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
+            .get_storage(address, position, epoch_num.into())
+            .map(|x| x.map(Into::into))
+            .map_err(RpcError::invalid_params)
+            .into_future()
+            .boxed()
+    }
+
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
@@ -818,6 +846,7 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }

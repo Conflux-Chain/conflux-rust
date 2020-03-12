@@ -277,7 +277,6 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    #[allow(unused_variables)]
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs({:?})", filter);
 
@@ -360,6 +359,35 @@ impl RpcImpl {
             })?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
+    fn storage_at(
+        &self, address: RpcH160, position: RpcH256,
+        epoch_num: Option<EpochNumber>,
+    ) -> BoxFuture<Option<RpcH256>>
+    {
+        let address: H160 = address.into();
+        let position: H256 = position.into();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+
+        info!(
+            "RPC Request: cfx_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
+            address, position, epoch_num
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let maybe_entry = light
+                .get_storage(epoch_num.into(), address, position)
+                .await
+                .map_err(RpcError::invalid_params)?;
+
+            Ok(maybe_entry.map(Into::into))
         };
 
         Box::new(fut.boxed().compat())
@@ -453,6 +481,7 @@ impl Cfx for CfxHandler {
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }

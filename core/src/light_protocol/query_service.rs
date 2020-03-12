@@ -25,7 +25,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, CodeInfo, EpochNumber, Receipt, SignedTransaction, StateRoot,
-    StorageKey, TransactionIndex,
+    StorageKey, StorageValue, TransactionIndex,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
@@ -124,10 +124,19 @@ impl QueryService {
         .await
     }
 
-    async fn retrieve_state_entry(
+    async fn retrieve_state_entry_raw(
         &self, epoch: u64, key: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, String> {
-        trace!("retrieve_state_entry epoch = {}, key = {:?}", epoch, key);
+        trace!(
+            "retrieve_state_entry_raw epoch = {}, key = {:?}",
+            epoch,
+            key
+        );
+
+        // trigger state root request but don't wait for result
+        // FIXME(thegaram): is there a better way?
+        let _ =
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
 
         with_timeout(
             *MAX_POLL_TIME,
@@ -135,6 +144,19 @@ impl QueryService {
             self.with_io(|io| self.handler.state_entries.request_now(io, epoch, key)),
         )
         .await
+    }
+
+    async fn retrieve_state_entry<T: rlp::Decodable>(
+        &self, epoch: u64, key: Vec<u8>,
+    ) -> Result<Option<T>, String> {
+        match self.retrieve_state_entry_raw(epoch, key).await? {
+            None => Ok(None),
+            Some(raw) => {
+                let decoded = rlp::decode::<T>(raw.as_ref())
+                    .map_err(|e| format!("{}", e))?;
+                Ok(Some(decoded))
+            }
+        }
     }
 
     async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
@@ -203,49 +225,12 @@ impl QueryService {
         .to_key_bytes()
     }
 
-    async fn retrieve_account(
-        &self, epoch: u64, address: H160,
-    ) -> Result<Option<Account>, String> {
-        trace!(
-            "retrieve_account epoch = {}, address = {:?}",
-            epoch,
-            address
-        );
-
-        // trigger state root request but don't wait for result
-        // FIXME: is there a better way?
-        let _ =
-            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
-
-        let key = Self::account_key(&address);
-
-        let entry = match self.retrieve_state_entry(epoch, key).await? {
-            None => return Ok(None),
-            Some(entry) => entry,
-        };
-
-        let account = rlp::decode(&entry[..]).map_err(|e| format!("{}", e))?;
-        Ok(Some(account))
-    }
-
-    async fn retrieve_code(
-        &self, epoch: u64, address: H160, code_hash: H256,
-    ) -> Result<Option<Vec<u8>>, String> {
-        trace!(
-            "retrieve_code epoch = {}, address = {:?}, code_hash = {:?}",
-            epoch,
-            address,
-            code_hash
-        );
-
-        let key = Self::code_key(&address, &code_hash);
-        let entry = match self.retrieve_state_entry(epoch, key).await? {
-            None => return Ok(None),
-            Some(entry) => entry,
-        };
-        let code_info: CodeInfo =
-            rlp::decode(&entry[..]).map_err(|e| format!("{}", e))?;
-        Ok(Some(code_info.code))
+    fn storage_key(address: &H160, position: &H256) -> Vec<u8> {
+        StorageKey::StorageKey {
+            address_bytes: &address.0,
+            storage_key: &position.0,
+        }
+        .to_key_bytes()
     }
 
     pub async fn get_account(
@@ -258,7 +243,11 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        self.retrieve_account(epoch, address).await
+        let key = Self::account_key(&address);
+
+        self.retrieve_state_entry(epoch, key)
+            .await
+            .map_err(|e| format!("Unable to retrieve account: {}", e))
     }
 
     pub async fn get_code(
@@ -271,22 +260,50 @@ impl QueryService {
             Err(e) => return Err(format!("{}", e)),
         };
 
-        let account = self
-            .retrieve_account(epoch, address)
-            .await
-            .map_err(|e| format!("Unable to retrieve account: {:?}", e))?;
+        let key = Self::account_key(&address);
 
-        let code_hash = match account {
-            Some(account) => account.code_hash,
-            None => {
-                return Err(format!(
-                    "Account {:?} (number={:?}) does not exist",
-                    address, epoch,
-                ))
-            }
+        let code_hash = match self
+            .retrieve_state_entry::<Account>(epoch, key)
+            .await
+        {
+            Err(e) => return Err(format!("Unable to retrieve account: {}", e)),
+            Ok(None) => return Ok(None),
+            Ok(Some(account)) => account.code_hash,
         };
 
-        self.retrieve_code(epoch, address, code_hash).await
+        let key = Self::code_key(&address, &code_hash);
+
+        match self.retrieve_state_entry::<CodeInfo>(epoch, key).await {
+            Err(e) => Err(format!("Unable to retrieve code: {}", e)),
+            Ok(None) => {
+                // FIXME(thegaram): can this happen?
+                error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
+                Err(format!("Unable to retrieve code: internal error"))
+            }
+            Ok(Some(info)) => Ok(Some(info.code)),
+        }
+    }
+
+    pub async fn get_storage(
+        &self, epoch: EpochNumber, address: H160, position: H256,
+    ) -> Result<Option<H256>, String> {
+        info!(
+            "get_storage epoch={:?} address={:?} position={:?}",
+            epoch, address, position
+        );
+
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
+        let key = Self::storage_key(&address, &position);
+
+        match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
+            Err(e) => Err(format!("Unable to retrieve storage entry: {}", e)),
+            Ok(None) => Ok(None),
+            Ok(Some(entry)) => Ok(Some(entry.value)),
+        }
     }
 
     pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {

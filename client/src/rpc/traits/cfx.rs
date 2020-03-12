@@ -84,10 +84,11 @@ pub trait Cfx {
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Bytes>;
 
-    //        /// Returns content of the storage at given address.
-    //        #[rpc(name = "cfx_getStorageAt")]
-    //        fn storage_at(&self, RpcH160, RpcU256, Option<BlockNumber>) ->
-    // BoxFuture<RpcH256>;
+    /// Returns storage entries from a given contract.
+    #[rpc(name = "cfx_getStorageAt")]
+    fn storage_at(
+        &self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<Option<RpcH256>>;
 
     /// Returns block with given hash.
     #[rpc(name = "cfx_getBlockByHash")]

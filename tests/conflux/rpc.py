@@ -116,6 +116,17 @@ class RpcClient:
         logs = self.node.cfx_getLogs(filter.__dict__)
         return logs
 
+    def get_storage_at(self, addr: str, pos: str, epoch: str = None) -> str:
+        assert_is_hash_string(addr, length=40)
+        assert_is_hash_string(pos)
+
+        if epoch is None:
+            res = self.node.cfx_getStorageAt(addr, pos)
+        else:
+            res = self.node.cfx_getStorageAt(addr, pos, epoch)
+
+        return res
+
     def get_code(self, address: str, epoch: str = None) -> str:
         if epoch is None:
             code = self.node.cfx_getCode(address)

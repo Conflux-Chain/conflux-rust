@@ -39,7 +39,8 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    Account, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
+    Account, EpochId, EpochNumber, SignedTransaction, StorageKey, StorageValue,
+    TransactionIndex,
 };
 use rayon::prelude::*;
 use std::{
@@ -474,6 +475,23 @@ impl ConsensusGraph {
         } else {
             0.into()
         })
+    }
+
+    /// Get storage entry of a contract
+    pub fn get_storage(
+        &self, address: H160, position: H256, epoch_number: EpochNumber,
+    ) -> Result<Option<H256>, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+        let key = StorageKey::new_storage_key(&address, position.as_ref());
+
+        match state_db.get::<StorageValue>(key) {
+            Ok(Some(entry)) => Ok(Some(entry.value)),
+            Ok(None) => Ok(None),
+            Err(e) => {
+                warn!("Unexpected error while retrieving storage entry: {}", e);
+                Err("db error occurred".into())
+            }
+        }
     }
 
     /// Get the current admin of a contract
