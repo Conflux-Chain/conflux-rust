@@ -4,8 +4,7 @@
 
 use crate::{bytes::Bytes, statedb::Error as DbError, vm};
 use cfx_types::{Address, U256, U512};
-use primitives::LogEntry;
-use std::collections::HashMap;
+use primitives::{receipt::StorageChange, LogEntry};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Executed {
@@ -32,10 +31,10 @@ pub struct Executed {
     pub logs: Vec<LogEntry>,
 
     /// Any accounts that occupy some storage.
-    pub storage_occupied: HashMap<Address, U256>,
+    pub storage_occupied: Vec<StorageChange>,
 
     /// Any accounts that release some storage.
-    pub storage_released: HashMap<Address, U256>,
+    pub storage_released: Vec<StorageChange>,
 
     /// Addresses of contracts created during execution of transaction.
     /// Ordered from earliest creation.

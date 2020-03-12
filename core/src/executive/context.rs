@@ -115,6 +115,9 @@ impl<'a> ContextTrait for Context<'a> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
+            // If the `original_sender` is not in the whitelist or the
+            // sponsor_balance is not enough for one single key, the owner
+            // should be the `original_sender`.
             let owner = if self
                 .state
                 .check_commission_privilege(
@@ -122,6 +125,11 @@ impl<'a> ContextTrait for Context<'a> {
                     &self.origin.original_sender,
                 )
                 .expect("no db error")
+                && self
+                    .state
+                    .sponsor_balance(&self.origin.original_receiver)
+                    .expect("no db error")
+                    >= *COLLATERAL_PER_STORAGE_KEY
             {
                 self.origin.original_receiver
             } else {

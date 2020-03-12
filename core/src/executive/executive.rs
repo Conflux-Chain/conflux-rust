@@ -21,12 +21,10 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256, U512};
-use primitives::{transaction::Action, SignedTransaction};
-use std::{
-    collections::{HashMap, HashSet},
-    convert::TryFrom,
-    sync::Arc,
+use primitives::{
+    receipt::StorageChange, transaction::Action, SignedTransaction,
 };
+use std::{collections::HashSet, convert::TryFrom, sync::Arc};
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -1322,17 +1320,6 @@ impl<'a> Executive<'a> {
             Action::Create => false,
         };
 
-        // Find the storage upper bound in this execution for the sender.
-        let storage_limit = {
-            let collateral_for_storage =
-                self.state.collateral_for_storage(&sender)?;
-            if tx.storage_limit <= U256::MAX - collateral_for_storage {
-                tx.storage_limit + collateral_for_storage
-            } else {
-                U256::MAX
-            }
-        };
-
         // Avoid unaffordable transactions
         let balance512 = U512::from(balance);
         let total_cost = if free_of_charge {
@@ -1379,6 +1366,33 @@ impl<'a> Executive<'a> {
                 &U256::try_from(gas_cost).unwrap(),
             )?;
         }
+
+        // Find the storage upper bound in this execution for the sender.
+        let storage_limit = {
+            let collateral_for_storage =
+                self.state.collateral_for_storage(&sender)?;
+            // The balance which the sponsor will sponsor sender.
+            let sponsored_balance = if free_of_charge {
+                // TODO: like the tx fee, an upper bound is needed.
+                self.state.sponsor_balance(&code_address)?
+            } else {
+                U256::zero()
+            };
+            if tx.storage_limit >= sponsored_balance {
+                if tx.storage_limit - sponsored_balance
+                    <= U256::MAX - collateral_for_storage
+                {
+                    // The incremental storage cost will be payed by the sender.
+                    tx.storage_limit - sponsored_balance
+                        + collateral_for_storage
+                } else {
+                    U256::MAX
+                }
+            } else {
+                // All incremental storage cost will be payed by the sponsor.
+                collateral_for_storage
+            }
+        };
 
         let (result, output) = match tx.action {
             Action::Create => {
@@ -1478,7 +1492,6 @@ impl<'a> Executive<'a> {
         //            spec.kill_dust == CleanDustMode::WithCodeAndStorage,
         //        )?;
 
-        // TODO: summarize storage usage.
         match result {
             Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
             Err(exception) => Ok(Executed {
@@ -1489,19 +1502,22 @@ impl<'a> Executive<'a> {
                 cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
-                storage_occupied: HashMap::new(),
-                storage_released: HashMap::new(),
+                storage_occupied: Vec::new(),
+                storage_released: Vec::new(),
                 output,
             }),
             Ok(r) => {
-                let mut storage_occupied = HashMap::new();
-                let mut storage_released = HashMap::new();
+                let mut storage_occupied = Vec::new();
+                let mut storage_released = Vec::new();
                 if r.apply_state {
                     let affected_address1: HashSet<_> =
                         substate.storage_occupied.keys().cloned().collect();
                     let affected_address2: HashSet<_> =
                         substate.storage_released.keys().cloned().collect();
-                    for address in affected_address1.union(&affected_address2) {
+                    let mut affected_address: Vec<_> =
+                        affected_address1.union(&affected_address2).collect();
+                    affected_address.sort();
+                    for address in affected_address {
                         let inc = substate
                             .storage_occupied
                             .get(address)
@@ -1513,17 +1529,17 @@ impl<'a> Executive<'a> {
                             .cloned()
                             .unwrap_or(0);
                         if inc > sub {
-                            storage_occupied.insert(
-                                *address,
-                                U256::from(inc - sub)
+                            storage_occupied.push(StorageChange {
+                                address: *address,
+                                amount: U256::from(inc - sub)
                                     * *COLLATERAL_PER_STORAGE_KEY,
-                            );
+                            });
                         } else if inc < sub {
-                            storage_released.insert(
-                                *address,
-                                U256::from(sub - inc)
+                            storage_released.push(StorageChange {
+                                address: *address,
+                                amount: U256::from(sub - inc)
                                     * *COLLATERAL_PER_STORAGE_KEY,
-                            );
+                            });
                         }
                     }
                 }

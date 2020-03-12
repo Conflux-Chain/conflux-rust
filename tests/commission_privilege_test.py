@@ -76,7 +76,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
-                               check_status=False):
+                               check_status=False,
+                               storage_limit=None):
         if contract_addr:
             func = getattr(contract.functions, name)
         else:
@@ -99,6 +100,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         tx_data.pop('gasPrice', None)
         tx_data.pop('chainId', None)
         tx_data.pop('to', None)
+        if storage_limit is not None:
+            tx_data['storage_limit'] = storage_limit
         transaction = create_transaction(**tx_data)
         self.send_transaction(transaction, wait, check_status)
         return transaction
@@ -107,16 +110,17 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         # Prevent easysolc from configuring the root logger to print to stderr
         self.log.propagate = False
         sponsor_whitelist_contract_addr = Web3.toChecksumAddress("8ad036480160591706c831f0da19d1a424e39469")
+        collateral_per_storage_key = 10 ** 18 // 16
 
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        commission_privilege_contract = solc.get_contract_instance(
+        control_contract = solc.get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/commission_privilege_control_abi.json"),
             bytecode_file = os.path.join(file_dir, "contracts/commission_privilege_control_bytecode.dat"),
         )
 
-        commission_privilege_test_contract = solc.get_contract_instance(
+        test_contract = solc.get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/commission_privilege_test_abi.json"),
             bytecode_file = os.path.join(file_dir, "contracts/commission_privilege_test_bytecode.dat"),
         )
@@ -173,7 +177,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
         # setup contract
         transaction = self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="constructor",
             args=[],
             sender_key=self.genesis_priv_key)
@@ -184,7 +188,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         # sponsor the contract
         b0 = client.get_balance(genesis_addr)
         self.call_contract_function(
-            contract=commission_privilege_contract,
+            contract=control_contract,
             name="set_sponsor",
             args=[Web3.toChecksumAddress(contract_addr), 10 ** 18],
             sender_key=self.genesis_priv_key,
@@ -198,19 +202,19 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b0 = client.get_balance(genesis_addr)
         c0 = client.get_collateral_for_storage(genesis_addr)
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="add",
             args=[Web3.toChecksumAddress(addr1)],
             sender_key=genesis_key,
             contract_addr=contract_addr,
             wait=True,
             check_status=True)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas - 10 ** 18 // 16)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 10 ** 18 // 16)
+        assert_equal(client.get_balance(genesis_addr), b0 - gas - collateral_per_storage_key)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 
         # addr1 call contract with privilege
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="foo",
             args=[],
             sender_key=priv_key1,
@@ -222,7 +226,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
         # addr2 call contract without privilege
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="foo",
             args=[],
             sender_key=priv_key2,
@@ -236,19 +240,19 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b0 = client.get_balance(genesis_addr)
         c0 = client.get_collateral_for_storage(genesis_addr)
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="add",
             args=[Web3.toChecksumAddress(addr2)],
             sender_key=genesis_key,
             contract_addr=contract_addr,
             wait=True,
             check_status=True)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas - 10 ** 18 // 16)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 10 ** 18 // 16)
+        assert_equal(client.get_balance(genesis_addr), b0 - gas - collateral_per_storage_key)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 
         # now, addr2 call contract with privilege
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="foo",
             args=[],
             sender_key=priv_key2,
@@ -262,19 +266,19 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         b0 = client.get_balance(genesis_addr)
         c0 = client.get_collateral_for_storage(genesis_addr)
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="remove",
             args=[Web3.toChecksumAddress(addr1)],
             sender_key=genesis_key,
             contract_addr=contract_addr,
             wait=True,
             check_status=True)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 - 10 ** 18 // 16)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas + 10 ** 18 // 16)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 - collateral_per_storage_key)
+        assert_equal(client.get_balance(genesis_addr), b0 - gas + collateral_per_storage_key)
 
         # addr1 call contract without privilege
         self.call_contract_function(
-            contract=commission_privilege_test_contract,
+            contract=test_contract,
             name="foo",
             args=[],
             sender_key=priv_key1,
@@ -286,7 +290,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
         # new sponsor failed
         self.call_contract_function(
-            contract=commission_privilege_contract,
+            contract=control_contract,
             name="set_sponsor",
             args=[Web3.toChecksumAddress(contract_addr), 5 * 10 ** 17],
             sender_key=priv_key3,
@@ -299,7 +303,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         # new sponsor succeed
         b0 = client.get_balance(genesis_addr)
         self.call_contract_function(
-            contract=commission_privilege_contract,
+            contract=control_contract,
             name="set_sponsor",
             args=[Web3.toChecksumAddress(contract_addr), 10 ** 18],
             sender_key=priv_key3,
@@ -309,6 +313,197 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor(contract_addr), addr3)
         assert_equal(client.get_balance(addr3), 10 ** 18 - gas * 2)
         assert_equal(client.get_balance(genesis_addr), b0 + 10 ** 18 - gas * 2)
+
+        # now testing collateral for storage together with sponsor
+        # addr1 create 2 keys without privilege, and storage limit is 1, should failed
+        b1 = client.get_balance(addr1)
+        assert_equal(client.get_collateral_for_storage(contract_addr), 0)
+        assert_equal(client.get_collateral_for_storage(addr1), 0)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add",
+            args=[0, 2],
+            sender_key=priv_key1,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=collateral_per_storage_key)
+        assert_equal(client.get_collateral_for_storage(contract_addr), 0)
+        assert_equal(client.get_collateral_for_storage(addr1), 0)
+        assert_equal(client.get_balance(addr1), b1 - gas)
+
+        # addr1 create 2 keys without privilege, and storage limit is 2, should succeed
+        b1 = client.get_balance(addr1)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add",
+            args=[0, 2],
+            sender_key=priv_key1,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=collateral_per_storage_key * 2)
+        assert_equal(client.get_collateral_for_storage(contract_addr), 0)
+        assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key * 2)
+        assert_equal(client.get_balance(addr1), b1 - gas - collateral_per_storage_key * 2)
+
+        # remove 1 key create by addr1
+        b1 = client.get_balance(addr1)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_del",
+            args=[0, 1],
+            sender_key=priv_key1,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=collateral_per_storage_key * 2)
+        assert_equal(client.get_collateral_for_storage(contract_addr), 0)
+        assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key)
+        assert_equal(client.get_balance(addr1), b1 - gas + collateral_per_storage_key)
+
+        # addr2 create 2 keys with privilege, and storage limit is 1, should succeed
+        sp = client.get_sponsor_balance(contract_addr)
+        b2 = client.get_balance(addr2)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add",
+            args=[2, 4],
+            sender_key=priv_key2,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=collateral_per_storage_key)
+        assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 2)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp - collateral_per_storage_key * 2 - gas)
+        assert_equal(client.get_collateral_for_storage(addr2), 0)
+        assert_equal(client.get_balance(addr2), b2)
+
+        # addr2 create 13 keys with privilege, and storage limit is 0, should succeed
+        sp = client.get_sponsor_balance(contract_addr)
+        b2 = client.get_balance(addr2)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add",
+            args=[4, 17],
+            sender_key=priv_key2,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=0)
+        assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 15)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp - collateral_per_storage_key * 13 - gas)
+        assert_equal(client.get_collateral_for_storage(addr2), 0)
+        assert_equal(client.get_balance(addr2), b2)
+
+        # now sponsor_balance is unable to pay collateral for storage
+        # the balance of addr2 is able to pay 15 collateral for storage, but not 16
+        assert_greater_than(collateral_per_storage_key, client.get_sponsor_balance(contract_addr))
+        assert_greater_than(collateral_per_storage_key * 16, client.get_balance(addr2))
+        assert_greater_than(client.get_balance(addr2), collateral_per_storage_key * 15)
+
+        # addr2 create 1 keys with privilege, and storage limit is 0, should failed
+        sp = client.get_sponsor_balance(contract_addr)
+        b2 = client.get_balance(addr2)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add",
+            args=[17, 18],
+            sender_key=priv_key2,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=0)
+        assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 15)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp - gas)
+        assert_equal(client.get_collateral_for_storage(addr2), 0)
+        assert_equal(client.get_balance(addr2), b2)
+
+        # addr2 create 1 keys with privilege, and storage limit is 2, should succeed
+        sp = client.get_sponsor_balance(contract_addr)
+        b2 = client.get_balance(addr2)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add",
+            args=[17, 18],
+            sender_key=priv_key2,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=collateral_per_storage_key * 2)
+        assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 15)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp - gas)
+        assert_equal(client.get_collateral_for_storage(addr2), collateral_per_storage_key)
+        assert_equal(client.get_balance(addr2), b2 - collateral_per_storage_key)
+
+        # addr2 del 10 keys with privilege
+        sp = client.get_sponsor_balance(contract_addr)
+        b2 = client.get_balance(addr2)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_del",
+            args=[2, 12],
+            sender_key=priv_key2,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=collateral_per_storage_key)
+        assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 5)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp - gas + collateral_per_storage_key * 10)
+        assert_equal(client.get_collateral_for_storage(addr2), collateral_per_storage_key)
+        assert_equal(client.get_balance(addr2), b2)
+
+        # addr3 sponsor with less sponsor balance, should fail
+        b3 = client.get_balance(addr3)
+        sp = client.get_sponsor_balance(contract_addr)
+        self.call_contract_function(
+            contract=control_contract,
+            name="set_sponsor",
+            args=[Web3.toChecksumAddress(contract_addr), sp - 1],
+            sender_key=priv_key3,
+            contract_addr=sponsor_whitelist_contract_addr,
+            wait=True)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp)
+        assert_equal(client.get_sponsor(contract_addr), addr3)
+        assert_equal(client.get_balance(addr3), b3 - gas)
+
+        # addr3 sponsor with more sponsor balance, should succeed
+        b3 = client.get_balance(addr3)
+        sp = client.get_sponsor_balance(contract_addr)
+        self.call_contract_function(
+            contract=control_contract,
+            name="set_sponsor",
+            args=[Web3.toChecksumAddress(contract_addr), sp + 1],
+            sender_key=priv_key3,
+            contract_addr=sponsor_whitelist_contract_addr,
+            wait=True)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp + 1)
+        assert_equal(client.get_sponsor(contract_addr), addr3)
+        assert_equal(client.get_balance(addr3), b3 - gas - 1)
+
+        # genesis sponsor with sponsor balance, should failed
+        b0 = client.get_balance(genesis_addr)
+        sp = client.get_sponsor_balance(contract_addr)
+        self.call_contract_function(
+            contract=control_contract,
+            name="set_sponsor",
+            args=[Web3.toChecksumAddress(contract_addr), sp + 1],
+            sender_key=self.genesis_priv_key,
+            contract_addr=sponsor_whitelist_contract_addr,
+            wait=True)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp)
+        assert_equal(client.get_sponsor(contract_addr), addr3)
+        assert_equal(client.get_balance(genesis_addr), b0 - gas)
+
+        # genesis sponsor with sponsor balance and collateral_for_storage, should succeed
+        b0 = client.get_balance(genesis_addr)
+        b3 = client.get_balance(addr3)
+        cfs = client.get_collateral_for_storage(contract_addr)
+        sp = client.get_sponsor_balance(contract_addr)
+        self.call_contract_function(
+            contract=control_contract,
+            name="set_sponsor",
+            args=[Web3.toChecksumAddress(contract_addr), sp + cfs],
+            sender_key=self.genesis_priv_key,
+            contract_addr=sponsor_whitelist_contract_addr,
+            wait=True)
+        assert_equal(client.get_collateral_for_storage(contract_addr), cfs)
+        assert_equal(client.get_sponsor_balance(contract_addr), sp)
+        assert_equal(client.get_sponsor(contract_addr), genesis_addr)
+        assert_equal(client.get_balance(genesis_addr), b0 - gas - sp - cfs)
+        assert_equal(client.get_balance(addr3), b3 + sp + cfs)
 
         self.log.info("Pass")
 

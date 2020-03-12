@@ -20,6 +20,8 @@ contract CommissionPrivilegeControl {
 }
 
 contract CommissionPrivilegeTest {
+    mapping(uint => uint) public ss;
+
     function add(address account) public payable {
         CommissionPrivilegeControl cpc = CommissionPrivilegeControl(0x8ad036480160591706c831f0DA19D1a424e39469);
         address[] memory a = new address[](1);
@@ -35,5 +37,16 @@ contract CommissionPrivilegeTest {
     }
 
     function foo() public payable {
+    }
+
+    function par_add(uint start, uint end) public payable {
+        for (uint i = start; i < end; i++) {
+            ss[i] = 1;
+        }
+    }
+    function par_del(uint start, uint end) public payable {
+        for (uint i = start; i < end; i++) {
+            ss[i] = 0;
+        }
     }
 }

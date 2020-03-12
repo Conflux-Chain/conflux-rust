@@ -26,8 +26,7 @@ use parity_bytes::ToPretty;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
-        Receipt, StorageChange,
-        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
@@ -1101,22 +1100,8 @@ impl ConsensusExecutionHandler {
                     Ok(ref executed) => {
                         env.gas_used = executed.cumulative_gas_used;
                         transaction_logs = executed.logs.clone();
-                        storage_occupied = executed
-                            .storage_occupied
-                            .iter()
-                            .map(|(addr, amount)| StorageChange {
-                                address: *addr,
-                                amount: *amount,
-                            })
-                            .collect();
-                        storage_released = executed
-                            .storage_released
-                            .iter()
-                            .map(|(addr, amount)| StorageChange {
-                                address: *addr,
-                                amount: *amount,
-                            })
-                            .collect();
+                        storage_occupied = executed.storage_occupied.clone();
+                        storage_released = executed.storage_released.clone();
                         if executed.exception.is_some() {
                             warn!(
                                 "tx execution error: transaction={:?}, err={:?}",

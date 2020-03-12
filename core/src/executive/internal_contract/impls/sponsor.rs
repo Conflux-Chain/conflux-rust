@@ -55,23 +55,27 @@ impl SponsorWhitelistControl {
             ));
         }
 
+        let prev_sponsor = state.sponsor(&contract_address)?;
         let prev_sponsor_balance = state.sponsor_balance(&contract_address)?;
         let prev_collateral_for_storage =
             state.collateral_for_storage(&contract_address)?;
-        if sponsor_balance < prev_sponsor_balance + prev_collateral_for_storage
-        {
+        let minimum_sponsor_balance_requried = if prev_sponsor != sponsor {
+            prev_sponsor_balance + prev_collateral_for_storage
+        } else {
+            prev_sponsor_balance
+        };
+        if sponsor_balance < minimum_sponsor_balance_requried {
             return Err(vm::Error::InternalContract(
                 "sponsor_balance is not exceed previous sponsor",
             ));
         }
 
-        let prev_sponsor = state.sponsor(&contract_address)?;
-        // If previous sponsor exists, we should refund the
-        // `sponsor_balance`, including `collateral_for_storage`.
+        // If previous sponsor exists, we should refund the `sponsor_balance`,
+        // including `collateral_for_storage` if `prev_sponsor != sponsor`.
         if !prev_sponsor.is_zero() {
             state.add_balance(
                 &prev_sponsor,
-                &(prev_sponsor_balance + prev_collateral_for_storage),
+                &minimum_sponsor_balance_requried,
                 substate.to_cleanup_mode(&spec),
             )?;
         }
@@ -80,13 +84,21 @@ impl SponsorWhitelistControl {
             &sponsor_balance,
             &mut substate.to_cleanup_mode(&spec),
         )?;
-        // Part of the `sponsor_balance` should be used as
-        // `collateral_for_storage`.
-        Ok(state.set_sponsor(
-            &contract_address,
-            &sponsor,
-            &(sponsor_balance - prev_collateral_for_storage),
-        )?)
+        if prev_sponsor == sponsor {
+            Ok(state.set_sponsor(
+                &contract_address,
+                &sponsor,
+                &sponsor_balance,
+            )?)
+        } else {
+            // Part of the `sponsor_balance` should be used as
+            // `collateral_for_storage`.
+            Ok(state.set_sponsor(
+                &contract_address,
+                &sponsor,
+                &(sponsor_balance - prev_collateral_for_storage),
+            )?)
+        }
     }
 
     fn add_privilege(
