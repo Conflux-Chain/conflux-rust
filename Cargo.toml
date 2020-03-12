@@ -1,7 +1,7 @@
 [package]
 name = "conflux"
-version = "0.1.1"
-edition = "2018"
+version = "0.2.2"
+edition = "2020"
 
 [dependencies]
 mio = "0.6.8"
