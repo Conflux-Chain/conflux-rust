@@ -975,6 +975,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         // cur_era_stable_genesis is set
         inner.recover_state_valid();
         self.new_block_handler.construct_pivot_state(inner);
+        inner.finish_block_recovery();
     }
 
     fn best_info(&self) -> Arc<BestInformation> {
