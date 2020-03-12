@@ -5,7 +5,7 @@
 use cfx_bytes::Bytes;
 use cfx_types::U256;
 use cfxcore::{
-    executive::Executive,
+    executive::{Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     state::State,
     statedb::StateDb,
@@ -44,6 +44,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     };
     let tx = tx.sign(kp.secret());
     let machine = new_machine_with_builtin();
+    let internal_contract_map = InternalContractMap::new();
     let env = Env {
         number: 0, // TODO: replace 0 with correct cardinal number
         author: Default::default(),
@@ -80,7 +81,13 @@ fn txexe_benchmark(c: &mut Criterion) {
                 VmFactory::new(1024 * 32),
                 0, /* block_number */
             );
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+            let mut ex = Executive::new(
+                &mut state,
+                &env,
+                &machine,
+                &spec,
+                &internal_contract_map,
+            );
             let mut nonce_increased = false;
             b.iter(|| {
                 //ex.transact(&tx, &mut nonce_increased);
