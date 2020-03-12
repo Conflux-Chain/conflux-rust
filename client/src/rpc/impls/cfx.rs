@@ -39,6 +39,7 @@ use primitives::{filter::Filter, SignedTransaction, TransactionWithSignature};
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
+use primitives::transaction::Action::Call;
 
 #[derive(Default)]
 pub struct RpcImplConfiguration {
@@ -339,6 +340,12 @@ impl RpcImpl {
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
+        if let Call(H160(r)) = &tx.transaction.action {
+            let type_bits = r[0] & 0xf0;
+            if !(type_bits == 0x0 || type_bits == 0x10 || type_bits == 0x80) {
+                return Err(RpcError::invalid_params("Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."))
+            }
+        }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
         if signed_trans.len() + failed_trans.len() > 1 {
