@@ -3169,14 +3169,16 @@ impl ConsensusGraphInner {
     /// available after `construct_pivot_state`. We need to fill its body
     /// here so that it will be executed when it's activated.
     pub fn finish_block_recovery(&mut self) {
+        let data_man = self.data_man.clone();
         for (_, arena_index) in &self.invalid_block_queue {
+            let block_hash = self.arena[*arena_index].hash;
             self.block_body_caches.entry(*arena_index).or_insert_with(
-                || self.data_man
-                    .block_by_hash(&self.arena[*arena_index].hash, true)
+                || data_man
+                    .block_by_hash(&block_hash, true)
                     .map(|block| block.transactions.clone())
                     .or_else(|| {
                         error!("Block {:?} in ConsensusInner is missing from db",
-                               self.arena[*arena_index].hash);
+                               block_hash);
                         None
                     })
             );
