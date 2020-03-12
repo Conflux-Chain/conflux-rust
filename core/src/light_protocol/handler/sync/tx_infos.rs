@@ -7,7 +7,7 @@ extern crate lru_time_cache;
 use cfx_types::H256;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
-use primitives::{Receipt, SignedTransaction, TransactionAddress};
+use primitives::{Receipt, SignedTransaction, TransactionIndex};
 use std::{future::Future, sync::Arc};
 
 use crate::{
@@ -41,7 +41,7 @@ struct Statistics {
 // prioritize earlier requests
 type MissingTxInfo = TimeOrdered<H256>;
 
-type TxInfoValidated = (SignedTransaction, Receipt, TransactionAddress);
+type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex);
 
 pub struct TxInfos {
     // block tx sync manager
@@ -174,7 +174,7 @@ impl TxInfos {
 
         for (index, (tx, receipt)) in items.enumerate() {
             let hash = tx.hash();
-            let address = TransactionAddress { block_hash, index };
+            let address = TransactionIndex { block_hash, index };
 
             self.verified
                 .write()

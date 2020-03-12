@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, SUPPRESS
 from collections import Counter
 import eth_utils
 import rlp
@@ -12,7 +12,7 @@ import conflux.config
 from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int, pubtoaddr
 from test_framework.blocktools import create_block, create_transaction
-from test_framework.test_framework import ConfluxTestFramework
+from test_framework.test_framework import ConfluxTestFramework, OptionHelper
 from test_framework.mininode import *
 from test_framework.util import *
 from scripts.stat_latency_map_reduce import Statistics
@@ -27,212 +27,79 @@ class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.rpc_timewait = 60
-        self.num_nodes = 1
+        # Have to have a num_nodes due to assert in base class.
+        self.num_nodes = None
+
+    SIMULATE_OPTIONS = dict(
+        # Bandwidth in Mbit/s
+        bandwidth = 20,
+        connect_peers = 3,
+        enable_flamegraph = False,
+        enable_tx_propagation = False,
+        ips_file = "ips",
+        generation_period_ms = 500,
+        nodes_per_host = 3,
+        num_blocks = 1000,
+        report_progress_blocks = 10,
+        storage_memory_gb = 2,
+        tps = 1000,
+        txs_per_block = 1,
+        generate_tx_data_len = 0,
+    )
+
+    PASS_TO_CONFLUX_OPTIONS = dict(
+        data_propagate_enabled = False,
+        data_propagate_interval_ms = 1000,
+        data_propagate_size = 1000,
+        egress_min_throttle = 512,
+        egress_max_throttle = 1024,
+        egress_queue_capacity = 2048,
+        genesis_secrets = "/home/ubuntu/genesis_secrets.txt",
+        record_tx_index = False,
+        send_tx_period_ms = 1300,
+        txgen_account_count = 1000,
+        tx_pool_size = conflux.config.default_conflux_conf["tx_pool_size"],
+    )
 
     def add_options(self, parser:ArgumentParser):
-        parser.add_argument(
-            "--nodes-per-host",
-            dest="nodes_per_host",
-            default=3,
-            type=int
-        )
-        parser.add_argument(
-            "--generation-period-ms",
-            dest="generation_period_ms",
-            default=5000,
-            type=int
-        )
-        parser.add_argument(
-            "--num-blocks",
-            dest="num_blocks",
-            default=100,
-            type=int
-        )
-        parser.add_argument(
-            "--block-sync-step",
-            dest="block_sync_step",
-            default=10,
-            type=int
-        )
-        parser.add_argument(
-            "--ips-file",
-            dest="ips_file",
-            default="ips",
-            type=str
-        )
-        parser.add_argument(
-            "--txs-per-block",
-            dest="txs_per_block",
-            default=5,
-            type=int
-        )
-        parser.add_argument(
-            "--generate-tx-data-len",
-            dest="generate_tx_data_len",
-            default=0,
-            type=int
-        )
-        parser.add_argument(
-            "--connect-peers",
-            dest="connect_peers",
-            default=3,
-            type=int
-        )
-        parser.add_argument(
-            "--throttling",
-            dest="throttling",
-            default="512,1024,2048",
-            type=str
-        )
-        parser.add_argument(
-            "--storage-memory-gb",
-            dest="storage_memory_gb",
-            default=2,
-            type=int
-        )
-        parser.add_argument(
-            "--data-propagate-enabled",
-            dest="data_propagate_enabled",
-            action='store_true',
-        )
-        parser.add_argument(
-            "--data-propagate-interval-ms",
-            dest="data_propagate_interval_ms",
-            default=1000,
-            type=int
-        )
-        parser.add_argument(
-            "--data-propagate-size",
-            dest="data_propagate_size",
-            default=1000,
-            type=int
-        )
-        # FIXME: renaming..
-        # Tx generation will also be enabled if we enable tx propagation
-        parser.add_argument(
-            "--enable-tx-propagation",
-            dest="enable_tx_propagation",
-            action="store_true"
-        )
-        # options for LAT_LATEST
-        parser.add_argument(
-            "--tps",
-            dest="tps",
-            default=1000,
-            type=int,
-        )
-        # Bandwidth in Mbit/s
-        parser.add_argument(
-            "--bandwidth",
-            dest="bandwidth",
-            default=20,
-            type=int
-        )
-        # Peer propagation count
-        parser.add_argument(
-            "--min-peers-propagation",
-            dest="min_peers_propagation",
-            default=8,
-            type=int,
-        )
-        parser.add_argument(
-            "--max-peers-propagation",
-            dest="max_peers_propagation",
-            default=128,
-            type=int,
-        )
-        parser.add_argument(
-            "--send-tx-period-ms",
-            dest="send_tx_period_ms",
-            default=1300,
-            type=int,
-        )
-        # FIXME: why?
-        parser.add_argument(
-            "--txgen-account-count",
-            dest="txgen_account_count",
-            default=1000,
-            type=int,
-        )
-        # FIXME: it feels stupid to repeat everything.
-        parser.add_argument(
-            "--tx-pool-size",
-            dest="tx_pool_size",
-            default=500_000,
-            type=int,
-        )
-        parser.add_argument(
-            "--genesis-secrets",
-            dest="genesis_secrets",
-            default="/home/ubuntu/genesis_secrets.txt",
-            type=str,
-        )
-        parser.add_argument(
-            "--enable-flamegraph",
-            dest="flamegraph_enabled",
-            action="store_true"
-        )
+        OptionHelper.add_options(parser, RemoteSimulate.SIMULATE_OPTIONS)
+        OptionHelper.add_options(parser, RemoteSimulate.PASS_TO_CONFLUX_OPTIONS)
 
     def after_options_parsed(self):
         ConfluxTestFramework.after_options_parsed(self)
 
+        # num_nodes is set to nodes_per_host because setup_chain() generates configs
+        # for each node on the same host with different port number.
         self.num_nodes = self.options.nodes_per_host
-
+        self.enable_tx_propagation = self.options.enable_tx_propagation
         self.ips = []
         with open(self.options.ips_file, 'r') as ip_file:
             for line in ip_file.readlines():
                 line = line[:-1]
                 self.ips.append(line)
 
-        # FIXME: What's the point to forward self.options to conf_parameters? It feels so stupid to copy
-        # FIXME: everything.
+        self.conf_parameters = OptionHelper.conflux_options_to_config(
+            vars(self.options), RemoteSimulate.PASS_TO_CONFLUX_OPTIONS)
 
-        # experiment name
-        self.enable_tx_propagation = self.options.enable_tx_propagation
-
-        # throttling
-        # FIXME: why it's much larger than default, and why the default value is configured
-        # in exp_latency again.
-        egress_settings = self.options.throttling.split(",")
-        self.conf_parameters["egress_queue_capacity"] = egress_settings[2]
-        self.conf_parameters["egress_max_throttle"] = egress_settings[1]
-        self.conf_parameters["egress_min_throttle"] = egress_settings[0]
-
-        # target memory GB
+        # Default Conflux memory consumption
         target_memory = 16
-
-        # storage
-        for k in ["db_cache_size", "ledger_cache_size"
+        # Overwrite with scaled configs so that Conflux consumes storage_memory_gb rather than target_memory.
+        for k in ["db_cache_size", "ledger_cache_size",
             "storage_delta_mpts_cache_size", "storage_delta_mpts_cache_start_size",
             "storage_delta_mpts_slab_idle_size"]:
             self.conf_parameters[k] = str(
                 conflux.config.production_conf[k] // target_memory * self.options.storage_memory_gb)
+        self.conf_parameters["tx_pool_size"] = \
+            self.options.tx_pool_size // target_memory * self.options.storage_memory_gb
 
-        # txpool
-        self.conf_parameters["tx_pool_size"] = str(self.options.tx_pool_size // target_memory * self.options.storage_memory_gb)
+        # Do not keep track of tx index to save CPU/Disk costs because they are not used in the experiments
+        self.conf_parameters["record_tx_index"] = "false"
 
-        # data propagation
-        # FIXME: options?
-        self.conf_parameters["data_propagate_enabled"] = str(self.options.data_propagate_enabled).lower()
-        self.conf_parameters["data_propagate_interval_ms"] = str(self.options.data_propagate_interval_ms)
-        self.conf_parameters["data_propagate_size"] = str(self.options.data_propagate_size)
-
-        # Do not keep track of tx address to save CPU/Disk costs because they are not used in the experiments
-        self.conf_parameters["record_tx_address"] = "false"
         if self.enable_tx_propagation:
             self.conf_parameters["generate_tx"] = "true"
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
-            self.conf_parameters["txgen_account_count"] = str(self.options.txgen_account_count)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
-
-        # tx propagation setting
-        self.conf_parameters["min_peers_propagation"] = str(self.options.min_peers_propagation)
-        self.conf_parameters["max_peers_propagation"] = str(self.options.max_peers_propagation)
-        self.conf_parameters["send_tx_period_ms"] = str(self.options.send_tx_period_ms)
-
-        #genesis accounts
-        self.conf_parameters["genesis_secrets"] = str("\'{}\'".format(self.options.genesis_secrets))
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)
@@ -254,7 +121,7 @@ class RemoteSimulate(ConfluxTestFramework):
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
         cmd_startup = "./remote_start_conflux.sh {} {} {} {} {}&> start_conflux.out".format(
             self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, 
-            self.options.bandwidth, str(self.options.flamegraph_enabled).lower()
+            self.options.bandwidth, str(self.options.enable_flamegraph).lower()
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
@@ -283,10 +150,11 @@ class RemoteSimulate(ConfluxTestFramework):
             #setup usable accounts
 
             start_time = time.time()
-            current_index=1
+            current_index=0
             for i in range(len(self.nodes)):
                 client = RpcClient(self.nodes[i])
                 client.send_usable_genesis_accounts(current_index)
+                # Each node use independent set of txgen_account_count genesis accounts.
                 current_index+=self.options.txgen_account_count
             self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
 
@@ -328,7 +196,7 @@ class RemoteSimulate(ConfluxTestFramework):
             thread.start()
             threads[p] = thread
 
-            if i % self.options.block_sync_step == 0:
+            if i % self.options.report_progress_blocks == 0:
                 self.log.info("[PROGRESS] %d blocks generated async", i)
 
             self.progress = i
