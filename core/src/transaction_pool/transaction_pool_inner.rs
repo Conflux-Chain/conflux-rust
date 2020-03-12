@@ -181,8 +181,7 @@ impl ReadyAccountPool {
             weight *= base;
         }
 
-        self.treap
-            .insert(tx.sender(), tx.clone(), weight)
+        self.treap.insert(tx.sender(), tx.clone(), weight)
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
@@ -217,13 +216,18 @@ pub struct TransactionPoolInner {
 }
 
 impl TransactionPoolInner {
-    pub fn new(capacity: usize, tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
+    pub fn new(
+        capacity: usize, tx_weight_scaling: u64, tx_weight_exp: u8,
+    ) -> Self {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
             unpacked_transaction_count: 0,
             deferred_pool: DeferredPool::new(),
-            ready_account_pool: ReadyAccountPool::new(tx_weight_scaling, tx_weight_exp),
+            ready_account_pool: ReadyAccountPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+            ),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: GarbageCollector::default(),
             txs: HashMap::new(),

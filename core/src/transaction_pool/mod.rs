@@ -101,7 +101,11 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 impl TransactionPool {
     pub fn new(config: TxPoolConfig, data_man: Arc<BlockDataManager>) -> Self {
         let genesis_hash = data_man.true_genesis.hash();
-        let inner = TransactionPoolInner::new(config.capacity, config.tx_weight_scaling, config.tx_weight_exp);
+        let inner = TransactionPoolInner::new(
+            config.capacity,
+            config.tx_weight_scaling,
+            config.tx_weight_exp,
+        );
         TransactionPool {
             config,
             inner: RwLock::new(inner),
