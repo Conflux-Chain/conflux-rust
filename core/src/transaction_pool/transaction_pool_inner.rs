@@ -677,7 +677,7 @@ impl TransactionPoolInner {
             })?;
 
         if transaction.hash[0] & 254 == 0 {
-            debug!(
+            trace!(
                 "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
                 transaction.hash, transaction.sender, transaction.nonce, state_nonce
             );
@@ -686,7 +686,7 @@ impl TransactionPoolInner {
             >= state_nonce
                 + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
         {
-            debug!(
+            trace!(
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             );
@@ -695,7 +695,7 @@ impl TransactionPoolInner {
                 transaction.hash()
             ));
         } else if transaction.nonce < state_nonce {
-            debug!(
+            trace!(
                 "Transaction {:?} is discarded due to a too stale nonce",
                 transaction.hash()
             );

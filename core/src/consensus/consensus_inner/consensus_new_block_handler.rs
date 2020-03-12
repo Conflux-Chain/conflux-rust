@@ -16,6 +16,7 @@ use crate::{
     },
     parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
+    state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     storage::StateRootWithAuxInfo,
     Notifications, SharedTransactionPool,
@@ -1193,8 +1194,8 @@ impl ConsensusNewBlockHandler {
     )
     {
         debug!(
-            "Start activating block in ConsensusGraph: index = {:?} hash={:?}",
-            me, inner.arena[me].hash
+            "Start activating block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
+            me, inner.arena[me].hash, block_body_opt.is_some(),
         );
         let parent = inner.arena[me].parent;
         let has_body = block_body_opt.is_some();
@@ -1297,6 +1298,10 @@ impl ConsensusNewBlockHandler {
             let lca = inner.lca(last, me);
             let new;
             if force_confirm != force_lca {
+                debug!(
+                    "pivot chain switch to force_confirm={} force_height={}",
+                    force_confirm, force_height
+                );
                 fork_at = inner.arena[force_lca].height + 1;
                 new = inner.ancestor_at(force_confirm, fork_at);
                 pivot_changed = true;
@@ -1911,6 +1916,24 @@ impl ConsensusNewBlockHandler {
         );
         self.data_man
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
+        let era_block = inner.arena[me].era_block();
+        let era_block_hash = if era_block != NULL {
+            inner.arena[era_block].hash
+        } else {
+            Default::default()
+        };
+        if inner.inner_conf.enable_state_expose {
+            STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
+                ConsensusGraphBlockState {
+                    block_hash: inner.arena[me].hash,
+                    best_block_hash: inner.best_block_hash(),
+                    block_status: block_info.get_status(),
+                    past_era_weight: inner.arena[me].past_era_weight(),
+                    era_block_hash,
+                    adaptive: inner.arena[me].adaptive(),
+                },
+            )
+        }
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
@@ -1927,6 +1950,11 @@ impl ConsensusNewBlockHandler {
             self.data_man.state_availability_boundary.read().lower_bound;
         let start_pivot_index =
             (state_boundary_height - inner.cur_era_genesis_height) as usize;
+        debug!(
+            "construct_pivot_state: start={}, pivot_chain.len()={}",
+            start_pivot_index,
+            inner.pivot_chain.len()
+        );
         if start_pivot_index >= inner.pivot_chain.len() {
             // The pivot chain of recovered blocks is before state lower_bound,
             // so we do not need to construct any pivot state.
