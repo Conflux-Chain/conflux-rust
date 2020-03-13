@@ -1,12 +1,12 @@
 ## cfxstore-cli
 
-Parity Ethereum key management.
+Conflux key management. It is built on top of the Parity Ethereum counterpart.
 
 ### Usage
 
 ```
-Parity Ethereum key management tool.
-  Copyright 2015-2019 Parity Technologies (UK) Ltd.
+Conflux key management tool.
+  Copyright 2020 Conflux Foundation
 
 Usage:
     cfxstore insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
@@ -60,7 +60,7 @@ Commands:
 #### `insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
 *Encrypt secret with a password and save it in secret store.*
 
-- `<secret>` - ethereum secret, 32 bytes long
+- `<secret>` - conflux secret, 32 bytes long
 - `<password>` - account password, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 - `[--vault VAULT]` - vault to use in this operation
@@ -89,7 +89,7 @@ cfxstore insert `cfxkey generate random -s` "this is sparta"
 #### `change-pwd <address> <old-pwd> <new-pwd> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
 *Change account password.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<old-pwd>` - old account password, file path
 - `<new-pwd>` - new account password, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
@@ -183,7 +183,7 @@ Found password: test
 #### `remove <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
 *Remove account from secret store.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<password>` - account password, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 - `[--vault VAULT]` - vault to use in this operation
@@ -202,7 +202,7 @@ true
 #### `sign <address> <password> <message> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
 *Sign message with account's secret.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<password>` - account password, file path
 - `<message>` - message to sign, 32 bytes long
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
@@ -222,7 +222,7 @@ c6649f9555232d90ff716d7e552a744c5af771574425a74860e12f763479eb1b708c1f3a7dc0a0a7
 #### `public <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
 *Displays public key for an address.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<password>` - account password, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 - `[--vault VAULT]` - vault to use in this operation
@@ -293,7 +293,7 @@ OK
 #### `move-to-vault <address> <vault> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
 *Move account to vault from another vault/root directory.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<vault>` - name of existing vault to move account to
 - `<password>` - password of existing `<vault>` to move account to, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
@@ -316,7 +316,7 @@ OK
 #### `move-from-vault <address> <vault> <password> [--dir DIR]`
 *Move account to root directory from given vault.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<vault>` - name of existing vault to move account to
 - `<password>` - password of existing `<vault>` to move account to, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
@@ -329,12 +329,3 @@ cfxstore move-from-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault1 vault1_
 ```
 OK
 ```
-
-## Parity Ethereum toolchain
-_This project is a part of the Parity Ethereum toolchain._
-
-- [evmbin](https://github.com/paritytech/parity-ethereum/blob/master/evmbin/) - EVM implementation for Parity Ethereum.
-- [ethabi](https://github.com/paritytech/ethabi) - Parity Ethereum function calls encoding.
-- [cfxstore](https://github.com/paritytech/parity-ethereum/blob/master/accounts/cfxstore) - Parity Ethereum key management.
-- [ethkey](https://github.com/paritytech/parity-ethereum/blob/master/accounts/ethkey) - Parity Ethereum keys generator.
-- [whisper](https://github.com/paritytech/whisper) - Implementation of Whisper-v2 PoC.

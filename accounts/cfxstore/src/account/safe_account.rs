@@ -25,6 +25,7 @@ use cfxkey::{
     Public, Secret, Signature,
 };
 use crypto;
+use ethereum_types::H160;
 use json;
 use Error;
 
@@ -140,7 +141,7 @@ impl SafeAccount {
         let meta_plain = json::VaultKeyMeta::load(&meta_plain)
             .map_err(|e| Error::Custom(format!("{:?}", e)))?;
 
-        if let Address(r) = &meta_plain.address {
+        if let H160(r) = &meta_plain.address {
             let type_bits = r[0] & 0xf0;
             if type_bits != 0x10 {
                 warn!("Trying to import a non-user type account address. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.");

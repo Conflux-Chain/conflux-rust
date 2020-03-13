@@ -1,12 +1,13 @@
 ## cfxkey-cli
 
-Parity Ethereum keys generator.
+Conflux keys generator. It is built on top of the counterpart of Parity Ethereum. Note that Conflux
+address scheme is different from Ethereum. You cannot directly import Ethereum key files into Conflux.
 
 ### Usage
 
 ```
-Parity Ethereum Keys Generator.
-  Copyright 2015-2019 Parity Technologies (UK) Ltd.
+Conflux Keys Generator.
+  Copyright 2020 Conflux Foundation
 
 Usage:
     cfxkey info <secret-or-phrase> [options]
@@ -39,7 +40,7 @@ Commands:
 #### `info <secret>`
 *Display info about private key.*
 
-- `<secret>` - ethereum secret, 32 bytes long
+- `<secret>` - conflux secret, 32 bytes long
 
 ```
 cfxkey info 17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55
@@ -143,7 +144,7 @@ address: 00cf3711cbd3a1512570639280758118ba0b2bcb
 #### `sign <secret> <message>`
 *Sign a message with a secret.*
 
-- `<secret>` - ethereum secret, 32 bytes long
+- `<secret>` - conflux secret, 32 bytes long
 - `<message>` - message to sign, 32 bytes long
 
 ```
@@ -159,7 +160,7 @@ c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8
 #### `verify public <public> <signature> <message>`
 *Verify the signature.*
 
-- `<public>` - ethereum public, 64 bytes long
+- `<public>` - conflux public, 64 bytes long
 - `<signature>` - message signature, 65 bytes long
 - `<message>` - message, 32 bytes long
 
@@ -176,7 +177,7 @@ true
 #### `verify address <address> <signature> <message>`
 *Verify the signature.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<signature>` - message signature, 65 bytes long
 - `<message>` - message, 32 bytes long
 
@@ -193,7 +194,7 @@ true
 #### `recover <address> <known-phrase>`
 *Try to recover an account given expected address and partial (too short or with invalid words) recovery phrase.*
 
-- `<address>` - ethereum address, 20 bytes long
+- `<address>` - conflux address, 20 bytes long
 - `<known-phrase>` - known phrase, can be in a form of `thwarting * creamer`
 
 ```
@@ -210,12 +211,3 @@ secret:  001ce488d50d2f7579dc190c4655f32918d505cee3de63bddc7101bc91c0c2f0
 public:  4e19a5fdae82596e1485c69b687c9cc52b5078e5b0668ef3ce8543cd90e712cb00df822489bc1f1dcb3623538a54476c7b3def44e1a51dc174e86448b63f42d0
 address: 00cf3711cbd3a1512570639280758118ba0b2bcb
 ```
-
-## Parity Ethereum toolchain
-_This project is a part of the Parity Ethereum toolchain._
-
-- [evmbin](https://github.com/paritytech/parity-ethereum/blob/master/evmbin/) - EVM implementation for Parity Ethereum.
-- [ethabi](https://github.com/paritytech/ethabi) - Parity Ethereum function calls encoding.
-- [cfxstore](https://github.com/paritytech/parity-ethereum/blob/master/accounts/cfxstore) - Parity Ethereum key management.
-- [cfxkey](https://github.com/paritytech/parity-ethereum/blob/master/accounts/cfxkey) - Parity Ethereum keys generator.
-- [whisper](https://github.com/paritytech/whisper) - Implementation of Whisper-v2 PoC.
