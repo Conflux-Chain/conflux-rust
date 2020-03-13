@@ -41,11 +41,11 @@ use SimpleSecretStore;
 use StoreAccountRef;
 
 /// Accounts store.
-pub struct EthStore {
-    store: EthMultiStore,
+pub struct CfxStore {
+    store: CfxMultiStore,
 }
 
-impl EthStore {
+impl CfxStore {
     /// Open a new accounts store with given key directory backend.
     pub fn open(directory: Box<dyn KeyDirectory>) -> Result<Self, Error> {
         Self::open_with_iterations(directory, KEY_ITERATIONS as u32)
@@ -56,8 +56,8 @@ impl EthStore {
     pub fn open_with_iterations(
         directory: Box<dyn KeyDirectory>, iterations: u32,
     ) -> Result<Self, Error> {
-        Ok(EthStore {
-            store: EthMultiStore::open_with_iterations(directory, iterations)?,
+        Ok(CfxStore {
+            store: CfxMultiStore::open_with_iterations(directory, iterations)?,
         })
     }
 
@@ -69,7 +69,7 @@ impl EthStore {
     /// recommended if you manage many keys (say over 10k).
     ///
     /// By default refreshing is disabled, so only accounts created using this
-    /// instance of `EthStore` are taken into account.
+    /// instance of `CfxStore` are taken into account.
     pub fn set_refresh_time(&self, time: Duration) {
         self.store.set_refresh_time(time)
     }
@@ -80,7 +80,7 @@ impl EthStore {
     }
 }
 
-impl SimpleSecretStore for EthStore {
+impl SimpleSecretStore for CfxStore {
     fn insert_account(
         &self, vault: SecretVaultRef, secret: Secret, password: &Password,
     ) -> Result<StoreAccountRef, Error> {
@@ -209,7 +209,7 @@ impl SimpleSecretStore for EthStore {
     }
 }
 
-impl SecretStore for EthStore {
+impl SecretStore for CfxStore {
     fn raw_secret(
         &self, account: &StoreAccountRef, password: &Password,
     ) -> Result<OpaqueSecret, Error> {
@@ -337,9 +337,9 @@ impl SecretStore for EthStore {
     }
 }
 
-/// Similar to `EthStore` but may store many accounts (with different passwords)
+/// Similar to `CfxStore` but may store many accounts (with different passwords)
 /// for the same `Address`
-pub struct EthMultiStore {
+pub struct CfxMultiStore {
     dir: Box<dyn KeyDirectory>,
     iterations: u32,
     // order lock: cache, then vaults
@@ -354,7 +354,7 @@ struct Timestamp {
     refresh_time: Duration,
 }
 
-impl EthMultiStore {
+impl CfxMultiStore {
     /// Open new multi-accounts store with given key directory backend.
     pub fn open(directory: Box<dyn KeyDirectory>) -> Result<Self, Error> {
         Self::open_with_iterations(directory, KEY_ITERATIONS as u32)
@@ -365,7 +365,7 @@ impl EthMultiStore {
     pub fn open_with_iterations(
         directory: Box<dyn KeyDirectory>, iterations: u32,
     ) -> Result<Self, Error> {
-        let store = EthMultiStore {
+        let store = CfxMultiStore {
             dir: directory,
             vaults: Mutex::new(HashMap::new()),
             iterations,
@@ -389,7 +389,7 @@ impl EthMultiStore {
     /// recommended if you manage many keys (say over 10k).
     ///
     /// By default refreshing is disabled, so only accounts created using this
-    /// instance of `EthStore` are taken into account.
+    /// instance of `CfxStore` are taken into account.
     pub fn set_refresh_time(&self, time: Duration) {
         self.timestamp.lock().refresh_time = time;
     }
@@ -584,7 +584,7 @@ impl EthMultiStore {
     }
 }
 
-impl SimpleSecretStore for EthMultiStore {
+impl SimpleSecretStore for CfxMultiStore {
     fn insert_account(
         &self, vault: SecretVaultRef, secret: Secret, password: &Password,
     ) -> Result<StoreAccountRef, Error> {
@@ -909,7 +909,7 @@ mod tests {
     extern crate tempdir;
 
     use self::tempdir::TempDir;
-    use super::{EthMultiStore, EthStore};
+    use super::{CfxMultiStore, CfxStore};
     use accounts_dir::{KeyDirectory, MemoryDirectory, RootDiskDirectory};
     use ethereum_types::H256;
     use cfxkey::{Generator, KeyPair, Random};
@@ -920,13 +920,13 @@ mod tests {
 
     fn keypair() -> KeyPair { Random.generate().unwrap() }
 
-    fn store() -> EthStore {
-        EthStore::open(Box::new(MemoryDirectory::default()))
+    fn store() -> CfxStore {
+        CfxStore::open(Box::new(MemoryDirectory::default()))
             .expect("MemoryDirectory always load successfuly; qed")
     }
 
-    fn multi_store() -> EthMultiStore {
-        EthMultiStore::open(Box::new(MemoryDirectory::default()))
+    fn multi_store() -> CfxMultiStore {
+        CfxMultiStore::open(Box::new(MemoryDirectory::default()))
             .expect("MemoryDirectory always load successfuly; qed")
     }
 
@@ -1130,7 +1130,7 @@ mod tests {
     fn should_create_and_open_vaults() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name1 = "vault1";
         let password1 = "password1".into();
         let name2 = "vault2";
@@ -1220,7 +1220,7 @@ mod tests {
     fn should_move_vault_acounts() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name1 = "vault1";
         let password1 = "password1".into();
         let name2 = "vault2";
@@ -1310,7 +1310,7 @@ mod tests {
     fn should_not_remove_account_when_moving_to_self() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let password1 = "password1".into();
         let keypair1 = keypair();
 
@@ -1335,7 +1335,7 @@ mod tests {
     fn should_remove_account_from_vault() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name1 = "vault1";
         let password1 = "password1".into();
         let keypair1 = keypair();
@@ -1360,7 +1360,7 @@ mod tests {
     fn should_not_remove_account_from_vault_when_password_is_incorrect() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name1 = "vault1";
         let password1 = "password1".into();
         let password2 = "password2".into();
@@ -1386,7 +1386,7 @@ mod tests {
     fn should_change_vault_password() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name = "vault";
         let password = "password".into();
         let keypair = keypair();
@@ -1419,7 +1419,7 @@ mod tests {
     fn should_have_different_passwords_for_vault_secret_and_meta() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name = "vault";
         let password = "password".into();
         let secret_password = "sec_password".into();
@@ -1452,7 +1452,7 @@ mod tests {
     fn should_list_opened_vaults() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name1 = "vault1";
         let password1 = "password1".into();
         let name2 = "vault2";
@@ -1477,7 +1477,7 @@ mod tests {
     fn should_manage_vaults_meta() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name1 = "vault1";
         let password1 = "password1".into();
 
@@ -1553,7 +1553,7 @@ mod tests {
     fn should_save_meta_when_setting_before_password() {
         // given
         let mut dir = RootDiskDirectoryGuard::new();
-        let store = EthStore::open(dir.key_dir.take().unwrap()).unwrap();
+        let store = CfxStore::open(dir.key_dir.take().unwrap()).unwrap();
         let name = "vault";
         let password = "password1".into();
         let new_password = "password2".into();

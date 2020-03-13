@@ -17,7 +17,7 @@ panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" 
 io = { path = "../util/io" }
 cfxkey = { path = "../accounts/cfxkey" }
 cfxstore = { path = "../accounts/cfxstore" }
-ethcore-accounts = { path = "../accounts" }
+cfxcore-accounts = { path = "../accounts" }
 app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }

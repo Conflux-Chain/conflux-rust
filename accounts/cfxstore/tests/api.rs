@@ -24,7 +24,7 @@ use ethereum_types::Address;
 use cfxstore::{
     accounts_dir::RootDiskDirectory,
     cfxkey::{verify_address, Generator, KeyPair, Random, Secret},
-    EthStore, SecretVaultRef, SimpleSecretStore, StoreAccountRef,
+    CfxStore, SecretVaultRef, SimpleSecretStore, StoreAccountRef,
 };
 use std::str::FromStr;
 use util::TransientDir;
@@ -32,14 +32,14 @@ use util::TransientDir;
 #[test]
 fn secret_store_create() {
     let dir = TransientDir::create().unwrap();
-    let _ = EthStore::open(Box::new(dir)).unwrap();
+    let _ = CfxStore::open(Box::new(dir)).unwrap();
 }
 
 #[test]
 #[should_panic]
 fn secret_store_open_not_existing() {
     let dir = TransientDir::open();
-    let _ = EthStore::open(Box::new(dir)).unwrap();
+    let _ = CfxStore::open(Box::new(dir)).unwrap();
 }
 
 fn random_secret() -> Secret { Random.generate().unwrap().secret().clone() }
@@ -47,7 +47,7 @@ fn random_secret() -> Secret { Random.generate().unwrap().secret().clone() }
 #[test]
 fn secret_store_create_account() {
     let dir = TransientDir::create().unwrap();
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     assert_eq!(store.accounts().unwrap().len(), 0);
     assert!(store
         .insert_account(SecretVaultRef::Root, random_secret(), &"".into())
@@ -62,7 +62,7 @@ fn secret_store_create_account() {
 #[test]
 fn secret_store_sign() {
     let dir = TransientDir::create().unwrap();
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     assert!(store
         .insert_account(SecretVaultRef::Root, random_secret(), &"".into())
         .is_ok());
@@ -79,7 +79,7 @@ fn secret_store_sign() {
 #[test]
 fn secret_store_change_password() {
     let dir = TransientDir::create().unwrap();
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     assert!(store
         .insert_account(SecretVaultRef::Root, random_secret(), &"".into())
         .is_ok());
@@ -102,7 +102,7 @@ fn secret_store_change_password() {
 #[test]
 fn secret_store_remove_account() {
     let dir = TransientDir::create().unwrap();
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     assert!(store
         .insert_account(SecretVaultRef::Root, random_secret(), &"".into())
         .is_ok());
@@ -137,7 +137,7 @@ fn ciphertext_path() -> &'static str {
 #[test]
 fn secret_store_laod_geth_files() {
     let dir = RootDiskDirectory::at(test_path());
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     assert_eq!(
         store.accounts().unwrap(),
         vec![
@@ -160,7 +160,7 @@ fn secret_store_laod_geth_files() {
 #[test]
 fn secret_store_load_pat_files() {
     let dir = RootDiskDirectory::at(pat_path());
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     assert_eq!(
         store.accounts().unwrap(),
         vec![
@@ -193,7 +193,7 @@ fn test_decrypting_files_with_short_ciphertext() {
     )
     .unwrap();
     let dir = RootDiskDirectory::at(ciphertext_path());
-    let store = EthStore::open(Box::new(dir)).unwrap();
+    let store = CfxStore::open(Box::new(dir)).unwrap();
     let accounts = store.accounts().unwrap();
     assert_eq!(
         accounts,

@@ -34,7 +34,7 @@ use std::{
 
 use cfxkey::{Address, Generator, Message, Password, Public, Random, Secret};
 use cfxstore::{
-    accounts_dir::MemoryDirectory, random_string, EthMultiStore, EthStore,
+    accounts_dir::MemoryDirectory, random_string, CfxMultiStore, CfxStore,
     OpaqueSecret, SecretStore, SecretVaultRef, SimpleSecretStore,
     StoreAccountRef,
 };
@@ -69,7 +69,7 @@ pub struct AccountProvider {
     /// Accounts on disk
     sstore: Box<dyn SecretStore>,
     /// Accounts unlocked with rolling tokens
-    transient_sstore: EthMultiStore,
+    transient_sstore: CfxMultiStore,
     /// When unlocking account permanently we additionally keep a raw secret in
     /// memory to increase the performance of transaction signing.
     unlock_keep_secret: bool,
@@ -77,8 +77,8 @@ pub struct AccountProvider {
     blacklisted_accounts: Vec<Address>,
 }
 
-fn transient_sstore() -> EthMultiStore {
-    EthMultiStore::open(Box::new(MemoryDirectory::default()))
+fn transient_sstore() -> CfxMultiStore {
+    CfxMultiStore::open(Box::new(MemoryDirectory::default()))
         .expect("MemoryDirectory load always succeeds; qed")
 }
 
@@ -121,7 +121,7 @@ impl AccountProvider {
             unlocked: RwLock::new(HashMap::new()),
             address_book: RwLock::new(AddressBook::transient()),
             sstore: Box::new(
-                EthStore::open(Box::new(MemoryDirectory::default()))
+                CfxStore::open(Box::new(MemoryDirectory::default()))
                     .expect("MemoryDirectory load always succeeds; qed"),
             ),
             transient_sstore: transient_sstore(),

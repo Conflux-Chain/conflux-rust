@@ -680,6 +680,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfxcore-accounts"
+version = "0.1.0"
+dependencies = [
+ "cfxkey",
+ "cfxstore",
+ "ethereum-types 0.8.0",
+ "log 0.4.8",
+ "parking_lot 0.10.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tempdir",
+]
+
+[[package]]
 name = "cfxkey"
 version = "0.3.0"
 dependencies = [
@@ -793,6 +808,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxcore",
+ "cfxcore-accounts",
  "cfxkey",
  "cfxstore",
  "clap",
@@ -802,7 +818,6 @@ dependencies = [
  "delegate",
  "dir",
  "error-chain",
- "ethcore-accounts",
  "executable-helpers",
  "futures 0.3.4",
  "futures01",
@@ -878,6 +893,7 @@ dependencies = [
  "blockgen",
  "cfx-types",
  "cfxcore",
+ "cfxcore-accounts",
  "cfxkey",
  "cfxstore",
  "channel",
@@ -889,7 +905,6 @@ dependencies = [
  "docopt",
  "env_logger",
  "error-chain",
- "ethcore-accounts",
  "ethereum-types 0.8.0",
  "futures 0.1.29",
  "futures-semaphore",
@@ -1474,21 +1489,6 @@ dependencies = [
  "impl-rlp",
  "impl-serde 0.2.3",
  "tiny-keccak",
-]
-
-[[package]]
-name = "ethcore-accounts"
-version = "0.1.0"
-dependencies = [
- "cfxkey",
- "cfxstore",
- "ethereum-types 0.8.0",
- "log 0.4.8",
- "parking_lot 0.10.0",
- "serde",
- "serde_derive",
- "serde_json",
- "tempdir",
 ]
 
 [[package]]

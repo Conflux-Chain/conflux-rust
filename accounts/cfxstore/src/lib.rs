@@ -59,7 +59,7 @@ mod secret_store;
 pub use self::{
     account::{Crypto, SafeAccount},
     error::Error,
-    cfxstore::{EthMultiStore, EthStore},
+    cfxstore::{CfxMultiStore, CfxStore},
     import::{import_account, import_accounts, read_geth_accounts},
     json::OpaqueKeyFile as KeyFile,
     parity_wordlist::random_phrase,
