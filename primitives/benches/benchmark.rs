@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfxkey::{recover, sign, verify_public, KeyPair};
 use criterion::{criterion_group, criterion_main, Criterion};
-use ethkey::{recover, sign, verify_public, KeyPair};
 use keccak_hash::keccak;
 
 fn recover_benchmark(c: &mut Criterion) {
