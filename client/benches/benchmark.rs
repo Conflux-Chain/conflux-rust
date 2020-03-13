@@ -13,9 +13,9 @@ use cfxcore::{
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };
+use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
-use ethkey::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
 use std::{sync::Arc, time::Duration};

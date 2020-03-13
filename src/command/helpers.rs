@@ -18,7 +18,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use ethkey::Password;
+use cfxkey::Password;
 use rpassword::read_password;
 use std::{
     fs::File,

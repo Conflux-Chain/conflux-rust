@@ -15,7 +15,7 @@ primitives = { path = "../primitives" }
 parking_lot = "0.10"
 rlp = "0.4.0"
 rand = "0.7"
-ethkey = { path = "../accounts/ethkey" }
+cfxkey = { path = "../accounts/cfxkey" }
 txgen = { path = "../transactiongen" }
 log = "0.4"
 db = { path = "../db" }

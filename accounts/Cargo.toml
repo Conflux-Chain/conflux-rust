@@ -1,15 +1,15 @@
 [package]
-description = "Parity Ethereum Account Management"
-homepage = "http://parity.io"
+description = "Conflux Account Management"
+homepage = "http://conflux-chain.org"
 license = "GPL-3.0"
-name = "ethcore-accounts"
+name = "cfxcore-accounts"
 version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
+authors = ["Conflux Foundation"]
 edition = "2018"
 
 [dependencies]
-ethkey = { path = "ethkey" }
-ethstore = { path = "ethstore" }
+cfxkey = { path = "cfxkey" }
+cfxstore = { path = "cfxstore" }
 log = "0.4"
 parking_lot = "0.10"
 serde = "1.0"

@@ -7,11 +7,11 @@
 use crate::{traits::*, HashValue};
 use anyhow::{bail, Result};
 use cfx_types::{H256, H520};
-use core::convert::TryFrom;
-use ethkey::{
+use cfxkey::{
     Generator, Public, Random as EthkeyRandom, Secret,
     Signature as EthkeySignature, SECP256K1,
 };
+use core::convert::TryFrom;
 use libra_crypto_derive::{SilentDebug, SilentDisplay};
 use secp256k1::key;
 use serde::{de, ser};
@@ -160,7 +160,7 @@ impl SigningKey for Secp256k1PrivateKey {
     fn sign_message(&self, message: &HashValue) -> Secp256k1Signature {
         let secret = &self.0;
         let msg = H256::from_slice(message.to_vec().as_slice());
-        let sig = ethkey::sign(secret, &msg).expect("Error signing message");
+        let sig = cfxkey::sign(secret, &msg).expect("Error signing message");
         Secp256k1Signature(sig)
     }
 }
@@ -304,7 +304,7 @@ impl Signature for Secp256k1Signature {
     ) -> Result<()> {
         Secp256k1Signature::check_malleability(&self.to_bytes())?;
         let msg = H256::from_slice(message.to_vec().as_slice());
-        let result = ethkey::verify_public(&public_key.0, &self.0, &msg)?;
+        let result = cfxkey::verify_public(&public_key.0, &self.0, &msg)?;
         if result {
             Ok(())
         } else {

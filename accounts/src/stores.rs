@@ -22,7 +22,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ethkey::Address;
+use cfxkey::Address;
 use log::{trace, warn};
 
 use crate::AccountMeta;

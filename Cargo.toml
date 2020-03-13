@@ -16,8 +16,8 @@ parking_lot = "0.10"
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-ethstore = { path = "accounts/ethstore" }
-ethcore-accounts = { path = "accounts" }
+cfxstore = { path = "accounts/cfxstore" }
+cfxcore-accounts = { path = "accounts" }
 home = "0.5.0"
 rpassword = "4.0.1"
 io = { path = "util/io" }
@@ -48,7 +48,7 @@ cfx-types = { path = "cfx_types" }
 threadpool = "1.7"
 futures = "0.1.29"
 docopt = "1.0"
-ethkey = { path = "accounts/ethkey" }
+cfxkey = { path = "accounts/cfxkey" }
 parity-wordlist = "1.3.0"
 rustc-hex = "2.0.1"
 env_logger = "0.5"
@@ -78,8 +78,8 @@ name = "cfx-gen-dot"
 path = "tools/cfx-gen-dot/main.rs"
 
 [[bin]]
-name = "ethkey"
-path = "accounts/ethkey/cli/src/main.rs"
+name = "cfxkey"
+path = "accounts/cfxkey/cli/src/main.rs"
 
 [[bin]]
 name = "tg_config_gen"
