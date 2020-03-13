@@ -15,13 +15,13 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 extern crate ethereum_types;
-extern crate ethstore;
+extern crate cfxstore;
 extern crate rand;
 
 mod util;
 
 use ethereum_types::Address;
-use ethstore::{
+use cfxstore::{
     accounts_dir::RootDiskDirectory,
     cfxkey::{verify_address, Generator, KeyPair, Random, Secret},
     EthStore, SecretVaultRef, SimpleSecretStore, StoreAccountRef,
@@ -114,22 +114,22 @@ fn secret_store_remove_account() {
 }
 
 fn test_path() -> &'static str {
-    match ::std::fs::metadata("ethstore") {
-        Ok(_) => "ethstore/tests/res/geth_keystore",
+    match ::std::fs::metadata("cfxstore") {
+        Ok(_) => "cfxstore/tests/res/geth_keystore",
         Err(_) => "tests/res/geth_keystore",
     }
 }
 
 fn pat_path() -> &'static str {
-    match ::std::fs::metadata("ethstore") {
-        Ok(_) => "ethstore/tests/res/pat",
+    match ::std::fs::metadata("cfxstore") {
+        Ok(_) => "cfxstore/tests/res/pat",
         Err(_) => "tests/res/pat",
     }
 }
 
 fn ciphertext_path() -> &'static str {
-    match ::std::fs::metadata("ethstore") {
-        Ok(_) => "ethstore/tests/res/ciphertext",
+    match ::std::fs::metadata("cfxstore") {
+        Ok(_) => "cfxstore/tests/res/ciphertext",
         Err(_) => "tests/res/ciphertext",
     }
 }

@@ -23,7 +23,7 @@ extern crate ethcore_accounts;
 use super::helpers::{password_from_file, password_prompt};
 use clap;
 use client::accounts::{account_provider, keys_dir, keys_path};
-use ethstore::{
+use cfxstore::{
     accounts_dir::RootDiskDirectory, import_account, import_accounts,
 };
 use std::path::PathBuf;

@@ -216,6 +216,6 @@ _This project is a part of the Parity Ethereum toolchain._
 
 - [evmbin](https://github.com/paritytech/parity-ethereum/blob/master/evmbin/) - EVM implementation for Parity Ethereum.
 - [ethabi](https://github.com/paritytech/ethabi) - Parity Ethereum function calls encoding.
-- [ethstore](https://github.com/paritytech/parity-ethereum/blob/master/accounts/ethstore) - Parity Ethereum key management.
+- [cfxstore](https://github.com/paritytech/parity-ethereum/blob/master/accounts/cfxstore) - Parity Ethereum key management.
 - [cfxkey](https://github.com/paritytech/parity-ethereum/blob/master/accounts/cfxkey) - Parity Ethereum keys generator.
 - [whisper](https://github.com/paritytech/whisper) - Implementation of Whisper-v2 PoC.

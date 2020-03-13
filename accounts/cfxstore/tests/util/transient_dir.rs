@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use ethstore::{
+use cfxstore::{
     accounts_dir::{KeyDirectory, RootDiskDirectory},
     Error, SafeAccount,
 };

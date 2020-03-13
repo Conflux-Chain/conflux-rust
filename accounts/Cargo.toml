@@ -9,7 +9,7 @@ edition = "2018"
 
 [dependencies]
 cfxkey = { path = "cfxkey" }
-ethstore = { path = "ethstore" }
+cfxstore = { path = "cfxstore" }
 log = "0.4"
 parking_lot = "0.10"
 serde = "1.0"

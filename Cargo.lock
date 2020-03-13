@@ -700,6 +700,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfxstore"
+version = "0.2.1"
+dependencies = [
+ "cfxkey",
+ "dir",
+ "ethereum-types 0.8.0",
+ "libc",
+ "log 0.4.8",
+ "matches",
+ "parity-crypto 0.4.2",
+ "parity-wordlist",
+ "parking_lot 0.10.0",
+ "rand 0.7.3",
+ "rustc-hex 1.0.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "smallvec 0.6.13",
+ "tempdir",
+ "time",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "channel"
 version = "0.1.0"
 dependencies = [
@@ -770,6 +794,7 @@ dependencies = [
  "cfx-types",
  "cfxcore",
  "cfxkey",
+ "cfxstore",
  "clap",
  "criterion 0.2.11",
  "ctrlc",
@@ -778,7 +803,6 @@ dependencies = [
  "dir",
  "error-chain",
  "ethcore-accounts",
- "ethstore",
  "executable-helpers",
  "futures 0.3.4",
  "futures01",
@@ -855,6 +879,7 @@ dependencies = [
  "cfx-types",
  "cfxcore",
  "cfxkey",
+ "cfxstore",
  "channel",
  "clap",
  "client",
@@ -866,7 +891,6 @@ dependencies = [
  "error-chain",
  "ethcore-accounts",
  "ethereum-types 0.8.0",
- "ethstore",
  "futures 0.1.29",
  "futures-semaphore",
  "home 0.5.3",
@@ -1457,8 +1481,8 @@ name = "ethcore-accounts"
 version = "0.1.0"
 dependencies = [
  "cfxkey",
+ "cfxstore",
  "ethereum-types 0.8.0",
- "ethstore",
  "log 0.4.8",
  "parking_lot 0.10.0",
  "serde",
@@ -1499,30 +1523,6 @@ dependencies = [
  "impl-serde 0.2.3",
  "primitive-types 0.6.2",
  "uint 0.8.2",
-]
-
-[[package]]
-name = "ethstore"
-version = "0.2.1"
-dependencies = [
- "cfxkey",
- "dir",
- "ethereum-types 0.8.0",
- "libc",
- "log 0.4.8",
- "matches",
- "parity-crypto 0.4.2",
- "parity-wordlist",
- "parking_lot 0.10.0",
- "rand 0.7.3",
- "rustc-hex 1.0.0",
- "serde",
- "serde_derive",
- "serde_json",
- "smallvec 0.6.13",
- "tempdir",
- "time",
- "tiny-keccak",
 ]
 
 [[package]]

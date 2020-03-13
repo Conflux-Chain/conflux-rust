@@ -51,7 +51,7 @@ mod account;
 mod json;
 
 mod error;
-mod ethstore;
+mod cfxstore;
 mod import;
 mod random;
 mod secret_store;
@@ -59,7 +59,7 @@ mod secret_store;
 pub use self::{
     account::{Crypto, SafeAccount},
     error::Error,
-    ethstore::{EthMultiStore, EthStore},
+    cfxstore::{EthMultiStore, EthStore},
     import::{import_account, import_accounts, read_geth_accounts},
     json::OpaqueKeyFile as KeyFile,
     parity_wordlist::random_phrase,

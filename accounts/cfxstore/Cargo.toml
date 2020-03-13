@@ -1,6 +1,6 @@
 [package]
 description = "Parity Ethereum Key Management"
-name = "ethstore"
+name = "cfxstore"
 version = "0.2.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 

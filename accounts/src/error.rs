@@ -16,7 +16,7 @@
 
 use std::fmt;
 
-use ethstore::Error as SSError;
+use cfxstore::Error as SSError;
 
 /// Signing error
 #[derive(Debug)]

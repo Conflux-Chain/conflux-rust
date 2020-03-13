@@ -5,7 +5,7 @@
 use app_dirs::{get_app_root, AppDataType, AppInfo};
 use dir::helpers::replace_home;
 use ethcore_accounts::{AccountProvider, AccountProviderSettings};
-use ethstore::{accounts_dir::RootDiskDirectory, EthStore};
+use cfxstore::{accounts_dir::RootDiskDirectory, EthStore};
 use std::path::PathBuf;
 
 pub fn account_provider(

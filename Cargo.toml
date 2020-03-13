@@ -16,7 +16,7 @@ parking_lot = "0.10"
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-ethstore = { path = "accounts/ethstore" }
+cfxstore = { path = "accounts/cfxstore" }
 ethcore-accounts = { path = "accounts" }
 home = "0.5.0"
 rpassword = "4.0.1"

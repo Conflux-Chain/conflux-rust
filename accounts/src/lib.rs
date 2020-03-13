@@ -33,7 +33,7 @@ use std::{
 };
 
 use cfxkey::{Address, Generator, Message, Password, Public, Random, Secret};
-use ethstore::{
+use cfxstore::{
     accounts_dir::MemoryDirectory, random_string, EthMultiStore, EthStore,
     OpaqueSecret, SecretStore, SecretVaultRef, SimpleSecretStore,
     StoreAccountRef,
@@ -42,7 +42,7 @@ use log::warn;
 use parking_lot::RwLock;
 
 pub use cfxkey::Signature;
-pub use ethstore::{Derivation, Error, IndexDerivation, KeyFile};
+pub use cfxstore::{Derivation, Error, IndexDerivation, KeyFile};
 
 pub use self::{account_data::AccountMeta, error::SignError};
 
@@ -685,7 +685,7 @@ mod tests {
     use super::{AccountProvider, Unlock};
     use ethereum_types::H256;
     use cfxkey::{Address, Generator, Random};
-    use ethstore::{Derivation, StoreAccountRef};
+    use cfxstore::{Derivation, StoreAccountRef};
     use std::time::{Duration, Instant};
 
     #[test]

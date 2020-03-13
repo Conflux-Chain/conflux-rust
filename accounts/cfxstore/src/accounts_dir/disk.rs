@@ -431,7 +431,7 @@ mod test {
     fn should_create_new_account() {
         // given
         let mut dir = env::temp_dir();
-        dir.push("ethstore_should_create_new_account");
+        dir.push("cfxstore_should_create_new_account");
         let keypair = Random.generate().unwrap();
         let password = "hello world".into();
         let directory = RootDiskDirectory::create(dir.clone()).unwrap();
@@ -462,7 +462,7 @@ mod test {
     fn should_handle_duplicate_filenames() {
         // given
         let mut dir = env::temp_dir();
-        dir.push("ethstore_should_handle_duplicate_filenames");
+        dir.push("cfxstore_should_handle_duplicate_filenames");
         let keypair = Random.generate().unwrap();
         let password = "hello world".into();
         let directory = RootDiskDirectory::create(dir.clone()).unwrap();

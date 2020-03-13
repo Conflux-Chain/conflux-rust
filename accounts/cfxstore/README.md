@@ -1,4 +1,4 @@
-## ethstore-cli
+## cfxstore-cli
 
 Parity Ethereum key management.
 
@@ -9,21 +9,21 @@ Parity Ethereum key management tool.
   Copyright 2015-2019 Parity Technologies (UK) Ltd.
 
 Usage:
-    ethstore insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore change-pwd <address> <old-pwd> <new-pwd> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore list [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore import [--src DIR] [--dir DIR]
-    ethstore import-wallet <path> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore find-wallet-pass <path> <password>
-    ethstore remove <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore sign <address> <password> <message> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore public <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore list-vaults [--dir DIR]
-    ethstore create-vault <vault> <password> [--dir DIR]
-    ethstore change-vault-pwd <vault> <old-pwd> <new-pwd> [--dir DIR]
-    ethstore move-to-vault <address> <vault> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    ethstore move-from-vault <address> <vault> <password> [--dir DIR]
-    ethstore [-h | --help]
+    cfxstore insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore change-pwd <address> <old-pwd> <new-pwd> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore list [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore import [--src DIR] [--dir DIR]
+    cfxstore import-wallet <path> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore find-wallet-pass <path> <password>
+    cfxstore remove <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore sign <address> <password> <message> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore public <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore list-vaults [--dir DIR]
+    cfxstore create-vault <vault> <password> [--dir DIR]
+    cfxstore change-vault-pwd <vault> <old-pwd> <new-pwd> [--dir DIR]
+    cfxstore move-to-vault <address> <vault> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
+    cfxstore move-from-vault <address> <vault> <password> [--dir DIR]
+    cfxstore [-h | --help]
 
 Options:
     -h, --help               Display this message and exit.
@@ -67,7 +67,7 @@ Commands:
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore insert 7d29fab185a33e2cd955812397354c472d2b84615b645aa135ff539f6b0d70d5 password.txt
+cfxstore insert 7d29fab185a33e2cd955812397354c472d2b84615b645aa135ff539f6b0d70d5 password.txt
 ```
 
 ```
@@ -77,7 +77,7 @@ a8fa5dd30a87bb9e3288d604eb74949c515ab66e
 --
 
 ```
-ethstore insert `cfxkey generate random -s` "this is sparta"
+cfxstore insert `cfxkey generate random -s` "this is sparta"
 ```
 
 ```
@@ -97,7 +97,7 @@ ethstore insert `cfxkey generate random -s` "this is sparta"
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore change-pwd a8fa5dd30a87bb9e3288d604eb74949c515ab66e old_pwd.txt new_pwd.txt
+cfxstore change-pwd a8fa5dd30a87bb9e3288d604eb74949c515ab66e old_pwd.txt new_pwd.txt
 ```
 
 ```
@@ -114,7 +114,7 @@ true
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore list
+cfxstore list
 ```
 
 ```
@@ -132,7 +132,7 @@ ethstore list
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 
 ```
-ethstore import
+cfxstore import
 ```
 
 ```
@@ -152,7 +152,7 @@ ethstore import
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore import-wallet ethwallet.json password.txt
+cfxstore import-wallet ethwallet.json password.txt
 ```
 
 ```
@@ -170,7 +170,7 @@ The list of passwords can be generated using e.g. [Phildo/brutedist](https://git
 - `<password>` - possible passwords, file path
 
 ```
-ethstore find-wallet-pass ethwallet.json passwords.txt
+cfxstore find-wallet-pass ethwallet.json passwords.txt
 ```
 
 ```
@@ -190,7 +190,7 @@ Found password: test
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore remove a8fa5dd30a87bb9e3288d604eb74949c515ab66e password.txt
+cfxstore remove a8fa5dd30a87bb9e3288d604eb74949c515ab66e password.txt
 ```
 
 ```
@@ -210,7 +210,7 @@ true
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore sign 24edfff680d536a5f6fe862d36df6f8f6f40f115 password.txt 7d29fab185a33e2cd955812397354c472d2b84615b645aa135ff539f6b0d70d5
+cfxstore sign 24edfff680d536a5f6fe862d36df6f8f6f40f115 password.txt 7d29fab185a33e2cd955812397354c472d2b84615b645aa135ff539f6b0d70d5
 ```
 
 ```
@@ -229,7 +229,7 @@ c6649f9555232d90ff716d7e552a744c5af771574425a74860e12f763479eb1b708c1f3a7dc0a0a7
 - `[--vault-pwd VAULTPWD]` - vault password to use in this operation, file path
 
 ```
-ethstore public 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea account_password.txt --vault vault_name --vault-pwd vault_password.txt
+cfxstore public 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea account_password.txt --vault vault_name --vault-pwd vault_password.txt
 ```
 
 ```
@@ -244,7 +244,7 @@ ethstore public 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea account_password.txt --
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 
 ```
-ethstore list-vaults
+cfxstore list-vaults
 ```
 
 ```
@@ -263,7 +263,7 @@ vault3
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 
 ```
-ethstore create-vault vault3 vault3_password.txt
+cfxstore create-vault vault3 vault3_password.txt
 ```
 
 ```
@@ -281,7 +281,7 @@ OK
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 
 ```
-ethstore change-vault-pwd vault3 vault3_password.txt new_vault3_password.txt
+cfxstore change-vault-pwd vault3 vault3_password.txt new_vault3_password.txt
 ```
 
 ```
@@ -302,8 +302,8 @@ OK
 
 
 ```
-ethstore move-to-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault3 vault3_password.txt
-ethstore move-to-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault1 vault1_password.txt --vault vault3 --vault-pwd vault3_password.txt
+cfxstore move-to-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault3 vault3_password.txt
+cfxstore move-to-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault1 vault1_password.txt --vault vault3 --vault-pwd vault3_password.txt
 ```
 
 ```
@@ -323,7 +323,7 @@ OK
 
 
 ```
-ethstore move-from-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault1 vault1_password.txt
+cfxstore move-from-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault1 vault1_password.txt
 ```
 
 ```
@@ -335,6 +335,6 @@ _This project is a part of the Parity Ethereum toolchain._
 
 - [evmbin](https://github.com/paritytech/parity-ethereum/blob/master/evmbin/) - EVM implementation for Parity Ethereum.
 - [ethabi](https://github.com/paritytech/ethabi) - Parity Ethereum function calls encoding.
-- [ethstore](https://github.com/paritytech/parity-ethereum/blob/master/accounts/ethstore) - Parity Ethereum key management.
+- [cfxstore](https://github.com/paritytech/parity-ethereum/blob/master/accounts/cfxstore) - Parity Ethereum key management.
 - [ethkey](https://github.com/paritytech/parity-ethereum/blob/master/accounts/ethkey) - Parity Ethereum keys generator.
 - [whisper](https://github.com/paritytech/whisper) - Implementation of Whisper-v2 PoC.
