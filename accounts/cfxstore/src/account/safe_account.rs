@@ -1,3 +1,7 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -104,8 +108,8 @@ impl SafeAccount {
 					Some(json_address) => {
 						let json_address = json_address.into();
 						if derived_address != json_address {
-							warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}",
-								derived_address, json_address);
+                            warn!("Detected address mismatch when opening an account. Derived: {:?}, in json got: {:?}. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.", derived_address, json_address);
+                            return Err(Error::Custom(format!("Address mismatch. Derived: {:?}, in json got: {:?}.", derived_address, json_address)));
 						}
 					},
 					_ => {},
@@ -135,6 +139,17 @@ impl SafeAccount {
         let meta_plain = meta_crypto.decrypt(password)?;
         let meta_plain = json::VaultKeyMeta::load(&meta_plain)
             .map_err(|e| Error::Custom(format!("{:?}", e)))?;
+
+        if let Address(r) = &meta_plain.address {
+            let type_bits = r[0] & 0xf0;
+            if type_bits != 0x10 {
+                warn!("Trying to import a non-user type account address. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.");
+                return Err(Error::Custom(format!(
+                    "Import non-user type address. Address: {:?}",
+                    meta_plain.address
+                )));
+            }
+        }
 
         SafeAccount::from_file(
             json::KeyFile {
