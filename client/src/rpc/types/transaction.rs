@@ -32,6 +32,7 @@ pub struct Transaction {
     pub contract_created: Option<RpcH160>,
     pub data: Bytes,
     pub storage_limit: RpcU256,
+    pub epoch_height: u64,
     pub status: Option<RpcU256>,
     /// The standardised V field of the signature.
     pub v: RpcU256,
@@ -70,6 +71,7 @@ impl Transaction {
             gas: t.gas.into(),
             data: t.data.clone().into(),
             storage_limit: t.storage_limit.into(),
+            epoch_height: t.epoch_height,
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),
@@ -89,6 +91,7 @@ impl Transaction {
                     },
                     value: self.value.into(),
                     storage_limit: self.storage_limit.into(),
+                    epoch_height: self.epoch_height,
                     data: self.data.into(),
                 },
                 v: self.v.as_usize() as u8,
@@ -114,11 +117,12 @@ pub struct SendTxRequest {
     pub data: Option<Bytes>,
     pub nonce: Option<RpcU256>,
     pub storage_limit: Option<RpcU256>,
+    pub epoch_height: Option<u64>,
 }
 
 impl SendTxRequest {
     pub fn sign_with(
-        self, password: Option<String>,
+        self, best_epoch_height: u64, password: Option<String>,
     ) -> Result<TransactionWithSignature, String> {
         let tx = PrimitiveTransaction {
             nonce: self.nonce.unwrap_or_default().into(),
@@ -133,6 +137,7 @@ impl SendTxRequest {
                 .storage_limit
                 .unwrap_or(U256::MAX.into())
                 .into(),
+            epoch_height: self.epoch_height.unwrap_or(best_epoch_height),
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 
