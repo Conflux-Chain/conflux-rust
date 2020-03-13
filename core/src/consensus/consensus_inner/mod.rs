@@ -1525,7 +1525,7 @@ impl ConsensusGraphInner {
             is_heavy,
             difficulty: *block_header.difficulty(),
             past_num_blocks: 0,
-            past_era_weight: 0, // will be updated later below
+            past_era_weight: 0, // will be updated later
             is_timer,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1547,25 +1547,13 @@ impl ConsensusGraphInner {
             self.arena[referee].referrers.push(index);
         }
 
-        let blockset =
-            self.exchange_or_compute_blockset_in_own_view_of_epoch(index, None);
+        self.compute_blockset_in_own_view_of_epoch(index);
         let executed_epoch_len =
             self.get_ordered_executable_epoch_blocks(index).len();
 
         if parent != NULL {
-            let era_genesis = self.get_era_genesis_block_with_parent(parent);
-
-            let weight_era_in_my_epoch =
-                self.total_weight_in_own_epoch(&blockset, era_genesis);
             let past_num_blocks =
                 self.arena[parent].past_num_blocks + executed_epoch_len as u64;
-            let past_era_weight = if parent != era_genesis {
-                self.arena[parent].past_era_weight
-                    + self.block_weight(parent)
-                    + weight_era_in_my_epoch
-            } else {
-                self.block_weight(parent) + weight_era_in_my_epoch
-            };
 
             self.data_man.insert_epoch_execution_context(
                 hash.clone(),
@@ -1577,16 +1565,11 @@ impl ConsensusGraphInner {
             );
 
             self.arena[index].past_num_blocks = past_num_blocks;
-            self.arena[index].past_era_weight = past_era_weight;
         }
-        self.exchange_or_compute_blockset_in_own_view_of_epoch(
-            index,
-            Some(blockset),
-        );
 
         debug!(
-            "Block {} inserted into Consensus with index={} past_era_weight={}",
-            hash, index, self.arena[index].past_era_weight
+            "Block {} inserted into Consensus with index={}",
+            hash, index
         );
 
         (index, self.hash_to_arena_indices.len())
