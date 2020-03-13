@@ -45,7 +45,7 @@ impl RpcImpl {
     pub fn new(
         _consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
         block_gen: Arc<TGBlockGenerator>, tx_pool: SharedTransactionPool,
-        _config: RpcImplConfiguration, executor: Arc<Executor>,
+        _config: RpcImplConfiguration,
     ) -> Self
     {
         RpcImpl {
