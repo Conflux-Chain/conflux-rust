@@ -7,7 +7,7 @@ edition = "2018"
 byteorder = "1.2.7"
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
-ethkey = { path = "../accounts/ethkey" }
+cfxkey = { path = "../accounts/cfxkey" }
 fixed-hash = "0.5"
 keccak-hash = "0.4"
 lazy_static = "1.4"

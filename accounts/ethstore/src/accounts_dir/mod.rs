@@ -16,7 +16,7 @@
 
 //! Accounts Directory
 
-use ethkey::Password;
+use cfxkey::Password;
 use std::path::PathBuf;
 use Error;
 use SafeAccount;

@@ -12,7 +12,7 @@ use jsonrpc_tcp_server as tcp;
 extern crate log;
 #[macro_use]
 extern crate serde_derive;
-extern crate ethkey as keylib;
+extern crate cfxkey as keylib;
 
 #[macro_use]
 mod config_macro;

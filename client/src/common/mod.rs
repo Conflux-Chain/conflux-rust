@@ -164,7 +164,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager, genesis::DEV_GENESIS_KEY_PAIR_2,
     ConsensusGraph, Stopable, SynchronizationService, TransactionPool,
 };
-use ethkey::public_to_address;
+use cfxkey::public_to_address;
 use keylib::KeyPair;
 use parking_lot::Mutex;
 use secret_store::SharedSecretStore;

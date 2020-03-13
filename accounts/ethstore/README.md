@@ -77,7 +77,7 @@ a8fa5dd30a87bb9e3288d604eb74949c515ab66e
 --
 
 ```
-ethstore insert `ethkey generate random -s` "this is sparta"
+ethstore insert `cfxkey generate random -s` "this is sparta"
 ```
 
 ```

@@ -7,7 +7,7 @@ extern crate keccak_hash as hash;
 extern crate rlp;
 #[macro_use]
 extern crate rlp_derive;
-extern crate ethkey as keylib;
+extern crate cfxkey as keylib;
 extern crate log;
 extern crate unexpected;
 #[macro_use]

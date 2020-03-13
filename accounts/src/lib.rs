@@ -32,7 +32,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ethkey::{Address, Generator, Message, Password, Public, Random, Secret};
+use cfxkey::{Address, Generator, Message, Password, Public, Random, Secret};
 use ethstore::{
     accounts_dir::MemoryDirectory, random_string, EthMultiStore, EthStore,
     OpaqueSecret, SecretStore, SecretVaultRef, SimpleSecretStore,
@@ -41,7 +41,7 @@ use ethstore::{
 use log::warn;
 use parking_lot::RwLock;
 
-pub use ethkey::Signature;
+pub use cfxkey::Signature;
 pub use ethstore::{Derivation, Error, IndexDerivation, KeyFile};
 
 pub use self::{account_data::AccountMeta, error::SignError};
@@ -684,7 +684,7 @@ impl AccountProvider {
 mod tests {
     use super::{AccountProvider, Unlock};
     use ethereum_types::H256;
-    use ethkey::{Address, Generator, Random};
+    use cfxkey::{Address, Generator, Random};
     use ethstore::{Derivation, StoreAccountRef};
     use std::time::{Duration, Instant};
 

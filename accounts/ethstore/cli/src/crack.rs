@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::collections::VecDeque;
 use parking_lot::Mutex;
 
-use ethstore::{ethkey::Password, PresaleWallet, Error};
+use ethstore::{cfxkey::Password, PresaleWallet, Error};
 use num_cpus;
 
 pub fn run(passwords: VecDeque<Password>, wallet_path: &str) -> Result<(), Error> {

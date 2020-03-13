@@ -23,7 +23,7 @@ mod util;
 use ethereum_types::Address;
 use ethstore::{
     accounts_dir::RootDiskDirectory,
-    ethkey::{verify_address, Generator, KeyPair, Random, Secret},
+    cfxkey::{verify_address, Generator, KeyPair, Random, Secret},
     EthStore, SecretVaultRef, SimpleSecretStore, StoreAccountRef,
 };
 use std::str::FromStr;

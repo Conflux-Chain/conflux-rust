@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethereum_types::H256;
-use ethkey::{Address, Message, Password, Public, Secret, Signature};
+use cfxkey::{Address, Message, Password, Public, Secret, Signature};
 use json::{OpaqueKeyFile, Uuid};
 use std::{
     cmp::Ordering,
@@ -163,7 +163,7 @@ pub trait SecretStore: SimpleSecretStore {
     fn sign_with_secret(
         &self, secret: &OpaqueSecret, message: &Message,
     ) -> Result<Signature, Error> {
-        Ok(::ethkey::sign(&secret.0, message)?)
+        Ok(::cfxkey::sign(&secret.0, message)?)
     }
 
     /// Imports existing JSON wallet

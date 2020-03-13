@@ -22,7 +22,7 @@ rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 clap = "2"
 db = { path = "../db" }
-ethkey = { path = "../accounts/ethkey" }
+cfxkey = { path = "../accounts/cfxkey" }
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"

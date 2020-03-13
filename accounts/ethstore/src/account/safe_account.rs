@@ -17,7 +17,7 @@
 use super::crypto::Crypto;
 use account::Version;
 use crypto;
-use ethkey::{
+use cfxkey::{
     self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
     Public, Secret, Signature,
 };
@@ -186,7 +186,7 @@ impl SafeAccount {
         &self, password: &Password, shared_mac: &[u8], message: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let secret = self.crypto.secret(password)?;
-        ethkey::crypto::ecies::decrypt(&secret, shared_mac, message)
+        cfxkey::crypto::ecies::decrypt(&secret, shared_mac, message)
             .map_err(From::from)
     }
 
@@ -232,7 +232,7 @@ impl SafeAccount {
 #[cfg(test)]
 mod tests {
     use super::SafeAccount;
-    use ethkey::{verify_public, Generator, Message, Random};
+    use cfxkey::{verify_public, Generator, Message, Random};
 
     #[test]
     fn sign_and_verify_public() {

@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 extern crate env_logger;
-extern crate ethkey;
+extern crate cfxkey;
 extern crate keccak_hash;
 extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
 use docopt::Docopt;
-use ethkey::{Error as EthkeyError, Generator, Public, Random};
+use cfxkey::{Error as EthkeyError, Generator, Public, Random};
 use keccak_hash::keccak;
 use log::*;
 use rustc_hex::FromHexError;

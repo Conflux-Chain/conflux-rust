@@ -34,7 +34,7 @@ use std::{env, process, fs, fmt};
 
 use docopt::Docopt;
 use ethstore::accounts_dir::{KeyDirectory, RootDiskDirectory};
-use ethstore::ethkey::{Address, Password};
+use ethstore::cfxkey::{Address, Password};
 use ethstore::{EthStore, SimpleSecretStore, SecretStore, import_accounts, PresaleWallet, SecretVaultRef, StoreAccountRef};
 
 mod crack;

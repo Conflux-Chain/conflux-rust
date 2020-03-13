@@ -20,7 +20,7 @@ use accounts_dir::{
     DiskKeyFileManager, KeyDirectory, KeyFileManager, RootDiskDirectory,
 };
 use dir;
-use ethkey::Address;
+use cfxkey::Address;
 use Error;
 
 /// Import an account from a file.

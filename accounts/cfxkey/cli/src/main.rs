@@ -1,3 +1,7 @@
+// Copyright 2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -16,7 +20,7 @@
 
 extern crate docopt;
 extern crate env_logger;
-extern crate ethkey;
+extern crate cfxkey;
 extern crate panic_hook;
 extern crate parity_wordlist;
 extern crate rustc_hex;
@@ -29,7 +33,7 @@ extern crate serde_derive;
 use std::{env, fmt, io, num::ParseIntError, process, sync};
 
 use docopt::Docopt;
-use ethkey::{
+use cfxkey::{
     brain_recover, sign, verify_address, verify_public, Brain, BrainPrefix,
     Error as EthkeyError, Generator, KeyPair, Prefix, Random,
 };
@@ -40,14 +44,14 @@ Parity Ethereum keys generator.
   Copyright 2015-2019 Parity Technologies (UK) Ltd.
 
 Usage:
-    ethkey info <secret-or-phrase> [options]
-    ethkey generate random [options]
-    ethkey generate prefix <prefix> [options]
-    ethkey sign <secret> <message>
-    ethkey verify public <public> <signature> <message>
-    ethkey verify address <address> <signature> <message>
-    ethkey recover <address> <known-phrase>
-    ethkey [-h | --help]
+    cfxkey info <secret-or-phrase> [options]
+    cfxkey generate random [options]
+    cfxkey generate prefix <prefix> [options]
+    cfxkey sign <secret> <message>
+    cfxkey verify public <public> <signature> <message>
+    cfxkey verify address <address> <signature> <message>
+    cfxkey recover <address> <known-phrase>
+    cfxkey [-h | --help]
 
 Options:
     -h, --help         Display this message and exit.
@@ -375,7 +379,7 @@ mod tests {
     #[test]
     fn info() {
         let command = vec![
-            "ethkey",
+            "cfxkey",
             "info",
             "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
         ]
@@ -392,7 +396,7 @@ address: 16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5".to_owned();
 
     #[test]
     fn brain() {
-        let command = vec!["ethkey", "info", "--brain", "this is sparta"]
+        let command = vec!["cfxkey", "info", "--brain", "this is sparta"]
             .into_iter()
             .map(Into::into)
             .collect::<Vec<String>>();
@@ -409,7 +413,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
     #[test]
     fn secret() {
         let command =
-            vec!["ethkey", "info", "--brain", "this is sparta", "--secret"]
+            vec!["cfxkey", "info", "--brain", "this is sparta", "--secret"]
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<String>>();
@@ -423,7 +427,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
     #[test]
     fn public() {
         let command =
-            vec!["ethkey", "info", "--brain", "this is sparta", "--public"]
+            vec!["cfxkey", "info", "--brain", "this is sparta", "--public"]
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<String>>();
@@ -435,7 +439,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
     #[test]
     fn address() {
         let command =
-            vec!["ethkey", "info", "-b", "this is sparta", "--address"]
+            vec!["cfxkey", "info", "-b", "this is sparta", "--address"]
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<String>>();
@@ -447,7 +451,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
     #[test]
     fn sign() {
         let command = vec![
-            "ethkey",
+            "cfxkey",
             "sign",
             "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
             "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987",
@@ -462,7 +466,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
 
     #[test]
     fn verify_valid_public() {
-        let command = vec!["ethkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
+        let command = vec!["cfxkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
 			.into_iter()
 			.map(Into::into)
 			.collect::<Vec<String>>();
@@ -473,7 +477,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
 
     #[test]
     fn verify_valid_address() {
-        let command = vec!["ethkey", "verify", "address", "16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
+        let command = vec!["cfxkey", "verify", "address", "16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
 			.into_iter()
 			.map(Into::into)
 			.collect::<Vec<String>>();
@@ -484,7 +488,7 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
 
     #[test]
     fn verify_invalid() {
-        let command = vec!["ethkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec986"]
+        let command = vec!["cfxkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec986"]
 			.into_iter()
 			.map(Into::into)
 			.collect::<Vec<String>>();

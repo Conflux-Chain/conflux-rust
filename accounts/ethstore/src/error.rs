@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crypto::{self, Error as EthCryptoError};
-use ethkey::{self, DerivationError, Error as EthKeyError};
+use cfxkey::{self, DerivationError, Error as EthKeyError};
 use std::{fmt, io::Error as IoError};
 
 /// Account-related errors.
@@ -47,8 +47,8 @@ pub enum Error {
     CreationFailed,
     /// `EthKey` error
     EthKey(EthKeyError),
-    /// `ethkey::crypto::Error`
-    EthKeyCrypto(ethkey::crypto::Error),
+    /// `cfxkey::crypto::Error`
+    EthKeyCrypto(cfxkey::crypto::Error),
     /// `EthCrypto` error
     EthCrypto(EthCryptoError),
     /// Derivation error
@@ -97,8 +97,8 @@ impl From<EthKeyError> for Error {
     fn from(err: EthKeyError) -> Self { Error::EthKey(err) }
 }
 
-impl From<ethkey::crypto::Error> for Error {
-    fn from(err: ethkey::crypto::Error) -> Self { Error::EthKeyCrypto(err) }
+impl From<cfxkey::crypto::Error> for Error {
+    fn from(err: cfxkey::crypto::Error) -> Self { Error::EthKeyCrypto(err) }
 }
 
 impl From<EthCryptoError> for Error {

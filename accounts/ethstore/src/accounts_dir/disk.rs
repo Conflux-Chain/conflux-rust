@@ -18,7 +18,7 @@ use super::{
     vault::{VaultDiskDirectory, VAULT_FILE_NAME},
     KeyDirectory, VaultKey, VaultKeyDirectory, VaultKeyDirectoryProvider,
 };
-use ethkey::Password;
+use cfxkey::Password;
 use json::{self, Uuid};
 use std::{
     collections::HashMap,
@@ -424,7 +424,7 @@ mod test {
     use self::tempdir::TempDir;
     use super::{KeyDirectory, RootDiskDirectory, VaultKey};
     use account::SafeAccount;
-    use ethkey::{Generator, Random};
+    use cfxkey::{Generator, Random};
     use std::{env, fs};
 
     #[test]

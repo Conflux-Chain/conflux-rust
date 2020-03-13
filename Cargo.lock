@@ -377,9 +377,9 @@ version = "0.1.0"
 dependencies = [
  "cfx-types",
  "cfxcore",
+ "cfxkey",
  "clap",
  "db",
- "ethkey",
  "keccak-hash 0.4.1",
  "lazy_static",
  "log 0.4.8",
@@ -595,12 +595,12 @@ dependencies = [
  "cfx-bytes",
  "cfx-stratum",
  "cfx-types",
+ "cfxkey",
  "channel",
  "clap",
  "criterion 0.2.11",
  "db",
  "error-chain",
- "ethkey",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.4",
@@ -680,6 +680,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfxkey"
+version = "0.3.0"
+dependencies = [
+ "edit-distance",
+ "ethereum-types 0.8.0",
+ "lazy_static",
+ "log 0.4.8",
+ "parity-crypto 0.4.2",
+ "parity-secp256k1",
+ "parity-wordlist",
+ "quick-error",
+ "rand 0.7.3",
+ "rustc-hex 1.0.0",
+ "serde",
+ "serde_derive",
+ "tiny-keccak",
+ "zeroize 1.1.0",
+]
+
+[[package]]
 name = "channel"
 version = "0.1.0"
 dependencies = [
@@ -749,6 +769,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxcore",
+ "cfxkey",
  "clap",
  "criterion 0.2.11",
  "ctrlc",
@@ -757,7 +778,6 @@ dependencies = [
  "dir",
  "error-chain",
  "ethcore-accounts",
- "ethkey",
  "ethstore",
  "executable-helpers",
  "futures 0.3.4",
@@ -834,6 +854,7 @@ dependencies = [
  "blockgen",
  "cfx-types",
  "cfxcore",
+ "cfxkey",
  "channel",
  "clap",
  "client",
@@ -845,7 +866,6 @@ dependencies = [
  "error-chain",
  "ethcore-accounts",
  "ethereum-types 0.8.0",
- "ethkey",
  "ethstore",
  "futures 0.1.29",
  "futures-semaphore",
@@ -1436,8 +1456,8 @@ dependencies = [
 name = "ethcore-accounts"
 version = "0.1.0"
 dependencies = [
+ "cfxkey",
  "ethereum-types 0.8.0",
- "ethkey",
  "ethstore",
  "log 0.4.8",
  "parking_lot 0.10.0",
@@ -1482,32 +1502,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ethkey"
-version = "0.3.0"
-dependencies = [
- "edit-distance",
- "ethereum-types 0.8.0",
- "lazy_static",
- "log 0.4.8",
- "parity-crypto 0.4.2",
- "parity-secp256k1",
- "parity-wordlist",
- "quick-error",
- "rand 0.7.3",
- "rustc-hex 1.0.0",
- "serde",
- "serde_derive",
- "tiny-keccak",
- "zeroize 1.1.0",
-]
-
-[[package]]
 name = "ethstore"
 version = "0.2.1"
 dependencies = [
+ "cfxkey",
  "dir",
  "ethereum-types 0.8.0",
- "ethkey",
  "libc",
  "log 0.4.8",
  "matches",
@@ -2623,11 +2623,11 @@ dependencies = [
  "byteorder",
  "bytes 0.5.4",
  "cfx-types",
+ "cfxkey",
  "criterion 0.3.1",
  "curve25519-dalek",
  "digest 0.8.1",
  "ed25519-dalek",
- "ethkey",
  "hex 0.3.2",
  "hmac 0.7.1",
  "lazy_static",
@@ -2748,8 +2748,8 @@ dependencies = [
  "bytes 0.4.12",
  "bytes 0.5.4",
  "cfx-types",
+ "cfxkey",
  "chrono",
- "ethkey",
  "hex 0.3.2",
  "itertools",
  "keccak-hash 0.4.1",
@@ -3194,10 +3194,10 @@ dependencies = [
  "bytes 0.4.12",
  "cfx-bytes",
  "cfx-types",
+ "cfxkey",
  "enum-map",
  "enum-map-derive",
  "error-chain",
- "ethkey",
  "igd",
  "io",
  "ipnetwork",
@@ -3821,8 +3821,8 @@ dependencies = [
  "byteorder",
  "cfx-bytes",
  "cfx-types",
+ "cfxkey",
  "criterion 0.2.11",
- "ethkey",
  "fixed-hash 0.5.2",
  "keccak-hash 0.4.1",
  "lazy_static",
@@ -4627,8 +4627,8 @@ dependencies = [
 name = "secret-store"
 version = "0.1.0"
 dependencies = [
+ "cfxkey",
  "ethereum-types 0.8.0",
- "ethkey",
  "keccak-hash 0.4.1",
  "parking_lot 0.10.0",
  "primitives",
@@ -5684,9 +5684,9 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxcore",
+ "cfxkey",
  "clap",
  "db",
- "ethkey",
  "hex 0.2.0",
  "io",
  "keccak-hash 0.4.1",

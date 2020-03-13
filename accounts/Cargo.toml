@@ -8,7 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 
 [dependencies]
-ethkey = { path = "ethkey" }
+cfxkey = { path = "cfxkey" }
 ethstore = { path = "ethstore" }
 log = "0.4"
 parking_lot = "0.10"

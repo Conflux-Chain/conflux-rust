@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate ethkey as keylib;
+extern crate cfxkey as keylib;
 extern crate parking_lot;
 
 use keylib::KeyPair;

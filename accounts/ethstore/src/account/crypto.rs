@@ -16,7 +16,7 @@
 
 use account::{Aes128Ctr, Cipher, Kdf, Pbkdf2, Prf};
 use crypto::{self, Keccak256};
-use ethkey::{Password, Secret};
+use cfxkey::{Password, Secret};
 use json;
 use random::Random;
 use smallvec::SmallVec;
@@ -192,7 +192,7 @@ impl Crypto {
 #[cfg(test)]
 mod tests {
     use super::{Crypto, Error};
-    use ethkey::{Generator, Random};
+    use cfxkey::{Generator, Random};
 
     #[test]
     fn crypto_with_secret_create() {

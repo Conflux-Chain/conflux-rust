@@ -4,7 +4,7 @@
 
 extern crate cfx_bytes as bytes;
 extern crate core;
-extern crate ethkey as keylib;
+extern crate cfxkey as keylib;
 extern crate network;
 extern crate parking_lot;
 extern crate primitives;

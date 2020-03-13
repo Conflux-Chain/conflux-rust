@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use cfx_types::U256;
-use ethkey::{Error, Password};
+use cfxkey::{Error, Password};
 use primitives::{
     transaction::Action, SignedTransaction,
     Transaction as PrimitiveTransaction, TransactionWithSignature,

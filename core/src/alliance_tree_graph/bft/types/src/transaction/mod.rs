@@ -15,7 +15,7 @@ use crate::{
     write_set::WriteSet,
 };
 use anyhow::{bail, ensure, format_err, Error, Result};
-use ethkey::Secret;
+use cfxkey::Secret;
 use keccak_hash::keccak;
 use libra_crypto::{
     hash::{CryptoHash, CryptoHasher, EventAccumulatorHasher},
@@ -225,7 +225,7 @@ impl RawTransaction {
     pub fn sign(
         self, secret: &Secret, public_key: Public,
     ) -> Result<SignatureCheckedTransaction> {
-        let signature = ::ethkey::sign(
+        let signature = ::cfxkey::sign(
             secret,
             &H256::from_slice(self.hash().to_vec().as_slice()),
         )

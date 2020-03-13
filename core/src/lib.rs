@@ -8,7 +8,7 @@
 
 extern crate cfx_bytes as bytes;
 extern crate core;
-extern crate ethkey as keylib;
+extern crate cfxkey as keylib;
 extern crate io;
 extern crate keccak_hash as hash;
 #[macro_use]

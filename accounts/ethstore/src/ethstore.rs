@@ -25,7 +25,7 @@ use std::{
 use account::SafeAccount;
 use accounts_dir::{KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory};
 use crypto::KEY_ITERATIONS;
-use ethkey::{
+use cfxkey::{
     self, Address, ExtendedKeyPair, KeyPair, Message, Password, Public, Secret,
     Signature,
 };
@@ -566,18 +566,18 @@ impl EthMultiStore {
                 for path_item in path {
                     extended = extended.derive(
                         if path_item.soft {
-                            ethkey::Derivation::Soft(path_item.index)
+                            cfxkey::Derivation::Soft(path_item.index)
                         } else {
-                            ethkey::Derivation::Hard(path_item.index)
+                            cfxkey::Derivation::Hard(path_item.index)
                         },
                     )?;
                 }
             }
             Derivation::SoftHash(h256) => {
-                extended = extended.derive(ethkey::Derivation::Soft(h256))?;
+                extended = extended.derive(cfxkey::Derivation::Soft(h256))?;
             }
             Derivation::HardHash(h256) => {
-                extended = extended.derive(ethkey::Derivation::Hard(h256))?;
+                extended = extended.derive(cfxkey::Derivation::Hard(h256))?;
             }
         }
         Ok(extended)
@@ -630,7 +630,7 @@ impl SimpleSecretStore for EthMultiStore {
         if let Some(account) = accounts.first() {
             let extended =
                 self.generate(account.crypto.secret(password)?, derivation)?;
-            Ok(ethkey::public_to_address(extended.public().public()))
+            Ok(cfxkey::public_to_address(extended.public().public()))
         } else {
             Err(Error::InvalidPassword)
         }
@@ -646,7 +646,7 @@ impl SimpleSecretStore for EthMultiStore {
             let extended =
                 self.generate(account.crypto.secret(password)?, derivation)?;
             let secret = extended.secret().as_raw();
-            Ok(ethkey::sign(&secret, message)?)
+            Ok(cfxkey::sign(&secret, message)?)
         } else {
             Err(Error::InvalidPassword)
         }
@@ -912,7 +912,7 @@ mod tests {
     use super::{EthMultiStore, EthStore};
     use accounts_dir::{KeyDirectory, MemoryDirectory, RootDiskDirectory};
     use ethereum_types::H256;
-    use ethkey::{Generator, KeyPair, Random};
+    use cfxkey::{Generator, KeyPair, Random};
     use secret_store::{
         Derivation, SecretStore, SecretVaultRef, SimpleSecretStore,
         StoreAccountRef,

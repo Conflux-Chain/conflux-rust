@@ -31,7 +31,7 @@ extern crate time;
 extern crate tiny_keccak;
 
 extern crate ethereum_types;
-extern crate ethkey as _ethkey;
+extern crate cfxkey as _cfxkey;
 extern crate parity_crypto as crypto;
 extern crate parity_wordlist;
 
@@ -45,7 +45,7 @@ extern crate serde_derive;
 extern crate matches;
 
 pub mod accounts_dir;
-pub mod ethkey;
+pub mod cfxkey;
 
 mod account;
 mod json;
@@ -71,4 +71,4 @@ pub use self::{
 };
 
 /// An opaque wrapper for secret.
-pub struct OpaqueSecret(::ethkey::Secret);
+pub struct OpaqueSecret(::cfxkey::Secret);

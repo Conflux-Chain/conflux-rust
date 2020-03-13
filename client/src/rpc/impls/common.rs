@@ -17,7 +17,7 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use ethcore_accounts::AccountProvider;
-use ethkey::Password;
+use cfxkey::Password;
 use keccak_hash::keccak;
 use primitives::{Action, SignedTransaction};
 

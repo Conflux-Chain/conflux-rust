@@ -12,7 +12,7 @@ use crate::{
 };
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
-use ethkey::{recover, sign, KeyPair, Secret};
+use cfxkey::{recover, sign, KeyPair, Secret};
 use rlp::{Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{

@@ -29,7 +29,7 @@ extern crate enum_map_derive;
 extern crate strum;
 #[macro_use]
 extern crate strum_macros;
-extern crate ethkey as keylib;
+extern crate cfxkey as keylib;
 extern crate keccak_hash;
 
 pub const PROTOCOL_ID_SIZE: usize = 3;
