@@ -1195,7 +1195,10 @@ impl ConsensusNewBlockHandler {
         let my_weight = inner.block_weight(me);
         let mut extend_pivot = false;
         let mut pivot_changed = false;
-        // FIXME Clarify the meaning of `fork_at` through this function.
+        // ``fork_at`` stores the first pivot chain height that we need to
+        // update (because of the new inserted block). If the new block
+        // extends the pivot chain, ``fork_at`` will equal to the new pivot
+        // chain height (end of the pivot chain).
         let mut fork_at;
         let old_pivot_chain_len = inner.pivot_chain.len();
 
@@ -1364,8 +1367,6 @@ impl ConsensusNewBlockHandler {
                 inner.recompute_metadata(fork_at, last_pivot_to_update);
             } else {
                 // pivot chain not extend and not change
-                // FIXME: We should go back and revisit how we deal with this
-                // for performance
                 ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, me);
                 inner.recompute_metadata(
                     inner.get_pivot_height(),
@@ -1435,14 +1436,17 @@ impl ConsensusNewBlockHandler {
             );
             return;
         }
-        fork_at = max(inner.cur_era_stable_height + 1, fork_at);
+        // Note that only pivot chain height after the capped_fork_at needs to
+        // update execution state.
+        let capped_fork_at = max(inner.cur_era_stable_height + 1, fork_at);
 
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
         meter.update_confirmation_risks(inner);
 
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
-                let fork_at_pivot_index = inner.height_to_pivot_index(fork_at);
+                let capped_fork_at_pivot_index =
+                    inner.height_to_pivot_index(capped_fork_at);
                 // Starting from old_len ensures that all epochs within
                 // [old_len - delay, new_len - delay) will be inserted to db, so
                 // no epochs will be skipped. Starting from
@@ -1452,12 +1456,12 @@ impl ConsensusNewBlockHandler {
                     >= EPOCH_SET_PERSISTENCE_DELAY as usize
                 {
                     min(
-                        fork_at_pivot_index,
+                        capped_fork_at_pivot_index,
                         old_pivot_chain_len
                             - EPOCH_SET_PERSISTENCE_DELAY as usize,
                     )
                 } else {
-                    fork_at_pivot_index
+                    capped_fork_at_pivot_index
                 };
                 let to_persist_pivot_index = inner.pivot_chain.len()
                     - EPOCH_SET_PERSISTENCE_DELAY as usize;
@@ -1635,8 +1639,10 @@ impl ConsensusNewBlockHandler {
                     - DEFERRED_STATE_EPOCH_COUNT
                     + 1
             };
-            let mut state_at = fork_at;
-            if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
+            let mut state_at = capped_fork_at;
+            if capped_fork_at + DEFERRED_STATE_EPOCH_COUNT
+                > old_pivot_chain_height
+            {
                 if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
                     state_at =
                         old_pivot_chain_height - DEFERRED_STATE_EPOCH_COUNT + 1;
@@ -1648,9 +1654,9 @@ impl ConsensusNewBlockHandler {
                 let mut state_availability_boundary =
                     inner.data_man.state_availability_boundary.write();
                 assert!(
-                    fork_at > state_availability_boundary.lower_bound,
+                    capped_fork_at > state_availability_boundary.lower_bound,
                     "forked_at {} should > boundary_lower_bound, boundary {:?}",
-                    fork_at,
+                    capped_fork_at,
                     state_availability_boundary
                 );
                 if pivot_changed {
@@ -1659,21 +1665,23 @@ impl ConsensusNewBlockHandler {
                             .pivot_chain
                             .push(inner.arena[me].hash);
                     } else {
-                        let split_off_index =
-                            fork_at - state_availability_boundary.lower_bound;
+                        let split_off_index = capped_fork_at
+                            - state_availability_boundary.lower_bound;
                         state_availability_boundary
                             .pivot_chain
                             .split_off(split_off_index as usize);
-                        for i in inner.height_to_pivot_index(fork_at)
+                        for i in inner.height_to_pivot_index(capped_fork_at)
                             ..inner.pivot_chain.len()
                         {
                             state_availability_boundary
                                 .pivot_chain
                                 .push(inner.arena[inner.pivot_chain[i]].hash);
                         }
-                        if state_availability_boundary.upper_bound >= fork_at {
+                        if state_availability_boundary.upper_bound
+                            >= capped_fork_at
+                        {
                             state_availability_boundary.upper_bound =
-                                fork_at - 1;
+                                capped_fork_at - 1;
                         }
                     }
                     state_availability_boundary.optimistic_executed_height =
