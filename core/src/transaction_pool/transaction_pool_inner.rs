@@ -737,6 +737,7 @@ mod test_transaction_pool_inner {
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
                 storage_limit: U256::MAX,
+                epoch_height: 0,
                 data: Vec::new(),
             }
             .sign(sender.secret()),
