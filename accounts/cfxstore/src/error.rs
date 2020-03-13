@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crypto::{self, Error as EthCryptoError};
 use cfxkey::{self, DerivationError, Error as EthKeyError};
+use crypto::{self, Error as EthCryptoError};
 use std::{fmt, io::Error as IoError};
 
 /// Account-related errors.

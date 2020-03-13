@@ -3,9 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use app_dirs::{get_app_root, AppDataType, AppInfo};
-use dir::helpers::replace_home;
 use cfxcore_accounts::{AccountProvider, AccountProviderSettings};
 use cfxstore::{accounts_dir::RootDiskDirectory, CfxStore};
+use dir::helpers::replace_home;
 use std::path::PathBuf;
 
 pub fn account_provider(

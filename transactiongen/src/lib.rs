@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 extern crate cfx_bytes as bytes;
-extern crate core;
 extern crate cfxkey as keylib;
+extern crate core;
 extern crate network;
 extern crate parking_lot;
 extern crate primitives;

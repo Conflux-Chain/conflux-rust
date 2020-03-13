@@ -19,8 +19,8 @@ use std::{collections::HashSet, fs, path::Path};
 use accounts_dir::{
     DiskKeyFileManager, KeyDirectory, KeyFileManager, RootDiskDirectory,
 };
-use dir;
 use cfxkey::Address;
+use dir;
 use Error;
 
 /// Import an account from a file.

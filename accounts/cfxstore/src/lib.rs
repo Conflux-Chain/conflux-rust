@@ -30,8 +30,8 @@ extern crate tempdir;
 extern crate time;
 extern crate tiny_keccak;
 
-extern crate ethereum_types;
 extern crate cfxkey as _cfxkey;
+extern crate ethereum_types;
 extern crate parity_crypto as crypto;
 extern crate parity_wordlist;
 
@@ -50,16 +50,16 @@ pub mod cfxkey;
 mod account;
 mod json;
 
-mod error;
 mod cfxstore;
+mod error;
 mod import;
 mod random;
 mod secret_store;
 
 pub use self::{
     account::{Crypto, SafeAccount},
-    error::Error,
     cfxstore::{CfxMultiStore, CfxStore},
+    error::Error,
     import::{import_account, import_accounts, read_geth_accounts},
     json::OpaqueKeyFile as KeyFile,
     parity_wordlist::random_phrase,

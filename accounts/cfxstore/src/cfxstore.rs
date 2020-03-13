@@ -24,11 +24,11 @@ use std::{
 
 use account::SafeAccount;
 use accounts_dir::{KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory};
-use crypto::KEY_ITERATIONS;
 use cfxkey::{
     self, Address, ExtendedKeyPair, KeyPair, Message, Password, Public, Secret,
     Signature,
 };
+use crypto::KEY_ITERATIONS;
 use import;
 use json::{self, OpaqueKeyFile, Uuid};
 use random::Random;
@@ -911,8 +911,8 @@ mod tests {
     use self::tempdir::TempDir;
     use super::{CfxMultiStore, CfxStore};
     use accounts_dir::{KeyDirectory, MemoryDirectory, RootDiskDirectory};
-    use ethereum_types::H256;
     use cfxkey::{Generator, KeyPair, Random};
+    use ethereum_types::H256;
     use secret_store::{
         Derivation, SecretStore, SecretVaultRef, SimpleSecretStore,
         StoreAccountRef,

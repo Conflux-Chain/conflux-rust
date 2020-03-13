@@ -15,8 +15,8 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use account::{Aes128Ctr, Cipher, Kdf, Pbkdf2, Prf};
-use crypto::{self, Keccak256};
 use cfxkey::{Password, Secret};
+use crypto::{self, Keccak256};
 use json;
 use random::Random;
 use smallvec::SmallVec;
