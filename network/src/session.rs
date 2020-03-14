@@ -75,6 +75,11 @@ pub enum SessionData {
     Continue,
 }
 
+pub struct SessionDataWithDisconnectInfo {
+    pub session_data: SessionData,
+    pub token_to_disconnect: Option<(StreamToken, String)>,
+}
+
 // id for Hello packet
 const PACKET_HELLO: u8 = 0x80;
 // id for Disconnect packet
@@ -213,13 +218,16 @@ impl Session {
     /// Readable IO handler. Returns packet data if available.
     pub fn readable<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
-    ) -> Result<SessionData, Error> {
+    ) -> Result<SessionDataWithDisconnectInfo, Error> {
         // update the last read timestamp for statistics
         self.last_read = Instant::now();
 
         if self.expired() {
             debug!("cannot read data due to expired, session = {:?}", self);
-            return Ok(SessionData::None);
+            return Ok(SessionDataWithDisconnectInfo {
+                session_data: SessionData::None,
+                token_to_disconnect: None,
+            });
         }
 
         match self.state {
@@ -227,7 +235,10 @@ impl Session {
                 let h = h.get_mut();
 
                 if !h.readable(io, &host.metadata)? {
-                    return Ok(SessionData::None);
+                    return Ok(SessionDataWithDisconnectInfo {
+                        session_data: SessionData::None,
+                        token_to_disconnect: None,
+                    });
                 }
 
                 if h.done() {
@@ -237,11 +248,17 @@ impl Session {
                     });
                 }
 
-                Ok(SessionData::Continue)
+                Ok(SessionDataWithDisconnectInfo {
+                    session_data: SessionData::Continue,
+                    token_to_disconnect: None,
+                })
             }
             State::Session(ref mut c) => match c.readable()? {
                 Some(data) => Ok(self.read_packet(data, host)?),
-                None => Ok(SessionData::None),
+                None => Ok(SessionDataWithDisconnectInfo {
+                    session_data: SessionData::None,
+                    token_to_disconnect: None,
+                }),
             },
         }
     }
@@ -249,7 +266,7 @@ impl Session {
     /// Handle the packet from underlying connection.
     fn read_packet(
         &mut self, data: Bytes, host: &NetworkServiceInner,
-    ) -> Result<SessionData, Error> {
+    ) -> Result<SessionDataWithDisconnectInfo, Error> {
         let packet = SessionPacket::parse(data)?;
 
         // For protocol packet, the Hello packet should already been received.
@@ -264,12 +281,23 @@ impl Session {
         match packet.id {
             PACKET_HELLO => {
                 // For ingress session, update the node id in `SessionManager`
-                self.update_ingress_node_id(host)?;
+                let token_to_disconnect = self.update_ingress_node_id(host)?;
+
+                let token_to_disconnect = match token_to_disconnect {
+                    Some(token) => Some((
+                        token,
+                        String::from("Remove old session from the same node"),
+                    )),
+                    None => None,
+                };
 
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
                 self.read_hello(&rlp, host)?;
-                Ok(SessionData::Ready)
+                Ok(SessionDataWithDisconnectInfo {
+                    session_data: SessionData::Ready,
+                    token_to_disconnect,
+                })
             }
             PACKET_DISCONNECT => {
                 let rlp = Rlp::new(&packet.data);
@@ -280,11 +308,14 @@ impl Session {
                 );
                 Err(ErrorKind::Disconnect(reason).into())
             }
-            PACKET_USER => Ok(SessionData::Message {
-                data: packet.data.to_vec(),
-                protocol: packet
-                    .protocol
-                    .expect("protocol should available for USER packet"),
+            PACKET_USER => Ok(SessionDataWithDisconnectInfo {
+                session_data: SessionData::Message {
+                    data: packet.data.to_vec(),
+                    protocol: packet
+                        .protocol
+                        .expect("protocol should available for USER packet"),
+                },
+                token_to_disconnect: None,
             }),
             _ => {
                 debug!(
@@ -299,10 +330,10 @@ impl Session {
     /// Update node Id in `SessionManager` for ingress session.
     fn update_ingress_node_id(
         &mut self, host: &NetworkServiceInner,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<usize>, Error> {
         // ignore egress session
         if self.metadata.originated {
-            return Ok(());
+            return Ok(None);
         }
 
         let token = self.token();

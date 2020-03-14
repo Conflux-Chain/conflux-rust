@@ -1069,6 +1069,7 @@ impl NetworkServiceInner {
         let mut ready_protocols: Vec<ProtocolId> = Vec::new();
         let mut messages: Vec<(ProtocolId, Vec<u8>)> = Vec::new();
         let mut kill = false;
+        let mut token_to_disconnect = None;
 
         // if let Some(session) = session.clone()
         if let Some(session) = self.sessions.get(stream) {
@@ -1076,25 +1077,31 @@ impl NetworkServiceInner {
                 let mut sess = session.write();
                 let data = sess.readable(io, self);
                 match data {
-                    Ok(SessionData::Ready) => {
-                        //let mut sess = session.lock();
-                        for (protocol, _) in self.handlers.read().iter() {
-                            if sess.have_capability(*protocol) {
-                                ready_protocols.push(*protocol);
+                    Ok(session_data) => {
+                        token_to_disconnect = session_data.token_to_disconnect;
+                        match session_data.session_data {
+                            SessionData::Ready => {
+                                //let mut sess = session.lock();
+                                for (protocol, _) in self.handlers.read().iter()
+                                {
+                                    if sess.have_capability(*protocol) {
+                                        ready_protocols.push(*protocol);
+                                    }
+                                }
                             }
+                            SessionData::Message { data, protocol } => {
+                                match self.handlers.read().get(&protocol) {
+                                    None => warn!(
+                                        "No handler found for protocol: {:?}",
+                                        protocol
+                                    ),
+                                    Some(_) => messages.push((protocol, data)),
+                                }
+                            }
+                            SessionData::None => break,
+                            SessionData::Continue => {}
                         }
                     }
-                    Ok(SessionData::Message { data, protocol }) => {
-                        match self.handlers.read().get(&protocol) {
-                            None => warn!(
-                                "No handler found for protocol: {:?}",
-                                protocol
-                            ),
-                            Some(_) => messages.push((protocol, data)),
-                        }
-                    }
-                    Ok(SessionData::None) => break,
-                    Ok(SessionData::Continue) => {}
                     Err(Error(kind, _)) => {
                         debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
                         kill = true;
@@ -1102,6 +1109,16 @@ impl NetworkServiceInner {
                     }
                 }
             }
+        }
+
+        if let Some(token_to_disconnect) = token_to_disconnect {
+            self.kill_connection(
+                token_to_disconnect.0,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+                token_to_disconnect.1.as_str(), // reason
+            );
         }
 
         if kill {
@@ -1112,6 +1129,7 @@ impl NetworkServiceInner {
                 Some(UpdateNodeOperation::Failure),
                 "session readable error", // reason
             );
+            return;
         }
 
         if !ready_protocols.is_empty() {

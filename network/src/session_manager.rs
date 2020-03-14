@@ -232,7 +232,12 @@ impl SessionManager {
         if sessions.contains(session.token()) {
             sessions.remove(session.token());
             if let Some(node_id) = session.id() {
-                self.node_id_index.write().remove(node_id);
+                let mut node_id_index = self.node_id_index.write();
+                if let Some(token) = node_id_index.get(node_id) {
+                    if *token == session.token() {
+                        node_id_index.remove(node_id);
+                    }
+                }
             }
 
             assert!(self.ip_limit.write().remove(&session.address().ip()));
@@ -252,10 +257,12 @@ impl SessionManager {
     /// Update the node id index for ingress session.
     /// Return error if the session index does not exist, or the node id already
     /// in use by other session.
+    /// Return optional to-be-disconnected token if no error happens.
     pub fn update_ingress_node_id(
         &self, idx: usize, node_id: &NodeId,
-    ) -> Result<(), String> {
+    ) -> Result<Option<usize>, String> {
         debug!("SessionManager.update_ingress_node_id: enter");
+        let mut token_to_disconnect = None;
 
         let sessions = self.sessions.read();
         let mut node_id_index = self.node_id_index.write();
@@ -272,14 +279,18 @@ impl SessionManager {
         // ensure the node id is unique
         if let Some(cur_idx) = node_id_index.get(node_id) {
             debug!("SessionManager.update_ingress_node_id: leave on node_id already exists");
-            return Err(format!("session already exists, node_id = {:?}, cur_idx = {}, new_idx = {}", node_id.clone(), *cur_idx, idx));
+            if *cur_idx != idx {
+                token_to_disconnect = Some(*cur_idx);
+            } else {
+                panic!("The same token already exists for the same node!!!");
+            }
         }
 
         node_id_index.insert(node_id.clone(), idx);
 
         debug!("SessionManager.update_ingress_node_id: leave");
 
-        Ok(())
+        Ok(token_to_disconnect)
     }
 }
 
