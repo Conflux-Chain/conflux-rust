@@ -233,14 +233,10 @@ impl SessionManager {
             sessions.remove(session.token());
             if let Some(node_id) = session.id() {
                 let mut node_id_index = self.node_id_index.write();
-                let mut need_remove = false;
                 if let Some(token) = node_id_index.get(node_id) {
                     if *token == session.token() {
-                        need_remove = true;
+                        node_id_index.remove(node_id);
                     }
-                }
-                if need_remove {
-                    node_id_index.remove(node_id);
                 }
             }
 
