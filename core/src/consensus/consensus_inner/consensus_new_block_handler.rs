@@ -1235,7 +1235,7 @@ impl ConsensusNewBlockHandler {
             inner.update_timer_chain(me);
             // Now we go over every element in the ``invalid_block_queue``
             // because their timer may change.
-            if self.conf.bench_mode {
+            if !self.conf.bench_mode {
                 let mut new_block_queue = BinaryHeap::new();
                 for (_, x) in &inner.invalid_block_queue {
                     let timer =
