@@ -1794,6 +1794,10 @@ impl ConsensusGraphInner {
                 total_weight -= self.block_weight(index as usize);
             }
         }
+        debug!(
+            "recompute_anticone_weight: me={} upper={} total_weight={}",
+            me, pivot_block_arena_index, total_weight
+        );
         total_weight
     }
 

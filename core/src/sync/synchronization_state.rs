@@ -65,7 +65,7 @@ pub type SynchronizationPeers =
 pub struct SynchronizationState {
     is_consortium: bool,
     is_full_node: bool,
-    is_dev_mode: bool,
+    is_dev_or_test_mode: bool,
     pub peers: RwLock<SynchronizationPeers>,
     pub validator_set: RwLock<HashSet<AccountAddress>>,
     pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
@@ -74,12 +74,12 @@ pub struct SynchronizationState {
 
 impl SynchronizationState {
     pub fn new(
-        is_consortium: bool, is_full_node: bool, is_dev_mode: bool,
+        is_consortium: bool, is_full_node: bool, is_dev_or_test_mode: bool,
     ) -> Self {
         SynchronizationState {
             is_consortium,
             is_full_node,
-            is_dev_mode,
+            is_dev_or_test_mode,
             peers: Default::default(),
             validator_set: Default::default(),
             handshaking_peers: Default::default(),
@@ -190,7 +190,7 @@ impl SynchronizationState {
 
     pub fn is_full_node(&self) -> bool { self.is_full_node }
 
-    pub fn is_dev_mode(&self) -> bool { self.is_dev_mode }
+    pub fn is_dev_or_test_mode(&self) -> bool { self.is_dev_or_test_mode }
 
     // FIXME: use median instead, because it's so confusing without context.
     // FIXME: median_chain_height_from_peers.
