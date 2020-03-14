@@ -68,6 +68,11 @@ pub struct ConsensusConfig {
     pub bench_mode: bool,
     /// The configuration used by inner data
     pub inner_conf: ConsensusInnerConfig,
+    /// The epoch bound for processing a transaction. For a transaction being
+    /// process, the epoch height of its enclosing block must be with in
+    /// [tx.epoch_height - transaction_epoch_bound, tx.epoch_height +
+    /// transaction_epoch_bound]
+    pub transaction_epoch_bound: u64,
 }
 
 #[derive(Debug)]
@@ -166,6 +171,7 @@ impl ConsensusGraph {
             data_man.clone(),
             vm,
             inner.clone(),
+            conf.transaction_epoch_bound,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();

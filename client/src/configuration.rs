@@ -107,6 +107,7 @@ build_config! {
         (network_id, (u64), 1)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -359,6 +360,7 @@ impl Configuration {
                 enable_state_expose: self.raw_conf.enable_state_expose,
             },
             bench_mode: false,
+            transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
         }
     }
 
@@ -577,6 +579,7 @@ impl Configuration {
         config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
         config.tx_weight_scaling = self.raw_conf.tx_weight_scaling;
         config.tx_weight_exp = self.raw_conf.tx_weight_exp;
+        config.transaction_epoch_bound = self.raw_conf.transaction_epoch_bound;
 
         config
     }
