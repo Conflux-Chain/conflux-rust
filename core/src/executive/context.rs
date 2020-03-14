@@ -774,7 +774,7 @@ mod tests {
 
         assert_eq!(
             address,
-            Address::from_str("8707bc70dbb382b3ca576e3c2f193cf36e0ccaf3")
+            Address::from_str("8a509a60cc33373ed59837b7e2e68f1c94765f8d")
                 .unwrap()
         );
     }

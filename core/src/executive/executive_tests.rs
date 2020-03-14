@@ -34,7 +34,7 @@ fn test_contract_address() {
     let address =
         Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let expected_address =
-        Address::from_str("8d4827b1ec3c4b388b0c486ea425a68316aa6698").unwrap();
+        Address::from_str("87ed868bd4e05f0be585961a5293a68cfb6ce60e").unwrap();
     assert_eq!(
         expected_address,
         contract_address(
