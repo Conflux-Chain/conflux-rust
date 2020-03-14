@@ -802,19 +802,18 @@ impl ConsensusNewBlockHandler {
 
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
-        let parent_tw = inner.weight_tree.get(parent);
-        let parent_w = inner.block_weight(parent);
-        inner.adaptive_tree.set(me, -parent_tw + parent_w);
     }
 
     #[inline]
     /// Subroutine called by on_new_block()
     fn update_lcts_finalize(&self, inner: &mut ConsensusGraphInner, me: usize) {
         let parent = inner.arena[me].parent;
+        let parent_tw = inner.weight_tree.get(parent);
+        let parent_w = inner.block_weight(parent);
+        inner.adaptive_tree.set(me, -parent_tw + parent_w);
+
         let weight = inner.block_weight(me);
-
         inner.weight_tree.path_apply(me, weight);
-
         inner.adaptive_tree.path_apply(me, 2 * weight);
         inner.adaptive_tree.caterpillar_apply(parent, -weight);
     }
