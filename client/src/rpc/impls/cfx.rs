@@ -19,7 +19,12 @@ use crate::rpc::{
 };
 use blockgen::BlockGenerator;
 use cfx_types::{Public, H160, H256};
-use cfxcore::{block_data_manager::BlockExecutionResultWithEpoch, block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph, PeerInfo, SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool, ConsensusGraphTrait};
+use cfxcore::{
+    block_data_manager::BlockExecutionResultWithEpoch,
+    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
+    test_context::*, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+};
 use jsonrpc_core::{
     futures::future::{Future, IntoFuture},
     BoxFuture, Error as RpcError, Result as RpcResult,
@@ -693,9 +698,10 @@ impl RpcImpl {
 
         debug!("RPC Request: cfx_call");
         let best_epoch_height = consensus_graph.best_epoch_number();
-        let signed_tx = sign_call(best_epoch_height, request).map_err(|err| {
-            RpcError::invalid_params(format!("Sign tx error: {:?}", err))
-        })?;
+        let signed_tx =
+            sign_call(best_epoch_height, request).map_err(|err| {
+                RpcError::invalid_params(format!("Sign tx error: {:?}", err))
+            })?;
         trace!("call tx {:?}", signed_tx);
         consensus_graph
             .call_virtual(&signed_tx, epoch.into())
@@ -743,9 +749,10 @@ impl RpcImpl {
 
         debug!("RPC Request: cfx_estimateGas");
         let best_epoch_height = consensus_graph.best_epoch_number();
-        let signed_tx = sign_call(best_epoch_height, request).map_err(|err| {
-            RpcError::invalid_params(format!("Sign tx error: {:?}", err))
-        })?;
+        let signed_tx =
+            sign_call(best_epoch_height, request).map_err(|err| {
+                RpcError::invalid_params(format!("Sign tx error: {:?}", err))
+            })?;
         trace!("call tx {:?}", signed_tx);
         let result = consensus_graph.estimate_gas(&signed_tx, epoch.into());
         result

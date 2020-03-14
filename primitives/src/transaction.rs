@@ -184,7 +184,8 @@ pub struct Transaction {
     /// Maximum storage increasement in this execution.
     pub storage_limit: U256,
     /// The epoch height of the transaction. A transaction
-    /// can only be packed between the epochs of [epoch_height - TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
+    /// can only be packed between the epochs of [epoch_height -
+    /// TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
     pub epoch_height: u64,
     /// Transaction data.
     pub data: Bytes,

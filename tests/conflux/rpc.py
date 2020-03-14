@@ -254,7 +254,7 @@ class RpcClient:
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=None):
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=None, epoch_height = 0):
         if sender is None:
             sender = self.GENESIS_ADDR
 
@@ -269,7 +269,7 @@ class RpcClient:
 
         action = eth_utils.decode_hex(receiver)
         data = eth_utils.decode_hex(data_hex)
-        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height)
 
         return tx.sign(priv_key)
 

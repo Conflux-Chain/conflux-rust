@@ -455,7 +455,9 @@ impl QueryService {
         Ok(matching)
     }
 
-    pub fn get_latest_verifiable_epoch_number(&self) -> Result<u64, FilterError> {
+    pub fn get_latest_verifiable_epoch_number(
+        &self,
+    ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
         let latest_verified = self.handler.witnesses.latest_verified();
 
