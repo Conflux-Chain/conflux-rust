@@ -138,8 +138,8 @@ class LogFilteringTest(ConfluxTestFramework):
     def number_to_topic(self, number):
         return "0x" + ("%x" % number).zfill(64)
 
-    def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+    def deploy_contract(self, sender, priv_key, data_hex, epoch_height = 0):
+        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, epoch_height = epoch_height)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]

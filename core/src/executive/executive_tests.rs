@@ -433,6 +433,7 @@ fn test_not_enough_cash() {
         gas: U256::from(100_000),
         gas_price: U256::one(),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         nonce: U256::zero(),
     }
     .sign(keypair.secret());
@@ -938,6 +939,7 @@ fn test_commission_privilege() {
         value: U256::from(1000000),
         action: Action::Call(address),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: vec![],
     }
     .sign(sender.secret());
@@ -1013,6 +1015,7 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: vec![],
     }
     .sign(caller3.secret());
@@ -1047,6 +1050,7 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: vec![],
     }
     .sign(caller1.secret());
@@ -1081,6 +1085,7 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1121,6 +1126,7 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1159,6 +1165,7 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: vec![],
     }
     .sign(caller3.secret());

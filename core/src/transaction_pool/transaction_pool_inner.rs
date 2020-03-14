@@ -545,7 +545,8 @@ impl TransactionPoolInner {
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256,
-        block_size_limit: usize,
+        block_size_limit: usize, epoch_height_lower_bound: u64,
+        epoch_height_upper_bound: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
@@ -557,20 +558,29 @@ impl TransactionPoolInner {
         let mut total_tx_size: usize = 0;
 
         let mut big_tx_resample_times_limit = 10;
-        let mut too_big_txs = Vec::new();
+        let mut recycle_txs = Vec::new();
 
         'out: while let Some(tx) = self.ready_account_pool.pop() {
             let tx_size = tx.rlp_size();
             if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
                 || block_size_limit - total_tx_size < tx_size
             {
-                too_big_txs.push(tx.clone());
+                recycle_txs.push(tx.clone());
                 if big_tx_resample_times_limit > 0 {
                     big_tx_resample_times_limit -= 1;
                     continue 'out;
                 } else {
                     break 'out;
                 }
+            }
+
+            // If in rare case we popped up something that is currently outside
+            // the bound, we will skip the transaction.
+            if tx.epoch_height < epoch_height_lower_bound {
+                continue 'out;
+            } else if tx.epoch_height > epoch_height_upper_bound {
+                recycle_txs.push(tx.clone());
+                continue 'out;
             }
 
             total_tx_gas_limit += *tx.gas_limit();
@@ -590,7 +600,7 @@ impl TransactionPoolInner {
             }
         }
 
-        for tx in too_big_txs {
+        for tx in recycle_txs {
             self.ready_account_pool.insert(tx);
         }
 
@@ -737,6 +747,7 @@ mod test_transaction_pool_inner {
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
                 storage_limit: U256::MAX,
+                epoch_height: 0,
                 data: Vec::new(),
             }
             .sign(sender.secret()),

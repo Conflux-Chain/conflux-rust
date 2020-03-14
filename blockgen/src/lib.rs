@@ -11,8 +11,8 @@ use cfxcore::{
     },
     pow::*,
     transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
-    ConsensusGraph, SharedSynchronizationGraph, SharedSynchronizationService,
-    SharedTransactionPool, Stopable,
+    ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
+    SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
 use lazy_static::lazy_static;
 use log::{debug, trace, warn};
@@ -271,6 +271,7 @@ impl BlockGenerator {
             num_txs,
             block_gas_limit,
             block_size_limit,
+            consensus_graph.best_epoch_number(),
         );
 
         Ok(self.assemble_new_block_impl(

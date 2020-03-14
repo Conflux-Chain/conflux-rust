@@ -774,6 +774,8 @@ pub struct ConsensusExecutionHandler {
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
     base_reward_table_in_ucfx: Vec<u64>,
+
+    transaction_epoch_bound: u64,
 }
 
 impl ConsensusExecutionHandler {
@@ -788,6 +790,7 @@ impl ConsensusExecutionHandler {
             data_man,
             vm,
             base_reward_table_in_ucfx,
+            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         }
     }
 
@@ -1069,52 +1072,81 @@ impl ConsensusExecutionHandler {
                 let mut storage_released = Vec::new();
                 let mut storage_occupied = Vec::new();
 
-                let r = {
-                    Executive::new(
-                        state,
-                        &env,
-                        &machine,
-                        &spec,
-                        &internal_contract_map,
-                    )
-                    .transact(transaction, &mut nonce_increased)
+                // If the transaction is outside the epoch range
+                // [tx.epoch_height - tx_epoch_bound, tx.epoch_height +
+                // tx_epoch_bound], we are going to skip the
+                // execution of the transaction.
+                let pivot_height = pivot_block.block_header.height();
+                let epoch_height_in_bound = if pivot_height
+                    + self.transaction_epoch_bound
+                    < transaction.epoch_height
+                {
+                    info!("tx execution error: the transaction epoch height is too far ahead! pivot height {} transaction epoch height {}", pivot_height, transaction.epoch_height);
+                    trace!(
+                        "Add back ({:?}) to the pending pool!",
+                        transaction.clone()
+                    );
+                    to_pending.push(transaction.clone());
+                    false
+                } else if pivot_height
+                    > transaction.epoch_height + self.transaction_epoch_bound
+                {
+                    info!("tx execution error: the transaction epoch height is too old! pivot height {} transaction epoch height {}", pivot_height, transaction.epoch_height);
+                    false
+                } else {
+                    true
                 };
-                // TODO Store fine-grained output status in receipts.
-                // Note now NotEnoughCash has
-                // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
-                // but its nonce is increased, which might need fixing.
-                match r {
-                    Err(ExecutionError::InvalidNonce { expected, got }) => {
-                        // not inc nonce
-                        trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
-                        // Add future transactions back to pool if we are
-                        // not verifying forking chain
-                        if on_local_pivot && got > expected {
-                            trace!(
-                                "To re-add transaction ({:?}) to pending pool",
-                                transaction.clone()
-                            );
-                            to_pending.push(transaction.clone());
+
+                if epoch_height_in_bound {
+                    let r = {
+                        Executive::new(
+                            state,
+                            &env,
+                            &machine,
+                            &spec,
+                            &internal_contract_map,
+                        )
+                        .transact(transaction, &mut nonce_increased)
+                    };
+                    // TODO Store fine-grained output status in receipts.
+                    // Note now NotEnoughCash has
+                    // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
+                    // but its nonce is increased, which might need fixing.
+                    match r {
+                        Err(ExecutionError::InvalidNonce { expected, got }) => {
+                            // not inc nonce
+                            trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
+                            // Add future transactions back to pool if we are
+                            // not verifying forking chain
+                            if on_local_pivot && got > expected {
+                                trace!(
+                                    "To re-add transaction ({:?}) to pending pool",
+                                    transaction.clone()
+                                );
+                                to_pending.push(transaction.clone());
+                            }
                         }
-                    }
-                    Ok(ref executed) => {
-                        env.gas_used = executed.cumulative_gas_used;
-                        transaction_logs = executed.logs.clone();
-                        storage_occupied = executed.storage_occupied.clone();
-                        storage_released = executed.storage_released.clone();
-                        if executed.exception.is_some() {
-                            warn!(
-                                "tx execution error: transaction={:?}, err={:?}",
-                                transaction, r
-                            );
-                        } else {
-                            GOOD_TPS_METER.mark(1);
-                            tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
-                            trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                        Ok(ref executed) => {
+                            env.gas_used = executed.cumulative_gas_used;
+                            transaction_logs = executed.logs.clone();
+                            storage_occupied =
+                                executed.storage_occupied.clone();
+                            storage_released =
+                                executed.storage_released.clone();
+                            if executed.exception.is_some() {
+                                warn!(
+                                    "tx execution error: transaction={:?}, err={:?}",
+                                    transaction, r
+                                );
+                            } else {
+                                GOOD_TPS_METER.mark(1);
+                                tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                                trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                            }
                         }
-                    }
-                    Err(e) => {
-                        info!("tx execution error: transaction={:?}, err={:?}, in block {:?}", transaction, e, block.hash());
+                        Err(e) => {
+                            info!("tx execution error: transaction={:?}, err={:?}, in block {:?}", transaction, e, block.hash());
+                        }
                     }
                 }
 

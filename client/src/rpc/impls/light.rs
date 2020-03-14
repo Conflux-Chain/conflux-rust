@@ -351,7 +351,10 @@ impl RpcImpl {
                 debug!("after loading nonce in latest state, tx = {:?}", tx);
             }
 
-            let tx = tx.sign_with(password).map_err(|e| {
+            let epoch_height = light.get_latest_verifiable_epoch_number().map_err(|_| {
+                RpcError::invalid_params(format!("the light client cannot retrieve/verify the latest mined pivot block."))
+            })?;
+            let tx = tx.sign_with(epoch_height, password).map_err(|e| {
                 RpcError::invalid_params(format!(
                     "failed to send transaction: {:?}",
                     e
