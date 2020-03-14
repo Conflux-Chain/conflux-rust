@@ -26,7 +26,7 @@ use parity_bytes::ToPretty;
 use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     io::Write,
     slice::Iter,
     sync::Arc,
@@ -985,6 +985,24 @@ impl ConsensusNewBlockHandler {
         inner.compute_timer_chain_tuple(me, Some(anticone))
     }
 
+    fn compute_invalid_block_start_timer(
+        &self, inner: &ConsensusGraphInner, me: usize,
+    ) -> u64 {
+        let last_index =
+            inner.arena[me].data.past_view_last_timer_block_arena_index;
+        if last_index == NULL {
+            inner.inner_conf.timer_chain_beta
+        } else {
+            inner.arena[last_index].data.ledger_view_timer_chain_height
+                + inner.inner_conf.timer_chain_beta
+                + if inner.get_timer_chain_index(last_index) != NULL {
+                    1
+                } else {
+                    0
+                }
+        }
+    }
+
     fn preactivate_block(
         &self, inner: &mut ConsensusGraphInner, me: usize,
     ) -> BlockStatus {
@@ -1218,6 +1236,21 @@ impl ConsensusNewBlockHandler {
             inner.best_timer_chain_difficulty = diff;
             inner.best_timer_chain_hash = inner.arena[me].hash.clone();
             inner.update_timer_chain(me);
+            // Now we go over every element in the ``invalid_block_queue``
+            // because their timer may change.
+            if !self.conf.bench_mode {
+                let mut new_block_queue = BinaryHeap::new();
+                for (_, x) in &inner.invalid_block_queue {
+                    let timer =
+                        self.compute_invalid_block_start_timer(inner, *x);
+                    new_block_queue.push((-(timer as i128), *x));
+                    debug!(
+                        "Partial invalid Block {} (hash = {}) start timer is now {}",
+                        *x, inner.arena[*x].hash, timer
+                    );
+                }
+                inner.invalid_block_queue = new_block_queue;
+            }
         } else {
             let mut timer_chain_height =
                 inner.arena[parent].data.ledger_view_timer_chain_height;
@@ -1789,23 +1822,8 @@ impl ConsensusNewBlockHandler {
 
                 if block_status == BlockStatus::PartialInvalid {
                     inner.arena[me].data.partial_invalid = true;
-                    let last_index = inner.arena[me]
-                        .data
-                        .past_view_last_timer_block_arena_index;
-                    let timer = if last_index == NULL {
-                        inner.inner_conf.timer_chain_beta
-                    } else {
-                        inner.arena[last_index]
-                            .data
-                            .ledger_view_timer_chain_height
-                            + inner.inner_conf.timer_chain_beta
-                            + if inner.get_timer_chain_index(last_index) != NULL
-                            {
-                                1
-                            } else {
-                                0
-                            }
-                    };
+                    let timer =
+                        self.compute_invalid_block_start_timer(inner, me);
                     // We are not going to delay partial invalid blocks in the
                     // bench mode
                     if self.conf.bench_mode {
