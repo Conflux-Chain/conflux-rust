@@ -229,12 +229,6 @@ def pubtoaddr(k):
     addr[0] |= 0x10
     return bytes(addr)
 
-def contractaddr(sender, nonce):
-    contract_addr = bytearray(sha3_256(rlp.encode([sender, nonce]))[-20:])
-    contract_addr[0] &= 0x0f
-    contract_addr[0] |= 0x80
-    return bytes(contract_addr)
-
 def checksum_encode(addr):  # Takes a 20-byte binary address as input
     addr = normalize_address(addr)
     o = ''

@@ -762,7 +762,7 @@ mod tests {
                 &U256::max_value(),
                 &U256::zero(),
                 &[],
-                CreateContractAddress::FromSenderAndNonce,
+                CreateContractAddress::FromSenderNonceAndCodeHash,
                 false,
             ) {
                 Ok(ContractCreateResult::Created(address, _)) => address,
@@ -774,7 +774,7 @@ mod tests {
 
         assert_eq!(
             address,
-            Address::from_str("8d770416a3345f91e4b34576cb804a576fa48eb1")
+            Address::from_str("8707bc70dbb382b3ca576e3c2f193cf36e0ccaf3")
                 .unwrap()
         );
     }

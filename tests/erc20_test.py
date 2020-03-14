@@ -3,7 +3,7 @@ from http.client import CannotSendRequest
 from eth_utils import decode_hex
 
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int, contractaddr
+from conflux.utils import encode_hex, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
@@ -65,12 +65,14 @@ class P2PTest(ConfluxTestFramework):
         raw_create = erc20_contract.constructor().buildTransaction(self.tx_conf)
         tx_data = decode_hex(raw_create["data"])
         tx_create = create_transaction(pri_key=genesis_key, receiver=b'', nonce=nonce, gas_price=gas_price, data=tx_data, gas=gas, value=0)
-        self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx_create]))
-        self.wait_for_tx([tx_create])
-        self.log.info("Contract created, start transfering tokens")
+        client = RpcClient(self.nodes[0])
+        client.send_tx(tx_create, True)
+        receipt = client.get_transaction_receipt(tx_create.hash_hex())
+        contract_addr = receipt['contractCreated']
+        self.log.info("Contract " + str(contract_addr) + " created, start transferring tokens")
 
         tx_n = 10
-        self.tx_conf["to"] = Web3.toChecksumAddress(encode_hex_0x(contractaddr(genesis_addr, nonce)))
+        self.tx_conf["to"] = contract_addr
         nonce += 1
         balance_map = {genesis_key: 1000000 * 10**18}
         sender_key = genesis_key
