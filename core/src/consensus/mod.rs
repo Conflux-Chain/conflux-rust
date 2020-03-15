@@ -20,6 +20,7 @@ pub use crate::consensus::{
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
+    executive::Executed,
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
@@ -673,13 +674,6 @@ impl ConsensusGraph {
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
-    /// Estimate the gas of a transaction
-    pub fn estimate_gas(
-        &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<U256, String> {
-        self.call_virtual(tx, epoch).map(|(_, gas_used)| gas_used)
-    }
-
     pub fn logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
@@ -835,7 +829,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<(Vec<u8>, U256), String> {
+    ) -> Result<Executed, String> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
