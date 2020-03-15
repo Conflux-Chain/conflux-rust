@@ -20,6 +20,7 @@
 
 use std::fmt;
 
+use crate::rpc::types::Bytes;
 use jsonrpc_core::{Error, ErrorCode, Value};
 
 mod codes {
@@ -68,5 +69,17 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
         code: ErrorCode::InvalidParams,
         message: format!("Couldn't parse parameters: {}", param),
         data: Some(Value::String(format!("{:?}", details))),
+    }
+}
+
+pub fn execution_error(message: String, output: Vec<u8>) -> Error {
+    let output_bytes = Bytes::new(output);
+    Error {
+        code: ErrorCode::ServerError(codes::EXECUTION_ERROR),
+        message,
+        data: Some(Value::String(
+            serde_json::to_string(&output_bytes)
+                .expect("Bytes serialization cannot fail"),
+        )),
     }
 }
