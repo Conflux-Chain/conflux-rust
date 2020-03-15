@@ -280,7 +280,7 @@ class TestNode:
         self.log.debug("Node stopped")
         return True
 
-    def wait_until_stopped(self, timeout=CONFLUX_RPC_WAIT_TIMEOUT):
+    def wait_until_stopped(self, timeout=CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT):
         wait_until(self.is_node_stopped, timeout=timeout)
 
     def assert_start_raises_init_error(self,
