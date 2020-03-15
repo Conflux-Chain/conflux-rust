@@ -95,6 +95,7 @@ threadpool = "1.0"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
 zip = "*"
 tokio-timer = "0.2.13"
+derivative = "2.0.2"
 
 [dev-dependencies]
 criterion = "0.2"

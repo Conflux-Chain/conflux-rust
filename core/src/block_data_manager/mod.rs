@@ -38,6 +38,7 @@ use crate::block_data_manager::{
     db_manager::DBManager, tx_data_manager::TransactionDataManager,
 };
 pub use block_data_types::*;
+use derivative::Derivative;
 use std::{hash::Hash, path::Path, time::Duration};
 
 use crate::parameters::consensus_internal::REWARD_EPOCH_COUNT;
@@ -50,10 +51,13 @@ lazy_static! {
 pub const NULLU64: u64 = !0;
 
 /// FIXME: move it to another module.
-#[derive(Debug, Clone)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub struct StateAvailabilityBoundary {
     /// This is the hash of blocks in pivot chain based on current graph.
+    #[derivative(Debug = "ignore")]
     pub pivot_chain: Vec<H256>,
+
     pub synced_state_height: u64,
     /// This is the lower boundary height of available state.
     pub lower_bound: u64,
