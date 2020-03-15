@@ -50,6 +50,11 @@ args:
         long: log-level
         value_name: LEVEL
         takes_value: true
+    - log-conf:
+        help: Sets a custom log config file.
+        long: log-conf
+        value_name: FILE
+        takes_value: true
     - config:
         help: Sets a custom config file.
         short: c
