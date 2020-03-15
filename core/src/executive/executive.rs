@@ -32,17 +32,21 @@ pub fn contract_address(
     code: &[u8],
 ) -> (Address, Option<H256>)
 {
-    use rlp::RlpStream;
-
     match address_scheme {
-        CreateContractAddress::FromSenderAndNonce => {
-            let mut stream = RlpStream::new_list(2);
-            stream.append(sender);
-            stream.append(nonce);
+        CreateContractAddress::FromSenderNonceAndCodeHash => {
+            let mut buffer = [0u8; 1 + 20 + 32 + 32];
+            // In Conflux, we append CodeHash to determine the address as well.
+            // This is required to enable us to clean up unused user account in
+            // future.
+            let code_hash = keccak(code);
+            buffer[0] = 0x0;
+            &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
+            &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first four bits to indicate the type of
             // the address. For contract address, the bits will be
             // set to 0x8.
-            let mut h = Address::from(keccak(stream.as_raw()));
+            let mut h = Address::from(keccak(&buffer[..]));
             h.as_bytes_mut()[0] &= 0x0f;
             h.as_bytes_mut()[0] |= 0x80;
             (h, None)
@@ -54,19 +58,6 @@ pub fn contract_address(
             &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
             &mut buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
             &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
-            // In Conflux, we use the first bit to indicate the type of the
-            // address. For contract address, the bit will be set
-            // one.
-            let mut h = Address::from(keccak(&buffer[..]));
-            h.as_bytes_mut()[0] &= 0x0f;
-            h.as_bytes_mut()[0] |= 0x80;
-            (h, Some(code_hash))
-        }
-        CreateContractAddress::FromSenderAndCodeHash => {
-            let code_hash = keccak(code);
-            let mut buffer = [0u8; 20 + 32];
-            &mut buffer[..20].copy_from_slice(&sender[..]);
-            &mut buffer[20..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bit will be set
             // one.
@@ -1397,7 +1388,7 @@ impl<'a> Executive<'a> {
         let (result, output) = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
-                    CreateContractAddress::FromSenderAndNonce,
+                    CreateContractAddress::FromSenderNonceAndCodeHash,
                     &sender,
                     &nonce,
                     &tx.data,

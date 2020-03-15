@@ -305,7 +305,7 @@ impl DirectTransactionGenerator {
         let address_by_index = vec![start_address.clone()];
 
         let erc20_address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
+            CreateContractAddress::FromSenderNonceAndCodeHash,
             &contract_creator,
             &0.into(),
             &[],

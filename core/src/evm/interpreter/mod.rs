@@ -653,7 +653,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
                 let address_scheme = match instruction {
-					instructions::CREATE => CreateContractAddress::FromSenderAndNonce,
+					instructions::CREATE => CreateContractAddress::FromSenderNonceAndCodeHash,
 					instructions::CREATE2 => {
                         let h: H256 = BigEndianHash::from_uint(&self.stack.pop_back());
                         CreateContractAddress::FromSenderSaltAndCodeHash(h)
