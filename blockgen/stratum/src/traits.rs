@@ -20,7 +20,7 @@
 
 use cfx_types::H256;
 use jsonrpc_tcp_server::PushMessageError;
-use std::{self, error::Error as StdError};
+use std;
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -32,9 +32,7 @@ pub enum Error {
 }
 
 impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::Io(err.description().to_owned())
-    }
+    fn from(err: std::io::Error) -> Self { Error::Io(err.to_string()) }
 }
 
 impl From<PushMessageError> for Error {
