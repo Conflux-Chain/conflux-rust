@@ -55,7 +55,7 @@ impl AnticoneCache {
             if self.data.len() > 2 * CACHE_INDEX_STRIDE {
                 let seq_number = self.seq_number;
                 self.data.retain(|_, (_, k)| {
-                    (seq_number - *k <= CACHE_INDEX_STRIDE as u64)
+                    seq_number - *k <= CACHE_INDEX_STRIDE as u64
                 });
             }
         } else {
