@@ -590,7 +590,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// slab.clear();
     /// assert!(slab.is_empty());
     /// ```
-    pub fn clear(&mut self) { mem::replace(self, Self::default()); }
+    pub fn clear(&mut self) { std::mem::take(self) }
 
     /// Return the number of stored values.
     ///
