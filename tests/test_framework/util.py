@@ -22,6 +22,7 @@ from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
+CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
 
 logger = logging.getLogger("TestFramework.utils")
 

@@ -75,7 +75,7 @@ pub mod client_methods {
     ) -> bool {
         let sleep_duration = Duration::from_secs(1);
         let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(10);
+        let max_timeout = Duration::from_secs(1200);
         let instant = Instant::now();
         let mut warned = false;
         while instant.elapsed() < max_timeout {
