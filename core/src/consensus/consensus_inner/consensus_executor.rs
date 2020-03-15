@@ -8,7 +8,7 @@ use crate::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
     consensus::ConsensusGraphInner,
-    executive::{ExecutionError, Executive, InternalContractMap},
+    executive::{Executed, ExecutionError, Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
     state::{CleanupMode, State},
@@ -579,7 +579,7 @@ impl ConsensusExecutor {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
-    ) -> Result<(Vec<u8>, U256), String> {
+    ) -> Result<Executed, String> {
         self.handler.call_virtual(tx, epoch_id)
     }
 
@@ -1516,7 +1516,7 @@ impl ConsensusExecutionHandler {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
-    ) -> Result<(Vec<u8>, U256), String> {
+    ) -> Result<Executed, String> {
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
         let internal_contract_map = InternalContractMap::new();
@@ -1574,14 +1574,6 @@ impl ConsensusExecutionHandler {
         );
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
-        match r {
-            Ok(executed) => match executed.exception {
-                Some(vm_err) => {
-                    Err(format!("exception thrown in execution: {:?}", vm_err))
-                }
-                None => Ok((executed.output, executed.gas_used)),
-            },
-            Err(e) => Err(format!("execution error: {:?}", e)),
-        }
+        r.map_err(|e| format!("execution error: {:?}", e))
     }
 }

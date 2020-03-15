@@ -114,8 +114,8 @@ use super::super::{
 };
 use parking_lot::Mutex;
 use std::{
-    cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, mem, ops,
-    ptr, slice,
+    cell::UnsafeCell, fmt, iter::IntoIterator, marker::PhantomData, ops, ptr,
+    slice,
 };
 
 /// Pre-allocated storage for a uniform data type.
@@ -590,7 +590,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// slab.clear();
     /// assert!(slab.is_empty());
     /// ```
-    pub fn clear(&mut self) { mem::replace(self, Self::default()); }
+    pub fn clear(&mut self) { std::mem::take(self); }
 
     /// Return the number of stored values.
     ///
