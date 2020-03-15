@@ -478,6 +478,12 @@ impl State {
         })
     }
 
+    pub fn admin(&self, address: &Address) -> DbResult<Address> {
+        self.ensure_cached(address, RequireCache::None, |acc| {
+            acc.map_or(Address::zero(), |acc| *acc.admin())
+        })
+    }
+
     pub fn withdrawable_staking_balance(
         &self, address: &Address,
     ) -> DbResult<U256> {
