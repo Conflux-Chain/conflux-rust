@@ -16,17 +16,20 @@ use unexpected::{Mismatch, OutOfBounds};
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
+    pub chain_id: Option<u64>,
 }
 
 impl VerificationConfig {
-    pub fn new(test_mode: bool) -> Self {
+    pub fn new(test_mode: bool, chain_id: Option<u64>) -> Self {
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
+                chain_id,
             }
         } else {
             VerificationConfig {
                 verify_timestamp: true,
+                chain_id,
             }
         }
     }

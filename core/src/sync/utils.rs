@@ -177,7 +177,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         notifications.clone(),
     ));
 
-    let verification_config = VerificationConfig::new(true);
+    let verification_config = VerificationConfig::new(true, Some(0));
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,
