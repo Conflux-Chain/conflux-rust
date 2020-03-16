@@ -254,7 +254,6 @@ impl OverlayAccount {
 
     pub fn sponsor(&self) -> &Address { &self.sponsor }
 
-    #[cfg(test)]
     pub fn admin(&self) -> &Address { &self.admin }
 
     pub fn sub_sponsor_balance(&mut self, by: &U256) {
