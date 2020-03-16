@@ -24,8 +24,8 @@ use futures::{
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, CodeInfo, EpochNumber, Receipt, SignedTransaction, StateRoot,
-    StorageKey, StorageValue, TransactionIndex,
+    Account, ChainIdParams, CodeInfo, EpochNumber, Receipt, SignedTransaction,
+    StateRoot, StorageKey, StorageValue, TransactionIndex,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
@@ -453,6 +453,11 @@ impl QueryService {
         );
 
         Ok(matching)
+    }
+
+    pub fn get_latest_verifiable_chain_id(&self) -> Result<u64, FilterError> {
+        let epoch_number = self.get_latest_verifiable_epoch_number()?;
+        Ok(ChainIdParams { epoch_number }.get_chain_id())
     }
 
     pub fn get_latest_verifiable_epoch_number(

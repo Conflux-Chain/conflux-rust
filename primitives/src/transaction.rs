@@ -159,6 +159,17 @@ impl Encodable for Action {
     }
 }
 
+/// The parameters needed to determine the chain_id
+pub struct ChainIdParams {
+    /// Epoch Number
+    pub epoch_number: u64,
+}
+
+impl ChainIdParams {
+    /// The function return the chain_id with given parameters
+    pub fn get_chain_id(&self) -> u64 { 0 }
+}
+
 #[derive(
     Default,
     Debug,
@@ -187,6 +198,8 @@ pub struct Transaction {
     /// can only be packed between the epochs of [epoch_height -
     /// TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
     pub epoch_height: u64,
+    /// The chain id of the transaction
+    pub chain_id: u64,
     /// Transaction data.
     pub data: Bytes,
 }

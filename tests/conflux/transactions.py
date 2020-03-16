@@ -21,10 +21,11 @@ class UnsignedTransaction(rlp.Serializable):
         ('value', big_endian_int),
         ('storage_limit', big_endian_int),
         ('epoch_height', big_endian_int),
+        ('chain_id', big_endian_int),
         ('data', binary),
     ]
 
-    def __init__(self, nonce, gas_price, gas, action, value, data, storage_limit, epoch_height):
+    def __init__(self, nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id):
         if gas_price >= TT256 or \
                 value >= TT256 or nonce >= TT256:
             raise InvalidTransaction("Values way too high!")
@@ -37,7 +38,8 @@ class UnsignedTransaction(rlp.Serializable):
             action=action,
             data=data,
             storage_limit=storage_limit,
-            epoch_height=epoch_height
+            epoch_height=epoch_height,
+            chain_id=chain_id
         )
 
     def sign(self, key):
@@ -56,19 +58,18 @@ class UnsignedTransaction(rlp.Serializable):
 class Transaction(rlp.Serializable):
     """
     A transaction is stored as:
-    [nonce, gasprice, startgas, to, value, data, v, r, s]
+    [[nonce, gas_price, gas, action, value, storage_limit, epoch_height, chain_id, data], v, r, s]
 
     nonce is the number of transactions already sent by that account, encoded
     in binary form (eg.  0 -> '', 7 -> '\x07', 1000 -> '\x03\xd8').
 
     (v,r,s) is the raw Electrum-style signature of the transaction without the
     signature made with the private key corresponding to the sending account,
-    with 0 <= v <= 3. From an Electrum-style signature (65 bytes) it is
+    with 0 <= v <= 1. From an Electrum-style signature (65 bytes) it is
     possible to extract the public key, and thereby the address, directly.
 
     A valid transaction is one where:
-    (i) the signature is well-formed (ie. 0 <= v <= 3, 0 <= r < P, 0 <= s < N,
-        0 <= r < P - N if v >= 2), and
+    (i) the signature is well-formed, and
     (ii) the sending account has enough funds to pay the fee and the value.
     """
 

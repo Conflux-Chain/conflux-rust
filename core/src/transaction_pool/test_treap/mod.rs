@@ -108,6 +108,7 @@ fn next_signed_transaction(rng: &mut ChaChaRng) -> SignedTransaction {
             action: Action::Call(Address::from_low_u64_be(0)),
             storage_limit: U256::MAX,
             epoch_height: 0,
+            chain_id: 0,
             data: vec![],
         }
         .with_signature(Signature::default()),

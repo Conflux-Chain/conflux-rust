@@ -32,7 +32,7 @@ pub struct CallRequest {
 }
 
 pub fn sign_call(
-    epoch_height: u64, request: CallRequest,
+    epoch_height: u64, chain_id: u64, request: CallRequest,
 ) -> Result<SignedTransaction, Error> {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
@@ -46,6 +46,7 @@ pub fn sign_call(
         value: request.value.unwrap_or_default(),
         storage_limit: request.storage_limit.unwrap_or(U256::MAX),
         epoch_height,
+        chain_id,
         data: request.data.unwrap_or_default().into_vec(),
     }
     .fake_sign(from))

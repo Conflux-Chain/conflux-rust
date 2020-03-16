@@ -220,6 +220,7 @@ impl TransactionGenerator {
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: U256::MAX,
+                chain_id: 0,
                 epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
             };
@@ -407,6 +408,7 @@ impl DirectTransactionGenerator {
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
                 epoch_height: 0,
+                chain_id: 0,
                 data: vec![0u8; 128],
             };
             let signed_transaction = tx.sign(sender_kp.secret());
@@ -497,6 +499,7 @@ impl DirectTransactionGenerator {
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
                 epoch_height: 0,
+                chain_id: 0,
                 data: tx_data,
             };
             let signed_transaction = tx.sign(sender_kp.secret());
