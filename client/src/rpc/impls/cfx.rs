@@ -12,10 +12,10 @@ use crate::rpc::{
         sign_call, Account as RpcAccount, BFTStates, BlameInfo,
         Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
         ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
-        Receipt as RpcReceipt, SendTxRequest, Status as RpcStatus,
-        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
-        U64 as RpcU64,
+        Receipt as RpcReceipt, SendTxRequest, SponsorInfo as RpcSponsorInfo,
+        Status as RpcStatus, SyncGraphStates, Transaction as RpcTransaction,
+        H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
+        U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -150,9 +150,9 @@ impl RpcImpl {
             .boxed()
     }
 
-    fn sponsor(
+    fn sponsor_info(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160> {
+    ) -> BoxFuture<RpcSponsorInfo> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
@@ -166,31 +166,8 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
 
-        cg.get_sponsor(address, num.into())
-            .map(|x| x.into())
-            .map_err(RpcError::invalid_params)
-            .into_future()
-            .boxed()
-    }
-
-    fn sponsor_balance(
-        &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcU256> {
-        let num = num.unwrap_or(EpochNumber::LatestState);
-        let address: H160 = address.into();
-        info!(
-            "RPC Request: cfx_getAdmin address={:?} epoch_num={:?}",
-            address, num
-        );
-
-        let cg = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-
-        cg.get_sponsor_balance(address, num.into())
-            .map(|x| x.into())
+        cg.get_sponsor_info(address, num.into())
+            .map(|x| RpcSponsorInfo::new(x))
             .map_err(RpcError::invalid_params)
             .into_future()
             .boxed()
@@ -849,8 +826,7 @@ impl Cfx for CfxHandler {
             fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-            fn sponsor(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-            fn sponsor_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;

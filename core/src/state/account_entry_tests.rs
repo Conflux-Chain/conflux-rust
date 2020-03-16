@@ -5,7 +5,7 @@
 use super::account_entry::OverlayAccount;
 use crate::{hash::KECCAK_EMPTY, parameters::staking::*};
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, DepositInfo, StakingVoteInfo};
+use primitives::{Account, DepositInfo, SponsorInfo, StakingVoteInfo};
 
 #[test]
 fn test_overlay_account_create() {
@@ -21,8 +21,7 @@ fn test_overlay_account_create() {
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
         admin: Address::zero(),
-        sponsor: Address::zero(),
-        sponsor_balance: 0.into(),
+        sponsor_info: Default::default(),
     };
     // test new from account 1
     let overlay_account = OverlayAccount::new(&address, account, 0);
@@ -38,12 +37,17 @@ fn test_overlay_account_create() {
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
     assert_eq!(overlay_account.reset_storage(), false);
     assert_eq!(*overlay_account.admin(), Address::zero());
-    assert_eq!(*overlay_account.sponsor(), Address::zero());
-    assert_eq!(*overlay_account.sponsor_balance(), U256::from(0));
+    assert_eq!(*overlay_account.sponsor_info(), Default::default());
 
     let address = Address::random();
     let admin = Address::random();
-    let sponsor = Address::random();
+    let sponsor_info = SponsorInfo {
+        sponsor_for_gas: Address::random(),
+        sponsor_for_collateral: Address::random(),
+        sponsor_balance_for_gas: U256::from(123),
+        sponsor_balance_for_collateral: U256::from(124),
+        sponsor_gas_bound: U256::from(2),
+    };
     let account = Account {
         address,
         balance: 101.into(),
@@ -55,8 +59,7 @@ fn test_overlay_account_create() {
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
         admin,
-        sponsor,
-        sponsor_balance: U256::from(123),
+        sponsor_info: sponsor_info.clone(),
     };
 
     // test new from account 2
@@ -76,8 +79,7 @@ fn test_overlay_account_create() {
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
     assert_eq!(overlay_account.reset_storage(), false);
     assert_eq!(*overlay_account.admin(), admin);
-    assert_eq!(*overlay_account.sponsor(), sponsor);
-    assert_eq!(*overlay_account.sponsor_balance(), U256::from(123));
+    assert_eq!(*overlay_account.sponsor_info(), sponsor_info);
 
     // test new basic
     let overlay_account =
@@ -96,8 +98,7 @@ fn test_overlay_account_create() {
     assert_eq!(overlay_account.is_contract(), false);
     assert_eq!(overlay_account.is_basic(), true);
     assert_eq!(*overlay_account.admin(), Address::zero());
-    assert_eq!(*overlay_account.sponsor(), Address::zero());
-    assert_eq!(*overlay_account.sponsor_balance(), U256::from(0));
+    assert_eq!(*overlay_account.sponsor_info(), Default::default());
 
     // test new contract
     let mut overlay_account =
@@ -115,8 +116,7 @@ fn test_overlay_account_create() {
     assert_eq!(overlay_account.reset_storage(), true);
     assert_eq!(overlay_account.is_contract(), true);
     assert_eq!(*overlay_account.admin(), Address::zero());
-    assert_eq!(*overlay_account.sponsor(), Address::zero());
-    assert_eq!(*overlay_account.sponsor_balance(), U256::from(0));
+    assert_eq!(*overlay_account.sponsor_info(), Default::default());
     overlay_account.inc_nonce();
     assert_eq!(*overlay_account.nonce(), 1235.into());
 
@@ -141,14 +141,12 @@ fn test_overlay_account_create() {
     assert_eq!(overlay_account.reset_storage(), true);
     assert_eq!(overlay_account.is_contract(), true);
     assert_eq!(*overlay_account.admin(), admin);
-    assert_eq!(*overlay_account.sponsor(), Address::zero());
-    assert_eq!(*overlay_account.sponsor_balance(), U256::from(0));
+    assert_eq!(*overlay_account.sponsor_info(), Default::default());
 }
 
 #[test]
 fn test_deposit_and_withdraw() {
     let address = Address::random();
-    let sponsor = Address::random();
     let admin = Address::random();
     let account = Account {
         address,
@@ -161,8 +159,7 @@ fn test_deposit_and_withdraw() {
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
         admin,
-        sponsor,
-        sponsor_balance: 0.into(),
+        sponsor_info: Default::default(),
     };
     let interest_rate_per_block =
         *INITIAL_ANNUAL_INTEREST_RATE / U256::from(BLOCKS_PER_YEAR);
@@ -440,7 +437,6 @@ fn check_ordered_feature(staking_vote_list: &Vec<StakingVoteInfo>) {
 #[test]
 fn test_vote_lock() {
     let address = Address::random();
-    let sponsor = Address::random();
     let admin = Address::random();
     let mut account = Account {
         address,
@@ -453,8 +449,7 @@ fn test_vote_lock() {
         deposit_list: Vec::new(),
         staking_vote_list: Vec::new(),
         admin,
-        sponsor,
-        sponsor_balance: 0.into(),
+        sponsor_info: Default::default(),
     };
     account.deposit_list.push(DepositInfo {
         amount: 10000000.into(),
@@ -591,8 +586,14 @@ fn test_vote_lock() {
 #[test]
 fn test_clone_overwrite() {
     let address = Address::random();
-    let sponsor = Address::random();
     let admin = Address::random();
+    let sponsor_info = SponsorInfo {
+        sponsor_for_gas: Address::random(),
+        sponsor_for_collateral: Address::random(),
+        sponsor_balance_for_gas: U256::from(123),
+        sponsor_balance_for_collateral: U256::from(124),
+        sponsor_gas_bound: U256::from(2),
+    };
     let account1 = Account {
         address,
         balance: 1000.into(),
@@ -611,12 +612,17 @@ fn test_clone_overwrite() {
             unlock_time: 335,
         }],
         admin,
-        sponsor,
-        sponsor_balance: 233.into(),
+        sponsor_info,
     };
 
-    let sponsor = Address::random();
     let admin = Address::random();
+    let sponsor_info = SponsorInfo {
+        sponsor_for_gas: Address::random(),
+        sponsor_for_collateral: Address::random(),
+        sponsor_balance_for_gas: U256::from(1233),
+        sponsor_balance_for_collateral: U256::from(1244),
+        sponsor_gas_bound: U256::from(23),
+    };
     let account2 = Account {
         address,
         balance: 1001.into(),
@@ -635,8 +641,7 @@ fn test_clone_overwrite() {
             unlock_time: 338,
         }],
         admin,
-        sponsor,
-        sponsor_balance: 456.into(),
+        sponsor_info,
     };
 
     let mut overlay_account1 =

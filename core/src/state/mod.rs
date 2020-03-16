@@ -197,8 +197,8 @@ impl State {
         for (addr, inc) in &collateral_for_storage_inc {
             let delta = U256::from(*inc) * *COLLATERAL_PER_STORAGE_KEY;
             if self.is_contract(addr) {
-                assert!(!self.sponsor(addr)?.is_zero());
-                let sponsor_balance = self.sponsor_balance(addr)?;
+                let sponsor_balance =
+                    self.sponsor_balance_for_collateral(addr)?;
                 // sponsor_balance is not enough to cover storage incremental.
                 if delta > sponsor_balance {
                     return Ok(CollateralCheckResult::NotEnoughBalance {
@@ -361,19 +361,50 @@ impl State {
             .unwrap_or(false)
     }
 
-    pub fn sponsor(&self, address: &Address) -> DbResult<Address> {
-        self.require(address, false).map(|x| *x.sponsor())
+    pub fn sponsor_for_gas(&self, address: &Address) -> DbResult<Address> {
+        self.require(address, false)
+            .map(|acc| acc.sponsor_info().sponsor_for_gas)
     }
 
-    pub fn set_sponsor(
+    pub fn sponsor_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<Address> {
+        self.require(address, false)
+            .map(|acc| acc.sponsor_info().sponsor_for_collateral)
+    }
+
+    pub fn set_sponsor_for_gas(
+        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+        upper_bound: &U256,
+    ) -> DbResult<()>
+    {
+        self.require(address, false).map(|mut x| {
+            x.set_sponsor_for_gas(sponsor, sponsor_balance, upper_bound)
+        })
+    }
+
+    pub fn set_sponsor_for_collateral(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
     ) -> DbResult<()> {
         self.require(address, false)
-            .map(|mut x| x.set_sponsor(*sponsor, *sponsor_balance))
+            .map(|mut x| x.set_sponsor_for_collateral(sponsor, sponsor_balance))
     }
 
-    pub fn sponsor_balance(&self, address: &Address) -> DbResult<U256> {
-        self.require(address, false).map(|x| *x.sponsor_balance())
+    pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
+        self.require(address, false)
+            .map(|acc| acc.sponsor_info().sponsor_gas_bound)
+    }
+
+    pub fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
+        self.require(address, false)
+            .map(|acc| acc.sponsor_info().sponsor_balance_for_gas)
+    }
+
+    pub fn sponsor_balance_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        self.require(address, false)
+            .map(|acc| acc.sponsor_info().sponsor_balance_for_collateral)
     }
 
     pub fn set_admin(
@@ -385,18 +416,32 @@ impl State {
             .map(|mut x| x.set_admin(requester, admin))
     }
 
-    pub fn sub_sponsor_balance(
+    pub fn sub_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         self.require(address, false)
-            .map(|mut x| x.sub_sponsor_balance(by))
+            .map(|mut x| x.sub_sponsor_balance_for_gas(by))
     }
 
-    pub fn add_sponsor_balance(
+    pub fn add_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         self.require(address, false)
-            .map(|mut x| x.add_sponsor_balance(by))
+            .map(|mut x| x.add_sponsor_balance_for_gas(by))
+    }
+
+    pub fn sub_sponsor_balance_for_collateral(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.require(address, false)
+            .map(|mut x| x.sub_sponsor_balance_for_collateral(by))
+    }
+
+    pub fn add_sponsor_balance_for_collateral(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.require(address, false)
+            .map(|mut x| x.add_sponsor_balance_for_collateral(by))
     }
 
     pub fn check_commission_privilege(

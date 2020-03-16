@@ -9,9 +9,10 @@ use crate::rpc::{
         Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, Status as RpcStatus, SyncGraphStates,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
+        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+        U64 as RpcU64,
     },
 };
 use cfx_types::{Public, H160, H256, U256};
@@ -123,9 +124,9 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    fn sponsor(
+    fn sponsor_info(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160> {
+    ) -> BoxFuture<RpcSponsorInfo> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -143,37 +144,9 @@ impl RpcImpl {
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            Ok(account
-                .map(|account| account.sponsor.into())
-                .unwrap_or_default())
-        };
-
-        Box::new(fut.boxed().compat())
-    }
-
-    fn sponsor_balance(
-        &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcU256> {
-        let address: H160 = address.into();
-        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
-
-        info!(
-            "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
-            address, epoch
-        );
-
-        // clone `self.light` to avoid lifetime issues due to capturing `self`
-        let light = self.light.clone();
-
-        let fut = async move {
-            let account = light
-                .get_account(epoch, address)
-                .await
-                .map_err(RpcError::invalid_params)?;
-
-            Ok(account
-                .map(|account| account.sponsor_balance.into())
-                .unwrap_or_default())
+            Ok(RpcSponsorInfo::new(
+                account.map_or(Default::default(), |acc| acc.sponsor_info),
+            ))
         };
 
         Box::new(fut.boxed().compat())
@@ -482,8 +455,7 @@ impl Cfx for CfxHandler {
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-            fn sponsor(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-            fn sponsor_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+            fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;

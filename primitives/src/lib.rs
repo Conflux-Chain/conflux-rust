@@ -26,7 +26,10 @@ pub mod transaction;
 pub mod transaction_index;
 
 pub use crate::{
-    account::{Account, CodeInfo, DepositInfo, StakingVoteInfo, StorageValue},
+    account::{
+        Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo,
+        StorageValue,
+    },
     block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},

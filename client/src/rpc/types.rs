@@ -24,7 +24,7 @@ mod uint;
 pub mod pubsub;
 
 pub use self::{
-    account::Account,
+    account::{Account, SponsorInfo},
     bft_states::BFTStates,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
