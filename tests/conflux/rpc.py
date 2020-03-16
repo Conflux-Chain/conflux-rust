@@ -231,7 +231,7 @@ class RpcClient:
     def get_tx(self, tx_hash: str) -> dict:
         return self.node.cfx_getTransactionByHash(tx_hash)
 
-    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0):
+    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=0):
         if sender is None:
             sender = self.GENESIS_ADDR
             if priv_key is None:
@@ -247,14 +247,14 @@ class RpcClient:
             storage_limit = 2 ** 256 - 1
 
         action = eth_utils.decode_hex(receiver)
-        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
         
         if sign:
             return tx.sign(priv_key)
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=None, epoch_height = 0):
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=None, epoch_height=0, chain_id=0):
         if sender is None:
             sender = self.GENESIS_ADDR
 
@@ -269,7 +269,7 @@ class RpcClient:
 
         action = eth_utils.decode_hex(receiver)
         data = eth_utils.decode_hex(data_hex)
-        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height)
+        tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
 
         return tx.sign(priv_key)
 

@@ -173,10 +173,6 @@ build_config! {
         (tx_pool_min_tx_gas_price, (u64), 1)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)
-        // The chain_id of conflux network
-        // Some(0) for testnet
-        // None for not verify chain_id
-        (chain_id, (Option<u64>), None)
 
         // Storage Section.
         (block_cache_gc_period_ms, (u64), 5_000)
@@ -392,7 +388,7 @@ impl Configuration {
     }
 
     pub fn verification_config(&self) -> VerificationConfig {
-        VerificationConfig::new(self.is_test_mode(), self.chain_id())
+        VerificationConfig::new(self.is_test_mode())
     }
 
     pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {
@@ -590,8 +586,6 @@ impl Configuration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
         }
     }
-
-    pub fn chain_id(&self) -> Option<u64> { self.raw_conf.chain_id }
 
     pub fn is_test_mode(&self) -> bool {
         match self.raw_conf.mode.as_ref().map(|s| s.as_str()) {

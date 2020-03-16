@@ -280,6 +280,13 @@ impl TransactionPool {
             }
         }
 
+        // check chain_id
+        let best_chain_id = { self.consensus_best_info.lock().best_chain_id() };
+        if best_chain_id != transaction.chain_id {
+            warn!("Transaction discarded due to chain_id not match: best chain_id {} tx chain_id {}", best_chain_id, transaction.chain_id);
+            return Err(format!("transaction chain_id {} is not match, the current best chain_id {} expected!", transaction.chain_id, best_chain_id));
+        }
+
         // check transaction gas limit
         if transaction.gas > DEFAULT_MAX_TRANSACTION_GAS_LIMIT.into() {
             warn!(

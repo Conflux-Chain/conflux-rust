@@ -399,12 +399,15 @@ impl RpcImpl {
         }
 
         let epoch_height = consensus_graph.best_epoch_number();
-        let tx = tx.sign_with(epoch_height, password).map_err(|e| {
-            RpcError::invalid_params(format!(
-                "failed to send transaction: {:?}",
-                e
-            ))
-        })?;
+        let chain_id = consensus_graph.best_chain_id();
+        let tx =
+            tx.sign_with(epoch_height, chain_id, password)
+                .map_err(|e| {
+                    RpcError::invalid_params(format!(
+                        "failed to send transaction: {:?}",
+                        e
+                    ))
+                })?;
 
         Ok(tx)
     }
@@ -741,8 +744,9 @@ impl RpcImpl {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
         let best_epoch_height = consensus_graph.best_epoch_number();
-        let signed_tx =
-            sign_call(best_epoch_height, request).map_err(|err| {
+        let chain_id = consensus_graph.best_chain_id();
+        let signed_tx = sign_call(best_epoch_height, chain_id, request)
+            .map_err(|err| {
                 RpcError::invalid_params(format!("Sign tx error: {:?}", err))
             })?;
         trace!("call tx {:?}", signed_tx);
