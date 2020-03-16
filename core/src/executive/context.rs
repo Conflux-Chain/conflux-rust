@@ -8,7 +8,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
-    state::{CleanupMode, State, Substate},
+    state::{State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
@@ -395,7 +395,7 @@ impl<'a> ContextTrait for Context<'a> {
             self.state.sub_balance(
                 &address,
                 &balance,
-                &mut CleanupMode::NoEmpty,
+                &mut self.substate.to_cleanup_mode(&self.spec),
             )?;
         } else {
             trace!(target: "context", "Suiciding {} -> {} (xfer: {})", address, refund_address, balance);

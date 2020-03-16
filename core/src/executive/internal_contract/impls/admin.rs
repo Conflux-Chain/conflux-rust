@@ -5,6 +5,7 @@
 use super::super::InternalContractTrait;
 use crate::{
     bytes::Bytes,
+    parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
     state::{State, Substate},
     vm::{self, ActionParams, Spec},
 };
@@ -38,6 +39,57 @@ impl AdminControl {
             &new_admin_address,
         )?)
     }
+
+    fn destroy(
+        &self, input: &[u8], params: &ActionParams, spec: &Spec,
+        state: &mut State, substate: &mut Substate,
+    ) -> vm::Result<()>
+    {
+        if input.len() != 64 {
+            return Err(vm::Error::InternalContract("invalid data"));
+        }
+
+        let contract_address = Address::from_slice(&input[12..32]);
+        let refund_address = Address::from_slice(&input[44..64]);
+        let admin = state.admin(&contract_address)?;
+        if admin != params.original_sender {
+            return Err(vm::Error::InternalContract(
+                "only admin is allowed to destroy contract",
+            ));
+        }
+
+        // TODO: maybe we should fail if collateral_for_storage is not zero.
+
+        let balance = state.balance(&contract_address)?;
+        let code_size = state
+            .code_size(&contract_address)?
+            .expect("code size exists");
+        let code_owner = state
+            .code_owner(&contract_address)?
+            .expect("code owner exists");
+        let collateral_for_code = U256::from(code_size)
+            * U256::from(CONFLUX_TOKEN)
+            / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
+        state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
+        if contract_address == refund_address {
+            state.sub_balance(
+                &contract_address,
+                &balance,
+                &mut substate.to_cleanup_mode(spec),
+            )?;
+        } else {
+            state.transfer_balance(
+                &contract_address,
+                &refund_address,
+                &balance,
+                substate.to_cleanup_mode(spec),
+            )?;
+        }
+
+        substate.suicides.insert(contract_address);
+
+        Ok(())
+    }
 }
 
 impl InternalContractTrait for AdminControl {
@@ -49,8 +101,8 @@ impl InternalContractTrait for AdminControl {
 
     /// execute this internal contract on the given parameters.
     fn execute(
-        &self, params: &ActionParams, _spec: &Spec, state: &mut State,
-        _substate: &mut Substate,
+        &self, params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate,
     ) -> vm::Result<()>
     {
         let data = if let Some(ref d) = params.data {
@@ -73,10 +125,15 @@ impl InternalContractTrait for AdminControl {
             data[0], data[1], data[2], data[3]
         );
         if data[0..4] == [0x73, 0xe8, 0x0c, 0xba] {
-            // The first 4 bytes of keccak('set_admin(address,address') is
-            // 0x73e80cba 4 bytes `Method ID` + 20 bytes
-            // `contract_address` + 20 bytes `new_admin_address`
+            // The first 4 bytes of keccak('set_admin(address,address)') is
+            // 0x73e80cba.
+            // 4 bytes `Method ID` + 32 bytes `contract_address` + 32 bytes
+            // `new_admin_address`
             self.set_admin(&data[4..], params, state)
+        } else if data[0..4] == [0x00, 0xf5, 0x5d, 0x9d] {
+            // The first 4 bytes of keccak('destroy(address)') is 0x00f55d9d.
+            // 4 bytes `Method ID` + 32 bytes `contract_address`
+            self.destroy(&data[4..], params, spec, state, substate)
         } else {
             Ok(())
         }

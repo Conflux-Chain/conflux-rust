@@ -365,6 +365,10 @@ impl State {
         self.require(address, false).map(|x| *x.sponsor())
     }
 
+    pub fn admin(&self, address: &Address) -> DbResult<Address> {
+        self.require(address, false).map(|x| *x.admin())
+    }
+
     pub fn set_sponsor(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
     ) -> DbResult<()> {
