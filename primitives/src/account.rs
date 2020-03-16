@@ -46,6 +46,30 @@ pub struct StorageValue {
 }
 
 #[derive(
+    Clone,
+    Debug,
+    RlpDecodable,
+    RlpEncodable,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+    Default,
+)]
+pub struct SponsorInfo {
+    /// This is the address of the sponsor for gas cost of the contract.
+    pub sponsor_for_gas: Address,
+    /// This is the address of the sponsor for collateral of the contract.
+    pub sponsor_for_collateral: Address,
+    /// This is the upper bound of sponsor gas cost per tx.
+    pub sponsor_gas_bound: U256,
+    /// This is the amount of tokens sponsor for gas cost to the contract.
+    pub sponsor_balance_for_gas: U256,
+    /// This is the amount of tokens sponsor for collateral to the contract.
+    pub sponsor_balance_for_collateral: U256,
+}
+
+#[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
 pub struct Account {
@@ -69,10 +93,8 @@ pub struct Account {
     pub staking_vote_list: Vec<StakingVoteInfo>,
     /// This is the address of the administrator of the contract.
     pub admin: Address,
-    /// This is the address of the sponsor of the contract.
-    pub sponsor: Address,
-    /// This is the amount of tokens sponsor to the contract.
-    pub sponsor_balance: U256,
+    /// This is the sponsor information of the contract.
+    pub sponsor_info: SponsorInfo,
 }
 
 impl Account {
@@ -90,8 +112,7 @@ impl Account {
             deposit_list: Vec::new(),
             staking_vote_list: Vec::new(),
             admin: Address::zero(),
-            sponsor: Address::zero(),
-            sponsor_balance: U256::zero(),
+            sponsor_info: Default::default(),
         }
     }
 }

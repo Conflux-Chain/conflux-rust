@@ -10,7 +10,8 @@ use crate::{
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use primitives::{
-    Account, CodeInfo, DepositInfo, StakingVoteInfo, StorageKey, StorageValue,
+    Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo, StorageKey,
+    StorageValue,
 };
 use rlp::RlpStream;
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
@@ -41,10 +42,8 @@ pub struct OverlayAccount {
     // Administrator of the account
     admin: Address,
 
-    // This is the address of the sponsor of the contract.
-    sponsor: Address,
-    // This is the amount of tokens sponsor to the contract.
-    sponsor_balance: U256,
+    // This is the sponsor information of the contract.
+    sponsor_info: SponsorInfo,
 
     // This is a cache for storage change.
     storage_cache: RefCell<HashMap<H256, H256>>,
@@ -90,8 +89,7 @@ impl OverlayAccount {
             balance: account.balance,
             nonce: account.nonce,
             admin: account.admin,
-            sponsor: account.sponsor,
-            sponsor_balance: account.sponsor_balance,
+            sponsor_info: account.sponsor_info,
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -141,8 +139,7 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: Address::zero(),
-            sponsor: Address::zero(),
-            sponsor_balance: U256::zero(),
+            sponsor_info: Default::default(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -170,8 +167,7 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: Address::zero(),
-            sponsor: Address::zero(),
-            sponsor_balance: U256::zero(),
+            sponsor_info: Default::default(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -201,8 +197,7 @@ impl OverlayAccount {
             balance,
             nonce,
             admin: admin.clone(),
-            sponsor: Address::zero(),
-            sponsor_balance: U256::zero(),
+            sponsor_info: Default::default(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -234,8 +229,7 @@ impl OverlayAccount {
             deposit_list: self.deposit_list.clone(),
             staking_vote_list: self.staking_vote_list.clone(),
             admin: self.admin,
-            sponsor: self.sponsor,
-            sponsor_balance: self.sponsor_balance,
+            sponsor_info: self.sponsor_info.clone(),
         }
     }
 
@@ -245,24 +239,43 @@ impl OverlayAccount {
 
     pub fn balance(&self) -> &U256 { &self.balance }
 
-    pub fn sponsor_balance(&self) -> &U256 { &self.sponsor_balance }
+    pub fn sponsor_info(&self) -> &SponsorInfo { &self.sponsor_info }
 
-    pub fn set_sponsor(&mut self, sponsor: Address, sponsor_balance: U256) {
-        self.sponsor = sponsor;
-        self.sponsor_balance = sponsor_balance;
+    pub fn set_sponsor_for_gas(
+        &mut self, sponsor: &Address, sponsor_balance: &U256,
+        upper_bound: &U256,
+    )
+    {
+        self.sponsor_info.sponsor_for_gas = *sponsor;
+        self.sponsor_info.sponsor_balance_for_gas = *sponsor_balance;
+        self.sponsor_info.sponsor_gas_bound = *upper_bound;
     }
 
-    pub fn sponsor(&self) -> &Address { &self.sponsor }
+    pub fn set_sponsor_for_collateral(
+        &mut self, sponsor: &Address, sponsor_balance: &U256,
+    ) {
+        self.sponsor_info.sponsor_for_collateral = *sponsor;
+        self.sponsor_info.sponsor_balance_for_collateral = *sponsor_balance;
+    }
 
     pub fn admin(&self) -> &Address { &self.admin }
 
-    pub fn sub_sponsor_balance(&mut self, by: &U256) {
-        assert!(self.sponsor_balance >= *by);
-        self.sponsor_balance -= *by;
+    pub fn sub_sponsor_balance_for_gas(&mut self, by: &U256) {
+        assert!(self.sponsor_info.sponsor_balance_for_gas >= *by);
+        self.sponsor_info.sponsor_balance_for_gas -= *by;
     }
 
-    pub fn add_sponsor_balance(&mut self, by: &U256) {
-        self.sponsor_balance += *by;
+    pub fn add_sponsor_balance_for_gas(&mut self, by: &U256) {
+        self.sponsor_info.sponsor_balance_for_gas += *by;
+    }
+
+    pub fn sub_sponsor_balance_for_collateral(&mut self, by: &U256) {
+        assert!(self.sponsor_info.sponsor_balance_for_collateral >= *by);
+        self.sponsor_info.sponsor_balance_for_collateral -= *by;
+    }
+
+    pub fn add_sponsor_balance_for_collateral(&mut self, by: &U256) {
+        self.sponsor_info.sponsor_balance_for_collateral += *by;
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
@@ -516,7 +529,7 @@ impl OverlayAccount {
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {
         if self.is_contract {
-            self.sub_sponsor_balance(by);
+            self.sub_sponsor_balance_for_collateral(by);
         } else {
             self.sub_balance(by);
         }
@@ -526,7 +539,7 @@ impl OverlayAccount {
     pub fn sub_collateral_for_storage(&mut self, by: &U256) {
         assert!(self.collateral_for_storage >= *by);
         if self.is_contract {
-            self.add_sponsor_balance(by);
+            self.add_sponsor_balance_for_collateral(by);
         } else {
             self.add_balance(by);
         }
@@ -560,8 +573,7 @@ impl OverlayAccount {
             balance: self.balance,
             nonce: self.nonce,
             admin: self.admin,
-            sponsor: self.sponsor,
-            sponsor_balance: self.sponsor_balance,
+            sponsor_info: self.sponsor_info.clone(),
             storage_cache: RefCell::new(HashMap::new()),
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
@@ -680,8 +692,7 @@ impl OverlayAccount {
         self.balance = other.balance;
         self.nonce = other.nonce;
         self.admin = other.admin;
-        self.sponsor = other.sponsor;
-        self.sponsor_balance = other.sponsor_balance;
+        self.sponsor_info = other.sponsor_info;
         self.code_hash = other.code_hash;
         self.code_cache = other.code_cache;
         self.code_owner = other.code_owner;

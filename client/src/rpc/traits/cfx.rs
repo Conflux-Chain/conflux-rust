@@ -4,8 +4,9 @@
 
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest, EpochNumber,
-    Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt, Transaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
+    SponsorInfo as RpcSponsorInfo, Transaction, H160 as RpcH160,
+    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::Public;
@@ -54,17 +55,11 @@ pub trait Cfx {
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<RpcH160>;
 
-    /// Returns sponsor of the given contract
-    #[rpc(name = "cfx_getSponsor")]
-    fn sponsor(
+    /// Returns sponsor information of the given contract
+    #[rpc(name = "cfx_getSponsorInfo")]
+    fn sponsor_info(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160>;
-
-    /// Returns sponsor balance of the given contract
-    #[rpc(name = "cfx_getSponsorBalance")]
-    fn sponsor_balance(
-        &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<RpcU256>;
+    ) -> BoxFuture<RpcSponsorInfo>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
