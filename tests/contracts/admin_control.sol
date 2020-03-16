@@ -2,7 +2,7 @@ pragma solidity >=0.4.15;
 contract AdminControl {
     function set_admin(address, address) public {}
 
-    function destroy(address, address) public {}
+    function destroy(address) public {}
 }
 
 contract AdminControlProxy {
@@ -11,8 +11,8 @@ contract AdminControlProxy {
         ac.set_admin(cont, admin);
     }
 
-    function destroy(address cont, address refund_addr) public payable {
+    function destroy(address cont) public payable {
         AdminControl ac = AdminControl(0x6060dE9e1568e69811C4A398F92c3d10949dc891);
-        ac.destroy(cont, refund_addr);
+        ac.destroy(cont);
     }
 }

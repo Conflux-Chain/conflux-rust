@@ -20,10 +20,10 @@ pub use crate::consensus::{
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
+    executive::Executed,
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
-    state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
@@ -68,6 +68,11 @@ pub struct ConsensusConfig {
     pub bench_mode: bool,
     /// The configuration used by inner data
     pub inner_conf: ConsensusInnerConfig,
+    /// The epoch bound for processing a transaction. For a transaction being
+    /// process, the epoch height of its enclosing block must be with in
+    /// [tx.epoch_height - transaction_epoch_bound, tx.epoch_height +
+    /// transaction_epoch_bound]
+    pub transaction_epoch_bound: u64,
 }
 
 #[derive(Debug)]
@@ -166,6 +171,7 @@ impl ConsensusGraph {
             data_man.clone(),
             vm,
             inner.clone(),
+            conf.transaction_epoch_bound,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
@@ -674,13 +680,6 @@ impl ConsensusGraph {
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
-    /// Estimate the gas of a transaction
-    pub fn estimate_gas(
-        &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<U256, String> {
-        self.call_virtual(tx, epoch).map(|(_, gas_used)| gas_used)
-    }
-
     pub fn logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
@@ -836,7 +835,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<(Vec<u8>, U256), String> {
+    ) -> Result<Executed, String> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
@@ -932,32 +931,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
             }
 
             *self.latest_inserted_block.lock() = *hash;
-            if inner.inner_conf.enable_state_expose {
-                if let Some(arena_index) = inner.hash_to_arena_indices.get(hash)
-                {
-                    let local_info = self
-                        .data_man
-                        .local_block_info_from_db(hash)
-                        .expect("local block info must exist in db");
-                    let era_block = inner.arena[*arena_index].era_block();
-                    let era_block_hash = if era_block != NULL {
-                        inner.arena[era_block].hash
-                    } else {
-                        Default::default()
-                    };
-                    STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
-                        ConsensusGraphBlockState {
-                            block_hash: *hash,
-                            best_block_hash: inner.best_block_hash(),
-                            block_status: local_info.get_status(),
-                            past_era_weight: inner.arena[*arena_index]
-                                .past_era_weight(),
-                            era_block_hash,
-                            adaptive: inner.arena[*arena_index].adaptive(),
-                        },
-                    )
-                }
-            }
         }
 
         // Skip updating best info during recovery

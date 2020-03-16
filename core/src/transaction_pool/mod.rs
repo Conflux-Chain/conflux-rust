@@ -19,6 +19,7 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
     executive,
+    parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     statedb::{Result as StateDbResult, StateDb},
     storage::{Result as StorageResult, StateIndex, StorageManagerTrait},
     vm,
@@ -69,6 +70,8 @@ pub struct TxPoolConfig {
     pub max_block_gas: u64,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
+
+    pub transaction_epoch_bound: u64,
 }
 
 impl Default for TxPoolConfig {
@@ -80,6 +83,8 @@ impl Default for TxPoolConfig {
             max_block_gas: DEFAULT_MAX_BLOCK_GAS_LIMIT,
             tx_weight_scaling: 1,
             tx_weight_exp: 1,
+
+            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         }
     }
 }
@@ -258,6 +263,23 @@ impl TransactionPool {
     fn verify_transaction(
         &self, transaction: &TransactionWithSignature,
     ) -> Result<(), String> {
+        // Check the epoch height is in bound. Because this is such a loose
+        // bound, we can check it here as if it will not change at all
+        // during its life time.
+        let best_height = { self.consensus_best_info.lock().best_epoch_number };
+        // If it is zero, it might be possible that it is not initialized
+        if best_height != 0 {
+            if (best_height + self.config.transaction_epoch_bound
+                < transaction.epoch_height)
+                || (transaction.epoch_height
+                    + self.config.transaction_epoch_bound
+                    < best_height)
+            {
+                warn!("Transaction discarded due to epoch height out of the bound: best height {} tx epoch height {}", best_height, transaction.epoch_height);
+                return Err(format!("transaction epoch height {} is out side the range of the current pivot height ({}) bound, only {} drift allowed!", transaction.epoch_height, best_height, self.config.transaction_epoch_bound));
+            }
+        }
+
         // check transaction gas limit
         if transaction.gas > DEFAULT_MAX_TRANSACTION_GAS_LIMIT.into() {
             warn!(
@@ -371,9 +393,25 @@ impl TransactionPool {
 
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-    ) -> Vec<Arc<SignedTransaction>> {
+        best_epoch_height: u64,
+    ) -> Vec<Arc<SignedTransaction>>
+    {
         let mut inner = self.inner.write();
-        inner.pack_transactions(num_txs, block_gas_limit, block_size_limit)
+        let height_lower_bound =
+            if best_epoch_height > self.config.transaction_epoch_bound {
+                best_epoch_height - self.config.transaction_epoch_bound
+            } else {
+                0
+            };
+        let height_upper_bound =
+            best_epoch_height + self.config.transaction_epoch_bound;
+        inner.pack_transactions(
+            num_txs,
+            block_gas_limit,
+            block_size_limit,
+            height_lower_bound,
+            height_upper_bound,
+        )
     }
 
     pub fn notify_modified_accounts(
@@ -476,8 +514,12 @@ impl TransactionPool {
     {
         let consensus_best_info = self.consensus_best_info.lock();
 
-        let transactions_from_pool =
-            self.pack_transactions(num_txs, block_gas_limit, block_size_limit);
+        let transactions_from_pool = self.pack_transactions(
+            num_txs,
+            block_gas_limit,
+            block_size_limit,
+            consensus_best_info.best_epoch_number,
+        );
 
         let transactions = [
             additional_transactions.as_slice(),

@@ -50,7 +50,7 @@ impl Receipt {
         let mut address = None;
         if Action::Create == transaction.action && receipt.outcome_status == 0 {
             let (created_address, _) = contract_address(
-                CreateContractAddress::FromSenderAndNonce,
+                CreateContractAddress::FromSenderNonceAndCodeHash,
                 &transaction.sender,
                 &transaction.nonce,
                 &transaction.data,

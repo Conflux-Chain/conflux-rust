@@ -18,14 +18,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate ethcore_accounts;
+extern crate cfxcore_accounts;
 
 use super::helpers::{password_from_file, password_prompt};
-use clap;
-use client::accounts::{account_provider, keys_dir, keys_path};
-use ethstore::{
+use cfxstore::{
     accounts_dir::RootDiskDirectory, import_account, import_accounts,
 };
+use clap;
+use client::accounts::{account_provider, keys_dir, keys_path};
 use std::path::PathBuf;
 
 #[derive(Debug, PartialEq)]

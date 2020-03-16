@@ -3,7 +3,10 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
-    parameters::WORKER_COMPUTATION_PARALLELISM,
+    parameters::{
+        consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
+        WORKER_COMPUTATION_PARALLELISM,
+    },
     pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
@@ -168,6 +171,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */
+            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         },
         vm.clone(),
         txpool.clone(),

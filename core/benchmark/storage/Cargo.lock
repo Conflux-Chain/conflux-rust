@@ -545,11 +545,11 @@ dependencies = [
  "cfx-bytes",
  "cfx-stratum",
  "cfx-types",
+ "cfxkey",
  "channel",
  "clap",
  "db",
  "error-chain",
- "ethkey 0.3.0",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.4",
@@ -626,6 +626,26 @@ dependencies = [
  "toml 0.4.10",
  "unexpected 0.1.0 (git+https://github.com/Conflux-Chain/conflux-parity-deps.git)",
  "zip",
+]
+
+[[package]]
+name = "cfxkey"
+version = "0.3.0"
+dependencies = [
+ "edit-distance",
+ "ethereum-types 0.8.0",
+ "lazy_static",
+ "log 0.4.8",
+ "parity-crypto 0.4.2",
+ "parity-secp256k1",
+ "parity-wordlist",
+ "quick-error",
+ "rand 0.7.3",
+ "rustc-hex 1.0.0",
+ "serde",
+ "serde_derive",
+ "tiny-keccak",
+ "zeroize 1.1.0",
 ]
 
 [[package]]
@@ -711,7 +731,7 @@ source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd
 dependencies = [
  "ethereum-types 0.4.2",
  "ethjson",
- "ethkey 0.3.0 (git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0)",
+ "ethkey",
  "heapsize",
  "keccak-hash 0.1.2",
  "parity-bytes",
@@ -1297,7 +1317,7 @@ dependencies = [
  "ethcore-miner",
  "ethereum-types 0.4.2",
  "ethjson",
- "ethkey 0.3.0 (git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0)",
+ "ethkey",
  "evm",
  "hash-db",
  "heapsize",
@@ -1510,26 +1530,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "tiny-keccak",
-]
-
-[[package]]
-name = "ethkey"
-version = "0.3.0"
-dependencies = [
- "edit-distance",
- "ethereum-types 0.8.0",
- "lazy_static",
- "log 0.4.8",
- "parity-crypto 0.4.2",
- "parity-secp256k1",
- "parity-wordlist",
- "quick-error",
- "rand 0.7.3",
- "rustc-hex 1.0.0",
- "serde",
- "serde_derive",
- "tiny-keccak",
- "zeroize 1.1.0",
 ]
 
 [[package]]
@@ -2616,10 +2616,10 @@ dependencies = [
  "byteorder",
  "bytes 0.5.4",
  "cfx-types",
+ "cfxkey",
  "curve25519-dalek",
  "digest 0.8.1",
  "ed25519-dalek",
- "ethkey 0.3.0",
  "hex",
  "hmac 0.7.1",
  "lazy_static",
@@ -2731,10 +2731,11 @@ dependencies = [
  "bytes 0.4.12",
  "bytes 0.5.4",
  "cfx-types",
+ "cfxkey",
  "chrono",
- "ethkey 0.3.0",
  "hex",
  "itertools 0.8.2",
+ "keccak-hash 0.4.1",
  "lazy_static",
  "libra-canonical-serialization",
  "libra-crypto",
@@ -3233,10 +3234,10 @@ dependencies = [
  "bytes 0.4.12",
  "cfx-bytes",
  "cfx-types",
+ "cfxkey",
  "enum-map",
  "enum-map-derive",
  "error-chain",
- "ethkey 0.3.0",
  "igd",
  "io",
  "ipnetwork",
@@ -3959,7 +3960,7 @@ dependencies = [
  "byteorder",
  "cfx-bytes",
  "cfx-types",
- "ethkey 0.3.0",
+ "cfxkey",
  "fixed-hash 0.5.2",
  "keccak-hash 0.4.1",
  "lazy_static",
@@ -4770,8 +4771,8 @@ dependencies = [
 name = "secret-store"
 version = "0.1.0"
 dependencies = [
+ "cfxkey",
  "ethereum-types 0.8.0",
- "ethkey 0.3.0",
  "keccak-hash 0.4.1",
  "parking_lot 0.10.0",
  "primitives",
@@ -5153,7 +5154,7 @@ dependencies = [
  "ethcore",
  "ethereum-types 0.4.2",
  "ethjson",
- "ethkey 0.3.0 (git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0)",
+ "ethkey",
  "heapsize",
  "kvdb 0.4.0",
  "lazy_static",

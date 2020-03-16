@@ -20,10 +20,11 @@ class UnsignedTransaction(rlp.Serializable):
         ('action', address),
         ('value', big_endian_int),
         ('storage_limit', big_endian_int),
+        ('epoch_height', big_endian_int),
         ('data', binary),
     ]
 
-    def __init__(self, nonce, gas_price, gas, action, value, data, storage_limit):
+    def __init__(self, nonce, gas_price, gas, action, value, data, storage_limit, epoch_height):
         if gas_price >= TT256 or \
                 value >= TT256 or nonce >= TT256:
             raise InvalidTransaction("Values way too high!")
@@ -36,6 +37,7 @@ class UnsignedTransaction(rlp.Serializable):
             action=action,
             data=data,
             storage_limit=storage_limit,
+            epoch_height=epoch_height
         )
 
     def sign(self, key):

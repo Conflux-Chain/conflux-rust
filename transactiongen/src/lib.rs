@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 extern crate cfx_bytes as bytes;
+extern crate cfxkey as keylib;
 extern crate core;
-extern crate ethkey as keylib;
 extern crate network;
 extern crate parking_lot;
 extern crate primitives;
@@ -220,6 +220,7 @@ impl TransactionGenerator {
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: U256::MAX,
+                epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
             };
 
@@ -304,7 +305,7 @@ impl DirectTransactionGenerator {
         let address_by_index = vec![start_address.clone()];
 
         let erc20_address = contract_address(
-            CreateContractAddress::FromSenderAndNonce,
+            CreateContractAddress::FromSenderNonceAndCodeHash,
             &contract_creator,
             &0.into(),
             &[],
@@ -402,6 +403,10 @@ impl DirectTransactionGenerator {
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: U256::MAX,
+                // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
+                // large value to avoid FIXME: this sloppy zero
+                // becomes an issue in the experiments.
+                epoch_height: 0,
                 data: vec![0u8; 128],
             };
             let signed_transaction = tx.sign(sender_kp.secret());
@@ -488,6 +493,10 @@ impl DirectTransactionGenerator {
                 value: 0.into(),
                 action: Action::Call(self.erc20_address.clone()),
                 storage_limit: U256::MAX,
+                // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
+                // large value to avoid FIXME: this sloppy zero
+                // becomes an issue in the experiments.
+                epoch_height: 0,
                 data: tx_data,
             };
             let signed_transaction = tx.sign(sender_kp.secret());

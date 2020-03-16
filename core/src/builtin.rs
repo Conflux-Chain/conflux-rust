@@ -31,7 +31,7 @@ use parity_crypto::digest;
 
 use crate::bytes::BytesRef;
 use cfx_types::{H256, U256};
-use ethkey::{public_to_address, Address};
+use cfxkey::{public_to_address, Address};
 use keylib::{recover as ec_recover, Signature};
 
 /// Execution error.

@@ -13,9 +13,9 @@ use cfxcore::{
     vm::{Env, Spec},
     vm_factory::VmFactory,
 };
+use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
-use ethkey::{Generator, KeyPair, Random};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
 use std::{sync::Arc, time::Duration};
@@ -40,6 +40,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         value: 1.into(),
         action: Action::Call(receiver_kp.address()),
         storage_limit: U256::MAX,
+        epoch_height: 0,
         data: Bytes::new(),
     };
     let tx = tx.sign(kp.secret());

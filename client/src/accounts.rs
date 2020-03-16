@@ -3,9 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use app_dirs::{get_app_root, AppDataType, AppInfo};
+use cfxcore_accounts::{AccountProvider, AccountProviderSettings};
+use cfxstore::{accounts_dir::RootDiskDirectory, CfxStore};
 use dir::helpers::replace_home;
-use ethcore_accounts::{AccountProvider, AccountProviderSettings};
-use ethstore::{accounts_dir::RootDiskDirectory, EthStore};
 use std::path::PathBuf;
 
 pub fn account_provider(
@@ -31,10 +31,10 @@ pub fn keys_dir(path: String) -> Result<RootDiskDirectory, String> {
 
 fn secret_store(
     dir: Box<RootDiskDirectory>, iterations: Option<u32>,
-) -> Result<EthStore, String> {
+) -> Result<CfxStore, String> {
     match iterations {
-        Some(i) => EthStore::open_with_iterations(dir, i),
-        None => EthStore::open(dir),
+        Some(i) => CfxStore::open_with_iterations(dir, i),
+        None => CfxStore::open(dir),
     }
     .map_err(|e| format!("Could not open keys store: {}", e))
 }

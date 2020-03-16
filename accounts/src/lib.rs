@@ -32,17 +32,17 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ethkey::{Address, Generator, Message, Password, Public, Random, Secret};
-use ethstore::{
-    accounts_dir::MemoryDirectory, random_string, EthMultiStore, EthStore,
+use cfxkey::{Address, Generator, Message, Password, Public, Random, Secret};
+use cfxstore::{
+    accounts_dir::MemoryDirectory, random_string, CfxMultiStore, CfxStore,
     OpaqueSecret, SecretStore, SecretVaultRef, SimpleSecretStore,
     StoreAccountRef,
 };
 use log::warn;
 use parking_lot::RwLock;
 
-pub use ethkey::Signature;
-pub use ethstore::{Derivation, Error, IndexDerivation, KeyFile};
+pub use cfxkey::Signature;
+pub use cfxstore::{Derivation, Error, IndexDerivation, KeyFile};
 
 pub use self::{account_data::AccountMeta, error::SignError};
 
@@ -69,7 +69,7 @@ pub struct AccountProvider {
     /// Accounts on disk
     sstore: Box<dyn SecretStore>,
     /// Accounts unlocked with rolling tokens
-    transient_sstore: EthMultiStore,
+    transient_sstore: CfxMultiStore,
     /// When unlocking account permanently we additionally keep a raw secret in
     /// memory to increase the performance of transaction signing.
     unlock_keep_secret: bool,
@@ -77,8 +77,8 @@ pub struct AccountProvider {
     blacklisted_accounts: Vec<Address>,
 }
 
-fn transient_sstore() -> EthMultiStore {
-    EthMultiStore::open(Box::new(MemoryDirectory::default()))
+fn transient_sstore() -> CfxMultiStore {
+    CfxMultiStore::open(Box::new(MemoryDirectory::default()))
         .expect("MemoryDirectory load always succeeds; qed")
 }
 
@@ -121,7 +121,7 @@ impl AccountProvider {
             unlocked: RwLock::new(HashMap::new()),
             address_book: RwLock::new(AddressBook::transient()),
             sstore: Box::new(
-                EthStore::open(Box::new(MemoryDirectory::default()))
+                CfxStore::open(Box::new(MemoryDirectory::default()))
                     .expect("MemoryDirectory load always succeeds; qed"),
             ),
             transient_sstore: transient_sstore(),
@@ -683,9 +683,9 @@ impl AccountProvider {
 #[cfg(test)]
 mod tests {
     use super::{AccountProvider, Unlock};
+    use cfxkey::{Address, Generator, Random};
+    use cfxstore::{Derivation, StoreAccountRef};
     use ethereum_types::H256;
-    use ethkey::{Address, Generator, Random};
-    use ethstore::{Derivation, StoreAccountRef};
     use std::time::{Duration, Instant};
 
     #[test]

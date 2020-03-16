@@ -21,6 +21,8 @@ pub mod consensus {
     pub const NULLU64: u64 = !0;
 
     pub const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
+
+    pub const TRANSACTION_DEFAULT_EPOCH_BOUND: u64 = 100000;
 }
 
 pub mod consensus_internal {

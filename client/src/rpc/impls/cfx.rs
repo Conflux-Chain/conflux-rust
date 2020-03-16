@@ -5,6 +5,7 @@
 use delegate::delegate;
 
 use crate::rpc::{
+    helpers::errors::execution_error,
     impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
     types::{
@@ -21,8 +22,9 @@ use blockgen::BlockGenerator;
 use cfx_types::{Public, H160, H256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, state_exposer::STATE_EXPOSER,
-    test_context::*, ConsensusGraph, PeerInfo, SharedConsensusGraph,
+    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
+    state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{
@@ -35,7 +37,10 @@ use network::{
     throttling, SessionDetails, UpdateNodeOperation,
 };
 use parking_lot::Mutex;
-use primitives::{filter::Filter, SignedTransaction, TransactionWithSignature};
+use primitives::{
+    filter::Filter, transaction::Action::Call, SignedTransaction,
+    TransactionWithSignature,
+};
 use rlp::Rlp;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
@@ -339,6 +344,12 @@ impl RpcImpl {
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
+        if let Call(H160(r)) = &tx.transaction.action {
+            let type_bits = r[0] & 0xf0;
+            if !(type_bits == 0x0 || type_bits == 0x10 || type_bits == 0x80) {
+                return Err(RpcError::invalid_params("Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
+            }
+        }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
         if signed_trans.len() + failed_trans.len() > 1 {
@@ -387,7 +398,8 @@ impl RpcImpl {
             debug!("after loading nonce in latest state, tx = {:?}", tx);
         }
 
-        let tx = tx.sign_with(password).map_err(|e| {
+        let epoch_height = consensus_graph.best_epoch_number();
+        let tx = tx.sign_with(epoch_height, password).map_err(|e| {
             RpcError::invalid_params(format!(
                 "failed to send transaction: {:?}",
                 e
@@ -676,27 +688,6 @@ impl RpcImpl {
         ))
     }
 
-    fn call(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
-
-        debug!("RPC Request: cfx_call");
-        let signed_tx = sign_call(request).map_err(|err| {
-            RpcError::invalid_params(format!("Sign tx error: {:?}", err))
-        })?;
-        trace!("call tx {:?}", signed_tx);
-        consensus_graph
-            .call_virtual(&signed_tx, epoch.into())
-            .map(|output| Bytes::new(output.0))
-            .map_err(RpcError::invalid_params)
-    }
-
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
         let consensus_graph = self
             .consensus
@@ -725,9 +716,23 @@ impl RpcImpl {
             .boxed()
     }
 
+    fn call(
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
+    ) -> RpcResult<Bytes> {
+        let success_executed = self.exec_transaction(request, epoch)?;
+        Ok(Bytes::new(success_executed.output))
+    }
+
     fn estimate_gas(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<RpcU256> {
+        let success_executed = self.exec_transaction(request, epoch)?;
+        Ok(success_executed.gas_used.into())
+    }
+
+    fn exec_transaction(
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
+    ) -> RpcResult<Executed> {
         let consensus_graph = self
             .consensus
             .as_any()
@@ -735,18 +740,21 @@ impl RpcImpl {
             .expect("downcast should succeed");
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
-        debug!("RPC Request: cfx_estimateGas");
-        let signed_tx = sign_call(request).map_err(|err| {
-            RpcError::invalid_params(format!("Sign tx error: {:?}", err))
-        })?;
+        let best_epoch_height = consensus_graph.best_epoch_number();
+        let signed_tx =
+            sign_call(best_epoch_height, request).map_err(|err| {
+                RpcError::invalid_params(format!("Sign tx error: {:?}", err))
+            })?;
         trace!("call tx {:?}", signed_tx);
-        let result = consensus_graph.estimate_gas(&signed_tx, epoch.into());
-        result
-            .map_err(|e| {
-                warn!("Transaction execution error {:?}", e);
-                RpcError::internal_error()
-            })
-            .map(|x| x.into())
+        let executed = consensus_graph
+            .call_virtual(&signed_tx, epoch.into())
+            .map_err(RpcError::invalid_params)?;
+        match executed.exception {
+            None => Ok(executed),
+            Some(exception) => {
+                Err(execution_error(exception.to_string(), executed.output))
+            }
+        }
     }
 
     fn current_sync_phase(&self) -> RpcResult<String> {

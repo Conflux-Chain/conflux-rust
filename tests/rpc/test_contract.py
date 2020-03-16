@@ -24,7 +24,7 @@ class TestContract(RpcClient):
         gas_price = 1
         gas = 50000000
         self.tx_conf = {"gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
-        staking_contract_addr = Web3.toChecksumAddress("443c409373ffd5c0bec1dddb7bec830856757b65")
+        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
         self.tx_conf["to"] = staking_contract_addr
         tx_data = eth_utils.decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
         tx = self.new_tx(value=0, receiver=staking_contract_addr, data=tx_data, gas=gas, gas_price=gas_price)

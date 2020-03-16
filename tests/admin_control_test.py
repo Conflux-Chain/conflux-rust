@@ -194,6 +194,18 @@ class AdminControlTest(ConfluxTestFramework):
             check_status=True)
         assert_equal(client.get_admin(contract_addr), addr2)
 
+        # destroy
+        tx = self.call_contract_function(
+            contract=admin_control_contract,
+            name="destroy",
+            args=[Web3.toChecksumAddress(contract_addr)],
+            sender_key=priv_key2,
+            contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
+            wait=True,
+            check_status=True)
+        assert_equal(client.get_balance(contract_addr), 0)
+        assert_equal(client.get_balance(addr2), 5999999999900000000)
+
         self.log.info("Pass")
 
 if __name__ == "__main__":

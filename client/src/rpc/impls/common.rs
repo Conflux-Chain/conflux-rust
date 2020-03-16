@@ -16,8 +16,8 @@ use cfxcore::{
     BlockDataManager, ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedTransactionPool,
 };
-use ethcore_accounts::AccountProvider;
-use ethkey::Password;
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
 use keccak_hash::keccak;
 use primitives::{Action, SignedTransaction};
 

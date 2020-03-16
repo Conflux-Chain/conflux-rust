@@ -75,7 +75,7 @@ pub mod client_methods {
     ) -> bool {
         let sleep_duration = Duration::from_secs(1);
         let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(10);
+        let max_timeout = Duration::from_secs(1200);
         let instant = Instant::now();
         let mut warned = false;
         while instant.elapsed() < max_timeout {
@@ -164,7 +164,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager, genesis::DEV_GENESIS_KEY_PAIR_2,
     ConsensusGraph, Stopable, SynchronizationService, TransactionPool,
 };
-use ethkey::public_to_address;
+use cfxkey::public_to_address;
 use keylib::KeyPair;
 use parking_lot::Mutex;
 use secret_store::SharedSecretStore;

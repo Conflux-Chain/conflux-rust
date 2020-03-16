@@ -67,18 +67,20 @@ impl TGBlockGenerator {
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
 
-        let transactions = txpool.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            block_size_limit,
-        );
-
-        let mut rng = rand::thread_rng();
         let parent_header = data_man
             .block_header_by_hash(&parent_hash)
             .expect("parent header must exist");
         let parent_height = parent_header.height();
         let parent_timestamp = parent_header.timestamp();
+
+        let transactions = txpool.pack_transactions(
+            num_txs,
+            block_gas_limit,
+            block_size_limit,
+            parent_height,
+        );
+
+        let mut rng = rand::thread_rng();
 
         trace!("{} txs packed", transactions.len());
 

@@ -16,6 +16,7 @@ use crate::{
     },
     parameters::{consensus::*, consensus_internal::*},
     rlp::Encodable,
+    state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     storage::StateRootWithAuxInfo,
     Notifications, SharedTransactionPool,
@@ -26,7 +27,7 @@ use parity_bytes::ToPretty;
 use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     io::Write,
     slice::Iter,
     sync::Arc,
@@ -802,19 +803,18 @@ impl ConsensusNewBlockHandler {
 
         inner.adaptive_tree.make_tree(me);
         inner.adaptive_tree.link(parent, me);
-        let parent_tw = inner.weight_tree.get(parent);
-        let parent_w = inner.block_weight(parent);
-        inner.adaptive_tree.set(me, -parent_tw + parent_w);
     }
 
     #[inline]
     /// Subroutine called by on_new_block()
     fn update_lcts_finalize(&self, inner: &mut ConsensusGraphInner, me: usize) {
         let parent = inner.arena[me].parent;
+        let parent_tw = inner.weight_tree.get(parent);
+        let parent_w = inner.block_weight(parent);
+        inner.adaptive_tree.set(me, -parent_tw + parent_w);
+
         let weight = inner.block_weight(me);
-
         inner.weight_tree.path_apply(me, weight);
-
         inner.adaptive_tree.path_apply(me, 2 * weight);
         inner.adaptive_tree.caterpillar_apply(parent, -weight);
     }
@@ -985,6 +985,24 @@ impl ConsensusNewBlockHandler {
         inner.compute_timer_chain_tuple(me, Some(anticone))
     }
 
+    fn compute_invalid_block_start_timer(
+        &self, inner: &ConsensusGraphInner, me: usize,
+    ) -> u64 {
+        let last_index =
+            inner.arena[me].data.past_view_last_timer_block_arena_index;
+        if last_index == NULL {
+            inner.inner_conf.timer_chain_beta
+        } else {
+            inner.arena[last_index].data.ledger_view_timer_chain_height
+                + inner.inner_conf.timer_chain_beta
+                + if inner.get_timer_chain_index(last_index) != NULL {
+                    1
+                } else {
+                    0
+                }
+        }
+    }
+
     fn preactivate_block(
         &self, inner: &mut ConsensusGraphInner, me: usize,
     ) -> BlockStatus {
@@ -1032,6 +1050,24 @@ impl ConsensusNewBlockHandler {
 
         // Because the following computation relies on all previous blocks being
         // active, We have to delay it till now
+        let era_genesis = inner.get_era_genesis_block_with_parent(parent);
+        let blockset =
+            inner.exchange_or_compute_blockset_in_own_view_of_epoch(me, None);
+        let weight_era_in_my_epoch =
+            inner.total_weight_in_own_epoch(&blockset, era_genesis);
+        inner.exchange_or_compute_blockset_in_own_view_of_epoch(
+            me,
+            Some(blockset),
+        );
+        let past_era_weight = if parent != era_genesis {
+            inner.arena[parent].past_era_weight
+                + inner.block_weight(parent)
+                + weight_era_in_my_epoch
+        } else {
+            inner.block_weight(parent) + weight_era_in_my_epoch
+        };
+        inner.arena[me].past_era_weight = past_era_weight;
+
         let mut timer_longest_difficulty = 0;
         let mut longest_referee = parent;
         if parent != NULL {
@@ -1135,8 +1171,8 @@ impl ConsensusNewBlockHandler {
         }
 
         debug!(
-            "Finish preactivation block {} index = {}",
-            inner.arena[me].hash, me
+            "Finish preactivation block {} index = {} past_era_weight={}",
+            inner.arena[me].hash, me, inner.arena[me].past_era_weight
         );
         let block_status = if pending {
             BlockStatus::Pending
@@ -1158,8 +1194,8 @@ impl ConsensusNewBlockHandler {
     )
     {
         debug!(
-            "Start activating block in ConsensusGraph: index = {:?} hash={:?}",
-            me, inner.arena[me].hash
+            "Start activating block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
+            me, inner.arena[me].hash, block_body_opt.is_some(),
         );
         let parent = inner.arena[me].parent;
         let has_body = block_body_opt.is_some();
@@ -1177,7 +1213,10 @@ impl ConsensusNewBlockHandler {
         let my_weight = inner.block_weight(me);
         let mut extend_pivot = false;
         let mut pivot_changed = false;
-        // FIXME Clarify the meaning of `fork_at` through this function.
+        // ``fork_at`` stores the first pivot chain height that we need to
+        // update (because of the new inserted block). If the new block
+        // extends the pivot chain, ``fork_at`` will equal to the new pivot
+        // chain height (end of the pivot chain).
         let mut fork_at;
         let old_pivot_chain_len = inner.pivot_chain.len();
 
@@ -1197,6 +1236,21 @@ impl ConsensusNewBlockHandler {
             inner.best_timer_chain_difficulty = diff;
             inner.best_timer_chain_hash = inner.arena[me].hash.clone();
             inner.update_timer_chain(me);
+            // Now we go over every element in the ``invalid_block_queue``
+            // because their timer may change.
+            if !self.conf.bench_mode {
+                let mut new_block_queue = BinaryHeap::new();
+                for (_, x) in &inner.invalid_block_queue {
+                    let timer =
+                        self.compute_invalid_block_start_timer(inner, *x);
+                    new_block_queue.push((-(timer as i128), *x));
+                    debug!(
+                        "Partial invalid Block {} (hash = {}) start timer is now {}",
+                        *x, inner.arena[*x].hash, timer
+                    );
+                }
+                inner.invalid_block_queue = new_block_queue;
+            }
         } else {
             let mut timer_chain_height =
                 inner.arena[parent].data.ledger_view_timer_chain_height;
@@ -1244,6 +1298,10 @@ impl ConsensusNewBlockHandler {
             let lca = inner.lca(last, me);
             let new;
             if force_confirm != force_lca {
+                debug!(
+                    "pivot chain switch to force_confirm={} force_height={}",
+                    force_confirm, force_height
+                );
                 fork_at = inner.arena[force_lca].height + 1;
                 new = inner.ancestor_at(force_confirm, fork_at);
                 pivot_changed = true;
@@ -1346,8 +1404,6 @@ impl ConsensusNewBlockHandler {
                 inner.recompute_metadata(fork_at, last_pivot_to_update);
             } else {
                 // pivot chain not extend and not change
-                // FIXME: We should go back and revisit how we deal with this
-                // for performance
                 ConsensusNewBlockHandler::try_clear_blockset_in_own_view_of_epoch(inner, me);
                 inner.recompute_metadata(
                     inner.get_pivot_height(),
@@ -1417,14 +1473,17 @@ impl ConsensusNewBlockHandler {
             );
             return;
         }
-        fork_at = max(inner.cur_era_stable_height + 1, fork_at);
+        // Note that only pivot chain height after the capped_fork_at needs to
+        // update execution state.
+        let capped_fork_at = max(inner.cur_era_stable_height + 1, fork_at);
 
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
         meter.update_confirmation_risks(inner);
 
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
-                let fork_at_pivot_index = inner.height_to_pivot_index(fork_at);
+                let capped_fork_at_pivot_index =
+                    inner.height_to_pivot_index(capped_fork_at);
                 // Starting from old_len ensures that all epochs within
                 // [old_len - delay, new_len - delay) will be inserted to db, so
                 // no epochs will be skipped. Starting from
@@ -1434,12 +1493,12 @@ impl ConsensusNewBlockHandler {
                     >= EPOCH_SET_PERSISTENCE_DELAY as usize
                 {
                     min(
-                        fork_at_pivot_index,
+                        capped_fork_at_pivot_index,
                         old_pivot_chain_len
                             - EPOCH_SET_PERSISTENCE_DELAY as usize,
                     )
                 } else {
-                    fork_at_pivot_index
+                    capped_fork_at_pivot_index
                 };
                 let to_persist_pivot_index = inner.pivot_chain.len()
                     - EPOCH_SET_PERSISTENCE_DELAY as usize;
@@ -1617,8 +1676,10 @@ impl ConsensusNewBlockHandler {
                     - DEFERRED_STATE_EPOCH_COUNT
                     + 1
             };
-            let mut state_at = fork_at;
-            if fork_at + DEFERRED_STATE_EPOCH_COUNT > old_pivot_chain_height {
+            let mut state_at = capped_fork_at;
+            if capped_fork_at + DEFERRED_STATE_EPOCH_COUNT
+                > old_pivot_chain_height
+            {
                 if old_pivot_chain_height > DEFERRED_STATE_EPOCH_COUNT {
                     state_at =
                         old_pivot_chain_height - DEFERRED_STATE_EPOCH_COUNT + 1;
@@ -1630,9 +1691,9 @@ impl ConsensusNewBlockHandler {
                 let mut state_availability_boundary =
                     inner.data_man.state_availability_boundary.write();
                 assert!(
-                    fork_at > state_availability_boundary.lower_bound,
+                    capped_fork_at > state_availability_boundary.lower_bound,
                     "forked_at {} should > boundary_lower_bound, boundary {:?}",
-                    fork_at,
+                    capped_fork_at,
                     state_availability_boundary
                 );
                 if pivot_changed {
@@ -1641,21 +1702,23 @@ impl ConsensusNewBlockHandler {
                             .pivot_chain
                             .push(inner.arena[me].hash);
                     } else {
-                        let split_off_index =
-                            fork_at - state_availability_boundary.lower_bound;
+                        let split_off_index = capped_fork_at
+                            - state_availability_boundary.lower_bound;
                         state_availability_boundary
                             .pivot_chain
                             .split_off(split_off_index as usize);
-                        for i in inner.height_to_pivot_index(fork_at)
+                        for i in inner.height_to_pivot_index(capped_fork_at)
                             ..inner.pivot_chain.len()
                         {
                             state_availability_boundary
                                 .pivot_chain
                                 .push(inner.arena[inner.pivot_chain[i]].hash);
                         }
-                        if state_availability_boundary.upper_bound >= fork_at {
+                        if state_availability_boundary.upper_bound
+                            >= capped_fork_at
+                        {
                             state_availability_boundary.upper_bound =
-                                fork_at - 1;
+                                capped_fork_at - 1;
                         }
                     }
                     state_availability_boundary.optimistic_executed_height =
@@ -1763,23 +1826,8 @@ impl ConsensusNewBlockHandler {
 
                 if block_status == BlockStatus::PartialInvalid {
                     inner.arena[me].data.partial_invalid = true;
-                    let last_index = inner.arena[me]
-                        .data
-                        .past_view_last_timer_block_arena_index;
-                    let timer = if last_index == NULL {
-                        inner.inner_conf.timer_chain_beta
-                    } else {
-                        inner.arena[last_index]
-                            .data
-                            .ledger_view_timer_chain_height
-                            + inner.inner_conf.timer_chain_beta
-                            + if inner.get_timer_chain_index(last_index) != NULL
-                            {
-                                1
-                            } else {
-                                0
-                            }
-                    };
+                    let timer =
+                        self.compute_invalid_block_start_timer(inner, me);
                     // We are not going to delay partial invalid blocks in the
                     // bench mode
                     if self.conf.bench_mode {
@@ -1868,6 +1916,24 @@ impl ConsensusNewBlockHandler {
         );
         self.data_man
             .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
+        let era_block = inner.arena[me].era_block();
+        let era_block_hash = if era_block != NULL {
+            inner.arena[era_block].hash
+        } else {
+            Default::default()
+        };
+        if inner.inner_conf.enable_state_expose {
+            STATE_EXPOSER.consensus_graph.lock().block_state_vec.push(
+                ConsensusGraphBlockState {
+                    block_hash: inner.arena[me].hash,
+                    best_block_hash: inner.best_block_hash(),
+                    block_status: block_info.get_status(),
+                    past_era_weight: inner.arena[me].past_era_weight(),
+                    era_block_hash,
+                    adaptive: inner.arena[me].adaptive(),
+                },
+            )
+        }
     }
 
     /// construct_pivot_state() rebuild pivot chain state info from db
@@ -1884,6 +1950,11 @@ impl ConsensusNewBlockHandler {
             self.data_man.state_availability_boundary.read().lower_bound;
         let start_pivot_index =
             (state_boundary_height - inner.cur_era_genesis_height) as usize;
+        debug!(
+            "construct_pivot_state: start={}, pivot_chain.len()={}",
+            start_pivot_index,
+            inner.pivot_chain.len()
+        );
         if start_pivot_index >= inner.pivot_chain.len() {
             // The pivot chain of recovered blocks is before state lower_bound,
             // so we do not need to construct any pivot state.

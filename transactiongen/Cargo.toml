@@ -19,7 +19,7 @@ rlp = "0.4.0"
 rand = "0.7"
 secret-store = { path = "../secret_store" }
 network = { path = "../network" }
-ethkey = { path = "../accounts/ethkey" }
+cfxkey = { path = "../accounts/cfxkey" }
 log = "0.4"
 db = { path = "../db" }
 toml = "0.4"

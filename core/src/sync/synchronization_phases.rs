@@ -590,7 +590,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         // FIXME: use target_height instead.
         let middle_epoch = self.syn.get_middle_epoch();
         if middle_epoch.is_none() {
-            if self.syn.is_dev_mode() {
+            if self.syn.is_dev_or_test_mode() {
                 return SyncPhaseType::Normal;
             } else {
                 return self.phase_type();

@@ -298,7 +298,7 @@ impl SynchronizationProtocolHandler {
         let sync_state = Arc::new(SynchronizationState::new(
             protocol_config.is_consortium,
             is_full_node,
-            protocol_config.dev_mode,
+            protocol_config.dev_mode || protocol_config.test_mode,
         ));
         let request_manager =
             Arc::new(RequestManager::new(&protocol_config, sync_state.clone()));

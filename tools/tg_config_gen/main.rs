@@ -2,15 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+extern crate cfxkey;
 extern crate env_logger;
-extern crate ethkey;
 extern crate keccak_hash;
 extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
+use cfxkey::{Error as EthkeyError, Generator, Public, Random};
 use docopt::Docopt;
-use ethkey::{Error as EthkeyError, Generator, Public, Random};
 use keccak_hash::keccak;
 use log::*;
 use rustc_hex::FromHexError;

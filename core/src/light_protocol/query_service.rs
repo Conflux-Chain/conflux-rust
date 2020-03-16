@@ -455,8 +455,8 @@ impl QueryService {
         Ok(matching)
     }
 
-    fn get_height_from_epoch_number(
-        &self, epoch: EpochNumber,
+    pub fn get_latest_verifiable_epoch_number(
+        &self,
     ) -> Result<u64, FilterError> {
         // find highest epoch that we are able to verify based on witness info
         let latest_verified = self.handler.witnesses.latest_verified();
@@ -469,9 +469,21 @@ impl QueryService {
                 return Err(FilterError::UnableToVerify {
                     epoch: 0,
                     latest_verifiable: 0,
-                })
+                });
             }
         };
+
+        trace!(
+            "get_latest_verifiable_epoch_number latest_verifiable = {}",
+            latest_verifiable
+        );
+        Ok(latest_verifiable)
+    }
+
+    fn get_height_from_epoch_number(
+        &self, epoch: EpochNumber,
+    ) -> Result<u64, FilterError> {
+        let latest_verifiable = self.get_latest_verifiable_epoch_number()?;
 
         trace!(
             "get_height_from_epoch_number epoch = {:?}, latest_verifiable = {}",
