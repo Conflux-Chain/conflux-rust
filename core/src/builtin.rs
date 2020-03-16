@@ -292,9 +292,8 @@ impl Impl for EcRecover {
         let r = H256::from_slice(&input[64..96]);
         let s = H256::from_slice(&input[96..128]);
 
-        // FIXME: this is the chain_id part, we need to fix it
         let bit = match v[31] {
-            27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
+            0 | 1 if &v.0[..31] == &[0; 31] => v[31],
             _ => {
                 return Ok(());
             }
