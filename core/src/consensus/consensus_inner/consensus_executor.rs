@@ -162,13 +162,14 @@ impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        bench_mode: bool,
+        transaction_epoch_bound: u64, bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
             vm,
+            transaction_epoch_bound,
         ));
         let (sender, receiver) = channel();
 
@@ -781,7 +782,7 @@ pub struct ConsensusExecutionHandler {
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory,
+        vm: VmFactory, transaction_epoch_bound: u64,
     ) -> Self
     {
         let base_reward_table_in_ucfx = build_base_reward_table();
@@ -790,7 +791,7 @@ impl ConsensusExecutionHandler {
             data_man,
             vm,
             base_reward_table_in_ucfx,
-            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+            transaction_epoch_bound,
         }
     }
 
