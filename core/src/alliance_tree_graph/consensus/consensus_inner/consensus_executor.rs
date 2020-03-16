@@ -728,6 +728,19 @@ impl ConsensusExecutionHandler {
                             transaction, r
                         );
                     }
+                    Err(ExecutionError::NotEnoughCash {
+                        required: _,
+                        got: _,
+                        actual_cost,
+                    }) => {
+                        /* We charge `actual_cost`, so increase
+                         * `cumulative_gas_used` to make
+                         * this charged balance distributed to miners.
+                         * Note for the case that `balance < tx_fee`, the
+                         * amount of remainder is lost forever. */
+                        env.gas_used += actual_cost / transaction.gas_price;
+                        cumulative_gas_used = env.gas_used;
+                    }
                     Err(ExecutionError::InvalidNonce { expected, got }) => {
                         // not inc nonce
                         n_invalid_nonce += 1;

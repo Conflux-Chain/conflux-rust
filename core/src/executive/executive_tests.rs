@@ -20,7 +20,11 @@ use cfx_types::{Address, BigEndianHash, H256, U256, U512};
 use keylib::{Generator, Random};
 use primitives::{transaction::Action, Transaction};
 use rustc_hex::FromHex;
-use std::{cmp, str::FromStr, sync::Arc};
+use std::{
+    cmp::{self, min},
+    str::FromStr,
+    sync::Arc,
+};
 
 fn make_byzantium_machine(max_depth: usize) -> Machine {
     let mut machine = crate::machine::new_machine_with_builtin();
@@ -446,6 +450,7 @@ fn test_not_enough_cash() {
     state
         .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
         .unwrap();
+    let correct_cost = min(t.gas_price * t.gas, 100_017.into());
     let mut env = Env::default();
     env.gas_limit = U256::from(100_000);
     let machine = make_byzantium_machine(0);
@@ -465,9 +470,13 @@ fn test_not_enough_cash() {
     };
 
     match res {
-        Err(ExecutionError::NotEnoughCash { required, got })
-            if required == U512::from(100_018)
-                && got == U512::from(100_017) =>
+        Err(ExecutionError::NotEnoughCash {
+            required,
+            got,
+            actual_cost,
+        }) if required == U512::from(100_018)
+            && got == U512::from(100_017)
+            && correct_cost == actual_cost =>
         {
             ()
         }
