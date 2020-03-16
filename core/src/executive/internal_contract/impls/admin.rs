@@ -17,6 +17,75 @@ lazy_static! {
         Address::from_str("6060de9e1568e69811c4a398f92c3d10949dc891").unwrap();
 }
 
+pub fn suicide(
+    contract_address: &Address, refund_address: &Address, state: &mut State,
+    spec: &Spec, substate: &mut Substate,
+) -> vm::Result<()>
+{
+    if !state.collateral_for_storage(contract_address)?.is_zero() {
+        return Err(vm::Error::InternalContract(
+            "contract has nonzero collateral_for_storage",
+        ));
+    }
+    let balance = state.balance(contract_address)?;
+    let code_size = state
+        .code_size(contract_address)?
+        .expect("code size exists");
+    let code_owner = state
+        .code_owner(contract_address)?
+        .expect("code owner exists");
+    let collateral_for_code = U256::from(code_size) * U256::from(CONFLUX_TOKEN)
+        / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
+    state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
+    let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
+    let sponsor_for_collateral =
+        state.sponsor_for_collateral(contract_address)?;
+    let sponsor_balance_for_gas =
+        state.sponsor_balance_for_gas(contract_address)?;
+    let sponsor_balance_for_collateral =
+        state.sponsor_balance_for_collateral(contract_address)?;
+    if !sponsor_for_gas.is_zero() {
+        state.add_balance(
+            &sponsor_for_gas,
+            &sponsor_balance_for_gas,
+            substate.to_cleanup_mode(spec),
+        )?;
+        state.sub_sponsor_balance_for_gas(
+            contract_address,
+            &sponsor_balance_for_gas,
+        )?;
+    }
+    if !sponsor_for_collateral.is_zero() {
+        state.add_balance(
+            &sponsor_for_collateral,
+            &sponsor_balance_for_collateral,
+            substate.to_cleanup_mode(spec),
+        )?;
+        state.sub_sponsor_balance_for_collateral(
+            contract_address,
+            &sponsor_balance_for_collateral,
+        )?;
+    }
+    if refund_address == contract_address {
+        state.sub_balance(
+            contract_address,
+            &balance,
+            &mut substate.to_cleanup_mode(spec),
+        )?;
+    } else {
+        trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, refund_address, balance);
+        state.transfer_balance(
+            contract_address,
+            refund_address,
+            &balance,
+            substate.to_cleanup_mode(spec),
+        )?;
+    }
+    substate.suicides.insert(*contract_address);
+
+    Ok(())
+}
+
 pub struct AdminControl;
 
 impl AdminControl {
@@ -53,34 +122,12 @@ impl AdminControl {
         debug!("contract_address={:?}", contract_address);
 
         let requester = &params.original_sender;
-
-        if state.admin(&contract_address)? == *requester {
-            let balance = state.balance(&contract_address)?;
-            let code_size = state
-                .code_size(&contract_address)?
-                .expect("code size exists");
-            let code_owner = state
-                .code_owner(&contract_address)?
-                .expect("code owner exists");
-            let collateral_for_code = U256::from(code_size)
-                * U256::from(CONFLUX_TOKEN)
-                / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
-            state.sub_collateral_for_storage(
-                &code_owner,
-                &collateral_for_code,
-            )?;
-            assert_ne!(requester, &contract_address);
-            trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, requester, balance);
-            state.transfer_balance(
-                &contract_address,
-                requester,
-                &balance,
-                substate.to_cleanup_mode(spec),
-            )?;
-            substate.suicides.insert(contract_address);
+        let admin = state.admin(&contract_address)?;
+        if admin == *requester {
+            suicide(&contract_address, &admin, state, spec, substate)
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 }
 

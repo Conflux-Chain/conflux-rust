@@ -11,9 +11,10 @@ use crate::rpc::{
         Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, Status as RpcStatus, SyncGraphStates,
-        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
-        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
+        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+        U64 as RpcU64,
     },
 };
 use cfx_types::{Public, H256};
@@ -209,8 +210,7 @@ impl Cfx for CfxHandler {
         fn transaction_count(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
 
         fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-        fn sponsor(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-        fn sponsor_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
+        fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
         fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
         fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
         fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;

@@ -1002,10 +1002,19 @@ fn test_commission_privilege() {
         .check_commission_privilege(&address, &caller3.address())
         .unwrap());
     state
-        .set_sponsor(&address, &sender.address(), &U256::from(110_000))
+        .set_sponsor_for_gas(
+            &address,
+            &sender.address(),
+            &U256::from(110_000),
+            &U256::from(110_000),
+        )
         .unwrap();
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_gas(&address).unwrap(),
+        U256::from(110_000)
+    );
+    assert_eq!(
+        state.sponsor_gas_bound(&address).unwrap(),
         U256::from(110_000)
     );
 
@@ -1041,7 +1050,7 @@ fn test_commission_privilege() {
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
     assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_gas(&address).unwrap(),
         U256::from(110_000)
     );
 
@@ -1079,7 +1088,10 @@ fn test_commission_privilege() {
         state.balance(&caller1.address()).unwrap(),
         U256::from(100_000)
     );
-    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::from(10_000));
+    assert_eq!(
+        state.sponsor_balance_for_gas(&address).unwrap(),
+        U256::from(10_000)
+    );
 
     // call with commission privilege and not enough commission balance
     let tx = Transaction {
@@ -1112,14 +1124,22 @@ fn test_commission_privilege() {
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
     assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
-    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::from(10_000));
+    assert_eq!(
+        state.sponsor_balance_for_gas(&address).unwrap(),
+        U256::from(10_000)
+    );
 
     // add more commission balance
     state
-        .set_sponsor(&address, &sender.address(), &U256::from(200_000))
+        .set_sponsor_for_gas(
+            &address,
+            &sender.address(),
+            &U256::from(200_000),
+            &U256::from(200_000),
+        )
         .unwrap();
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_gas(&address).unwrap(),
         U256::from(200_000)
     );
 
@@ -1152,7 +1172,7 @@ fn test_commission_privilege() {
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
     assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_gas(&address).unwrap(),
         U256::from(100_000)
     );
 
@@ -1191,7 +1211,10 @@ fn test_commission_privilege() {
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
     assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
-    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::zero());
+    assert_eq!(
+        state.sponsor_balance_for_gas(&address).unwrap(),
+        U256::zero()
+    );
 }
 
 #[test]
@@ -1261,10 +1284,14 @@ fn test_storage_commission_privilege() {
     assert_eq!(substate.storage_occupied[&sender], 1);
 
     state
-        .set_sponsor(&address, &sender, &COLLATERAL_PER_STORAGE_KEY)
+        .set_sponsor_for_collateral(
+            &address,
+            &sender,
+            &COLLATERAL_PER_STORAGE_KEY,
+        )
         .unwrap();
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_collateral(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
     );
     assert_eq!(gas_left, U256::from(79983));
@@ -1429,7 +1456,10 @@ fn test_storage_commission_privilege() {
         state.balance(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY
     );
-    assert_eq!(state.sponsor_balance(&address).unwrap(), U256::zero());
+    assert_eq!(
+        state.sponsor_balance_for_collateral(&address).unwrap(),
+        U256::zero()
+    );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
@@ -1492,7 +1522,7 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY
     );
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_collateral(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY
     );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());
@@ -1562,7 +1592,7 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY
     );
     assert_eq!(
-        state.sponsor_balance(&address).unwrap(),
+        state.sponsor_balance_for_collateral(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
     );
     assert_eq!(state.staking_balance(&address).unwrap(), U256::zero());

@@ -1297,16 +1297,19 @@ impl<'a> Executive<'a> {
         // Check if contract will pay transaction fee for the sender.
         let mut substate = Substate::new();
         let mut code_address = Address::zero();
+        let mut has_privilege = false;
         let free_of_charge = match tx.action {
             Action::Call(ref address) => {
                 code_address = *address;
-                // TODO: add upper bound check.
+                has_privilege = self
+                    .state
+                    .check_commission_privilege(&code_address, &sender)?;
                 self.state.is_contract(address)
-                    && self
-                        .state
-                        .check_commission_privilege(&code_address, &sender)?
-                    && U512::from(self.state.sponsor_balance(address)?)
+                    && has_privilege
+                    && U512::from(self.state.sponsor_balance_for_gas(address)?)
                         >= gas_cost
+                    && gas_cost
+                        <= U512::from(self.state.sponsor_gas_bound(address)?)
             }
             Action::Create => false,
         };
@@ -1333,7 +1336,7 @@ impl<'a> Executive<'a> {
                     &mut substate.to_cleanup_mode(&spec),
                 )?;
             } else {
-                self.state.sub_sponsor_balance(
+                self.state.sub_sponsor_balance_for_gas(
                     &code_address,
                     &U256::try_from(gas_cost).unwrap(),
                 )?;
@@ -1352,7 +1355,7 @@ impl<'a> Executive<'a> {
                 &mut substate.to_cleanup_mode(&spec),
             )?;
         } else {
-            self.state.sub_sponsor_balance(
+            self.state.sub_sponsor_balance_for_gas(
                 &code_address,
                 &U256::try_from(gas_cost).unwrap(),
             )?;
@@ -1363,9 +1366,8 @@ impl<'a> Executive<'a> {
             let collateral_for_storage =
                 self.state.collateral_for_storage(&sender)?;
             // The balance which the sponsor will sponsor sender.
-            let sponsored_balance = if free_of_charge {
-                // TODO: like the tx fee, an upper bound is needed.
-                self.state.sponsor_balance(&code_address)?
+            let sponsored_balance = if has_privilege {
+                self.state.sponsor_balance_for_collateral(&code_address)?
             } else {
                 U256::zero()
             };

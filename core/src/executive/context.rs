@@ -3,12 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::{executive::*, InternalContractMap};
+use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
     parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
-    state::{CleanupMode, State, Substate},
+    state::{State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
@@ -127,7 +127,9 @@ impl<'a> ContextTrait for Context<'a> {
                 .expect("no db error")
                 && self
                     .state
-                    .sponsor_balance(&self.origin.original_receiver)
+                    .sponsor_balance_for_collateral(
+                        &self.origin.original_receiver,
+                    )
                     .expect("no db error")
                     >= *COLLATERAL_PER_STORAGE_KEY
             {
@@ -385,36 +387,13 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let address = self.origin.address.clone();
-        let balance = self.balance(&address)?;
-        let code_size =
-            self.state.code_size(&address)?.expect("code size exists");
-        let code_owner =
-            self.state.code_owner(&address)?.expect("code owner exists");
-        let collateral_for_code = U256::from(code_size)
-            * U256::from(CONFLUX_TOKEN)
-            / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
-        self.state
-            .sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
-        if &address == refund_address {
-            self.state.sub_balance(
-                &address,
-                &balance,
-                &mut CleanupMode::NoEmpty,
-            )?;
-        } else {
-            trace!(target: "context", "Suiciding {} -> {} (xfer: {})", address, refund_address, balance);
-            self.state.transfer_balance(
-                &address,
-                refund_address,
-                &balance,
-                self.substate.to_cleanup_mode(&self.spec),
-            )?;
-        }
-
-        self.substate.suicides.insert(address);
-
-        Ok(())
+        suicide_impl(
+            &self.origin.address,
+            refund_address,
+            &mut self.state,
+            &self.spec,
+            &mut self.substate,
+        )
     }
 
     fn spec(&self) -> &Spec { &self.spec }

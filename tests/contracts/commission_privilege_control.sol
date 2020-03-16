@@ -1,9 +1,16 @@
 pragma solidity >=0.4.15;
 contract CommissionPrivilegeControl {
     // ------------------------------------------------------------------------
-    // Someone will sponsor the contract `contract_addr` will `amount` tokens
+    // Someone will sponsor the gas cost for contract `contract_addr` with an
+    // `upper_bound` for a single transaction.
     // ------------------------------------------------------------------------
-    function set_sponsor(address contract_addr, uint amount) public {
+    function set_sponsor_for_gas(address contract_addr, uint upper_bound) public {
+    }
+
+    // ------------------------------------------------------------------------
+    // Someone will sponsor the storage collateral for contract `contract_addr`.
+    // ------------------------------------------------------------------------
+    function set_sponsor_for_collateral(address contract_addr) public {
     }
 
     // ------------------------------------------------------------------------

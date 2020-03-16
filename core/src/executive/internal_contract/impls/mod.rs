@@ -13,7 +13,7 @@ use self::{
 };
 
 pub use self::{
-    admin::ADMIN_CONTROL_CONTRACT_ADDRESS,
+    admin::{suicide, ADMIN_CONTROL_CONTRACT_ADDRESS},
     sponsor::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     staking::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
 };

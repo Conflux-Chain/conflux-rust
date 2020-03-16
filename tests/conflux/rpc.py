@@ -162,17 +162,26 @@ class RpcClient:
         else:
             return int(self.node.cfx_getCollateralForStorage(addr, epoch), 0)
     
-    def get_sponsor(self, addr: str, epoch: str = None) -> str:
+    def get_sponsor_info(self, addr: str, epoch: str = None) -> dict:
         if epoch is None:
-            return self.node.cfx_getSponsor(addr)
+            return self.node.cfx_getSponsorInfo(addr)
         else:
-            return self.node.cfx_getSponsor(addr, epoch)
+            return self.node.cfx_getSponsorInfo(addr, epoch)
 
-    def get_sponsor_balance(self, addr: str, epoch: str = None) -> int:
-        if epoch is None:
-            return int(self.node.cfx_getSponsorBalance(addr), 0)
-        else:
-            return int(self.node.cfx_getSponsorBalance(addr, epoch), 0)
+    def get_sponsor_for_gas(self, addr: str, epoch: str = None) -> str:
+        return self.get_sponsor_info(addr, epoch)['sponsorForGas']
+
+    def get_sponsor_for_collateral(self, addr: str, epoch: str = None) -> str:
+        return self.get_sponsor_info(addr, epoch)['sponsorForCollateral']
+
+    def get_sponsor_balance_for_collateral(self, addr: str, epoch: str = None) -> int:
+        return int(self.get_sponsor_info(addr, epoch)['sponsorBalanceForCollateral'], 0)
+
+    def get_sponsor_balance_for_gas(self, addr: str, epoch: str = None) -> int:
+        return int(self.get_sponsor_info(addr, epoch)['sponsorBalanceForGas'], 0)
+
+    def get_sponsor_gas_bound(self, addr: str, epoch: str = None) -> int:
+        return int(self.get_sponsor_info(addr, epoch)['sponsorGasBound'], 0)
 
     def get_admin(self, addr: str, epoch: str = None) -> str:
         if epoch is None:

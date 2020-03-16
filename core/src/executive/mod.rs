@@ -14,7 +14,7 @@ pub use self::{
     executed::{Executed, ExecutionError, ExecutionResult},
     executive::{contract_address, Executive},
     internal_contract::{
-        InternalContractMap, InternalContractTrait,
+        suicide, InternalContractMap, InternalContractTrait,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
         STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     },

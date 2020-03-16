@@ -19,7 +19,7 @@ lazy_static! {
 pub struct SponsorWhitelistControl;
 
 impl SponsorWhitelistControl {
-    fn set_sponsor(
+    fn set_sponsor_for_gas(
         &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<()>
@@ -34,9 +34,9 @@ impl SponsorWhitelistControl {
             return Err(vm::Error::InternalContract("invalid data"));
         }
 
-        let sponsor = params.sender;
+        let sponsor = &params.sender;
         let contract_address = Address::from_slice(&input[12..32]);
-        let sponsor_balance = U256::from(&input[32..64]);
+        let upper_bound = U256::from(&input[32..64]);
         if !state.exists(&contract_address)? {
             return Err(vm::Error::InternalContract(
                 "contract address not exist",
@@ -49,56 +49,169 @@ impl SponsorWhitelistControl {
             ));
         }
 
-        if state.balance(&sponsor)? < sponsor_balance {
+        let sponsor_balance = state.balance(self.address())?;
+
+        if sponsor_balance / U256::from(1000) < upper_bound {
             return Err(vm::Error::InternalContract(
-                "balance is less than sponsor_balance",
+                "sponsor should at least sponsor upper_bound * 1000",
             ));
         }
 
-        let prev_sponsor = state.sponsor(&contract_address)?;
-        let prev_sponsor_balance = state.sponsor_balance(&contract_address)?;
-        let prev_collateral_for_storage =
-            state.collateral_for_storage(&contract_address)?;
-        let minimum_sponsor_balance_requried = if prev_sponsor != sponsor {
-            prev_sponsor_balance + prev_collateral_for_storage
+        let prev_sponsor = state.sponsor_for_gas(&contract_address)?;
+        let prev_sponsor_balance =
+            state.sponsor_balance_for_gas(&contract_address)?;
+        let prev_upper_bound = state.sponsor_gas_bound(&contract_address)?;
+        // If previous sponsor is not the same as current sponsor, we should try
+        // to replace the sponsor. Otherwise, we should try to charge
+        // `sponsor_balance`.
+        if prev_sponsor != *sponsor {
+            // `sponsor_balance` should exceed previous sponsor's
+            // `sponsor_balance`.
+            if sponsor_balance <= prev_sponsor_balance {
+                return Err(vm::Error::InternalContract(
+                    "sponsor_balance is not exceed previous sponsor",
+                ));
+            }
+            // `upper_bound` should exceed previous sponsor's `upper_bound`,
+            // unless previous sponsor's `sponsor_balance` is not able to cover
+            // the upper bound.
+            if prev_sponsor_balance >= prev_upper_bound
+                && upper_bound <= prev_upper_bound
+            {
+                return Err(vm::Error::InternalContract(
+                    "upper_bound is not exceed previous sponsor",
+                ));
+            }
+            // refund to previous sponsor
+            if !prev_sponsor.is_zero() {
+                state.add_balance(
+                    &prev_sponsor,
+                    &prev_sponsor_balance,
+                    substate.to_cleanup_mode(&spec),
+                )?;
+            }
+            state.sub_balance(
+                self.address(),
+                &sponsor_balance,
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+            state.set_sponsor_for_gas(
+                &contract_address,
+                sponsor,
+                &sponsor_balance,
+                &upper_bound,
+            )?;
         } else {
-            prev_sponsor_balance
-        };
-        if sponsor_balance < minimum_sponsor_balance_requried {
-            return Err(vm::Error::InternalContract(
-                "sponsor_balance is not exceed previous sponsor",
-            ));
-        }
-
-        // If previous sponsor exists, we should refund the `sponsor_balance`,
-        // including `collateral_for_storage` if `prev_sponsor != sponsor`.
-        if !prev_sponsor.is_zero() {
-            state.add_balance(
-                &prev_sponsor,
-                &minimum_sponsor_balance_requried,
-                substate.to_cleanup_mode(&spec),
+            // if previous sponsor's `sponsor_balance` is not able to cover
+            // the `upper_bound`, we can adjust the `upper_bound` to a smaller
+            // one.
+            if prev_sponsor_balance >= prev_upper_bound
+                && upper_bound < prev_upper_bound
+            {
+                return Err(vm::Error::InternalContract(
+                    "cannot change upper_bound to a smaller one",
+                ));
+            }
+            state.sub_balance(
+                self.address(),
+                &sponsor_balance,
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+            state.set_sponsor_for_gas(
+                &contract_address,
+                sponsor,
+                &(sponsor_balance + prev_sponsor_balance),
+                &upper_bound,
             )?;
         }
-        state.sub_balance(
-            &sponsor,
-            &sponsor_balance,
-            &mut substate.to_cleanup_mode(&spec),
-        )?;
-        if prev_sponsor == sponsor {
-            Ok(state.set_sponsor(
-                &contract_address,
-                &sponsor,
-                &sponsor_balance,
-            )?)
-        } else {
-            // Part of the `sponsor_balance` should be used as
-            // `collateral_for_storage`.
-            Ok(state.set_sponsor(
-                &contract_address,
-                &sponsor,
-                &(sponsor_balance - prev_collateral_for_storage),
-            )?)
+
+        Ok(())
+    }
+
+    fn set_sponsor_for_collateral(
+        &self, input: &[u8], params: &ActionParams, spec: &Spec,
+        state: &mut State, substate: &mut Substate,
+    ) -> vm::Result<()>
+    {
+        if state.is_contract(&params.sender) {
+            return Err(vm::Error::InternalContract(
+                "contract account is not allowed to sponsor other contract",
+            ));
         }
+
+        if input.len() != 32 {
+            return Err(vm::Error::InternalContract("invalid data"));
+        }
+        let sponsor = &params.sender;
+        let contract_address = Address::from_slice(&input[12..32]);
+        if !state.exists(&contract_address)? {
+            return Err(vm::Error::InternalContract(
+                "contract address not exist",
+            ));
+        }
+
+        if !state.is_contract(&contract_address) {
+            return Err(vm::Error::InternalContract(
+                "not allowed to sponsor non-contract account",
+            ));
+        }
+
+        let sponsor_balance = state.balance(self.address())?;
+
+        if sponsor_balance.is_zero() {
+            return Err(vm::Error::InternalContract(
+                "zero sponsor balance is not allowed",
+            ));
+        }
+
+        let prev_sponsor = state.sponsor_for_collateral(&contract_address)?;
+        let prev_sponsor_balance =
+            state.sponsor_balance_for_collateral(&contract_address)?;
+        let collateral_for_storage =
+            state.collateral_for_storage(&contract_address)?;
+        // If previous sponsor is not the same as current sponsor, we should try
+        // to replace the sponsor. Otherwise, we should try to charge
+        // `sponsor_balance`.
+        if prev_sponsor != *sponsor {
+            // `sponsor_balance` should exceed previous sponsor's
+            // `sponsor_balance` + `collateral_for_storage`.
+            if sponsor_balance <= prev_sponsor_balance + collateral_for_storage
+            {
+                return Err(vm::Error::InternalContract(
+                    "sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage",
+                ));
+            }
+            // refund to previous sponsor
+            if !prev_sponsor.is_zero() {
+                state.add_balance(
+                    &prev_sponsor,
+                    &(prev_sponsor_balance + collateral_for_storage),
+                    substate.to_cleanup_mode(&spec),
+                )?;
+            }
+            state.sub_balance(
+                self.address(),
+                &sponsor_balance,
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+            state.set_sponsor_for_collateral(
+                &contract_address,
+                sponsor,
+                &sponsor_balance,
+            )?;
+        } else {
+            state.sub_balance(
+                self.address(),
+                &sponsor_balance,
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+            state.set_sponsor_for_collateral(
+                &contract_address,
+                sponsor,
+                &(sponsor_balance + prev_sponsor_balance),
+            )?;
+        }
+        Ok(())
     }
 
     fn add_privilege(
@@ -201,12 +314,25 @@ impl InternalContractTrait for SponsorWhitelistControl {
             return Err(vm::Error::InternalContract("invalid data"));
         }
 
-        if data[0..4] == [0x77, 0x55, 0xfa, 0x12] {
-            // The first 4 bytes of keccak('set_sponsor(address,uint256)')
-            // is `0x7755fa12`.
+        if data[0..4] == [0xe9, 0xac, 0x3d, 0x4a] {
+            // The first 4 bytes of
+            // keccak('set_sponsor_for_gas(address,uint256)')
+            // is `0xe9ac3d4a`.
             // 4 bytes `Method ID` + 32 bytes `contract_address` + 32 bytes
-            // `sponsor_balance`.
-            self.set_sponsor(&data[4..], params, spec, state, substate)
+            // `upper_bound`.
+            self.set_sponsor_for_gas(&data[4..], params, spec, state, substate)
+        } else if data[0..4] == [0x08, 0x62, 0xbf, 0x68] {
+            // The first 4 bytes of
+            // keccak('set_sponsor_for_collateral(address)')
+            // is `0x0862bf68`.
+            // 4 bytes `Method ID` + 32 bytes `contract_address`.
+            self.set_sponsor_for_collateral(
+                &data[4..],
+                params,
+                spec,
+                state,
+                substate,
+            )
         } else if data[0..4] == [0xfe, 0x15, 0x15, 0x6c] {
             // The first 4 bytes of keccak('add_privilege(address[])') is
             // `0xfe15156c`.
