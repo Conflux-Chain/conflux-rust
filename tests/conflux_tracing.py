@@ -438,7 +438,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 self._block_txs[block_hash] = eth_utils.encode_hex(rlp.encode(txs))
                 self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
         except Exception as e:
-            self.log.info('got exception[{}]'.format(repr(e)))
+            self.log.info('got exception[{}] when {} generates block'.format(repr(e), chosen_peer))
             self.persist_snapshot()
             raise e
 

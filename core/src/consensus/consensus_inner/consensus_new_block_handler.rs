@@ -518,10 +518,16 @@ impl ConsensusNewBlockHandler {
         let mut candidate;
         let blockset =
             inner.exchange_or_compute_blockset_in_own_view_of_epoch(me, None);
-        let candidate_iter = if inner.arena[parent].data.partial_invalid {
+        // Note that here we have to be conservative. If it is pending we have
+        // to treat it as if it is partial invalid.
+        let candidate_iter = if inner.arena[parent].data.partial_invalid
+            || inner.arena[parent].data.pending
+        {
             candidate = blockset.clone();
             let mut p = parent;
-            while p != NULL && inner.arena[p].data.partial_invalid {
+            while p != NULL && inner.arena[p].data.partial_invalid
+                || inner.arena[p].data.pending
+            {
                 let blockset_p = inner
                     .exchange_or_compute_blockset_in_own_view_of_epoch(p, None);
                 candidate.extend(blockset_p.iter());
@@ -1843,10 +1849,10 @@ impl ConsensusNewBlockHandler {
                 } else {
                     if block_status == BlockStatus::Pending {
                         inner.arena[me].data.pending = true;
-                        ConsensusNewBlockHandler::
-                        try_clear_blockset_in_own_view_of_epoch(
-                                                    inner, me,
-                                                );
+                        // ConsensusNewBlockHandler::
+                        // try_clear_blockset_in_own_view_of_epoch(
+                        //                             inner, me,
+                        //                         );
                         debug!(
                             "Block {} (hash = {}) is pending but processed",
                             me, inner.arena[me].hash
