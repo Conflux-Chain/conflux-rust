@@ -1393,6 +1393,11 @@ impl<'a> Executive<'a> {
                     &nonce,
                     &tx.data,
                 );
+
+                if self.state.is_contract(&new_address) {
+                    return Err(ExecutionError::ContractAddressConflict);
+                }
+
                 let params = ActionParams {
                     code_address: new_address,
                     code_hash: None,
