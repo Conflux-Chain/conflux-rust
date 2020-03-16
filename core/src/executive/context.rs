@@ -184,6 +184,11 @@ impl<'a> ContextTrait for Context<'a> {
             }
         };
 
+        if self.state.is_contract(&address) {
+            debug!("Contract address conflict!");
+            return Ok(ContractCreateResult::Failed);
+        }
+
         // prepare the params
         let params = ActionParams {
             code_address: address.clone(),

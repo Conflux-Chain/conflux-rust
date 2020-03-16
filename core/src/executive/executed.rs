@@ -95,6 +95,8 @@ pub enum ExecutionError {
     Internal(String),
     /// Returned when generic transaction occurs
     TransactionMalformed(String),
+    /// Contract already exists in the specified address.
+    ContractAddressConflict,
 }
 
 impl From<DbError> for ExecutionError {
