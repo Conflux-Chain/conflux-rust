@@ -368,3 +368,8 @@ jsonrpc_local_http_port=12539
 #
 # max_trans_count_received_in_catch_up = 60_000
 
+# The chain_id of conflux network
+# 0 for testnet
+# commentting out for not verify chain_id
+#
+chain_id = 0

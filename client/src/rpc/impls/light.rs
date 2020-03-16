@@ -354,12 +354,17 @@ impl RpcImpl {
             let epoch_height = light.get_latest_verifiable_epoch_number().map_err(|_| {
                 RpcError::invalid_params(format!("the light client cannot retrieve/verify the latest mined pivot block."))
             })?;
-            let tx = tx.sign_with(epoch_height, password).map_err(|e| {
-                RpcError::invalid_params(format!(
-                    "failed to send transaction: {:?}",
-                    e
-                ))
+            let chain_id = light.get_latest_verifiable_chain_id().map_err(|_| {
+                RpcError::invalid_params(format!("the light client cannot retrieve/verify the latest chain_id."))
             })?;
+            let tx = tx.sign_with(epoch_height, chain_id, password).map_err(
+                |e| {
+                    RpcError::invalid_params(format!(
+                        "failed to send transaction: {:?}",
+                        e
+                    ))
+                },
+            )?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };

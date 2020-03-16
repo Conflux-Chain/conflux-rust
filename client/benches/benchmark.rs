@@ -41,6 +41,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         action: Action::Call(receiver_kp.address()),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: Bytes::new(),
     };
     let tx = tx.sign(kp.secret());

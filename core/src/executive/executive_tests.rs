@@ -434,6 +434,7 @@ fn test_not_enough_cash() {
         gas_price: U256::one(),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         nonce: U256::zero(),
     }
     .sign(keypair.secret());
@@ -940,6 +941,7 @@ fn test_commission_privilege() {
         action: Action::Call(address),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: vec![],
     }
     .sign(sender.secret());
@@ -1016,6 +1018,7 @@ fn test_commission_privilege() {
         action: Action::Call(address),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: vec![],
     }
     .sign(caller3.secret());
@@ -1051,6 +1054,7 @@ fn test_commission_privilege() {
         action: Action::Call(address),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: vec![],
     }
     .sign(caller1.secret());
@@ -1086,6 +1090,7 @@ fn test_commission_privilege() {
         action: Action::Call(address),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1127,6 +1132,7 @@ fn test_commission_privilege() {
         action: Action::Call(address),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1166,6 +1172,7 @@ fn test_commission_privilege() {
         action: Action::Call(address),
         storage_limit: U256::MAX,
         epoch_height: 0,
+        chain_id: 0,
         data: vec![],
     }
     .sign(caller3.secret());

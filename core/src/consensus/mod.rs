@@ -39,8 +39,8 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
-    Account, EpochId, EpochNumber, SignedTransaction, StorageKey, StorageValue,
-    TransactionIndex,
+    Account, ChainIdParams, EpochId, EpochNumber, SignedTransaction,
+    StorageKey, StorageValue, TransactionIndex,
 };
 use rayon::prelude::*;
 use std::{
@@ -104,6 +104,15 @@ pub struct BestInformation {
     // bounded_terminal_block_hashes. This is just to save some space.
     pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
+}
+
+impl BestInformation {
+    pub fn best_chain_id(&self) -> u64 {
+        ChainIdParams {
+            epoch_number: self.best_epoch_number,
+        }
+        .get_chain_id()
+    }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -975,6 +984,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn best_epoch_number(&self) -> u64 {
         self.best_info.read_recursive().best_epoch_number
+    }
+
+    fn best_chain_id(&self) -> u64 {
+        self.best_info.read_recursive().best_chain_id()
     }
 
     fn best_block_hash(&self) -> H256 {

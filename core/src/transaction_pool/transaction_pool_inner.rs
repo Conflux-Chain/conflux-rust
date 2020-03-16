@@ -748,6 +748,7 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 storage_limit: U256::MAX,
                 epoch_height: 0,
+                chain_id: 0,
                 data: Vec::new(),
             }
             .sign(sender.secret()),

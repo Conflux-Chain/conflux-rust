@@ -738,6 +738,10 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
         self.best_info.read_recursive().best_epoch_number
     }
 
+    fn best_chain_id(&self) -> u64 {
+        self.best_info.read_recursive().best_chain_id()
+    }
+
     fn best_block_hash(&self) -> H256 {
         self.best_info.read_recursive().best_block_hash
     }
