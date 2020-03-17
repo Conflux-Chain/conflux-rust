@@ -1591,7 +1591,8 @@ impl ConsensusGraphInner {
         while let Some(index) = queue.pop_front() {
             for child in &self.arena[index].children {
                 if !visited.contains(*child as u32)
-                    && self.arena[*child].data.activated
+                    && (self.arena[*child].data.activated
+                        || self.arena[*child].data.active_cnt == NULL)
                 {
                     visited.add(*child as u32);
                     queue.push_back(*child);
@@ -1599,7 +1600,8 @@ impl ConsensusGraphInner {
             }
             for referrer in &self.arena[index].referrers {
                 if !visited.contains(*referrer as u32)
-                    && self.arena[*referrer].data.activated
+                    && (self.arena[*referrer].data.activated
+                        || self.arena[*referrer].data.active_cnt == NULL)
                 {
                     visited.add(*referrer as u32);
                     queue.push_back(*referrer);
