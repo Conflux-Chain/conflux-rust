@@ -18,7 +18,7 @@ class GHASTTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = TIMER_RATIO
         self.conf_parameters["timer_chain_beta"] = TIMER_BETA
         self.conf_parameters["initial_difficulty"] = INITIAL_DIFFICULTY
-        self.conf_parameters["anticone_penalty_ratio"] = "ANTICONE_PENALTY_BETA"
+        self.conf_parameters["anticone_penalty_ratio"] = ANTICONE_PENALTY_BETA
 
     def setup_network(self):
         self.setup_nodes()
