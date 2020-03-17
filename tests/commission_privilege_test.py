@@ -119,10 +119,13 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        control_contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/commission_privilege_control_abi.json"),
-            bytecode_file = os.path.join(file_dir, "contracts/commission_privilege_control_bytecode.dat"),
-        )
+        control_contract_file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
+        control_contract_file_path.pop(-1)
+        control_contract_file_path.extend(["internal_contract", "metadata", "SponsorWhitelistControl.json"])
+        control_contract_file_path = "/".join(control_contract_file_path)
+        control_contract_dict = json.loads(open(os.path.join(control_contract_file_path), "r").read())
+
+        control_contract = solc.get_contract_instance(contract_dict=control_contract_dict)
 
         test_contract = solc.get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/commission_privilege_test_abi.json"),
