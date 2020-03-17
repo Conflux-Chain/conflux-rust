@@ -14,7 +14,7 @@ use crate::{
     },
 };
 use cfx_types::{Bloom, H256};
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
@@ -1132,6 +1132,10 @@ pub struct DataManagerConfiguration {
     record_tx_index: bool,
     tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
+}
+
+impl MallocSizeOf for DataManagerConfiguration {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl DataManagerConfiguration {

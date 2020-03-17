@@ -4,6 +4,7 @@
 
 use crate::sync::message::TransactionDigests;
 use cfx_types::H256;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::PeerId;
 use primitives::{block::CompactBlock, SignedTransaction, TxPropagateId};
@@ -33,11 +34,13 @@ lazy_static! {
         );
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct TimeWindowEntry<T> {
     pub secs: u64,
     pub values: Vec<T>,
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct TimeWindow<T> {
     window_size: usize,
     slot_duration_as_secs: u64,
