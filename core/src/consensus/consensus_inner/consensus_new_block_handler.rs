@@ -368,7 +368,9 @@ impl ConsensusNewBlockHandler {
         for (i, node) in inner.arena.iter() {
             if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
-                && node.data.activated
+                && (node.data.activated || node.data.active_cnt == NULL) /* We include only preactivated blocks */
+                && node.era_block != NULL
+            /* We exclude out-of-era blocks */
             {
                 anticone.add(i as u32);
             }
@@ -434,12 +436,12 @@ impl ConsensusNewBlockHandler {
             for index in my_past.drain() {
                 anticone.remove(index);
             }
-        }
 
-        // We only consider non-lagacy blocks when computing anticone.
-        for index in anticone.clone().iter() {
-            if inner.arena[index as usize].era_block == NULL {
-                anticone.remove(index);
+            // We only consider non-lagacy blocks when computing anticone.
+            for index in anticone.clone().iter() {
+                if inner.arena[index as usize].era_block == NULL {
+                    anticone.remove(index);
+                }
             }
         }
 
@@ -1338,10 +1340,18 @@ impl ConsensusNewBlockHandler {
                 new = inner.ancestor_at(me, fork_at);
                 let new_weight = inner.weight_tree.get(new);
 
-                if ConsensusGraphInner::is_heavier(
-                    (new_weight, &inner.arena[new].hash),
-                    (prev_weight, &inner.arena[prev].hash),
-                ) {
+                // Note that for properly set consensus parameters, fork_at will
+                // always after the force_height (i.e., the
+                // force confirmation is always stable).
+                // But during testing, we may want to stress the consensus.
+                // Therefore we add this condition fork_at >
+                // force_height to maintain consistency.
+                if fork_at > force_height
+                    && ConsensusGraphInner::is_heavier(
+                        (new_weight, &inner.arena[new].hash),
+                        (prev_weight, &inner.arena[prev].hash),
+                    )
+                {
                     pivot_changed = true;
                 } else {
                     // The previous subtree is still heavier, nothing is

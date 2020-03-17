@@ -1027,11 +1027,15 @@ impl ConsensusGraphInner {
             }
             my_past.add(index as u32);
             let idx_parent = self.arena[index].parent;
-            if anticone.contains(idx_parent as u32) {
+            if anticone.contains(idx_parent as u32)
+                || self.arena[idx_parent].era_block == NULL
+            {
                 queue.push_back(idx_parent);
             }
             for referee in &self.arena[index].referees {
-                if anticone.contains(*referee as u32) {
+                if anticone.contains(*referee as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
                     queue.push_back(*referee);
                 }
             }
@@ -1591,7 +1595,9 @@ impl ConsensusGraphInner {
         while let Some(index) = queue.pop_front() {
             for child in &self.arena[index].children {
                 if !visited.contains(*child as u32)
-                    && self.arena[*child].data.activated
+                    && (self.arena[*child].data.activated
+                        || self.arena[*child].data.active_cnt == NULL)
+                /* We include all preactivated blocks */
                 {
                     visited.add(*child as u32);
                     queue.push_back(*child);
@@ -1599,7 +1605,9 @@ impl ConsensusGraphInner {
             }
             for referrer in &self.arena[index].referrers {
                 if !visited.contains(*referrer as u32)
-                    && self.arena[*referrer].data.activated
+                    && (self.arena[*referrer].data.activated
+                        || self.arena[*referrer].data.active_cnt == NULL)
+                /* We include all preactivated blocks */
                 {
                     visited.add(*referrer as u32);
                     queue.push_back(*referrer);
