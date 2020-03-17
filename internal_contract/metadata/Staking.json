@@ -1,0 +1,55 @@
+{
+    "abi": [
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "deposit",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "duration",
+                    "type": "uint256"
+                }
+            ],
+            "name": "lock",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "constant": false,
+            "inputs": [
+                {
+                    "internalType": "uint256",
+                    "name": "amount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "withdraw",
+            "outputs": [],
+            "payable": false,
+            "stateMutability": "nonpayable",
+            "type": "function"
+        }
+    ],
+    "bytecode": "608060405234801561001057600080fd5b5061010b806100206000396000f3fe6080604052348015600f57600080fd5b5060043610603c5760003560e01c80631338736f1460415780632e1a7d4d146076578063b6b55f251460a1575b600080fd5b607460048036036040811015605557600080fd5b81019080803590602001909291908035906020019092919050505060cc565b005b609f60048036036020811015608a57600080fd5b810190808035906020019092919050505060d0565b005b60ca6004803603602081101560b557600080fd5b810190808035906020019092919050505060d3565b005b5050565b50565b5056fea265627a7a72315820ab6e77113ddda92021743282e9ebaa95e9b3e59deaaee24d48a6f1e9e6f24df064736f6c63430005100032"
+}

@@ -513,10 +513,12 @@ class ContractBenchTest(SmartContractBenchBase):
     def run_test(self):
         solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        staking_contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "contracts/storage_interest_staking_abi.json"),
-            bytecode_file = os.path.join(file_dir, "contracts/storage_interest_staking_bytecode.dat"),
-        )
+        file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
+        file_path.pop(-1)
+        file_path.extend(["internal_contract", "metadata", "Staking.json"])
+        file_path = "/".join(file_path)
+        staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
+        staking_contract = solc.get_contract_instance(contract_dict=staking_contract_dict)
         staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
 
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"

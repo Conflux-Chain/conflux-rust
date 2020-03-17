@@ -12,26 +12,8 @@ from web3 import Web3
 from easysolc import Solc
 
 class TestContract(RpcClient):
-    def _deposit(self):
-        # lock tokens in bank
-        solc = Solc()
-        file_dir = os.path.dirname(os.path.realpath(__file__))
-        staking_contract = solc.get_contract_instance(
-            abi_file = os.path.join(file_dir, "../contracts/storage_interest_staking_abi.json"),
-            bytecode_file = os.path.join(file_dir, "../contracts/storage_interest_staking_bytecode.dat"),
-        )
-
-        gas_price = 1
-        gas = 50000000
-        self.tx_conf = {"gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
-        staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
-        self.tx_conf["to"] = staking_contract_addr
-        tx_data = eth_utils.decode_hex(staking_contract.functions.deposit(10000 * 10 ** 18).buildTransaction(self.tx_conf)["data"])
-        tx = self.new_tx(value=0, receiver=staking_contract_addr, data=tx_data, gas=gas, gas_price=gas_price)
-        self.send_tx(tx, True)
 
     def test_contract_deploy(self) -> str:
-        self._deposit()
         # test simple storage contract with default value (5)
         tx = self.new_contract_tx("", "0x608060405234801561001057600080fd5b50600560008190555060e6806100276000396000f3fe6080604052600436106043576000357c01000000000000000000000000000000000000000000000000000000009004806360fe47b11460485780636d4ce63c14607f575b600080fd5b348015605357600080fd5b50607d60048036036020811015606857600080fd5b810190808035906020019092919050505060a7565b005b348015608a57600080fd5b50609160b1565b6040518082815260200191505060405180910390f35b8060008190555050565b6000805490509056fea165627a7a72305820b5180d95fdc3813028ed47f62c7cdf708b76c0db094043f533b42a430d313e150029")
         assert_equal(self.send_tx(tx, True), tx.hash_hex())

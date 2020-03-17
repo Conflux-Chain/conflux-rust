@@ -1,5 +1,6 @@
-pragma solidity ^0.5.0;
-contract StorageInterestStaking {
+pragma solidity >=0.4.15;
+
+contract Staking {
     function deposit(uint amount) external {
     }
 
@@ -9,4 +10,3 @@ contract StorageInterestStaking {
     function lock(uint amount, uint duration) external {
     }
 }
-
