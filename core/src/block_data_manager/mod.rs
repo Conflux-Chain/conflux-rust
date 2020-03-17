@@ -14,7 +14,8 @@ use crate::{
     },
 };
 use cfx_types::{Bloom, H256};
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
@@ -53,6 +54,7 @@ pub const NULLU64: u64 = !0;
 /// FIXME: move it to another module.
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
+#[derive(DeriveMallocSizeOf)]
 pub struct StateAvailabilityBoundary {
     /// This is the hash of blocks in pivot chain based on current graph.
     #[derivative(Debug = "ignore")]
@@ -1132,6 +1134,10 @@ pub struct DataManagerConfiguration {
     record_tx_index: bool,
     tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
+}
+
+impl MallocSizeOf for DataManagerConfiguration {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl DataManagerConfiguration {

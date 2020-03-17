@@ -19,6 +19,7 @@ use crate::{
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
@@ -61,6 +62,7 @@ pub struct ConsensusInnerConfig {
 /// Unlike the ConsensusGraphNode fields, fields in ConsensusGraphNodeData will
 /// only be available after the block is *preactivated* (after calling
 /// preactivate_block().
+#[derive(DeriveMallocSizeOf)]
 pub struct ConsensusGraphNodeData {
     /// It indicates the epoch number of the block, i.e., the height of the
     /// corresponding pivot chain block of this one
@@ -153,6 +155,7 @@ impl ConsensusGraphNodeData {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct ConsensusGraphPivotData {
     /// The set of blocks whose last_pivot_in_past point to this pivot chain
     /// location
@@ -444,6 +447,7 @@ pub struct ConsensusGraphInner {
     old_era_block_set: Mutex<VecDeque<H256>>,
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,

@@ -2024,6 +2024,8 @@ name = "hibitset"
 version = "0.6.0"
 dependencies = [
  "atom",
+ "malloc_size_of",
+ "malloc_size_of_derive",
  "rand 0.7.3",
  "rayon",
 ]
@@ -2858,6 +2860,8 @@ name = "link-cut-tree"
 version = "0.1.0"
 dependencies = [
  "cfx-types",
+ "malloc_size_of",
+ "malloc_size_of_derive",
  "parking_lot 0.10.0",
  "rand 0.7.3",
 ]
@@ -2985,6 +2989,7 @@ version = "0.0.1"
 dependencies = [
  "cfg-if",
  "cfx-types",
+ "slab 0.4.2",
  "winapi 0.3.8",
 ]
 
