@@ -1199,10 +1199,31 @@ impl ConsensusNewBlockHandler {
         queue: &mut VecDeque<usize>,
     )
     {
-        debug!(
-            "Start activating block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
-            me, inner.arena[me].hash, block_body_opt.is_some(),
-        );
+        inner.arena[me].data.activated = true;
+        let mut succ_list = inner.arena[me].children.clone();
+        succ_list.extend(inner.arena[me].referrers.iter());
+        for succ in &succ_list {
+            assert!(inner.arena[*succ].data.active_cnt > 0);
+            inner.arena[*succ].data.active_cnt -= 1;
+            if inner.arena[*succ].data.active_cnt == 0 {
+                queue.push_back(*succ);
+            }
+        }
+        // The above is the only thing we need to do for out-of-era blocks
+        // so for these blocks, we quit here.
+        if inner.arena[me].era_block == NULL {
+            debug!(
+                "Updated active counters for out-of-era block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
+                me, inner.arena[me].hash, block_body_opt.is_some(),
+            );
+            return;
+        } else {
+            debug!(
+                "Start activating block in ConsensusGraph: index = {:?} hash={:?} has_body={}",
+                me, inner.arena[me].hash, block_body_opt.is_some(),
+            );
+        }
+
         let parent = inner.arena[me].parent;
         let has_body = block_body_opt.is_some();
         // Update terminal hashes for mining
@@ -1214,7 +1235,6 @@ impl ConsensusNewBlockHandler {
             inner.terminal_hashes.remove(&inner.arena[*referee].hash);
         }
 
-        inner.arena[me].data.activated = true;
         self.update_lcts_finalize(inner, me);
         let my_weight = inner.block_weight(me);
         let mut extend_pivot = false;
@@ -1436,16 +1456,6 @@ impl ConsensusNewBlockHandler {
                 me,
                 Some(blockset),
             );
-        }
-
-        let mut succ_list = inner.arena[me].children.clone();
-        succ_list.extend(inner.arena[me].referrers.iter());
-        for succ in &succ_list {
-            assert!(inner.arena[*succ].data.active_cnt > 0);
-            inner.arena[*succ].data.active_cnt -= 1;
-            if inner.arena[*succ].data.active_cnt == 0 {
-                queue.push_back(*succ);
-            }
         }
 
         // Only process blocks in the subtree of stable
@@ -1791,7 +1801,7 @@ impl ConsensusNewBlockHandler {
         let parent_hash = block_header.parent_hash();
         let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
         // current block is outside era or it's parent is outside era
-        if parent_index.is_none()
+        let me = if parent_index.is_none()
             || inner.arena[*parent_index.unwrap()].era_block == NULL
         {
             debug!(
@@ -1803,7 +1813,7 @@ impl ConsensusNewBlockHandler {
                 .local_block_info_from_db(hash)
                 .map(|info| info.get_status())
                 .unwrap_or(BlockStatus::Pending);
-            let sn = inner.insert_out_era_block(
+            let (sn, me) = inner.insert_out_era_block(
                 &block_header,
                 block_status_in_db == BlockStatus::PartialInvalid,
             );
@@ -1814,21 +1824,38 @@ impl ConsensusNewBlockHandler {
             );
             self.data_man
                 .insert_local_block_info_to_db(hash, block_info);
-            return;
-        }
-
-        let (me, indices_len) = inner.insert(&block_header);
-        self.statistics
-            .set_consensus_graph_inserted_block_count(indices_len);
-
-        inner.block_body_caches.insert(me, block_body_opt);
-        self.update_lcts_initial(inner, me);
+            // If me is NULL, it means that this block does not have any stub,
+            // so we can safely ignore it in the consensus besides
+            // update its sequence number in the data manager.
+            if me == NULL {
+                return;
+            }
+            me
+        } else {
+            let (me, indices_len) = inner.insert(&block_header);
+            self.statistics
+                .set_consensus_graph_inserted_block_count(indices_len);
+            inner.block_body_caches.insert(me, block_body_opt);
+            self.update_lcts_initial(inner, me);
+            me
+        };
 
         if inner.arena[me].data.active_cnt == 0 {
             let mut queue: VecDeque<usize> = VecDeque::new();
             queue.push_back(me);
             while let Some(me) = queue.pop_front() {
-                let block_status = self.preactivate_block(inner, me);
+                // For out-of-era blocks, we just fetch the results from the
+                // already filled field. We do not run
+                // preactivate_block() on them.
+                let block_status = if inner.arena[me].era_block != NULL {
+                    self.preactivate_block(inner, me)
+                } else {
+                    if inner.arena[me].data.partial_invalid {
+                        BlockStatus::PartialInvalid
+                    } else {
+                        BlockStatus::Pending
+                    }
+                };
 
                 if block_status == BlockStatus::PartialInvalid {
                     inner.arena[me].data.partial_invalid = true;
@@ -1849,10 +1876,6 @@ impl ConsensusNewBlockHandler {
                 } else {
                     if block_status == BlockStatus::Pending {
                         inner.arena[me].data.pending = true;
-                        // ConsensusNewBlockHandler::
-                        // try_clear_blockset_in_own_view_of_epoch(
-                        //                             inner, me,
-                        //                         );
                         debug!(
                             "Block {} (hash = {}) is pending but processed",
                             me, inner.arena[me].hash
@@ -1864,7 +1887,7 @@ impl ConsensusNewBlockHandler {
                         );
                     }
                     let transactions =
-                        inner.block_body_caches.remove(&me).unwrap();
+                        inner.block_body_caches.remove(&me).unwrap_or(None);
                     self.activate_block(
                         inner,
                         me,
@@ -1892,7 +1915,7 @@ impl ConsensusNewBlockHandler {
                     assert!(inner.arena[x].data.active_cnt == NULL);
                     inner.arena[x].data.active_cnt = 0;
                     let transactions =
-                        inner.block_body_caches.remove(&x).unwrap();
+                        inner.block_body_caches.remove(&x).unwrap_or(None);
                     self.activate_block(
                         inner,
                         x,
