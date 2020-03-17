@@ -368,8 +368,9 @@ impl ConsensusNewBlockHandler {
         for (i, node) in inner.arena.iter() {
             if node.data.epoch_number > last_in_pivot
                 && !visited.contains(i as u32)
-                && (node.data.activated || node.data.active_cnt == NULL)
+                && (node.data.activated || node.data.active_cnt == NULL) /* We include only preactivated blocks */
                 && node.era_block != NULL
+            /* We exclude out-of-era blocks */
             {
                 anticone.add(i as u32);
             }
