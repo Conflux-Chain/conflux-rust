@@ -12,7 +12,11 @@ use cfxcore::{
         ConsensusConfig as TreeGraphConsensusConfig,
     },
     block_data_manager::{DataManagerConfiguration, DbType},
-    consensus::{ConsensusConfig, ConsensusInnerConfig},
+    consensus::{
+        consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        ConsensusConfig, ConsensusInnerConfig,
+    },
+    consensus_internal_parameters::*,
     consensus_parameters::*,
     storage::{
         self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
@@ -96,6 +100,7 @@ build_config! {
 
         // Genesis section.
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
+        (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -590,6 +595,14 @@ impl Configuration {
         }
     }
 
+    pub fn execution_config(&self) -> ConsensusExecutionConfiguration {
+        ConsensusExecutionConfiguration {
+            anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
+            base_reward_table_in_ucfx: build_base_reward_table(),
+            transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
+        }
+    }
+
     pub fn is_test_mode(&self) -> bool {
         match self.raw_conf.mode.as_ref().map(|s| s.as_str()) {
             Some("test") => true,
@@ -634,4 +647,20 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
         Some(_) => Ok(vec![]),
         None => Ok(vec![]),
     }
+}
+
+pub fn build_base_reward_table() -> Vec<u64> {
+    let mut base_reward_table = Vec::new();
+    base_reward_table.resize(MINING_REWARD_DECAY_PERIOD_IN_QUARTER, 0);
+    for i in 0..MINING_REWARD_DECAY_PERIOD_IN_QUARTER {
+        let reward = if i == 0 {
+            INITIAL_BASE_MINING_REWARD_IN_UCFX
+        } else {
+            (base_reward_table[i - 1] as f64
+                * MINING_REWARD_DECAY_RATIO_PER_QUARTER)
+                .round() as u64
+        };
+        base_reward_table[i] = reward;
+    }
+    base_reward_table
 }

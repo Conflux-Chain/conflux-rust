@@ -1,10 +1,14 @@
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
-    consensus::{ConsensusConfig, ConsensusInnerConfig},
+    consensus::{
+        consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        ConsensusConfig, ConsensusInnerConfig,
+    },
     db::NUM_COLUMNS,
     parameters::{
         consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
+        consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
     pow::ProofOfWorkConfig,
@@ -179,6 +183,11 @@ pub fn initialize_synchronization_graph_with_data_manager(
         data_man.clone(),
         pow_config.clone(),
         notifications.clone(),
+        ConsensusExecutionConfiguration {
+            anticone_penalty_ratio: tcr - 1,
+            base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
+            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+        },
     ));
 
     let verification_config = VerificationConfig::new(true);
