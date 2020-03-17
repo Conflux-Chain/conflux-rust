@@ -1483,27 +1483,36 @@ impl<'a> Executive<'a> {
 
         // gas_used is only used to estimate gas needed
         let gas_used = tx.gas - gas_left;
-        // 2*gas_left should be smaller than gas_used, otherwise
-        // all the gas is charged.
-        let charge_all = (gas_left + gas_left) >= gas_used;
-        let (cumulative_gas_used, fees_value) = if charge_all {
-            (self.env.gas_used + tx.gas, tx.gas * tx.gas_price)
+        // gas_left should be smaller than 1/4 of gas_limit, otherwise
+        // 3/4 of gas_limit is charged.
+        let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
+        let (cumulative_gas_used, fees_value, refund_value) = if charge_all {
+            let gas_refunded = tx.gas >> 2;
+            let gas_charged = tx.gas - gas_refunded;
+            (
+                self.env.gas_used + gas_charged,
+                gas_charged * tx.gas_price,
+                gas_refunded * tx.gas_price,
+            )
         } else {
-            let spec = self.spec;
-            let refundee = if let Some(r) = refund_receiver {
-                r
-            } else {
-                tx.sender()
-            };
-            let refund_value = gas_left * tx.gas_price;
-            self.state.add_balance(
-                &refundee,
-                &refund_value,
-                substate.to_cleanup_mode(&spec),
-            )?;
-
-            (self.env.gas_used + gas_used, gas_used * tx.gas_price)
+            (
+                self.env.gas_used + gas_used,
+                gas_used * tx.gas_price,
+                gas_left * tx.gas_price,
+            )
         };
+
+        let refundee = if let Some(r) = refund_receiver {
+            r
+        } else {
+            tx.sender()
+        };
+        let spec = self.spec;
+        self.state.add_balance(
+            &refundee,
+            &refund_value,
+            substate.to_cleanup_mode(&spec),
+        )?;
 
         // perform suicides
         for address in &substate.suicides {
