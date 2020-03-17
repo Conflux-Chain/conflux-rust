@@ -6,7 +6,7 @@ use crate::{
     block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
 };
 use cfx_types::{BigEndianHash, H256, U256, U512};
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
 use rlp::RlpStream;
 use std::{collections::HashMap, convert::TryFrom};
@@ -44,7 +44,7 @@ pub struct ProofOfWorkSolution {
     pub nonce: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, DeriveMallocSizeOf)]
 pub struct ProofOfWorkConfig {
     pub test_mode: bool,
     pub use_stratum: bool,
@@ -54,12 +54,6 @@ pub struct ProofOfWorkConfig {
     pub stratum_listen_addr: String,
     pub stratum_port: u16,
     pub stratum_secret: Option<H256>,
-}
-
-impl MallocSizeOf for ProofOfWorkConfig {
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.stratum_listen_addr.size_of(ops)
-    }
 }
 
 impl ProofOfWorkConfig {
