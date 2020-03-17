@@ -1374,7 +1374,7 @@ impl ConsensusGraphInner {
     /// `arena`.
     pub fn insert_out_era_block(
         &mut self, block_header: &BlockHeader, partial_invalid: bool,
-    ) -> u64 {
+    ) -> (u64, usize) {
         let sn = self.get_next_sequence_number();
         let hash = block_header.hash();
         // we make cur_era_genesis be it's parent if it doesn‘t has one.
@@ -1393,7 +1393,14 @@ impl ConsensusGraphInner {
 
         if parent == NULL && referees.is_empty() {
             self.old_era_block_set.lock().push_back(hash);
-            return sn;
+            return (sn, NULL);
+        }
+
+        let mut active_cnt = 0;
+        for referee in &referees {
+            if !self.arena[*referee].data.activated {
+                active_cnt += 1;
+            }
         }
 
         // actually, we only need these fields: `parent`, `referees`,
@@ -1414,10 +1421,10 @@ impl ConsensusGraphInner {
             children: Vec::new(),
             referees,
             referrers: Vec::new(),
-            data: ConsensusGraphNodeData::new(NULLU64, sn, 0),
+            data: ConsensusGraphNodeData::new(NULLU64, sn, active_cnt),
         });
         self.arena[index].data.pending = true;
-        self.arena[index].data.activated = true;
+        self.arena[index].data.activated = false;
         self.arena[index].data.partial_invalid = partial_invalid;
         self.hash_to_arena_indices.insert(hash, index);
 
@@ -1432,7 +1439,7 @@ impl ConsensusGraphInner {
         self.weight_tree.make_tree(index);
         self.adaptive_tree.make_tree(index);
 
-        sn
+        (sn, index)
     }
 
     fn get_timer_difficulty(&self, me: usize) -> i128 {
