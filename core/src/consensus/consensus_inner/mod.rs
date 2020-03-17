@@ -1597,6 +1597,7 @@ impl ConsensusGraphInner {
                 if !visited.contains(*child as u32)
                     && (self.arena[*child].data.activated
                         || self.arena[*child].data.active_cnt == NULL)
+                /* We include all preactivated blocks */
                 {
                     visited.add(*child as u32);
                     queue.push_back(*child);
@@ -1606,6 +1607,7 @@ impl ConsensusGraphInner {
                 if !visited.contains(*referrer as u32)
                     && (self.arena[*referrer].data.activated
                         || self.arena[*referrer].data.active_cnt == NULL)
+                /* We include all preactivated blocks */
                 {
                     visited.add(*referrer as u32);
                     queue.push_back(*referrer);
