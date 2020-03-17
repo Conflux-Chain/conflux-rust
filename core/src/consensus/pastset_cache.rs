@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use hibitset::BitSet;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::collections::{HashMap, HashSet};
 
 const MAX_PASTSET_CACHE_CAP: usize = 256;
@@ -11,6 +12,12 @@ const MAX_PASTSET_CACHE_CAP: usize = 256;
 pub struct PastSetCache {
     cache: HashMap<usize, (BitSet, u64)>,
     entry: u64,
+}
+
+impl MallocSizeOf for PastSetCache {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.cache.size_of(ops)
+    }
 }
 
 impl PastSetCache {
