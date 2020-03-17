@@ -21,6 +21,7 @@ class P2PTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["timer_chain_beta"] = "20"
         self.conf_parameters["era_epoch_count"] = "50"
+        self.conf_parameters["anticone_penalty_ratio"] = "10"
         self.stop_probability = 0.02
         self.clean_probability = 0.5
 

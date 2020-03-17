@@ -151,6 +151,7 @@ impl ArchiveClient {
             data_man.clone(),
             pow_config.clone(),
             notifications.clone(),
+            conf.execution_config(),
         ));
 
         let protocol_config = conf.protocol_config();

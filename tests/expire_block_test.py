@@ -16,6 +16,7 @@ class ExpireBlockTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_beta"] = "15"
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
+        self.conf_parameters["anticone_penalty_ratio"] = "10"
         self.num_nodes = 2
 
     def setup_network(self):

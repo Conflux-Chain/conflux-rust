@@ -473,6 +473,7 @@ class ConfluxTracing(ConfluxTestFramework):
             "adaptive_weight_beta": "1",
             "timer_chain_block_difficulty_ratio": "3",
             "timer_chain_beta": "20",
+            "anticone_penalty_ratio": "10",
         }
 
     def setup_nodes(self):

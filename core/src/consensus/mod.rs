@@ -20,6 +20,7 @@ pub use crate::consensus::{
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
+    consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
     executive::Executed,
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
@@ -165,6 +166,7 @@ impl ConsensusGraph {
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
         era_stable_block_hash: &H256, notifications: Arc<Notifications>,
+        execution_conf: ConsensusExecutionConfiguration,
     ) -> Self
     {
         let inner =
@@ -180,7 +182,7 @@ impl ConsensusGraph {
             data_man.clone(),
             vm,
             inner.clone(),
-            conf.transaction_epoch_bound,
+            execution_conf,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
@@ -221,6 +223,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
+        execution_conf: ConsensusExecutionConfiguration,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -235,6 +238,7 @@ impl ConsensusGraph {
             &genesis_hash,
             &stable_hash,
             notifications,
+            execution_conf,
         )
     }
 

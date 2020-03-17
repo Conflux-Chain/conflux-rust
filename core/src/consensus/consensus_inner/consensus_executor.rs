@@ -162,14 +162,14 @@ impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        transaction_epoch_bound: u64, bench_mode: bool,
+        config: ConsensusExecutionConfiguration, bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
             vm,
-            transaction_epoch_bound,
+            config,
         ));
         let (sender, receiver) = channel();
 
@@ -444,7 +444,7 @@ impl ConsensusExecutor {
                         // adjustment.
                         // LINT.IfChange(ANTICONE_PENALTY_1)
                         if anticone_difficulty / U512::from(epoch_difficulty)
-                            >= U512::from(ANTICONE_PENALTY_RATIO)
+                            >= U512::from(self.handler.config.anticone_penalty_ratio)
                         {
                             no_reward = true;
                         }
@@ -754,44 +754,24 @@ impl ConsensusExecutor {
     }
 }
 
-fn build_base_reward_table() -> Vec<u64> {
-    let mut base_reward_table = Vec::new();
-    base_reward_table.resize(MINING_REWARD_DECAY_PERIOD_IN_QUARTER, 0);
-    for i in 0..MINING_REWARD_DECAY_PERIOD_IN_QUARTER {
-        let reward = if i == 0 {
-            INITIAL_BASE_MINING_REWARD_IN_UCFX
-        } else {
-            (base_reward_table[i - 1] as f64
-                * MINING_REWARD_DECAY_RATIO_PER_QUARTER)
-                .round() as u64
-        };
-        base_reward_table[i] = reward;
-    }
-    base_reward_table
-}
-
 pub struct ConsensusExecutionHandler {
     tx_pool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
-    base_reward_table_in_ucfx: Vec<u64>,
-
-    transaction_epoch_bound: u64,
+    config: ConsensusExecutionConfiguration,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
-        vm: VmFactory, transaction_epoch_bound: u64,
+        vm: VmFactory, config: ConsensusExecutionConfiguration,
     ) -> Self
     {
-        let base_reward_table_in_ucfx = build_base_reward_table();
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
             vm,
-            base_reward_table_in_ucfx,
-            transaction_epoch_bound,
+            config,
         }
     }
 
@@ -1094,7 +1074,7 @@ impl ConsensusExecutionHandler {
                     // tx_epoch_bound], we are going to skip the
                     // execution of the transaction.
                     let epoch_height_in_bound = if pivot_height
-                        + self.transaction_epoch_bound
+                        + self.config.transaction_epoch_bound
                         < transaction.epoch_height
                     {
                         info!("tx execution error: the transaction epoch height is too far ahead! pivot height {} transaction epoch height {}", pivot_height, transaction.epoch_height);
@@ -1106,7 +1086,7 @@ impl ConsensusExecutionHandler {
                         false
                     } else if pivot_height
                         > transaction.epoch_height
-                            + self.transaction_epoch_bound
+                            + self.config.transaction_epoch_bound
                     {
                         info!("tx execution error: the transaction epoch height is too old! pivot height {} transaction epoch height {}", pivot_height, transaction.epoch_height);
                         false
@@ -1226,12 +1206,13 @@ impl ConsensusExecutionHandler {
     fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
         let reward_table_index =
             (past_block_count / MINED_BLOCK_COUNT_PER_QUARTER) as usize;
-        let reward_in_ucfx =
-            if reward_table_index < self.base_reward_table_in_ucfx.len() {
-                self.base_reward_table_in_ucfx[reward_table_index]
-            } else {
-                ULTIMATE_BASE_MINING_REWARD_IN_UCFX
-            };
+        let reward_in_ucfx = if reward_table_index
+            < self.config.base_reward_table_in_ucfx.len()
+        {
+            self.config.base_reward_table_in_ucfx[reward_table_index]
+        } else {
+            ULTIMATE_BASE_MINING_REWARD_IN_UCFX
+        };
 
         U512::from(reward_in_ucfx) * U512::from(CONFLUX_TOKEN / 1_000_000)
     }
@@ -1304,8 +1285,8 @@ impl ConsensusExecutionHandler {
                         / U512::from(epoch_difficulty)
                         * anticone_difficulty
                         / U512::from(epoch_difficulty)
-                        / U512::from(ANTICONE_PENALTY_RATIO)
-                        / U512::from(ANTICONE_PENALTY_RATIO);
+                        / U512::from(self.config.anticone_penalty_ratio)
+                        / U512::from(self.config.anticone_penalty_ratio);
                     // Lint.ThenChange(consensus/mod.rs#ANTICONE_PENALTY_1)
 
                     debug_assert!(reward > anticone_penalty);
@@ -1599,4 +1580,12 @@ impl ConsensusExecutionHandler {
         trace!("Execution result {:?}", r);
         r.map_err(|e| format!("execution error: {:?}", e))
     }
+}
+
+pub struct ConsensusExecutionConfiguration {
+    /// Anticone penalty ratio for reward processing.
+    /// It should be less than `timer_chain_beta`.
+    pub anticone_penalty_ratio: u64,
+    pub base_reward_table_in_ucfx: Vec<u64>,
+    pub transaction_epoch_bound: u64,
 }

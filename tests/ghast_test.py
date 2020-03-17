@@ -8,6 +8,7 @@ from conflux.rpc import RpcClient
 
 TIMER_RATIO = 3
 TIMER_BETA = 20
+ANTICONE_PENALTY_BETA = 10
 INITIAL_DIFFICULTY = 1000
 
 class GHASTTest(ConfluxTestFramework):
@@ -17,6 +18,7 @@ class GHASTTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = TIMER_RATIO
         self.conf_parameters["timer_chain_beta"] = TIMER_BETA
         self.conf_parameters["initial_difficulty"] = INITIAL_DIFFICULTY
+        self.conf_parameters["anticone_penalty_ratio"] = ANTICONE_PENALTY_BETA
 
     def setup_network(self):
         self.setup_nodes()
