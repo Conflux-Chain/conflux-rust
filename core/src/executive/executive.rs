@@ -24,7 +24,11 @@ use cfx_types::{Address, H256, U256, U512};
 use primitives::{
     receipt::StorageChange, transaction::Action, SignedTransaction,
 };
-use std::{collections::HashSet, convert::TryFrom, sync::Arc};
+use std::{
+    collections::HashSet,
+    convert::{TryFrom, TryInto},
+    sync::Arc,
+};
 
 /// Returns new address created from address, nonce, and code hash
 pub fn contract_address(
@@ -1324,26 +1328,30 @@ impl<'a> Executive<'a> {
         if balance512 < total_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
+            let actual_cost: U256;
             if !free_of_charge {
-                let actual_cost = if gas_cost > balance512 {
+                actual_cost = if gas_cost > balance512 {
                     balance512
                 } else {
                     gas_cost
-                };
+                }
+                .try_into()
+                .unwrap();
                 self.state.sub_balance(
                     &sender,
-                    &U256::try_from(actual_cost).unwrap(),
+                    &actual_cost,
                     &mut substate.to_cleanup_mode(&spec),
                 )?;
             } else {
-                self.state.sub_sponsor_balance_for_gas(
-                    &code_address,
-                    &U256::try_from(gas_cost).unwrap(),
-                )?;
+                // We have checked that the sponsor has enough balance.
+                actual_cost = gas_cost.try_into().unwrap();
+                self.state
+                    .sub_sponsor_balance_for_gas(&code_address, &actual_cost)?;
             }
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
+                actual_cost,
             });
         }
 
