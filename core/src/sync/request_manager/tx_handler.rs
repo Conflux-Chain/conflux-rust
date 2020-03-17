@@ -453,6 +453,7 @@ impl InflightPendingTransactionContainer {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct TransactionCacheContainerInner {
     tx_hashes_map: HashMap<u32, HashSet<H256>>,
     tx_map: HashMap<H256, Arc<SignedTransaction>>,
@@ -469,6 +470,7 @@ impl TransactionCacheContainerInner {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct TransactionCacheContainer {
     inner: TransactionCacheContainerInner,
 }
