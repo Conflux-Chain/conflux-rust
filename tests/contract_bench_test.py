@@ -373,6 +373,7 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.functions.getHash(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1]), 0, ts, True).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         v, r, s = ecsign(bytes.fromhex(result[2:]), self.pri[0])
+        v -= 27
         r = self.fixto64(hex(r))
         s = self.fixto64(hex(s))
         assert(len(r) == 66)
