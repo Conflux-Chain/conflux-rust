@@ -25,7 +25,7 @@ class TransactionTest(DefaultConfluxTestFramework):
         receiver_addr = privtoaddr(receiver_sk)
         client = RpcClient(self.nodes[0])
 
-        value = 100000000;
+        value = 100000000
         tx = create_transaction(pri_key = genesis_key, receiver=receiver_addr, value = value, nonce = 0, gas_price = 1, epoch_height = 0)
         client.send_tx(tx)
         block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.1)

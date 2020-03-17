@@ -3,7 +3,7 @@ import datetime
 from http.client import CannotSendRequest
 from conflux.utils import convert_to_nodeid, privtoaddr, parse_as_int, encode_hex
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import  create_transaction
+from test_framework.blocktools import create_transaction, wait_for_initial_nonce
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
@@ -44,6 +44,8 @@ class SingleBench(ConfluxTestFramework):
                 if i % 1000 == 0:
                     self.log.debug("generated %d tx", i)
                 sender_key = random.choice(list(balance_map))
+                if sender_key not in nonce_map:
+                    nonce_map[sender_key] = wait_for_initial_nonce(self.nodes[0], sender_key)
                 nonce = nonce_map[sender_key]
                 if random.random() < 0.1 and balance_map[sender_key] > 21000 * 4 * tx_n:
                     value = int(balance_map[sender_key] * 0.5)

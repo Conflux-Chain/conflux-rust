@@ -668,7 +668,6 @@ impl ConsensusGraph {
         // FIXME: check if we should fill the correct `block_number`.
         let state = State::new(
             state_db,
-            0.into(),           /* account_start_nonce */
             Default::default(), /* vm */
             0,                  /* block_number */
         );
@@ -1081,9 +1080,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
                         .map(|db| {
                             State::new(
                                 StateDb::new(db),
-                                0.into(), /* account_start_nonce */
                                 Default::default(), /* vm */
-                                past_num_blocks, /* block_numer */
+                                past_num_blocks,    /* block_numer */
                             )
                         })
                         .expect("Best state has been executed");

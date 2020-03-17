@@ -7,7 +7,7 @@ from rlp.sedes import Binary, BigEndianInt
 from conflux import utils
 from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_block, create_transaction
+from test_framework.blocktools import create_block, create_transaction, wait_for_initial_nonce
 from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
@@ -19,6 +19,8 @@ class TransactionTest(DefaultConfluxTestFramework):
         self.log.info("Initial State: (sk:%d, addr:%s, balance:%d)", bytes_to_int(genesis_key),
                       eth_utils.encode_hex(privtoaddr(genesis_key)), balance_map[genesis_key])
         nonce_map = {genesis_key: 0}
+        block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.2)
+        block_gen_thread.start()
 
         '''Check if transaction from uncommitted new address can be accepted'''
         tx_n = 5
@@ -27,11 +29,13 @@ class TransactionTest(DefaultConfluxTestFramework):
         for i in range(tx_n):
             sender_key = receiver_sk
             value = int((balance_map[sender_key] - ((tx_n - i) * 21000 * gas_price)) * random.random())
+            if sender_key not in nonce_map:
+                nonce_map[sender_key] = wait_for_initial_nonce(self.nodes[0], sender_key)
             nonce = nonce_map[sender_key]
             receiver_sk, _ = ec_random_keys()
-            nonce_map[receiver_sk] = 0
             balance_map[receiver_sk] = value
-            tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
+            receiver_addr = privtoaddr(receiver_sk)
+            tx = create_transaction(pri_key=sender_key, receiver=receiver_addr, value=value, nonce=nonce,
                                     gas_price=gas_price)
             r = random.randint(0, self.num_nodes - 1)
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
@@ -40,9 +44,6 @@ class TransactionTest(DefaultConfluxTestFramework):
             self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
                            value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
-            time.sleep(random.random() / 100)
-        block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.2)
-        block_gen_thread.start()
         for k in balance_map:
             self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
             wait_until(lambda: self.check_account(k, balance_map))
@@ -54,6 +55,8 @@ class TransactionTest(DefaultConfluxTestFramework):
         self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/100/2)
         for i in range(tx_n):
             sender_key = random.choice(list(balance_map))
+            if sender_key not in nonce_map:
+                nonce_map[sender_key] = wait_for_initial_nonce(self.nodes[0], sender_key)
             nonce = nonce_map[sender_key]
             data = b''
             rand_n = random.random()
@@ -62,7 +65,6 @@ class TransactionTest(DefaultConfluxTestFramework):
                 value = int(balance_map[sender_key] * 0.5)
                 receiver_sk, _ = ec_random_keys()
                 receiver = privtoaddr(receiver_sk)
-                nonce_map[receiver_sk] = 0
                 balance_map[receiver_sk] = value
             elif rand_n > 0.9 and balance_map[sender_key] > 21000 * 4 * tx_n:
                 value = 0

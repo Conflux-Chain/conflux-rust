@@ -71,9 +71,21 @@ def create_block_with_nonce(
 
 
 def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=default_config['GENESIS_COINBASE'],
-                       data=b'', pri_key=default_config["GENESIS_PRI_KEY"], storage_limit=2 ** 256 - 1, epoch_height = 0, chain_id = 0):
+                       data=b'', pri_key=default_config["GENESIS_PRI_KEY"], storage_limit=2 ** 256 - 1, epoch_height = 0, chain_id = 0, node=None):
     transaction = UnsignedTransaction(nonce, gas_price, gas, receiver, value, data, storage_limit, epoch_height, chain_id)
     return transaction.sign(pri_key)
+
+
+# FIXME Add timeout
+def wait_for_initial_nonce(node, key):
+    if key == default_config["GENESIS_PRI_KEY"]:
+        return 0
+    nonce = 0
+    while nonce == 0:
+        nonce = int(node.cfx_getTransactionCount(encode_hex_0x(privtoaddr(key))), 0)
+        time.sleep(0.01)
+    print("nonce for addr", encode_hex_0x(privtoaddr(key)), nonce)
+    return nonce
 
 
 def make_genesis():

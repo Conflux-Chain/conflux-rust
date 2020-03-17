@@ -595,7 +595,6 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .expect("State exists"),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
@@ -997,7 +996,6 @@ impl ConsensusExecutionHandler {
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             0, /* block_number */
         );
