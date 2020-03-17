@@ -13,7 +13,9 @@
 
 use cfg_if::cfg_if;
 use cfx_types::{H256, H512};
+use slab::Slab;
 use std::{
+    collections::{BinaryHeap, VecDeque},
     hash::{BuildHasher, Hash},
     mem::{self, size_of},
     ops::Range,
@@ -218,6 +220,61 @@ impl<T> MallocShallowSizeOf for Vec<T> {
 }
 
 impl<T: MallocSizeOf> MallocSizeOf for Vec<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for elem in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Clone)]
+enum Entry<T> {
+    Vacant(usize),
+    Occupied(T),
+}
+
+impl<T> MallocShallowSizeOf for Slab<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<Entry<T>>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for Slab<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for (_, elem) in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+impl<T> MallocShallowSizeOf for BinaryHeap<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<T>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for BinaryHeap<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for elem in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+impl<T> MallocShallowSizeOf for VecDeque<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<T>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for VecDeque<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         let mut n = self.shallow_size_of(ops);
         for elem in self.iter() {
