@@ -6,6 +6,7 @@ use crate::{
     block_data_manager::BlockDataManager, hash::keccak, parameters::pow::*,
 };
 use cfx_types::{BigEndianHash, H256, U256, U512};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
 use rlp::RlpStream;
@@ -252,6 +253,7 @@ where
 }
 
 //FIXME: make entries replaceable
+#[derive(DeriveMallocSizeOf)]
 struct TargetDifficultyCacheInner {
     cache: HashMap<H256, U256>,
 }
@@ -266,6 +268,12 @@ impl TargetDifficultyCacheInner {
 
 struct TargetDifficultyCache {
     inner: RwLock<TargetDifficultyCacheInner>,
+}
+
+impl MallocSizeOf for TargetDifficultyCache {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.inner.read().size_of(ops)
+    }
 }
 
 impl TargetDifficultyCache {
@@ -290,6 +298,7 @@ impl TargetDifficultyCache {
 /// This is a data structure to cache the computed target difficulty
 /// of a adjustment period. Each element is indexed by the hash of
 /// the upper boundary block of the period.
+#[derive(DeriveMallocSizeOf)]
 pub struct TargetDifficultyManager {
     cache: TargetDifficultyCache,
 }
