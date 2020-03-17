@@ -56,27 +56,27 @@ class LatencyExperiment:
         self.stat_archive_file = "exp_stat_latency.tgz"
 
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
-        exp_latency_options = dict(
+        self.exp_latency_options = dict(
             vms = 10,
             batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
         )
-        OptionHelper.add_options(parser, exp_latency_options)
+        OptionHelper.add_options(parser, self.exp_latency_options)
 
         def k_from_kv(kv):
             (k, v) = kv
             return k
 
         remote_simulate_options = dict(filter(
-            lambda kv: k_from_kv(kv) in set(["bandwidth", "enable_flamegraph", "enable_tx_propagation", "ips_file"]),
-            list(RemoteSimulate.SIMULATE_OPTIONS.items()) +
-                         list(RemoteSimulate.PASS_TO_CONFLUX_OPTIONS.items())))
+            lambda kv: k_from_kv(kv) in set(["bandwidth", "profiler", "enable_tx_propagation", "ips_file"]),
+            list(RemoteSimulate.SIMULATE_OPTIONS.items())))
+        remote_simulate_options.update(RemoteSimulate.PASS_TO_CONFLUX_OPTIONS)
         # Configs with different default values than RemoteSimulate
         remote_simulate_options["nodes_per_host"] = 1
         remote_simulate_options["storage_memory_gb"] = 2
         remote_simulate_options["connect_peers"] = 8
         remote_simulate_options["tps"] = 4000
-        OptionHelper.add_options(parser, remote_simulate_options)
 
+        OptionHelper.add_options(parser, remote_simulate_options)
         self.options = parser.parse_args()
 
         if os.path.getsize("./genesis_secrets.txt") % 65 != 0:
@@ -135,13 +135,16 @@ class LatencyExperiment:
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
         cmd = [
-            "python3 ../remote_simulate.py",
+            "python3",
+            "../remote_simulate.py",
             "--generation-period-ms", str(config.block_gen_interval_ms),
             "--num-blocks", str(config.num_blocks),
             "--txs-per-block", str(config.txs_per_block),
             "--generate-tx-data-len", str(config.tx_size),
             "--tx-pool-size", str(1_000_000),
-        ] + OptionHelper.parsed_options_to_args(self.options)
+        ] + OptionHelper.parsed_options_to_args(
+            dict(filter(lambda kv: kv[0] not in self.exp_latency_options, vars(self.options).items()))
+        )
 
         if config.data_propagate_enabled:
             cmd.extend([
@@ -150,9 +153,9 @@ class LatencyExperiment:
                 "--data-propagate-size", str(config.data_propagate_size),
             ])
 
+        log_file = open(self.simulate_log_file, "w")
         print("[CMD]: {} > {}".format(cmd, self.simulate_log_file))
-
-        ret = subprocess.run(cmd, stdout = self.simulate_log_file).returncode
+        ret = subprocess.run(cmd, stdout = log_file, stderr=log_file).returncode
         assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(ret, self.simulate_log_file)
 
         os.system('grep "(ERROR)" {}'.format(self.simulate_log_file))
