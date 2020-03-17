@@ -10,7 +10,6 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -23,13 +22,8 @@ class P2PTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def run_test(self):
-        # Prevent easysolc from configuring the root logger to print to stderr
-        self.log.propagate = False
-
-        solc = Solc()
-        # erc20_contract = solc.get_contract_instance(source=os.path.dirname(os.path.realpath(__file__)) + "/erc20.sol", contract_name="FixedSupplyToken")
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        erc20_contract = solc.get_contract_instance(
+        erc20_contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/erc20_abi.json"),
             bytecode_file = os.path.join(file_dir, "contracts/erc20_bytecode.dat"),
         )

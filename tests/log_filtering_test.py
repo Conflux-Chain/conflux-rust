@@ -10,8 +10,6 @@ from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
-from web3 import Web3
-from easysolc import Solc
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
 CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address,address)"))

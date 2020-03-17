@@ -9,7 +9,6 @@ from conflux.rpc import RpcClient
 from conflux.utils import privtoaddr, int_to_hex
 from test_framework.util import assert_equal, assert_is_hash_string
 from web3 import Web3
-from easysolc import Solc
 
 class TestContract(RpcClient):
 

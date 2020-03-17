@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
-import json
-
 from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, privtoaddr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
@@ -11,7 +9,6 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 class WithdrawDepositTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -37,16 +34,12 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
 
     def run_test(self):
-        # Prevent easysolc from configuring the root logger to print to stderr
-        self.log.propagate = False
-
-        solc = Solc()
         file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
         file_path.pop(-1)
         file_path.extend(["internal_contract", "metadata", "Staking.json"])
         file_path = "/".join(file_path)
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
-        staking_contract = solc.get_contract_instance(contract_dict=staking_contract_dict)
+        staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
 
         start_p2p_connection(self.nodes)
 
