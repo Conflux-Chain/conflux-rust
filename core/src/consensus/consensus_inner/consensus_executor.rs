@@ -903,7 +903,7 @@ impl ConsensusExecutionHandler {
                     .data_man
                     .state_availability_boundary
                     .read()
-                    .check_availability(start_block_number + 1, epoch_hash)
+                    .check_availability(pivot_block_header.height(), epoch_hash)
                 {
                     self.tx_pool
                         .set_best_executed_epoch(StateIndex::new_for_readonly(
