@@ -1361,7 +1361,6 @@ impl ConsensusNewBlockHandler {
                 }
             }
             if pivot_changed {
-                debug!("Old pivot chain: {:?}", inner.pivot_chain);
                 // The new subtree is heavier, update pivot chain
                 let fork_pivot_index = inner.height_to_pivot_index(fork_at);
                 assert!(fork_pivot_index < inner.pivot_chain.len());
@@ -1414,7 +1413,6 @@ impl ConsensusNewBlockHandler {
                         );
                     }
                 }
-                debug!("New pivot chain: {:?}", inner.pivot_chain);
             }
         };
         debug!(
