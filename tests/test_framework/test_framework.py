@@ -541,14 +541,15 @@ class DefaultConfluxTestFramework(ConfluxTestFramework):
 
 class OptionHelper:
     def to_argument_str(arg_name):
-        "--" + str(arg_name).replace("_", "-")
+        return "--" + str(arg_name).replace("_", "-")
 
     def parsed_options_to_args(parsed_arg: dict):
         args = []
-        for arg_name, value in parsed_arg:
+        for arg_name, value in parsed_arg.items():
             args.append(OptionHelper.to_argument_str(arg_name))
             if type(value) is not bool:
                 args.append(str(value))
+        return args
 
     """
     arg_definition is a key-value pair of arg_name and its default value.
@@ -566,30 +567,33 @@ class OptionHelper:
             arg_filter: Union[None, set, dict] = None):
         for arg_name, default_value in arg_definition.items():
             if arg_filter is None or arg_name in arg_filter:
-                if default_value is None:
-                    parser.add_argument(
-                        OptionHelper.to_argument_str(arg_name),
-                        dest=arg_name,
-                        default=SUPPRESS,
-                        type=str
-                    )
-                elif type(default_value) is bool:
-                    parser.add_argument(
-                        OptionHelper.to_argument_str(arg_name),
-                        dest=arg_name,
-                        action= 'store_false' if default_value else 'store_true',
-                    )
-                else:
-                    parser.add_argument(
-                        OptionHelper.to_argument_str(arg_name),
-                        dest=arg_name,
-                        default=default_value,
-                        type=type(default_value)
-                    )
+                try:
+                    if default_value is None:
+                        parser.add_argument(
+                            OptionHelper.to_argument_str(arg_name),
+                            dest=arg_name,
+                            default=SUPPRESS,
+                            type=str
+                        )
+                    elif type(default_value) is bool:
+                        parser.add_argument(
+                            OptionHelper.to_argument_str(arg_name),
+                            dest=arg_name,
+                            action= 'store_false' if default_value else 'store_true',
+                        )
+                    else:
+                        parser.add_argument(
+                            OptionHelper.to_argument_str(arg_name),
+                            dest=arg_name,
+                            default=default_value,
+                            type=type(default_value)
+                        )
+                except argparse.ArgumentError as e:
+                    print(f"Ignored argparse error: {e}")
 
     def conflux_options_to_config(parsed_args: dict, arg_filter: Union[None, set, dict] = None) -> dict:
         conflux_config = {}
-        for arg_name, value in parsed_args:
+        for arg_name, value in parsed_args.items():
             if arg_filter is None or arg_name in arg_filter:
                 if type(value) is bool:
                     conflux_config[arg_name] = "true" if value else "false"

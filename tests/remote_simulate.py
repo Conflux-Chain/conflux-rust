@@ -7,21 +7,38 @@ import rlp
 import tarfile
 from concurrent.futures import ThreadPoolExecutor
 
-from conflux import utils
 import conflux.config
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int, pubtoaddr
-from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import ConfluxTestFramework, OptionHelper
-from test_framework.mininode import *
 from test_framework.util import *
+import time
 from scripts.stat_latency_map_reduce import Statistics
-from scripts.exp_latency import pscp, pssh, kill_remote_conflux
-import csv
 import os
 
+def execute(cmd, retry, cmd_description):
+    while True:
+        ret = os.system(cmd)
+        if ret == 0:
+            break
+
+        print("Failed to {}, return code = {}, retry = {} ...".format(cmd_description, ret, retry))
+        assert retry > 0
+        retry -= 1
+        time.sleep(1)
+
+def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
+    cmd = f'parallel-ssh -O "StrictHostKeyChecking no" -h "{ips_file}" -p 400 "{remote_cmd}" > /dev/null 2>&1'
+    execute(cmd, retry, cmd_description)
+
+def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
+    cmd = f'parallel-scp -O "StrictHostKeyChecking no" -h "{ips_file}" -p 400 "{local}" "{remote}" > /dev/null 2>&1'
+    execute(cmd, retry, cmd_description)
+
+def kill_remote_conflux(ips_file:str):
+    pssh(ips_file, "killall conflux || echo already killed", 3, "kill remote conflux")
+
 """
-FIXME: Describe this class.
+Setup and run conflux nodes on multiple vms with a few nodes on each vm.
 """
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
@@ -120,7 +137,7 @@ class RemoteSimulate(ConfluxTestFramework):
         cmd_cleanup = "rm -rf /tmp/conflux_test_*"
         cmd_setup = "tar zxf conflux_conf.tgz -C /tmp"
         cmd_startup = "./remote_start_conflux.sh {} {} {} {} {}&> start_conflux.out".format(
-            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host, 
+            self.options.tmpdir, p2p_port(0), self.options.nodes_per_host,
             self.options.bandwidth, str(self.options.enable_flamegraph).lower()
         )
         cmd = "{}; {} && {} && {}".format(cmd_kill_conflux, cmd_cleanup, cmd_setup, cmd_startup)
@@ -141,14 +158,11 @@ class RemoteSimulate(ConfluxTestFramework):
 
         connect_sample_nodes(self.nodes, self.log, sample=self.options.connect_peers, timeout=120)
 
-        self.sync_blocks()
+        self.wait_until_nodes_synced()
 
-    def run_test(self):
-        num_nodes = len(self.nodes)
-
+    def init_txgen(self):
         if self.enable_tx_propagation:
             #setup usable accounts
-
             start_time = time.time()
             current_index=0
             for i in range(len(self.nodes)):
@@ -158,11 +172,8 @@ class RemoteSimulate(ConfluxTestFramework):
                 current_index+=self.options.txgen_account_count
             self.log.info("Time spend (s) on setting up genesis accounts: {}".format(time.time()-start_time))
 
-        # setup monitor to report the current block count periodically
-        cur_block_count = self.nodes[0].getblockcount()
-        # The monitor will check the block_count of nodes[0]
-        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
-        monitor_thread.start()
+    def generate_blocks_async(self):
+        num_nodes = len(self.nodes)
 
         # generate blocks
         threads = {}
@@ -170,7 +181,7 @@ class RemoteSimulate(ConfluxTestFramework):
         for i in range(1, self.options.num_blocks + 1):
             wait_sec = random.expovariate(1000 / self.options.generation_period_ms)
             start = time.time()
-            
+
             # find an idle node to generate block
             p = random.randint(0, num_nodes - 1)
             retry = 0
@@ -207,15 +218,28 @@ class RemoteSimulate(ConfluxTestFramework):
                 time.sleep(wait_sec - elapsed)
             elif elapsed > 0.01:
                 self.log.warn("%d generating block slowly %.2f", p, elapsed)
+        self.log.info("generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__))
+
+    def run_test(self):
+        # setup monitor to report the current block count periodically
+        cur_block_count = self.nodes[0].getblockcount()
+        # The monitor will check the block_count of nodes[0]
+        monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
+        monitor_thread.start()
+
+        # When enable_tx_propagation is set, let conflux nodes generate tx automatically.
+        self.init_txgen()
+        # We instruct nodes to generate blocks.
+        self.generate_blocks_async()
 
         monitor_thread.join()
-        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
-        self.sync_blocks()
 
-        self.log.info("generateoneblock RPC latency: {}".format(Statistics(rpc_times, 3).__dict__))
+        self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
+        self.wait_until_nodes_synced()
+
         self.log.info("Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash()))
 
-    def sync_blocks(self):
+    def wait_until_nodes_synced(self):
         """
         Wait for all nodes to reach same block count and best block
         """
