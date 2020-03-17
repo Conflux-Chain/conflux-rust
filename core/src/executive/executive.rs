@@ -1328,9 +1328,9 @@ impl<'a> Executive<'a> {
         if balance512 < total_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
-            let actual_cost: U256;
+            let actual_gas_cost: U256;
             if !free_of_charge {
-                actual_cost = if gas_cost > balance512 {
+                actual_gas_cost = if gas_cost > balance512 {
                     balance512
                 } else {
                     gas_cost
@@ -1339,19 +1339,21 @@ impl<'a> Executive<'a> {
                 .unwrap();
                 self.state.sub_balance(
                     &sender,
-                    &actual_cost,
+                    &actual_gas_cost,
                     &mut substate.to_cleanup_mode(&spec),
                 )?;
             } else {
                 // We have checked that the sponsor has enough balance.
-                actual_cost = gas_cost.try_into().unwrap();
-                self.state
-                    .sub_sponsor_balance_for_gas(&code_address, &actual_cost)?;
+                actual_gas_cost = gas_cost.try_into().unwrap();
+                self.state.sub_sponsor_balance_for_gas(
+                    &code_address,
+                    &actual_gas_cost,
+                )?;
             }
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
-                actual_cost,
+                actual_gas_cost,
             });
         }
 
@@ -1458,13 +1460,20 @@ impl<'a> Executive<'a> {
             }
         };
 
-        Ok(self.finalize(tx, substate, result, output)?)
+        let refund_receiver = if free_of_charge {
+            Some(code_address)
+        } else {
+            None
+        };
+
+        Ok(self.finalize(tx, substate, result, output, refund_receiver)?)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
-        &mut self, tx: &SignedTransaction, substate: Substate,
+        &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
+        refund_receiver: Option<Address>,
     ) -> ExecutionResult<Executed>
     {
         let gas_left = match result {
@@ -1474,7 +1483,27 @@ impl<'a> Executive<'a> {
 
         // gas_used is only used to estimate gas needed
         let gas_used = tx.gas - gas_left;
-        let fees_value = tx.gas * tx.gas_price;
+        // 2*gas_left should be smaller than gas_used, otherwise
+        // all the gas is charged.
+        let charge_all = (gas_left + gas_left) >= gas_used;
+        let (cumulative_gas_used, fees_value) = if charge_all {
+            (self.env.gas_used + tx.gas, tx.gas * tx.gas_price)
+        } else {
+            let spec = self.spec;
+            let refundee = if let Some(r) = refund_receiver {
+                r
+            } else {
+                tx.sender()
+            };
+            let refund_value = gas_left * tx.gas_price;
+            self.state.add_balance(
+                &refundee,
+                &refund_value,
+                substate.to_cleanup_mode(&spec),
+            )?;
+
+            (self.env.gas_used + gas_used, gas_used * tx.gas_price)
+        };
 
         // perform suicides
         for address in &substate.suicides {
@@ -1504,7 +1533,7 @@ impl<'a> Executive<'a> {
                 exception: Some(exception),
                 gas: tx.gas,
                 gas_used: tx.gas,
-                fee: fees_value,
+                fee: tx.gas * tx.gas_price,
                 cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
@@ -1549,6 +1578,7 @@ impl<'a> Executive<'a> {
                         }
                     }
                 }
+
                 Ok(Executed {
                     exception: if r.apply_state {
                         None
@@ -1558,7 +1588,7 @@ impl<'a> Executive<'a> {
                     gas: tx.gas,
                     gas_used,
                     fee: fees_value,
-                    cumulative_gas_used: self.env.gas_used + tx.gas,
+                    cumulative_gas_used,
                     logs: substate.logs,
                     contracts_created: substate.contracts_created,
                     storage_occupied,

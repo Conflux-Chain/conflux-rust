@@ -473,10 +473,10 @@ fn test_not_enough_cash() {
         Err(ExecutionError::NotEnoughCash {
             required,
             got,
-            actual_cost,
+            actual_gas_cost,
         }) if required == U512::from(100_018)
             && got == U512::from(100_017)
-            && correct_cost == actual_cost =>
+            && correct_cost == actual_gas_cost =>
         {
             ()
         }
