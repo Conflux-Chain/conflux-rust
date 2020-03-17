@@ -11,7 +11,6 @@ from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes
 
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 4
         self.conf_parameters = {
             "log_level": "\"debug\"",

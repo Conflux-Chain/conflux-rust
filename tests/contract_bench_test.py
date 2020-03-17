@@ -17,13 +17,12 @@ from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 
 from web3 import Web3
 
 class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -514,7 +513,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"
         self.priv_key = default_config["GENESIS_PRI_KEY"]
-        self.sender = encode_hex_0x(privtoaddr(self.priv_key))
+        self.sender = encode_hex_0x(priv_to_addr(self.priv_key))
         self.sender_checksum = Web3.toChecksumAddress(self.sender)
         self.pub = []
         self.pri = []
@@ -531,7 +530,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         for i in range(10):
             priv_key = random.randint(0, 2 ** 256).to_bytes(32, "big")
-            pub_key = encode_hex_0x(privtoaddr(priv_key))
+            pub_key = encode_hex_0x(priv_to_addr(priv_key))
             self.pub.append(pub_key)
             self.pri.append(priv_key)
             transaction = self.rpc.new_tx(sender=self.sender, receiver=pub_key, value=1000000 * 10 ** 18, priv_key=self.priv_key)

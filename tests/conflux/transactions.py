@@ -51,7 +51,7 @@ class UnsignedTransaction(rlp.Serializable):
         v, r, s = ecsign(rawhash, key)
         v = v - 27
         ret = Transaction(transaction=copy.deepcopy(self), v=v, r=r, s=s)
-        ret._sender = utils.privtoaddr(key)
+        ret._sender = utils.priv_to_addr(key)
         return ret
 
 

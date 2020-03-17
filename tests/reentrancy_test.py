@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from conflux.utils import privtoaddr, parse_as_int
+from conflux.utils import priv_to_addr, parse_as_int
 from conflux.rpc import RpcClient
 from http.client import CannotSendRequest
 from test_framework.util import *
@@ -23,11 +23,10 @@ class ReentrancyTest(ConfluxTestFramework):
 
         self.nonce_map = {}
         self.genesis_priv_key = default_config['GENESIS_PRI_KEY']
-        self.genesis_addr = privtoaddr(self.genesis_priv_key)
+        self.genesis_addr = priv_to_addr(self.genesis_priv_key)
         self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -82,7 +81,7 @@ class ReentrancyTest(ConfluxTestFramework):
         else:
             func = getattr(contract, name)
         attrs = {
-            'nonce': self.get_nonce(privtoaddr(sender_key)),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** ReentrancyTest.REQUEST_BASE
         }
         if contract_addr:
@@ -120,9 +119,9 @@ class ReentrancyTest(ConfluxTestFramework):
             contract_name="ReentranceExploit")
 
         user1, _ = ec_random_keys()
-        user1_addr = privtoaddr(user1)
+        user1_addr = priv_to_addr(user1)
         user2, _ = ec_random_keys()
-        user2_addr = privtoaddr(user2)
+        user2_addr = priv_to_addr(user2)
 
         # setup balance
         value = (10 ** 15 + 2000) * 10 ** 18 + ReentrancyTest.REQUEST_BASE['gas']

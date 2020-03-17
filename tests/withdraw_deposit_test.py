@@ -2,7 +2,7 @@
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
@@ -12,7 +12,6 @@ from web3 import Web3
 
 class WithdrawDepositTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -45,7 +44,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         self.log.info("Initializing contract")
         genesis_key = default_config["GENESIS_PRI_KEY"]
-        genesis_addr = privtoaddr(genesis_key)
+        genesis_addr = priv_to_addr(genesis_key)
         nonce = 0
         gas_price = 1
         gas = 50000000

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import datetime
 from http.client import CannotSendRequest
-from conflux.utils import convert_to_nodeid, privtoaddr, parse_as_int, encode_hex
+from conflux.utils import convert_to_nodeid, priv_to_addr, parse_as_int, encode_hex
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce
 from test_framework.test_framework import ConfluxTestFramework
@@ -12,7 +12,6 @@ import pickle
 
 class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -58,9 +57,9 @@ class SingleBench(ConfluxTestFramework):
                     balance_map[receiver_sk] += value
                 # not enough transaction fee (gas_price * gas_limit) should not happen for now
                 assert balance_map[sender_key] >= value + gas_price * 21000
-                tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
+                tx = create_transaction(pri_key=sender_key, receiver=priv_to_addr(receiver_sk), value=value, nonce=nonce,
                                         gas_price=gas_price)
-                self.log.debug("%s send %d to %s nonce=%d balance: sender=%s, receiver=%s", encode_hex(privtoaddr(sender_key)), value, encode_hex(privtoaddr(receiver_sk)), nonce, balance_map[sender_key], balance_map[receiver_sk])
+                self.log.debug("%s send %d to %s nonce=%d balance: sender=%s, receiver=%s", encode_hex(priv_to_addr(sender_key)), value, encode_hex(priv_to_addr(receiver_sk)), nonce, balance_map[sender_key], balance_map[receiver_sk])
                 all_txs.append(tx)
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
@@ -96,7 +95,7 @@ class SingleBench(ConfluxTestFramework):
         self.log.info("Tx per second: %f", tx_n / time_used)
 
     def check_account(self, k, balance_map):
-        addr = eth_utils.encode_hex(privtoaddr(k))
+        addr = eth_utils.encode_hex(priv_to_addr(k))
         try:
             balance = parse_as_int(self.node.cfx_getBalance(addr))
         except Exception as e:

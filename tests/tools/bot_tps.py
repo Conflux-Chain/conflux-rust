@@ -11,7 +11,7 @@ import sys
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from conflux.utils import privtoaddr
+from conflux.utils import priv_to_addr
 from test_framework.util import assert_equal, get_simple_rpc_proxy
 
 DRIPS_PER_CFX = 10**18
@@ -169,7 +169,7 @@ if len(sys.argv) == 1:
     sys.exit(1)
 
 faucet_priv_key = sys.argv[1]
-faucet_addr = eth_utils.encode_hex(privtoaddr(faucet_priv_key))
+faucet_addr = eth_utils.encode_hex(priv_to_addr(faucet_priv_key))
 bootnodes = load_boot_nodes()
 num_threads = 1 if len(sys.argv) < 3 else int(sys.argv[2])
 num_receivers = 20 if len(sys.argv) < 4 else int(sys.argv[3])

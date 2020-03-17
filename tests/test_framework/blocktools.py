@@ -10,6 +10,7 @@ from conflux.transactions import Transaction, UnsignedTransaction
 from conflux.utils import *
 from trie import HexaryTrie
 import time
+import jsonrpcclient
 
 TEST_DIFFICULTY = 4
 HASH_MAX = 1 << 256
@@ -76,15 +77,22 @@ def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=defaul
     return transaction.sign(pri_key)
 
 
-# FIXME Add timeout
-def wait_for_initial_nonce(node, key):
+def wait_for_initial_nonce(node, key, timeout=10):
     if key == default_config["GENESIS_PRI_KEY"]:
         return 0
     nonce = 0
+    start = time.time()
+    last_exception = None
     while nonce == 0:
-        nonce = int(node.cfx_getTransactionCount(encode_hex_0x(privtoaddr(key))), 0)
-        time.sleep(0.1)
-    print("nonce for addr", encode_hex_0x(privtoaddr(key)), nonce)
+        if time.time() - start > timeout:
+            raise AssertionError("Wait for initial nonce for pubkey {} timeout after {} seconds, last exception is {}"
+                                 .format(encode_hex(priv_to_pub(key)), timeout, last_exception))
+        try:
+            nonce = int(node.cfx_getTransactionCount(encode_hex_0x(priv_to_addr(key))), 0)
+        except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+            last_exception = e
+            pass
+    print(encode_hex(priv_to_addr(key)), nonce)
     return nonce
 
 

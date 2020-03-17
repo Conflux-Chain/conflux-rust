@@ -8,7 +8,6 @@ from test_framework.util import *
 
 class FixedGenerateTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
 
     def setup_network(self):

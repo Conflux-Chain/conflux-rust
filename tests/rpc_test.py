@@ -6,7 +6,7 @@ import types
 
 from conflux.config import default_config
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE, Transactions
-from conflux.utils import int_to_hex, privtoaddr, encode_hex
+from conflux.utils import int_to_hex, priv_to_addr, encode_hex
 from test_framework.blocktools import make_genesis, create_transaction
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
@@ -16,7 +16,6 @@ from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait
 
 class RpcTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
 
     def setup_network(self):

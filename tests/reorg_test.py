@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce
 from test_framework.test_framework import ConfluxTestFramework
@@ -9,7 +9,6 @@ from test_framework.util import *
 
 class ReorgTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 8
         self.n_shard = 2
         self.shard_size = int(self.num_nodes / self.n_shard)
@@ -37,7 +36,7 @@ class ReorgTest(ConfluxTestFramework):
             value = default_config["TOTAL_COIN"] - 21000
             balance_map = {receiver_sk: value}
             nonce_map = {receiver_sk: 0}
-            tx = create_transaction(pri_key=genesis_key, receiver=privtoaddr(receiver_sk), value=value, nonce=0,
+            tx = create_transaction(pri_key=genesis_key, receiver=priv_to_addr(receiver_sk), value=value, nonce=0,
                                     gas_price=gas_price)
             shard_nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             for i in range(tx_n):
@@ -54,18 +53,18 @@ class ReorgTest(ConfluxTestFramework):
                     value = 1
                     receiver_sk = random.choice(list(balance_map))
                     balance_map[receiver_sk] += value
-                tx = create_transaction(pri_key=sender_key, receiver=privtoaddr(receiver_sk), value=value, nonce=nonce,
+                tx = create_transaction(pri_key=sender_key, receiver=priv_to_addr(receiver_sk), value=value, nonce=nonce,
                                         gas_price=gas_price)
                 r = random.randint(0, self.shard_size - 1)
                 shard_nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
-                self.log.info("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                               value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
+                self.log.info("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(priv_to_addr(sender_key))[-4:],
+                              value, eth_utils.encode_hex(priv_to_addr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
                 self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
                 time.sleep(random.random() / 10)
             for k in balance_map:
-                self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
+                self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(priv_to_addr(k)))
                 wait_until(lambda: self.check_account(k, balance_map, shard_nodes[0]))
             shard_balance.append(balance_map)
 
@@ -107,7 +106,7 @@ class ReorgTest(ConfluxTestFramework):
         self.log.info("Pass")
 
     def check_account(self, k, balance_map, node):
-        addr = eth_utils.encode_hex(privtoaddr(k))
+        addr = eth_utils.encode_hex(priv_to_addr(k))
         try:
             balance = parse_as_int(node.cfx_getBalance(addr))
         except Exception as e:

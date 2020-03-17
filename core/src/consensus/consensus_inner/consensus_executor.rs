@@ -983,6 +983,10 @@ impl ConsensusExecutionHandler {
                 column!()
             ));
         };
+        let mut state_availability_boundary =
+            self.data_man
+                .state_availability_boundary
+                .write();
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
@@ -997,11 +1001,7 @@ impl ConsensusExecutionHandler {
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
             on_local_pivot, epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
         );
-
-        self.data_man
-            .state_availability_boundary
-            .write()
-            .adjust_upper_bound(&pivot_block.block_header);
+        state_availability_boundary.adjust_upper_bound(&pivot_block.block_header);
     }
 
     fn process_epoch_transactions(

@@ -5,7 +5,7 @@ from eth_utils import decode_hex
 from rlp.sedes import Binary, BigEndianInt
 
 from conflux import utils
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_block, create_transaction, wait_for_initial_nonce
 from test_framework.test_framework import DefaultConfluxTestFramework
@@ -14,14 +14,15 @@ from test_framework.util import *
 
 class TransactionTest(DefaultConfluxTestFramework):
     def set_test_params(self):
-        self.conf_parameters["log_level"] = '"trace"'
         self.num_nodes = 8
+        self.conf_parameters["log_level"] = '"trace"'
+        self.rpc_timewait = 1000000
 
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
         self.log.info("Initial State: (sk:%d, addr:%s, balance:%d)", bytes_to_int(genesis_key),
-                      eth_utils.encode_hex(privtoaddr(genesis_key)), balance_map[genesis_key])
+                      eth_utils.encode_hex(priv_to_addr(genesis_key)), balance_map[genesis_key])
         nonce_map = {genesis_key: 0}
         block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.2)
         block_gen_thread.start()
@@ -38,18 +39,18 @@ class TransactionTest(DefaultConfluxTestFramework):
             nonce = nonce_map[sender_key]
             receiver_sk, _ = ec_random_keys()
             balance_map[receiver_sk] = value
-            receiver_addr = privtoaddr(receiver_sk)
+            receiver_addr = priv_to_addr(receiver_sk)
             tx = create_transaction(pri_key=sender_key, receiver=receiver_addr, value=value, nonce=nonce,
                                     gas_price=gas_price)
             r = random.randint(0, self.num_nodes - 1)
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             nonce_map[sender_key] = nonce + 1
             balance_map[sender_key] -= value + gas_price * 21000
-            self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                           value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
+            self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(priv_to_addr(sender_key))[-4:],
+                           value, eth_utils.encode_hex(priv_to_addr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
         for k in balance_map:
-            self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
+            self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(priv_to_addr(k)))
             wait_until(lambda: self.check_account(k, balance_map))
         self.log.info("Pass 1")
 
@@ -68,7 +69,7 @@ class TransactionTest(DefaultConfluxTestFramework):
             if rand_n < 0.1 and balance_map[sender_key] > 21000 * 4 * tx_n:
                 value = int(balance_map[sender_key] * 0.5)
                 receiver_sk, _ = ec_random_keys()
-                receiver = privtoaddr(receiver_sk)
+                receiver = priv_to_addr(receiver_sk)
                 balance_map[receiver_sk] = value
                 is_payment = True
             elif rand_n > 0.9 and balance_map[sender_key] > 21000 * 4 * tx_n:
@@ -80,7 +81,7 @@ class TransactionTest(DefaultConfluxTestFramework):
             else:
                 value = 1
                 receiver_sk = random.choice(list(balance_map))
-                receiver = privtoaddr(receiver_sk)
+                receiver = priv_to_addr(receiver_sk)
                 balance_map[receiver_sk] += value
                 is_payment = True
             # not enough transaction fee (gas_price * gas_limit) should not happen for now
@@ -95,8 +96,6 @@ class TransactionTest(DefaultConfluxTestFramework):
                 balance_map[sender_key] -= value + gas_price * gas
             else:
                 balance_map[sender_key] -= value + gas_price * 7500000
-            self.log.debug("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d nonce:%d", encode_hex(tx.hash), eth_utils.encode_hex(privtoaddr(sender_key))[-4:],
-                          value, eth_utils.encode_hex(privtoaddr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk], nonce)
             self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
             time.sleep(random.random() / 100)
         for k in balance_map:
@@ -119,7 +118,7 @@ class TransactionTest(DefaultConfluxTestFramework):
                     raise AssertionError("Tx {} not confirmed after 30 seconds".format(tx.hash_hex()))
 
         for k in balance_map:
-            self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(privtoaddr(k)))
+            self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(priv_to_addr(k)))
             wait_until(lambda: self.check_account(k, balance_map))
         block_gen_thread.stop()
         block_gen_thread.join()
@@ -127,7 +126,7 @@ class TransactionTest(DefaultConfluxTestFramework):
         self.log.info("Pass")
 
     def check_account(self, k, balance_map):
-        addr = eth_utils.encode_hex(privtoaddr(k))
+        addr = eth_utils.encode_hex(priv_to_addr(k))
         try:
             balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
             staking_balance = parse_as_int(self.nodes[0].cfx_getStakingBalance(addr))

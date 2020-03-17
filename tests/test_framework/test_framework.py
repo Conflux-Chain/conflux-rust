@@ -69,7 +69,7 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.setup_clean_chain = False
+        self.setup_clean_chain = True
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
@@ -526,7 +526,6 @@ class SkipTest(Exception):
 
 class DefaultConfluxTestFramework(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 8
 
     def setup_network(self):

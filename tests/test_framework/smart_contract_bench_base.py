@@ -7,7 +7,7 @@ from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
 from conflux.rpc import RpcClient
-from conflux.utils import ec_random_keys, privtoaddr, encode_hex_0x
+from conflux.utils import ec_random_keys, priv_to_addr, encode_hex_0x
 from http.client import CannotSendRequest
 
 
@@ -29,7 +29,6 @@ class SmartContractBenchBase(ConfluxTestFramework):
         )
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -55,7 +54,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         super().__init__()
         self.nonce_map = {}
         self.default_account_key = default_config["GENESIS_PRI_KEY"]
-        self.default_account_address = privtoaddr(self.default_account_key)
+        self.default_account_address = priv_to_addr(self.default_account_key)
 
     def get_nonce(self, sender):
         sender = sender.lower()
@@ -73,7 +72,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         else:
             func = getattr(contract, name)
         attributes = {
-            'nonce': self.get_nonce(privtoaddr(sender_key)),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** SmartContractBenchBase.REQUEST_BASE
         }
         if contract_addr:
@@ -96,12 +95,12 @@ class SmartContractBenchBase(ConfluxTestFramework):
         results = []
         for _ in range(count):
             pri_key, pub_key = ec_random_keys()
-            transaction = self.transfer(self.default_account_key, privtoaddr(pri_key), amount, wait, check_status)
+            transaction = self.transfer(self.default_account_key, priv_to_addr(pri_key), amount, wait, check_status)
             results.append([pri_key, transaction])
         return results
 
     def transfer(self, sender_key, receiver, amount, wait=False, check_status=False):
-        nonce = self.get_nonce(privtoaddr(sender_key))
+        nonce = self.get_nonce(priv_to_addr(sender_key))
         transaction = create_transaction(nonce, 1, 21000, amount, receiver, pri_key=sender_key)
         self._send_transaction(transaction, wait, check_status)
         return transaction
