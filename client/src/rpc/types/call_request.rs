@@ -31,6 +31,13 @@ pub struct CallRequest {
     pub storage_limit: Option<U256>,
 }
 
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EstimateGasAndCollateralResponse {
+    pub gas_used: U256,
+    pub storage_occupied: U256,
+}
+
 pub fn sign_call(
     epoch_height: u64, chain_id: u64, request: CallRequest,
 ) -> Result<SignedTransaction, Error> {

@@ -3,10 +3,9 @@ import sys
 import os
 sys.path.append("..")
 
-import eth_utils
 from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import privtoaddr, int_to_hex
+from conflux.utils import privtoaddr, int_to_hex, encode_hex
 from test_framework.util import assert_equal, assert_is_hash_string
 from web3 import Web3
 from easysolc import Solc
@@ -27,6 +26,44 @@ class TestContract(RpcClient):
         contract_addr = self.test_contract_deploy()
         gas = self.estimate_gas(contract_addr, "0x6d4ce63c") # get storage
         assert gas > self.DEFAULT_TX_GAS
+    
+    def test_estimate_collateral(self):
+        contract_addr = self.test_contract_deploy()
+        (addr, priv_key) = self.rand_account()
+        tx = self.new_tx(
+            sender=self.GENESIS_ADDR,
+            priv_key=self.GENESIS_PRI_KEY,
+            value=10 ** 18,
+            receiver=addr)
+        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+        assert_equal(self.get_balance(addr), 10 ** 18)
+        assert_equal(self.get_collateral_for_storage(addr), 0)
+
+        # if you set the storage to 6, sender will pay collateral for storage
+        collateral = self.estimate_collateral(
+            contract_addr=contract_addr,
+            data_hex="0x60fe47b10000000000000000000000000000000000000000000000000000000000000006",
+            sender=addr)
+        assert_equal(collateral, 10 ** 18 // 16)
+        assert_equal(self.get_collateral_for_storage(addr), 0)
+
+        # send tx to set the storage from 5 to 6
+        tx = self.new_contract_tx(
+            receiver=contract_addr,
+            data_hex="0x60fe47b10000000000000000000000000000000000000000000000000000000000000006",
+            sender=addr,
+            priv_key=priv_key)
+        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+        assert_equal(int(self.call(contract_addr, "0x6d4ce63c"), 0), 6)
+        assert_equal(self.get_collateral_for_storage(addr), 10 ** 18 // 16)
+
+        # this time you don't need to pay collateral for storage even if you change the storage value
+        collateral = self.estimate_collateral(
+            contract_addr=contract_addr,
+            data_hex="0x60fe47b10000000000000000000000000000000000000000000000000000000000000007",
+            sender=addr)
+        assert_equal(collateral, 0)
+        assert_equal(self.get_collateral_for_storage(addr), 10 ** 18 // 16)
 
     def test_call_result(self):
         contract_addr = self.test_contract_deploy()
