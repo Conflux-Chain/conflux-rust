@@ -11,15 +11,16 @@ use crate::rpc::{
     types::{
         sign_call, Account as RpcAccount, BFTStates, BlameInfo,
         Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-        ConsensusGraphStates, EpochNumber, Filter as RpcFilter, Log as RpcLog,
-        Receipt as RpcReceipt, SendTxRequest, SponsorInfo as RpcSponsorInfo,
-        Status as RpcStatus, SyncGraphStates, Transaction as RpcTransaction,
-        H160 as RpcH160, H256 as RpcH256, H520 as RpcH520, U128 as RpcU128,
-        U256 as RpcU256, U64 as RpcU64,
+        ConsensusGraphStates, EpochNumber, EstimateGasAndCollateralResponse,
+        Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
+        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
+        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
+        U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
-use cfx_types::{Public, H160, H256};
+use cfx_types::{Public, H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
@@ -703,11 +704,22 @@ impl RpcImpl {
         Ok(Bytes::new(success_executed.output))
     }
 
-    fn estimate_gas(
+    fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256> {
+    ) -> RpcResult<EstimateGasAndCollateralResponse> {
+        let caller = request.from.unwrap_or_default();
         let success_executed = self.exec_transaction(request, epoch)?;
-        Ok(success_executed.gas_used.into())
+        let mut storage_occupied = U256::zero();
+        for storage_change in &success_executed.storage_occupied {
+            if storage_change.address == caller {
+                storage_occupied = storage_change.amount;
+            }
+        }
+        let response = EstimateGasAndCollateralResponse {
+            gas_used: success_executed.gas_used.into(),
+            storage_occupied: storage_occupied.into(),
+        };
+        Ok(response)
     }
 
     fn exec_transaction(
@@ -831,7 +843,7 @@ impl Cfx for CfxHandler {
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
-            fn estimate_gas(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<RpcU256>;
+            fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_number: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
             fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
