@@ -1798,11 +1798,11 @@ impl SynchronizationGraph {
                 mut new_header_graph_ready_blocks,
                 invalid_blocks,
             ) = inner.try_recover_graph_unready_block();
-            debug!(
+            info!(
                 "Recover blocks into graph_ready {:?}",
                 new_graph_ready_blocks
             );
-            debug!(
+            info!(
                 "Recover blocks into header graph_ready {:?}",
                 new_header_graph_ready_blocks
             );
@@ -1914,7 +1914,7 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("expire_set: {:?}", expire_set);
+        info!("expire_set: {:?}", expire_set);
         inner.remove_blocks(&expire_set);
     }
 }
