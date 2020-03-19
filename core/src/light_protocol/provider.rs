@@ -236,10 +236,7 @@ impl Provider {
         let best_info = self.consensus.best_info();
         let genesis_hash = self.graph.data_man.true_genesis.hash();
 
-        let terminals = match &best_info.terminal_block_hashes {
-            Some(x) => x.clone(),
-            None => best_info.bounded_terminal_block_hashes.clone(),
-        };
+        let terminals = best_info.bounded_terminal_block_hashes.clone();
 
         let msg: Box<dyn Message> = Box::new(StatusPong {
             best_epoch: best_info.best_epoch_number,
