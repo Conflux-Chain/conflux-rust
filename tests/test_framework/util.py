@@ -641,9 +641,13 @@ def get_contract_instance(contract_dict=None,
     if source and contract_name:
         output = solcx.compile_files([source])
         contract_dict = output[f"{source}:{contract_name}"]
+        if "bin" in contract_dict:
+            contract_dict["bytecode"] = contract_dict.pop("bin")
+        elif "code" in contract_dict:
+            contract_dict["bytecode"] = contract_dict.pop("code")
     if contract_dict:
         contract = w3.eth.contract(
-            abi=contract_dict['abi'], bytecode=contract_dict['bin'], address=address)
+            abi=contract_dict['abi'], bytecode=contract_dict['bytecode'], address=address)
     elif abi_file:
         with open(abi_file, 'r') as abi_file:
             abi = json.loads(abi_file.read())
