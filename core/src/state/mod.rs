@@ -14,7 +14,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey, StorageValue};
+use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -1019,6 +1019,15 @@ impl State {
         if self.storage_at(address, &key)? != value {
             self.require(address, false)?.set_storage(key, value, owner)
         }
+        Ok(())
+    }
+
+    pub fn set_storage_layout(
+        &mut self, address: &Address, layout: StorageLayout,
+    ) -> DbResult<()> {
+        // FIXME: storage layout is only set once;
+        // is there a need to read and cache?
+        self.require(address, false)?.set_storage_layout(layout);
         Ok(())
     }
 

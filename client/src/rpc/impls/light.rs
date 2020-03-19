@@ -345,6 +345,14 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
+    #[allow(unused_variables)]
+    fn storage_root(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> BoxFuture<Option<RpcH256>> {
+        // TODO(thegaram)
+        unimplemented!();
+    }
+
     fn storage_at(
         &self, address: RpcH160, position: RpcH256,
         epoch_num: Option<EpochNumber>,
@@ -554,6 +562,7 @@ impl DebugRpc for DebugRpcImpl {
 
         target self.rpc_impl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
     }
 

@@ -317,5 +317,6 @@ impl DebugRpc for DebugRpcImpl {
 
     not_supported! {
         fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
+        fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
     }
 }

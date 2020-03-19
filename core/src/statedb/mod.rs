@@ -58,6 +58,14 @@ impl StateDb {
         self.get::<Account>(StorageKey::new_account_key(address))
     }
 
+    pub fn get_storage_root(&self, address: &Address) -> Result<Option<H256>> {
+        let key = StorageKey::new_storage_root_key(address);
+
+        self.storage
+            .get_merkle_hash_wo_compressed_path(key)
+            .map_err(|e| e.into())
+    }
+
     pub fn get_raw(&self, key: StorageKey) -> Result<Option<Box<[u8]>>> {
         let r = Ok(self.storage.get(key)?);
         trace!("get_raw key={:?}, value={:?}", key, r);

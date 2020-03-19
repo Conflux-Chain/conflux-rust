@@ -39,12 +39,6 @@ pub struct CodeInfo {
     pub owner: Address,
 }
 
-#[derive(Default, Clone, Debug, RlpDecodable, RlpEncodable)]
-pub struct StorageValue {
-    pub value: H256,
-    pub owner: Address,
-}
-
 #[derive(
     Clone,
     Debug,
