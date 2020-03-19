@@ -639,10 +639,11 @@ def get_contract_instance(contract_dict=None,
     w3 = web3.Web3()
     contract = None
     if source and contract_name:
-        contract_dict = solcx.compile_files(source)[contract_name]
+        output = solcx.compile_files([source])
+        contract_dict = output[f"{source}:{contract_name}"]
     if contract_dict:
         contract = w3.eth.contract(
-            abi=contract_dict['abi'], bytecode=contract_dict['bytecode'], address=address)
+            abi=contract_dict['abi'], bytecode=contract_dict['bin'], address=address)
     elif abi_file:
         with open(abi_file, 'r') as abi_file:
             abi = json.loads(abi_file.read())
