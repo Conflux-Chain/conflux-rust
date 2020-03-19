@@ -129,10 +129,8 @@ impl State {
                     + self.staking_state.interest_rate_per_block)
                 / *INTEREST_RATE_PER_BLOCK_SCALE;
         let secondary_reward = self.staking_state.total_storage_tokens
-            * (*INTEREST_RATE_PER_BLOCK_SCALE
-                + self.staking_state.interest_rate_per_block)
-            / *INTEREST_RATE_PER_BLOCK_SCALE
-            - self.staking_state.total_storage_tokens;
+            * self.staking_state.interest_rate_per_block
+            / *INTEREST_RATE_PER_BLOCK_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
         secondary_reward
