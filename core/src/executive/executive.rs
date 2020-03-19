@@ -1502,17 +1502,16 @@ impl<'a> Executive<'a> {
             )
         };
 
-        let refundee = if let Some(r) = refund_receiver {
-            r
+        if let Some(r) = refund_receiver {
+            self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
-            tx.sender()
+            let spec = self.spec;
+            self.state.add_balance(
+                &tx.sender(),
+                &refund_value,
+                substate.to_cleanup_mode(&spec),
+            )?;
         };
-        let spec = self.spec;
-        self.state.add_balance(
-            &refundee,
-            &refund_value,
-            substate.to_cleanup_mode(&spec),
-        )?;
 
         // perform suicides
         for address in &substate.suicides {
