@@ -162,7 +162,7 @@ class ContractBenchTest(SmartContractBenchBase):
         c1 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(len(logs), l + 2)
         assert_equal(self.rpc.get_balance(contractAddr), cost)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - fee - (c1 - c0))
+        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - (fee - 2500000) - (c1 - c0))
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
@@ -186,7 +186,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(self.rpc.get_balance(contractAddr), 0)
         c2 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(c2 - c1, 125000000000000000)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - fee * 2 - (c2 - c0))
+        assert_equal(self.rpc.get_balance(self.sender), b0 - (fee - 2500000) * 2 - (c2 - c0))
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 

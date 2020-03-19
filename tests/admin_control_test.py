@@ -169,7 +169,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 10 ** 18)
-        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - gas)
+        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - gas + gas // 4)
         assert_equal(client.get_admin(contract_addr), addr)
 
         # transfer admin (fail)
@@ -204,7 +204,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 0)
-        assert_equal(client.get_balance(addr2), 5999999999900000000)
+        assert_equal(client.get_balance(addr2), 5999999999912500000 + gas // 4)
 
         self.log.info("Pass")
 

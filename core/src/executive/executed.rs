@@ -86,7 +86,7 @@ pub enum ExecutionError {
         /// Actual balance.
         got: U512,
         /// Actual cost. This should be min(tx_fee, balance).
-        actual_cost: U256,
+        actual_gas_cost: U256,
     },
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
