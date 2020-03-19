@@ -947,12 +947,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message(&self) -> Status {
         let best_info = self.graph.consensus.best_info();
 
-        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
-        {
-            x.clone()
-        } else {
-            best_info.bounded_terminal_block_hashes.clone()
-        };
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
