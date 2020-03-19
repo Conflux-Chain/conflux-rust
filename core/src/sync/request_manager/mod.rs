@@ -269,6 +269,7 @@ impl RequestManager {
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
+        debug!("request_blocks: hashes={:?}", hashes);
 
         let request = GetBlocks {
             request_id: 0,
@@ -846,8 +847,9 @@ impl RequestManager {
                 break;
             } else if req.request.1 > *DEFAULT_REQUEST_DELAY_UPPER_BOUND {
                 // Discard stale requests
-                req.request.0.on_removed(&self.inflight_keys);
-                continue;
+                // req.request.0.on_removed(&self.inflight_keys);
+                // continue;
+                error!("Request is in-flight for over an hour: {:?}", req);
             }
 
             // Waiting requests are already in-flight, so send them without

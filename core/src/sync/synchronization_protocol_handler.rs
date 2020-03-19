@@ -1619,7 +1619,13 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             EXPIRE_BLOCK_GC_TIMER => {
                 // remove expire blocks every `expire_block_gc_period`
                 // TODO Parameterize this timeout.
-                self.expire_block_gc(io, 120).ok();
+                // Set to twice expire period to ensure that stale blocks will
+                // exist in the frontier across two consecutive GC.
+                self.expire_block_gc(
+                    io,
+                    self.protocol_config.expire_block_gc_period.as_secs() * 2,
+                )
+                .ok();
             }
             EXPIRE_BFT_EXECUTION_TIMER => {
                 debug!("timeout: remove_expired_bft_execution");
