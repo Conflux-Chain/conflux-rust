@@ -60,6 +60,12 @@ class WithdrawDepositTest(ConfluxTestFramework):
         block_gen_thread.start()
         self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
 
+        total_num_blocks = 2 * 60 * 60 * 24 * 365
+        accumulate_interest_rate = [2 ** 80 * total_num_blocks]
+        for _ in range(1000):
+            accumulate_interest_rate.append(accumulate_interest_rate[-1] * (
+                40000 + 1000000 * total_num_blocks) // (total_num_blocks * 1000000))
+
         # Setup balance for node 0
         node = self.nodes[0]
         client = RpcClient(node)
@@ -83,17 +89,17 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         # withdraw 5 * 10**17
         balance = client.get_balance(addr)
-        tx_data = decode_hex(staking_contract.functions.withdraw(5 * 10 ** 17).buildTransaction(self.tx_conf)["data"])
+        capital = 5 * 10 ** 17
+        tx_data = decode_hex(staking_contract.functions.withdraw(capital).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
         duration = withdraw_time - deposit_time
-        total_num_blocks = 2 * 60 * 60 * 24 * 365
-        interest = 5 * 10 ** 17 * duration * 252288000 // (total_num_blocks * 100) // total_num_blocks
-        service_charge = 5 * 10 ** 17 * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
-        assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17)
-        assert_equal(client.get_balance(addr), balance + 5 * 10 ** 17 + interest - service_charge - gas)
+        interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
+        service_charge = capital * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
+        assert_equal(client.get_staking_balance(addr), 10 ** 18 - capital)
+        assert_equal(client.get_balance(addr), balance + capital + interest - service_charge - gas)
 
         # lock 4 * 10 ** 17 for 1 day
         balance = client.get_balance(addr)
@@ -106,7 +112,8 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         # withdraw 5 * 10**17 and it should fail
         balance = client.get_balance(addr)
-        tx_data = decode_hex(staking_contract.functions.withdraw(5 * 10 ** 17).buildTransaction(self.tx_conf)["data"])
+        capital = 5 * 10 ** 17
+        tx_data = decode_hex(staking_contract.functions.withdraw(capital).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
@@ -124,16 +131,17 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         # withdraw 10**17 and it should succeed
         balance = client.get_balance(addr)
-        tx_data = decode_hex(staking_contract.functions.withdraw(10 ** 17).buildTransaction(self.tx_conf)["data"])
+        capital = 10 ** 17
+        tx_data = decode_hex(staking_contract.functions.withdraw(capital).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
         duration = withdraw_time - deposit_time
-        interest = 10 ** 17 * duration * 252288000 // (total_num_blocks * 100) // total_num_blocks
-        service_charge = 10 ** 17 * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
-        assert_equal(client.get_balance(addr), balance + 10 ** 17 + interest - service_charge - gas)
-        assert_equal(client.get_staking_balance(addr), 4 * 10 ** 17)
+        interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
+        service_charge = capital * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
+        assert_equal(client.get_balance(addr), balance + capital + interest - service_charge - gas)
+        assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17 - capital)
 
         block_gen_thread.stop()
         block_gen_thread.join()
