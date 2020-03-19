@@ -19,10 +19,7 @@ pub struct GetTerminalBlockHashes {
 impl Handleable for GetTerminalBlockHashes {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let best_info = ctx.manager.graph.consensus.best_info();
-        let terminal_hashes = match &best_info.terminal_block_hashes {
-            Some(x) => x.clone(),
-            None => best_info.bounded_terminal_block_hashes.clone(),
-        };
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
         let response = GetTerminalBlockHashesResponse {
             request_id: self.request_id,
             hashes: terminal_hashes,

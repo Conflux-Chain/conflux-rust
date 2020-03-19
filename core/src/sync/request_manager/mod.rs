@@ -507,6 +507,7 @@ impl RequestManager {
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
+        debug!("request_compact_blocks: hashes={:?}", hashes);
 
         let request = GetCompactBlocks {
             request_id: 0,
