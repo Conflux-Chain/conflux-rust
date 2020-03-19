@@ -187,7 +187,7 @@ pub mod staking {
         /// The actual accumulate interest rate stored will be `accumulate_interest_rate / INTEREST_RATE_SCALE`.
         pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR) << 80;
         /// The initial annual interest is 4%, which means the initial interest rate per block will be
-        /// `4% / BLOCKS_PER_YEAR`. We will multiple it with scale factor and store it as an integer.
+        /// `4% / BLOCKS_PER_YEAR`. We will multiply it with scale factor and store it as an integer.
         /// This is the scale factor of initial interest rate per block.
         pub static ref INTEREST_RATE_PER_BLOCK_SCALE: U256 = U256::from(BLOCKS_PER_YEAR * 1000000);
         /// This is the initial interest rate per block with scale: `4% / BLOCKS_PER_YEAR * INTEREST_RATE_PER_BLOCK_SCALE`.
