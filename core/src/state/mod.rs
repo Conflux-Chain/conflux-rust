@@ -122,6 +122,8 @@ impl State {
     pub fn increase_block_number(&mut self) -> U256 {
         assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.block_number += 1;
+        self.account_start_nonce +=
+            ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
         let interest_rate = self.staking_state.annual_interest_rate
             / U256::from(BLOCKS_PER_YEAR);
         self.staking_state.accumulate_interest_rate += interest_rate;
