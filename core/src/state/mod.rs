@@ -131,7 +131,8 @@ impl State {
         let secondary_reward = self.staking_state.total_storage_tokens
             * (*INTEREST_RATE_PER_BLOCK_SCALE
                 + self.staking_state.interest_rate_per_block)
-            / *INTEREST_RATE_PER_BLOCK_SCALE;
+            / *INTEREST_RATE_PER_BLOCK_SCALE
+            - self.staking_state.total_storage_tokens;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
         secondary_reward
@@ -642,8 +643,7 @@ impl State {
     }
 
     pub fn annual_interest_rate(&self) -> U256 {
-        self.staking_state.interest_rate_per_block
-            * U256::from(BLOCKS_PER_YEAR)
+        self.staking_state.interest_rate_per_block * U256::from(BLOCKS_PER_YEAR)
     }
 
     pub fn set_annual_interest_rate(&mut self, annual_interest_rate: U256) {

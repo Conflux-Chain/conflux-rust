@@ -458,7 +458,8 @@ impl OverlayAccount {
                 withdraw_time - self.deposit_list[index].deposit_time;
             let capital = std::cmp::min(self.deposit_list[index].amount, rest);
             interest += capital * accumulated_interest_rate
-                / self.deposit_list[index].accumulated_interest_rate;
+                / self.deposit_list[index].accumulated_interest_rate
+                - capital;
             if duration < BLOCKS_PER_YEAR {
                 service_charge += capital
                     * U256::from(BLOCKS_PER_YEAR - duration)
