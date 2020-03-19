@@ -121,7 +121,9 @@ impl StateDb {
             Self::INTEREST_RATE_KEY,
         );
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
-        Ok(interest_rate_opt.unwrap_or(*INITIAL_ANNUAL_INTEREST_RATE))
+        Ok(interest_rate_opt.unwrap_or(
+            *INITIAL_INTEREST_RATE_PER_BLOCK * U256::from(BLOCKS_PER_YEAR),
+        ))
     }
 
     pub fn get_accumulate_interest_rate(&self) -> Result<U256> {
@@ -130,7 +132,7 @@ impl StateDb {
             Self::ACCUMULATE_INTEREST_RATE_KEY,
         );
         let acc_interest_rate_opt = self.get::<U256>(acc_interest_rate_key)?;
-        Ok(acc_interest_rate_opt.unwrap_or(U256::zero()))
+        Ok(acc_interest_rate_opt.unwrap_or(*ACCUMULATED_INTEREST_RATE_SCALE))
     }
 
     pub fn get_total_issued_tokens(&self) -> Result<U256> {

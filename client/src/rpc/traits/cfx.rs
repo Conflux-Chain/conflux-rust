@@ -4,9 +4,9 @@
 
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest, EpochNumber,
-    Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-    SponsorInfo as RpcSponsorInfo, Transaction, H160 as RpcH160,
-    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
+    Receipt as RpcReceipt, SponsorInfo as RpcSponsorInfo, Transaction,
+    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use cfx_types::Public;
@@ -152,21 +152,17 @@ pub trait Cfx {
     #[rpc(name = "cfx_getLogs")]
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
 
-    //        /// Estimate gas needed for execution of given contract.
-    //        #[rpc(name = "cfx_estimateGas")]
-    //        fn estimate_gas(&self, CallRequest, Option<BlockNumber>) ->
-    // BoxFuture<RpcU256>;
-
     /// Get transaction by its hash.
     #[rpc(name = "cfx_getTransactionByHash")]
     fn transaction_by_hash(
         &self, tx_hash: RpcH256,
     ) -> BoxFuture<Option<Transaction>>;
 
-    #[rpc(name = "cfx_estimateGas")]
-    fn estimate_gas(
+    /// Return estimated gas and collateral usage.
+    #[rpc(name = "cfx_estimateGasAndCollateral")]
+    fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch_number: Option<EpochNumber>,
-    ) -> RpcResult<RpcU256>;
+    ) -> RpcResult<EstimateGasAndCollateralResponse>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
     fn blocks_by_epoch(

@@ -34,6 +34,7 @@ class RpcClient:
         self.UPDATE_NODE_OP_REMOVE = "Remove"
 
         # hash/address definitions
+        self.GENESIS_PRI_KEY = default_config["GENESIS_PRI_KEY"]
         self.GENESIS_ADDR = eth_utils.encode_hex(privtoaddr(default_config["GENESIS_PRI_KEY"]))
         self.COINBASE_ADDR = eth_utils.encode_hex(default_config["GENESIS_COINBASE"])
         self.GENESIS_ORIGIN_COIN = default_config["TOTAL_COIN"]
@@ -318,14 +319,16 @@ class RpcClient:
         status = self.node.txpool_status()
         return (status["deferred"], status["ready"])
 
-    def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None):
+    def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None, sender:str=None):
+        if sender is None:
+            sender = self.GENESIS_ADDR
         if nonce is None:
-            nonce = self.get_nonce(self.GENESIS_ADDR)
+            nonce = self.get_nonce(sender)
 
         return {
             "hash": "0x"+"0"*64,
             "nonce": hex(nonce),
-            "from": self.GENESIS_ADDR,
+            "from": sender,
             "to": contract_addr,
             "value": hex(0),
             "gasPrice": hex(1),
@@ -338,8 +341,13 @@ class RpcClient:
 
     def estimate_gas(self, contract_addr:str, data_hex:str) -> int:
         tx = self.new_tx_for_call(contract_addr, data_hex)
-        gas = self.node.cfx_estimateGas(tx)
-        return int(gas, 0)
+        response = self.node.cfx_estimateGasAndCollateral(tx)
+        return int(response['gasUsed'], 0)
+    
+    def estimate_collateral(self, contract_addr:str, data_hex:str, sender:str) -> int:
+        tx = self.new_tx_for_call(contract_addr, data_hex, sender=sender)
+        response = self.node.cfx_estimateGasAndCollateral(tx)
+        return int(response['storageOccupied'], 0)
 
     def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)

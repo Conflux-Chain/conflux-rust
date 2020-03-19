@@ -183,12 +183,15 @@ pub mod staking {
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
         pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
-        /// This is the scale factor for interest rate: `BLOCKS_PER_YEAR * 100`.
-        /// The actual interest rate per block will be `INITIAL_ANNUAL_INTEREST_RATE /
-        /// INTEREST_RATE_SCALE / BLOCKS_PER_YEAR`.
-        pub static ref INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR * 100);
-        /// This is the initial annual interest rate with scale: `0.04 * INTEREST_RATE_SCALE`
-        pub static ref INITIAL_ANNUAL_INTEREST_RATE: U256 = U256::from(BLOCKS_PER_YEAR * 4);
+        /// This is the scale factor for accumulated interest rate: `BLOCKS_PER_YEAR * 2 ^ 80`.
+        /// The actual accumulate interest rate stored will be `accumulate_interest_rate / INTEREST_RATE_SCALE`.
+        pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR) << 80;
+        /// The initial annual interest is 4%, which means the initial interest rate per block will be
+        /// `4% / BLOCKS_PER_YEAR`. We will multiply it with scale factor and store it as an integer.
+        /// This is the scale factor of initial interest rate per block.
+        pub static ref INTEREST_RATE_PER_BLOCK_SCALE: U256 = U256::from(BLOCKS_PER_YEAR * 1000000);
+        /// This is the initial interest rate per block with scale: `4% / BLOCKS_PER_YEAR * INTEREST_RATE_PER_BLOCK_SCALE`.
+        pub static ref INITIAL_INTEREST_RATE_PER_BLOCK: U256 = U256::from(40000);
         /// This is the service charge rate for withdraw, `SERVICE_CHARGE_RATE /
         /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
         pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
