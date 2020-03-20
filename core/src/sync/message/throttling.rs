@@ -41,7 +41,7 @@ impl Handleable for Throttled {
             let request = ctx.match_request(request_id)?;
             ctx.manager
                 .request_manager
-                .remove_mismatch_request(ctx.io, &request);
+                .resend_request_to_another_peer(ctx.io, &request);
         }
 
         Ok(())

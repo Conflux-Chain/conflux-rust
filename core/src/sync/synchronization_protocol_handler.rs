@@ -449,8 +449,16 @@ impl SynchronizationProtocolHandler {
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
         match e.0 {
-            ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidGetBlockTxn(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidStatus(_) => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
             ErrorKind::InvalidMessageFormat => {
+                // TODO: Shall we blacklist a node when the message format is
+                // wrong? maybe it's a different version of sync protocol?
                 op = Some(UpdateNodeOperation::Remove)
             }
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
@@ -508,7 +516,7 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Failure)
                 }
             },
-            ErrorKind::Storage(_) => {}
+            ErrorKind::Storage(_) => disconnect = false,
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
@@ -519,6 +527,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
+            ErrorKind::NotSupported(_) => disconnect = false,
         }
 
         if disconnect {

@@ -1,4 +1,5 @@
 use crate::{message::PeerId, sync::state::storage::SnapshotSyncCandidate};
+use primitives::EpochId;
 use std::{
     collections::{BTreeMap, HashSet},
     time::{Duration, Instant},
@@ -30,16 +31,19 @@ pub struct StateSyncCandidateManager {
     /// The starting time of the ongoing candidate requesting
     start_time: Instant,
 
+    pub current_era_genesis: EpochId,
+    candidates: Vec<SnapshotSyncCandidate>,
+
     /// The map from state candidates to the set of peers that can support this
     /// state
-    candidates: BTreeMap<SnapshotSyncCandidate, HashSet<PeerId>>,
+    candidates_map: BTreeMap<SnapshotSyncCandidate, HashSet<PeerId>>,
     /// The peers who have been requested for candidate response but has not
     /// replied
     pending_peers: HashSet<PeerId>,
 
     /// The chosen candidate that we are actually requesting state manifest and
     /// chunks
-    pub active_candidate: Option<SnapshotSyncCandidate>,
+    active_candidate: Option<usize>,
     /// The peers that can serve `active_candidate`.
     active_peers: HashSet<PeerId>,
 }
@@ -48,7 +52,9 @@ impl StateSyncCandidateManager {
     fn new() -> Self {
         Self {
             start_time: Instant::now(),
-            candidates: BTreeMap::new(),
+            current_era_genesis: Default::default(),
+            candidates: Default::default(),
+            candidates_map: BTreeMap::new(),
             pending_peers: Default::default(),
             active_candidate: None,
             active_peers: Default::default(),
@@ -56,14 +62,18 @@ impl StateSyncCandidateManager {
     }
 
     pub fn reset(
-        &mut self, candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
-    ) {
+        &mut self, current_era_genesis: EpochId,
+        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
+    )
+    {
         let mut candidates_map = BTreeMap::new();
-        for candidate in candidates {
-            candidates_map.insert(candidate, HashSet::new());
+        for candidate in &candidates {
+            candidates_map.insert(candidate.clone(), HashSet::new());
         }
         self.start_time = Instant::now();
-        self.candidates = candidates_map;
+        self.current_era_genesis = current_era_genesis;
+        self.candidates = candidates;
+        self.candidates_map = candidates_map;
         self.pending_peers = peers.into_iter().collect();
         self.active_candidate = None;
         self.active_peers = HashSet::new();
@@ -84,28 +94,32 @@ impl StateSyncCandidateManager {
         let mut requested_candidates_set: HashSet<&SnapshotSyncCandidate> =
             requested_candidates.iter().collect();
         for candidate in supported_candidates {
-            match self.candidates.get_mut(candidate) {
+            match self.candidates_map.get_mut(candidate) {
                 Some(peer_set) => {
                     peer_set.insert(*peer);
                 }
                 None => {
-                    debug!(
-                        "Receive unexpected candidate {:?} from peer {:?}",
-                        candidate, peer
-                    );
+                    if requested_candidates_set.contains(candidate) {
+                        debug!("requested candidate {:?} is stale", candidate);
+                    } else {
+                        debug!(
+                            "Receive unexpected candidate {:?} from peer {:?}",
+                            candidate, peer
+                        );
+                    }
                 }
             }
             requested_candidates_set.remove(&candidate);
         }
         for unsupported_candidate in requested_candidates_set {
-            match self.candidates.get_mut(unsupported_candidate) {
+            match self.candidates_map.get_mut(unsupported_candidate) {
                 Some(peer_set) => {
                     peer_set.remove(peer);
                 }
                 None => {
                     debug!(
-                        "requested candidate removed {:?} from peer {:?}",
-                        unsupported_candidate, peer
+                        "requested candidate {:?} is stale",
+                        unsupported_candidate,
                     );
                 }
             }
@@ -118,14 +132,14 @@ impl StateSyncCandidateManager {
             // Here we return None only if all requested peers cannot serve the
             // candidates TODO ask about new state candidates or new
             // peers when active_candidate is None
-            return self.active_candidate.clone();
+            return self.get_active_candidate();
         }
         None
     }
 
     pub fn on_peer_disconnected(&mut self, peer: &PeerId) {
         self.active_peers.remove(peer);
-        for peers in self.candidates.values_mut() {
+        for peers in self.candidates_map.values_mut() {
             peers.remove(peer);
         }
     }
@@ -138,6 +152,10 @@ impl StateSyncCandidateManager {
 
     pub fn active_peers(&self) -> &HashSet<PeerId> { &self.active_peers }
 
+    pub fn get_active_candidate(&self) -> Option<SnapshotSyncCandidate> {
+        self.active_candidate.map(|i| self.candidates[i].clone())
+    }
+
     /// `peer` cannot support the active candidate now
     pub fn note_state_sync_failure(&mut self, peer: &PeerId) {
         self.pending_peers.remove(peer);
@@ -146,24 +164,41 @@ impl StateSyncCandidateManager {
             self.set_active_candidate();
         }
         self.active_peers.remove(peer);
-        if let Some(active_candidate) = &self.active_candidate {
-            if let Some(peers) = self.candidates.get_mut(active_candidate) {
+        if let Some(active_candidate) = self.active_candidate.clone() {
+            if let Some(peers) = self
+                .candidates_map
+                .get_mut(&self.candidates[active_candidate])
+            {
                 peers.remove(peer);
             }
         }
     }
 
-    // TODO Find candidate according to priority
-    fn set_active_candidate(&mut self) {
-        for (candidate, peer_set) in &self.candidates {
-            if !peer_set.is_empty() {
+    pub fn set_active_candidate(&mut self) {
+        let mut candidate_index = self.active_candidate.map_or(0, |i| i + 1);
+        let max_candidate_index = self.candidates.len();
+        while candidate_index < max_candidate_index {
+            self.active_candidate = Some(candidate_index);
+            let candidate = &self.candidates[candidate_index];
+            let peer_set = self.candidates_map.get(candidate).unwrap();
+            if peer_set.is_empty() {
                 debug!(
-                    "StateSync: set active_candidate={:?}, active_peers={:?}",
-                    candidate, peer_set
+                    "StateSync: candidate {}={:?}, active_peers={:?}",
+                    candidate_index, candidate, peer_set
                 );
-                self.active_candidate = Some(candidate.clone());
+            } else {
+                debug!(
+                    "StateSync: set active_candidate {}={:?}, active_peers={:?}",
+                    candidate_index, candidate, peer_set
+                );
                 self.active_peers = peer_set.clone();
+                break;
             }
+            candidate_index += 1;
+        }
+        // All sync candidates failed.
+        if candidate_index == max_candidate_index {
+            self.active_candidate = None;
         }
     }
 

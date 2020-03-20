@@ -36,10 +36,24 @@ pub enum SnapshotSyncCandidate {
 
 impl SnapshotSyncCandidate {
     fn to_type_id(&self) -> u8 {
-        match &self {
+        match self {
             SnapshotSyncCandidate::OneStepSync { .. } => 0,
             SnapshotSyncCandidate::FullSync { .. } => 1,
             SnapshotSyncCandidate::IncSync { .. } => 2,
+        }
+    }
+
+    pub fn get_snapshot_epoch_id(&self) -> &EpochId {
+        match self {
+            SnapshotSyncCandidate::OneStepSync {
+                snapshot_epoch_id, ..
+            } => snapshot_epoch_id,
+            SnapshotSyncCandidate::FullSync {
+                snapshot_epoch_id, ..
+            } => snapshot_epoch_id,
+            SnapshotSyncCandidate::IncSync {
+                snapshot_epoch_id, ..
+            } => snapshot_epoch_id,
         }
     }
 }
@@ -223,10 +237,21 @@ impl RangedManifest {
     }
 
     pub fn load(
-        snapshot_epoch_id: &EpochId, start_key: Option<Vec<u8>>,
+        snapshot_to_sync: &SnapshotSyncCandidate, start_key: Option<Vec<u8>>,
         storage_manager: &StorageManager, chunk_size: u64,
     ) -> Result<Option<(RangedManifest, MerkleHash)>, Error>
     {
+        let snapshot_epoch_id = match snapshot_to_sync {
+            SnapshotSyncCandidate::FullSync {
+                snapshot_epoch_id, ..
+            } => snapshot_epoch_id,
+            SnapshotSyncCandidate::IncSync { .. } => {
+                unimplemented!();
+            }
+            SnapshotSyncCandidate::OneStepSync { .. } => {
+                unimplemented!();
+            }
+        };
         debug!(
             "begin to load manifest, snapshot_epoch_id = {:?}, start_key = {:?}",
             snapshot_epoch_id, start_key
