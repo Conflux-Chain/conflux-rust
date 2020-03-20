@@ -89,10 +89,14 @@ impl StateSyncCandidateManager {
                     peer_set.insert(*peer);
                 }
                 None => {
-                    debug!(
-                        "Receive unexpected candidate {:?} from peer {:?}",
-                        candidate, peer
-                    );
+                    if requested_candidates_set.contains(candidate) {
+                        debug!("requested candidate {:?} is stale", candidate);
+                    } else {
+                        debug!(
+                            "Receive unexpected candidate {:?} from peer {:?}",
+                            candidate, peer
+                        );
+                    }
                 }
             }
             requested_candidates_set.remove(&candidate);
@@ -104,8 +108,8 @@ impl StateSyncCandidateManager {
                 }
                 None => {
                     debug!(
-                        "requested candidate removed {:?} from peer {:?}",
-                        unsupported_candidate, peer
+                        "requested candidate {:?} is stale",
+                        unsupported_candidate,
                     );
                 }
             }

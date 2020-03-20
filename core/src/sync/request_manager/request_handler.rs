@@ -313,12 +313,15 @@ impl RequestContainer {
         protocol_config: &ProtocolConfiguration,
     ) -> Result<RequestMessage, Error>
     {
+        // FIXME: isn't this enough? What do these statements below do?
         let removed_req = self.remove_inflight_request(request_id);
         if let Some(removed_req) = removed_req {
             removed_req
                 .timed_req
                 .removed
                 .store(true, AtomicOrdering::Relaxed);
+            // FIXME: if it sends pending requests, why not move it to a
+            // separate method?
             while self.has_pending_requests() {
                 if let Some(new_request_id) = self.get_next_request_id() {
                     let mut pending_msg = self.pop_pending_request().unwrap();
@@ -444,15 +447,15 @@ impl RequestMessage {
     /// `UnexpectedResponse` error.
     pub fn downcast_ref<T: Request + Any>(
         &self, io: &dyn NetworkContext, request_manager: &RequestManager,
-        remove_on_mismatch: bool,
+        resend_on_mismatch: bool,
     ) -> Result<&T, Error>
     {
         match self.request.as_any().downcast_ref::<T>() {
             Some(req) => Ok(req),
             None => {
                 warn!("failed to downcast general request to concrete request type, message = {:?}", self);
-                if remove_on_mismatch {
-                    request_manager.remove_mismatch_request(io, self);
+                if resend_on_mismatch {
+                    request_manager.resend_request_to_another_peer(io, self);
                 }
                 Err(ErrorKind::UnexpectedResponse.into())
             }
