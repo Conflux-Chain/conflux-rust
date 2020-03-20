@@ -1,10 +1,12 @@
 use cfx_types::U256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::SignedTransaction;
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::{cmp::Ordering, mem, ops::Deref, sync::Arc};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
@@ -45,7 +47,7 @@ pub enum InsertResult {
     Updated(TxWithReadyInfo),
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 struct NoncePoolNode {
     /// transaction in current node
     tx: TxWithReadyInfo,
@@ -296,6 +298,12 @@ impl NoncePoolNode {
 pub struct NoncePool {
     root: Option<Box<NoncePoolNode>>,
     rng: XorShiftRng,
+}
+
+impl MallocSizeOf for NoncePool {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.root.size_of(ops)
+    }
 }
 
 impl NoncePool {

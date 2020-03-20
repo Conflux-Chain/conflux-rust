@@ -33,6 +33,8 @@ use crate::{
     Notifications,
 };
 use cfx_types::{Bloom, H160, H256, U256};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -96,7 +98,7 @@ impl ConsensusGraphStatistics {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
@@ -152,6 +154,16 @@ pub struct ConsensusGraph {
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
+}
+
+impl MallocSizeOf for ConsensusGraph {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.inner.read().size_of(ops)
+            + self.txpool.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.best_info.read().size_of(ops)
+            + self.pivot_block_state_valid_map.lock().size_of(ops)
+    }
 }
 
 impl ConsensusGraph {
