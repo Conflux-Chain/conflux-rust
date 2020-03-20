@@ -2825,7 +2825,9 @@ impl ConsensusGraphInner {
                     tmp_lca.push(self.cur_era_genesis_block_arena_index)
                 }
                 let mut lca = self.timer_chain[end];
-                for j in (end - self.inner_conf.timer_chain_beta as usize + 1)..end {
+                for j in
+                    (end - self.inner_conf.timer_chain_beta as usize + 1)..end
+                {
                     // Note that we may have timer_chain blocks that are
                     // outside the genesis tree temporarily.
                     // Therefore we have to deal with the case that lca
