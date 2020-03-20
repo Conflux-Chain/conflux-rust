@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::node::Node;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::{
@@ -15,6 +16,14 @@ pub struct TreapMap<K, V, W> {
     root: Option<Box<Node<K, V, W>>>,
     size: usize,
     rng: XorShiftRng,
+}
+
+impl<K: MallocSizeOf, V: MallocSizeOf, W: MallocSizeOf> MallocSizeOf
+    for TreapMap<K, V, W>
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.root.size_of(ops)
+    }
 }
 
 impl<

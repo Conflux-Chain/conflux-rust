@@ -161,8 +161,15 @@ fn test_deposit_and_withdraw() {
         admin,
         sponsor_info: Default::default(),
     };
-    let interest_rate_per_block =
-        *INITIAL_ANNUAL_INTEREST_RATE / U256::from(BLOCKS_PER_YEAR);
+    let mut accumulated_interest_rate = vec![*ACCUMULATED_INTEREST_RATE_SCALE];
+    for _ in 0..100000 {
+        let last = *accumulated_interest_rate.last().unwrap();
+        accumulated_interest_rate.push(
+            last * (*INITIAL_INTEREST_RATE_PER_BLOCK
+                + *INTEREST_RATE_PER_BLOCK_SCALE)
+                / *INTEREST_RATE_PER_BLOCK_SCALE,
+        );
+    }
     let mut overlay_account = OverlayAccount::new(&address, account, 0);
     // add balance 2 * 10^15
     overlay_account.add_balance(&2_000_000_000_000_000u64.into());
@@ -178,7 +185,7 @@ fn test_deposit_and_withdraw() {
     // deposit
     overlay_account.deposit(
         1_000_000_000_000_000u64.into(), /* amount */
-        interest_rate_per_block,
+        accumulated_interest_rate[1],
         1, /* deposit_time */
     );
     assert_eq!(
@@ -195,7 +202,7 @@ fn test_deposit_and_withdraw() {
     );
     overlay_account.deposit(
         100_000_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(2),
+        accumulated_interest_rate[2],
         2, /* deposit_time */
     );
     assert_eq!(
@@ -212,7 +219,7 @@ fn test_deposit_and_withdraw() {
     );
     overlay_account.deposit(
         10_000_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(3),
+        accumulated_interest_rate[3],
         3, /* deposit_time */
     );
     assert_eq!(
@@ -229,7 +236,7 @@ fn test_deposit_and_withdraw() {
     );
     overlay_account.deposit(
         1_000_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(4),
+        accumulated_interest_rate[4],
         4, /* deposit_time */
     );
     assert_eq!(
@@ -246,7 +253,7 @@ fn test_deposit_and_withdraw() {
     );
     overlay_account.deposit(
         100_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(5),
+        accumulated_interest_rate[5],
         5, /* deposit_time */
     );
     assert_eq!(
@@ -263,7 +270,7 @@ fn test_deposit_and_withdraw() {
     );
     overlay_account.deposit(
         10_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(6),
+        accumulated_interest_rate[6],
         6, /* deposit_time */
     );
     assert_eq!(
@@ -280,7 +287,7 @@ fn test_deposit_and_withdraw() {
     );
     overlay_account.deposit(
         1_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(7),
+        accumulated_interest_rate[7],
         7, /* deposit_time */
     );
     assert_eq!(
@@ -337,7 +344,7 @@ fn test_deposit_and_withdraw() {
     // 500_000_000_000_000 from `block_number = 1`
     let (interest, service_charge) = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
-        interest_rate_per_block,
+        accumulated_interest_rate[1],
         1, /* withdraw_time */
     );
     assert_eq!(interest, U256::zero());
@@ -364,18 +371,18 @@ fn test_deposit_and_withdraw() {
     // 500_000_000_000_000 from `block_number = 1`
     let (interest, service_charge) = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(BLOCKS_PER_YEAR + 1),
+        accumulated_interest_rate[100000],
         BLOCKS_PER_YEAR + 1, /* withdraw_time */
     );
-    assert_eq!(interest, U256::from(20_000_000_000_000u64));
+    assert_eq!(interest, U256::from(31_710_480_387u64));
     assert_eq!(service_charge, U256::zero());
     assert_eq!(
         *overlay_account.accumulated_interest_return(),
-        U256::from(20_000_000_000_000u64)
+        U256::from(31_710_480_387u64)
     );
     assert_eq!(
         *overlay_account.balance(),
-        U256::from(1_908_639_000_000_000u64)
+        U256::from(1_888_670_710_480_387u64)
     );
     assert_eq!(
         *overlay_account.staking_balance(),
@@ -396,18 +403,18 @@ fn test_deposit_and_withdraw() {
     // 250_000_000_000 from `block_number = 4`
     let (interest, service_charge) = overlay_account.withdraw(
         110_250_000_000_000u64.into(), /* amount */
-        interest_rate_per_block * U256::from(100),
+        accumulated_interest_rate[100],
         100, /* withdraw_time */
     );
     assert_eq!(interest, U256::from(6_845_508u64));
     assert_eq!(service_charge, U256::from(55_124_914_430u64));
     assert_eq!(
         *overlay_account.accumulated_interest_return(),
-        U256::from(20_000_006_845_508u64)
+        U256::from(31_717_325_895u64)
     );
     assert_eq!(
         *overlay_account.balance(),
-        U256::from(2_018_833_881_931_078u64)
+        U256::from(1_998_865_592_411_465u64)
     );
     assert_eq!(
         *overlay_account.staking_balance(),

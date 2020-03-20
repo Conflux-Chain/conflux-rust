@@ -473,10 +473,10 @@ fn test_not_enough_cash() {
         Err(ExecutionError::NotEnoughCash {
             required,
             got,
-            actual_cost,
+            actual_gas_cost,
         }) if required == U512::from(100_018)
             && got == U512::from(100_017)
-            && correct_cost == actual_cost =>
+            && correct_cost == actual_gas_cost =>
         {
             ()
         }
@@ -970,7 +970,7 @@ fn test_commission_privilege() {
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
-        U256::from(999_999_999_998_900_000u64)
+        U256::from(999_999_999_998_925_000u64)
     );
 
     state
@@ -1031,7 +1031,7 @@ fn test_commission_privilege() {
     let tx = Transaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
-        gas: U256::from(100_000),
+        gas: U256::from(60_000),
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
@@ -1057,7 +1057,10 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
-    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(41_976)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
         U256::from(110_000)
@@ -1099,7 +1102,7 @@ fn test_commission_privilege() {
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::from(10_000)
+        U256::from(35_000)
     );
 
     // call with commission privilege and not enough commission balance
@@ -1132,10 +1135,13 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
-    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(25_000)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::from(10_000)
+        U256::from(35_000)
     );
 
     // add more commission balance
@@ -1166,7 +1172,10 @@ fn test_commission_privilege() {
     }
     .sign(caller2.secret());
     assert_eq!(tx.sender(), caller2.address());
-    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(25_000)
+    );
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
         &env,
@@ -1179,10 +1188,13 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
-    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(25_000)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::from(100_000)
+        U256::from(125_000)
     );
 
     // add commission privilege to caller3
@@ -1206,7 +1218,10 @@ fn test_commission_privilege() {
     }
     .sign(caller3.secret());
     assert_eq!(tx.sender(), caller3.address());
-    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(41_976)
+    );
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
         &env,
@@ -1219,10 +1234,13 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
-    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(41_976)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::zero()
+        U256::from(50_000)
     );
 }
 

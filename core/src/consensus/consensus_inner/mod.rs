@@ -19,6 +19,7 @@ use crate::{
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::Mutex;
 use primitives::{
@@ -445,6 +446,28 @@ pub struct ConsensusGraphInner {
     /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
     /// which blocks it can safely remove
     old_era_block_set: Mutex<VecDeque<H256>>,
+}
+
+impl MallocSizeOf for ConsensusGraphInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.arena.size_of(ops)
+            + self.hash_to_arena_indices.size_of(ops)
+            + self.pivot_chain.size_of(ops)
+            + self.pivot_chain_metadata.size_of(ops)
+            + self.timer_chain.size_of(ops)
+            + self.timer_chain_accumulative_lca.size_of(ops)
+            + self.terminal_hashes.size_of(ops)
+            + self.initial_stable_future.size_of(ops)
+            + self.weight_tree.size_of(ops)
+            + self.adaptive_tree.size_of(ops)
+            + self.invalid_block_queue.size_of(ops)
+            + self.block_body_caches.size_of(ops)
+            + self.pow_config.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.anticone_cache.size_of(ops)
+            + self.pastset_cache.size_of(ops)
+            + self.old_era_block_set.lock().size_of(ops)
+    }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -2131,7 +2154,7 @@ impl ConsensusGraphInner {
     /// If a block is adaptive, then for the heavy blocks, it equals to
     /// the heavy block ratio times the difficulty. Otherwise, it is zero.
     fn block_weight(&self, me: usize) -> i128 {
-        if !self.arena[me].data.activated {
+        if !self.arena[me].data.activated || self.arena[me].era_block == NULL {
             return 0 as i128;
         }
         let is_heavy = self.arena[me].is_heavy;
@@ -2739,6 +2762,49 @@ impl ConsensusGraphInner {
                     }
                     tmp_lca.push(last_lca);
                 }
+            }
+        } else if tmp_chain.len() > self.timer_chain.len() - fork_at_index {
+            let mut last_lca = match self.timer_chain_accumulative_lca.last() {
+                Some(last_lca) => *last_lca,
+                None => self.cur_era_genesis_block_arena_index,
+            };
+            for i in self.timer_chain.len()..(fork_at_index + tmp_chain.len()) {
+                // `end` is the timer chain index of the end of
+                // `timer_chain_beta` consecutive blocks which
+                // we will compute accumulative lca.
+                let end = i - self.inner_conf.timer_chain_beta as usize;
+                if end < self.inner_conf.timer_chain_beta as usize {
+                    tmp_lca.push(self.cur_era_genesis_block_arena_index);
+                    continue;
+                }
+                let mut lca = self.timer_chain[end];
+                for j in
+                    (end - self.inner_conf.timer_chain_beta as usize + 1)..end
+                {
+                    // Note that we may have timer_chain blocks that are
+                    // outside the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca
+                    // becomes NULL
+                    if lca == NULL {
+                        break;
+                    }
+                    lca = self.lca(lca, self.timer_chain[j]);
+                }
+                // Note that we have the assumption that the force
+                // confirmation point will always move
+                // along parental edges, i.e., it is not possible for the
+                // point to move to a sibling tree. This
+                // assumption is true if the timer_chain_beta
+                // and the timer_chain_difficulty_ratio are set to large
+                // enough values.
+                //
+                // It is therefore safe here to use the height to compare.
+                if lca != NULL
+                    && self.arena[last_lca].height < self.arena[lca].height
+                {
+                    last_lca = lca;
+                }
+                tmp_lca.push(last_lca);
             }
         }
 

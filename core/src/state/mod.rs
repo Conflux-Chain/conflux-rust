@@ -64,8 +64,8 @@ struct StakingState {
     total_staking_tokens: U256,
     // This is the total number of CFX used as collateral.
     total_storage_tokens: U256,
-    // This is the annual interest rate.
-    annual_interest_rate: U256,
+    // This is the interest rate per block.
+    interest_rate_per_block: U256,
     // This is the accumulated interest rate.
     accumulate_interest_rate: U256,
 }
@@ -110,7 +110,8 @@ impl State {
                 total_issued_tokens,
                 total_staking_tokens,
                 total_storage_tokens,
-                annual_interest_rate,
+                interest_rate_per_block: annual_interest_rate
+                    / U256::from(BLOCKS_PER_YEAR),
                 accumulate_interest_rate,
             },
             block_number,
@@ -122,12 +123,14 @@ impl State {
     pub fn increase_block_number(&mut self) -> U256 {
         assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.block_number += 1;
-        let interest_rate = self.staking_state.annual_interest_rate
-            / U256::from(BLOCKS_PER_YEAR);
-        self.staking_state.accumulate_interest_rate += interest_rate;
+        self.staking_state.accumulate_interest_rate =
+            self.staking_state.accumulate_interest_rate
+                * (*INTEREST_RATE_PER_BLOCK_SCALE
+                    + self.staking_state.interest_rate_per_block)
+                / *INTEREST_RATE_PER_BLOCK_SCALE;
         let secondary_reward = self.staking_state.total_storage_tokens
-            * interest_rate
-            / *INTEREST_RATE_SCALE;
+            * self.staking_state.interest_rate_per_block
+            / *INTEREST_RATE_PER_BLOCK_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
         secondary_reward
@@ -637,12 +640,13 @@ impl State {
         Ok(())
     }
 
-    pub fn annual_interest_rate(&self) -> &U256 {
-        &self.staking_state.annual_interest_rate
+    pub fn annual_interest_rate(&self) -> U256 {
+        self.staking_state.interest_rate_per_block * U256::from(BLOCKS_PER_YEAR)
     }
 
     pub fn set_annual_interest_rate(&mut self, annual_interest_rate: U256) {
-        self.staking_state.annual_interest_rate = annual_interest_rate;
+        self.staking_state.interest_rate_per_block =
+            annual_interest_rate / U256::from(BLOCKS_PER_YEAR);
     }
 
     pub fn accumulate_interest_rate(&self) -> &U256 {
@@ -692,7 +696,8 @@ impl State {
 
     fn commit_staking_state(&mut self) -> DbResult<()> {
         self.db.set_annual_interest_rate(
-            &self.staking_state.annual_interest_rate,
+            &(self.staking_state.interest_rate_per_block
+                * U256::from(BLOCKS_PER_YEAR)),
         )?;
         self.db.set_accumulate_interest_rate(
             &self.staking_state.accumulate_interest_rate,
@@ -1120,8 +1125,9 @@ impl State {
         assert!(self.checkpoints.borrow().is_empty());
         assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.cache.borrow_mut().clear();
-        self.staking_state.annual_interest_rate =
-            self.db.get_annual_interest_rate().expect("no db error");
+        self.staking_state.interest_rate_per_block =
+            self.db.get_annual_interest_rate().expect("no db error")
+                / U256::from(BLOCKS_PER_YEAR);
         self.staking_state.accumulate_interest_rate =
             self.db.get_accumulate_interest_rate().expect("no db error");
         self.staking_state.total_issued_tokens =

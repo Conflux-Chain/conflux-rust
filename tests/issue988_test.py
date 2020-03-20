@@ -9,7 +9,6 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 def signed_bytes_to_int256(input):
     v = bytes_to_int(input)
@@ -128,12 +127,9 @@ class Issue988Test(ConfluxTestFramework):
         return self.nodes[0].cfx_call(tx)
 
     def run_test(self):
-        self.log.propagate = False
-
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        test_contract = solc.get_contract_instance(
+        test_contract = get_contract_instance(
             abi_file =os.path.join(file_dir, "contracts/issue988_abi.json"),
             bytecode_file=os.path.join(file_dir, "contracts/issue988_bytecode.dat"),
         )

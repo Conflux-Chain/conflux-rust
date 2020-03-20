@@ -33,6 +33,8 @@ use crate::{
     Notifications,
 };
 use cfx_types::{Bloom, H160, H256, U256};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -96,14 +98,11 @@ impl ConsensusGraphStatistics {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
-    // terminal_block_hashes will be None if it is same as the
-    // bounded_terminal_block_hashes. This is just to save some space.
-    pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
 }
 
@@ -155,6 +154,16 @@ pub struct ConsensusGraph {
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
+}
+
+impl MallocSizeOf for ConsensusGraph {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.inner.read().size_of(ops)
+            + self.txpool.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.best_info.read().size_of(ops)
+            + self.pivot_block_state_valid_map.lock().size_of(ops)
+    }
 }
 
 impl ConsensusGraph {
@@ -1151,18 +1160,17 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let mut best_info = self.best_info.write();
 
         let terminal_hashes = inner.terminal_hashes();
-        let (terminal_block_hashes, bounded_terminal_block_hashes) =
+        let bounded_terminal_block_hashes =
             if terminal_hashes.len() > REFEREE_BOUND {
-                (Some(terminal_hashes), inner.best_terminals(REFEREE_BOUND))
+                inner.best_terminals(REFEREE_BOUND)
             } else {
-                (None, terminal_hashes)
+                terminal_hashes
             };
 
         *best_info = Arc::new(BestInformation {
             best_block_hash: inner.best_block_hash(),
             best_epoch_number: inner.best_epoch_number(),
             current_difficulty: inner.current_difficulty,
-            terminal_block_hashes,
             bounded_terminal_block_hashes,
         });
     }
