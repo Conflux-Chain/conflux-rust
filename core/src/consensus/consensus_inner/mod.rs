@@ -2811,7 +2811,7 @@ impl ConsensusGraphInner {
                     tmp_lca.push(last_lca);
                 }
             }
-        } else if tmp_chain.len() >= self.timer_chain.len() - fork_at_index {
+        } else if tmp_chain.len() > self.timer_chain.len() - fork_at_index {
             let mut last_lca = match self.timer_chain_accumulative_lca.last() {
                 Some(last_lca) => *last_lca,
                 None => self.cur_era_genesis_block_arena_index,
@@ -2822,7 +2822,8 @@ impl ConsensusGraphInner {
                 // we will compute accumulative lca.
                 let end = i - self.inner_conf.timer_chain_beta as usize;
                 if end < self.inner_conf.timer_chain_beta as usize {
-                    tmp_lca.push(self.cur_era_genesis_block_arena_index)
+                    tmp_lca.push(self.cur_era_genesis_block_arena_index);
+                    continue;
                 }
                 let mut lca = self.timer_chain[end];
                 for j in
