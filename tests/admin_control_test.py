@@ -9,7 +9,6 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 class AdminControlTest(ConfluxTestFramework):
     REQUEST_BASE = {
@@ -104,17 +103,14 @@ class AdminControlTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        self.log.propagate = False
-
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        pay_contract = solc.get_contract_instance(
+        pay_contract = get_contract_instance(
             abi_file=os.path.join(file_dir, "contracts/pay_abi.json"),
             bytecode_file=os.path.join(file_dir, "contracts/pay_bytecode.dat"),
         )
 
-        admin_control_contract = solc.get_contract_instance(
+        admin_control_contract = get_contract_instance(
             abi_file=os.path.join(file_dir, "contracts/admin_control_abi.json"),
             bytecode_file=os.path.join(file_dir, "contracts/admin_control_bytecode.dat"),
         )

@@ -10,7 +10,6 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 class CommissionPrivilegeTest(ConfluxTestFramework):
     REQUEST_BASE = {
@@ -110,13 +109,10 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        # Prevent easysolc from configuring the root logger to print to stderr
-        self.log.propagate = False
         sponsor_whitelist_contract_addr = Web3.toChecksumAddress("8ad036480160591706c831f0da19d1a424e39469")
         collateral_per_storage_key = 10 ** 18 // 16
         upper_bound = 5 * 10 ** 7
 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
         control_contract_file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
@@ -125,9 +121,9 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         control_contract_file_path = "/".join(control_contract_file_path)
         control_contract_dict = json.loads(open(os.path.join(control_contract_file_path), "r").read())
 
-        control_contract = solc.get_contract_instance(contract_dict=control_contract_dict)
+        control_contract = get_contract_instance(contract_dict=control_contract_dict)
 
-        test_contract = solc.get_contract_instance(
+        test_contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/commission_privilege_test_abi.json"),
             bytecode_file = os.path.join(file_dir, "contracts/commission_privilege_test_bytecode.dat"),
         )

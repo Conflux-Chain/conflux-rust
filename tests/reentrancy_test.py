@@ -9,9 +9,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.blocktools import create_transaction
 from test_framework.block_gen_thread import BlockGenThread
 from eth_utils import decode_hex
-from easysolc import Solc
 from web3 import Web3
-import copy
 
 class ReentrancyTest(ConfluxTestFramework):
     REQUEST_BASE = {
@@ -106,21 +104,18 @@ class ReentrancyTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        self.log.propagate = False
-
         start_p2p_connection(self.nodes)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
         self.log.info("Initializing contract")
        
-        self.buggy_contract = solc.get_contract_instance(
+        self.buggy_contract = get_contract_instance(
             source=os.path.join(file_dir, "contracts/reentrancy.sol"),
             contract_name="Reentrance")
-        self.exploit_contract = solc.get_contract_instance(
+        self.exploit_contract = get_contract_instance(
             source=os.path.join(file_dir, "contracts/reentrancy_exploit.sol"),
             contract_name="ReentranceExploit")
 

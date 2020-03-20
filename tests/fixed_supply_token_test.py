@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from conflux.utils import privtoaddr
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
-from easysolc import Solc
-
 from web3 import Web3
 import os
+
+from test_framework.util import get_contract_instance
 
 
 class FixedTokenSupplyTokenTest(SmartContractBenchBase):
@@ -16,9 +16,8 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
         self.accounts = []
 
     def setup_contract(self):
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        self.contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/fixed_supply_token.sol"),
+        self.contract = get_contract_instance(source=os.path.join(file_dir, "contracts/fixed_supply_token.sol"),
                                                    contract_name="FixedSupplyToken")
         self.log.info("Initializing contract")
 

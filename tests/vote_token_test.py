@@ -7,7 +7,6 @@ from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from test_framework.mininode import *
 from test_framework.util import *
-from easysolc import Solc
 
 from web3 import Web3
 import os
@@ -29,12 +28,11 @@ class VoteTokenTest(SmartContractBenchBase):
         self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price), "chainId":0}
 
     def setup_contract(self):
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        self.token_contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
+        self.token_contract = get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
                                                          contract_name="DummyErc20")
-        self.vote_contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
+        self.vote_contract = get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
                                                         contract_name="AdvancedTokenVote1202")
         self.log.info("Initializing contract")
         transaction = self.call_contract_function(self.token_contract, "constructor", [], self.default_account_key)
