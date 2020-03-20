@@ -2,11 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, Handleable},
-    state::{storage::Chunk, SnapshotChunkRequest},
-    Error, ErrorKind,
+use crate::{
+    message::{GetMaybeRequestId, Message, MsgId},
+    sync::{
+        message::{msgid, Context, Handleable},
+        state::{storage::Chunk, SnapshotChunkRequest},
+        Error, ErrorKind,
+    },
 };
+use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable)]
@@ -14,6 +18,8 @@ pub struct SnapshotChunkResponse {
     pub request_id: u64,
     pub chunk: Chunk,
 }
+
+build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
 
 impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
@@ -27,10 +33,12 @@ impl Handleable for SnapshotChunkResponse {
 
         if let Err(e) = self.chunk.validate(&request.chunk_key) {
             debug!("failed to validate the snapshot chunk, error = {:?}", e);
+            // TODO: is the "other" peer guaranteed to have the chunk?
+            // How did we pass the peer list?
             ctx.manager
                 .request_manager
-                .remove_mismatch_request(ctx.io, &message);
-            bail!(ErrorKind::Invalid);
+                .resend_request_to_another_peer(ctx.io, &message);
+            bail!(ErrorKind::InvalidSnapshotChunk(e.description().into()));
         }
 
         ctx.manager.state_sync.handle_snapshot_chunk_response(

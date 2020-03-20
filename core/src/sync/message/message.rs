@@ -75,12 +75,6 @@ build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "G
 build_msg_with_request_id_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn" }
 build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange" }
 build_msg_with_request_id_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
-build_msg_with_request_id_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
-build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
-build_msg_with_request_id_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
-build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
-build_msg_with_request_id_impl! { StateSyncCandidateRequest, msgid::STATE_SYNC_CANDIDATE_REQUEST, "StateSyncCandidateRequest" }
-build_msg_impl! { StateSyncCandidateResponse, msgid::STATE_SYNC_CANDIDATE_RESPONSE, "StateSyncCandidateResponse" }
 build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled" }
 
 // normal priority and size-sensitive message types

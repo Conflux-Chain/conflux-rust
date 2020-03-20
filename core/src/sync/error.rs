@@ -20,14 +20,24 @@ error_chain! {
     }
 
     errors {
-        Invalid {
+        InvalidBlock {
             description("Invalid block"),
             display("Invalid block"),
+        }
+
+        InvalidGetBlockTxn(reason: String) {
+            description("Invalid GetBlockTxn"),
+            display("Invalid GetBlockTxn: {}", reason),
         }
 
         InvalidMessageFormat {
             description("Invalid message format"),
             display("Invalid message format"),
+        }
+
+        InvalidStatus(reason: String) {
+            description("Invalid Status"),
+            display("Invalid Status: {}", reason),
         }
 
         UnknownPeer {
@@ -68,12 +78,12 @@ error_chain! {
 
         InvalidSnapshotManifest(reason: String) {
             description("invalid snapshot manifest"),
-            display("invalid snapshot manifest: {:?}", reason),
+            display("invalid snapshot manifest: {}", reason),
         }
 
         InvalidSnapshotChunk(reason: String) {
             description("invalid snapshot chunk"),
-            display("invalid snapshot chunk: {:?}", reason),
+            display("invalid snapshot chunk: {}", reason),
         }
 
         AlreadyThrottled(msg_name: &'static str) {
@@ -93,7 +103,12 @@ error_chain! {
 
         UnexpectedMessage(reason: String) {
             description("Message received in unexpected"),
-            display("UnexpectedMessage: {:?}", reason)
+            display("UnexpectedMessage: {:?}", reason),
+        }
+
+        NotSupported(reason: String) {
+            description("Unable to process the message due to protocol version mismatch"),
+            display("Unable to process the message due to protocol version mismatch: {}", reason),
         }
     }
 }

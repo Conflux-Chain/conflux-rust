@@ -2,31 +2,42 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::{Context, DynamicCapability, Handleable, KeyContainer},
-    request_manager::{AsAny, Request},
-    state::{
-        snapshot_chunk_response::SnapshotChunkResponse,
-        storage::{Chunk, ChunkKey},
+use crate::{
+    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
+    sync::{
+        message::{
+            msgid, Context, DynamicCapability, Handleable, KeyContainer,
+        },
+        request_manager::{AsAny, Request},
+        state::{
+            snapshot_chunk_response::SnapshotChunkResponse,
+            storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
+        },
+        Error, ErrorKind, ProtocolConfiguration,
     },
-    Error, ProtocolConfiguration,
 };
-use cfx_types::H256;
+use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotChunkRequest {
+    // request_id for SnapshotChunkRequest is independent from each other
+    // because request_id is set per message when the request is sent.
     pub request_id: u64,
-    pub checkpoint: H256,
+    pub snapshot_to_sync: SnapshotSyncCandidate,
     pub chunk_key: ChunkKey,
 }
 
+build_msg_with_request_id_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
+
 impl SnapshotChunkRequest {
-    pub fn new(checkpoint: H256, chunk_key: ChunkKey) -> Self {
+    pub fn new(
+        snapshot_sync_candidate: SnapshotSyncCandidate, chunk_key: ChunkKey,
+    ) -> Self {
         SnapshotChunkRequest {
             request_id: 0,
-            checkpoint,
+            snapshot_to_sync: snapshot_sync_candidate,
             chunk_key,
         }
     }
@@ -34,8 +45,16 @@ impl SnapshotChunkRequest {
 
 impl Handleable for SnapshotChunkRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        let snapshot_epoch_id = match &self.snapshot_to_sync {
+            SnapshotSyncCandidate::FullSync {
+                snapshot_epoch_id, ..
+            } => snapshot_epoch_id,
+            _ => bail!(ErrorKind::NotSupported(
+                "OneStepSync/IncSync not yet implemented.".into()
+            )),
+        };
         let chunk = match Chunk::load(
-            &self.checkpoint,
+            snapshot_epoch_id,
             &self.chunk_key,
             &ctx.manager.graph.data_man.storage_manager,
         ) {

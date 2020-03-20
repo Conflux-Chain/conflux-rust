@@ -13,6 +13,7 @@ use crate::{
         StateRootAuxInfo, StateRootWithAuxInfo,
     },
     sync::{
+        error::{Error, ErrorKind},
         message::{msgid, Context},
         state::{
             restore::Restorer,
@@ -37,7 +38,7 @@ use primitives::{
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
     collections::{HashMap, VecDeque},
-    fmt::{Debug, Formatter, Result},
+    fmt::{Debug, Formatter},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -46,6 +47,7 @@ use std::{
 pub enum Status {
     Inactive,
     RequestingCandidates,
+    StartCandidateSync,
     DownloadingManifest(Instant),
     DownloadingChunks(Instant),
     Completed,
@@ -57,10 +59,13 @@ impl Default for Status {
 }
 
 impl Debug for Status {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let status = match self {
             Status::Inactive => "inactive".into(),
             Status::RequestingCandidates => "requesting candidates".into(),
+            Status::StartCandidateSync => {
+                "about to request a candidate state".into()
+            }
             Status::DownloadingManifest(t) => {
                 format!("downloading manifest ({:?})", t.elapsed())
             }
@@ -75,13 +80,15 @@ impl Debug for Status {
     }
 }
 
+// TODO: Implement OneStepSync / IncSync as this is currently only implemented
+// for FullSync.
 struct Inner {
     sync_candidate_manager: StateSyncCandidateManager,
 
     /// The checkpoint whose state is being synced
     manifest_request_status: Option<(Instant, PeerId)>,
 
-    snapshot_epoch_id: EpochId,
+    current_sync_candidate: Option<SnapshotSyncCandidate>,
     trusted_blame_block: H256,
     status: Status,
 
@@ -105,18 +112,23 @@ struct Inner {
 
 impl Default for Inner {
     fn default() -> Self {
-        Self::new(Default::default(), Default::default(), Default::default())
+        Self::new(None, Default::default(), Default::default())
     }
 }
 
 impl Inner {
     fn new(
-        snapshot_epoch_id: EpochId, trusted_blame_block: H256, status: Status,
-    ) -> Self {
+        current_sync_candidate: Option<SnapshotSyncCandidate>,
+        trusted_blame_block: H256, status: Status,
+    ) -> Self
+    {
+        let snapshot_epoch_id = current_sync_candidate
+            .as_ref()
+            .map_or(Default::default(), |c| c.get_snapshot_epoch_id().clone());
         Self {
             sync_candidate_manager: Default::default(),
             manifest_request_status: None,
-            snapshot_epoch_id,
+            current_sync_candidate,
             trusted_blame_block,
             status,
             true_state_root_by_blame_info: StateRootWithAuxInfo::genesis(
@@ -134,42 +146,36 @@ impl Inner {
         }
     }
 
-    fn initialize_downloading_manifest(
-        &mut self, snapshot_epoch_id: EpochId, trusted_blame_block: H256,
-    ) {
+    pub fn start_sync_for_candidate(
+        &mut self, sync_candidate: SnapshotSyncCandidate,
+        trusted_blame_block: H256, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
+    )
+    {
+        if self.current_sync_candidate.as_ref() == Some(&sync_candidate)
+            && self.trusted_blame_block == trusted_blame_block
+        {
+            return;
+        }
+        info!(
+            "start to sync state, snapshot_to_sync = {:?}, trusted blame block = {:?}",
+            sync_candidate, trusted_blame_block);
         let old_inner = std::mem::replace(
             self,
             Self::new(
-                snapshot_epoch_id,
+                Some(sync_candidate),
                 trusted_blame_block,
                 Status::DownloadingManifest(Instant::now()),
             ),
         );
         self.sync_candidate_manager = old_inner.sync_candidate_manager;
-    }
-
-    // TODO Handle OneStepSync and IncSync
-    pub fn start_state_sync(
-        &mut self, snapshot_epoch_id: H256, trusted_blame_block: H256,
-        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
-        if self.snapshot_epoch_id == snapshot_epoch_id
-            && self.trusted_blame_block == trusted_blame_block
-        {
-            return;
-        }
-        info!("start to sync state, snapshot_epoch_id = {:?}, trusted blame block = {:?}", snapshot_epoch_id, trusted_blame_block);
-        self.initialize_downloading_manifest(
-            snapshot_epoch_id,
-            trusted_blame_block,
-        );
         self.request_manifest(io, sync_handler);
     }
 
-    pub fn start_candidate_sync(
-        &mut self, candidates: Vec<SnapshotSyncCandidate>,
-        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
+    pub fn start_sync(
+        &mut self, current_era_genesis: EpochId,
+        candidates: Vec<SnapshotSyncCandidate>, io: &dyn NetworkContext,
+        sync_handler: &SynchronizationProtocolHandler,
     )
     {
         let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
@@ -178,8 +184,11 @@ impl Inner {
             return;
         }
         self.status = Status::RequestingCandidates;
-        self.sync_candidate_manager
-            .reset(candidates.clone(), peers.clone());
+        self.sync_candidate_manager.reset(
+            current_era_genesis,
+            candidates.clone(),
+            peers.clone(),
+        );
         self.request_candidates(io, sync_handler, candidates, peers);
     }
 
@@ -211,7 +220,8 @@ impl Inner {
     )
     {
         let request = SnapshotManifestRequest::new(
-            self.snapshot_epoch_id.clone(),
+            // Safe to unwrap since it's guaranteed to be Some(..)
+            self.current_sync_candidate.clone().unwrap(),
             self.trusted_blame_block.clone(),
         );
 
@@ -230,7 +240,7 @@ impl Inner {
 }
 
 impl Debug for Inner {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
             "(status = {:?}, download = {}/{}/{})",
@@ -264,21 +274,20 @@ impl SnapshotChunkSync {
     pub fn handle_snapshot_manifest_response(
         &self, ctx: &Context, response: SnapshotManifestResponse,
         request: &SnapshotManifestRequest,
-    )
+    ) -> Result<(), Error>
     {
         let mut inner = &mut *self.inner.write();
 
         // new era started
-        if response.snapshot_epoch_id != inner.snapshot_epoch_id {
+        if Some(&request.snapshot_to_sync)
+            != inner.current_sync_candidate.as_ref()
+        {
             info!(
-                "Checkpoint changed and ignore the received snapshot manifest, new checkpoint = {:?}, requested checkpoint = {:?}",
-                inner.snapshot_epoch_id,
-                response.snapshot_epoch_id);
-            // FIXME handle valid old manifest
-            inner
-                .sync_candidate_manager
-                .note_state_sync_failure(&ctx.peer);
-            return;
+                "The received snapshot manifest doesn't match the current sync candidate,\
+                 current sync candidate = {:?}, requested sync candidate = {:?}",
+                inner.current_sync_candidate,
+                request.snapshot_to_sync);
+            return Ok(());
         }
 
         // status mismatch
@@ -286,7 +295,7 @@ impl SnapshotChunkSync {
             Status::DownloadingManifest(start_time) => start_time,
             _ => {
                 info!("Snapshot manifest received, but mismatch with current status {:?}", inner.status);
-                return;
+                return Ok(());
             }
         };
 
@@ -294,7 +303,11 @@ impl SnapshotChunkSync {
         if request.is_initial_request() {
             match Self::validate_blame_states(
                 ctx,
-                &inner.snapshot_epoch_id,
+                inner
+                    .current_sync_candidate
+                    .as_ref()
+                    .unwrap()
+                    .get_snapshot_epoch_id(),
                 &inner.trusted_blame_block,
                 &response.state_root_vec,
                 &response.receipt_blame_vec,
@@ -314,7 +327,9 @@ impl SnapshotChunkSync {
                             response.snapshot_merkle_root,
                             snapshot_info.merkle_root);
                         self.resync_manifest(ctx, &mut inner);
-                        return;
+                        bail!(ErrorKind::InvalidSnapshotManifest(
+                            "invalid snapshot root in manifest".into(),
+                        ));
                     }
                     inner.restorer.snapshot_merkle_root =
                         snapshot_info.merkle_root;
@@ -326,13 +341,19 @@ impl SnapshotChunkSync {
                 None => {
                     warn!("failed to validate the blame state, re-sync manifest from other peer");
                     self.resync_manifest(ctx, &mut inner);
-                    return;
+                    bail!(ErrorKind::InvalidSnapshotManifest(
+                        "invalid blame state in manifest".into(),
+                    ));
                 }
             }
             match Self::validate_epoch_receipts(
                 ctx,
                 inner.blame_vec_offset,
-                &inner.snapshot_epoch_id,
+                inner
+                    .current_sync_candidate
+                    .as_ref()
+                    .unwrap()
+                    .get_snapshot_epoch_id(),
                 &response.receipt_blame_vec,
                 &response.bloom_blame_vec,
                 &response.block_receipts,
@@ -341,7 +362,9 @@ impl SnapshotChunkSync {
                 None => {
                     warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
                     self.resync_manifest(ctx, &mut inner);
-                    return;
+                    bail!(ErrorKind::InvalidSnapshotManifest(
+                        "invalid epoch receipts in manifest".into(),
+                    ));
                 }
             }
 
@@ -351,11 +374,13 @@ impl SnapshotChunkSync {
                 &request.start_chunk,
             ) {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
-                return;
+                bail!(ErrorKind::InvalidSnapshotManifest(
+                    "invalid chunk proofs in manifest".into(),
+                ));
             }
         }
 
-        let verifier = match FullSyncVerifier::new(
+        let verifier = FullSyncVerifier::new(
             response.manifest.chunk_boundaries.len() + 1,
             response.manifest.chunk_boundaries.clone(),
             response.manifest.chunk_boundary_proofs.clone(),
@@ -368,16 +393,7 @@ impl SnapshotChunkSync {
                 .get_snapshot_manager()
                 .get_snapshot_db_manager(),
             &inner.restorer.snapshot_epoch_id,
-        ) {
-            Ok(verifier) => verifier,
-            Err(e) => {
-                warn!(
-                    "Fail to create FullSyncVerifier from Manifest, err={:?}",
-                    e
-                );
-                return;
-            }
-        };
+        )?;
         inner.restorer.initialize_verifier(verifier);
         inner.pending_chunks.extend(response.manifest.into_chunks());
 
@@ -403,7 +419,7 @@ impl SnapshotChunkSync {
 
         info!(
             "Snapshot manifest received, checkpoint = {:?}, elapsed = {:?}, chunks = {}",
-            inner.snapshot_epoch_id,
+            inner.current_sync_candidate,
             start_time.elapsed(),
             inner.pending_chunks.len(),
         );
@@ -425,15 +441,10 @@ impl SnapshotChunkSync {
         }
 
         debug!("sync state progress: {:?}", *inner);
+        Ok(())
     }
 
     fn resync_manifest(&self, ctx: &Context, inner: &mut Inner) {
-        let snapshot_epoch_id = inner.snapshot_epoch_id.clone();
-        let trusted_blame_block = inner.trusted_blame_block.clone();
-        inner.initialize_downloading_manifest(
-            snapshot_epoch_id,
-            trusted_blame_block,
-        );
         inner.request_manifest(ctx.io, ctx.manager);
     }
 
@@ -453,7 +464,7 @@ impl SnapshotChunkSync {
             .is_none());
 
         let request = SnapshotChunkRequest::new(
-            inner.snapshot_epoch_id.clone(),
+            inner.current_sync_candidate.clone().unwrap(),
             chunk_key.clone(),
         );
 
@@ -482,7 +493,7 @@ impl SnapshotChunkSync {
             Status::DownloadingChunks(t) => {
                 debug!(
                     "Snapshot chunk received, checkpoint = {:?}, chunk = {:?}",
-                    inner.snapshot_epoch_id, chunk_key
+                    inner.current_sync_candidate, chunk_key
                 );
                 t
             }
@@ -530,7 +541,12 @@ impl SnapshotChunkSync {
         &self, sync_handler: &SynchronizationProtocolHandler,
     ) {
         let inner = self.inner.read();
-        let mut deferred_block_hash = inner.snapshot_epoch_id;
+        let mut deferred_block_hash = inner
+            .current_sync_candidate
+            .as_ref()
+            .unwrap()
+            .get_snapshot_epoch_id()
+            .clone();
         // FIXME: Because state_root_aux_info can't be computed for state block
         // FIXME: before snapshot, for the reward epoch count, maybe
         // FIXME: save it to a dedicated place for reward computation.
@@ -765,17 +781,17 @@ impl SnapshotChunkSync {
     }
 
     fn validate_epoch_receipts(
-        ctx: &Context, blame_vec_offset: usize, checkpoint: &H256,
+        ctx: &Context, blame_vec_offset: usize, snapshot_epoch_id: &EpochId,
         receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
         block_receipts: &Vec<BlockExecutionResult>,
     ) -> Option<Vec<(H256, H256, Arc<Vec<Receipt>>)>>
     {
-        let mut epoch_hash = checkpoint.clone();
+        let mut epoch_hash = snapshot_epoch_id.clone();
         let checkpoint = ctx
             .manager
             .graph
             .data_man
-            .block_header_by_hash(checkpoint)
+            .block_header_by_hash(snapshot_epoch_id)
             .expect("checkpoint header must exist");
         let epoch_receipts_count = if checkpoint.height() == 0 {
             1
@@ -801,13 +817,20 @@ impl SnapshotChunkSync {
                 .expect("ordered executable epoch blocks must exist");
             let mut epoch_receipts = Vec::new();
             for i in 0..ordered_executable_epoch_blocks.len() {
-                epoch_receipts.push(Arc::new(
-                    block_receipts[receipts_vec_offset + i]
-                        .receipts
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                ));
+                if let Some(block_receipt) =
+                    block_receipts.get(receipts_vec_offset + i)
+                {
+                    epoch_receipts.push(Arc::new(
+                        block_receipt
+                            .receipts
+                            .iter()
+                            .cloned()
+                            .collect::<Vec<_>>(),
+                    ));
+                } else {
+                    // Invalid block_receipts vector length.
+                    return None;
+                }
             }
             let receipt_root = BlockHeaderBuilder::compute_block_receipts_root(
                 &epoch_receipts,
@@ -856,13 +879,17 @@ impl SnapshotChunkSync {
         &self, peer: &PeerId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
-    ) -> Option<SnapshotSyncCandidate>
+    )
     {
-        self.inner.write().sync_candidate_manager.on_peer_response(
-            peer,
-            supported_candidates,
-            requested_candidates,
-        )
+        if self
+            .inner
+            .write()
+            .sync_candidate_manager
+            .on_peer_response(peer, supported_candidates, requested_candidates)
+            .is_some()
+        {
+            self.inner.write().status = Status::StartCandidateSync;
+        }
     }
 
     pub fn on_peer_disconnected(&self, peer: &PeerId) {
@@ -873,61 +900,67 @@ impl SnapshotChunkSync {
     /// Reset status if we cannot make progress based on current peers and
     /// candidates
     pub fn update_status(
-        &self, epoch_to_sync: EpochId, io: &dyn NetworkContext,
-        sync_handler: &SynchronizationProtocolHandler,
+        &self, current_era_genesis: EpochId, epoch_to_sync: EpochId,
+        io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
     )
     {
         let mut inner = self.inner.write();
         self.check_timeout(&mut *inner);
         if inner.sync_candidate_manager.is_inactive() {
             inner.status = Status::Inactive;
-            inner.snapshot_epoch_id = Default::default();
+            inner.current_sync_candidate = Default::default();
             inner.trusted_blame_block = Default::default();
         }
 
-        // FIXME Here we should handle both era shift and snapshot shift.
         // If we moves into the next era, we should force state_sync to change
         // the candidates to states with in the new stable era. If the
         // era stays the same and a new snapshot becomes available, we
         // only change candidates if old candidates cannot to be synced,
         // so a state can be synced with one era time instead of only
         // one snapshot time
-        if inner.snapshot_epoch_id == epoch_to_sync {
+        if inner.sync_candidate_manager.current_era_genesis
+            == current_era_genesis
+        {
             // state sync started, so we only need to check if it's completed
             if inner.status == Status::Completed {
                 return;
             } else if inner.sync_candidate_manager.active_peers().is_empty() {
-                inner.request_manifest(io, sync_handler);
+                // Previous candidate sync failed. Start the next one.
+                inner.status = Status::StartCandidateSync;
+                inner.sync_candidate_manager.set_active_candidate();
             }
-        } else if inner.status == Status::RequestingCandidates
-            && inner.snapshot_epoch_id == H256::default()
-        {
-            // We are requesting candidates, so check if it's ready
-            if let Some(SnapshotSyncCandidate::FullSync {
-                height: _,
-                snapshot_epoch_id,
-            }) = inner.sync_candidate_manager.active_candidate.clone()
-            {
-                match sync_handler
-                    .graph
-                    .consensus
-                    .get_trusted_blame_block_for_snapshot(&snapshot_epoch_id)
+
+            if inner.status == Status::StartCandidateSync {
+                if let Some(sync_candidate) =
+                    inner.sync_candidate_manager.get_active_candidate()
                 {
-                    Some(trusted_blame_block) => {
-                        inner.start_state_sync(
-                            snapshot_epoch_id,
-                            trusted_blame_block,
-                            io,
-                            sync_handler,
-                        );
+                    match sync_handler
+                        .graph
+                        .consensus
+                        .get_trusted_blame_block_for_snapshot(
+                            sync_candidate.get_snapshot_epoch_id(),
+                        ) {
+                        Some(trusted_blame_block) => {
+                            inner.start_sync_for_candidate(
+                                sync_candidate,
+                                trusted_blame_block,
+                                io,
+                                sync_handler,
+                            );
+                        }
+                        None => {
+                            error!("failed to start checkpoint sync, the trusted blame block is unavailable, epoch_to_sync={:?}", epoch_to_sync);
+                        }
                     }
-                    None => {
-                        // FIXME should find the trusted blame block
-                        error!("failed to start checkpoint sync, the trusted blame block is unavailable, epoch_to_sync={:?}", epoch_to_sync);
-                    }
+                } else {
+                    inner.status = Status::Inactive;
                 }
             }
         } else {
+            inner.status = Status::Inactive;
+        }
+
+        if inner.status == Status::Inactive {
             // New era started or all candidates fail, we should restart
             // candidates sync
             let height = sync_handler
@@ -940,7 +973,7 @@ impl SnapshotChunkSync {
                 height,
                 snapshot_epoch_id: epoch_to_sync,
             }];
-            inner.start_candidate_sync(candidates, io, sync_handler)
+            inner.start_sync(current_era_genesis, candidates, io, sync_handler)
         }
     }
 

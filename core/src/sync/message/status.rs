@@ -32,7 +32,7 @@ impl Handleable for Status {
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.peer, genesis_hash, self.genesis_hash
             );
-            return Err(ErrorKind::Invalid.into());
+            bail!(ErrorKind::InvalidStatus("genesis hash mismatches".into()));
         }
 
         let mut latest: HashSet<H256> =
@@ -43,7 +43,9 @@ impl Handleable for Status {
                 let mut peer_info = peer_info.write();
                 if peer_info.protocol_version != self.protocol_version {
                     warn!("Protocol versions do not match");
-                    return Err(ErrorKind::Invalid.into());
+                    bail!(ErrorKind::InvalidStatus(
+                        "protocol version mismatches".into()
+                    ));
                 }
                 peer_info.heartbeat = Instant::now();
 

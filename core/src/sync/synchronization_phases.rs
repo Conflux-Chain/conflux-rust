@@ -320,8 +320,16 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
-        self.state_sync
-            .update_status(epoch_to_sync, io, sync_handler);
+        let current_era_genesis = sync_handler
+            .graph
+            .data_man
+            .get_cur_consensus_era_genesis_hash();
+        self.state_sync.update_status(
+            current_era_genesis,
+            epoch_to_sync,
+            io,
+            sync_handler,
+        );
         if self.state_sync.status() == Status::Completed {
             self.state_sync.restore_execution_state(sync_handler);
             *sync_handler.synced_epoch_id.lock() = Some(epoch_to_sync);
@@ -337,6 +345,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     )
     {
         info!("start phase {:?}", self.name());
+        let current_era_genesis = sync_handler
+            .graph
+            .data_man
+            .get_cur_consensus_era_genesis_hash();
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
         if let Some(commitment) = sync_handler
@@ -360,8 +372,12 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return;
         }
 
-        self.state_sync
-            .update_status(epoch_to_sync, io, sync_handler);
+        self.state_sync.update_status(
+            current_era_genesis,
+            epoch_to_sync,
+            io,
+            sync_handler,
+        );
     }
 }
 
