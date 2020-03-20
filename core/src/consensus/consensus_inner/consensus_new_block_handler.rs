@@ -545,12 +545,19 @@ impl ConsensusNewBlockHandler {
         };
 
         if let Some(subtree_weight) = weight_tuple {
-            return ConsensusNewBlockHandler::check_correct_parent_brutal(
+            let res = ConsensusNewBlockHandler::check_correct_parent_brutal(
                 inner,
                 me,
                 subtree_weight,
                 candidate_iter,
             );
+            // We have to put but the blockset here! Otherwise the
+            // blockset_in_own_view_of_epoch will be corrupted.
+            inner.exchange_or_compute_blockset_in_own_view_of_epoch(
+                me,
+                Some(blockset),
+            );
+            return res;
         }
         let mut valid = true;
         let force_confirm = inner.arena[me].data.force_confirm;

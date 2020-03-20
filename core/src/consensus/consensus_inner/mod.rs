@@ -1791,7 +1791,8 @@ impl ConsensusGraphInner {
         let last_pivot = self.arena[me].data.last_pivot_in_past;
         while let Some(index) = queue.pop_front() {
             let parent = self.arena[index].parent;
-            if self.arena[parent].data.epoch_number > last_pivot
+            if parent != NULL
+                && self.arena[parent].data.epoch_number > last_pivot
                 && !visited.contains(parent as u32)
             {
                 queue.push_back(parent);
@@ -2225,7 +2226,7 @@ impl ConsensusGraphInner {
     /// If a block is adaptive, then for the heavy blocks, it equals to
     /// the heavy block ratio times the difficulty. Otherwise, it is zero.
     fn block_weight(&self, me: usize) -> i128 {
-        if !self.arena[me].data.activated {
+        if !self.arena[me].data.activated || self.arena[me].era_block == NULL {
             return 0 as i128;
         }
         let is_heavy = self.arena[me].is_heavy;
