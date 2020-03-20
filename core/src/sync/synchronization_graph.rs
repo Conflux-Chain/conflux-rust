@@ -13,9 +13,11 @@ use crate::{
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
     verification::*,
-    Notifications,
+    ConsensusGraph, Notifications,
 };
 use cfx_types::{H256, U256};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
 };
@@ -72,6 +74,7 @@ impl SyncGraphStatistics {
     pub fn clear(&mut self) { self.inserted_block_count = 1; }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationGraphNode {
     pub block_header: Arc<BlockHeader>,
     /// The status of graph connectivity in the current block view.
@@ -95,6 +98,7 @@ pub struct SynchronizationGraphNode {
     pub last_update_timestamp: u64,
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct UnreadyBlockFrontier {
     frontier: HashSet<usize>,
     updated: bool,
@@ -148,6 +152,20 @@ pub struct SynchronizationGraphInner {
     pub not_ready_blocks_count: usize,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
+}
+
+impl MallocSizeOf for SynchronizationGraphInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.arena.size_of(ops)
+            + self.hash_to_arena_indices.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.children_by_hash.size_of(ops)
+            + self.referrers_by_hash.size_of(ops)
+            + self.pow_config.size_of(ops)
+            + self.not_ready_blocks_frontier.size_of(ops)
+            + self.old_era_blocks_frontier.size_of(ops)
+            + self.old_era_blocks_frontier_set.size_of(ops)
+    }
 }
 
 impl SynchronizationGraphInner {
@@ -948,6 +966,26 @@ pub struct SynchronizationGraph {
 
     /// whether it is a archive node or full node
     is_full_node: bool,
+}
+
+impl MallocSizeOf for SynchronizationGraph {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut malloc_size = self.inner.read().size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.initial_missed_block_hashes.lock().size_of(ops);
+
+        // TODO: Add statistics for consortium.
+        if !self.is_consortium() {
+            let consensus_graph = self
+                .consensus
+                .as_any()
+                .downcast_ref::<ConsensusGraph>()
+                .expect("downcast should succeed");
+            malloc_size += consensus_graph.size_of(ops);
+        }
+
+        malloc_size
+    }
 }
 
 pub type SharedSynchronizationGraph = Arc<SynchronizationGraph>;

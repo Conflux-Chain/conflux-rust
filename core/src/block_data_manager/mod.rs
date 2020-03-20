@@ -207,6 +207,27 @@ pub struct BlockDataManager {
     pub state_availability_boundary: RwLock<StateAvailabilityBoundary>,
 }
 
+impl MallocSizeOf for BlockDataManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.block_headers.read().size_of(ops)
+            + self.blocks.read().size_of(ops)
+            + self.compact_blocks.read().size_of(ops)
+            + self.block_receipts.read().size_of(ops)
+            + self.transaction_indices.read().size_of(ops)
+            + self.epoch_execution_commitments.read().size_of(ops)
+            + self.epoch_execution_contexts.read().size_of(ops)
+            + self.invalid_block_set.read().size_of(ops)
+            + self.cur_consensus_era_genesis_hash.read().size_of(ops)
+            + self.cur_consensus_era_stable_hash.read().size_of(ops)
+            + self.config.size_of(ops)
+            + self.tx_data_manager.size_of(ops)
+            + self.true_genesis.size_of(ops)
+            + self.cache_man.lock().size_of(ops)
+            + self.target_difficulty_manager.size_of(ops)
+            + self.state_availability_boundary.read().size_of(ops)
+    }
+}
+
 impl BlockDataManager {
     pub fn new(
         cache_conf: CacheConfig, true_genesis: Arc<Block>, db: Arc<SystemDB>,

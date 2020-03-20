@@ -6,6 +6,7 @@ use super::{
 };
 use crate::statedb::Result as StateDbResult;
 use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
@@ -37,6 +38,7 @@ lazy_static! {
         register_meter_with_group("txpool", "gc_txs_tps");
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct DeferredPool {
     buckets: HashMap<Address, NoncePool>,
 }
@@ -123,6 +125,7 @@ impl DeferredPool {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
     treap: TreapMap<Address, Arc<SignedTransaction>, U512>,
     tx_weight_scaling: u64,
@@ -204,6 +207,7 @@ impl ReadyAccountPool {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
     total_received_count: usize,

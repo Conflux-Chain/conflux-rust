@@ -19,6 +19,7 @@ use crate::{
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::Mutex;
 use primitives::{
@@ -445,6 +446,28 @@ pub struct ConsensusGraphInner {
     /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
     /// which blocks it can safely remove
     old_era_block_set: Mutex<VecDeque<H256>>,
+}
+
+impl MallocSizeOf for ConsensusGraphInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.arena.size_of(ops)
+            + self.hash_to_arena_indices.size_of(ops)
+            + self.pivot_chain.size_of(ops)
+            + self.pivot_chain_metadata.size_of(ops)
+            + self.timer_chain.size_of(ops)
+            + self.timer_chain_accumulative_lca.size_of(ops)
+            + self.terminal_hashes.size_of(ops)
+            + self.initial_stable_future.size_of(ops)
+            + self.weight_tree.size_of(ops)
+            + self.adaptive_tree.size_of(ops)
+            + self.invalid_block_queue.size_of(ops)
+            + self.block_body_caches.size_of(ops)
+            + self.pow_config.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.anticone_cache.size_of(ops)
+            + self.pastset_cache.size_of(ops)
+            + self.old_era_block_set.lock().size_of(ops)
+    }
 }
 
 #[derive(DeriveMallocSizeOf)]

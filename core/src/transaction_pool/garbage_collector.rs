@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::Address;
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{
     cmp::{Ord, Ordering, PartialEq, PartialOrd},
     collections::HashMap,
@@ -12,7 +13,7 @@ use std::{
 /// This is the internal node type of `GarbageCollector`.
 /// A node `lhs` is considered as smaller than another node `rhs` if `lhs.count
 /// < rhs.count` or `lhs.count == rhs.count && lhs.timestamp > rhs.timestamp`.
-#[derive(Eq, Copy, Clone)]
+#[derive(Eq, Copy, Clone, DeriveMallocSizeOf)]
 pub struct GarbageCollectorNode {
     /// This is the address of a sender.
     pub sender: Address,
@@ -47,7 +48,7 @@ impl PartialOrd for GarbageCollectorNode {
 
 /// The `GarbageCollector` maintain a priority queue of `GarbageCollectorNode`,
 /// the topmost node is the largest one.
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct GarbageCollector {
     data: Vec<GarbageCollectorNode>,
     mapping: HashMap<Address, usize>,

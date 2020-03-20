@@ -12,7 +12,7 @@
 //! WebRender.
 
 use cfg_if::cfg_if;
-use cfx_types::{H256, H512, U256};
+use cfx_types::{H160, H256, H512, U256, U512};
 use slab::Slab;
 use std::{
     collections::{BinaryHeap, VecDeque},
@@ -437,7 +437,7 @@ malloc_size_of_is_0!(
 );
 malloc_size_of_is_0!(Range<f32>, Range<f64>);
 
-malloc_size_of_is_0!(H256, U256, H512);
+malloc_size_of_is_0!(H256, U256, H512, H160, U512);
 
 mod usable_size {
 
