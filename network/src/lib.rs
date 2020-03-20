@@ -32,6 +32,7 @@ extern crate strum_macros;
 extern crate cfxkey as keylib;
 extern crate keccak_hash;
 
+// FIXME: what is protocol id, and where are they used?
 pub const PROTOCOL_ID_SIZE: usize = 3;
 pub type ProtocolId = [u8; PROTOCOL_ID_SIZE];
 pub type HandlerWorkType = u8;
@@ -199,6 +200,7 @@ pub enum NetworkIoMessage {
     AddHandler {
         handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
+        // FIXME: here has versions
         versions: Vec<u8>,
     },
     /// Register a new protocol timer
@@ -217,6 +219,7 @@ pub enum NetworkIoMessage {
         work_type: HandlerWorkType,
     },
     HandleProtocolMessage {
+        // FIXME: but here not.
         protocol: ProtocolId,
         peer: PeerId,
         data: Vec<u8>,

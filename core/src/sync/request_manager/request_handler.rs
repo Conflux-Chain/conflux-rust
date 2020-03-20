@@ -299,6 +299,44 @@ impl RequestContainer {
         }
     }
 
+    pub fn send_pending_requests(
+        &mut self, io: &dyn NetworkContext,
+        requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
+        protocol_config: &ProtocolConfiguration,
+    ) -> Result<(), Error>
+    {
+        while self.has_pending_requests() {
+            if let Some(new_request_id) = self.get_next_request_id() {
+                let mut pending_msg = self.pop_pending_request().unwrap();
+                pending_msg.set_request_id(new_request_id);
+                let send_res = pending_msg.request.send(io, self.peer_id);
+
+                if send_res.is_err() {
+                    warn!("Error while send_message, err={:?}", send_res);
+                    self.append_pending_request(pending_msg);
+                    return Err(send_res.err().unwrap().into());
+                }
+
+                let timed_req = Arc::new(TimedSyncRequests::from_request(
+                    self.peer_id,
+                    new_request_id,
+                    &pending_msg,
+                    protocol_config,
+                ));
+                self.append_inflight_request(
+                    new_request_id,
+                    pending_msg,
+                    timed_req.clone(),
+                );
+                requests_queue.push(timed_req);
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
     // Match request with given response.
     // Could return the following error:
     // 1. RequestNotFound:
@@ -319,34 +357,12 @@ impl RequestContainer {
                 .timed_req
                 .removed
                 .store(true, AtomicOrdering::Relaxed);
-            while self.has_pending_requests() {
-                if let Some(new_request_id) = self.get_next_request_id() {
-                    let mut pending_msg = self.pop_pending_request().unwrap();
-                    pending_msg.set_request_id(new_request_id);
-                    let send_res = pending_msg.request.send(io, self.peer_id);
+            // TODO: It's better only set a flag to the eventloop to send
+            // TODO: pending requests. The error should be properly handled,
+            // TODO: but no such error should be thrown here in this function.
+            self.send_pending_requests(io, requests_queue, protocol_config)
+                .ok();
 
-                    if send_res.is_err() {
-                        warn!("Error while send_message, err={:?}", send_res);
-                        self.append_pending_request(pending_msg);
-                        return Err(send_res.err().unwrap().into());
-                    }
-
-                    let timed_req = Arc::new(TimedSyncRequests::from_request(
-                        self.peer_id,
-                        new_request_id,
-                        &pending_msg,
-                        protocol_config,
-                    ));
-                    self.append_inflight_request(
-                        new_request_id,
-                        pending_msg,
-                        timed_req.clone(),
-                    );
-                    requests_queue.push(timed_req);
-                } else {
-                    break;
-                }
-            }
             Ok(removed_req.message)
         } else {
             bail!(ErrorKind::RequestNotFound)
@@ -444,15 +460,15 @@ impl RequestMessage {
     /// `UnexpectedResponse` error.
     pub fn downcast_ref<T: Request + Any>(
         &self, io: &dyn NetworkContext, request_manager: &RequestManager,
-        remove_on_mismatch: bool,
+        resend_on_mismatch: bool,
     ) -> Result<&T, Error>
     {
         match self.request.as_any().downcast_ref::<T>() {
             Some(req) => Ok(req),
             None => {
                 warn!("failed to downcast general request to concrete request type, message = {:?}", self);
-                if remove_on_mismatch {
-                    request_manager.remove_mismatch_request(io, self);
+                if resend_on_mismatch {
+                    request_manager.resend_request_to_another_peer(io, self);
                 }
                 Err(ErrorKind::UnexpectedResponse.into())
             }

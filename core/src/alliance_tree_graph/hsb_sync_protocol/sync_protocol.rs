@@ -235,7 +235,13 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
         match e.0 {
-            ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidGetBlockTxn(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidStatus(_) => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
             ErrorKind::InvalidMessageFormat => {
                 op = Some(UpdateNodeOperation::Remove)
             }
@@ -305,6 +311,7 @@ impl<P: Payload> HotStuffSynchronizationProtocol<P> {
             ErrorKind::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
+            ErrorKind::NotSupported(_) => disconnect = false,
         }
 
         if disconnect {
