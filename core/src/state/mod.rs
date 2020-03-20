@@ -727,15 +727,19 @@ impl State {
                 .delete_all(StorageKey::new_code_root_key(&address))?;
             if let Some(storage_key_value) = storages_opt {
                 for (_, value) in storage_key_value {
-                    let storage_value =
-                        rlp::decode::<StorageValue>(value.as_ref())?;
-                    assert!(self
-                        .exists(&storage_value.owner)
-                        .expect("no db error"));
-                    self.sub_collateral_for_storage(
-                        &storage_value.owner,
-                        &COLLATERAL_PER_STORAGE_KEY,
-                    )?;
+                    if let Ok(storage_value) =
+                        rlp::decode::<StorageValue>(value.as_ref())
+                    {
+                        assert!(self
+                            .exists(&storage_value.owner)
+                            .expect("no db error"));
+                        self.sub_collateral_for_storage(
+                            &storage_value.owner,
+                            &COLLATERAL_PER_STORAGE_KEY,
+                        )?;
+                    };
+
+                    // ignore other values (e.g. layout) for now
                 }
             }
         }
