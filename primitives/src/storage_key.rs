@@ -421,7 +421,7 @@ mod delta_mpt_storage_key {
                 }
                 remaining_bytes = &remaining_bytes[ACCOUNT_KEYPART_BYTES..];
                 if remaining_bytes.starts_with(Self::STORAGE_PREFIX) {
-                    let bytes = &remaining_bytes[KEY_PADDING_BYTES..];
+                    let bytes = &remaining_bytes[Self::STORAGE_PREFIX_LEN..];
                     if bytes.len() > 0 {
                         StorageKey::StorageKey {
                             address_bytes,
