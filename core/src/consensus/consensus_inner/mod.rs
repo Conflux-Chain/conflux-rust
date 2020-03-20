@@ -2811,6 +2811,54 @@ impl ConsensusGraphInner {
                     tmp_lca.push(last_lca);
                 }
             }
+        } else if tmp_chain.len() >= self.timer_chain.len() - fork_at_index {
+            let mut last_lca = match self.timer_chain_accumulative_lca.last() {
+                Some(last_lca) => *last_lca,
+                None => self.cur_era_genesis_block_arena_index,
+            };
+            for i in (self.timer_chain.len() - fork_at_index)..tmp_chain.len() {
+                let mut lca = tmp_chain[i];
+                // tmp_chain is shorter than timer_chain_beta, so we start with
+                // 0.
+                for j in 0..i {
+                    // Note that we may have timer_chain blocks that are
+                    // outside the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca
+                    // becomes NULL
+                    if lca == NULL {
+                        break;
+                    }
+                    lca = self.lca(lca, tmp_chain[j]);
+                }
+                for j in (fork_at_index + i + 1
+                    - self.inner_conf.timer_chain_beta as usize)
+                    ..fork_at_index
+                {
+                    // Note that we may have timer_chain blocks that are
+                    // outside the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca
+                    // becomes NULL
+                    if lca == NULL {
+                        break;
+                    }
+                    lca = self.lca(lca, self.timer_chain[j]);
+                }
+                // Note that we have the assumption that the force
+                // confirmation point will always move
+                // along parental edges, i.e., it is not possible for the
+                // point to move to a sibling tree. This
+                // assumption is true if the timer_chain_beta
+                // and the timer_chain_difficulty_ratio are set to large
+                // enough values.
+                //
+                // It is therefore safe here to use the height to compare.
+                if lca != NULL
+                    && self.arena[last_lca].height < self.arena[lca].height
+                {
+                    last_lca = lca;
+                }
+                tmp_lca.push(last_lca);
+            }
         }
 
         (fork_at, res, tmp_lca, tmp_chain)

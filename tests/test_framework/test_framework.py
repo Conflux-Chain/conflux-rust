@@ -288,7 +288,7 @@ class ConfluxTestFramework:
         # two halves that can work on competing chains.
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, i, i + 1)
-        self.sync_all()
+        sync_blocks(self.nodes)
 
     def setup_nodes(self, binary=None):
         """Override this method to customize test node setup"""
