@@ -1041,8 +1041,8 @@ impl ConsensusGraphInner {
         }
         let mut my_past = BitSet::new();
         let mut queue: VecDeque<usize> = VecDeque::new();
-        for index in referee_indices {
-            queue.push_back(index);
+        for index in &referee_indices {
+            queue.push_back(*index);
         }
         while let Some(index) = queue.pop_front() {
             if my_past.contains(index as u32) {
@@ -1077,11 +1077,17 @@ impl ConsensusGraphInner {
             }
         }
 
+        let timer_chain_tuple = self.compute_timer_chain_tuple(
+            parent_arena_index,
+            &referee_indices,
+            Some(&anticone),
+        );
+
         self.adaptive_weight_impl(
             parent_arena_index,
             &anticone_barrier,
             None,
-            None,
+            Some(&timer_chain_tuple),
             i128::try_from(difficulty.low_u128()).unwrap(),
         )
     }
@@ -2574,9 +2580,51 @@ impl ConsensusGraphInner {
         }
     }
 
+    fn compute_timer_chain_past_view_info(
+        &self, parent: usize, referees: &Vec<usize>,
+    ) -> (i128, usize) {
+        let mut timer_longest_difficulty = 0;
+        let mut longest_referee = parent;
+        if parent != NULL {
+            timer_longest_difficulty =
+                self.arena[parent].data.past_view_timer_longest_difficulty
+                    + self.get_timer_difficulty(parent);
+        }
+        for referee in referees {
+            let timer_difficulty =
+                self.arena[*referee].data.past_view_timer_longest_difficulty
+                    + self.get_timer_difficulty(*referee);
+            if longest_referee == NULL
+                || ConsensusGraphInner::is_heavier(
+                    (timer_difficulty, &self.arena[*referee].hash),
+                    (
+                        timer_longest_difficulty,
+                        &self.arena[longest_referee].hash,
+                    ),
+                )
+            {
+                timer_longest_difficulty = timer_difficulty;
+                longest_referee = *referee;
+            }
+        }
+        let last_timer_block_arena_index = if longest_referee == NULL
+            || self.arena[longest_referee].is_timer
+                && !self.arena[longest_referee].data.partial_invalid
+        {
+            longest_referee
+        } else {
+            self.arena[longest_referee]
+                .data
+                .past_view_last_timer_block_arena_index
+        };
+        (timer_longest_difficulty, last_timer_block_arena_index)
+    }
+
     fn compute_timer_chain_tuple(
-        &self, me: usize, anticone_opt: Option<&BitSet>,
-    ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>) {
+        &self, parent: usize, referees: &Vec<usize>,
+        anticone_opt: Option<&BitSet>,
+    ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>)
+    {
         let empty_set = BitSet::new();
         let anticone = if let Some(a) = anticone_opt {
             a
@@ -2585,7 +2633,9 @@ impl ConsensusGraphInner {
         };
         let mut tmp_chain = Vec::new();
         let mut tmp_chain_set = HashSet::new();
-        let mut i = self.arena[me].data.past_view_last_timer_block_arena_index;
+        let (_, past_view_last_timer_block_arena_index) =
+            self.compute_timer_chain_past_view_info(parent, referees);
+        let mut i = past_view_last_timer_block_arena_index;
         while i != NULL && self.get_timer_chain_index(i) == NULL {
             tmp_chain.push(i);
             tmp_chain_set.insert(i);
@@ -2605,11 +2655,8 @@ impl ConsensusGraphInner {
         }
 
         let mut res = HashMap::new();
-        if fork_at_index == self.timer_chain.len() {
-            // Extending the newest timer chain, simple case
-            res.insert(me, fork_at);
-        } else {
-            debug!("New block {} not extending timer chain (len = {}), fork at timer chain height {}, timer chain index {}", me, self.timer_chain.len(), fork_at, fork_at_index);
+        if fork_at_index < self.timer_chain.len() {
+            debug!("New block parent = {} referees = {:?} not extending timer chain (len = {}), fork at timer chain height {}, timer chain index {}", parent, referees, self.timer_chain.len(), fork_at, fork_at_index);
             // Now we need to update the timer_chain_height field of the
             // remaining blocks with topological sort
             let mut queue = VecDeque::new();
@@ -2812,8 +2859,12 @@ impl ConsensusGraphInner {
     }
 
     fn update_timer_chain(&mut self, me: usize) {
-        let (fork_at, res, extra_lca, tmp_chain) =
-            self.compute_timer_chain_tuple(me, None);
+        let (fork_at, res, extra_lca, tmp_chain) = self
+            .compute_timer_chain_tuple(
+                self.arena[me].parent,
+                &self.arena[me].referees,
+                None,
+            );
 
         let fork_at_index =
             (fork_at - self.cur_era_genesis_timer_chain_height) as usize;
@@ -2834,7 +2885,16 @@ impl ConsensusGraphInner {
             self.timer_chain_accumulative_lca
                 [new_chain_lca_size - extra_lca.len() + i] = extra_lca[i];
         }
-        assert!(res.contains_key(&me));
+        // In case of extending the key chain, me may not be inside the result
+        // map and we will set it to the end of the timer chain.
+        if !res.contains_key(&me) {
+            assert!(
+                self.cur_era_genesis_timer_chain_height
+                    + self.timer_chain.len() as u64
+                    == fork_at
+            );
+            self.arena[me].data.ledger_view_timer_chain_height = fork_at;
+        }
         for (k, v) in res {
             self.arena[k].data.ledger_view_timer_chain_height = v;
         }

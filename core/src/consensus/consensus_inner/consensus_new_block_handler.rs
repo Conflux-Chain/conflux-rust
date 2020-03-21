@@ -1009,7 +1009,11 @@ impl ConsensusNewBlockHandler {
     fn compute_timer_chain_tuple(
         inner: &ConsensusGraphInner, me: usize, anticone: &BitSet,
     ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>) {
-        inner.compute_timer_chain_tuple(me, Some(anticone))
+        inner.compute_timer_chain_tuple(
+            inner.arena[me].parent,
+            &inner.arena[me].referees,
+            Some(anticone),
+        )
     }
 
     fn compute_invalid_block_start_timer(
@@ -1077,41 +1081,12 @@ impl ConsensusNewBlockHandler {
 
         // Because the following computation relies on all previous blocks being
         // active, We have to delay it till now
-        let mut timer_longest_difficulty = 0;
-        let mut longest_referee = parent;
-        if parent != NULL {
-            timer_longest_difficulty =
-                inner.arena[parent].data.past_view_timer_longest_difficulty
-                    + inner.get_timer_difficulty(parent);
-        }
-        for referee in &inner.arena[me].referees {
-            let timer_difficulty = inner.arena[*referee]
-                .data
-                .past_view_timer_longest_difficulty
-                + inner.get_timer_difficulty(*referee);
-            if longest_referee == NULL
-                || ConsensusGraphInner::is_heavier(
-                    (timer_difficulty, &inner.arena[*referee].hash),
-                    (
-                        timer_longest_difficulty,
-                        &inner.arena[longest_referee].hash,
-                    ),
-                )
-            {
-                timer_longest_difficulty = timer_difficulty;
-                longest_referee = *referee;
-            }
-        }
-        let last_timer_block_arena_index = if longest_referee == NULL
-            || inner.arena[longest_referee].is_timer
-                && !inner.arena[longest_referee].data.partial_invalid
-        {
-            longest_referee
-        } else {
-            inner.arena[longest_referee]
-                .data
-                .past_view_last_timer_block_arena_index
-        };
+        let (timer_longest_difficulty, last_timer_block_arena_index) = inner
+            .compute_timer_chain_past_view_info(
+                parent,
+                &inner.arena[me].referees,
+            );
+
         inner.arena[me].data.past_view_timer_longest_difficulty =
             timer_longest_difficulty;
         inner.arena[me].data.past_view_last_timer_block_arena_index =
