@@ -880,8 +880,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
                             block_hash: *hash,
                             best_block_hash: inner.best_block_hash(),
                             block_status: local_info.get_status(),
-                            past_era_weight: inner.arena[*arena_index]
-                                .past_era_weight(),
                             era_block_hash,
                             adaptive: inner.arena[*arena_index].adaptive(),
                         },

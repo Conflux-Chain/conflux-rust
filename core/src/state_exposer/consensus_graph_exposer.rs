@@ -10,7 +10,6 @@ pub struct ConsensusGraphBlockState {
     pub block_hash: H256,
     pub best_block_hash: H256,
     pub block_status: BlockStatus,
-    pub past_era_weight: i128,
     pub era_block_hash: H256,
     pub adaptive: bool,
 }
