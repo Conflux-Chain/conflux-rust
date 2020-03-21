@@ -1203,6 +1203,7 @@ impl ConsensusNewBlockHandler {
     )
     {
         inner.arena[me].data.activated = true;
+        self.statistics.inc_consensus_graph_activated_block_count();
         let mut succ_list = inner.arena[me].children.clone();
         succ_list.extend(inner.arena[me].referrers.iter());
         for succ in &succ_list {
