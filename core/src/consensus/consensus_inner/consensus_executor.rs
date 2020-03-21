@@ -401,7 +401,7 @@ impl ConsensusExecutor {
                             ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, *index)
                         };
 
-                        let block_consensus_node_anticone_sameera : HashSet<usize> =
+                        let block_consensus_node_anticone_same_era: HashSet<usize> =
                             block_consensus_node_anticone
                                 .iter()
                                 .filter(|idx| {
@@ -412,15 +412,15 @@ impl ConsensusExecutor {
                                 })
                                 .map(|idx| *idx)
                                 .collect();
-                        let anticone_cutoff_epoch_anticone_set_sameera : HashSet<usize> = anticone_cutoff_epoch_anticone_set
+                        let anticone_cutoff_epoch_anticone_set_same_era: HashSet<usize> = anticone_cutoff_epoch_anticone_set
                             .iter()
                             .filter(|idx| {
                                 inner.is_same_era(**idx, pivot_arena_index)
                             })
                             .map(|idx| *idx)
                             .collect();
-                        let anticone_set = block_consensus_node_anticone_sameera
-                            .difference(&anticone_cutoff_epoch_anticone_set_sameera)
+                        let anticone_set = block_consensus_node_anticone_same_era
+                            .difference(&anticone_cutoff_epoch_anticone_set_same_era)
                             .cloned()
                             .collect::<HashSet<_>>();
                         for a_index in anticone_set {
