@@ -13,6 +13,10 @@ from test_framework.mininode import *
 from test_framework.util import *
 
 class TransactionTest(DefaultConfluxTestFramework):
+    def set_test_params(self):
+        self.conf_parameters["log_level"] = '"trace"'
+        self.num_nodes = 8
+
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}

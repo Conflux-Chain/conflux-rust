@@ -83,7 +83,7 @@ def wait_for_initial_nonce(node, key):
     nonce = 0
     while nonce == 0:
         nonce = int(node.cfx_getTransactionCount(encode_hex_0x(privtoaddr(key))), 0)
-        time.sleep(0.01)
+        time.sleep(0.1)
     print("nonce for addr", encode_hex_0x(privtoaddr(key)), nonce)
     return nonce
 
