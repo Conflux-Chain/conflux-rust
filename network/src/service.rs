@@ -1458,7 +1458,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     token,
                     io,
                     true,
-                    Some(UpdateNodeOperation::Demotion),
+                    Some(UpdateNodeOperation::Failure),
                     "handshake timeout", // reason
                 );
             }
