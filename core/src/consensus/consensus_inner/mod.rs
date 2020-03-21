@@ -480,8 +480,6 @@ pub struct ConsensusGraphNode {
     is_timer: bool,
     /// The total weight of its past set in the era (exclude itself)
     past_num_blocks: u64,
-    /// The total weight of its past set in its own era (exclude itself)
-    past_era_weight: i128,
     adaptive: bool,
 
     /// The genesis arena index of the era that `self` is in.
@@ -499,8 +497,6 @@ pub struct ConsensusGraphNode {
 }
 
 impl ConsensusGraphNode {
-    pub fn past_era_weight(&self) -> i128 { self.past_era_weight }
-
     pub fn past_num_blocks(&self) -> u64 { self.past_num_blocks }
 
     pub fn adaptive(&self) -> bool { self.adaptive }
@@ -1442,7 +1438,6 @@ impl ConsensusGraphInner {
             is_heavy: true,
             difficulty: *block_header.difficulty(),
             past_num_blocks: 0,
-            past_era_weight: 0, // will be updated later below
             is_timer: false,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1563,7 +1558,6 @@ impl ConsensusGraphInner {
             is_heavy,
             difficulty: *block_header.difficulty(),
             past_num_blocks: 0,
-            past_era_weight: 0, // will be updated later
             is_timer,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1776,72 +1770,6 @@ impl ConsensusGraphInner {
             epoch_blocks.push(block);
         }
         epoch_blocks
-    }
-
-    fn recompute_anticone_weight(
-        &self, me: usize, pivot_block_arena_index: usize,
-    ) -> i128 {
-        assert!(self.is_same_era(me, pivot_block_arena_index));
-        // We need to compute the future size of me under the view of epoch
-        // height pivot_index
-        let mut visited = BitSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(pivot_block_arena_index);
-        visited.add(pivot_block_arena_index as u32);
-        let last_pivot = self.arena[me].data.last_pivot_in_past;
-        while let Some(index) = queue.pop_front() {
-            let parent = self.arena[index].parent;
-            if parent != NULL
-                && self.arena[parent].data.epoch_number > last_pivot
-                && !visited.contains(parent as u32)
-            {
-                queue.push_back(parent);
-                visited.add(parent as u32);
-            }
-            for referee in &self.arena[index].referees {
-                if self.arena[*referee].data.epoch_number > last_pivot
-                    && !visited.contains(*referee as u32)
-                {
-                    queue.push_back(*referee);
-                    visited.add(*referee as u32);
-                }
-            }
-        }
-        queue.push_back(me);
-        let mut visited2 = BitSet::new();
-        visited2.add(me as u32);
-        while let Some(index) = queue.pop_front() {
-            for child in &self.arena[index].children {
-                if visited.contains(*child as u32)
-                    && !visited2.contains(*child as u32)
-                {
-                    queue.push_back(*child);
-                    visited2.add(*child as u32);
-                }
-            }
-            for referrer in &self.arena[index].referrers {
-                if visited.contains(*referrer as u32)
-                    && !visited2.contains(*referrer as u32)
-                {
-                    queue.push_back(*referrer);
-                    visited2.add(*referrer as u32);
-                }
-            }
-        }
-        let mut total_weight = self.arena[pivot_block_arena_index]
-            .past_era_weight
-            - self.arena[me].past_era_weight
-            + self.block_weight(pivot_block_arena_index);
-        for index in visited2.iter() {
-            if self.is_same_era(index as usize, pivot_block_arena_index) {
-                total_weight -= self.block_weight(index as usize);
-            }
-        }
-        debug!(
-            "recompute_anticone_weight: me={} upper={} total_weight={}",
-            me, pivot_block_arena_index, total_weight
-        );
-        total_weight
     }
 
     /// Compute the expected difficulty of a new block given its parent.

@@ -7,7 +7,10 @@ use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
-    consensus::ConsensusGraphInner,
+    consensus::{
+        consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
+        ConsensusGraphInner,
+    },
     executive::{Executed, ExecutionError, Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
@@ -360,11 +363,11 @@ impl ConsensusExecutor {
                 let anticone_cutoff_epoch_anticone_set_ref_opt = inner
                     .anticone_cache
                     .get(anticone_penalty_cutoff_epoch_arena_index);
-                let anticone_cutoff_epoch_anticone_set_opt;
+                let anticone_cutoff_epoch_anticone_set;
                 if let Some(r) = anticone_cutoff_epoch_anticone_set_ref_opt {
-                    anticone_cutoff_epoch_anticone_set_opt = Some(r.clone());
+                    anticone_cutoff_epoch_anticone_set = r.clone();
                 } else {
-                    anticone_cutoff_epoch_anticone_set_opt = None;
+                    anticone_cutoff_epoch_anticone_set = ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, anticone_penalty_cutoff_epoch_arena_index);
                 }
                 let ordered_epoch_blocks = inner.get_or_compute_ordered_executable_epoch_blocks(pivot_arena_index);
                 for index in ordered_epoch_blocks.iter() {
@@ -392,52 +395,42 @@ impl ConsensusExecutor {
                     if !no_reward {
                         let block_consensus_node_anticone_opt =
                             inner.anticone_cache.get(*index);
-                        if block_consensus_node_anticone_opt.is_none()
-                            || anticone_cutoff_epoch_anticone_set_opt.is_none()
-                        {
-                            anticone_difficulty = U512::from(U256::from(
-                                inner.recompute_anticone_weight(
-                                    *index,
-                                    anticone_penalty_cutoff_epoch_arena_index,
-                                ),
-                            ));
+                        let block_consensus_node_anticone = if let Some(r) = block_consensus_node_anticone_opt {
+                            r.clone()
                         } else {
-                            let block_consensus_node_anticone: HashSet<usize> =
-                                block_consensus_node_anticone_opt
-                                    .unwrap()
-                                    .iter()
-                                    .filter(|idx| {
-                                        inner.is_same_era(
-                                            **idx,
-                                            pivot_arena_index,
-                                        )
-                                    })
-                                    .map(|idx| *idx)
-                                    .collect();
-                            let anticone_cutoff_epoch_anticone_set: HashSet<
-                                usize,
-                            > = anticone_cutoff_epoch_anticone_set_opt
-                                .as_ref()
-                                .unwrap()
+                            ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, *index)
+                        };
+
+                        let block_consensus_node_anticone_same_era: HashSet<usize> =
+                            block_consensus_node_anticone
                                 .iter()
                                 .filter(|idx| {
-                                    inner.is_same_era(**idx, pivot_arena_index)
+                                    inner.is_same_era(
+                                        **idx,
+                                        pivot_arena_index,
+                                    )
                                 })
                                 .map(|idx| *idx)
                                 .collect();
-                            let anticone_set = block_consensus_node_anticone
-                                .difference(&anticone_cutoff_epoch_anticone_set)
-                                .cloned()
-                                .collect::<HashSet<_>>();
-                            for a_index in anticone_set {
-                                // TODO: Maybe consider to use base difficulty
-                                // Check with the spec!
-                                anticone_difficulty +=
-                                    U512::from(U256::from(inner.block_weight(
-                                        a_index
-                                    )));
-                            }
-                        };
+                        let anticone_cutoff_epoch_anticone_set_same_era: HashSet<usize> = anticone_cutoff_epoch_anticone_set
+                            .iter()
+                            .filter(|idx| {
+                                inner.is_same_era(**idx, pivot_arena_index)
+                            })
+                            .map(|idx| *idx)
+                            .collect();
+                        let anticone_set = block_consensus_node_anticone_same_era
+                            .difference(&anticone_cutoff_epoch_anticone_set_same_era)
+                            .cloned()
+                            .collect::<HashSet<_>>();
+                        for a_index in anticone_set {
+                            // TODO: Maybe consider to use base difficulty
+                            // Check with the spec!
+                            anticone_difficulty +=
+                                U512::from(U256::from(inner.block_weight(
+                                    a_index
+                                )));
+                        }
 
                         // TODO: check the clear definition of anticone penalty,
                         // normally and around the time of difficulty

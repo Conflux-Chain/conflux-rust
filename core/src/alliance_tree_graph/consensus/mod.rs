@@ -686,7 +686,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                             block_hash: *hash,
                             best_block_hash: inner.best_block_hash(),
                             block_status: local_info.get_status(),
-                            past_era_weight: 0.into(),
                             era_block_hash,
                             adaptive: false,
                         },

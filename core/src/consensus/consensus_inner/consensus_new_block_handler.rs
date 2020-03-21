@@ -378,6 +378,18 @@ impl ConsensusNewBlockHandler {
         anticone
     }
 
+    pub fn compute_anticone_hashset_bruteforce(
+        inner: &ConsensusGraphInner, me: usize,
+    ) -> HashSet<usize> {
+        let s =
+            ConsensusNewBlockHandler::compute_anticone_bruteforce(inner, me);
+        let mut ret = HashSet::new();
+        for index in s.iter() {
+            ret.insert(index as usize);
+        }
+        ret
+    }
+
     /// Note that this function is not a pure computation function. It has the
     /// sideeffect of updating all existing anticone set in the anticone
     /// cache
@@ -1065,24 +1077,6 @@ impl ConsensusNewBlockHandler {
 
         // Because the following computation relies on all previous blocks being
         // active, We have to delay it till now
-        let era_genesis = inner.get_era_genesis_block_with_parent(parent);
-        let blockset =
-            inner.exchange_or_compute_blockset_in_own_view_of_epoch(me, None);
-        let weight_era_in_my_epoch =
-            inner.total_weight_in_own_epoch(&blockset, era_genesis);
-        inner.exchange_or_compute_blockset_in_own_view_of_epoch(
-            me,
-            Some(blockset),
-        );
-        let past_era_weight = if parent != era_genesis {
-            inner.arena[parent].past_era_weight
-                + inner.block_weight(parent)
-                + weight_era_in_my_epoch
-        } else {
-            inner.block_weight(parent) + weight_era_in_my_epoch
-        };
-        inner.arena[me].past_era_weight = past_era_weight;
-
         let mut timer_longest_difficulty = 0;
         let mut longest_referee = parent;
         if parent != NULL {
@@ -1186,8 +1180,8 @@ impl ConsensusNewBlockHandler {
         }
 
         debug!(
-            "Finish preactivation block {} index = {} past_era_weight={}",
-            inner.arena[me].hash, me, inner.arena[me].past_era_weight
+            "Finish preactivation block {} index = {}",
+            inner.arena[me].hash, me
         );
         let block_status = if pending {
             BlockStatus::Pending
@@ -1974,7 +1968,6 @@ impl ConsensusNewBlockHandler {
                     block_hash: inner.arena[me].hash,
                     best_block_hash: inner.best_block_hash(),
                     block_status: block_info.get_status(),
-                    past_era_weight: inner.arena[me].past_era_weight(),
                     era_block_hash,
                     adaptive: inner.arena[me].adaptive(),
                 },
