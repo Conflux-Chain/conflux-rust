@@ -132,7 +132,6 @@ class ConsensusBlockStatus(object):
         self.hash = json_data['blockHash']
         self.best_block_hash = json_data['bestBlockHash']
         self.block_status = BlockStatus(json_data['blockStatus'])
-        self.past_era_weight = json_data['pastEraWeight']
         self.era_block_hash = json_data['eraBlockHash']
         self.adaptive = json_data['adaptive']
 
@@ -145,7 +144,6 @@ class ConsensusBlockStatus(object):
                 self.era_block_hash != other.era_block_hash:
             return False
         return self.hash == other.hash and \
-            self.past_era_weight == other.past_era_weight and \
             self.block_status == other.block_status and \
             self.adaptive == other.adaptive
 
@@ -154,13 +152,11 @@ class ConsensusBlockStatus(object):
                 hash={}, \
                 best_block_hash={}, \
                 block_status={}, \
-                past_era_weight={}, \
                 era_block={}, \
                 adaptive={})".format(
             self.hash,
             self.best_block_hash,
             self.block_status,
-            self.past_era_weight,
             self.era_block,
             self.adaptive)
 
@@ -205,8 +201,6 @@ class ConsensusSnapshot(object):
                 assert block.era_block_hash == verified_block.era_block_hash or \
                     block.era_block_hash == DEFAULT_HASH, "peer[{}] block[{}] era_block_hash[{}], expect [{}]".format(
                         self.peer_id, block.hash, block.era_block_hash, verified_block.era_block_hash)
-                assert block.past_era_weight == verified_block.past_era_weight, "peer[{}] block[{}] past_era_weight[{}], expect [{}]".format(
-                    self.peer_id, block.hash, block.past_era_weight, verified_block.past_era_weight)
         elif block.hash in self.block_status_unverified:
             unverified_block = self.block_status_unverified[block.hash]
             if unverified_block.block_status == BlockStatus.Pending:
@@ -221,8 +215,6 @@ class ConsensusSnapshot(object):
                         block.era_block_hash == DEFAULT_HASH or \
                         unverified_block.era_block_hash == DEFAULT_HASH, "peer[{}] block[{}] era_block_hash[{}], expect [{}]".format(
                             self.peer_id, block.hash, block.era_block_hash, unverified_block.era_block_hash)
-                    assert block.past_era_weight == unverified_block.past_era_weight, "peer[{}] block[{}] past_era_weight[{}], expect [{}]".format(
-                        self.peer_id, block.hash, block.past_era_weight, unverified_block.past_era_weight)
         else:
             self.block_status_unverified[block.hash] = block
 

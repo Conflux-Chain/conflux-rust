@@ -445,13 +445,6 @@ impl TreeGraphConsensus {
             .map_err(|err| format!("Get transaction count error: {:?}", err))
     }
 
-    /// Estimate the gas of a transaction
-    pub fn estimate_gas(
-        &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<U256, String> {
-        self.call_virtual(tx, epoch).map(|(_, gas_used)| gas_used)
-    }
-
     pub fn logs(
         &self, filter: Filter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
@@ -693,7 +686,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                             block_hash: *hash,
                             best_block_hash: inner.best_block_hash(),
                             block_status: local_info.get_status(),
-                            past_era_weight: 0.into(),
                             era_block_hash,
                             adaptive: false,
                         },
@@ -883,7 +875,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
         let mut best_info = self.best_info.write();
 
         let terminal_hashes = inner.terminal_hashes();
-        let (terminal_block_hashes, bounded_terminal_block_hashes) =
+        let bounded_terminal_block_hashes =
             if terminal_hashes.len() > REFEREE_BOUND {
                 let mut tmp = Vec::new();
                 let best_idx = inner.pivot_chain.last().unwrap();
@@ -894,18 +886,15 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                 }
                 tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
                 tmp.split_off(REFEREE_BOUND);
-                let bounded_hashes =
-                    tmp.iter().map(|(_, b)| (*b).clone()).collect();
-                (Some(terminal_hashes), bounded_hashes)
+                tmp.iter().map(|(_, b)| (*b).clone()).collect()
             } else {
-                (None, terminal_hashes)
+                terminal_hashes
             };
 
         *best_info = Arc::new(BestInformation {
             best_block_hash: inner.best_block_hash(),
             best_epoch_number: inner.best_epoch_number(),
             current_difficulty: 0.into(),
-            terminal_block_hashes,
             bounded_terminal_block_hashes,
         });
     }

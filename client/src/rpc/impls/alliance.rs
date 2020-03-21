@@ -10,11 +10,11 @@ use crate::rpc::{
     types::{
         Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
-        EpochNumber, Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
-        U64 as RpcU64,
+        EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
+        SponsorInfo as RpcSponsorInfo, Status as RpcStatus, SyncGraphStates,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
 use cfx_types::{Public, H256};
@@ -217,7 +217,7 @@ impl Cfx for CfxHandler {
         fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
         fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
-        fn estimate_gas(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
         fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
         fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;

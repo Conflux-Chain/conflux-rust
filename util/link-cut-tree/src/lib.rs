@@ -11,9 +11,16 @@ use lct::{
     DefaultLinkCutTreeTrait, MinLinkCutTreeInner, SizeLinkCutTreeTrait,
     SizeMinLinkCutTreeInner,
 };
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 
 pub struct MinLinkCutTree<T> {
     inner: Mutex<T>,
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for MinLinkCutTree<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.inner.lock().size_of(ops)
+    }
 }
 
 impl<

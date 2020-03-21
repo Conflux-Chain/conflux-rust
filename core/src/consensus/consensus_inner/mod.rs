@@ -19,6 +19,8 @@ use crate::{
 use cfx_types::{H256, U256, U512};
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::Mutex;
 use primitives::{
     receipt::Receipt, Block, BlockHeader, BlockHeaderBuilder, EpochId,
@@ -61,6 +63,7 @@ pub struct ConsensusInnerConfig {
 /// Unlike the ConsensusGraphNode fields, fields in ConsensusGraphNodeData will
 /// only be available after the block is *preactivated* (after calling
 /// preactivate_block().
+#[derive(DeriveMallocSizeOf)]
 pub struct ConsensusGraphNodeData {
     /// It indicates the epoch number of the block, i.e., the height of the
     /// corresponding pivot chain block of this one
@@ -153,6 +156,7 @@ impl ConsensusGraphNodeData {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 struct ConsensusGraphPivotData {
     /// The set of blocks whose last_pivot_in_past point to this pivot chain
     /// location
@@ -444,6 +448,29 @@ pub struct ConsensusGraphInner {
     old_era_block_set: Mutex<VecDeque<H256>>,
 }
 
+impl MallocSizeOf for ConsensusGraphInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.arena.size_of(ops)
+            + self.hash_to_arena_indices.size_of(ops)
+            + self.pivot_chain.size_of(ops)
+            + self.pivot_chain_metadata.size_of(ops)
+            + self.timer_chain.size_of(ops)
+            + self.timer_chain_accumulative_lca.size_of(ops)
+            + self.terminal_hashes.size_of(ops)
+            + self.initial_stable_future.size_of(ops)
+            + self.weight_tree.size_of(ops)
+            + self.adaptive_tree.size_of(ops)
+            + self.invalid_block_queue.size_of(ops)
+            + self.block_body_caches.size_of(ops)
+            + self.pow_config.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.anticone_cache.size_of(ops)
+            + self.pastset_cache.size_of(ops)
+            + self.old_era_block_set.lock().size_of(ops)
+    }
+}
+
+#[derive(DeriveMallocSizeOf)]
 pub struct ConsensusGraphNode {
     pub hash: H256,
     pub height: u64,
@@ -453,8 +480,6 @@ pub struct ConsensusGraphNode {
     is_timer: bool,
     /// The total weight of its past set in the era (exclude itself)
     past_num_blocks: u64,
-    /// The total weight of its past set in its own era (exclude itself)
-    past_era_weight: i128,
     adaptive: bool,
 
     /// The genesis arena index of the era that `self` is in.
@@ -472,8 +497,6 @@ pub struct ConsensusGraphNode {
 }
 
 impl ConsensusGraphNode {
-    pub fn past_era_weight(&self) -> i128 { self.past_era_weight }
-
     pub fn past_num_blocks(&self) -> u64 { self.past_num_blocks }
 
     pub fn adaptive(&self) -> bool { self.adaptive }
@@ -1027,11 +1050,15 @@ impl ConsensusGraphInner {
             }
             my_past.add(index as u32);
             let idx_parent = self.arena[index].parent;
-            if anticone.contains(idx_parent as u32) {
+            if anticone.contains(idx_parent as u32)
+                || self.arena[idx_parent].era_block == NULL
+            {
                 queue.push_back(idx_parent);
             }
             for referee in &self.arena[index].referees {
-                if anticone.contains(*referee as u32) {
+                if anticone.contains(*referee as u32)
+                    || self.arena[idx_parent].era_block == NULL
+                {
                     queue.push_back(*referee);
                 }
             }
@@ -1411,7 +1438,6 @@ impl ConsensusGraphInner {
             is_heavy: true,
             difficulty: *block_header.difficulty(),
             past_num_blocks: 0,
-            past_era_weight: 0, // will be updated later below
             is_timer: false,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1532,7 +1558,6 @@ impl ConsensusGraphInner {
             is_heavy,
             difficulty: *block_header.difficulty(),
             past_num_blocks: 0,
-            past_era_weight: 0, // will be updated later
             is_timer,
             // Block header contains an adaptive field, we will verify with our
             // own computation
@@ -1591,7 +1616,9 @@ impl ConsensusGraphInner {
         while let Some(index) = queue.pop_front() {
             for child in &self.arena[index].children {
                 if !visited.contains(*child as u32)
-                    && self.arena[*child].data.activated
+                    && (self.arena[*child].data.activated
+                        || self.arena[*child].data.active_cnt == NULL)
+                /* We include all preactivated blocks */
                 {
                     visited.add(*child as u32);
                     queue.push_back(*child);
@@ -1599,7 +1626,9 @@ impl ConsensusGraphInner {
             }
             for referrer in &self.arena[index].referrers {
                 if !visited.contains(*referrer as u32)
-                    && self.arena[*referrer].data.activated
+                    && (self.arena[*referrer].data.activated
+                        || self.arena[*referrer].data.active_cnt == NULL)
+                /* We include all preactivated blocks */
                 {
                     visited.add(*referrer as u32);
                     queue.push_back(*referrer);
@@ -1741,71 +1770,6 @@ impl ConsensusGraphInner {
             epoch_blocks.push(block);
         }
         epoch_blocks
-    }
-
-    fn recompute_anticone_weight(
-        &self, me: usize, pivot_block_arena_index: usize,
-    ) -> i128 {
-        assert!(self.is_same_era(me, pivot_block_arena_index));
-        // We need to compute the future size of me under the view of epoch
-        // height pivot_index
-        let mut visited = BitSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(pivot_block_arena_index);
-        visited.add(pivot_block_arena_index as u32);
-        let last_pivot = self.arena[me].data.last_pivot_in_past;
-        while let Some(index) = queue.pop_front() {
-            let parent = self.arena[index].parent;
-            if self.arena[parent].data.epoch_number > last_pivot
-                && !visited.contains(parent as u32)
-            {
-                queue.push_back(parent);
-                visited.add(parent as u32);
-            }
-            for referee in &self.arena[index].referees {
-                if self.arena[*referee].data.epoch_number > last_pivot
-                    && !visited.contains(*referee as u32)
-                {
-                    queue.push_back(*referee);
-                    visited.add(*referee as u32);
-                }
-            }
-        }
-        queue.push_back(me);
-        let mut visited2 = BitSet::new();
-        visited2.add(me as u32);
-        while let Some(index) = queue.pop_front() {
-            for child in &self.arena[index].children {
-                if visited.contains(*child as u32)
-                    && !visited2.contains(*child as u32)
-                {
-                    queue.push_back(*child);
-                    visited2.add(*child as u32);
-                }
-            }
-            for referrer in &self.arena[index].referrers {
-                if visited.contains(*referrer as u32)
-                    && !visited2.contains(*referrer as u32)
-                {
-                    queue.push_back(*referrer);
-                    visited2.add(*referrer as u32);
-                }
-            }
-        }
-        let mut total_weight = self.arena[pivot_block_arena_index]
-            .past_era_weight
-            - self.arena[me].past_era_weight
-            + self.block_weight(pivot_block_arena_index);
-        for index in visited2.iter() {
-            if self.is_same_era(index as usize, pivot_block_arena_index) {
-                total_weight -= self.block_weight(index as usize);
-            }
-        }
-        debug!(
-            "recompute_anticone_weight: me={} upper={} total_weight={}",
-            me, pivot_block_arena_index, total_weight
-        );
-        total_weight
     }
 
     /// Compute the expected difficulty of a new block given its parent.
@@ -2190,7 +2154,7 @@ impl ConsensusGraphInner {
     /// If a block is adaptive, then for the heavy blocks, it equals to
     /// the heavy block ratio times the difficulty. Otherwise, it is zero.
     fn block_weight(&self, me: usize) -> i128 {
-        if !self.arena[me].data.activated {
+        if !self.arena[me].data.activated || self.arena[me].era_block == NULL {
             return 0 as i128;
         }
         let is_heavy = self.arena[me].is_heavy;
@@ -2798,6 +2762,49 @@ impl ConsensusGraphInner {
                     }
                     tmp_lca.push(last_lca);
                 }
+            }
+        } else if tmp_chain.len() > self.timer_chain.len() - fork_at_index {
+            let mut last_lca = match self.timer_chain_accumulative_lca.last() {
+                Some(last_lca) => *last_lca,
+                None => self.cur_era_genesis_block_arena_index,
+            };
+            for i in self.timer_chain.len()..(fork_at_index + tmp_chain.len()) {
+                // `end` is the timer chain index of the end of
+                // `timer_chain_beta` consecutive blocks which
+                // we will compute accumulative lca.
+                let end = i - self.inner_conf.timer_chain_beta as usize;
+                if end < self.inner_conf.timer_chain_beta as usize {
+                    tmp_lca.push(self.cur_era_genesis_block_arena_index);
+                    continue;
+                }
+                let mut lca = self.timer_chain[end];
+                for j in
+                    (end - self.inner_conf.timer_chain_beta as usize + 1)..end
+                {
+                    // Note that we may have timer_chain blocks that are
+                    // outside the genesis tree temporarily.
+                    // Therefore we have to deal with the case that lca
+                    // becomes NULL
+                    if lca == NULL {
+                        break;
+                    }
+                    lca = self.lca(lca, self.timer_chain[j]);
+                }
+                // Note that we have the assumption that the force
+                // confirmation point will always move
+                // along parental edges, i.e., it is not possible for the
+                // point to move to a sibling tree. This
+                // assumption is true if the timer_chain_beta
+                // and the timer_chain_difficulty_ratio are set to large
+                // enough values.
+                //
+                // It is therefore safe here to use the height to compare.
+                if lca != NULL
+                    && self.arena[last_lca].height < self.arena[lca].height
+                {
+                    last_lca = lca;
+                }
+                tmp_lca.push(last_lca);
             }
         }
 

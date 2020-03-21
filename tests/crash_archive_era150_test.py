@@ -23,6 +23,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_beta"] = "10"
         self.conf_parameters["era_epoch_count"] = "150"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
+        self.conf_parameters["anticone_penalty_ratio"] = "8"
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

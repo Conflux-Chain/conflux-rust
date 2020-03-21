@@ -12,8 +12,10 @@
 //! WebRender.
 
 use cfg_if::cfg_if;
-use cfx_types::{H256, H512};
+use cfx_types::{H160, H256, H512, U256, U512};
+use slab::Slab;
 use std::{
+    collections::{BinaryHeap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
     mem::{self, size_of},
     ops::Range,
@@ -34,6 +36,8 @@ pub struct MallocSizeOfOps {
     /// memory measurements will actually be computed estimates rather than
     /// real and accurate measurements.
     pub enclosing_size_of_op: Option<VoidPtrToSizeFn>,
+
+    pub visited: HashSet<usize>,
 }
 
 impl MallocSizeOfOps {
@@ -45,6 +49,7 @@ impl MallocSizeOfOps {
         MallocSizeOfOps {
             size_of_op: size_of,
             enclosing_size_of_op: malloc_enclosing_size_of,
+            visited: HashSet::new(),
         }
     }
 
@@ -227,11 +232,70 @@ impl<T: MallocSizeOf> MallocSizeOf for Vec<T> {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Clone)]
+enum Entry<T> {
+    Vacant(usize),
+    Occupied(T),
+}
+
+impl<T> MallocShallowSizeOf for Slab<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<Entry<T>>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for Slab<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for (_, elem) in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+impl<T> MallocShallowSizeOf for BinaryHeap<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<T>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for BinaryHeap<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for elem in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
+impl<T> MallocShallowSizeOf for VecDeque<T> {
+    fn shallow_size_of(&self, _ops: &mut MallocSizeOfOps) -> usize {
+        mem::size_of::<T>() * self.capacity()
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for VecDeque<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut n = self.shallow_size_of(ops);
+        for elem in self.iter() {
+            n += elem.size_of(ops);
+        }
+        n
+    }
+}
+
 /// This is only for estimating memory size in Cache Manager
 impl<T: MallocSizeOf> MallocSizeOf for Arc<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        (mem::size_of::<T>() + self.as_ref().size_of(ops))
-            / Arc::strong_count(self)
+        let ptr = self.as_ref() as *const T as usize;
+        if ops.visited.contains(&ptr) {
+            return 0;
+        }
+        ops.visited.insert(ptr);
+        mem::size_of::<T>() + self.as_ref().size_of(ops)
     }
 }
 
@@ -380,7 +444,7 @@ malloc_size_of_is_0!(
 );
 malloc_size_of_is_0!(Range<f32>, Range<f64>);
 
-malloc_size_of_is_0!(H256, H512);
+malloc_size_of_is_0!(H256, U256, H512, H160, U512);
 
 mod usable_size {
 

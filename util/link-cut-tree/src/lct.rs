@@ -1,3 +1,5 @@
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+
 pub const NULL: usize = !0;
 
 pub trait DefaultLinkCutTreeTrait {
@@ -389,6 +391,26 @@ impl_default_lct_func!(MinLinkCutTreeInner);
 impl_default_lct_func!(SizeMinLinkCutTreeInner);
 impl_default_caterpillar_link_cut_tree_trait!(MinLinkCutTreeInner);
 impl_default_caterpillar_link_cut_tree_trait!(SizeMinLinkCutTreeInner);
+
+impl MallocSizeOf for SizeMinLinkCutTreeInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.tree.size_of(ops)
+    }
+}
+
+impl MallocSizeOf for SizeMinNode {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
+
+impl MallocSizeOf for CaterpillarMinLinkCutTreeInner {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.tree.size_of(ops)
+    }
+}
+
+impl MallocSizeOf for CaterpillarMinNode {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
 
 impl SizeMinLinkCutTreeInner {
     #[inline]

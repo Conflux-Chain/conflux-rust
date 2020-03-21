@@ -20,6 +20,7 @@ pub use crate::consensus::{
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
+    consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
     executive::Executed,
     parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
@@ -32,6 +33,8 @@ use crate::{
     Notifications,
 };
 use cfx_types::{Bloom, H160, H256, U256};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -78,6 +81,7 @@ pub struct ConsensusConfig {
 #[derive(Debug)]
 pub struct ConsensusGraphStatistics {
     pub inserted_block_count: usize,
+    pub activated_block_count: usize,
     pub processed_block_count: usize,
 }
 
@@ -85,24 +89,23 @@ impl ConsensusGraphStatistics {
     pub fn new() -> ConsensusGraphStatistics {
         ConsensusGraphStatistics {
             inserted_block_count: 0,
+            activated_block_count: 0,
             processed_block_count: 0,
         }
     }
 
     pub fn clear(&mut self) {
         self.inserted_block_count = 0;
+        self.activated_block_count = 0;
         self.processed_block_count = 0;
     }
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
-    // terminal_block_hashes will be None if it is same as the
-    // bounded_terminal_block_hashes. This is just to save some space.
-    pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
 }
 
@@ -156,6 +159,16 @@ pub struct ConsensusGraph {
     pub synced_epoch_id: Mutex<Option<EpochId>>,
 }
 
+impl MallocSizeOf for ConsensusGraph {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.inner.read().size_of(ops)
+            + self.txpool.size_of(ops)
+            + self.data_man.size_of(ops)
+            + self.best_info.read().size_of(ops)
+            + self.pivot_block_state_valid_map.lock().size_of(ops)
+    }
+}
+
 impl ConsensusGraph {
     /// Build the ConsensusGraph with a specific era genesis block and various
     /// other components. The execution will be skipped if bench_mode sets
@@ -165,6 +178,7 @@ impl ConsensusGraph {
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
         era_stable_block_hash: &H256, notifications: Arc<Notifications>,
+        execution_conf: ConsensusExecutionConfiguration,
     ) -> Self
     {
         let inner =
@@ -180,7 +194,7 @@ impl ConsensusGraph {
             data_man.clone(),
             vm,
             inner.clone(),
-            conf.transaction_epoch_bound,
+            execution_conf,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
@@ -221,6 +235,7 @@ impl ConsensusGraph {
         conf: ConsensusConfig, vm: VmFactory, txpool: SharedTransactionPool,
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
+        execution_conf: ConsensusExecutionConfiguration,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -235,6 +250,7 @@ impl ConsensusGraph {
             &genesis_hash,
             &stable_hash,
             notifications,
+            execution_conf,
         )
     }
 
@@ -1145,18 +1161,17 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let mut best_info = self.best_info.write();
 
         let terminal_hashes = inner.terminal_hashes();
-        let (terminal_block_hashes, bounded_terminal_block_hashes) =
+        let bounded_terminal_block_hashes =
             if terminal_hashes.len() > REFEREE_BOUND {
-                (Some(terminal_hashes), inner.best_terminals(REFEREE_BOUND))
+                inner.best_terminals(REFEREE_BOUND)
             } else {
-                (None, terminal_hashes)
+                terminal_hashes
             };
 
         *best_info = Arc::new(BestInformation {
             best_block_hash: inner.best_block_hash(),
             best_epoch_number: inner.best_epoch_number(),
             current_difficulty: inner.current_difficulty,
-            terminal_block_hashes,
             bounded_terminal_block_hashes,
         });
     }

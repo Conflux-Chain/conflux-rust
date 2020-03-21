@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 /// The number of blocks in the past of an epoch.
 /// Used in evm execution.
-#[derive(Clone, RlpEncodable, RlpDecodable)]
+#[derive(Clone, RlpEncodable, RlpDecodable, DeriveMallocSizeOf)]
 pub struct EpochExecutionContext {
     pub start_block_number: u64,
 }
@@ -21,6 +21,10 @@ pub struct EpochExecutionCommitment {
     pub state_root_with_aux_info: StateRootWithAuxInfo,
     pub receipts_root: H256,
     pub logs_bloom_hash: H256,
+}
+
+impl MallocSizeOf for EpochExecutionCommitment {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 /// `receipts` and `bloom` of a single block after execution.

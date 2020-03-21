@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from base64 import b64encode
 from binascii import hexlify, unhexlify
+
 import conflux.config
 from decimal import Decimal, ROUND_DOWN
 import hashlib
@@ -14,12 +15,15 @@ from subprocess import CalledProcessError, check_call
 import time
 import socket
 import threading
-
 import jsonrpcclient.exceptions
+import solcx
+import web3
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
+
+solcx.set_solc_version('v0.5.10')
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
 CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
@@ -624,3 +628,37 @@ class ConnectThread(threading.Thread):
             self.log.error("Node " + str(self.a) + " fails to be connected to " + str(self.peers) + ", ip={}, index={}".format(node.ip, node.index))
             self.log.error(e)
             self.failed = True
+
+
+def get_contract_instance(contract_dict=None,
+                          source=None,
+                          contract_name=None,
+                          address=None,
+                          abi_file=None,
+                          bytecode_file=None):
+    w3 = web3.Web3()
+    contract = None
+    if source and contract_name:
+        output = solcx.compile_files([source])
+        contract_dict = output[f"{source}:{contract_name}"]
+        if "bin" in contract_dict:
+            contract_dict["bytecode"] = contract_dict.pop("bin")
+        elif "code" in contract_dict:
+            contract_dict["bytecode"] = contract_dict.pop("code")
+    if contract_dict:
+        contract = w3.eth.contract(
+            abi=contract_dict['abi'], bytecode=contract_dict['bytecode'], address=address)
+    elif abi_file:
+        with open(abi_file, 'r') as abi_file:
+            abi = json.loads(abi_file.read())
+        if address:
+            contract = w3.eth.contract(abi=abi, address=address)
+        elif bytecode_file:
+            bytecode = None
+            if bytecode_file:
+                with open(bytecode_file, 'r') as bytecode_file:
+                    bytecode = bytecode_file.read()
+                contract = w3.eth.contract(abi=abi, bytecode=bytecode)
+            else:
+                raise ValueError("The bytecode or the address must be provided")
+    return contract

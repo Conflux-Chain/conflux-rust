@@ -947,12 +947,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message(&self) -> Status {
         let best_info = self.graph.consensus.best_info();
 
-        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
-        {
-            x.clone()
-        } else {
-            best_info.bounded_terminal_block_hashes.clone()
-        };
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
@@ -1436,6 +1431,12 @@ impl SynchronizationProtocolHandler {
     pub fn expire_block_gc(
         &self, io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
+        if self.in_recover_from_db_phase() {
+            // In recover_from_db phase, this will be done at the end of
+            // recovery, and if we allow `resolve_outside_dependencies` here,
+            // it will cause inconsistency.
+            return Ok(());
+        }
         let need_to_relay = self.graph.resolve_outside_dependencies(
             false, /* recover_from_db */
             self.insert_header_to_consensus(),
@@ -1619,7 +1620,13 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             EXPIRE_BLOCK_GC_TIMER => {
                 // remove expire blocks every `expire_block_gc_period`
                 // TODO Parameterize this timeout.
-                self.expire_block_gc(io, 120).ok();
+                // Set to twice expire period to ensure that stale blocks will
+                // exist in the frontier across two consecutive GC.
+                self.expire_block_gc(
+                    io,
+                    self.protocol_config.expire_block_gc_period.as_secs() * 2,
+                )
+                .ok();
             }
             EXPIRE_BFT_EXECUTION_TIMER => {
                 debug!("timeout: remove_expired_bft_execution");

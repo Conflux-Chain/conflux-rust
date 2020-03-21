@@ -14,7 +14,8 @@ use crate::{
     },
 };
 use cfx_types::{Bloom, H256};
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
@@ -53,6 +54,7 @@ pub const NULLU64: u64 = !0;
 /// FIXME: move it to another module.
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
+#[derive(DeriveMallocSizeOf)]
 pub struct StateAvailabilityBoundary {
     /// This is the hash of blocks in pivot chain based on current graph.
     #[derivative(Debug = "ignore")]
@@ -214,6 +216,27 @@ pub struct BlockDataManager {
     /// The state of an epoch is valid if and only if the height of the epoch
     /// is inside the boundary.
     pub state_availability_boundary: RwLock<StateAvailabilityBoundary>,
+}
+
+impl MallocSizeOf for BlockDataManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.block_headers.read().size_of(ops)
+            + self.blocks.read().size_of(ops)
+            + self.compact_blocks.read().size_of(ops)
+            + self.block_receipts.read().size_of(ops)
+            + self.transaction_indices.read().size_of(ops)
+            + self.epoch_execution_commitments.read().size_of(ops)
+            + self.epoch_execution_contexts.read().size_of(ops)
+            + self.invalid_block_set.read().size_of(ops)
+            + self.cur_consensus_era_genesis_hash.read().size_of(ops)
+            + self.cur_consensus_era_stable_hash.read().size_of(ops)
+            + self.config.size_of(ops)
+            + self.tx_data_manager.size_of(ops)
+            + self.true_genesis.size_of(ops)
+            + self.cache_man.lock().size_of(ops)
+            + self.target_difficulty_manager.size_of(ops)
+            + self.state_availability_boundary.read().size_of(ops)
+    }
 }
 
 impl BlockDataManager {
@@ -1143,6 +1166,10 @@ pub struct DataManagerConfiguration {
     record_tx_index: bool,
     tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
+}
+
+impl MallocSizeOf for DataManagerConfiguration {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
 impl DataManagerConfiguration {

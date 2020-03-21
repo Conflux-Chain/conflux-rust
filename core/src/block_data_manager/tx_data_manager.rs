@@ -2,6 +2,7 @@ use crate::{
     sync::request_manager::tx_handler::TransactionCacheContainer,
     WORKER_COMPUTATION_PARALLELISM,
 };
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{register_queue, Queue};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -22,6 +23,12 @@ lazy_static! {
 pub struct TransactionDataManager {
     tx_time_window: RwLock<TransactionCacheContainer>,
     worker_pool: Arc<Mutex<ThreadPool>>,
+}
+
+impl MallocSizeOf for TransactionDataManager {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.tx_time_window.read().size_of(ops)
+    }
 }
 
 impl TransactionDataManager {

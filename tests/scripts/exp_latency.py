@@ -1,33 +1,14 @@
 #!/usr/bin/env python3
 
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import argparse
-import os
-from remote_simulate import RemoteSimulate
+from remote_simulate import RemoteSimulate, pssh, kill_remote_conflux
 import subprocess
-import time
 from test_framework.test_framework import OptionHelper
-
-def execute(cmd, retry, cmd_description):
-    while True:
-        ret = os.system(cmd)
-        if ret == 0:
-            break
-
-        print("Failed to {}, return code = {}, retry = {} ...".format(cmd_description, ret, retry))
-        assert retry > 0
-        retry -= 1
-        time.sleep(1)
-
-def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
-    cmd = f'parallel-ssh -O "StrictHostKeyChecking no" -h "{ips_file}" -p 400 "{remote_cmd}" > /dev/null 2>&1'
-    execute(cmd, retry, cmd_description)
-
-def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
-    cmd = f'parallel-scp -O "StrictHostKeyChecking no" -h "{ips_file}" -p 400 "{local}" "{remote}" > /dev/null 2>&1'
-    execute(cmd, retry, cmd_description)
-
-def kill_remote_conflux(ips_file:str):
-    pssh(ips_file, "killall conflux || echo already killed", 3, "kill remote conflux")
 
 def cleanup_remote_logs(ips_file:str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
@@ -66,7 +47,7 @@ class RemoteSimulateConfig:
 
         return config_groups
 
-class LatencyExperiment(ArgumentHolder):
+class LatencyExperiment:
     def __init__(self):
         self.exp_name = "latency_latest"
         self.stat_confirmation_latency = False
@@ -75,23 +56,27 @@ class LatencyExperiment(ArgumentHolder):
         self.stat_archive_file = "exp_stat_latency.tgz"
 
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
-        exp_latency_options = dict(
+        self.exp_latency_options = dict(
             vms = 10,
             batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
         )
-        OptionHelper.add_options(parser, exp_latency_options)
+        OptionHelper.add_options(parser, self.exp_latency_options)
+
+        def k_from_kv(kv):
+            (k, v) = kv
+            return k
 
         remote_simulate_options = dict(filter(
-            lambda kv: kv.0 in set(["bandwidth", "enable_flamegraph", "enable_tx_propagation", "ips_file"]),
-            list(RemoteSimulate.SIMULATE_OPTIONS.items()) +
-                         list(RemoteSimulate.PASS_TO_CONFLUX_OPTIONS.items())))
+            lambda kv: k_from_kv(kv) in set(["bandwidth", "profiler", "enable_tx_propagation", "ips_file"]),
+            list(RemoteSimulate.SIMULATE_OPTIONS.items())))
+        remote_simulate_options.update(RemoteSimulate.PASS_TO_CONFLUX_OPTIONS)
         # Configs with different default values than RemoteSimulate
         remote_simulate_options["nodes_per_host"] = 1
         remote_simulate_options["storage_memory_gb"] = 2
         remote_simulate_options["connect_peers"] = 8
         remote_simulate_options["tps"] = 4000
-        OptionHelper.add_options(parser, remote_simulate_options)
 
+        OptionHelper.add_options(parser, remote_simulate_options)
         self.options = parser.parse_args()
 
         if os.path.getsize("./genesis_secrets.txt") % 65 != 0:
@@ -150,13 +135,16 @@ class LatencyExperiment(ArgumentHolder):
 
     def run_remote_simulate(self, config:RemoteSimulateConfig):
         cmd = [
-            "python3 ../remote_simulate.py",
+            "python3",
+            "../remote_simulate.py",
             "--generation-period-ms", str(config.block_gen_interval_ms),
             "--num-blocks", str(config.num_blocks),
             "--txs-per-block", str(config.txs_per_block),
             "--generate-tx-data-len", str(config.tx_size),
             "--tx-pool-size", str(1_000_000),
-        ] + OptionHelper.parsed_options_to_args(self.options)
+        ] + OptionHelper.parsed_options_to_args(
+            dict(filter(lambda kv: kv[0] not in self.exp_latency_options, vars(self.options).items()))
+        )
 
         if config.data_propagate_enabled:
             cmd.extend([
@@ -165,9 +153,9 @@ class LatencyExperiment(ArgumentHolder):
                 "--data-propagate-size", str(config.data_propagate_size),
             ])
 
+        log_file = open(self.simulate_log_file, "w")
         print("[CMD]: {} > {}".format(cmd, self.simulate_log_file))
-
-        ret = subprocess.run(cmd, stdout = self.simulate_log_file).returncode
+        ret = subprocess.run(cmd, stdout = log_file, stderr=log_file).returncode
         assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(ret, self.simulate_log_file)
 
         os.system('grep "(ERROR)" {}'.format(self.simulate_log_file))

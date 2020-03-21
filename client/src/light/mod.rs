@@ -151,6 +151,7 @@ impl LightClient {
             data_man.clone(),
             pow_config.clone(),
             notifications.clone(),
+            conf.execution_config(),
         ));
 
         let _protocol_config = conf.protocol_config();

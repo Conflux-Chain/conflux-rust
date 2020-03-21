@@ -1263,6 +1263,7 @@ fn test_automatic_collateral_contract_account() {
         *COLLATERAL_PER_STORAGE_KEY
     );
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
+    assert_eq!(state.increase_block_number(), U256::from(39637239));
 
     // set another key to zero
     state.checkpoint();
@@ -1297,4 +1298,5 @@ fn test_automatic_collateral_contract_account() {
         U256::from(0)
     );
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.increase_block_number(), U256::from(0));
 }
