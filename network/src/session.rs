@@ -467,7 +467,7 @@ impl Session {
                     .map(|p| str::from_utf8(&p[..]).unwrap_or("???")),
                 packet_id
             );
-            bail!(ErrorKind::BadProtocol);
+            bail!(ErrorKind::Expired);
         }
 
         if self.expired() {
