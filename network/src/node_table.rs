@@ -511,6 +511,7 @@ impl NodeTable {
 
     // This function does not preserve runtime connection information
     pub fn add_node(&mut self, mut node: Node, preserve_last_contact: bool) {
+        debug!("NodeTable {:?} add_node {:?}", self.path, node);
         let mut _index = NodeReputationIndex::default();
         let mut exist = false;
         if let Some(index) = self.node_index.get_mut(&node.id) {
