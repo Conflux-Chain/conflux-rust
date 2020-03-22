@@ -19,7 +19,9 @@ use crate::{
     },
     bytes::Bytes,
     consensus::{BestInformation, ConsensusGraphTrait},
-    parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
+    parameters::{
+        block::REFEREE_DEFAULT_BOUND, consensus::*, consensus_internal::*,
+    },
     pow::ProofOfWorkConfig,
     state::State,
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
@@ -877,7 +879,9 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
 
         let terminal_hashes = inner.terminal_hashes();
         let bounded_terminal_block_hashes =
-            if terminal_hashes.len() > REFEREE_BOUND {
+            // FIXME: Here I assume the alliance chain will always run under the default bound
+            // FIXME: or the referee_bound does not matter. Otherwise, we need to change this code.
+            if terminal_hashes.len() > REFEREE_DEFAULT_BOUND {
                 let mut tmp = Vec::new();
                 let best_idx = inner.pivot_chain.last().unwrap();
                 for hash in terminal_hashes.iter() {
@@ -886,7 +890,7 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                     tmp.push((inner.arena[a_lca].height, hash));
                 }
                 tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
-                tmp.split_off(REFEREE_BOUND);
+                tmp.split_off(REFEREE_DEFAULT_BOUND);
                 tmp.iter().map(|(_, b)| (*b).clone()).collect()
             } else {
                 terminal_hashes

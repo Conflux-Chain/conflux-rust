@@ -147,7 +147,7 @@ pub mod block {
     // peak with only simple payment, which is good enough for now.
     pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
     // The maximum number of referees allowed for each block
-    pub const REFEREE_BOUND: usize = 200;
+    pub const REFEREE_DEFAULT_BOUND: usize = 200;
     // The maximal length of custom data in block header
     pub const HEADER_CUSTOM_LENGTH_BOUND: usize = 64;
     // If a new block is more than valid_time_drift ahead of the current system

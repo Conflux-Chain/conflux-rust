@@ -7,6 +7,7 @@ use crate::{
     },
     db::NUM_COLUMNS,
     parameters::{
+        block::REFEREE_DEFAULT_BOUND,
         consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
@@ -176,6 +177,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+            referee_bound: REFEREE_DEFAULT_BOUND,
         },
         vm.clone(),
         txpool.clone(),
@@ -190,7 +192,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
         },
     ));
 
-    let verification_config = VerificationConfig::new(true);
+    let verification_config =
+        VerificationConfig::new(true, REFEREE_DEFAULT_BOUND);
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,

@@ -22,7 +22,7 @@ use crate::{
     bytes::Bytes,
     consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
     executive::Executed,
-    parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
+    parameters::{consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
     statedb::StateDb,
@@ -76,6 +76,8 @@ pub struct ConsensusConfig {
     /// [tx.epoch_height - transaction_epoch_bound, tx.epoch_height +
     /// transaction_epoch_bound]
     pub transaction_epoch_bound: u64,
+    /// The number of referees that are allowed for a block.
+    pub referee_bound: usize,
 }
 
 #[derive(Debug)]
@@ -157,6 +159,7 @@ pub struct ConsensusGraph {
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
+    pub config: ConsensusConfig,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -209,7 +212,7 @@ impl ConsensusGraph {
             executor: executor.clone(),
             statistics: statistics.clone(),
             new_block_handler: ConsensusNewBlockHandler::new(
-                conf,
+                conf.clone(),
                 txpool,
                 data_man,
                 executor,
@@ -221,6 +224,7 @@ impl ConsensusGraph {
             latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Default::default(),
             synced_epoch_id: Default::default(),
+            config: conf,
         };
         graph.update_best_info();
         graph
@@ -1170,8 +1174,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let best_block_arena_index =
             *inner.hash_to_arena_indices.get(&best_block_hash).unwrap();
         let bounded_terminal_block_hashes =
-            if terminal_hashes.len() > REFEREE_BOUND {
-                inner.best_terminals(best_block_arena_index, REFEREE_BOUND)
+            if terminal_hashes.len() > self.config.referee_bound {
+                inner.best_terminals(
+                    best_block_arena_index,
+                    self.config.referee_bound,
+                )
             } else {
                 terminal_hashes
             };
