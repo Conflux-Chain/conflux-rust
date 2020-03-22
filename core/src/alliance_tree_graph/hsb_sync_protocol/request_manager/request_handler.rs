@@ -6,7 +6,7 @@ use crate::{
     alliance_tree_graph::hsb_sync_protocol::{
         request_manager::RequestManager, sync_protocol::RpcResponse,
     },
-    message::Message,
+    message::{Message, SetRequestId},
     sync::{Error, ErrorKind, ProtocolConfiguration},
 };
 use futures::channel::oneshot;
@@ -378,7 +378,7 @@ pub trait AsAny {
 }
 
 /// Trait of request message
-pub trait Request: Send + Debug + AsAny + Message {
+pub trait Request: Send + Debug + AsAny + Message + SetRequestId {
     /// Request timeout for resend purpose.
     fn timeout(&self, conf: &ProtocolConfiguration) -> Duration;
 
