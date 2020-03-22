@@ -21,7 +21,7 @@ use crate::{
             },
         },
     },
-    message::{Message, MsgId},
+    message::{GetMaybeRequestId, Message, MsgId},
     network::{
         NetworkContext, NetworkProtocolHandler, NetworkService, PeerId,
         UpdateNodeOperation,

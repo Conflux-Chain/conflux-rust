@@ -10,7 +10,9 @@ pub mod proposal;
 pub mod sync_info;
 pub mod vote;
 
-use crate::message::{Message, MsgId, RequestId};
+use crate::message::{
+    GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId,
+};
 
 use crate::alliance_tree_graph::bft::consensus::consensus_types::{
     common::Payload, epoch_retrieval::EpochRetrievalRequest,
@@ -35,6 +37,8 @@ build_msgid! {
 
 macro_rules! build_msg_impl_with_serde_serialization {
     ($name:ident, $msg:expr, $name_str:literal) => {
+        impl GetMaybeRequestId for $name {}
+
         impl Message for $name {
             fn msg_id(&self) -> MsgId { $msg }
 
@@ -52,6 +56,8 @@ macro_rules! build_msg_impl_with_serde_serialization {
 
 macro_rules! build_msg_impl_with_serde_serialization_generic {
     ($name:ident, $msg:expr, $name_str:literal) => {
+        impl<T: Payload> GetMaybeRequestId for $name<T> {}
+
         impl<T: Payload> Message for $name<T> {
             fn msg_id(&self) -> MsgId { $msg }
 
@@ -74,14 +80,6 @@ macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
 
             fn msg_name(&self) -> &'static str { $name_str }
 
-            fn get_request_id(&self) -> Option<RequestId> {
-                Some(self.request_id)
-            }
-
-            fn set_request_id(&mut self, id: RequestId) {
-                self.request_id = id;
-            }
-
             fn encode(&self) -> Vec<u8> {
                 let mut encoded =
                     lcs::to_bytes(self).expect("Failed to serialize.");
@@ -89,6 +87,8 @@ macro_rules! build_msg_impl_with_request_id_and_serde_serialization {
                 encoded
             }
         }
+
+        impl_request_id_methods!($name);
     };
 }
 
