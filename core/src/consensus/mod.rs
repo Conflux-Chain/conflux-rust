@@ -161,11 +161,14 @@ pub struct ConsensusGraph {
 
 impl MallocSizeOf for ConsensusGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let best_info_size = self.best_info.read().size_of(ops);
+        let pivot_block_state_valid_map_size =
+            self.pivot_block_state_valid_map.lock().size_of(ops);
         self.inner.read().size_of(ops)
             + self.txpool.size_of(ops)
             + self.data_man.size_of(ops)
-            + self.best_info.read().size_of(ops)
-            + self.pivot_block_state_valid_map.lock().size_of(ops)
+            + best_info_size
+            + pivot_block_state_valid_map_size
     }
 }
 
