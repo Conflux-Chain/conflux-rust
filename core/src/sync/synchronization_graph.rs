@@ -970,9 +970,12 @@ pub struct SynchronizationGraph {
 
 impl MallocSizeOf for SynchronizationGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        let mut malloc_size = self.inner.read().size_of(ops)
+        let inner_size = self.inner.read().size_of(ops);
+        let initial_missed_block_hashes_size =
+            self.initial_missed_block_hashes.lock().size_of(ops);
+        let mut malloc_size = inner_size
             + self.data_man.size_of(ops)
-            + self.initial_missed_block_hashes.lock().size_of(ops);
+            + initial_missed_block_hashes_size;
 
         // TODO: Add statistics for consortium.
         if !self.is_consortium() {

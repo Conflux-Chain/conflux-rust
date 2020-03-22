@@ -209,22 +209,41 @@ pub struct BlockDataManager {
 
 impl MallocSizeOf for BlockDataManager {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.block_headers.read().size_of(ops)
-            + self.blocks.read().size_of(ops)
-            + self.compact_blocks.read().size_of(ops)
-            + self.block_receipts.read().size_of(ops)
-            + self.transaction_indices.read().size_of(ops)
-            + self.epoch_execution_commitments.read().size_of(ops)
-            + self.epoch_execution_contexts.read().size_of(ops)
-            + self.invalid_block_set.read().size_of(ops)
-            + self.cur_consensus_era_genesis_hash.read().size_of(ops)
-            + self.cur_consensus_era_stable_hash.read().size_of(ops)
+        let block_headers_size = self.block_headers.read().size_of(ops);
+        let blocks_size = self.blocks.read().size_of(ops);
+        let compact_blocks_size = self.compact_blocks.read().size_of(ops);
+        let block_receipts_size = self.block_receipts.read().size_of(ops);
+        let transaction_indices_size =
+            self.transaction_indices.read().size_of(ops);
+        let epoch_execution_commitments_size =
+            self.epoch_execution_commitments.read().size_of(ops);
+        let epoch_execution_contexts_size =
+            self.epoch_execution_contexts.read().size_of(ops);
+        let invalid_block_set_size = self.invalid_block_set.read().size_of(ops);
+        let cur_consensus_era_genesis_hash_size =
+            self.cur_consensus_era_genesis_hash.read().size_of(ops);
+        let cur_consensus_era_stable_hash_size =
+            self.cur_consensus_era_stable_hash.read().size_of(ops);
+        let cache_man_size = self.cache_man.lock().size_of(ops);
+        let state_availability_boundary_size =
+            self.state_availability_boundary.read().size_of(ops);
+
+        block_headers_size
+            + blocks_size
+            + compact_blocks_size
+            + block_receipts_size
+            + transaction_indices_size
+            + epoch_execution_commitments_size
+            + epoch_execution_contexts_size
+            + invalid_block_set_size
+            + cur_consensus_era_genesis_hash_size
+            + cur_consensus_era_stable_hash_size
             + self.config.size_of(ops)
             + self.tx_data_manager.size_of(ops)
             + self.true_genesis.size_of(ops)
-            + self.cache_man.lock().size_of(ops)
+            + cache_man_size
             + self.target_difficulty_manager.size_of(ops)
-            + self.state_availability_boundary.read().size_of(ops)
+            + state_availability_boundary_size
     }
 }
 

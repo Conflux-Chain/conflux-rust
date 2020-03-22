@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::{
-    message::{Message, MsgId, RequestId},
+    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
     sync::{
         message::throttling::Throttle,
         state::{
@@ -84,6 +84,7 @@ build_msg_impl! { StateSyncCandidateResponse, msgid::STATE_SYNC_CANDIDATE_RESPON
 build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled" }
 
 // normal priority and size-sensitive message types
+impl GetMaybeRequestId for Transactions {}
 impl Message for Transactions {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 
@@ -98,6 +99,7 @@ impl Message for Transactions {
     }
 }
 
+impl GetMaybeRequestId for GetBlocksResponse {}
 impl Message for GetBlocksResponse {
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
@@ -112,6 +114,7 @@ impl Message for GetBlocksResponse {
     }
 }
 
+impl GetMaybeRequestId for GetBlocksWithPublicResponse {}
 impl Message for GetBlocksWithPublicResponse {
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
@@ -126,6 +129,7 @@ impl Message for GetBlocksWithPublicResponse {
     }
 }
 
+impl GetMaybeRequestId for GetBlockTxnResponse {}
 impl Message for GetBlockTxnResponse {
     fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 
@@ -140,6 +144,7 @@ impl Message for GetBlockTxnResponse {
     }
 }
 
+impl GetMaybeRequestId for TransactionDigests {}
 impl Message for TransactionDigests {
     fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
@@ -156,42 +161,7 @@ impl Message for TransactionDigests {
     }
 }
 
-impl Message for GetTransactions {
-    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
-
-    fn msg_name(&self) -> &'static str { "GetTransactions" }
-
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
-
-    fn set_request_id(&mut self, id: RequestId) { self.request_id = id; }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
-}
-
-impl Message for GetTransactionsFromTxHashes {
-    fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES }
-
-    fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashes" }
-
-    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn get_request_id(&self) -> Option<RequestId> { Some(self.request_id) }
-
-    fn set_request_id(&mut self, id: RequestId) { self.request_id = id; }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
-}
-
+impl GetMaybeRequestId for GetTransactionsResponse {}
 impl Message for GetTransactionsResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
@@ -207,7 +177,7 @@ impl Message for GetTransactionsResponse {
         encoded
     }
 }
-
+impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
 impl Message for GetTransactionsFromTxHashesResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 

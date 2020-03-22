@@ -161,11 +161,14 @@ pub struct ConsensusGraph {
 
 impl MallocSizeOf for ConsensusGraph {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let best_info_size = self.best_info.read().size_of(ops);
+        let pivot_block_state_valid_map_size =
+            self.pivot_block_state_valid_map.lock().size_of(ops);
         self.inner.read().size_of(ops)
             + self.txpool.size_of(ops)
             + self.data_man.size_of(ops)
-            + self.best_info.read().size_of(ops)
-            + self.pivot_block_state_valid_map.lock().size_of(ops)
+            + best_info_size
+            + pivot_block_state_valid_map_size
     }
 }
 
@@ -1159,13 +1162,16 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// store a version of best_info outside the inner to prevent keep
     /// getting inner locks.
     fn update_best_info(&self) {
-        let inner = self.inner.read();
+        let mut inner = self.inner.write();
         let mut best_info = self.best_info.write();
 
         let terminal_hashes = inner.terminal_hashes();
+        let best_block_hash = inner.best_block_hash();
+        let best_block_arena_index =
+            *inner.hash_to_arena_indices.get(&best_block_hash).unwrap();
         let bounded_terminal_block_hashes =
             if terminal_hashes.len() > REFEREE_BOUND {
-                inner.best_terminals(REFEREE_BOUND)
+                inner.best_terminals(best_block_arena_index, REFEREE_BOUND)
             } else {
                 terminal_hashes
             };
