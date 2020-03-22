@@ -3174,19 +3174,37 @@ impl ConsensusGraphInner {
         // influence the result here. The idea is that in normal
         // scenarios with good parameter setting. Force confirmation will
         // happen only when a block is already very stable.
-        while queue.len() > ref_bound {
+        while queue.len() > ref_bound
+            || queue
+                .peek()
+                .map_or(false, |(v, _)| *v == -(NULLU64 as i128))
+        {
             let (_, idx) = queue.pop().unwrap();
             let parent = self.arena[idx].parent;
-            if let Some(p) = counter_map.get_mut(&parent) {
-                *p = *p + 1;
-                if *p
-                    == self.arena[parent].children.len()
-                        + self.arena[parent].referrers.len()
-                {
-                    queue.push((-(self.arena[parent].height as i128), parent));
+            if parent != NULL {
+                if let Some(p) = counter_map.get_mut(&parent) {
+                    *p = *p + 1;
+                    if *p
+                        == self.arena[parent].children.len()
+                            + self.arena[parent].referrers.len()
+                    {
+                        // Note that although original terminal_hashes do not
+                        // have out-of-era blocks,
+                        // we can now get out-of-era blocks. We need to handle
+                        // them.
+                        if self.arena[parent].era_block == NULL {
+                            queue.push((-(NULLU64 as i128), parent));
+                        } else {
+                            let a_lca = self.lca(parent, best_index);
+                            queue.push((
+                                -(self.arena[a_lca].height as i128),
+                                parent,
+                            ));
+                        }
+                    }
+                } else if !pastset.contains(parent as u32) {
+                    counter_map.insert(parent, 1);
                 }
-            } else if !pastset.contains(parent as u32) {
-                counter_map.insert(parent, 1);
             }
             for referee in &self.arena[idx].referees {
                 if let Some(p) = counter_map.get_mut(referee) {
@@ -3195,10 +3213,19 @@ impl ConsensusGraphInner {
                         == self.arena[*referee].children.len()
                             + self.arena[*referee].referrers.len()
                     {
-                        queue.push((
-                            -(self.arena[*referee].height as i128),
-                            *referee,
-                        ));
+                        // Note that although original terminal_hashes do not
+                        // have out-of-era blocks,
+                        // we can now get out-of-era blocks. We need to handle
+                        // them.
+                        if self.arena[*referee].era_block == NULL {
+                            queue.push((-(NULLU64 as i128), *referee));
+                        } else {
+                            let a_lca = self.lca(*referee, best_index);
+                            queue.push((
+                                -(self.arena[a_lca].height as i128),
+                                *referee,
+                            ));
+                        }
                     }
                 } else if !pastset.contains(*referee as u32) {
                     counter_map.insert(*referee, 1);
