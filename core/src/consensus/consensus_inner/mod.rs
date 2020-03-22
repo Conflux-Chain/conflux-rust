@@ -3153,19 +3153,12 @@ impl ConsensusGraphInner {
             &pastset_tmp
         };
 
-        // We prepare a counter_map to denote the number of incoming edges for
-        // each block.
+        // We prepare a counter_map to denote the number of erased incoming
+        // edges for each block.
         let mut counter_map = HashMap::new();
-        for (x, node) in self.arena.iter() {
-            if pastset.contains(x as u32) {
-                continue;
-            }
-            counter_map.insert(x, node.children.len() + node.referrers.len());
-        }
         let mut queue = BinaryHeap::new();
         for hash in self.terminal_hashes.iter() {
             let a_idx = self.hash_to_arena_indices.get(hash).unwrap();
-            assert!(*counter_map.get(a_idx).unwrap() == 0);
             let a_lca = self.lca(*a_idx, best_index);
             queue.push((-(self.arena[a_lca].height as i128), *a_idx));
         }
@@ -3185,22 +3178,30 @@ impl ConsensusGraphInner {
             let (_, idx) = queue.pop().unwrap();
             let parent = self.arena[idx].parent;
             if let Some(p) = counter_map.get_mut(&parent) {
-                assert!(*p > 0);
-                *p = *p - 1;
-                if *p == 0 {
+                *p = *p + 1;
+                if *p
+                    == self.arena[parent].children.len()
+                        + self.arena[parent].referrers.len()
+                {
                     queue.push((-(self.arena[parent].height as i128), parent));
                 }
+            } else if !pastset.contains(parent as u32) {
+                counter_map.insert(parent, 1);
             }
             for referee in &self.arena[idx].referees {
                 if let Some(p) = counter_map.get_mut(referee) {
-                    assert!(*p > 0);
-                    *p = *p - 1;
-                    if *p == 0 {
+                    *p = *p + 1;
+                    if *p
+                        == self.arena[*referee].children.len()
+                            + self.arena[*referee].referrers.len()
+                    {
                         queue.push((
                             -(self.arena[*referee].height as i128),
                             *referee,
                         ));
                     }
+                } else if !pastset.contains(*referee as u32) {
+                    counter_map.insert(*referee, 1);
                 }
             }
         }
