@@ -299,6 +299,44 @@ impl RequestContainer {
         }
     }
 
+    pub fn send_pending_requests(
+        &mut self, io: &dyn NetworkContext,
+        requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
+        protocol_config: &ProtocolConfiguration,
+    ) -> Result<(), Error>
+    {
+        while self.has_pending_requests() {
+            if let Some(new_request_id) = self.get_next_request_id() {
+                let mut pending_msg = self.pop_pending_request().unwrap();
+                pending_msg.set_request_id(new_request_id);
+                let send_res = pending_msg.request.send(io, self.peer_id);
+
+                if send_res.is_err() {
+                    warn!("Error while send_message, err={:?}", send_res);
+                    self.append_pending_request(pending_msg);
+                    return Err(send_res.err().unwrap().into());
+                }
+
+                let timed_req = Arc::new(TimedSyncRequests::from_request(
+                    self.peer_id,
+                    new_request_id,
+                    &pending_msg,
+                    protocol_config,
+                ));
+                self.append_inflight_request(
+                    new_request_id,
+                    pending_msg,
+                    timed_req.clone(),
+                );
+                requests_queue.push(timed_req);
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
     // Match request with given response.
     // Could return the following error:
     // 1. RequestNotFound:
@@ -313,43 +351,18 @@ impl RequestContainer {
         protocol_config: &ProtocolConfiguration,
     ) -> Result<RequestMessage, Error>
     {
-        // FIXME: isn't this enough? What do these statements below do?
         let removed_req = self.remove_inflight_request(request_id);
         if let Some(removed_req) = removed_req {
             removed_req
                 .timed_req
                 .removed
                 .store(true, AtomicOrdering::Relaxed);
-            // FIXME: if it sends pending requests, why not move it to a
-            // separate method?
-            while self.has_pending_requests() {
-                if let Some(new_request_id) = self.get_next_request_id() {
-                    let mut pending_msg = self.pop_pending_request().unwrap();
-                    pending_msg.set_request_id(new_request_id);
-                    let send_res = pending_msg.request.send(io, self.peer_id);
+            // TODO: It's better only set a flag to the eventloop to send
+            // TODO: pending requests. The error should be properly handled,
+            // TODO: but no such error should be thrown here in this function.
+            self.send_pending_requests(io, requests_queue, protocol_config)
+                .ok();
 
-                    if send_res.is_err() {
-                        warn!("Error while send_message, err={:?}", send_res);
-                        self.append_pending_request(pending_msg);
-                        return Err(send_res.err().unwrap().into());
-                    }
-
-                    let timed_req = Arc::new(TimedSyncRequests::from_request(
-                        self.peer_id,
-                        new_request_id,
-                        &pending_msg,
-                        protocol_config,
-                    ));
-                    self.append_inflight_request(
-                        new_request_id,
-                        pending_msg,
-                        timed_req.clone(),
-                    );
-                    requests_queue.push(timed_req);
-                } else {
-                    break;
-                }
-            }
             Ok(removed_req.message)
         } else {
             bail!(ErrorKind::RequestNotFound)
