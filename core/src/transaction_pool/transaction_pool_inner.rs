@@ -700,8 +700,8 @@ impl TransactionPoolInner {
             ));
         } else if transaction.nonce < state_nonce {
             trace!(
-                "Transaction {:?} is discarded due to a too stale nonce",
-                transaction.hash()
+                "Transaction {:?} is discarded due to a too stale nonce, self.nonce={}, state_nonce={}",
+                transaction.hash(), transaction.nonce, state_nonce,
             );
             return Err(format!(
                 "Transaction {:?} is discarded due to a too stale nonce",

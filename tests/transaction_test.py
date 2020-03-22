@@ -7,17 +7,12 @@ from rlp.sedes import Binary, BigEndianInt
 from conflux import utils
 from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_block, create_transaction, wait_for_initial_nonce
+from test_framework.blocktools import create_block, create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable
 from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
 class TransactionTest(DefaultConfluxTestFramework):
-    def set_test_params(self):
-        self.num_nodes = 8
-        self.conf_parameters["log_level"] = '"trace"'
-        self.rpc_timewait = 1000000
-
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         balance_map = {genesis_key: default_config["TOTAL_COIN"]}
@@ -29,20 +24,20 @@ class TransactionTest(DefaultConfluxTestFramework):
 
         '''Check if transaction from uncommitted new address can be accepted'''
         tx_n = 5
-        receiver_sk = genesis_key
+        new_keys = set()
         gas_price = 1
         for i in range(tx_n):
-            sender_key = receiver_sk
-            value = int((balance_map[sender_key] - ((tx_n - i) * 21000 * gas_price)) * random.random())
-            if sender_key not in nonce_map:
-                nonce_map[sender_key] = wait_for_initial_nonce(self.nodes[0], sender_key)
-            nonce = nonce_map[sender_key]
+            sender_key = genesis_key
             receiver_sk, _ = ec_random_keys()
+            new_keys.add(receiver_sk)
+            value = int((balance_map[sender_key] - ((tx_n - i) * 21000 * gas_price)) * random.random())
             balance_map[receiver_sk] = value
+            nonce = nonce_map[sender_key]
             receiver_addr = priv_to_addr(receiver_sk)
             tx = create_transaction(pri_key=sender_key, receiver=receiver_addr, value=value, nonce=nonce,
                                     gas_price=gas_price)
             r = random.randint(0, self.num_nodes - 1)
+            r = 0
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             nonce_map[sender_key] = nonce + 1
             balance_map[sender_key] -= value + gas_price * 21000
@@ -55,24 +50,19 @@ class TransactionTest(DefaultConfluxTestFramework):
         self.log.info("Pass 1")
 
         '''Test Random Transactions'''
+        wait_for_account_stable()
+        for key in new_keys:
+            nonce_map[key] = wait_for_initial_nonce_for_privkey(self.nodes[0], key)
         all_txs = []
         tx_n = 1000
         self.log.info("start to generate %d transactions with about %d seconds", tx_n, tx_n/100/2)
         for i in range(tx_n):
             sender_key = random.choice(list(balance_map))
-            if sender_key not in nonce_map:
-                nonce_map[sender_key] = wait_for_initial_nonce(self.nodes[0], sender_key)
             nonce = nonce_map[sender_key]
             data = b''
             rand_n = random.random()
             gas = 21000
-            if rand_n < 0.1 and balance_map[sender_key] > 21000 * 4 * tx_n:
-                value = int(balance_map[sender_key] * 0.5)
-                receiver_sk, _ = ec_random_keys()
-                receiver = priv_to_addr(receiver_sk)
-                balance_map[receiver_sk] = value
-                is_payment = True
-            elif rand_n > 0.9 and balance_map[sender_key] > 21000 * 4 * tx_n:
+            if rand_n > 0.9 and balance_map[sender_key] > 21000 * 4 * tx_n:
                 value = 0
                 receiver = b''
                 data = bytes([96, 128, 96, 64, 82, 52, 128, 21, 97, 0, 16, 87, 96, 0, 128, 253, 91, 80, 96, 5, 96, 0, 129, 144, 85, 80, 96, 230, 128, 97, 0, 39, 96, 0, 57, 96, 0, 243, 254, 96, 128, 96, 64, 82, 96, 4, 54, 16, 96, 67, 87, 96, 0, 53, 124, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 144, 4, 128, 99, 96, 254, 71, 177, 20, 96, 72, 87, 128, 99, 109, 76, 230, 60, 20, 96, 127, 87, 91, 96, 0, 128, 253, 91, 52, 128, 21, 96, 83, 87, 96, 0, 128, 253, 91, 80, 96, 125, 96, 4, 128, 54, 3, 96, 32, 129, 16, 21, 96, 104, 87, 96, 0, 128, 253, 91, 129, 1, 144, 128, 128, 53, 144, 96, 32, 1, 144, 146, 145, 144, 80, 80, 80, 96, 167, 86, 91, 0, 91, 52, 128, 21, 96, 138, 87, 96, 0, 128, 253, 91, 80, 96, 145, 96, 177, 86, 91, 96, 64, 81, 128, 130, 129, 82, 96, 32, 1, 145, 80, 80, 96, 64, 81, 128, 145, 3, 144, 243, 91, 128, 96, 0, 129, 144, 85, 80, 80, 86, 91, 96, 0, 128, 84, 144, 80, 144, 86, 254, 161, 101, 98, 122, 122, 114, 48, 88, 32, 181, 24, 13, 149, 253, 195, 129, 48, 40, 237, 71, 246, 44, 124, 223, 112, 139, 118, 192, 219, 9, 64, 67, 245, 51, 180, 42, 67, 13, 49, 62, 21, 0, 41])
@@ -89,6 +79,7 @@ class TransactionTest(DefaultConfluxTestFramework):
             tx = create_transaction(pri_key=sender_key, receiver=receiver, value=value, nonce=nonce,
                                     gas_price=gas_price, data=data, gas=gas)
             r = random.randint(0, self.num_nodes - 1)
+            r = 0
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             all_txs.append(tx)
             nonce_map[sender_key] = nonce + 1

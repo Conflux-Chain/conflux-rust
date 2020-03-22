@@ -77,23 +77,36 @@ def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=defaul
     return transaction.sign(pri_key)
 
 
-def wait_for_initial_nonce(node, key, timeout=10):
-    if key == default_config["GENESIS_PRI_KEY"]:
+def wait_for_initial_nonce_for_privkey(node, key, timeout=10):
+    key = normalize_key(key)
+    addr = priv_to_addr(key)
+    return wait_for_initial_nonce_for_address(node, addr, timeout)
+
+
+def wait_for_initial_nonce_for_address(node, addr, timeout=10):
+    addr = encode_hex_0x(addr)
+    if addr == encode_hex_0x(priv_to_addr(default_config["GENESIS_PRI_KEY"])).lower():
         return 0
     nonce = 0
     start = time.time()
     last_exception = None
     while nonce == 0:
         if time.time() - start > timeout:
-            raise AssertionError("Wait for initial nonce for pubkey {} timeout after {} seconds, last exception is {}"
-                                 .format(encode_hex(priv_to_pub(key)), timeout, last_exception))
+            raise AssertionError("Wait for initial nonce for address {} timeout after {} seconds, last exception is {}"
+                                 .format(addr, timeout, last_exception))
         try:
-            nonce = int(node.cfx_getTransactionCount(encode_hex_0x(priv_to_addr(key))), 0)
+            nonce = int(node.cfx_getTransactionCount(addr), 0)
         except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+            # It's possible that
             last_exception = e
             pass
-    print(encode_hex(priv_to_addr(key)), nonce)
     return nonce
+
+
+# Wait until that all accounts have stable start nonce.
+# FIXME: 10 seconds is just an empirical value. We need confirmation for this.
+def wait_for_account_stable():
+    time.sleep(10)
 
 
 def make_genesis():

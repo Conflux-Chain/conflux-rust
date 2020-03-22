@@ -5,7 +5,7 @@ from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_transaction, encode_hex_0x
+from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
@@ -35,7 +35,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
     def get_nonce(self, sender, inc=True):
         if sender not in self.nonce_map:
-            self.nonce_map[sender] = 0
+            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
         else:
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]
@@ -82,7 +82,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         else:
             func = getattr(contract, name)
         attrs = {
-            'nonce': self.get_nonce(encode_hex(priv_to_addr(sender_key))),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** CommissionPrivilegeTest.REQUEST_BASE
         }
         if contract_addr:
@@ -156,7 +156,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender=genesis_addr,
             priv_key=genesis_key,
             value=10 ** 18,
-            nonce=self.get_nonce(genesis_addr),
+            nonce=self.get_nonce(self.genesis_addr),
             receiver=addr1)
         client.send_tx(tx, True)
         assert_equal(client.get_balance(addr1), 10 ** 18)
@@ -164,7 +164,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender=genesis_addr,
             priv_key=genesis_key,
             value=10 ** 18,
-            nonce=self.get_nonce(genesis_addr),
+            nonce=self.get_nonce(self.genesis_addr),
             receiver=addr2)
         client.send_tx(tx, True)
         assert_equal(client.get_balance(addr2), 10 ** 18)
@@ -172,7 +172,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender=genesis_addr,
             priv_key=genesis_key,
             value=3 * 10 ** 18,
-            nonce=self.get_nonce(genesis_addr),
+            nonce=self.get_nonce(self.genesis_addr),
             receiver=addr3)
         client.send_tx(tx, True)
         assert_equal(client.get_balance(addr3), 3 * 10 ** 18)

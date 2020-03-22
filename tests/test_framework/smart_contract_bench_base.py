@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-from test_framework.blocktools import create_transaction
+from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, \
+    wait_for_initial_nonce_for_address
 from conflux.messages import Transactions
 from eth_utils import decode_hex
 from test_framework.block_gen_thread import BlockGenThread
@@ -57,9 +58,8 @@ class SmartContractBenchBase(ConfluxTestFramework):
         self.default_account_address = priv_to_addr(self.default_account_key)
 
     def get_nonce(self, sender):
-        sender = sender.lower()
         if sender not in self.nonce_map:
-            self.nonce_map[sender] = 0
+            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
         else:
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]

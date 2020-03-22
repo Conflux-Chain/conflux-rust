@@ -31,14 +31,13 @@ test_subdirs = [
     "", # include test_dir itself
     "light",
     "network_tests",
-    "full_node_tests",
 ]
 
 # By default, run all *_test.py files in the specified subfolders.
 for subdir in test_subdirs:
     subdir_path = os.path.join(test_dir, subdir)
     for file in os.listdir(subdir_path):
-        if file.endswith("_test.py"):
+        if file.endswith("_test.py") and not file.startswith("p2p"):
             rel_path = os.path.join(subdir, file)
             TEST_SCRIPTS.append(rel_path)
 
