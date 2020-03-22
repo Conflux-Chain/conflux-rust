@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::protocol::*;
-use crate::message::{Message, MsgId};
+use crate::message::{GetMaybeRequestId, Message, MsgId};
 use rlp::Encodable;
 
 // generate `pub mod msgid`

@@ -25,16 +25,22 @@ macro_rules! build_msgid {
     }
 }
 
-pub trait Message: Send + Sync {
+// TODO: GetMaybeRequestId is part of Message due to the implementation of
+// TODO: Throttled. Conceptually this class isn't part of Message.
+pub trait GetMaybeRequestId {
+    fn get_request_id(&self) -> Option<RequestId> { None }
+}
+
+pub trait SetRequestId: GetMaybeRequestId {
+    fn set_request_id(&mut self, _id: RequestId);
+}
+
+pub trait Message: Send + Sync + GetMaybeRequestId {
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
     fn msg_id(&self) -> MsgId;
     fn msg_name(&self) -> &'static str;
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
-
-    fn get_request_id(&self) -> Option<RequestId> { None }
-    // TODO Refactor: Avoid using this for responses.
-    fn set_request_id(&mut self, _id: RequestId) {}
 
     fn encode(&self) -> Vec<u8>;
 
@@ -90,6 +96,8 @@ pub fn decode_msg(msg: &[u8]) -> Option<(MsgId, Rlp)> {
 
 macro_rules! build_msg_impl {
     ($name:ident, $msg:expr, $name_str:literal) => {
+        impl GetMaybeRequestId for $name {}
+
         impl Message for $name {
             fn msg_id(&self) -> MsgId { $msg }
 
@@ -104,6 +112,22 @@ macro_rules! build_msg_impl {
     };
 }
 
+macro_rules! impl_request_id_methods {
+    ($name:ty) => {
+        impl GetMaybeRequestId for $name {
+            fn get_request_id(&self) -> Option<RequestId> {
+                Some(self.request_id)
+            }
+        }
+
+        impl SetRequestId for $name {
+            fn set_request_id(&mut self, id: RequestId) {
+                self.request_id = id;
+            }
+        }
+    };
+}
+
 macro_rules! build_msg_with_request_id_impl {
     ($name:ident, $msg:expr, $name_str:literal) => {
         impl Message for $name {
@@ -111,19 +135,13 @@ macro_rules! build_msg_with_request_id_impl {
 
             fn msg_name(&self) -> &'static str { $name_str }
 
-            fn get_request_id(&self) -> Option<RequestId> {
-                Some(self.request_id)
-            }
-
-            fn set_request_id(&mut self, id: RequestId) {
-                self.request_id = id;
-            }
-
             fn encode(&self) -> Vec<u8> {
                 let mut encoded = self.rlp_bytes();
                 encoded.push(self.msg_id());
                 encoded
             }
         }
+
+        impl_request_id_methods!($name);
     };
 }

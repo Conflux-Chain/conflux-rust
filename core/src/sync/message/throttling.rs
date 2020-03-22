@@ -13,6 +13,10 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::time::{Duration, Instant};
 use throttling::token_bucket::ThrottleResult;
 
+// TODO: It seems better to distinguish request, response, and different kind of
+// TODO: requests, as here in this class it tries to resend request to another
+// TODO: peer. This class is implemented to all Message type. But the resend
+// TODO: functionality applies only to AnyCast request.
 #[derive(Debug, RlpDecodable, RlpEncodable)]
 pub struct Throttled {
     pub msg_id: MsgId,
@@ -37,7 +41,7 @@ impl Handleable for Throttled {
             let request = ctx.match_request(request_id)?;
             ctx.manager
                 .request_manager
-                .send_request_again(ctx.io, &request);
+                .remove_mismatch_request(ctx.io, &request);
         }
 
         Ok(())
