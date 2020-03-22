@@ -3247,22 +3247,24 @@ impl ConsensusGraphInner {
                 } else if !pastset.contains(parent as u32) {
                     counter_map.insert(parent, 1);
                 }
-                if *counter_map.get(&parent).unwrap()
-                    == self.arena[parent].children.len()
-                        + self.arena[parent].referrers.len()
-                {
-                    // Note that although original terminal_hashes do not
-                    // have out-of-era blocks,
-                    // we can now get out-of-era blocks. We need to handle
-                    // them.
-                    if self.arena[parent].era_block == NULL {
-                        queue.push((-(NULLU64 as i128), parent));
-                    } else {
-                        let a_lca = self.lca(parent, best_index);
-                        queue.push((
-                            -(self.arena[a_lca].height as i128),
-                            parent,
-                        ));
+                if let Some(p) = counter_map.get(&parent) {
+                    if *p
+                        == self.arena[parent].children.len()
+                            + self.arena[parent].referrers.len()
+                    {
+                        // Note that although original terminal_hashes do not
+                        // have out-of-era blocks,
+                        // we can now get out-of-era blocks. We need to handle
+                        // them.
+                        if self.arena[parent].era_block == NULL {
+                            queue.push((-(NULLU64 as i128), parent));
+                        } else {
+                            let a_lca = self.lca(parent, best_index);
+                            queue.push((
+                                -(self.arena[a_lca].height as i128),
+                                parent,
+                            ));
+                        }
                     }
                 }
             }
@@ -3272,22 +3274,24 @@ impl ConsensusGraphInner {
                 } else if !pastset.contains(*referee as u32) {
                     counter_map.insert(*referee, 1);
                 }
-                if *counter_map.get(referee).unwrap()
-                    == self.arena[*referee].children.len()
-                        + self.arena[*referee].referrers.len()
-                {
-                    // Note that although original terminal_hashes do not
-                    // have out-of-era blocks,
-                    // we can now get out-of-era blocks. We need to handle
-                    // them.
-                    if self.arena[*referee].era_block == NULL {
-                        queue.push((-(NULLU64 as i128), *referee));
-                    } else {
-                        let a_lca = self.lca(*referee, best_index);
-                        queue.push((
-                            -(self.arena[a_lca].height as i128),
-                            *referee,
-                        ));
+                if let Some(p) = counter_map.get(referee) {
+                    if *p
+                        == self.arena[*referee].children.len()
+                            + self.arena[*referee].referrers.len()
+                    {
+                        // Note that although original terminal_hashes do not
+                        // have out-of-era blocks,
+                        // we can now get out-of-era blocks. We need to handle
+                        // them.
+                        if self.arena[*referee].era_block == NULL {
+                            queue.push((-(NULLU64 as i128), *referee));
+                        } else {
+                            let a_lca = self.lca(*referee, best_index);
+                            queue.push((
+                                -(self.arena[a_lca].height as i128),
+                                *referee,
+                            ));
+                        }
                     }
                 }
             }
