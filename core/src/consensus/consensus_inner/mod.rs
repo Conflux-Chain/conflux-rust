@@ -28,7 +28,7 @@ use primitives::{
 };
 use slab::Slab;
 use std::{
-    cmp::{max, Reverse},
+    cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
@@ -760,7 +760,7 @@ impl ConsensusGraphInner {
     fn compute_blockset_in_own_view_of_epoch_impl(
         &mut self, lca: usize, pivot: usize,
     ) {
-        let pastset = self.pastset_cache.get(lca, false).unwrap();
+        let pastset = self.pastset_cache.get(lca).unwrap();
         let mut path_to_lca = Vec::new();
         let mut cur = pivot;
         while cur != lca {
@@ -828,7 +828,7 @@ impl ConsensusGraphInner {
             let last = *self.pivot_chain.last().unwrap();
             let lca = self.lca(last, parent);
             assert!(lca != NULL);
-            if self.pastset_cache.get(lca, true).is_none() {
+            if self.pastset_cache.get_and_update_cache(lca).is_none() {
                 let pastset = self.compute_pastset_brutal(lca);
                 self.pastset_cache.update(lca, pastset);
             }
@@ -1328,14 +1328,14 @@ impl ConsensusGraphInner {
     fn compute_pastset_brutal(&mut self, me: usize) -> BitSet {
         let mut path = Vec::new();
         let mut cur = me;
-        while cur != NULL && self.pastset_cache.get(cur, false).is_none() {
+        while cur != NULL && self.pastset_cache.get(cur).is_none() {
             path.push(cur);
             cur = self.arena[cur].parent;
         }
         path.reverse();
         let mut result = self
             .pastset_cache
-            .get(cur, false)
+            .get(cur)
             .unwrap_or(&BitSet::new())
             .clone();
         for ancestor_arena_index in path {
@@ -3142,17 +3142,98 @@ impl ConsensusGraphInner {
     /// referencing edges). We sort the terminals based on its lca so that
     /// it will not change the parent selection results if we exclude last
     /// few terminals in the sorted order.
-    pub fn best_terminals(&self, ref_bound: usize) -> Vec<H256> {
-        let mut tmp = Vec::new();
-        let best_idx = self.pivot_chain.last().unwrap();
+    pub fn best_terminals(
+        &mut self, best_index: usize, ref_bound: usize,
+    ) -> Vec<H256> {
+        let pastset_tmp;
+        let pastset = if let Some(s) = self.pastset_cache.get(best_index) {
+            s
+        } else {
+            pastset_tmp = self.compute_pastset_brutal(best_index);
+            &pastset_tmp
+        };
+
+        // We prepare a counter_map to denote the number of erased incoming
+        // edges for each block.
+        let mut counter_map = HashMap::new();
+        let mut queue = BinaryHeap::new();
         for hash in self.terminal_hashes.iter() {
             let a_idx = self.hash_to_arena_indices.get(hash).unwrap();
-            let a_lca = self.lca(*a_idx, *best_idx);
-            tmp.push((self.arena[a_lca].height, hash));
+            let a_lca = self.lca(*a_idx, best_index);
+            queue.push((-(self.arena[a_lca].height as i128), *a_idx));
         }
-        tmp.sort_by(|a, b| Reverse(a.0).cmp(&Reverse(b.0)));
-        tmp.split_off(ref_bound);
-        let bounded_hashes = tmp.iter().map(|(_, b)| (*b).clone()).collect();
+
+        // The basic idea is to have a loop go over the refs in the priority
+        // queue. We remove tips that have the smallest lca height. When
+        // we remove a tip, we add those blocks the tip references back
+        // to the queue. Eventually, we will get a set of referees
+        // that is 1) within the ref_bound and 2) still holding best_index as
+        // their parent.
+        //
+        // Note that we ignore the case where the force confirm mechanism will
+        // influence the result here. The idea is that in normal
+        // scenarios with good parameter setting. Force confirmation will
+        // happen only when a block is already very stable.
+        while queue.len() > ref_bound
+            || queue
+                .peek()
+                .map_or(false, |(v, _)| *v == -(NULLU64 as i128))
+        {
+            let (_, idx) = queue.pop().unwrap();
+            let parent = self.arena[idx].parent;
+            if parent != NULL {
+                if let Some(p) = counter_map.get_mut(&parent) {
+                    *p = *p + 1;
+                } else if !pastset.contains(parent as u32) {
+                    counter_map.insert(parent, 1);
+                }
+                if *counter_map.get(&parent).unwrap()
+                    == self.arena[parent].children.len()
+                        + self.arena[parent].referrers.len()
+                {
+                    // Note that although original terminal_hashes do not
+                    // have out-of-era blocks,
+                    // we can now get out-of-era blocks. We need to handle
+                    // them.
+                    if self.arena[parent].era_block == NULL {
+                        queue.push((-(NULLU64 as i128), parent));
+                    } else {
+                        let a_lca = self.lca(parent, best_index);
+                        queue.push((
+                            -(self.arena[a_lca].height as i128),
+                            parent,
+                        ));
+                    }
+                }
+            }
+            for referee in &self.arena[idx].referees {
+                if let Some(p) = counter_map.get_mut(referee) {
+                    *p = *p + 1;
+                } else if !pastset.contains(*referee as u32) {
+                    counter_map.insert(*referee, 1);
+                }
+                if *counter_map.get(referee).unwrap()
+                    == self.arena[*referee].children.len()
+                        + self.arena[*referee].referrers.len()
+                {
+                    // Note that although original terminal_hashes do not
+                    // have out-of-era blocks,
+                    // we can now get out-of-era blocks. We need to handle
+                    // them.
+                    if self.arena[*referee].era_block == NULL {
+                        queue.push((-(NULLU64 as i128), *referee));
+                    } else {
+                        let a_lca = self.lca(*referee, best_index);
+                        queue.push((
+                            -(self.arena[a_lca].height as i128),
+                            *referee,
+                        ));
+                    }
+                }
+            }
+        }
+        let bounded_hashes =
+            queue.iter().map(|(_, b)| self.arena[*b].hash).collect();
         bounded_hashes
     }
 
