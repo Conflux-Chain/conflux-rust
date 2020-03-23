@@ -16,17 +16,20 @@ use unexpected::{Mismatch, OutOfBounds};
 #[derive(Debug, Copy, Clone)]
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
+    pub referee_bound: usize,
 }
 
 impl VerificationConfig {
-    pub fn new(test_mode: bool) -> Self {
+    pub fn new(test_mode: bool, referee_bound: usize) -> Self {
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
+                referee_bound,
             }
         } else {
             VerificationConfig {
                 verify_timestamp: true,
+                referee_bound,
             }
         }
     }
@@ -102,10 +105,10 @@ impl VerificationConfig {
         self.verify_pow(header)?;
 
         // A block will be invalid if it has more than REFEREE_BOUND referees
-        if header.referee_hashes().len() > REFEREE_BOUND {
+        if header.referee_hashes().len() > self.referee_bound {
             return Err(From::from(BlockError::TooManyReferees(OutOfBounds {
                 min: Some(0),
-                max: Some(REFEREE_BOUND),
+                max: Some(self.referee_bound),
                 found: header.referee_hashes().len(),
             })));
         }

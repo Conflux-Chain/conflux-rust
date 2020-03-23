@@ -12,6 +12,7 @@ use cfxcore::{
         ConsensusConfig as TreeGraphConsensusConfig,
     },
     block_data_manager::{DataManagerConfiguration, DbType},
+    block_parameters::*,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
         ConsensusConfig, ConsensusInnerConfig,
@@ -110,6 +111,7 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (network_id, (u64), 1)
+        (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
@@ -366,6 +368,7 @@ impl Configuration {
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
+            referee_bound: self.raw_conf.referee_bound,
         }
     }
 
@@ -395,7 +398,10 @@ impl Configuration {
     }
 
     pub fn verification_config(&self) -> VerificationConfig {
-        VerificationConfig::new(self.is_test_mode())
+        VerificationConfig::new(
+            self.is_test_mode(),
+            self.raw_conf.referee_bound,
+        )
     }
 
     pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {
