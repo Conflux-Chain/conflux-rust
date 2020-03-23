@@ -11,7 +11,7 @@ use crate::{
         consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
         ConsensusGraphInner,
     },
-    executive::{Executed, ExecutionError, Executive},
+    executive::{ExecutionError, Executive},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
     state::{CleanupMode, State},

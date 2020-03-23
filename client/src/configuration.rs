@@ -11,6 +11,7 @@ use cfxcore::{
     },
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
+    consensus::{ConsensusConfig, ConsensusInnerConfig},
     consensus_parameters::*,
     storage::{
         self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,

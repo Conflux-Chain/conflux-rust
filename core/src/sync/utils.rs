@@ -3,8 +3,9 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
-    parameters::WORKER_COMPUTATION_PARALLELISM,
-        block::REFEREE_DEFAULT_BOUND,
+    parameters::{
+        block::REFEREE_DEFAULT_BOUND, WORKER_COMPUTATION_PARALLELISM,
+    },
     pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
