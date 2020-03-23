@@ -10,7 +10,9 @@ use crate::{
     sync::{Error, ErrorKind, ProtocolConfiguration},
 };
 use futures::channel::oneshot;
-use network::{NetworkContext, PeerId, UpdateNodeOperation};
+use network::{
+    ErrorKind as NetworkErrorKind, NetworkContext, PeerId, UpdateNodeOperation,
+};
 use parking_lot::Mutex;
 use std::{
     any::Any,
@@ -109,9 +111,18 @@ impl RequestHandler {
         };
 
         request.set_request_id(request_id);
-        if request.send(io, peer).is_err() {
-            return Err(request);
-        }
+        let send_res = request.send(io, peer);
+        let is_send_error = if let Err(e) = send_res {
+            match e.kind() {
+                NetworkErrorKind::OversizedPacket => {
+                    panic!("Request packet should not be oversized!")
+                }
+                _ => {}
+            }
+            true
+        } else {
+            false
+        };
 
         let msg = RequestMessage::new(request, delay);
 
@@ -120,6 +131,7 @@ impl RequestHandler {
             request_id,
             &msg,
             &self.protocol_config,
+            is_send_error,
         ));
         peer_info.append_inflight_request(request_id, msg, timed_req.clone());
         requests_queue.push(timed_req);
@@ -320,18 +332,24 @@ impl RequestContainer {
                     let mut pending_msg = self.pop_pending_request().unwrap();
                     pending_msg.set_request_id(new_request_id);
                     let send_res = pending_msg.request.send(io, self.peer_id);
-
-                    if send_res.is_err() {
-                        warn!("Error while send_message, err={:?}", send_res);
-                        self.append_pending_request(pending_msg);
-                        return Err(send_res.err().unwrap().into());
-                    }
+                    let is_send_error = if let Err(e) = send_res {
+                        match e.kind() {
+                            NetworkErrorKind::OversizedPacket => panic!(
+                                "Request packet should not be oversized!"
+                            ),
+                            _ => {}
+                        }
+                        true
+                    } else {
+                        false
+                    };
 
                     let timed_req = Arc::new(TimedSyncRequests::from_request(
                         self.peer_id,
                         new_request_id,
                         &pending_msg,
                         protocol_config,
+                        is_send_error,
                     ));
                     self.append_inflight_request(
                         new_request_id,
@@ -441,10 +459,14 @@ impl TimedSyncRequests {
 
     pub fn from_request(
         peer_id: PeerId, request_id: u64, msg: &RequestMessage,
-        conf: &ProtocolConfiguration,
+        conf: &ProtocolConfiguration, is_send_error: bool,
     ) -> TimedSyncRequests
     {
-        let timeout = msg.request.timeout(conf);
+        let timeout = if is_send_error {
+            Duration::from_secs(1)
+        } else {
+            msg.request.timeout(conf)
+        };
         TimedSyncRequests::new(peer_id, timeout, request_id)
     }
 }
