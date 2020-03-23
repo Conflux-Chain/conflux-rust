@@ -47,11 +47,11 @@ class RpcCaller:
                     node.start(stdout=node.stdout, stderr=node.stderr)
                     node.wait_for_rpc_connection()
                     node.wait_for_nodeid()
-                    node.wait_for_recovery("NormalSyncPhase", 30)
+                    node.wait_for_recovery("NormalSyncPhase", node.recovery_timeout)
                     response = self.client.send(request, timeout=self.timeout)
                     return response.data.result
                 else:
-                    print(node.index, "exit with code", return_code, "during calling", self.method)
+                    print(node.index, "exit with code", return_code, "during calling", self.method, "exception is", e)
                     raise e
             else:
                 raise e
