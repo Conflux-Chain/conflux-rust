@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from conflux.utils import privtoaddr
+from conflux.utils import priv_to_addr
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from test_framework.blocktools import create_transaction, encode_hex_0x
@@ -44,7 +44,7 @@ class VoteTokenTest(SmartContractBenchBase):
     def generate_transactions(self, i):
         self.call_contract_function(self.vote_contract, "createIssue",
                                     [i, Web3.toChecksumAddress(self.token_address), [j for j in range(self.num_of_options)],
-                                     [Web3.toChecksumAddress(privtoaddr(acc)) for acc in self.accounts], "v"],
+                                     [Web3.toChecksumAddress(priv_to_addr(acc)) for acc in self.accounts], "v"],
                                     self.default_account_key, self.vote_address, True, True)
         for i in range(self.num_of_options):
             self.call_contract_function(self.vote_contract, "vote", [i, random.randint(0, self.num_of_options-1)],

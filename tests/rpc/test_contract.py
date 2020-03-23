@@ -5,7 +5,7 @@ sys.path.append("..")
 
 from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import privtoaddr, int_to_hex, encode_hex
+from conflux.utils import priv_to_addr, int_to_hex, encode_hex
 from test_framework.util import assert_equal, assert_is_hash_string
 from web3 import Web3
 

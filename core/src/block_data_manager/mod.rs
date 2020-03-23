@@ -87,8 +87,19 @@ impl StateAvailabilityBoundary {
         (height == 0 || height != self.synced_state_height)
             && self.lower_bound <= height
             && height <= self.upper_bound
-            && self.pivot_chain[(height - self.lower_bound) as usize]
-                == *block_hash
+            && {
+                let r = self.pivot_chain[(height - self.lower_bound) as usize]
+                    == *block_hash;
+                if !r {
+                    debug!(
+                        "pivot_chain={:?} should be {:?} asked is {:?}",
+                        self.pivot_chain,
+                        self.pivot_chain[(height - self.lower_bound) as usize],
+                        block_hash
+                    );
+                }
+                r
+            }
     }
 
     /// Try to update `upper_bound` according to a new executed block.

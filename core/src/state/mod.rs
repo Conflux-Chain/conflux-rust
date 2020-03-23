@@ -30,6 +30,7 @@ mod account_entry;
 mod substate;
 
 pub use self::substate::Substate;
+use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -85,11 +86,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(
-        db: StateDb, account_start_nonce: U256, vm: VmFactory,
-        block_number: u64,
-    ) -> Self
-    {
+    pub fn new(db: StateDb, vm: VmFactory, block_number: u64) -> Self {
         let annual_interest_rate =
             db.get_annual_interest_rate().expect("no db error");
         let accumulate_interest_rate =
@@ -100,6 +97,9 @@ impl State {
             db.get_total_staking_tokens().expect("No db error");
         let total_storage_tokens =
             db.get_total_storage_tokens().expect("No db error");
+        let account_start_nonce = (block_number
+            * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64)
+            .into();
         State {
             db,
             cache: RefCell::new(HashMap::new()),
@@ -123,6 +123,8 @@ impl State {
     pub fn increase_block_number(&mut self) -> U256 {
         assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.block_number += 1;
+        self.account_start_nonce +=
+            ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
         self.staking_state.accumulate_interest_rate =
             self.staking_state.accumulate_interest_rate
                 * (*INTEREST_RATE_PER_BLOCK_SCALE

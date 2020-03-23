@@ -212,7 +212,7 @@ assert encode_hex(sha3(b'\x00' * 256)) == 'd397b3b043d87fcd6fad1291ff0bfd16401c2
 
 
 @Memoize
-def privtoaddr(k):
+def priv_to_addr(k):
     k = normalize_key(k)
     x, y = privtopub(k)
     addr = bytearray(sha3(encode_int32(x) + encode_int32(y))[12:])
@@ -221,7 +221,13 @@ def privtoaddr(k):
     return bytes(addr)
 
 
-def pubtoaddr(k):
+def priv_to_pub(k):
+    k = normalize_key(k)
+    x, y = privtopub(k)
+    return bytes(encode_int32(x) + encode_int32(y))
+
+
+def pub_to_addr(k):
     x = big_endian_to_int(decode_hex(k[2:34]))
     y = big_endian_to_int(decode_hex(k[34:66]))
     addr = sha3(encode_int32(x) + encode_int32(y))[12:]

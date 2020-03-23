@@ -939,7 +939,6 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .expect("State exists"),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
@@ -998,7 +997,6 @@ impl ConsensusExecutionHandler {
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
             on_local_pivot, epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
         );
-
         self.data_man
             .state_availability_boundary
             .write()
@@ -1498,7 +1496,6 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .unwrap(),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
@@ -1546,7 +1543,6 @@ impl ConsensusExecutionHandler {
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             0, /* block_number */
         );

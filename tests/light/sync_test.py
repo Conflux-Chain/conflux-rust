@@ -15,7 +15,6 @@ LIGHTNODE = 2
 
 class LightSyncTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 3
 
     def setup_network(self):

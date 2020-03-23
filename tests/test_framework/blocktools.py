@@ -10,6 +10,7 @@ from conflux.transactions import Transaction, UnsignedTransaction
 from conflux.utils import *
 from trie import HexaryTrie
 import time
+import jsonrpcclient
 
 TEST_DIFFICULTY = 4
 HASH_MAX = 1 << 256
@@ -71,9 +72,41 @@ def create_block_with_nonce(
 
 
 def create_transaction(nonce=0, gas_price=1, gas=21000, value=0, receiver=default_config['GENESIS_COINBASE'],
-                       data=b'', pri_key=default_config["GENESIS_PRI_KEY"], storage_limit=2 ** 256 - 1, epoch_height = 0, chain_id = 0):
+                       data=b'', pri_key=default_config["GENESIS_PRI_KEY"], storage_limit=2 ** 256 - 1, epoch_height = 0, chain_id = 0, node=None):
     transaction = UnsignedTransaction(nonce, gas_price, gas, receiver, value, data, storage_limit, epoch_height, chain_id)
     return transaction.sign(pri_key)
+
+
+def wait_for_initial_nonce_for_privkey(node, key, timeout=10):
+    key = normalize_key(key)
+    addr = priv_to_addr(key)
+    return wait_for_initial_nonce_for_address(node, addr, timeout)
+
+
+def wait_for_initial_nonce_for_address(node, addr, timeout=10):
+    addr = encode_hex_0x(addr)
+    if addr == encode_hex_0x(priv_to_addr(default_config["GENESIS_PRI_KEY"])).lower():
+        return 0
+    nonce = 0
+    start = time.time()
+    last_exception = None
+    while nonce == 0:
+        if time.time() - start > timeout:
+            raise AssertionError("Wait for initial nonce for address {} timeout after {} seconds, last exception is {}"
+                                 .format(addr, timeout, last_exception))
+        try:
+            nonce = int(node.cfx_getTransactionCount(addr), 0)
+        except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+            # It's possible that
+            last_exception = e
+            pass
+    return nonce
+
+
+# Wait until that all accounts have stable start nonce.
+# FIXME: 10 seconds is just an empirical value. We need confirmation for this.
+def wait_for_account_stable():
+    time.sleep(10)
 
 
 def make_genesis():

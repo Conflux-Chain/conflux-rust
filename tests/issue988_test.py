@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+from http.client import CannotSendRequest
 
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_transaction, encode_hex_0x
+from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
@@ -28,11 +29,10 @@ class Issue988Test(ConfluxTestFramework):
 
         self.nonce_map = {}
         self.genesis_priv_key = default_config['GENESIS_PRI_KEY']
-        self.genesis_addr = privtoaddr(self.genesis_priv_key)
+        self.genesis_addr = priv_to_addr(self.genesis_priv_key)
         self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -40,9 +40,8 @@ class Issue988Test(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def get_nonce(self, sender, inc=True):
-        sender = sender.lower()
         if sender not in self.nonce_map:
-            self.nonce_map[sender] = 0
+            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
         else:
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]
@@ -87,7 +86,7 @@ class Issue988Test(ConfluxTestFramework):
         else:
             func = getattr(contract, name)
         attrs = {
-            'nonce': self.get_nonce(privtoaddr(sender_key)),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** Issue988Test.REQUEST_BASE
         }
         if contract_addr:
@@ -108,11 +107,9 @@ class Issue988Test(ConfluxTestFramework):
         self.send_transaction(transaction, wait, check_status)
         return transaction
 
-    def call_contract_function_rpc(self, contract, name, args, sender_key, contract_addr, value=None):
+    def call_contract_function_rpc(self, contract, name, args, contract_addr):
         func = getattr(contract.functions, name)
         attrs = {}
-        attrs["from"] = Web3.toChecksumAddress(encode_hex_0x(privtoaddr(sender_key)));
-        attrs["nonce"] = int_to_hex(1)
         gas_price = 1
         gas = 50000000
         attrs["gas"] = int_to_hex(gas)
@@ -169,7 +166,6 @@ class Issue988Test(ConfluxTestFramework):
             contract=test_contract,
             name="ktrriiwhlx",
             args=[],
-            sender_key=priv_key,
             contract_addr=contract_addr)
         result = signed_bytes_to_int256(decode_hex(raw_result))
         assert_equal(result, -12076)
@@ -178,7 +174,6 @@ class Issue988Test(ConfluxTestFramework):
             contract=test_contract,
             name="qiwmzrxuhd",
             args=[],
-            sender_key=priv_key,
             contract_addr=contract_addr)
         result = signed_bytes_to_int256(decode_hex(raw_result))
         assert_equal(result, -2)
@@ -187,7 +182,6 @@ class Issue988Test(ConfluxTestFramework):
             contract=test_contract,
             name="wxqpwecckl",
             args=[],
-            sender_key=priv_key,
             contract_addr=contract_addr)
         result = signed_bytes_to_int256(decode_hex(raw_result))
         assert_equal(result, -1)

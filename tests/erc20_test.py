@@ -3,7 +3,7 @@ from http.client import CannotSendRequest
 from eth_utils import decode_hex
 
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
@@ -13,7 +13,6 @@ from web3 import Web3
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 8
 
     def setup_network(self):
@@ -35,7 +34,7 @@ class P2PTest(ConfluxTestFramework):
 
         self.log.info("Initializing contract")
         genesis_key = default_config["GENESIS_PRI_KEY"]
-        genesis_addr = privtoaddr(genesis_key)
+        genesis_addr = priv_to_addr(genesis_key)
         nonce = 0
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
@@ -59,7 +58,7 @@ class P2PTest(ConfluxTestFramework):
             value = int((balance_map[sender_key] - ((tx_n - i) * 21000 * gas_price)) * random.random())
             receiver_sk, _ = ec_random_keys()
             balance_map[receiver_sk] = value
-            tx_data = decode_hex(erc20_contract.functions.transfer(Web3.toChecksumAddress(encode_hex(privtoaddr(receiver_sk))), value).buildTransaction(self.tx_conf)["data"])
+            tx_data = decode_hex(erc20_contract.functions.transfer(Web3.toChecksumAddress(encode_hex(priv_to_addr(receiver_sk))), value).buildTransaction(self.tx_conf)["data"])
             tx = create_transaction(pri_key=sender_key, receiver=decode_hex(self.tx_conf["to"]), value=0, nonce=nonce, gas=gas,
                                     gas_price=gas_price, data=tx_data)
             r = random.randint(0, self.num_nodes - 1)
@@ -71,7 +70,7 @@ class P2PTest(ConfluxTestFramework):
         self.wait_for_tx(all_txs)
         self.log.info("Check final token balance")
         for sk in balance_map:
-            addr = privtoaddr(sk)
+            addr = priv_to_addr(sk)
             assert_equal(self.get_balance(erc20_contract, addr, nonce), balance_map[sk])
         block_gen_thread.stop()
         block_gen_thread.join()

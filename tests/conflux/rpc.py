@@ -5,7 +5,7 @@ import rlp
 from .config import default_config
 from .transactions import Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import privtoaddr, sha3_256
+from .utils import priv_to_addr, sha3_256
 
 import sys
 sys.path.append("..")
@@ -34,8 +34,8 @@ class RpcClient:
         self.UPDATE_NODE_OP_REMOVE = "Remove"
 
         # hash/address definitions
+        self.GENESIS_ADDR = eth_utils.encode_hex(priv_to_addr(default_config["GENESIS_PRI_KEY"]))
         self.GENESIS_PRI_KEY = default_config["GENESIS_PRI_KEY"]
-        self.GENESIS_ADDR = eth_utils.encode_hex(privtoaddr(default_config["GENESIS_PRI_KEY"]))
         self.COINBASE_ADDR = eth_utils.encode_hex(default_config["GENESIS_COINBASE"])
         self.GENESIS_ORIGIN_COIN = default_config["TOTAL_COIN"]
         self.ZERO_HASH = eth_utils.encode_hex(b'\x00' * 32)
@@ -54,7 +54,7 @@ class RpcClient:
 
     def rand_account(self) -> (str, bytes):
         priv_key = eth_utils.encode_hex(os.urandom(32))
-        addr = eth_utils.encode_hex(privtoaddr(priv_key))
+        addr = eth_utils.encode_hex(priv_to_addr(priv_key))
         return (addr, priv_key)
 
     def rand_hash(self, seed: bytes = None) -> str:

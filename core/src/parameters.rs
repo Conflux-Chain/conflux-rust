@@ -146,6 +146,9 @@ pub mod block {
     // per block. With two blocks per second, we will have 4000TPS at the
     // peak with only simple payment, which is good enough for now.
     pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
+    // The maximum number of transactions to be packed in a block given
+    // `MAX_BLOCK_SIZE_IN_BYTES`, assuming 100-Byte transactions.
+    pub const ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT: usize = 2048;
     // The maximum number of referees allowed for each block
     pub const REFEREE_DEFAULT_BOUND: usize = 200;
     // The maximal length of custom data in block header

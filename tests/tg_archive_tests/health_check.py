@@ -511,7 +511,6 @@ class TreeGraphTracing(ConfluxTestFramework):
             raise e
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 11
         self.conf_parameters = {
             "is_consortium": "true",

@@ -833,7 +833,6 @@ impl ConsensusGraphTrait for TreeGraphConsensus {
                 .map(|db| {
                     State::new(
                         StateDb::new(db),
-                        0.into(),           /* account_start_nonce */
                         Default::default(), /* vm */
                         past_num_blocks,    /* block_number */
                     )

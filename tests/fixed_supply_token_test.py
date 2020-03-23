@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from conflux.utils import privtoaddr
+from conflux.utils import priv_to_addr
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from web3 import Web3
 import os
@@ -27,14 +27,14 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
 
     def generate_transactions(self, _):
         self.call_contract_function(self.contract, "transfer",
-                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[0])), 1000],
+                                    [Web3.toChecksumAddress(priv_to_addr(self.accounts[0])), 1000],
                                     self.default_account_key, self.contract_address, True, True)
         self.call_contract_function(self.contract, "approve",
-                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[1])), 500],
+                                    [Web3.toChecksumAddress(priv_to_addr(self.accounts[1])), 500],
                                     self.accounts[0], self.contract_address, True, True)
         self.call_contract_function(self.contract, "transferFrom",
-                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[0])),
-                                     Web3.toChecksumAddress(privtoaddr(self.default_account_key)), 300],
+                                    [Web3.toChecksumAddress(priv_to_addr(self.accounts[0])),
+                                     Web3.toChecksumAddress(priv_to_addr(self.default_account_key)), 300],
                                     self.accounts[1], self.contract_address, True, True)
 
 
