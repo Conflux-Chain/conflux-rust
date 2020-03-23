@@ -315,7 +315,9 @@ impl ConsensusGraph {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
+            EpochNumber::LatestState => {
+                self.data_man.state_availability_boundary.read().upper_bound
+            }
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
@@ -376,30 +378,9 @@ impl ConsensusGraph {
         }
     }
 
-    fn validate_stated_epoch(
-        &self, epoch_number: &EpochNumber,
-    ) -> Result<(), String> {
-        match epoch_number {
-            EpochNumber::LatestMined => {
-                return Err("Latest mined epoch is not executed".into());
-            }
-            EpochNumber::Number(num) => {
-                let latest_state_epoch =
-                    self.executed_best_state_epoch_number();
-                if *num > latest_state_epoch {
-                    return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<StateDb, String> {
-        self.validate_stated_epoch(&epoch_number)?;
         let height = self.get_height_from_epoch_number(epoch_number)?;
         debug!("Get pivot height={:?}", height);
         let hash =
@@ -626,13 +607,6 @@ impl ConsensusGraph {
 
     pub fn best_block_hash(&self) -> H256 {
         self.best_info.read_recursive().best_block_hash
-    }
-
-    /// Returns the latest epoch with executed state.
-    pub fn executed_best_state_epoch_number(&self) -> u64 {
-        self.inner
-            .read_recursive()
-            .executed_best_state_epoch_number()
     }
 
     /// Returns the latest epoch whose state execution has been enqueued.
@@ -862,7 +836,6 @@ impl ConsensusGraph {
         &self, tx: &SignedTransaction, epoch: EpochNumber,
     ) -> Result<Executed, String> {
         // only allow to call against stated epoch
-        self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
         self.executor.call_virtual(tx, &epoch_id)
     }

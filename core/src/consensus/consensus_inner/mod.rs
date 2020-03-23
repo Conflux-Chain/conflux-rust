@@ -1859,30 +1859,6 @@ impl ConsensusGraphInner {
         self.arena[*self.pivot_chain.last().unwrap()].hash
     }
 
-    /// Return the latest epoch number with executed state.
-    ///
-    /// The state is ensured to exist.
-    pub fn executed_best_state_epoch_number(&self) -> u64 {
-        let pivot_len = self.pivot_chain.len() as u64;
-        let mut best_state_pivot_index =
-            if pivot_len < DEFERRED_STATE_EPOCH_COUNT {
-                0
-            } else {
-                pivot_len - DEFERRED_STATE_EPOCH_COUNT
-            };
-        while best_state_pivot_index > 0 {
-            if self.data_man.epoch_executed(
-                &self.arena[self.pivot_chain[best_state_pivot_index as usize]]
-                    .hash,
-            ) {
-                break;
-            } else {
-                best_state_pivot_index -= 1;
-            }
-        }
-        self.pivot_index_to_height(best_state_pivot_index as usize)
-    }
-
     /// Return the latest epoch number whose state has been enqueued.
     ///
     /// The state may not exist, so the caller should wait for the result if its
