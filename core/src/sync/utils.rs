@@ -4,6 +4,7 @@ use crate::{
     consensus::{ConsensusConfig, ConsensusInnerConfig},
     db::NUM_COLUMNS,
     parameters::WORKER_COMPUTATION_PARALLELISM,
+        block::REFEREE_DEFAULT_BOUND,
     pow::ProofOfWorkConfig,
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
@@ -168,6 +169,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */
+            referee_bound: REFEREE_DEFAULT_BOUND,
         },
         vm.clone(),
         txpool.clone(),
@@ -177,7 +179,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
         notifications.clone(),
     ));
 
-    let verification_config = VerificationConfig::new(true);
+    let verification_config =
+        VerificationConfig::new(true, REFEREE_DEFAULT_BOUND);
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,
