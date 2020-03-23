@@ -1531,8 +1531,10 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_stable_height = new_stable_height;
                 let stable_arena_index =
                     inner.get_pivot_block_arena_index(new_stable_height);
-                // Always ensure that era stable genesis has an available state_valid.
-                inner.compute_state_valid(stable_arena_index)
+                // Always ensure that era stable genesis has an available
+                // state_valid.
+                inner
+                    .compute_state_valid(stable_arena_index)
                     .expect("last stable has available state_valid state");
                 let genesis_hash =
                     &inner.arena[inner.cur_era_genesis_block_arena_index].hash;
