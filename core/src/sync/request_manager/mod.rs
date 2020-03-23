@@ -519,7 +519,7 @@ impl RequestManager {
 
     pub fn request_blocktxn(
         &self, io: &dyn NetworkContext, peer_id: PeerId, block_hash: H256,
-        indexes: Vec<usize>, delay: Option<Duration>,
+        index_skips: Vec<usize>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -527,7 +527,7 @@ impl RequestManager {
         let request = GetBlockTxn {
             request_id: 0,
             block_hash: block_hash.clone(),
-            indexes,
+            index_skips,
         };
 
         self.request_with_delay(io, Box::new(request), Some(peer_id), delay);
@@ -548,7 +548,7 @@ impl RequestManager {
         }
     }
 
-    pub fn remove_mismatch_request(
+    pub fn resend_request_to_another_peer(
         &self, io: &dyn NetworkContext, req: &RequestMessage,
     ) {
         req.request.on_removed(&self.inflight_keys);
@@ -830,7 +830,7 @@ impl RequestManager {
         let timeout_requests = self.request_handler.get_timeout_requests(io);
         for req in timeout_requests {
             debug!("Timeout requests: {:?}", req);
-            self.remove_mismatch_request(io, &req);
+            self.resend_request_to_another_peer(io, &req);
         }
     }
 

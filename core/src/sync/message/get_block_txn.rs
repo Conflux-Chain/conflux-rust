@@ -18,7 +18,7 @@ use std::{any::Any, time::Duration};
 pub struct GetBlockTxn {
     pub request_id: RequestId,
     pub block_hash: H256,
-    pub indexes: Vec<usize>,
+    pub index_skips: Vec<usize>,
 }
 
 impl AsAny for GetBlockTxn {
@@ -50,17 +50,20 @@ impl Handleable for GetBlockTxn {
         match ctx.manager.graph.block_by_hash(&self.block_hash) {
             Some(block) => {
                 debug!("Process get_blocktxn hash={:?}", block.hash());
-                let mut tx_resp = Vec::with_capacity(self.indexes.len());
+                let mut tx_resp = Vec::with_capacity(self.index_skips.len());
                 let mut last = 0;
-                for index in self.indexes.iter() {
-                    last += *index;
+                for index_skip in self.index_skips.iter() {
+                    last += *index_skip;
                     if last >= block.transactions.len() {
                         warn!(
                             "Request tx index out of bound, peer={}, hash={}",
                             ctx.peer,
                             block.hash()
                         );
-                        return Err(ErrorKind::Invalid.into());
+                        return Err(ErrorKind::InvalidGetBlockTxn(
+                            "index out-of-bound".into(),
+                        )
+                        .into());
                     }
                     tx_resp.push(block.transactions[last].transaction.clone());
                     last += 1;

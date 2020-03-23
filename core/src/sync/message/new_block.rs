@@ -74,7 +74,7 @@ fn on_new_decoded_block(
             if res.0 {
                 need_to_relay.extend(res.1);
             } else {
-                return Err(Error::from_kind(ErrorKind::Invalid));
+                return Err(Error::from_kind(ErrorKind::InvalidBlock));
             }
         }
     }
