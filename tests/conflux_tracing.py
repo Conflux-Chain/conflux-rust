@@ -464,7 +464,7 @@ class ConfluxTracing(ConfluxTestFramework):
             "dev_snapshot_epoch_count": 50,
             "adaptive_weight_beta": "1",
             "timer_chain_block_difficulty_ratio": "3",
-            "timer_chain_beta": "20",
+            "timer_chain_beta": "40",
             "anticone_penalty_ratio": "10",
         }
 
