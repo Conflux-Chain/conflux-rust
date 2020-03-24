@@ -548,6 +548,10 @@ impl RequestManager {
         }
     }
 
+    pub fn send_pending_requests(&self, io: &dyn NetworkContext, peer: PeerId) {
+        self.request_handler.send_pending_requests(io, peer)
+    }
+
     pub fn resend_request_to_another_peer(
         &self, io: &dyn NetworkContext, req: &RequestMessage,
     ) {
@@ -558,9 +562,9 @@ impl RequestManager {
     // Match request with given response.
     // No need to let caller handle request resending.
     pub fn match_request(
-        &self, io: &dyn NetworkContext, peer_id: PeerId, request_id: u64,
+        &self, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
-        self.request_handler.match_request(io, peer_id, request_id)
+        self.request_handler.match_request(peer_id, request_id)
     }
 
     /// Remove inflight keys when a header is received.
@@ -827,7 +831,8 @@ impl RequestManager {
 
     pub fn resend_timeout_requests(&self, io: &dyn NetworkContext) {
         debug!("resend_timeout_requests: start");
-        let timeout_requests = self.request_handler.get_timeout_requests(io);
+        let timeout_requests =
+            self.request_handler.process_timeout_requests(io);
         for req in timeout_requests {
             debug!("Timeout requests: {:?}", req);
             self.resend_request_to_another_peer(io, &req);

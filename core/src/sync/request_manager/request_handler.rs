@@ -5,6 +5,7 @@
 use crate::{
     alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     message::{Message, SetRequestId},
+    parameters::sync::FAILED_REQUEST_RESEND_WAIT,
     sync::{
         message::{DynamicCapability, KeyContainer},
         request_manager::RequestManager,
@@ -67,19 +68,23 @@ impl RequestHandler {
     // 2. UnknownPeer:
     //      No need to let caller handle request resending;
     pub fn match_request(
-        &self, io: &dyn NetworkContext, peer_id: PeerId, request_id: u64,
+        &self, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         let mut peers = self.peers.lock();
-        let mut requests_queue = self.requests_queue.lock();
         if let Some(peer) = peers.get_mut(&peer_id) {
-            peer.match_request(
-                io,
-                request_id,
-                &mut *requests_queue,
-                &self.protocol_config,
-            )
+            peer.match_request(request_id)
         } else {
             bail!(ErrorKind::UnknownPeer);
+        }
+    }
+
+    pub fn send_pending_requests(&self, io: &dyn NetworkContext, peer: PeerId) {
+        if let Some(peer_info) = self.peers.lock().get_mut(&peer) {
+            peer_info.send_pending_requests(
+                io,
+                &mut *self.requests_queue.lock(),
+                &self.protocol_config,
+            );
         }
     }
 
@@ -87,7 +92,7 @@ impl RequestHandler {
     /// failed, return the request back to caller to handle in advance.
     pub fn send_request(
         &self, io: &dyn NetworkContext, peer: Option<PeerId>,
-        mut request: Box<dyn Request>, delay: Option<Duration>,
+        request: Box<dyn Request>, delay: Option<Duration>,
     ) -> Result<(), Box<dyn Request>>
     {
         let peer = match peer {
@@ -95,49 +100,29 @@ impl RequestHandler {
             None => return Err(request),
         };
 
-        let mut peers = self.peers.lock();
-        let mut requests_queue = self.requests_queue.lock();
-
+        let peers = &mut *self.peers.lock();
         let peer_info = match peers.get_mut(&peer) {
             Some(peer) => peer,
             None => return Err(request),
         };
 
+        let msg = RequestMessage::new(request, delay);
+
         let request_id = match peer_info.get_next_request_id() {
             Some(id) => id,
             None => {
-                peer_info.append_pending_request(RequestMessage::new(
-                    request, delay,
-                ));
+                peer_info.append_pending_request(msg);
                 return Ok(());
             }
         };
 
-        request.set_request_id(request_id);
-        let res = request.send(io, peer);
-        let is_send_error = if let Err(e) = res {
-            match e.kind() {
-                NetworkErrorKind::OversizedPacket => {
-                    panic!("Request packet should not be oversized!")
-                }
-                _ => {}
-            }
-            true
-        } else {
-            false
-        };
-
-        let msg = RequestMessage::new(request, delay);
-
-        let timed_req = Arc::new(TimedSyncRequests::from_request(
-            peer,
+        peer_info.immediate_send_request_to_peer(
+            io,
             request_id,
-            &msg,
+            msg,
+            &mut *self.requests_queue.lock(),
             &self.protocol_config,
-            is_send_error,
-        ));
-        peer_info.append_inflight_request(request_id, msg, timed_req.clone());
-        requests_queue.push(timed_req);
+        );
 
         Ok(())
     }
@@ -165,15 +150,16 @@ impl RequestHandler {
         timeout_requests
     }
 
-    pub fn get_timeout_requests(
+    pub fn process_timeout_requests(
         &self, io: &dyn NetworkContext,
     ) -> Vec<RequestMessage> {
         // Check if in-flight requests timeout
         let mut timeout_requests = Vec::new();
         let mut peers_to_disconnect = HashSet::new();
+        let mut peers_to_send_pending_requests = HashSet::new();
         for sync_req in self.get_timeout_sync_requests() {
             if let Ok(mut req) =
-                self.match_request(io, sync_req.peer_id, sync_req.request_id)
+                self.match_request(sync_req.peer_id, sync_req.request_id)
             {
                 let peer_id = sync_req.peer_id;
                 if let Some(request_container) =
@@ -183,6 +169,8 @@ impl RequestHandler {
                         .on_timeout_should_disconnect(&self.protocol_config)
                     {
                         peers_to_disconnect.insert(peer_id);
+                    } else {
+                        peers_to_send_pending_requests.insert(peer_id);
                     }
                 }
                 req.request.notify_timeout();
@@ -204,6 +192,9 @@ impl RequestHandler {
                 op,
                 "too many timeout requests", /* reason */
             );
+        }
+        for peer_id in peers_to_send_pending_requests {
+            self.send_pending_requests(io, peer_id);
         }
 
         timeout_requests
@@ -311,48 +302,66 @@ impl RequestContainer {
         }
     }
 
+    fn immediate_send_request_to_peer(
+        &mut self, io: &dyn NetworkContext, request_id: u64,
+        mut request_message: RequestMessage,
+        requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
+        protocol_config: &ProtocolConfiguration,
+    )
+    {
+        request_message.request.set_request_id(request_id);
+        let res = request_message.request.send(io, self.peer_id);
+        let is_send_error = if let Err(e) = res {
+            match e.kind() {
+                NetworkErrorKind::OversizedPacket => {
+                    panic!("Request packet should not be oversized!")
+                }
+                _ => {}
+            }
+            true
+        } else {
+            false
+        };
+
+        let timed_req = Arc::new(TimedSyncRequests::from_request(
+            self.peer_id,
+            request_id,
+            &request_message,
+            protocol_config,
+            is_send_error,
+        ));
+        self.append_inflight_request(
+            request_id,
+            request_message,
+            timed_req.clone(),
+        );
+        requests_queue.push(timed_req);
+    }
+
+    // Error from send_message():
+    //      This also does NOT introduce needs to handle request
+    //      resending for caller;
     pub fn send_pending_requests(
         &mut self, io: &dyn NetworkContext,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
-    ) -> Result<(), Error>
+    )
     {
         while self.has_pending_requests() {
             if let Some(new_request_id) = self.get_next_request_id() {
-                let mut pending_msg = self.pop_pending_request().unwrap();
-                pending_msg.set_request_id(new_request_id);
-                let send_res = pending_msg.request.send(io, self.peer_id);
-                let is_send_error = if let Err(e) = send_res {
-                    match e.kind() {
-                        NetworkErrorKind::OversizedPacket => {
-                            panic!("Request packet should not be oversized!")
-                        }
-                        _ => {}
-                    }
-                    true
-                } else {
-                    false
-                };
+                let pending_msg = self.pop_pending_request().unwrap();
 
-                let timed_req = Arc::new(TimedSyncRequests::from_request(
-                    self.peer_id,
-                    new_request_id,
-                    &pending_msg,
-                    protocol_config,
-                    is_send_error,
-                ));
-                self.append_inflight_request(
+                self.immediate_send_request_to_peer(
+                    io,
                     new_request_id,
                     pending_msg,
-                    timed_req.clone(),
+                    requests_queue,
+                    protocol_config,
                 );
-                requests_queue.push(timed_req);
             } else {
                 break;
             }
         }
-
-        Ok(())
     }
 
     // Match request with given response.
@@ -360,27 +369,15 @@ impl RequestContainer {
     // 1. RequestNotFound:
     //      In this case, no request is matched, so NO need to
     //      handle the resending of the request for caller;
-    // 2. Error from send_message():
-    //      This also does NOT introduce needs to handle request
-    //      resending for caller;
     pub fn match_request(
-        &mut self, io: &dyn NetworkContext, request_id: u64,
-        requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
-        protocol_config: &ProtocolConfiguration,
-    ) -> Result<RequestMessage, Error>
-    {
+        &mut self, request_id: u64,
+    ) -> Result<RequestMessage, Error> {
         let removed_req = self.remove_inflight_request(request_id);
         if let Some(removed_req) = removed_req {
             removed_req
                 .timed_req
                 .removed
                 .store(true, AtomicOrdering::Relaxed);
-            // TODO: It's better only set a flag to the eventloop to send
-            // TODO: pending requests. The error should be properly handled,
-            // TODO: but no such error should be thrown here in this function.
-            self.send_pending_requests(io, requests_queue, protocol_config)
-                .ok();
-
             Ok(removed_req.message)
         } else {
             bail!(ErrorKind::RequestNotFound)
@@ -532,7 +529,7 @@ impl TimedSyncRequests {
     ) -> TimedSyncRequests
     {
         let timeout = if is_send_error {
-            Duration::from_secs(1)
+            FAILED_REQUEST_RESEND_WAIT.clone()
         } else {
             msg.request.timeout(conf)
         };

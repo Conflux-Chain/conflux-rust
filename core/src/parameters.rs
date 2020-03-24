@@ -108,11 +108,16 @@ pub mod sync {
     /// the consensus layer.
     pub const BLOCK_PROPAGATION_DELAY: u64 = 10;
 
-    // The waiting time duration that will be accumulated for resending a
-    // timeout request.
     lazy_static! {
+        // The waiting time duration that will be accumulated for resending a
+        // timeout request.
         pub static ref REQUEST_START_WAITING_TIME: Duration =
             Duration::from_secs(1);
+
+        // The waiting time duration before resending a request which failed
+        // due to sending error.
+        pub static ref FAILED_REQUEST_RESEND_WAIT: Duration =
+            Duration::from_millis(50);
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
     pub const DEFAULT_CHUNK_SIZE: u64 = 1 * 1024 * 1024;
