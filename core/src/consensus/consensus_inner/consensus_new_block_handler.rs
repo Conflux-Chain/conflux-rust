@@ -1533,7 +1533,7 @@ impl ConsensusNewBlockHandler {
                     inner.get_pivot_block_arena_index(new_stable_height);
                 // Always ensure that era stable genesis has an available
                 // state_valid.
-                if has_body {
+                if has_body && !self.conf.bench_mode {
                     inner
                         .compute_state_valid(stable_arena_index)
                         .expect("last stable has available state_valid state");
