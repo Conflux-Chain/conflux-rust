@@ -430,7 +430,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 self._block_txs[block_hash] = eth_utils.encode_hex(rlp.encode(txs))
                 self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
         except Exception as e:
-            self.log.info('got exception[{}] when {} generates block'.format(repr(e), chosen_peer))
+            self.log.info('got exception[{}] when generateing block'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -462,13 +462,13 @@ class ConfluxTracing(ConfluxTestFramework):
             "era_epoch_count": 100,
             "dev_snapshot_epoch_count": 50,
             "adaptive_weight_beta": "1",
-            "timer_chain_block_difficulty_ratio": "3",
-            "timer_chain_beta": "20",
+            "timer_chain_block_difficulty_ratio": "10",
+            "timer_chain_beta": "40",
             "anticone_penalty_ratio": "10",
         }
 
     def setup_nodes(self):
-        self.add_nodes(self.num_nodes, auto_recovery=True)
+        self.add_nodes(self.num_nodes, auto_recovery=True, recovery_timeout=300)
         if self.options.archive:
             self.start_nodes()
         else:
