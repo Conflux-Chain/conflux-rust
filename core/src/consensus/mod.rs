@@ -48,6 +48,7 @@ use primitives::{
 use rayon::prelude::*;
 use std::{
     any::Any,
+    cmp::min,
     collections::{HashMap, HashSet},
     sync::Arc,
     thread::sleep,
@@ -315,7 +316,7 @@ impl ConsensusGraph {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
+            EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
@@ -385,7 +386,7 @@ impl ConsensusGraph {
             }
             EpochNumber::Number(num) => {
                 let latest_state_epoch =
-                    self.executed_best_state_epoch_number();
+                    self.best_executed_state_epoch_number();
                 if *num > latest_state_epoch {
                     return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
                 }
@@ -628,20 +629,27 @@ impl ConsensusGraph {
         self.best_info.read_recursive().best_block_hash
     }
 
-    /// Returns the latest epoch with executed state.
-    pub fn executed_best_state_epoch_number(&self) -> u64 {
-        self.inner
-            .read_recursive()
-            .executed_best_state_epoch_number()
-    }
-
-    /// Returns the latest epoch whose state execution has been enqueued.
-    /// And this state should be the `deferred_state` of the block being mined.
-    ///
-    /// Note that the state may not exist, and the caller should wait for the
-    /// result if the state is going to be used.
-    pub fn best_state_epoch_number(&self) -> u64 {
-        self.inner.read_recursive().best_state_epoch_number()
+    /// Returns the latest epoch whose state can be exposed safely, which means
+    /// its state is available and it's not only visible to optimistic
+    /// execution.
+    pub fn best_executed_state_epoch_number(&self) -> u64 {
+        let state_upper_bound =
+            self.data_man.state_availability_boundary.read().upper_bound;
+        // Here we can also get `best_state_epoch` from `inner`, but that
+        // would acquire the inner read lock.
+        let best_epoch_number = self.best_info.read().best_epoch_number;
+        let deferred_state_height =
+            if best_epoch_number < DEFERRED_STATE_EPOCH_COUNT {
+                0
+            } else {
+                best_epoch_number - DEFERRED_STATE_EPOCH_COUNT + 1
+            };
+        // state upper bound can be lower than deferred_state_height because
+        // the execution is async. It can also be higher
+        // because of optimistic execution. Here we guarantee
+        // to return an available state without exposing optimistically
+        // executed states.
+        min(state_upper_bound, deferred_state_height)
     }
 
     pub fn get_transaction_receipt_and_block_info(

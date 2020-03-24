@@ -461,6 +461,17 @@ impl RpcImpl {
             Some(result_tuple) => result_tuple,
         };
 
+        let epoch_block_header = self
+            .consensus
+            .get_data_manager()
+            .block_header_by_hash(&epoch_hash)
+            .ok_or(RpcError::internal_error())?;
+        let epoch_number = epoch_block_header.height();
+        if epoch_number > consensus_graph.best_executed_state_epoch_number() {
+            // The receipt is only visible to optimistic execution.
+            return Ok(None);
+        }
+
         // Operations below will not involve the status of ConsensusInner
         let block = self
             .consensus
@@ -479,12 +490,6 @@ impl RpcImpl {
             .ok_or(RpcError::internal_error())?
             .clone();
         let mut rpc_receipt = RpcReceipt::new(transaction, receipt, address);
-        let epoch_block_header = self
-            .consensus
-            .get_data_manager()
-            .block_header_by_hash(&epoch_hash)
-            .ok_or(RpcError::internal_error())?;
-        let epoch_number = epoch_block_header.height();
         rpc_receipt.set_epoch_number(Some(epoch_number));
         rpc_receipt.set_state_root(state_root.into());
         Ok(Some(rpc_receipt))
