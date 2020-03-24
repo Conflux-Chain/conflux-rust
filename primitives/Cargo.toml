@@ -16,11 +16,11 @@ lru = "0.1"
 malloc_size_of = { path = "../util/malloc_size_of" }
 rand = "0.7"
 rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 siphasher = "0.3"
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 
 [dev-dependencies]
 criterion = "0.2"

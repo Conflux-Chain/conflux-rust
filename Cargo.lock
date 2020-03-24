@@ -93,7 +93,8 @@ checksum = "013a6e0a2cbe3d20f9c60b65458f7a7f7a5e636c5d0f45a5a6aee5d4b1f01785"
 [[package]]
 name = "app_dirs"
 version = "1.2.1"
-source = "git+https://github.com/paritytech/app-dirs-rs#0b37f9481ce29e9d5174ad185bca695b206368eb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e73a24bad9bd6a94d6395382a6c69fe071708ae4409f763c5475e14ee896313d"
 dependencies = [
  "ole32-sys",
  "shell32-sys",
@@ -388,7 +389,7 @@ dependencies = [
 [[package]]
 name = "bn"
 version = "0.4.4"
-source = "git+https://github.com/paritytech/bn#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
+source = "git+https://github.com/paritytech/bn?rev=635c4cdd560bc0c8b262e6bf809dc709da8bcd7e#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
 dependencies = [
  "byteorder",
  "crunchy",
@@ -562,7 +563,7 @@ dependencies = [
 name = "cfx-types"
 version = "0.1.0"
 dependencies = [
- "ethereum-types 0.8.0",
+ "ethereum-types",
 ]
 
 [[package]]
@@ -668,7 +669,7 @@ version = "0.1.0"
 dependencies = [
  "cfxkey",
  "cfxstore",
- "ethereum-types 0.8.0",
+ "ethereum-types",
  "log 0.4.8",
  "parking_lot 0.10.0",
  "serde",
@@ -682,7 +683,7 @@ name = "cfxkey"
 version = "0.3.0"
 dependencies = [
  "edit-distance",
- "ethereum-types 0.8.0",
+ "ethereum-types",
  "lazy_static",
  "log 0.4.8",
  "parity-crypto 0.4.2",
@@ -703,7 +704,7 @@ version = "0.2.1"
 dependencies = [
  "cfxkey",
  "dir",
- "ethereum-types 0.8.0",
+ "ethereum-types",
  "libc",
  "log 0.4.8",
  "matches",
@@ -888,7 +889,7 @@ dependencies = [
  "docopt",
  "env_logger",
  "error-chain",
- "ethereum-types 0.8.0",
+ "ethereum-types",
  "futures 0.1.29",
  "futures-semaphore",
  "home 0.5.3",
@@ -1212,7 +1213,7 @@ dependencies = [
 [[package]]
 name = "ctrlc"
 version = "1.1.1"
-source = "git+https://github.com/paritytech/rust-ctrlc.git#b523017108bb2d571a7a69bd97bc406e63bc7a9d"
+source = "git+https://github.com/paritytech/rust-ctrlc.git?rev=b523017108bb2d571a7a69bd97bc406e63bc7a9d#b523017108bb2d571a7a69bd97bc406e63bc7a9d"
 dependencies = [
  "kernel32-sys",
  "libc",
@@ -1307,10 +1308,10 @@ dependencies = [
 [[package]]
 name = "dir"
 version = "0.1.2"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git#8581500f4d47525eb9e3bd8599ece591f4d599ce"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
 dependencies = [
  "app_dirs",
- "ethereum-types 0.7.0",
+ "ethereum-types",
  "home 0.3.4",
 ]
 
@@ -1453,19 +1454,6 @@ dependencies = [
 
 [[package]]
 name = "ethbloom"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd0584482a6433370908dee84ea13992c2cf39c569600e4dbfafe520bb3b90d1"
-dependencies = [
- "crunchy",
- "fixed-hash 0.4.0",
- "impl-rlp",
- "impl-serde 0.2.3",
- "tiny-keccak",
-]
-
-[[package]]
-name = "ethbloom"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
@@ -1485,25 +1473,11 @@ checksum = "e957efe1e627f8ec4e253660615fd9fe3736e10026197740b8b4b26c812be2e9"
 
 [[package]]
 name = "ethereum-types"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5a7777cb75d9ee2b8d3752634b15e4e4e70d2ef81a227e9d157acfa18592b1"
-dependencies = [
- "ethbloom 0.7.0",
- "fixed-hash 0.4.0",
- "impl-rlp",
- "impl-serde 0.2.3",
- "primitive-types 0.5.1",
- "uint",
-]
-
-[[package]]
-name = "ethereum-types"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
 dependencies = [
- "ethbloom 0.8.1",
+ "ethbloom",
  "fixed-hash 0.5.2",
  "impl-rlp",
  "impl-serde 0.2.3",
@@ -2508,7 +2482,7 @@ dependencies = [
 name = "kvdb-rocksdb"
 version = "0.1.6"
 dependencies = [
- "ethereum-types 0.8.0",
+ "ethereum-types",
  "fs-swap",
  "interleaved-ordered",
  "kvdb",
@@ -3437,7 +3411,7 @@ dependencies = [
 [[package]]
 name = "panic_hook"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git#8581500f4d47525eb9e3bd8599ece591f4d599ce"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
 dependencies = [
  "backtrace",
 ]
@@ -3744,8 +3718,6 @@ checksum = "83ef7b3b965c0eadcb6838f34f827e1dfb2939bdd5ebd43f9647e009b12b0371"
 dependencies = [
  "fixed-hash 0.4.0",
  "impl-codec",
- "impl-rlp",
- "impl-serde 0.2.3",
  "uint",
 ]
 
@@ -4380,7 +4352,7 @@ dependencies = [
 [[package]]
 name = "rlp_derive"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git#8581500f4d47525eb9e3bd8599ece591f4d599ce"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
 dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
@@ -4576,7 +4548,7 @@ name = "secret-store"
 version = "0.1.0"
 dependencies = [
  "cfxkey",
- "ethereum-types 0.8.0",
+ "ethereum-types",
  "keccak-hash 0.4.1",
  "parking_lot 0.10.0",
  "primitives",
@@ -5689,7 +5661,7 @@ dependencies = [
 [[package]]
 name = "unexpected"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git#8581500f4d47525eb9e3bd8599ece591f4d599ce"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
 
 [[package]]
 name = "unicase"
