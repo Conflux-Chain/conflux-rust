@@ -19,7 +19,7 @@ cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 log = "0.4"
 rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 clap = "2"
 db = { path = "../db" }
 cfxkey = { path = "../accounts/cfxkey" }
@@ -92,7 +92,7 @@ libra-state-view = { path="src/alliance_tree_graph/bft/storage/state-view" }
 storage-proto = { path = "src/alliance_tree_graph/bft/storage/storage-proto" }
 libradb = { path = "src/alliance_tree_graph/bft/storage/libradb" }
 threadpool = "1.0"
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 zip = "*"
 tokio-timer = "0.2.13"
 derivative = "2.0.2"
