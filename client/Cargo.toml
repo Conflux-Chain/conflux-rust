@@ -18,9 +18,9 @@ io = { path = "../util/io" }
 cfxkey = { path = "../accounts/cfxkey" }
 cfxstore = { path = "../accounts/cfxstore" }
 cfxcore-accounts = { path = "../accounts" }
-app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
+app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 jsonrpc-core = "14.0.0"
 jsonrpc-tcp-server = "14.0.0"
 jsonrpc-http-server = "14.0.0"
