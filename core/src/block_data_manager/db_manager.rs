@@ -330,15 +330,27 @@ impl DBManager {
     /// The functions below are private utils used by the DBManager to access
     /// database
     fn insert_to_db(&self, table: DBTable, db_key: &[u8], value: Vec<u8>) {
-        self.table_db.get(&table).unwrap().put(db_key, &value).ok();
+        self.table_db
+            .get(&table)
+            .unwrap()
+            .put(db_key, &value)
+            .expect("db insertion failure");
     }
 
     fn remove_from_db(&self, table: DBTable, db_key: &[u8]) {
-        self.table_db.get(&table).unwrap().delete(db_key).ok();
+        self.table_db
+            .get(&table)
+            .unwrap()
+            .delete(db_key)
+            .expect("db removal failure");
     }
 
     fn load_from_db(&self, table: DBTable, db_key: &[u8]) -> Option<Box<[u8]>> {
-        self.table_db.get(&table).unwrap().get(db_key).unwrap()
+        self.table_db
+            .get(&table)
+            .unwrap()
+            .get(db_key)
+            .expect("db read failure")
     }
 
     fn insert_encodable_val<V>(
