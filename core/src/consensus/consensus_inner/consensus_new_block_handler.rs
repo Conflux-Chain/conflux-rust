@@ -922,62 +922,65 @@ impl ConsensusNewBlockHandler {
     fn should_form_checkpoint_at(
         &self, inner: &mut ConsensusGraphInner,
     ) -> usize {
-        let new_genesis_height =
-            inner.cur_era_genesis_height + inner.inner_conf.era_epoch_count;
-        // We cannot move beyond the stable block/height
-        if new_genesis_height + inner.inner_conf.era_epoch_count
-            > inner.cur_era_stable_height
-        {
-            return inner.cur_era_genesis_block_arena_index;
-        }
-
-        let new_genesis_block_arena_index =
-            inner.get_pivot_block_arena_index(new_genesis_height);
         let stable_pivot_block =
             inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
-        assert!(inner.arena[stable_pivot_block].data.force_confirm != NULL);
-        if inner.lca(
-            new_genesis_block_arena_index,
-            inner.arena[stable_pivot_block].data.force_confirm,
-        ) != new_genesis_block_arena_index
-        {
-            return inner.cur_era_genesis_block_arena_index;
-        }
-
-        // Now we need to make sure that no timer chain block is in the anticone
-        // of the new genesis. This is required for our checkpoint
-        // algorithm.
-        let mut visited = BitSet::new();
-        let mut queue = VecDeque::new();
-        queue.push_back(new_genesis_block_arena_index);
-        visited.add(new_genesis_block_arena_index as u32);
-        while let Some(x) = queue.pop_front() {
-            for child in &inner.arena[x].children {
-                if !visited.contains(*child as u32) {
-                    visited.add(*child as u32);
-                    queue.push_back(*child);
-                }
-            }
-            for referrer in &inner.arena[x].referrers {
-                if !visited.contains(*referrer as u32) {
-                    visited.add(*referrer as u32);
-                    queue.push_back(*referrer);
-                }
-            }
-        }
-        let start_timer_chain_height = inner.arena
-            [new_genesis_block_arena_index]
-            .data
-            .ledger_view_timer_chain_height;
-        let start_timer_chain_index = (start_timer_chain_height
-            - inner.cur_era_genesis_timer_chain_height)
-            as usize;
-        for i in start_timer_chain_index..inner.timer_chain.len() {
-            if !visited.contains(inner.timer_chain[i] as u32) {
+        let mut new_genesis_height =
+            inner.cur_era_genesis_height + inner.inner_conf.era_epoch_count;
+        // We cannot move beyond the stable block/height
+        'out: while new_genesis_height < inner.cur_era_stable_height {
+            let new_genesis_block_arena_index =
+                inner.get_pivot_block_arena_index(new_genesis_height);
+            assert!(inner.arena[stable_pivot_block].data.force_confirm != NULL);
+            if inner.lca(
+                new_genesis_block_arena_index,
+                inner.arena[stable_pivot_block].data.force_confirm,
+            ) != new_genesis_block_arena_index
+            {
+                // All following era genesis candidates are on the same fork,
+                // so they are not force_confirmed by stable now.
                 return inner.cur_era_genesis_block_arena_index;
             }
+
+            // Now we need to make sure that no timer chain block is in the
+            // anticone of the new genesis. This is required for our
+            // checkpoint algorithm.
+            let mut visited = BitSet::new();
+            let mut queue = VecDeque::new();
+            queue.push_back(new_genesis_block_arena_index);
+            visited.add(new_genesis_block_arena_index as u32);
+            while let Some(x) = queue.pop_front() {
+                for child in &inner.arena[x].children {
+                    if !visited.contains(*child as u32) {
+                        visited.add(*child as u32);
+                        queue.push_back(*child);
+                    }
+                }
+                for referrer in &inner.arena[x].referrers {
+                    if !visited.contains(*referrer as u32) {
+                        visited.add(*referrer as u32);
+                        queue.push_back(*referrer);
+                    }
+                }
+            }
+            let start_timer_chain_height = inner.arena
+                [new_genesis_block_arena_index]
+                .data
+                .ledger_view_timer_chain_height;
+            let start_timer_chain_index = (start_timer_chain_height
+                - inner.cur_era_genesis_timer_chain_height)
+                as usize;
+            for i in start_timer_chain_index..inner.timer_chain.len() {
+                if !visited.contains(inner.timer_chain[i] as u32) {
+                    // This era genesis candidate has a timer chain block in its
+                    // anticone, so we move to check the next one.
+                    new_genesis_height += inner.inner_conf.era_epoch_count;
+                    continue 'out;
+                }
+            }
+            return new_genesis_block_arena_index;
         }
-        return new_genesis_block_arena_index;
+        // We cannot make a new checkpoint.
+        inner.cur_era_genesis_block_arena_index
     }
 
     fn persist_terminals(&self, inner: &ConsensusGraphInner) {
