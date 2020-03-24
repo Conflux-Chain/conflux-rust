@@ -927,7 +927,7 @@ impl ConsensusNewBlockHandler {
         let mut new_genesis_height =
             inner.cur_era_genesis_height + inner.inner_conf.era_epoch_count;
         // We cannot move beyond the stable block/height
-        while new_genesis_height < inner.cur_era_stable_height {
+        'out: while new_genesis_height < inner.cur_era_stable_height {
             let new_genesis_block_arena_index =
                 inner.get_pivot_block_arena_index(new_genesis_height);
             assert!(inner.arena[stable_pivot_block].data.force_confirm != NULL);
@@ -974,7 +974,7 @@ impl ConsensusNewBlockHandler {
                     // This era genesis candidate has a timer chain block in its
                     // anticone, so we move to check the next one.
                     new_genesis_height += inner.inner_conf.era_epoch_count;
-                    continue;
+                    continue 'out;
                 }
             }
             return new_genesis_block_arena_index;
