@@ -183,6 +183,63 @@ fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedDeltaMptIterator) {
 }
 
 #[test]
+fn test_mpt_node_path_to_from_db_key() {
+    // First, construct some special compressed path in a node.
+    let mpt_kv = [
+        (vec![0x00, 0x10, 0x00, 0x00], vec![0x00]),
+        (vec![0x00, 0x01, 0x00, 0x00, 0x02], vec![0x00]),
+        (vec![0x00, 0x01, 0x00, 0x00, 0x03], vec![0x00]),
+        (vec![0x00, 0x01, 0x02, 0x00], vec![0x00]),
+    ];
+    // Compressed path 1: [_0]
+    // Compressed path 2: [_00000]
+    // Compressed path 3: [_10_]
+    // Compressed path 4: [000_]
+    // Compressed path 5: [00]
+
+    let state_manager = new_state_manager_for_unit_test();
+    let mut state = state_manager.get_state_for_genesis_write();
+    for (key, value) in &mpt_kv {
+        state
+            .set(
+                StorageKey::AccountKey(key),
+                value.clone().into_boxed_slice(),
+            )
+            .expect("Failed to insert key.");
+    }
+    let mut epoch_id = EpochId::default();
+    epoch_id.as_bytes_mut()[0] = 1;
+    state.compute_state_root().unwrap();
+    let state_root_with_aux_info = state.commit(epoch_id).unwrap();
+
+    let state = state_manager
+        .get_state_no_commit(StateIndex::new_for_readonly(
+            &epoch_id,
+            &state_root_with_aux_info,
+        ))
+        .unwrap()
+        .unwrap();
+
+    // Second, use compressed path as mpt_node_path to test
+    // mpt_node_path_to_db_key / mpt_node_path_from_db_key.
+    for (key, value) in &mpt_kv {
+        let (v, proof) =
+            state.get_with_proof(StorageKey::AccountKey(key)).unwrap();
+        assert_eq!(v, Some(value.clone().into_boxed_slice()));
+        for node in proof.delta_proof.unwrap().get_proof_nodes() {
+            let compressed_path = node.compressed_path_ref();
+            let db_key = mpt_node_path_to_db_key(&compressed_path);
+            let loaded_compressed_path =
+                mpt_node_path_from_db_key(&db_key).unwrap();
+            assert_eq!(
+                &compressed_path as &dyn CompressedPathTrait,
+                &loaded_compressed_path as &dyn CompressedPathTrait,
+            );
+        }
+    }
+}
+
+#[test]
 fn test_merkle_root() {
     // Merkle root of empty db.
     assert_snapshot_mpt_formation(&DumpedDeltaMptIterator::default());
@@ -504,6 +561,7 @@ use crate::storage::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         DumpedDeltaMptIterator, TEST_NUMBER_OF_KEYS,
     },
+    StateIndex,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{EpochId, MerkleHash, StorageKey, MERKLE_NULL_NODE};

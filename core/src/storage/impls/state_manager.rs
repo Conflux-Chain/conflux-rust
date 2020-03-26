@@ -516,9 +516,9 @@ impl StateManager {
 
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
-        &self, epoch_id: StateIndex,
+        &self, state_index: StateIndex,
     ) -> Result<Option<State>> {
-        let maybe_state_trees = self.get_state_trees(&epoch_id)?;
+        let maybe_state_trees = self.get_state_trees(&state_index)?;
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => Ok(Some(State::new(

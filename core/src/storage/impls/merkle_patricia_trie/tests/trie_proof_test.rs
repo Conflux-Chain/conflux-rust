@@ -15,7 +15,7 @@ fn test_rlp() {
         Some(Box::new([0x03, 0x04, 0x05])),
         CompressedPathRaw::new(
             &[0x00, 0x01, 0x02],
-            CompressedPathRaw::first_nibble_mask(),
+            CompressedPathRaw::second_nibble_mask(),
         ),
     );
     assert_eq!(node1, rlp::decode(&rlp::encode(&node1)).unwrap());
