@@ -139,10 +139,10 @@ impl Handleable for GetCompactBlocksResponse {
 
         // We cannot just mark `self.blocks` as completed here because they
         // might be invalid.
-        let mut received_blocks = HashSet::new();
+        let mut received_full_blocks = HashSet::new();
         let mut not_block_responded_requests = requested;
         for block in &self.blocks {
-            received_blocks.insert(block.hash());
+            received_full_blocks.insert(block.hash());
             not_block_responded_requests.remove(&block.hash());
         }
 
@@ -159,7 +159,7 @@ impl Handleable for GetCompactBlocksResponse {
             ctx.io,
             RecoverPublicTask::new(
                 self.blocks,
-                received_blocks,
+                received_full_blocks,
                 ctx.peer,
                 true,
                 delay,
