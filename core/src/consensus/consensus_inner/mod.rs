@@ -1816,7 +1816,10 @@ impl ConsensusGraphInner {
                     &self.arena[parent_arena_index].hash,
                     |h| {
                         let index = self.hash_to_arena_indices.get(h).unwrap();
-                        self.get_ordered_executable_epoch_blocks(*index).len()
+                        let parent = self.arena[*index].parent;
+                        (self.arena[*index].past_num_blocks
+                            - self.arena[parent].past_num_blocks)
+                            as usize
                     },
                 )
             }
@@ -1847,7 +1850,10 @@ impl ConsensusGraphInner {
                 &new_best_hash,
                 |h| {
                     let index = self.hash_to_arena_indices.get(h).unwrap();
-                    self.get_ordered_executable_epoch_blocks(*index).len()
+                    let parent = self.arena[*index].parent;
+                    (self.arena[*index].past_num_blocks
+                        - self.arena[parent].past_num_blocks)
+                        as usize
                 },
             );
         } else {
