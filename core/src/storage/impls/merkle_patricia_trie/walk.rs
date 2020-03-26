@@ -141,7 +141,7 @@ pub(super) fn walk<
                     // "First half" matched
                     matched_path = CompressedPathRaw::new_and_apply_mask(
                         &path_slice[0..i + 1],
-                        CompressedPathRaw::first_nibble_mask(),
+                        CompressedPathRaw::second_nibble_mask(),
                     );
 
                     key_child_index = CompressedPathRaw::second_nibble(key[i]);

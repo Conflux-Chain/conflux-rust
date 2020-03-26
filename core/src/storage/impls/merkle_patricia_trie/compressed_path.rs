@@ -192,7 +192,11 @@ impl CompressedPathRaw {
         }
     }
 
-    pub fn first_nibble_mask() -> u8 { Self::BITS_4_7_MASK }
+    #[inline]
+    pub const fn first_nibble_mask() -> u8 { Self::BITS_0_3_MASK }
+
+    #[inline]
+    pub const fn second_nibble_mask() -> u8 { Self::BITS_4_7_MASK }
 
     pub fn from_first_nibble(x: u8) -> u8 { x << 4 }
 
@@ -210,7 +214,7 @@ impl CompressedPathRaw {
         // Need to extend the length.
         if x.end_mask() == 0 {
             new_size = x.path_size() + 1;
-            end_mask = Self::first_nibble_mask();
+            end_mask = Self::second_nibble_mask();
         } else {
             new_size = x.path_size();
             end_mask = 0;

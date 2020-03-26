@@ -48,9 +48,9 @@ pub fn mpt_node_path_from_db_key(db_key: &[u8]) -> Result<CompressedPathRaw> {
     let last_offset = db_key.len() - 1;
     let mut path = CompressedPathRaw::new_zeroed(
         (db_key.len() / 2).try_into()?,
-        // When last_offset is odd, 0xff is passed to first_nibble, otherwise
+        // When last_offset is odd, 0xf0 is set to path_mask, otherwise
         // 0.
-        CompressedPathRaw::first_nibble(0xff * ((last_offset & 1) as u8)),
+        CompressedPathRaw::second_nibble_mask() * ((last_offset & 1) as u8),
     );
     let path_mut = path.path_slice_mut();
 
