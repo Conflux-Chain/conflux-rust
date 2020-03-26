@@ -46,10 +46,9 @@ impl Handleable for GetCompactBlocksResponse {
 
         let req = ctx.match_request(self.request_id)?;
         let delay = req.delay;
-        let mut failed_blocks = HashSet::new();
         let mut completed_blocks = Vec::new();
 
-        let mut requested_blocks: HashSet<H256> = req
+        let requested: HashSet<H256> = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
@@ -63,7 +62,7 @@ impl Handleable for GetCompactBlocksResponse {
         for mut cmpct in self.compact_blocks {
             let hash = cmpct.hash();
 
-            if !requested_blocks.remove(&hash) {
+            if !requested.contains(&hash) {
                 warn!("Response has not requested compact block {:?}", hash);
                 continue;
             }
@@ -119,25 +118,32 @@ impl Handleable for GetCompactBlocksResponse {
                     block.transactions.len(),
                     block.size(),
                 );
-                let (success, to_relay) = ctx.manager.graph.insert_block(
+                let (success, _) = ctx.manager.graph.insert_block(
                     block, true,  // need_to_verify
                     true,  // persistent
                     false, // recover_from_db
                 );
 
                 // May fail due to transactions hash collision
-                if !success {
-                    failed_blocks.insert(hash);
-                }
-                if to_relay {
+                if success {
                     completed_blocks.push(hash);
                 }
             }
         }
 
+        // Make sure all requests will be handled.
+        // We cannot just mark `self.blocks` as received here because they might
+        // be invalid.
+        let mut received_blocks = HashSet::new();
+        let mut not_block_responded_requests = requested;
+        for block in &self.blocks {
+            received_blocks.insert(block.hash());
+            not_block_responded_requests.remove(&block.hash());
+        }
+
         ctx.manager.blocks_received(
             ctx.io,
-            failed_blocks,
+            not_block_responded_requests.clone(),
             completed_blocks.iter().cloned().collect(),
             true,
             Some(ctx.peer),
@@ -148,7 +154,7 @@ impl Handleable for GetCompactBlocksResponse {
             ctx.io,
             RecoverPublicTask::new(
                 self.blocks,
-                requested_blocks,
+                received_blocks,
                 ctx.peer,
                 true,
                 delay,
