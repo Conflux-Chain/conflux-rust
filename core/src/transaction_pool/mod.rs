@@ -36,7 +36,7 @@ use primitives::{
     Account, Action, SignedTransaction, TransactionWithSignature,
 };
 use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
-use transaction_pool_inner::TransactionPoolInner;
+use transaction_pool_inner::{TransactionPoolInner};
 
 lazy_static! {
     static ref TX_POOL_DEFERRED_GAUGE: Arc<dyn Gauge<usize>> =
