@@ -515,7 +515,7 @@ impl NetworkServiceInner {
                 )
         };
 
-        debug!("Self node id: {:?}", *keys.public());
+        info!("Self node id: {:?}", *keys.public());
 
         let tcp_listener = TcpListener::bind(&listen_address)?;
         listen_address = SocketAddr::new(

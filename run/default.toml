@@ -29,6 +29,15 @@ bootnodes="cfxnode://7ffff7f14f8f73fa93a95309803bbc93c762c48bc873a823ac40500471c
 #
 # mode = ""
 
+# If you want to setup a single node running Conflux for development. You should
+# COMMENT the bootnodes setting and you should use the following parameters:
+#
+# mode = "dev"
+
+# Note that ``dev_block_interval_ms'' controls the mining rate in the dev mode.
+#
+# dev_block_interval_ms = 250
+
 # ----------------- Mining Configuration -----------------
 
 # `start_mining` controls whether a thread is started to mine new blocks.
