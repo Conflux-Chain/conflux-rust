@@ -38,16 +38,17 @@ impl Handleable for GetBlockTxnResponse {
             true,
         )?;
 
-        let mut request_again = false;
         let mut request_from_same_peer = false;
+        // There can be at most one success block in this set.
+        let mut success_blocks = HashSet::new();
         if resp_hash != req.block_hash {
             warn!("Response blocktxn is not the requested block, req={:?}, resp={:?}", req.block_hash, resp_hash);
-            request_again = true;
         } else if ctx.manager.graph.contains_block(&resp_hash) {
             debug!(
                 "Get blocktxn, but full block already received, hash={}",
                 resp_hash
             );
+            success_blocks.insert(resp_hash);
         } else if let Some(header) =
             ctx.manager.graph.block_header_by_hash(&resp_hash)
         {
@@ -90,11 +91,8 @@ impl Handleable for GetBlockTxnResponse {
                         false, // recover_from_db
                     );
 
-                    let mut blocks = Vec::new();
-                    blocks.push(resp_hash);
                     if success {
-                        request_again = false;
-
+                        success_blocks.insert(resp_hash);
                         // a transaction from compact block should be
                         // added to received pool
                         ctx.manager
@@ -103,15 +101,13 @@ impl Handleable for GetBlockTxnResponse {
                     } else {
                         // If the peer is honest, may still fail due to
                         // tx hash collision
-                        request_again = true;
                         request_from_same_peer = true;
                     }
                     if to_relay && !ctx.manager.catch_up_mode() {
-                        ctx.manager.relay_blocks(ctx.io, blocks).ok();
+                        ctx.manager.relay_blocks(ctx.io, vec![resp_hash]).ok();
                     }
                 }
                 None => {
-                    request_again = true;
                     warn!(
                         "Get blocktxn, but misses compact block, hash={}",
                         resp_hash
@@ -119,27 +115,22 @@ impl Handleable for GetBlockTxnResponse {
                 }
             }
         } else {
-            request_again = true;
             warn!("Get blocktxn, but header not received, hash={}", resp_hash);
         }
 
-        if request_again {
-            let mut req_hashes = HashSet::new();
-            req_hashes.insert(req.block_hash);
-            let req_peer = if request_from_same_peer {
-                Some(ctx.peer)
-            } else {
-                None
-            };
-            ctx.manager.blocks_received(
-                ctx.io,
-                req_hashes,
-                HashSet::new(),
-                true,
-                req_peer,
-                delay,
-            );
-        }
+        let req_peer = if request_from_same_peer {
+            Some(ctx.peer)
+        } else {
+            None
+        };
+        ctx.manager.blocks_received(
+            ctx.io,
+            vec![req.block_hash].into_iter().collect(),
+            success_blocks,
+            true,
+            req_peer,
+            delay,
+        );
         Ok(())
     }
 }
