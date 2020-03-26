@@ -48,7 +48,7 @@ impl Handleable for GetCompactBlocksResponse {
         let delay = req.delay;
         let mut completed_blocks = Vec::new();
 
-        let requested: HashSet<H256> = req
+        let mut requested: HashSet<H256> = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
@@ -104,6 +104,8 @@ impl Handleable for GetCompactBlocksResponse {
                 ctx.manager
                     .request_manager
                     .request_blocktxn(ctx.io, ctx.peer, hash, missing, None);
+                // The block remains inflight.
+                requested.remove(&hash);
             } else {
                 let trans = cmpct
                     .reconstructed_txes
@@ -131,9 +133,8 @@ impl Handleable for GetCompactBlocksResponse {
             }
         }
 
-        // Make sure all requests will be handled.
-        // We cannot just mark `self.blocks` as received here because they might
-        // be invalid.
+        // We cannot just mark `self.blocks` as completed here because they
+        // might be invalid.
         let mut received_blocks = HashSet::new();
         let mut not_block_responded_requests = requested;
         for block in &self.blocks {
