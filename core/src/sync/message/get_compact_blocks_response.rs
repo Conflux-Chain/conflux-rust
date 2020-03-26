@@ -46,10 +46,10 @@ impl Handleable for GetCompactBlocksResponse {
 
         let req = ctx.match_request(self.request_id)?;
         let delay = req.delay;
-        let mut failed_blocks = HashSet::new();
-        let mut completed_blocks = Vec::new();
+        let mut to_relay_blocks = Vec::new();
+        let mut success_blocks = Vec::new();
 
-        let mut requested_blocks: HashSet<H256> = req
+        let mut requested: HashSet<H256> = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
@@ -63,7 +63,7 @@ impl Handleable for GetCompactBlocksResponse {
         for mut cmpct in self.compact_blocks {
             let hash = cmpct.hash();
 
-            if !requested_blocks.remove(&hash) {
+            if !requested.contains(&hash) {
                 warn!("Response has not requested compact block {:?}", hash);
                 continue;
             }
@@ -105,6 +105,8 @@ impl Handleable for GetCompactBlocksResponse {
                 ctx.manager
                     .request_manager
                     .request_blocktxn(ctx.io, ctx.peer, hash, missing, None);
+                // The block remains inflight.
+                requested.remove(&hash);
             } else {
                 let trans = cmpct
                     .reconstructed_txes
@@ -126,19 +128,28 @@ impl Handleable for GetCompactBlocksResponse {
                 );
 
                 // May fail due to transactions hash collision
-                if !success {
-                    failed_blocks.insert(hash);
+                if success {
+                    success_blocks.push(hash);
                 }
                 if to_relay {
-                    completed_blocks.push(hash);
+                    to_relay_blocks.push(hash);
                 }
             }
         }
 
+        // We cannot just mark `self.blocks` as completed here because they
+        // might be invalid.
+        let mut received_full_blocks = HashSet::new();
+        let mut not_block_responded_requests = requested;
+        for block in &self.blocks {
+            received_full_blocks.insert(block.hash());
+            not_block_responded_requests.remove(&block.hash());
+        }
+
         ctx.manager.blocks_received(
             ctx.io,
-            failed_blocks,
-            completed_blocks.iter().cloned().collect(),
+            not_block_responded_requests.clone(),
+            success_blocks.iter().cloned().collect(),
             true,
             Some(ctx.peer),
             delay,
@@ -148,7 +159,7 @@ impl Handleable for GetCompactBlocksResponse {
             ctx.io,
             RecoverPublicTask::new(
                 self.blocks,
-                requested_blocks,
+                received_full_blocks,
                 ctx.peer,
                 true,
                 delay,
@@ -156,6 +167,6 @@ impl Handleable for GetCompactBlocksResponse {
         );
 
         // Broadcast completed block_header_ready blocks
-        ctx.manager.relay_blocks(ctx.io, completed_blocks)
+        ctx.manager.relay_blocks(ctx.io, to_relay_blocks)
     }
 }
