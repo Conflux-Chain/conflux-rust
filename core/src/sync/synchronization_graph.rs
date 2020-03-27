@@ -617,43 +617,99 @@ impl SynchronizationGraphInner {
         me
     }
 
-    fn new_to_be_header_graph_ready(&self, index: usize) -> bool {
-        let ref node_me = self.arena[index];
-        if node_me.graph_status >= BLOCK_HEADER_GRAPH_READY {
-            return false;
+    // TODO local_block_info is also loaded for invalid check, so maybe we can
+    // refactor code to avoid loading it twice.
+    fn is_graph_ready_in_db(
+        &self, parent_or_referee_hash: &H256, genesis_seq_num: u64,
+    ) -> bool {
+        if let Some(info) = self
+            .data_man
+            .local_block_info_from_db(parent_or_referee_hash)
+        {
+            if info.get_status() == BlockStatus::Invalid {
+                false
+            } else {
+                info.get_seq_num() < genesis_seq_num
+                    || info.get_instance_id() == self.data_man.get_instance_id()
+            }
+        } else {
+            false
         }
-
-        if node_me.pending_referee_count > 0 {
-            return false;
-        }
-
-        let parent = node_me.parent;
-        (node_me.parent_reclaimed
-            || (parent != NULL
-                && self.arena[parent].graph_status >= BLOCK_HEADER_GRAPH_READY))
-            && !node_me.referees.iter().any(|&referee| {
-                self.arena[referee].graph_status < BLOCK_HEADER_GRAPH_READY
-            })
     }
 
-    fn new_to_be_block_graph_ready(&self, index: usize) -> bool {
+    fn new_to_be_graph_ready(
+        &mut self, index: usize, minimal_status: u8,
+    ) -> bool {
         let ref node_me = self.arena[index];
-        if !node_me.block_ready {
+        // If a block has become graph-ready before and reclaimed,
+        // it will be marked as `already_processed`
+        // in `insert_block_header`, so we do not need to handle this case here.
+        // And thus we also won't propagate graph-ready to already processed
+        // blocks.
+        if node_me.graph_status >= minimal_status {
             return false;
         }
 
-        if node_me.graph_status >= BLOCK_GRAPH_READY {
+        // FIXME: we may store `genesis_sequence_number` in data_man to avoid db
+        // access.
+        let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
+        let genesis_seq_num = self
+            .data_man
+            .local_block_info_from_db(&genesis_hash)
+            .expect("local_block_info for genesis must exist")
+            .get_seq_num();
+        let parent = self.arena[index].parent;
+        let parent_header_graph_ready = if parent == NULL {
+            self.arena[index].parent_reclaimed
+                || self.is_graph_ready_in_db(
+                    self.arena[index].block_header.parent_hash(),
+                    genesis_seq_num,
+                )
+        } else {
+            self.arena[parent].graph_status >= minimal_status
+        };
+
+        if !parent_header_graph_ready {
             return false;
+        } else if parent == NULL {
+            self.arena[index].parent_reclaimed = true;
         }
 
-        let parent = node_me.parent;
-        node_me.graph_status >= BLOCK_HEADER_GRAPH_READY
-            && (node_me.parent_reclaimed
-                || (parent != NULL
-                    && self.arena[parent].graph_status >= BLOCK_GRAPH_READY))
-            && !node_me.referees.iter().any(|&referee| {
-                self.arena[referee].graph_status < BLOCK_GRAPH_READY
-            })
+        // check whether referees are `BLOCK_HEADER_GRAPH_READY`
+        // 1. referees which are in
+        // memory and status is BLOCK_HEADER_GRAPH_READY.
+        // 2. referees
+        // which are not in memory and not invalid in disk
+        // (assume these blocks are BLOCK_GRAPH_READY)
+        let mut referee_hash_in_mem = HashSet::new();
+        for referee in self.arena[index].referees.iter() {
+            if self.arena[*referee].graph_status < minimal_status {
+                return false;
+            } else {
+                referee_hash_in_mem
+                    .insert(self.arena[*referee].block_header.hash());
+            }
+        }
+
+        for referee_hash in self.arena[index].block_header.referee_hashes() {
+            if !referee_hash_in_mem.contains(referee_hash) {
+                if !self.is_graph_ready_in_db(referee_hash, genesis_seq_num) {
+                    return false;
+                }
+            }
+        }
+
+        // parent and referees are all header graph ready.
+        true
+    }
+
+    fn new_to_be_header_graph_ready(&mut self, index: usize) -> bool {
+        self.new_to_be_graph_ready(index, BLOCK_HEADER_GRAPH_READY)
+    }
+
+    fn new_to_be_block_graph_ready(&mut self, index: usize) -> bool {
+        self.new_to_be_graph_ready(index, BLOCK_GRAPH_READY)
+            && self.arena[index].block_ready
     }
 
     // Get parent (height, timestamp, gas_limit, difficulty)
