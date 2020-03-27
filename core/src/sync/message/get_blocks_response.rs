@@ -26,6 +26,7 @@ pub struct GetBlocksResponse {
     pub blocks: Vec<Block>,
 }
 
+// FIXME: why is inflight_keys not removed from here.
 impl Handleable for GetBlocksResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let _timer = MeterTimer::time_func(BLOCK_HANDLE_TIMER.as_ref());

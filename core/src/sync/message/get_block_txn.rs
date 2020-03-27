@@ -5,7 +5,10 @@
 use crate::{
     message::RequestId,
     sync::{
-        message::{Context, GetBlockTxnResponse, Handleable, KeyContainer},
+        message::{
+            msgid, Context, GetBlockTxnResponse, GetBlocks, Handleable, Key,
+            KeyContainer,
+        },
         request_manager::{AsAny, Request},
         Error, ErrorKind, ProtocolConfiguration,
     },
@@ -32,7 +35,10 @@ impl Request for GetBlockTxn {
         conf.blocks_request_timeout
     }
 
-    fn on_removed(&self, _inflight_keys: &KeyContainer) {}
+    fn on_removed(&self, inflight_keys: &KeyContainer) {
+        let mut inflight_keys = inflight_keys.write(msgid::GET_BLOCKS);
+        inflight_keys.remove(&Key::Hash(self.block_hash.clone()));
+    }
 
     fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {
         // reuse the inflight key of GetCompactBlocks
@@ -41,7 +47,13 @@ impl Request for GetBlockTxn {
     fn is_empty(&self) -> bool { false }
 
     fn resend(&self) -> Option<Box<dyn Request>> {
-        Some(Box::new(self.clone()))
+        Some(Box::new(GetBlocks {
+            request_id: 0,
+            // request_block_need_public can only be true in catch_up_mode,
+            // where GetBlockTxn can not be initiated.
+            with_public: false,
+            hashes: vec![self.block_hash.clone()],
+        }))
     }
 }
 

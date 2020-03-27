@@ -1111,10 +1111,11 @@ impl BlockDataManager {
             .recover_unsigned_tx_with_order(transactions)
     }
 
-    pub fn build_partial(
+    pub fn find_missing_tx_indices_encoded(
         &self, compact_block: &mut CompactBlock,
     ) -> Vec<usize> {
-        self.tx_data_manager.build_partial(compact_block)
+        self.tx_data_manager
+            .find_missing_tx_indices_encoded(compact_block)
     }
 
     /// Caller should make sure the state exists.

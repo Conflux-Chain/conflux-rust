@@ -119,8 +119,8 @@ impl Block {
                 k0,
                 k1,
             ),
-            // reconstructed_txes constructed here will not be used
-            reconstructed_txes: Vec::new(),
+            // reconstructed_txns constructed here will not be used
+            reconstructed_txns: Vec::new(),
         }
     }
 
@@ -235,8 +235,8 @@ pub struct CompactBlock {
     pub nonce: u64,
     /// A list of tx short ids
     pub tx_short_ids: Vec<u8>,
-    /// Store the txes reconstructed, None means not received
-    pub reconstructed_txes: Vec<Option<Arc<SignedTransaction>>>,
+    /// Store the txns reconstructed, None means not received
+    pub reconstructed_txns: Vec<Option<Arc<SignedTransaction>>>,
 }
 
 impl Debug for CompactBlock {
@@ -251,7 +251,7 @@ impl Debug for CompactBlock {
 
 impl MallocSizeOf for CompactBlock {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.tx_short_ids.size_of(ops) + self.reconstructed_txes.size_of(ops)
+        self.tx_short_ids.size_of(ops) + self.reconstructed_txns.size_of(ops)
     }
 }
 
@@ -354,7 +354,7 @@ impl Decodable for CompactBlock {
             block_header: rlp.val_at(0)?,
             nonce: rlp.val_at(1)?,
             tx_short_ids: short_ids,
-            reconstructed_txes: Vec::new(),
+            reconstructed_txns: Vec::new(),
         })
     }
 }
