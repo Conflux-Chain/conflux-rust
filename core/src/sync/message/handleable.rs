@@ -22,7 +22,7 @@ impl<'a> Context<'a> {
     ) -> Result<RequestMessage, Error> {
         self.manager
             .request_manager
-            .match_request(self.io, self.peer, request_id)
+            .match_request(self.peer, request_id)
     }
 
     pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {

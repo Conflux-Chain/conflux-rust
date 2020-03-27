@@ -1544,6 +1544,10 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
 
         self.dispatch_message(io, peer, msg_id.into(), rlp)
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
+
+        // TODO: Only call when the message is a Response. But maybe not worth
+        // doing since the check for available request_id is cheap.
+        self.request_manager.send_pending_requests(io, peer);
     }
 
     fn on_work_dispatch(
