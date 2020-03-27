@@ -48,7 +48,6 @@ lazy_static! {
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
 const BLOCK_HEADER_ONLY: u8 = 1;
-const BLOCK_HEADER_PARENTAL_TREE_READY: u8 = 2;
 const BLOCK_HEADER_GRAPH_READY: u8 = 3;
 const BLOCK_GRAPH_READY: u8 = 4;
 
@@ -616,19 +615,6 @@ impl SynchronizationGraphInner {
         }
 
         me
-    }
-
-    fn new_to_be_header_parental_tree_ready(&self, index: usize) -> bool {
-        let ref node_me = self.arena[index];
-        if node_me.graph_status >= BLOCK_HEADER_PARENTAL_TREE_READY {
-            return false;
-        }
-
-        let parent = node_me.parent;
-        node_me.parent_reclaimed
-            || (parent != NULL
-                && self.arena[parent].graph_status
-                    >= BLOCK_HEADER_PARENTAL_TREE_READY)
     }
 
     fn new_to_be_header_graph_ready(&self, index: usize) -> bool {
@@ -1324,119 +1310,96 @@ impl SynchronizationGraph {
                     &mut invalid_set,
                     index,
                 );
-            } else {
-                if inner.new_to_be_header_graph_ready(index) {
-                    inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
-                    inner.arena[index].last_update_timestamp = now;
-                    debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
+            } else if inner.new_to_be_header_graph_ready(index) {
+                inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
+                inner.arena[index].last_update_timestamp = now;
+                debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
 
-                    let r = inner.verify_header_graph_ready_block(index);
+                let r = inner.verify_header_graph_ready_block(index);
 
-                    if need_to_verify && r.is_err() {
-                        warn!(
-                            "Invalid header_arc! inserted_header={:?} err={:?}",
-                            inner.arena[index].block_header.clone(),
-                            r
-                        );
-                        invalid_set.insert(index);
-                        inner.arena[index].graph_status = BLOCK_INVALID;
-                        inner.set_and_propagate_invalid(
-                            &mut queue,
-                            &mut invalid_set,
-                            index,
-                        );
-                        continue;
-                    }
+                if need_to_verify && r.is_err() {
+                    warn!(
+                        "Invalid header_arc! inserted_header={:?} err={:?}",
+                        inner.arena[index].block_header.clone(),
+                        r
+                    );
+                    invalid_set.insert(index);
+                    inner.arena[index].graph_status = BLOCK_INVALID;
+                    inner.set_and_propagate_invalid(
+                        &mut queue,
+                        &mut invalid_set,
+                        index,
+                    );
+                    continue;
+                }
 
-                    // Note that when called by `insert_block_header` we have to
-                    // insert header here immediately instead of
-                    // after the loop because its children may
-                    // become ready and being processed in the loop later. It
-                    // requires this block already being inserted
-                    // into the BlockDataManager!
-                    if index == header_index_to_insert {
-                        self.data_man.insert_block_header(
+                // Note that when called by `insert_block_header` we have to
+                // insert header here immediately instead of
+                // after the loop because its children may
+                // become ready and being processed in the loop later. It
+                // requires this block already being inserted
+                // into the BlockDataManager!
+                if index == header_index_to_insert {
+                    self.data_man.insert_block_header(
+                        inner.arena[index].block_header.hash(),
+                        inner.arena[index].block_header.clone(),
+                        persistent,
+                    );
+                }
+                if insert_to_consensus {
+                    CONSENSUS_WORKER_QUEUE.enqueue(1);
+                    *self.latest_graph_ready_block.lock() =
+                        inner.arena[index].block_header.hash();
+
+                    assert!(
+                        self.new_block_hashes.send((
                             inner.arena[index].block_header.hash(),
-                            inner.arena[index].block_header.clone(),
-                            persistent,
-                        );
-                    }
-                    if insert_to_consensus {
-                        CONSENSUS_WORKER_QUEUE.enqueue(1);
-                        *self.latest_graph_ready_block.lock() =
-                            inner.arena[index].block_header.hash();
+                            true, /* ignore_body */
+                        )),
+                        "consensus receiver dropped"
+                    );
 
-                        assert!(
-                            self.new_block_hashes.send((
-                                inner.arena[index].block_header.hash(),
-                                true, /* ignore_body */
-                            )),
-                            "consensus receiver dropped"
-                        );
-
-                        // maintain not_ready_blocks_frontier
-                        inner.not_ready_blocks_count -= 1;
-                        inner.not_ready_blocks_frontier.remove(&index);
-                        for child in &inner.arena[index].children {
-                            inner.not_ready_blocks_frontier.insert(*child);
-                        }
-                    }
-
-                    // Passed verification on header_arc.
-                    if inner.arena[index].block_ready {
-                        need_to_relay
-                            .push(inner.arena[index].block_header.hash());
-                    }
-
+                    // maintain not_ready_blocks_frontier
+                    inner.not_ready_blocks_count -= 1;
+                    inner.not_ready_blocks_frontier.remove(&index);
                     for child in &inner.arena[index].children {
-                        if inner.arena[*child].graph_status
-                            < BLOCK_HEADER_GRAPH_READY
-                        {
-                            queue.push_back(*child);
-                        }
+                        inner.not_ready_blocks_frontier.insert(*child);
                     }
-                    for referrer in &inner.arena[index].referrers {
-                        if inner.arena[*referrer].graph_status
-                            < BLOCK_HEADER_GRAPH_READY
-                        {
-                            queue.push_back(*referrer);
-                        }
-                    }
-                } else if inner.new_to_be_header_parental_tree_ready(index) {
-                    debug!("BlockIndex {} parent_index {} hash {} is header parental tree ready", index,
-                           inner.arena[index].parent, inner.arena[index].block_header.hash());
-                    if index == header_index_to_insert {
-                        self.data_man.insert_block_header(
-                            inner.arena[index].block_header.hash(),
-                            inner.arena[index].block_header.clone(),
-                            persistent,
-                        );
-                    }
-                    inner.arena[index].graph_status =
-                        BLOCK_HEADER_PARENTAL_TREE_READY;
-                    inner.arena[index].last_update_timestamp = now;
-                    for child in &inner.arena[index].children {
-                        debug_assert!(
-                            inner.arena[*child].graph_status
-                                < BLOCK_HEADER_PARENTAL_TREE_READY
-                        );
+                }
+
+                // Passed verification on header_arc.
+                if inner.arena[index].block_ready {
+                    need_to_relay.push(inner.arena[index].block_header.hash());
+                }
+
+                for child in &inner.arena[index].children {
+                    if inner.arena[*child].graph_status
+                        < BLOCK_HEADER_GRAPH_READY
+                    {
                         queue.push_back(*child);
                     }
-                } else {
-                    debug!(
-                        "BlockIndex {} parent_index {} hash {} is not ready",
-                        index,
-                        inner.arena[index].parent,
-                        inner.arena[index].block_header.hash()
-                    );
-                    if index == header_index_to_insert {
-                        self.data_man.insert_block_header(
-                            inner.arena[index].block_header.hash(),
-                            inner.arena[index].block_header.clone(),
-                            persistent,
-                        );
+                }
+                for referrer in &inner.arena[index].referrers {
+                    if inner.arena[*referrer].graph_status
+                        < BLOCK_HEADER_GRAPH_READY
+                    {
+                        queue.push_back(*referrer);
                     }
+                }
+            } else {
+                debug!(
+                    "BlockIndex {} parent_index {} hash {} is not ready",
+                    index,
+                    inner.arena[index].parent,
+                    inner.arena[index].block_header.hash()
+                );
+                if index == header_index_to_insert {
+                    self.data_man.insert_block_header(
+                        inner.arena[index].block_header.hash(),
+                        inner.arena[index].block_header.clone(),
+                        persistent,
+                    );
                 }
             }
         }

@@ -1446,6 +1446,7 @@ impl SynchronizationProtocolHandler {
             // it will cause inconsistency.
             return Ok(());
         }
+        // TODO This may not be needed now, but we should double check it.
         let need_to_relay = self.graph.resolve_outside_dependencies(
             false, /* recover_from_db */
             self.insert_header_to_consensus(),
