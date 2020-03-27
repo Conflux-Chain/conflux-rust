@@ -23,7 +23,7 @@ from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 
-solcx.set_solc_version('v0.5.10')
+solcx.set_solc_version('v0.5.17')
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
 CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220

@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use self::account_entry::{AccountEntry, AccountState, OverlayAccount};
+use self::account_entry::{AccountEntry, AccountState};
 use crate::{
     bytes::Bytes,
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
@@ -29,7 +29,7 @@ mod state_tests;
 mod account_entry;
 mod substate;
 
-pub use self::substate::Substate;
+pub use self::{account_entry::OverlayAccount, substate::Substate};
 use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
 
 #[derive(Copy, Clone)]
@@ -461,6 +461,8 @@ impl State {
         user: Address,
     ) -> DbResult<()>
     {
+        info!("add_commission_privilege contract_address: {:?}, contract_owner: {:?}, user: {:?}", contract_address, contract_owner, user);
+
         let mut account =
             self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)?;
         Ok(account.add_commission_privilege(

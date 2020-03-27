@@ -18,7 +18,7 @@ install web3
 install py-solc-x
 install jsonrpcclient
 
-python3 -m solcx.install v0.5.10
+python3 -m solcx.install v0.5.17
 
 # TODO cross platform
 #yum install clang snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel
