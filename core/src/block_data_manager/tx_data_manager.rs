@@ -191,8 +191,8 @@ impl TransactionDataManager {
                         end_idx += 1;
                         remainder -= 1;
                     }
-                    let unsigned_txes = Vec::new();
-                    unsigned_trans.push(unsigned_txes);
+                    let unsigned_txns = Vec::new();
+                    unsigned_trans.push(unsigned_txns);
                 }
 
                 unsigned_trans.last_mut().unwrap().push(tx);
@@ -202,14 +202,14 @@ impl TransactionDataManager {
 
             let (sender, receiver) = channel();
             let n_thread = unsigned_trans.len();
-            for unsigned_txes in unsigned_trans {
-                RECOVER_PUB_KEY_QUEUE.enqueue(unsigned_txes.len());
+            for unsigned_txns in unsigned_trans {
+                RECOVER_PUB_KEY_QUEUE.enqueue(unsigned_txns.len());
                 let sender = sender.clone();
                 self.worker_pool.lock().execute(move || {
-                    let mut signed_txes = Vec::new();
-                    for (idx, tx) in unsigned_txes {
+                    let mut signed_txns = Vec::new();
+                    for (idx, tx) in unsigned_txns {
                         if let Ok(public) = tx.recover_public() {
-                            signed_txes.push((idx, Arc::new(SignedTransaction::new(
+                            signed_txns.push((idx, Arc::new(SignedTransaction::new(
                                 public,
                                 tx.clone(),
                             ))));
@@ -221,7 +221,7 @@ impl TransactionDataManager {
                             break;
                         }
                     }
-                    sender.send(signed_txes).unwrap();
+                    sender.send(signed_txns).unwrap();
                 });
             }
 
@@ -243,14 +243,14 @@ impl TransactionDataManager {
     }
 
     /// Find tx in tx_time_window that matches tx_short_ids to fill in
-    /// reconstruced_txes Return the differentially encoded index of missing
+    /// reconstruced_txns Return the differentially encoded index of missing
     /// transactions Now should only called once after CompactBlock is
     /// decoded
-    pub fn build_partial(
+    pub fn find_missing_tx_indices_encoded(
         &self, compact_block: &mut CompactBlock,
     ) -> Vec<usize> {
         compact_block
-            .reconstructed_txes
+            .reconstructed_txns
             .resize(compact_block.len(), None);
 
         let (random_bytes_vector, fixed_bytes_vector) =
@@ -270,7 +270,7 @@ impl TransactionDataManager {
                     k1,
                 ) {
                     Some(tx) => {
-                        compact_block.reconstructed_txes[i] = Some(tx.clone());
+                        compact_block.reconstructed_txns[i] = Some(tx.clone());
                     }
                     None => {
                         missing_index.push(i);

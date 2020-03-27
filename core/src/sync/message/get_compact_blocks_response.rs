@@ -49,7 +49,7 @@ impl Handleable for GetCompactBlocksResponse {
         let mut to_relay_blocks = Vec::new();
         let mut received_reconstructed_blocks = Vec::new();
 
-        let mut requested: HashSet<H256> = req
+        let mut requested_except_inflight_txn: HashSet<H256> = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
@@ -62,7 +62,7 @@ impl Handleable for GetCompactBlocksResponse {
         for mut cmpct in self.compact_blocks {
             let hash = cmpct.hash();
 
-            if !requested.contains(&hash) {
+            if !requested_except_inflight_txn.contains(&hash) {
                 warn!("Response has not requested compact block {:?}", hash);
                 continue;
             }
@@ -96,7 +96,10 @@ impl Handleable for GetCompactBlocksResponse {
             let missing = {
                 let _timer =
                     MeterTimer::time_func(CMPCT_BLOCK_RECOVER_TIMER.as_ref());
-                ctx.manager.graph.data_man.build_partial(&mut cmpct)
+                ctx.manager
+                    .graph
+                    .data_man
+                    .find_missing_tx_indices_encoded(&mut cmpct)
             };
             if !missing.is_empty() {
                 debug!("Request {} missing tx in {}", missing.len(), hash);
@@ -105,10 +108,10 @@ impl Handleable for GetCompactBlocksResponse {
                     .request_manager
                     .request_blocktxn(ctx.io, ctx.peer, hash, missing, None);
                 // The block remains inflight.
-                requested.remove(&hash);
+                requested_except_inflight_txn.remove(&hash);
             } else {
                 let trans = cmpct
-                    .reconstructed_txes
+                    .reconstructed_txns
                     .into_iter()
                     .map(|tx| tx.unwrap())
                     .collect();
@@ -138,15 +141,16 @@ impl Handleable for GetCompactBlocksResponse {
         // We cannot just mark `self.blocks` as completed here because they
         // might be invalid.
         let mut received_full_blocks = HashSet::new();
-        let mut not_block_responded_requests = requested;
+        let mut compact_block_responded_requests =
+            requested_except_inflight_txn;
         for block in &self.blocks {
             received_full_blocks.insert(block.hash());
-            not_block_responded_requests.remove(&block.hash());
+            compact_block_responded_requests.remove(&block.hash());
         }
 
         ctx.manager.blocks_received(
             ctx.io,
-            not_block_responded_requests.clone(),
+            compact_block_responded_requests.clone(),
             received_reconstructed_blocks.iter().cloned().collect(),
             true,
             Some(ctx.peer),
