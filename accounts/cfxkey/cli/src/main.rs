@@ -40,8 +40,7 @@ use docopt::Docopt;
 use rustc_hex::{FromHex, FromHexError};
 
 const USAGE: &str = r#"
-Parity Ethereum keys generator.
-  Copyright 2015-2019 Parity Technologies (UK) Ltd.
+Conflux keys generator.
 
 Usage:
     cfxkey info <secret-or-phrase> [options]

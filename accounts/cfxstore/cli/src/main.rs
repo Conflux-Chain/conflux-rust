@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -40,8 +44,7 @@ use cfxstore::{EthStore, SimpleSecretStore, SecretStore, import_accounts, Presal
 mod crack;
 
 pub const USAGE: &'static str = r#"
-Parity Ethereum key management tool.
-  Copyright 2015-2019 Parity Technologies (UK) Ltd.
+Conflux key management tool.
 
 Usage:
     cfxstore insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
