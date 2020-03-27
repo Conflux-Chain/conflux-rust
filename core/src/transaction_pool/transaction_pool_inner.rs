@@ -161,8 +161,7 @@ impl ReadyAccountPool {
 
     fn update(
         &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
-    ) -> Option<Arc<SignedTransaction>>
-    {
+    ) -> Option<Arc<SignedTransaction>> {
         let replaced = if let Some(tx) = tx {
             if tx.hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in ready pool", tx.hash);
@@ -426,7 +425,8 @@ impl TransactionPoolInner {
                     timestamp,
                 );
                 self.txs.insert(transaction.hash(), transaction.clone());
-                self.tx_sponsored_gas_map.insert(transaction.hash(), sponsored_gas);
+                self.tx_sponsored_gas_map
+                    .insert(transaction.hash(), sponsored_gas);
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -439,7 +439,8 @@ impl TransactionPoolInner {
                 self.txs.remove(&replaced_tx.hash());
                 self.txs.insert(transaction.hash(), transaction.clone());
                 self.tx_sponsored_gas_map.remove(&replaced_tx.hash());
-                self.tx_sponsored_gas_map.insert(transaction.hash(), sponsored_gas);
+                self.tx_sponsored_gas_map
+                    .insert(transaction.hash(), sponsored_gas);
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -583,9 +584,7 @@ impl TransactionPoolInner {
         let mut big_tx_resample_times_limit = 10;
         let mut recycle_txs = Vec::new();
 
-        'out: while let Some(tx) =
-            self.ready_account_pool.pop()
-        {
+        'out: while let Some(tx) = self.ready_account_pool.pop() {
             let tx_size = tx.rlp_size();
             if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
                 || block_size_limit - total_tx_size < tx_size
@@ -617,7 +616,10 @@ impl TransactionPoolInner {
                 true, /* packed */
                 true, /* force */
                 None, /* state_nonce_and_balance */
-                self.tx_sponsored_gas_map.get(&tx.hash()).map(|x| x.clone()).unwrap_or(U256::from(0))
+                self.tx_sponsored_gas_map
+                    .get(&tx.hash())
+                    .map(|x| x.clone())
+                    .unwrap_or(U256::from(0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
 
@@ -638,7 +640,10 @@ impl TransactionPoolInner {
                 false, /* packed */
                 true,  /* force */
                 None,  /* state_nonce_and_balance */
-                self.tx_sponsored_gas_map.get(&tx.hash()).map(|x| x.clone()).unwrap_or(U256::from(0)),
+                self.tx_sponsored_gas_map
+                    .get(&tx.hash())
+                    .map(|x| x.clone())
+                    .unwrap_or(U256::from(0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
@@ -701,7 +706,9 @@ impl TransactionPoolInner {
             if let Ok(Some(sponsor_info)) =
                 self.get_sponsor_info_from_storage(&callee, account_cache)
             {
-                if account_cache.check_commission_privilege(&callee, &transaction.sender()) {
+                if account_cache
+                    .check_commission_privilege(&callee, &transaction.sender())
+                {
                     let estimated_gas = transaction.gas * transaction.gas_price;
                     if estimated_gas <= sponsor_info.sponsor_gas_bound
                         && estimated_gas <= sponsor_info.sponsor_balance_for_gas
@@ -711,8 +718,6 @@ impl TransactionPoolInner {
                 }
             }
         }
-
-        info!("insert_transaction_with_readiness_check sender: {:?} action: {:?}, sponsored_gas: {:?}", transaction.sender, transaction.action, sponsored_gas);
 
         let (state_nonce, state_balance) = self
             .get_nonce_and_balance_from_storage(

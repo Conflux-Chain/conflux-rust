@@ -29,7 +29,7 @@ mod state_tests;
 mod account_entry;
 mod substate;
 
-pub use self::{substate::Substate, account_entry::OverlayAccount};
+pub use self::{account_entry::OverlayAccount, substate::Substate};
 use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
 
 #[derive(Copy, Clone)]
