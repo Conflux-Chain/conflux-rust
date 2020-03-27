@@ -701,11 +701,13 @@ impl TransactionPoolInner {
             if let Ok(Some(sponsor_info)) =
                 self.get_sponsor_info_from_storage(&callee, account_cache)
             {
-                let estimated_gas = transaction.gas * transaction.gas_price;
-                if estimated_gas <= sponsor_info.sponsor_gas_bound
-                    && estimated_gas <= sponsor_info.sponsor_balance_for_gas
-                {
-                    sponsored_gas = transaction.gas;
+                if account_cache.check_commission_privilege(&callee, &transaction.sender()) {
+                    let estimated_gas = transaction.gas * transaction.gas_price;
+                    if estimated_gas <= sponsor_info.sponsor_gas_bound
+                        && estimated_gas <= sponsor_info.sponsor_balance_for_gas
+                    {
+                        sponsored_gas = transaction.gas;
+                    }
                 }
             }
         }

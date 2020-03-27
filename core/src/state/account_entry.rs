@@ -305,6 +305,7 @@ impl OverlayAccount {
                 rlp_stream.append_list(user.as_ref());
                 keccak(rlp_stream.out())
             };
+            info!("check_commission_privilege key: {:?}", key);
             self.storage_at(db, &key).map(|x| !x.is_zero())
         }
     }
@@ -320,6 +321,7 @@ impl OverlayAccount {
         rlp_stream.append_list(contract_address.as_ref());
         rlp_stream.append_list(user.as_ref());
         let key = keccak(rlp_stream.out());
+        info!("add_commission_privilege key: {:?}", key);
         self.set_storage(
             key,
             COMMISSION_PRIVILEGE_STORAGE_VALUE.clone(),
