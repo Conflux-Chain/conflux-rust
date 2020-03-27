@@ -207,7 +207,7 @@ impl Cfx for CfxHandler {
         fn block_by_hash(&self, hash: RpcH256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
         fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn gas_price(&self) -> RpcResult<RpcU256>;
-        fn transaction_count(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
+        fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
 
         fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
         fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;

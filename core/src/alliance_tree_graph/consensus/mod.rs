@@ -426,7 +426,7 @@ impl TreeGraphConsensus {
         Some((results_with_epoch, address, state_root))
     }
 
-    pub fn transaction_count(
+    pub fn next_nonce(
         &self, address: Address,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
     ) -> Result<U256, String>

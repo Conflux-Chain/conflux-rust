@@ -218,7 +218,7 @@ impl RpcImpl {
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }
 
-    pub fn transaction_count(
+    pub fn next_nonce(
         &self, address: RpcH160, num: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<RpcU256> {
         let consensus_graph = self
@@ -230,12 +230,12 @@ impl RpcImpl {
             EpochNumber::LatestState,
         ));
         info!(
-            "RPC Request: cfx_getTransactionCount address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
             address, num
         );
 
         consensus_graph
-            .transaction_count(address.into(), num.into())
+            .next_nonce(address.into(), num.into())
             .map_err(RpcError::invalid_params)
             .map(|x| x.into())
     }
