@@ -342,7 +342,7 @@ subcommands:
                 about: Get nonce of specified account
                 args:
                     - rpc-method:
-                        default_value: cfx_getTransactionCount
+                        default_value: cfx_getNextNonce
                         hidden: true
                     - rpc-args:
                         multiple: true

@@ -95,7 +95,7 @@ def wait_for_initial_nonce_for_address(node, addr, timeout=10):
             raise AssertionError("Wait for initial nonce for address {} timeout after {} seconds, last exception is {}"
                                  .format(addr, timeout, last_exception))
         try:
-            nonce = int(node.cfx_getTransactionCount(addr), 0)
+            nonce = int(node.cfx_getNextNonce(addr), 0)
         except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
             # It's possible that
             last_exception = e

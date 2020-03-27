@@ -687,7 +687,7 @@ impl ConsensusGraph {
         }
     }
 
-    pub fn transaction_count(
+    pub fn next_nonce(
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
     ) -> Result<U256, String>

@@ -193,11 +193,11 @@ class RpcClient:
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
         if epoch is None and block_hash is None:
-            return int(self.node.cfx_getTransactionCount(addr), 0)
+            return int(self.node.cfx_getNextNonce(addr), 0)
         elif epoch is None:
-            return int(self.node.cfx_getTransactionCount(addr, "hash:"+block_hash), 0)
+            return int(self.node.cfx_getNextNonce(addr, "hash:"+block_hash), 0)
         else:
-            return int(self.node.cfx_getTransactionCount(addr, epoch), 0)
+            return int(self.node.cfx_getNextNonce(addr, epoch), 0)
 
     def send_raw_tx(self, raw_tx: str) -> str:
         tx_hash = self.node.cfx_sendRawTransaction(raw_tx)
