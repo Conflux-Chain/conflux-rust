@@ -659,7 +659,7 @@ impl SynchronizationGraphInner {
             .expect("local_block_info for genesis must exist")
             .get_seq_num();
         let parent = self.arena[index].parent;
-        let parent_header_graph_ready = if parent == NULL {
+        let parent_graph_ready = if parent == NULL {
             self.arena[index].parent_reclaimed
                 || self.is_graph_ready_in_db(
                     self.arena[index].block_header.parent_hash(),
@@ -669,7 +669,7 @@ impl SynchronizationGraphInner {
             self.arena[parent].graph_status >= minimal_status
         };
 
-        if !parent_header_graph_ready {
+        if !parent_graph_ready {
             return false;
         } else if parent == NULL {
             self.arena[index].parent_reclaimed = true;
