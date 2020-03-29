@@ -100,7 +100,7 @@ impl Handleable for GetBlockTxnResponse {
                             .append_received_transactions(signed_txes);
                     }
                     if insert_result.should_relay()
-                        && ctx.manager.catch_up_mode()
+                        && !ctx.manager.catch_up_mode()
                     {
                         ctx.manager.relay_blocks(ctx.io, vec![resp_hash]).ok();
                     }

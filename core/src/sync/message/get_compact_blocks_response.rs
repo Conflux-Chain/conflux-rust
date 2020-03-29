@@ -126,7 +126,6 @@ impl Handleable for GetCompactBlocksResponse {
                     false, // recover_from_db
                 );
 
-                // May fail due to transactions hash collision
                 if !insert_result.request_again() {
                     received_reconstructed_blocks.push(hash);
                 }
