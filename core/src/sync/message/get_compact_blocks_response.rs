@@ -47,13 +47,12 @@ impl Handleable for GetCompactBlocksResponse {
         let req = ctx.match_request(self.request_id)?;
         let delay = req.delay;
         let mut to_relay_blocks = Vec::new();
-        let mut success_blocks = Vec::new();
+        let mut received_reconstructed_blocks = Vec::new();
 
         let mut requested: HashSet<H256> = req
             .downcast_ref::<GetCompactBlocks>(
                 ctx.io,
                 &ctx.manager.request_manager,
-                true,
             )?
             .hashes
             .iter()
@@ -121,17 +120,16 @@ impl Handleable for GetCompactBlocksResponse {
                     block.transactions.len(),
                     block.size(),
                 );
-                let (success, to_relay) = ctx.manager.graph.insert_block(
+                let insert_result = ctx.manager.graph.insert_block(
                     block, true,  // need_to_verify
                     true,  // persistent
                     false, // recover_from_db
                 );
 
-                // May fail due to transactions hash collision
-                if success {
-                    success_blocks.push(hash);
+                if !insert_result.request_again() {
+                    received_reconstructed_blocks.push(hash);
                 }
-                if to_relay {
+                if insert_result.should_relay() {
                     to_relay_blocks.push(hash);
                 }
             }
@@ -149,7 +147,7 @@ impl Handleable for GetCompactBlocksResponse {
         ctx.manager.blocks_received(
             ctx.io,
             not_block_responded_requests.clone(),
-            success_blocks.iter().cloned().collect(),
+            received_reconstructed_blocks.iter().cloned().collect(),
             true,
             Some(ctx.peer),
             delay,

@@ -23,7 +23,6 @@ impl Handleable for StateSyncCandidateResponse {
         let request = message.downcast_ref::<StateSyncCandidateRequest>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
         ctx.manager.state_sync.handle_snapshot_candidate_response(
             &ctx.peer,

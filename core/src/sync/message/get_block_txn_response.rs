@@ -35,12 +35,11 @@ impl Handleable for GetBlockTxnResponse {
         let req = req.downcast_ref::<GetBlockTxn>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         let mut request_from_same_peer = false;
         // There can be at most one success block in this set.
-        let mut success_blocks = HashSet::new();
+        let mut received_blocks = HashSet::new();
         if resp_hash != req.block_hash {
             warn!("Response blocktxn is not the requested block, req={:?}, resp={:?}", req.block_hash, resp_hash);
         } else if ctx.manager.graph.contains_block(&resp_hash) {
@@ -48,7 +47,7 @@ impl Handleable for GetBlockTxnResponse {
                 "Get blocktxn, but full block already received, hash={}",
                 resp_hash
             );
-            success_blocks.insert(resp_hash);
+            received_blocks.insert(resp_hash);
         } else if let Some(header) =
             ctx.manager.graph.block_header_by_hash(&resp_hash)
         {
@@ -85,26 +84,29 @@ impl Handleable for GetBlockTxnResponse {
                         block.transactions.len(),
                         block.size(),
                     );
-                    let (success, to_relay) = ctx.manager.graph.insert_block(
+                    let insert_result = ctx.manager.graph.insert_block(
                         block, true,  // need_to_verify
                         true,  // persistent
                         false, // recover_from_db
                     );
 
-                    if success {
-                        success_blocks.insert(resp_hash);
+                    if !insert_result.request_again() {
+                        received_blocks.insert(resp_hash);
+                    }
+                    if insert_result.is_valid() {
                         // a transaction from compact block should be
                         // added to received pool
                         ctx.manager
                             .request_manager
                             .append_received_transactions(signed_txes);
-                    } else {
-                        // If the peer is honest, may still fail due to
-                        // tx hash collision
-                        request_from_same_peer = true;
                     }
-                    if to_relay && !ctx.manager.catch_up_mode() {
+                    if insert_result.should_relay()
+                        && !ctx.manager.catch_up_mode()
+                    {
                         ctx.manager.relay_blocks(ctx.io, vec![resp_hash]).ok();
+                    }
+                    if insert_result.request_again() {
+                        request_from_same_peer = true;
                     }
                 }
                 None => {
@@ -118,7 +120,7 @@ impl Handleable for GetBlockTxnResponse {
             warn!("Get blocktxn, but header not received, hash={}", resp_hash);
         }
 
-        let req_peer = if request_from_same_peer {
+        let peer = if request_from_same_peer {
             Some(ctx.peer)
         } else {
             None
@@ -126,9 +128,9 @@ impl Handleable for GetBlockTxnResponse {
         ctx.manager.blocks_received(
             ctx.io,
             vec![req.block_hash].into_iter().collect(),
-            success_blocks,
+            received_blocks,
             true,
-            req_peer,
+            peer,
             delay,
         );
         Ok(())

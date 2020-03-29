@@ -70,7 +70,6 @@ impl Handleable for GetBlockHeadersResponse {
         let req = req.downcast_ref::<GetBlockHeaders>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         // keep first time drift validation error to return later

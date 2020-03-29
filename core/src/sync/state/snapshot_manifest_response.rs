@@ -51,7 +51,6 @@ impl Handleable for SnapshotManifestResponse {
         let request = message.downcast_ref::<SnapshotManifestRequest>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         if let Err(e) = self.validate(ctx, request) {

@@ -852,16 +852,16 @@ impl SynchronizationProtocolHandler {
                     }
                 }
             }
-            let (success, to_relay) = self.graph.insert_block(
+            let insert_result = self.graph.insert_block(
                 block, true,  /* need_to_verify */
                 true,  /* persistent */
                 false, /* recover_from_db */
             );
-            if success {
+            if insert_result.is_valid() {
                 // The requested block is correctly received
                 received_blocks.insert(hash);
             }
-            if to_relay {
+            if insert_result.should_relay() {
                 need_to_relay.push(hash);
             }
         }
