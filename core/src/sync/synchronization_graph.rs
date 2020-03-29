@@ -1117,17 +1117,17 @@ impl SynchronizationGraph {
                     }
                     if let Some((_, hash, ignore_body)) = priority_queue.pop() {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
-                        let referers = reverse_map.remove(&hash).unwrap();
-                        for referer in referers {
-                            let cnt_tuple = counter_map.get_mut(&referer).unwrap();
+                        let successors = reverse_map.remove(&hash).unwrap();
+                        for succ in successors {
+                            let cnt_tuple = counter_map.get_mut(&succ).unwrap();
                             cnt_tuple.0 -= 1;
                             if cnt_tuple.0 == 0 {
                                 let ignore_body = cnt_tuple.1;
-                                counter_map.remove(&referer);
-                                let header_referrer = data_man.block_header_by_hash(&referer).expect("Header must exist before sending to the consensus worker!");
-                                let parent_referrer = header_referrer.parent_hash();
-                                let epoch_number = consensus.get_block_epoch_number(parent_referrer).unwrap_or(0);
-                                priority_queue.push((epoch_number, referer, ignore_body));
+                                counter_map.remove(&succ);
+                                let header_succ = data_man.block_header_by_hash(&succ).expect("Header must exist before sending to the consensus worker!");
+                                let parent_succ = header_succ.parent_hash();
+                                let epoch_number = consensus.get_block_epoch_number(parent_succ).unwrap_or(0);
+                                priority_queue.push((epoch_number, succ, ignore_body));
                             }
                         }
                         consensus.on_new_block(
