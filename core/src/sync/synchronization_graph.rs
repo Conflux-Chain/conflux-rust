@@ -31,7 +31,7 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     mem, panic,
     sync::Arc,
-    thread::{self, sleep},
+    thread::{self, yield_now},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::mpsc::error::TryRecvError;
@@ -1136,7 +1136,7 @@ impl SynchronizationGraph {
                             true, /* update_best_info */
                         )
                     } else {
-                        sleep(Duration::from_millis(30));
+                        yield_now();
                     }
                 }
             })
