@@ -33,7 +33,7 @@ use self::{
             DebugRpcImpl as AllianceDebugRpcImpl, RpcImpl as AllianceImpl,
             TestRpcImpl as AllianceTestRpcImpl,
         },
-        cfx::{CfxHandler, DebugRpcImpl, RpcImpl, TestRpcImpl},
+        cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
         common::RpcImpl as CommonImpl,
         light::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
@@ -41,7 +41,7 @@ use self::{
         },
         pubsub::PubSubClient,
     },
-    traits::{cfx::Cfx, debug::DebugRpc, pubsub::PubSub, test::TestRpc},
+    traits::{cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc},
 };
 
 pub use self::types::{Block as RpcBlock, Origin};
@@ -136,7 +136,7 @@ pub fn setup_debug_rpc_apis(
     let interceptor =
         ThrottleInterceptor::new(&conf.raw_conf.throttling_conf, "rpc_local");
     let test = TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate();
-    let debug = DebugRpcImpl::new(common, rpc).to_delegate();
+    let debug = LocalRpcImpl::new(common, rpc).to_delegate();
 
     // extend_with maps each method in RpcImpl object into a RPC handler
     let mut handler = MetaIoHandler::default();

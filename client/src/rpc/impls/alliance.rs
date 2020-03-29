@@ -6,7 +6,7 @@ use delegate::delegate;
 
 use crate::rpc::{
     impls::{cfx::RpcImplConfiguration, common::RpcImpl as CommonImpl},
-    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
+    traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
@@ -288,7 +288,7 @@ impl DebugRpcImpl {
     }
 }
 
-impl DebugRpc for DebugRpcImpl {
+impl LocalRpc for DebugRpcImpl {
     delegate! {
         target self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;

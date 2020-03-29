@@ -8,6 +8,6 @@ pub mod pubsub;
 pub mod test;
 
 pub use cfx::Cfx;
-pub use debug::DebugRpc;
+pub use debug::LocalRpc;
 pub use pubsub::PubSub;
 pub use test::TestRpc;

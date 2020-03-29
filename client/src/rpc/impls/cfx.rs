@@ -7,7 +7,7 @@ use delegate::delegate;
 use crate::rpc::{
     helpers::errors::execution_error,
     impls::common::RpcImpl as CommonImpl,
-    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
+    traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         sign_call, Account as RpcAccount, BFTStates, BlameInfo,
         Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
@@ -909,18 +909,18 @@ impl TestRpc for TestRpcImpl {
     }
 }
 
-pub struct DebugRpcImpl {
+pub struct LocalRpcImpl {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
 }
 
-impl DebugRpcImpl {
+impl LocalRpcImpl {
     pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
-        DebugRpcImpl { common, rpc_impl }
+        LocalRpcImpl { common, rpc_impl }
     }
 }
 
-impl DebugRpc for DebugRpcImpl {
+impl LocalRpc for LocalRpcImpl {
     delegate! {
         target self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
