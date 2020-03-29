@@ -32,22 +32,30 @@ class ReorgTest(ConfluxTestFramework):
         for s in range(self.n_shard):
             ''' Send random transactions to this shard s '''
             shard_nodes = self.nodes[s * self.shard_size: (s + 1) * self.shard_size]
-            balance_map = {genesis_key: default_config["TOTAL_COIN"]}
-            nonce_map = {genesis_key: 0}
+            # We can not use genesis accounts in two shards, because they may generate transactions
+            # that are valid in another shard and breaks our assertion about the final shard state.
+            start_sk, _ = ec_random_keys()
+            value = default_config["TOTAL_COIN"] - 21000
+            tx = create_transaction(pri_key=genesis_key, receiver=priv_to_addr(start_sk), value=value, nonce=0,
+                                    gas_price=gas_price)
+            shard_nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
+
+            balance_map = {start_sk: value}
+            nonce_map = {start_sk: wait_for_initial_nonce_for_privkey(shard_nodes[0], start_sk)}
             account_n = 10
 
             # Initialize new accounts
             new_keys = set()
             for _ in range(account_n):
-                value = max(int(balance_map[genesis_key] * random.random()), 21000 * tx_n)
+                value = max(int(balance_map[start_sk] * random.random()), 21000 * tx_n)
                 receiver_sk, _ = ec_random_keys()
                 new_keys.add(receiver_sk)
-                tx = create_transaction(pri_key=genesis_key, receiver=priv_to_addr(receiver_sk), value=value,
-                                        nonce=nonce_map[genesis_key], gas_price=gas_price)
+                tx = create_transaction(pri_key=start_sk, receiver=priv_to_addr(receiver_sk), value=value,
+                                        nonce=nonce_map[start_sk], gas_price=gas_price)
                 shard_nodes[0].p2p.send_protocol_msg(Transactions(transactions=[tx]))
                 balance_map[receiver_sk] = value
-                nonce_map[genesis_key] += 1
-                balance_map[genesis_key] -= value + gas_price * 21000
+                nonce_map[start_sk] += 1
+                balance_map[start_sk] -= value + gas_price * 21000
             wait_for_account_stable()
             for key in new_keys:
                 nonce_map[key] = wait_for_initial_nonce_for_privkey(shard_nodes[0], key)
