@@ -58,7 +58,7 @@ pub mod consensus_internal {
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
     /// This is the minimum risk that the confirmation meter tries to maintain.
-    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.000001;
+    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.00000001;
     /// The maximum number of epochs that the confirmation meter tries to
     /// maintain internally.
     pub const CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK: usize = 100;
