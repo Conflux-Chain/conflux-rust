@@ -37,6 +37,7 @@ impl Handleable for GetBlockTxnResponse {
             &ctx.manager.request_manager,
         )?;
 
+        let mut request_from_same_peer = false;
         // There can be at most one success block in this set.
         let mut received_blocks = HashSet::new();
         if resp_hash != req.block_hash {
@@ -104,6 +105,9 @@ impl Handleable for GetBlockTxnResponse {
                     {
                         ctx.manager.relay_blocks(ctx.io, vec![resp_hash]).ok();
                     }
+                    if insert_result.request_again() {
+                        request_from_same_peer = true;
+                    }
                 }
                 None => {
                     warn!(
@@ -116,16 +120,17 @@ impl Handleable for GetBlockTxnResponse {
             warn!("Get blocktxn, but header not received, hash={}", resp_hash);
         }
 
-        // TODO For blocks with unmatch transaction root, it's possibly caused
-        // by short hash collision and we can request the full block
-        // from the same peer. However, there is no direct interface to
-        // achieve this control.
+        let peer = if request_from_same_peer {
+            Some(ctx.peer)
+        } else {
+            None
+        };
         ctx.manager.blocks_received(
             ctx.io,
             vec![req.block_hash].into_iter().collect(),
             received_blocks,
             true,
-            None,
+            peer,
             delay,
         );
         Ok(())
