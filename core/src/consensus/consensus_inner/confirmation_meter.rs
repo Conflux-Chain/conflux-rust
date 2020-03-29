@@ -207,17 +207,29 @@ impl ConfirmationMeter {
         // Compute risk
         let m_n_diff = m as f64 - n as f64;
         let mut risk = 0.9;
-        let threshold_1 = min(0.75 * m as f64 - 22.0, 2250.0);
+        let threshold_1 = if 0.75 * m as f64 - 22.0 < 2250.0 {
+            0.75 * m as f64 - 22.0
+        } else {
+            2250.0
+        };
         if m_n_diff >= threshold_1 {
             return risk;
         }
         risk = 0.0001;
-        let threshold_2 = min(0.70 * m as f64 - 22.0, 1500.0);
+        let threshold_2 = if 0.70 * m as f64 - 22.0 < 1500.0 {
+            0.70 * m as f64 - 22.0
+        } else {
+            1500.0
+        };
         if m_n_diff >= threshold_2 {
             return risk;
         }
         risk = 0.000001;
-        let threshold_3 = min(0.65 * m as f64 - 22.0, 750.0);
+        let threshold_3 = if 0.65 * m as f64 - 22.0 < 750.0 {
+            0.65 * m as f64
+        } else {
+            750.0
+        };
         if m_n_diff >= threshold_3 {
             return risk;
         }
