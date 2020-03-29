@@ -1124,9 +1124,9 @@ impl SynchronizationGraph {
                             if cnt_tuple.0 == 0 {
                                 let ignore_body = cnt_tuple.1;
                                 counter_map.remove(&referer);
-                                let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
-                                let parent_hash = header.parent_hash();
-                                let epoch_number = consensus.get_block_epoch_number(parent_hash).unwrap_or(0);
+                                let header_referrer = data_man.block_header_by_hash(&referer).expect("Header must exist before sending to the consensus worker!");
+                                let parent_referrer = header_referrer.parent_hash();
+                                let epoch_number = consensus.get_block_epoch_number(parent_referrer).unwrap_or(0);
                                 priority_queue.push((epoch_number, referer, ignore_body));
                             }
                         }
