@@ -525,7 +525,6 @@ impl Handleable for GetTransactionsResponse {
         let req = req.downcast_ref::<GetTransactions>(
             ctx.io,
             &ctx.manager.request_manager,
-            false,
         )?;
 
         // FIXME: Do some check based on transaction request.
@@ -586,7 +585,6 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
         let req = req.downcast_ref::<GetTransactionsFromTxHashes>(
             ctx.io,
             &ctx.manager.request_manager,
-            false,
         )?;
 
         // FIXME: Do some check based on transaction request.

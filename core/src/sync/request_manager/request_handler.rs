@@ -475,15 +475,16 @@ impl RequestMessage {
     /// `UnexpectedResponse` error.
     pub fn downcast_ref<T: Request + Any>(
         &self, io: &dyn NetworkContext, request_manager: &RequestManager,
-        resend_on_mismatch: bool,
-    ) -> Result<&T, Error>
-    {
+    ) -> Result<&T, Error> {
         match self.request.as_any().downcast_ref::<T>() {
             Some(req) => Ok(req),
             None => {
                 warn!("failed to downcast general request to concrete request type, message = {:?}", self);
-                if resend_on_mismatch {
-                    request_manager.resend_request_to_another_peer(io, self);
+                if let Some(resent_request) = self.request.resend() {
+                    request_manager.resend_request_to_another_peer(
+                        io,
+                        &RequestMessage::new(resent_request, self.delay),
+                    );
                 }
                 Err(ErrorKind::UnexpectedResponse.into())
             }

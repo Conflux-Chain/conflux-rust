@@ -79,13 +79,13 @@ fn on_new_decoded_block(
         }
     }
 
-    let (_, to_relay) = ctx.manager.graph.insert_block(
+    let insert_result = ctx.manager.graph.insert_block(
         block,
         need_to_verify,
         persistent,
         false, // recover_from_db
     );
-    if to_relay {
+    if insert_result.should_relay() {
         need_to_relay.push(hash);
     }
     Ok(need_to_relay)

@@ -28,7 +28,6 @@ impl Handleable for SnapshotChunkResponse {
         let request = message.downcast_ref::<SnapshotChunkRequest>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         if let Err(e) = self.chunk.validate(&request.chunk_key) {

@@ -1245,12 +1245,12 @@ impl SynchronizationGraph {
 
                 // Construct consensus graph if is not header_only.
                 if !header_only {
-                    let (success, _) = self.insert_block(
+                    let result = self.insert_block(
                         block, true,  /* need_to_verify */
                         false, /* persistent */
                         true,  /* recover_from_db */
                     );
-                    assert!(success);
+                    assert!(result.is_valid());
                 }
 
                 if !visited_blocks.contains(&parent) {
@@ -1705,12 +1705,9 @@ impl SynchronizationGraph {
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
         recover_from_db: bool,
-    ) -> (bool, bool)
+    ) -> BlockInsertionResult
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
-        let mut insert_success = true;
-        let mut need_to_relay = false;
-
         let hash = block.hash();
 
         debug!("insert_block {:?}", hash);
@@ -1718,9 +1715,7 @@ impl SynchronizationGraph {
         let inner = &mut *self.inner.write();
 
         if self.data_man.verified_invalid(&hash).0 {
-            insert_success = false;
-            // (false, false)
-            return (insert_success, need_to_relay);
+            return BlockInsertionResult::Invalid;
         }
 
         let contains_block =
@@ -1729,12 +1724,11 @@ impl SynchronizationGraph {
             } else {
                 // Sync graph is cleaned after inserting the header, so we can
                 // ignore the block body
-                return (true, false);
+                return BlockInsertionResult::Ignored;
             };
 
         if contains_block {
-            // (true, false)
-            return (insert_success, need_to_relay);
+            return BlockInsertionResult::AlreadyProcessed;
         }
 
         self.statistics.inc_sync_graph_inserted_block_count();
@@ -1752,7 +1746,6 @@ impl SynchronizationGraph {
                     _,
                 )) => {
                     warn ! ("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
-                    insert_success = false;
                     // If the transaction root does not match, it might be
                     // caused by receiving wrong
                     // transactions because of conflicting ShortId in
@@ -1761,7 +1754,7 @@ impl SynchronizationGraph {
                     // again, and the received block body is
                     // discarded.
                     inner.arena[me].block_ready = false;
-                    return (insert_success, need_to_relay);
+                    return BlockInsertionResult::RequestAgain;
                 }
                 Err(e) => {
                     warn!(
@@ -1790,16 +1783,10 @@ impl SynchronizationGraph {
                     persistent,
                 );
             }
-        } else {
-            insert_success = false;
         }
 
         let invalid_set =
             self.propagate_graph_status(inner, vec![me], recover_from_db);
-
-        if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
-            need_to_relay = true;
-        }
 
         // Post-processing invalid blocks.
         inner.process_invalid_blocks(&invalid_set);
@@ -1811,7 +1798,13 @@ impl SynchronizationGraph {
             block.size(),
         );
 
-        (insert_success, need_to_relay)
+        if inner.arena[me].graph_status == BLOCK_INVALID {
+            BlockInsertionResult::Invalid
+        } else if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
+            BlockInsertionResult::ShouldRelay
+        } else {
+            BlockInsertionResult::SuccessWithoutRelay
+        }
     }
 
     pub fn get_block_hashes_by_epoch(
@@ -1976,5 +1969,48 @@ impl SynchronizationGraph {
 
         info!("expire_set: {:?}", expire_set);
         inner.remove_blocks(&expire_set);
+    }
+}
+
+pub enum BlockInsertionResult {
+    // The block is valid and already processed before.
+    AlreadyProcessed,
+    // The block is valid and is new to be block-graph-ready.
+    ShouldRelay,
+    // The block is valid but not block-graph-ready.
+    SuccessWithoutRelay,
+    // The block is definitely invalid. It's not inserted to sync graph
+    // and should not be requested again.
+    Invalid,
+    // The case where transaction root does not match.
+    // We should request again to get
+    // the correct transactions for full verification.
+    RequestAgain,
+    // This is only for the case the the header is removed, possibly because
+    // we switch phases.
+    // We ignore the block without verification.
+    Ignored,
+}
+
+impl BlockInsertionResult {
+    pub fn is_valid(&self) -> bool {
+        matches!(
+            self,
+            BlockInsertionResult::AlreadyProcessed
+                | BlockInsertionResult::ShouldRelay
+                | BlockInsertionResult::SuccessWithoutRelay
+        )
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        matches!(self, BlockInsertionResult::Invalid)
+    }
+
+    pub fn should_relay(&self) -> bool {
+        matches!(self, BlockInsertionResult::ShouldRelay)
+    }
+
+    pub fn request_again(&self) -> bool {
+        matches!(self, BlockInsertionResult::RequestAgain)
     }
 }
