@@ -525,8 +525,8 @@ subcommands:
                         long: epoch
                         takes_value: true
                         value_name: EPOCH
-            - debug:
-                about: Debug subcommands (requires jsonrpc_local_http_port configured)
+            - local:
+                about: Local subcommands (requires jsonrpc_local_http_port configured)
                 setting: SubcommandRequiredElseHelp
                 subcommands:
                     - send:
@@ -617,9 +617,9 @@ subcommands:
                                         required: true
                                         takes_value: true
                                     - duration:
-                                        help: Duration to unlock the account, use 0x0 to unlock permanently.
+                                        help: Duration to unlock the account, use 0x0 to unlock permanently (strongly not recommended!).
                                         long: duration
-                                        default_value: "0x12c"
+                                        default_value: "0x3c"
                                         takes_value: true
                             - lock:
                                 about: Lock an unlocked account

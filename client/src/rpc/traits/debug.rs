@@ -17,7 +17,7 @@ use network::{
 use std::collections::BTreeMap;
 
 #[rpc(server)]
-pub trait DebugRpc {
+pub trait LocalRpc {
     #[rpc(name = "txpool_status")]
     fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
 
