@@ -35,7 +35,7 @@ impl Handleable for Status {
             bail!(ErrorKind::InvalidStatus("genesis hash mismatches".into()));
         }
 
-        let mut latest: HashSet<H256> =
+        let latest: HashSet<H256> =
             self.terminal_block_hashes.iter().cloned().collect();
 
         if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.peer) {
@@ -71,10 +71,6 @@ impl Handleable for Status {
                 warn!("Unexpected Status message from peer={}", ctx.peer);
                 return Err(ErrorKind::UnknownPeer.into());
             }
-
-            latest.extend(
-                ctx.manager.graph.initial_missed_block_hashes.lock().drain(),
-            );
 
             let throttling =
                 match ctx.manager.protocol_config.throttling_config_file {

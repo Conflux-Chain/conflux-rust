@@ -568,7 +568,7 @@ impl Session {
         } else if self.had_hello.is_none() {
             // should receive HELLO packet timely after session created
             if self.sent_hello.elapsed() > Duration::from_secs(300) {
-                return (true, Some(UpdateNodeOperation::Demotion));
+                return (true, Some(UpdateNodeOperation::Failure));
             }
         }
 

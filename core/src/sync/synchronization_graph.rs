@@ -1255,7 +1255,7 @@ impl SynchronizationGraph {
         // Remember the hashes of blocks that belong to the current genesis
         // era but are missed in db. The missed blocks will be fetched from
         // peers.
-        let mut missed_hashes = self.initial_missed_block_hashes.lock();
+        let mut missed_hashes = HashSet::new();
         while let Some(hash) = queue.pop_front() {
             if hash == genesis_hash {
                 // Genesis block is already in consensus graph.
@@ -1321,7 +1321,8 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("Initial missed blocks {:?}", *missed_hashes);
+        debug!("Initial missed blocks {:?}", missed_hashes);
+        *self.initial_missed_block_hashes.lock() = missed_hashes;
 
         // Resolve out-of-era dependencies for graph-unready blocks.
         self.resolve_outside_dependencies(
