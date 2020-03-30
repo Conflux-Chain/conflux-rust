@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     message::{Message, SetRequestId},
     parameters::sync::FAILED_REQUEST_RESEND_WAIT,
     sync::{
@@ -13,7 +12,6 @@ use crate::{
         Error, ErrorKind,
     },
 };
-use futures::channel::oneshot;
 use network::{
     ErrorKind as NetworkErrorKind, NetworkContext, PeerId, UpdateNodeOperation,
 };
@@ -445,14 +443,6 @@ pub trait Request: Send + Debug + AsAny + Message + SetRequestId {
 
     /// Notify the handler when the request gets timeout.
     fn notify_timeout(&mut self) {}
-
-    /// This is for RPC request. Set the notification handle for the request.
-    fn set_response_notification(
-        &mut self,
-        _res_tx: oneshot::Sender<Result<Box<dyn RpcResponse>, Error>>,
-    )
-    {
-    }
 }
 
 #[derive(Debug)]

@@ -29,7 +29,6 @@ jsonrpc-core-client = "14.0.0"
 jsonrpc-pubsub = "14.0.0"
 error-chain = { version = "0.12" }
 log = "0.4"
-executable-helpers = { path = "../core/src/alliance_tree_graph/bft/common/executable-helpers", version = "0.1.0" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 runtime = { path = "../util/runtime" }
@@ -59,11 +58,6 @@ futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }
 rayon = "1.2.0"
 throttling = { path = "../util/throttling" }
-libra-config = { path = "../core/src/alliance_tree_graph/bft/config" }
-libradb = { path = "../core/src/alliance_tree_graph/bft/storage/libradb" }
-libra-metrics = { path = "../core/src/alliance_tree_graph/bft/common/metrics" }
-libra-crypto = { path = "../core/src/alliance_tree_graph/bft/crypto/crypto" }
-libra-types = { path = "../core/src/alliance_tree_graph/bft/types" }
 tokio-timer = "0.2.13"
 
 [dev-dependencies]

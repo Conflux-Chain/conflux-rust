@@ -29,16 +29,13 @@ extern crate lazy_static;
 extern crate bit_set;
 extern crate bn;
 extern crate byteorder;
-extern crate libra_canonical_serialization as lcs;
+extern crate futures;
 extern crate memory_cache;
 extern crate num;
 extern crate parity_crypto;
-#[macro_use]
 extern crate prometheus;
-extern crate futures;
 #[cfg(test)]
 extern crate rustc_hex;
-extern crate schemadb;
 extern crate serde;
 extern crate serde_derive;
 extern crate unexpected;
@@ -56,7 +53,6 @@ pub mod genesis;
 pub mod parameters;
 #[macro_use]
 pub mod message;
-pub mod alliance_tree_graph;
 pub mod channel;
 pub mod client;
 pub mod light_protocol;
