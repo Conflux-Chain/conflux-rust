@@ -1029,9 +1029,20 @@ impl State {
     pub fn set_storage_layout(
         &mut self, address: &Address, layout: StorageLayout,
     ) -> DbResult<()> {
-        // FIXME: storage layout is only set once;
-        // is there a need to read and cache?
-        self.require(address, false)?.set_storage_layout(layout);
+        self.require_or_from(
+            address,
+            false,
+            || {
+                OverlayAccount::new_contract(
+                    address,
+                    0.into(),
+                    self.account_start_nonce,
+                    false,
+                )
+            },
+            |_| {},
+        )?
+        .set_storage_layout(layout);
         Ok(())
     }
 
