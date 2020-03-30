@@ -1118,6 +1118,21 @@ impl ConsensusExecutionHandler {
                                     to_pending.push(transaction.clone());
                                 }
                             }
+                            Err(ExecutionError::NotEnoughCash {
+                                required: _,
+                                got: _,
+                                actual_gas_cost,
+                            }) => {
+                                /* We charge `actual_gas_cost`, so increase
+                                 * `env.gas_used` to make
+                                 * this charged balance distributed to
+                                 * miners.
+                                 * Note for the case that `balance < tx_fee`,
+                                 * the amount
+                                 * of remainder is lost forever. */
+                                env.gas_used +=
+                                    actual_gas_cost / transaction.gas_price;
+                            }
                             Ok(ref executed) => {
                                 env.gas_used = executed.cumulative_gas_used;
                                 transaction_logs = executed.logs.clone();
