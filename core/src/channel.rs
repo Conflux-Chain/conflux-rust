@@ -6,7 +6,7 @@ use crate::UniqueId;
 use cfx_types::H256;
 use parking_lot::RwLock;
 use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, error::TryRecvError};
 
 pub struct Receiver<T> {
     pub id: u64,
@@ -15,6 +15,10 @@ pub struct Receiver<T> {
 
 impl<T> Receiver<T> {
     pub async fn recv(&mut self) -> Option<T> { self.receiver.recv().await }
+
+    pub fn try_recv(&mut self) -> Result<T, TryRecvError> {
+        self.receiver.try_recv()
+    }
 
     pub fn recv_blocking(&mut self) -> Option<T> {
         futures::executor::block_on(self.receiver.recv())

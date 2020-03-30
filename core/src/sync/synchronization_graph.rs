@@ -28,12 +28,13 @@ use primitives::{
 use slab::Slab;
 use std::{
     cmp::max,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     mem, panic,
     sync::Arc,
-    thread,
+    thread::{self, yield_now},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
 
 lazy_static! {
@@ -1075,17 +1076,68 @@ impl SynchronizationGraph {
         // `ConsensusGraph`
         thread::Builder::new()
             .name("Consensus Worker".into())
-            .spawn(move || loop {
-                match consensus_receiver.recv_blocking() {
-                    Some((hash, ignore_body)) => {
+            .spawn(move || {
+                // The Consensus Worker will prioritize blocks based on its parent epoch number while respecting the topological order. This has the following two benefits:
+                //
+                // 1. It will almost make sure that the self mined block being processed first
+                //
+                // 2. In case of a DoS attack that a malicious player releases a large chunk of old blocks. This strategy will make the consensus to process the meaningful blocks first.
+                let mut priority_queue: BinaryHeap<(u64, H256, bool)> = BinaryHeap::new();
+                let mut reverse_map : HashMap<H256, Vec<H256>> = HashMap::new();
+                let mut counter_map = HashMap::new();
+
+                'outer: loop {
+                    'inner: loop {
+                        match consensus_receiver.try_recv() {
+                            Ok((hash, ignore_body)) => {
+                                let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
+                                let mut cnt: usize = 0;
+                                let parent_hash = header.parent_hash();
+                                if let Some(v) = reverse_map.get_mut(parent_hash) {
+                                    v.push(hash.clone());
+                                    cnt += 1;
+                                }
+                                for referee in header.referee_hashes() {
+                                    if let Some(v) = reverse_map.get_mut(referee) {
+                                        v.push(hash.clone());
+                                        cnt += 1;
+                                    }
+                                }
+                                reverse_map.insert(hash.clone(), Vec::new());
+                                if cnt == 0 {
+                                    let epoch_number = consensus.get_block_epoch_number(parent_hash).unwrap_or(0);
+                                    priority_queue.push((epoch_number, hash, ignore_body));
+                                } else {
+                                    counter_map.insert(hash, (cnt, ignore_body));
+                                }
+                            },
+                            Err(TryRecvError::Empty) => break 'inner,
+                            Err(TryRecvError::Closed) => break 'outer,
+                        }
+                    }
+                    if let Some((_, hash, ignore_body)) = priority_queue.pop() {
                         CONSENSUS_WORKER_QUEUE.dequeue(1);
+                        let successors = reverse_map.remove(&hash).unwrap();
+                        for succ in successors {
+                            let cnt_tuple = counter_map.get_mut(&succ).unwrap();
+                            cnt_tuple.0 -= 1;
+                            if cnt_tuple.0 == 0 {
+                                let ignore_body = cnt_tuple.1;
+                                counter_map.remove(&succ);
+                                let header_succ = data_man.block_header_by_hash(&succ).expect("Header must exist before sending to the consensus worker!");
+                                let parent_succ = header_succ.parent_hash();
+                                let epoch_number = consensus.get_block_epoch_number(parent_succ).unwrap_or(0);
+                                priority_queue.push((epoch_number, succ, ignore_body));
+                            }
+                        }
                         consensus.on_new_block(
                             &hash,
                             ignore_body,
                             true, /* update_best_info */
                         )
+                    } else {
+                        yield_now();
                     }
-                    _ => break,
                 }
             })
             .expect("Cannot fail");
