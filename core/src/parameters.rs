@@ -7,7 +7,7 @@ pub mod consensus {
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
     pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
-    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 330;
+    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 250;
     pub const TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 180;
     pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 240;
     // The number of epochs per era. Each era is a potential checkpoint
@@ -58,7 +58,7 @@ pub mod consensus_internal {
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
     /// This is the minimum risk that the confirmation meter tries to maintain.
-    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.000001;
+    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.00000001;
     /// The maximum number of epochs that the confirmation meter tries to
     /// maintain internally.
     pub const CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK: usize = 100;
