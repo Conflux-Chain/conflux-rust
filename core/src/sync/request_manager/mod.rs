@@ -533,7 +533,7 @@ impl RequestManager {
         self.request_with_delay(io, Box::new(request), Some(peer_id), delay);
     }
 
-    pub fn send_request_again(
+    fn send_request_again(
         &self, io: &dyn NetworkContext, msg: &RequestMessage,
     ) {
         debug!("send_request_again, request={:?}", msg.request);
@@ -657,7 +657,7 @@ impl RequestManager {
     /// received or will be requested by the caller again (the case for
     /// `Blocktxn`).
     pub fn blocks_received(
-        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>, with_public: bool, delay: Option<Duration>,
     )
@@ -665,12 +665,12 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!(
             "blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}",
-            req_hashes, received_blocks, peer
+            requested_hashes, received_blocks, peer
         );
         let missing_blocks = {
             let mut inflight_keys = self.inflight_keys.write(msgid::GET_BLOCKS);
             let mut missing_blocks = Vec::new();
-            for req_hash in &req_hashes {
+            for req_hash in &requested_hashes {
                 if !received_blocks.remove(req_hash) {
                     // If `req_hash` is not in `blocks_in_flight`, it may has
                     // been received or requested
@@ -910,17 +910,12 @@ impl RequestManager {
     }
 
     pub fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
-        if let Some(mut unfinished_requests) =
+        if let Some(unfinished_requests) =
             self.request_handler.remove_peer(peer)
         {
-            {
-                for msg in &unfinished_requests {
-                    msg.request.on_removed(&self.inflight_keys);
-                }
-            }
-            for msg in unfinished_requests.iter_mut() {
+            for mut msg in unfinished_requests {
                 msg.delay = None;
-                self.send_request_again(io, &msg);
+                self.resend_request_to_another_peer(io, &msg);
             }
         } else {
             debug!("Peer already removed form request manager when disconnected peer={}", peer);

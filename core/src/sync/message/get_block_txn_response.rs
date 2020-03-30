@@ -52,7 +52,7 @@ impl Handleable for GetBlockTxnResponse {
             ctx.manager.graph.block_header_by_hash(&resp_hash)
         {
             debug!("Process blocktxn hash={:?}", resp_hash);
-            let signed_txes = ctx
+            let signed_txns = ctx
                 .manager
                 .graph
                 .data_man
@@ -60,13 +60,13 @@ impl Handleable for GetBlockTxnResponse {
             match ctx.manager.graph.data_man.compact_block_by_hash(&resp_hash) {
                 Some(cmpct) => {
                     let mut trans =
-                        Vec::with_capacity(cmpct.reconstructed_txes.len());
+                        Vec::with_capacity(cmpct.reconstructed_txns.len());
                     let mut index = 0;
-                    for tx in cmpct.reconstructed_txes {
+                    for tx in cmpct.reconstructed_txns {
                         match tx {
                             Some(tx) => trans.push(tx),
                             None => {
-                                trans.push(signed_txes[index].clone());
+                                trans.push(signed_txns[index].clone());
                                 index += 1;
                             }
                         }
@@ -98,7 +98,7 @@ impl Handleable for GetBlockTxnResponse {
                         // added to received pool
                         ctx.manager
                             .request_manager
-                            .append_received_transactions(signed_txes);
+                            .append_received_transactions(signed_txns);
                     }
                     if insert_result.should_relay()
                         && !ctx.manager.catch_up_mode()

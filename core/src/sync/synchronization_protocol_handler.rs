@@ -1417,14 +1417,14 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn blocks_received(
-        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>, delay: Option<Duration>,
     )
     {
         self.request_manager.blocks_received(
             io,
-            req_hashes,
+            requested_hashes,
             returned_blocks,
             ask_full_block,
             peer,
