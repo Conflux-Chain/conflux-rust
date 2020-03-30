@@ -28,14 +28,14 @@ pub struct Receipt {
     pub logs: Vec<LogEntry>,
     /// Transaction outcome.
     pub outcome_status: u8,
-    pub storage_occupied: Vec<StorageChange>,
+    pub storage_collateralized: Vec<StorageChange>,
     pub storage_released: Vec<StorageChange>,
 }
 
 impl Receipt {
     pub fn new(
         outcome: u8, gas_used: U256, logs: Vec<LogEntry>,
-        storage_occupied: Vec<StorageChange>,
+        storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
     ) -> Self
     {
@@ -47,7 +47,7 @@ impl Receipt {
             }),
             logs,
             outcome_status: outcome,
-            storage_occupied,
+            storage_collateralized,
             storage_released,
         }
     }

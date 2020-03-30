@@ -43,7 +43,7 @@ class TestContract(RpcClient):
             contract_addr=contract_addr,
             data_hex="0x60fe47b10000000000000000000000000000000000000000000000000000000000000006",
             sender=addr)
-        assert_equal(collateral, 10 ** 18 // 16)
+        assert_equal(collateral, 64)
         assert_equal(self.get_collateral_for_storage(addr), 0)
 
         # send tx to set the storage from 5 to 6

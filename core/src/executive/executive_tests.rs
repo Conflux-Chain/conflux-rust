@@ -1331,8 +1331,8 @@ fn test_storage_commission_privilege() {
         );
         ex.create(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&sender], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&sender], 1);
 
     state
         .set_sponsor_for_collateral(
@@ -1402,8 +1402,8 @@ fn test_storage_commission_privilege() {
         CollateralCheckResult::Valid
     );
     state.discard_checkpoint();
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&sender], 3);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&sender], 3);
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
@@ -1447,8 +1447,8 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&caller3], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&caller3], 1);
     assert_eq!(substate.storage_released.len(), 1);
     assert_eq!(substate.storage_released[&sender], 1);
     assert_eq!(gas_left, U256::from(94983));
@@ -1489,8 +1489,8 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&address], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&address], 1);
     assert_eq!(substate.storage_released.len(), 1);
     assert_eq!(substate.storage_released[&caller3], 1);
     assert_eq!(gas_left, U256::from(94983));
@@ -1557,8 +1557,8 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&caller2], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&caller2], 1);
     assert_eq!(substate.storage_released.len(), 1);
     assert_eq!(substate.storage_released[&address], 1);
     assert_eq!(gas_left, U256::from(94983));
@@ -1618,8 +1618,8 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&caller1], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&caller1], 1);
     assert_eq!(substate.storage_released.len(), 2);
     assert_eq!(substate.storage_released[&sender], 1);
     assert_eq!(substate.storage_released[&caller2], 1);

@@ -188,9 +188,11 @@ pub mod staking {
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
 
     lazy_static! {
+        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes.
+        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(CONFLUX_TOKEN / NUM_BYTES_PER_CONFLUX_TOKEN);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(64);
         /// This is the scale factor for accumulated interest rate: `BLOCKS_PER_YEAR * 2 ^ 80`.
         /// The actual accumulate interest rate stored will be `accumulate_interest_rate / INTEREST_RATE_SCALE`.
         pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR) << 80;

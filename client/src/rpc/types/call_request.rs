@@ -34,8 +34,10 @@ pub struct CallRequest {
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateGasAndCollateralResponse {
+    /// The amount of gas used in the execution.
     pub gas_used: U256,
-    pub storage_occupied: U256,
+    /// The number of bytes collateralized in the execution.
+    pub storage_collateralized: U256,
 }
 
 pub fn sign_call(

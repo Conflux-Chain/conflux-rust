@@ -24,9 +24,9 @@ use cfx_types::{Public, H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
-    state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    parameters::staking::COLLATERAL_PER_BYTE, state_exposer::STATE_EXPOSER,
+    test_context::*, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{
     futures::future::{Future, IntoFuture},
@@ -714,15 +714,16 @@ impl RpcImpl {
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let caller = request.from.unwrap_or_default();
         let success_executed = self.exec_transaction(request, epoch)?;
-        let mut storage_occupied = U256::zero();
-        for storage_change in &success_executed.storage_occupied {
+        let mut storage_collateralized = U256::zero();
+        for storage_change in &success_executed.storage_collateralized {
             if storage_change.address == caller {
-                storage_occupied = storage_change.amount;
+                storage_collateralized =
+                    storage_change.amount / *COLLATERAL_PER_BYTE;
             }
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: success_executed.gas_used.into(),
-            storage_occupied: storage_occupied.into(),
+            storage_collateralized: storage_collateralized.into(),
         };
         Ok(response)
     }

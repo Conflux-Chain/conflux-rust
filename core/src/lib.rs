@@ -53,7 +53,7 @@ pub mod error;
 mod evm;
 pub mod executive;
 pub mod genesis;
-mod parameters;
+pub mod parameters;
 #[macro_use]
 pub mod message;
 pub mod alliance_tree_graph;

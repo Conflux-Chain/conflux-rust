@@ -31,7 +31,7 @@ pub struct Executed {
     pub logs: Vec<LogEntry>,
 
     /// Any accounts that occupy some storage.
-    pub storage_occupied: Vec<StorageChange>,
+    pub storage_collateralized: Vec<StorageChange>,
 
     /// Any accounts that release some storage.
     pub storage_released: Vec<StorageChange>,
