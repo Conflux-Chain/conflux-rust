@@ -568,7 +568,7 @@ impl SynchronizationProtocolHandler {
             if missing_hashes.is_empty() {
                 return;
             }
-            to_request = missing_hashes.iter().cloned().collect::<Vec<H256>>();
+            to_request = missing_hashes.drain().collect::<Vec<H256>>();
             missing_hashes.clear();
         }
         let chosen_peer =
