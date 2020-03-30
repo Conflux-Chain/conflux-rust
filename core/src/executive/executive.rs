@@ -11,7 +11,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     hash::keccak,
     machine::Machine,
-    parameters::staking::COLLATERAL_PER_STORAGE_KEY,
+    parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
@@ -1381,12 +1381,18 @@ impl<'a> Executive<'a> {
             } else {
                 U256::zero()
             };
-            if tx.storage_limit >= sponsored_balance {
-                if tx.storage_limit - sponsored_balance
+            let storage_limit_in_drip =
+                if tx.storage_limit >= U256::MAX / *COLLATERAL_PER_BYTE {
+                    U256::MAX
+                } else {
+                    tx.storage_limit * *COLLATERAL_PER_BYTE
+                };
+            if storage_limit_in_drip >= sponsored_balance {
+                if storage_limit_in_drip - sponsored_balance
                     <= U256::MAX - collateral_for_storage
                 {
                     // The incremental storage cost will be payed by the sender.
-                    tx.storage_limit - sponsored_balance
+                    storage_limit_in_drip - sponsored_balance
                         + collateral_for_storage
                 } else {
                     U256::MAX

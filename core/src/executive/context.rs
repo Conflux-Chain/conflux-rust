@@ -7,7 +7,7 @@ use super::{executive::*, suicide as suicide_impl, InternalContractMap};
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
+    parameters::staking::*,
     state::{State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -331,9 +331,8 @@ impl<'a> ContextTrait for Context<'a> {
                         false => Ok(*gas),
                     };
                 }
-                let collateral_for_code = U256::from(data.len())
-                    * U256::from(CONFLUX_TOKEN)
-                    / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
+                let collateral_for_code =
+                    U256::from(data.len()) * *COLLATERAL_PER_BYTE;
                 let balance =
                     self.state.balance(&self.origin.original_sender)?;
                 let collateral_for_storage = self

@@ -109,6 +109,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
 
     def run_test(self):
         sponsor_whitelist_contract_addr = Web3.toChecksumAddress("8ad036480160591706c831f0da19d1a424e39469")
+        bytes_per_key = 64
         collateral_per_storage_key = 10 ** 18 // 16
         upper_bound = 5 * 10 ** 7
 
@@ -417,7 +418,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=priv_key1,
             contract_addr=contract_addr,
             wait=True,
-            storage_limit=collateral_per_storage_key)
+            storage_limit=bytes_per_key)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), 0)
         assert_equal(client.get_balance(addr1), b1 - gas)
@@ -431,7 +432,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=priv_key1,
             contract_addr=contract_addr,
             wait=True,
-            storage_limit=collateral_per_storage_key * 2)
+            storage_limit=bytes_per_key * 2)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key * 2)
         assert_equal(client.get_balance(addr1), b1 - gas + 12500000 - collateral_per_storage_key * 2)
@@ -445,7 +446,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=priv_key1,
             contract_addr=contract_addr,
             wait=True,
-            storage_limit=collateral_per_storage_key * 2)
+            storage_limit=bytes_per_key * 2)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key)
         assert_equal(client.get_balance(addr1), b1 - gas + 12500000 + collateral_per_storage_key)
@@ -461,7 +462,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=priv_key2,
             contract_addr=contract_addr,
             wait=True,
-            storage_limit=collateral_per_storage_key)
+            storage_limit=bytes_per_key)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 2)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc - collateral_per_storage_key * 2)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
@@ -521,7 +522,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=priv_key2,
             contract_addr=contract_addr,
             wait=True,
-            storage_limit=collateral_per_storage_key * 2)
+            storage_limit=bytes_per_key * 2)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 15)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
@@ -539,7 +540,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=priv_key2,
             contract_addr=contract_addr,
             wait=True,
-            storage_limit=collateral_per_storage_key)
+            storage_limit=bytes_per_key)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 5)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc + collateral_per_storage_key * 10)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
