@@ -235,7 +235,8 @@ impl State {
                 *substate.storage_released.entry(addr).or_insert(0) += sub;
             }
             for (addr, inc) in collateral_for_storage_inc {
-                *substate.storage_occupied.entry(addr).or_insert(0) += inc;
+                *substate.storage_collateralized.entry(addr).or_insert(0) +=
+                    inc;
             }
             Ok(CollateralCheckResult::Valid)
         }

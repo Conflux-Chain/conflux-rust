@@ -528,7 +528,7 @@ mod tests {
             logs: vec![],
             outcome_status: 0,
             log_bloom: Bloom::zero(),
-            storage_occupied: vec![],
+            storage_collateralized: vec![],
             storage_released: vec![],
         };
 
@@ -566,7 +566,7 @@ mod tests {
                      00000000000000000000000000000000",
                 )
                 .unwrap(),
-                storage_occupied: vec![],
+                storage_collateralized: vec![],
                 storage_released: vec![],
             },
             Receipt {
@@ -592,7 +592,7 @@ mod tests {
                      00000000000000000000000000000000",
                 )
                 .unwrap(),
-                storage_occupied: vec![],
+                storage_collateralized: vec![],
                 storage_released: vec![],
             },
         ];
@@ -620,7 +620,7 @@ mod tests {
                  00000000000000000000000000000000",
             )
             .unwrap(),
-            storage_occupied: vec![],
+            storage_collateralized: vec![],
             storage_released: vec![],
         }];
 

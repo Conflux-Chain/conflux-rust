@@ -714,15 +714,16 @@ impl RpcImpl {
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let caller = request.from.unwrap_or_default();
         let success_executed = self.exec_transaction(request, epoch)?;
-        let mut storage_occupied = U256::zero();
-        for storage_change in &success_executed.storage_occupied {
+        let mut storage_collateralized = U256::zero();
+        for storage_change in &success_executed.storage_collateralized {
             if storage_change.address == caller {
-                storage_occupied = storage_change.amount / *COLLATERAL_PER_BYTE;
+                storage_collateralized =
+                    storage_change.amount / *COLLATERAL_PER_BYTE;
             }
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: success_executed.gas_used.into(),
-            storage_occupied: storage_occupied.into(),
+            storage_collateralized: storage_collateralized.into(),
         };
         Ok(response)
     }

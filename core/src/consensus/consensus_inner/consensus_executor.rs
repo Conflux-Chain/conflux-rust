@@ -1042,7 +1042,7 @@ impl ConsensusExecutionHandler {
                 let mut transaction_logs = Vec::new();
                 let mut nonce_increased = false;
                 let mut storage_released = Vec::new();
-                let mut storage_occupied = Vec::new();
+                let mut storage_collateralized = Vec::new();
                 let pivot_height = pivot_block.block_header.height();
 
                 // If the transaction's chain_id is not match the best chain id
@@ -1121,8 +1121,8 @@ impl ConsensusExecutionHandler {
                             Ok(ref executed) => {
                                 env.gas_used = executed.cumulative_gas_used;
                                 transaction_logs = executed.logs.clone();
-                                storage_occupied =
-                                    executed.storage_occupied.clone();
+                                storage_collateralized =
+                                    executed.storage_collateralized.clone();
                                 storage_released =
                                     executed.storage_released.clone();
                                 if executed.exception.is_some() {
@@ -1155,7 +1155,7 @@ impl ConsensusExecutionHandler {
                     tx_outcome_status,
                     env.gas_used,
                     transaction_logs,
-                    storage_occupied,
+                    storage_collateralized,
                     storage_released,
                 );
                 receipts.push(receipt);

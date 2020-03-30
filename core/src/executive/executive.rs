@@ -1551,16 +1551,19 @@ impl<'a> Executive<'a> {
                 cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
-                storage_occupied: Vec::new(),
+                storage_collateralized: Vec::new(),
                 storage_released: Vec::new(),
                 output,
             }),
             Ok(r) => {
-                let mut storage_occupied = Vec::new();
+                let mut storage_collateralized = Vec::new();
                 let mut storage_released = Vec::new();
                 if r.apply_state {
-                    let affected_address1: HashSet<_> =
-                        substate.storage_occupied.keys().cloned().collect();
+                    let affected_address1: HashSet<_> = substate
+                        .storage_collateralized
+                        .keys()
+                        .cloned()
+                        .collect();
                     let affected_address2: HashSet<_> =
                         substate.storage_released.keys().cloned().collect();
                     let mut affected_address: Vec<_> =
@@ -1568,7 +1571,7 @@ impl<'a> Executive<'a> {
                     affected_address.sort();
                     for address in affected_address {
                         let inc = substate
-                            .storage_occupied
+                            .storage_collateralized
                             .get(address)
                             .cloned()
                             .unwrap_or(0);
@@ -1578,7 +1581,7 @@ impl<'a> Executive<'a> {
                             .cloned()
                             .unwrap_or(0);
                         if inc > sub {
-                            storage_occupied.push(StorageChange {
+                            storage_collateralized.push(StorageChange {
                                 address: *address,
                                 amount: U256::from(inc - sub)
                                     * *COLLATERAL_PER_STORAGE_KEY,
@@ -1605,7 +1608,7 @@ impl<'a> Executive<'a> {
                     cumulative_gas_used,
                     logs: substate.logs,
                     contracts_created: substate.contracts_created,
-                    storage_occupied,
+                    storage_collateralized,
                     storage_released,
                     output,
                 })
