@@ -5,7 +5,6 @@
 use crate::{
     bytes::{Bytes, ToPretty},
     hash::{keccak, KECCAK_EMPTY},
-    parameters::staking::*,
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
@@ -441,32 +440,21 @@ impl OverlayAccount {
         });
     }
 
+    /// Withdraw some amount of tokens, return the value of interest.
     pub fn withdraw(
         &mut self, amount: U256, accumulated_interest_rate: U256,
-        withdraw_time: u64,
-    ) -> (U256, U256)
-    {
+    ) -> U256 {
         assert!(self.withdrawable_staking_balance >= amount);
         self.withdrawable_staking_balance -= amount;
         self.staking_balance -= amount;
         let mut rest = amount;
         let mut interest = U256::zero();
-        let mut service_charge = U256::zero();
         let mut index = 0;
         while !rest.is_zero() {
-            let duration =
-                withdraw_time - self.deposit_list[index].deposit_time;
             let capital = std::cmp::min(self.deposit_list[index].amount, rest);
             interest += capital * accumulated_interest_rate
                 / self.deposit_list[index].accumulated_interest_rate
                 - capital;
-            if duration < BLOCKS_PER_YEAR {
-                service_charge += capital
-                    * U256::from(BLOCKS_PER_YEAR - duration)
-                    * *SERVICE_CHARGE_RATE
-                    / *SERVICE_CHARGE_RATE_SCALE
-                    / U256::from(BLOCKS_PER_YEAR);
-            }
 
             self.deposit_list[index].amount -= capital;
             rest -= capital;
@@ -478,8 +466,8 @@ impl OverlayAccount {
             self.deposit_list = self.deposit_list.split_off(index);
         }
         self.accumulated_interest_return += interest;
-        self.add_balance(&(amount + interest - service_charge));
-        (interest, service_charge)
+        self.add_balance(&(amount + interest));
+        interest
     }
 
     pub fn lock(&mut self, amount: U256, unlock_time: u64) {

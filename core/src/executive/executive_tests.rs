@@ -692,13 +692,16 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(state.block_number(), 0);
     // withdraw more than staking balance
@@ -720,13 +723,16 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(state.block_number(), 0);
 
@@ -747,14 +753,17 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
@@ -776,14 +785,17 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
@@ -801,13 +813,16 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -826,13 +841,16 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -857,13 +875,16 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -883,10 +904,13 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(999_949_999_999u64)
+        U256::from(999_999_999_998u64)
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::from(2));
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_950_000_001u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(2));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),

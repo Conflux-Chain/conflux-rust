@@ -87,11 +87,9 @@ class WithdrawDepositTest(ConfluxTestFramework):
         client.send_tx(tx)
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
-        duration = withdraw_time - deposit_time
         interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
-        service_charge = capital * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
         assert_equal(client.get_staking_balance(addr), 10 ** 18 - capital)
-        assert_equal(client.get_balance(addr), balance + capital + interest - service_charge - gas + 12500000)
+        assert_equal(client.get_balance(addr), balance + capital + interest - gas + 12500000)
 
         # lock 4 * 10 ** 17 for 1 day
         balance = client.get_balance(addr)
@@ -129,10 +127,8 @@ class WithdrawDepositTest(ConfluxTestFramework):
         client.send_tx(tx)
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
-        duration = withdraw_time - deposit_time
         interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
-        service_charge = capital * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
-        assert_equal(client.get_balance(addr), balance + capital + interest - service_charge - gas + 12500000)
+        assert_equal(client.get_balance(addr), balance + capital + interest - gas + 12500000)
         assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17 - capital)
 
         block_gen_thread.stop()
