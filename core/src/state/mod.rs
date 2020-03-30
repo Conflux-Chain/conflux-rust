@@ -619,16 +619,11 @@ impl State {
         &mut self, address: &Address, amount: &U256,
     ) -> DbResult<()> {
         if !amount.is_zero() {
-            let (interest, service_charge) =
-                self.require(address, false)?.withdraw(
-                    *amount,
-                    self.staking_state.accumulate_interest_rate,
-                    self.block_number,
-                );
+            let interest = self
+                .require(address, false)?
+                .withdraw(*amount, self.staking_state.accumulate_interest_rate);
             // the interest will be put in balance.
             self.staking_state.total_issued_tokens += interest;
-            // the serive charge will be destroyed.
-            self.staking_state.total_issued_tokens -= service_charge;
             self.staking_state.total_staking_tokens -= *amount;
         }
         Ok(())
