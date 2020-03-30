@@ -7,6 +7,7 @@ use cfx_types::H256;
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
+    cache_config::DEFAULT_LEDGER_CACHE_SIZE,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
         ConsensusConfig, ConsensusInnerConfig,
@@ -24,7 +25,6 @@ use cfxcore::{
 use metrics::MetricsConfiguration;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
-use cfxcore::cache_config::DEFAULT_LEDGER_CACHE_SIZE;
 
 // usage:
 // ```

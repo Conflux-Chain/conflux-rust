@@ -9,14 +9,13 @@ use crate::rpc::{
     impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
-        sign_call, Account as RpcAccount, BlameInfo,
-        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-        ConsensusGraphStates, EpochNumber, EstimateGasAndCollateralResponse,
-        Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
-        U64 as RpcU64,
+        sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
+        SponsorInfo as RpcSponsorInfo, Status as RpcStatus, SyncGraphStates,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -856,7 +855,6 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }
     }
-
 }
 
 #[allow(dead_code)]
