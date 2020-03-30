@@ -45,7 +45,7 @@ pub fn sign_call(
 ) -> Result<SignedTransaction, Error> {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_default();
+    let from = request.from.unwrap_or_else(|| H160::random());
 
     Ok(PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),
