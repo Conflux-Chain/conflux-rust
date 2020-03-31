@@ -14,7 +14,8 @@ pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct StorageChange {
     pub address: Address,
-    pub amount: U256,
+    /// Number of bytes.
+    pub amount: u64,
 }
 
 /// Information describing execution of a transaction.

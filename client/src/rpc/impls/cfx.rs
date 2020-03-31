@@ -19,13 +19,13 @@ use crate::rpc::{
     },
 };
 use blockgen::BlockGenerator;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{H160, H256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
-    parameters::staking::COLLATERAL_PER_BYTE, state_exposer::STATE_EXPOSER,
-    test_context::*, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::{
     futures::future::{Future, IntoFuture},
@@ -712,11 +712,10 @@ impl RpcImpl {
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let caller = request.from.unwrap_or_default();
         let success_executed = self.exec_transaction(request, epoch)?;
-        let mut storage_collateralized = U256::zero();
+        let mut storage_collateralized = 0;
         for storage_change in &success_executed.storage_collateralized {
             if storage_change.address == caller {
-                storage_collateralized =
-                    storage_change.amount / *COLLATERAL_PER_BYTE;
+                storage_collateralized = storage_change.amount;
             }
         }
         let response = EstimateGasAndCollateralResponse {

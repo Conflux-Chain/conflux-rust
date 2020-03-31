@@ -343,15 +343,16 @@ class RpcClient:
         tx = self.new_tx_for_call(contract_addr, data_hex)
         response = self.node.cfx_estimateGasAndCollateral(tx)
         return int(response['gasUsed'], 0)
-    
-    def estimate_collateral(self, contract_addr:str, data_hex:str, sender:str) -> int:
+
+    def estimate_collateral(self, contract_addr:str, data_hex:str, sender:str=None) -> int:
         tx = self.new_tx_for_call(contract_addr, data_hex, sender=sender)
+        if contract_addr == "0x":
+            del tx['to']
         response = self.node.cfx_estimateGasAndCollateral(tx)
-        return int(response['storageCollateralized'], 0)
+        return response['storageCollateralized']
 
     def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
-        
         if epoch is None:
             return self.node.cfx_call(tx)
         else:

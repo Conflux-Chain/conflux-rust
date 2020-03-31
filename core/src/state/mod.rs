@@ -232,11 +232,11 @@ impl State {
             });
         } else {
             for (addr, sub) in collateral_for_storage_sub {
-                *substate.storage_released.entry(addr).or_insert(0) += sub;
+                *substate.storage_released.entry(addr).or_insert(0) += sub * 64;
             }
             for (addr, inc) in collateral_for_storage_inc {
                 *substate.storage_collateralized.entry(addr).or_insert(0) +=
-                    inc;
+                    inc * 64;
             }
             Ok(CollateralCheckResult::Valid)
         }
