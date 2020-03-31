@@ -181,6 +181,24 @@ jsonrpc_local_http_port=12539
 #
 # max_download_state_peers = 8
 
+# Maximum number of handshaking sessions at the same time.
+#
+# max_handshakes = 64
+
+# Maximum number of incoming connections.
+#
+# max_incoming_peers = 64
+
+# Maximum number of outgoing connections.
+#
+# max_outgoing_peers = 16
+
+# Maximum number of outgoing connections to archive nodes. 0 represents
+# not required to connect to archive nodes. E.g. light node or full node
+# need not to connect to archive nodes.
+#
+# max_outgoing_peers_archive = 0
+
 # Maximum number of inflight requests for each peer.
 # If the max is reached, requests will be buffered until inflight requests are responded or timeout.
 #

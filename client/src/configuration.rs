@@ -143,7 +143,11 @@ build_config! {
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
         (max_download_state_peers, (usize), 8)
+        (max_handshakes, (usize), 64)
+        (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
+        (max_outgoing_peers, (usize), 16)
+        (max_outgoing_peers_archive, (usize), 0)
         (max_peers_tx_propagation, (usize), 128)
         (min_peers_tx_propagation, (usize), 8)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
@@ -291,6 +295,11 @@ impl Configuration {
         network_config.housekeeping_timeout = Duration::from_millis(
             self.raw_conf.discovery_housekeeping_timeout_ms,
         );
+        network_config.max_handshakes = self.raw_conf.max_handshakes;
+        network_config.max_incoming_peers = self.raw_conf.max_incoming_peers;
+        network_config.max_outgoing_peers = self.raw_conf.max_outgoing_peers;
+        network_config.max_outgoing_peers_archive =
+            self.raw_conf.max_outgoing_peers_archive;
         Ok(network_config)
     }
 
