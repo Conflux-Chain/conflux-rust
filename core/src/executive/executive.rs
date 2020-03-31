@@ -1583,14 +1583,12 @@ impl<'a> Executive<'a> {
                         if inc > sub {
                             storage_collateralized.push(StorageChange {
                                 address: *address,
-                                amount: U256::from(inc - sub)
-                                    * *COLLATERAL_PER_STORAGE_KEY,
+                                amount: inc - sub,
                             });
                         } else if inc < sub {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                amount: U256::from(sub - inc)
-                                    * *COLLATERAL_PER_STORAGE_KEY,
+                                amount: sub - inc,
                             });
                         }
                     }

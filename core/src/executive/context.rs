@@ -349,6 +349,11 @@ impl<'a> ContextTrait for Context<'a> {
                 {
                     return Err(vm::Error::ExceedStorageLimit);
                 }
+                *self
+                    .substate
+                    .storage_collateralized
+                    .entry(self.origin.original_sender)
+                    .or_insert(0) += data.len() as u64;
                 self.state.add_collateral_for_storage(
                     &self.origin.original_sender,
                     &collateral_for_code,
