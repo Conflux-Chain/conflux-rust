@@ -1224,10 +1224,9 @@ impl<'a> Executive<'a> {
     ) -> ExecutionResult<Executed> {
         let sender = tx.sender();
         let balance = self.state.balance(&sender)?;
-        let needed_balance =
-            tx.value.saturating_add(tx.gas.saturating_mul(tx.gas_price));
+        // Give the sender a sufficient balance.
+        let needed_balance = U256::MAX / U256::from(2);
         if balance < needed_balance {
-            // give the sender a sufficient balance
             self.state.add_balance(
                 &sender,
                 &(needed_balance - balance),
