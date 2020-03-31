@@ -253,10 +253,9 @@ impl CowNodeRef {
     {
         if self.owned {
             if guarded_trie_node.as_ref().as_ref().has_value() {
-                assert_eq!(
-                    key_prefix.end_mask(),
-                    CompressedPathRaw::HAS_SECOND_NIBBLE
-                );
+                assert!(CompressedPathRaw::has_second_nibble(
+                    key_prefix.path_mask()
+                ));
                 values.push((
                     key_prefix.path_slice().to_vec(),
                     guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
@@ -390,12 +389,16 @@ impl CowNodeRef {
     }
 
     /// Get if unowned, compute if owned.
+    ///
+    /// parent_node_path_steps_plus_one is the steps of path from root to the
+    /// compressed_path. e.g. parent_node_path_steps_plus_one is 0 for root
+    /// node, 1 for root node's direct children.
     pub fn get_or_compute_merkle(
         &mut self, trie: &DeltaMpt, owned_node_set: &mut OwnedNodeSet,
         allocator_ref: AllocatorRefRefDeltaMpt,
         db: &mut DeltaDbOwnedReadTraitObj,
         children_merkle_map: &mut ChildrenMerkleMap,
-        parent_node_path_steps: u16,
+        parent_node_path_steps_plus_one: u16,
     ) -> Result<MerkleHash>
     {
         if self.owned {
@@ -405,9 +408,7 @@ impl CowNodeRef {
                     &mut self.node_ref,
                 )
             };
-            // node_path_steps = 2 * parent_node_path_size_in_bytes +
-            // compressed_path_path_steps.
-            let node_path_steps = ((parent_node_path_steps + 1) & (!1))
+            let node_path_steps = parent_node_path_steps_plus_one
                 + trie_node.compressed_path_ref().path_steps();
             let children_merkles = self.get_or_compute_children_merkles(
                 trie,
@@ -421,7 +422,7 @@ impl CowNodeRef {
 
             let merkle = self.set_merkle(
                 children_merkles.as_ref(),
-                (parent_node_path_steps % 2) == 0,
+                (parent_node_path_steps_plus_one % 2) == 1,
                 trie_node,
             );
 
@@ -550,7 +551,9 @@ impl CowNodeRef {
                                 allocator_ref,
                                 db,
                                 children_merkle_map,
-                                node_path_steps,
+                                // +1 for the child_index, see also comment for
+                                // get_or_compute_merkle.
+                                node_path_steps + 1,
                             );
                             // There is no change to the child reference so the
                             // return value is dropped.
@@ -589,10 +592,9 @@ impl CowNodeRef {
     ) -> Result<()>
     {
         if guarded_trie_node.as_ref().as_ref().has_value() {
-            assert_eq!(
-                key_prefix.end_mask(),
-                CompressedPathRaw::HAS_SECOND_NIBBLE
-            );
+            assert!(CompressedPathRaw::has_second_nibble(
+                key_prefix.path_mask()
+            ));
             values.push((
                 key_prefix.path_slice().to_vec(),
                 guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
