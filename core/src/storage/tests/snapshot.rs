@@ -228,13 +228,19 @@ fn test_mpt_node_path_to_from_db_key() {
         assert_eq!(v, Some(value.clone().into_boxed_slice()));
         for node in proof.delta_proof.unwrap().get_proof_nodes() {
             let compressed_path = node.compressed_path_ref();
-            let db_key = mpt_node_path_to_db_key(&compressed_path);
-            let loaded_compressed_path =
-                mpt_node_path_from_db_key(&db_key).unwrap();
-            assert_eq!(
-                &compressed_path as &dyn CompressedPathTrait,
-                &loaded_compressed_path as &dyn CompressedPathTrait,
-            );
+            // mpt_node_path_to_db_key only works for paths with the beginning
+            // nibble.
+            if CompressedPathRaw::second_nibble(compressed_path.path_mask())
+                == CompressedPathRaw::NO_MISSING_NIBBLE
+            {
+                let db_key = mpt_node_path_to_db_key(&compressed_path);
+                let loaded_compressed_path =
+                    mpt_node_path_from_db_key(&db_key).unwrap();
+                assert_eq!(
+                    &compressed_path as &dyn CompressedPathTrait,
+                    &loaded_compressed_path as &dyn CompressedPathTrait,
+                );
+            }
         }
     }
 }

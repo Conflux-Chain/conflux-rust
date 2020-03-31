@@ -143,7 +143,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                 // The beginning of compressed_path is always aligned at full
                 // byte.
                 let aligned_path_start_offset = started_steps / 2;
-                if aligned_path_start_offset * 2
+                if started_steps
                     + last_trie_node.compressed_path_ref().path_steps()
                     == match_stopped_steps
                 {
@@ -163,35 +163,33 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                             WalkStop::path_diverted_uninitialized(),
                         ))
                     } else {
+                        let original_compressed_path_ref =
+                            last_trie_node.compressed_path_ref();
+                        let original_compressed_path_ref_mask =
+                            original_compressed_path_ref.path_mask();
                         let actual_matched_path = CompressedPathRaw::new(
                             &matched_path.path_slice()
                                 [aligned_path_start_offset as usize..],
-                            matched_path.end_mask(),
+                            CompressedPathRaw::set_second_nibble(
+                                matched_path.path_mask(),
+                                CompressedPathRaw::second_nibble(
+                                    original_compressed_path_ref_mask,
+                                ),
+                            ),
                         );
-                        let original_compressed_path_ref =
-                            last_trie_node.compressed_path_ref();
                         let actual_unmatched_path_remaining =
-                            if original_compressed_path_ref.end_mask()
-                                != CompressedPathRaw::HAS_SECOND_NIBBLE
-                            {
-                                CompressedPathRaw::new_and_apply_mask(
-                                    &unmatched_path_remaining.path_slice()[0
-                                        ..(original_compressed_path_ref
-                                            .path_size()
-                                            - actual_matched_path.path_size())
-                                            as usize],
-                                    original_compressed_path_ref.end_mask(),
-                                )
-                            } else {
-                                CompressedPathRaw::new(
-                                    &unmatched_path_remaining.path_slice()[0
-                                        ..(original_compressed_path_ref
-                                            .path_size()
-                                            - actual_matched_path.path_size())
-                                            as usize],
-                                    original_compressed_path_ref.end_mask(),
-                                )
-                            };
+                            CompressedPathRaw::new_and_apply_mask(
+                                &unmatched_path_remaining.path_slice()[0
+                                    ..(original_compressed_path_ref.path_size()
+                                        - actual_matched_path.path_size())
+                                        as usize],
+                                CompressedPathRaw::set_second_nibble(
+                                    original_compressed_path_ref_mask,
+                                    CompressedPathRaw::second_nibble(
+                                        unmatched_path_remaining.path_mask(),
+                                    ),
+                                ),
+                            );
 
                         Ok(CursorPopNodesTerminal::PathDiverted(
                             WalkStop::PathDiverted {
@@ -243,7 +241,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     };
 
                     let next_step = walk::<AM, _>(
-                        key_remaining,
+                        key_remaining.path_slice,
                         &new_node
                             .get_basic_path_node()
                             .trie_node
@@ -268,7 +266,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         } => {
                             self.path_nodes.push(new_node);
                             child_index = *new_child_index;
-                            key_remaining = *new_key_remaining;
+                            key_remaining = new_key_remaining.clone();
                             continue;
                         }
                         WalkStop::PathDiverted { .. } => {
@@ -1542,7 +1540,7 @@ impl<'node> GetChildTrait<'node> for MptCursorGetChild {
 pub enum CursorPopNodesTerminal<'key> {
     Arrived,
     Descent {
-        key_remaining: &'key [u8],
+        key_remaining: CompressedPathRef<'key>,
         child_index: u8,
     },
     PathDiverted(WalkStop<'key, ()>),
@@ -1551,7 +1549,7 @@ pub enum CursorPopNodesTerminal<'key> {
 pub enum CursorOpenPathTerminal<'key> {
     Arrived,
     ChildNotFound {
-        key_remaining: &'key [u8],
+        key_remaining: CompressedPathRef<'key>,
         child_index: u8,
     },
     PathDiverted(WalkStop<'key, ()>),
@@ -1588,15 +1586,20 @@ pub fn rlp_key_value_len(key_len: u16, value_len: usize) -> u64 {
     rlp_str_len(key_len.into()) + rlp_str_len(value_len)
 }
 
-use super::{
-    super::{super::storage_db::snapshot_mpt::*, errors::*},
-    children_table::*,
-    compressed_path::CompressedPathTrait,
-    mpt_value::MptValue,
-    trie_node::{TrieNodeTrait, VanillaTrieNode},
-    trie_proof::*,
-    walk::*,
-    CompressedPathRaw,
+use crate::storage::{
+    impls::{
+        errors::*,
+        merkle_patricia_trie::{
+            children_table::*,
+            compressed_path::CompressedPathTrait,
+            mpt_value::MptValue,
+            trie_node::{TrieNodeTrait, VanillaTrieNode},
+            trie_proof::*,
+            walk::*,
+            CompressedPathRaw, CompressedPathRef,
+        },
+    },
+    storage_db::snapshot_mpt::*,
 };
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use std::{

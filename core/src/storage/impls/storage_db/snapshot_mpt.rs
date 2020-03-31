@@ -16,9 +16,13 @@ pub trait SnapshotMptLoadNode {
 
 pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
     let path_slice = path.path_slice();
-    let end_mask = path.end_mask();
+    let path_mask = path.path_mask();
+    debug_assert_eq!(
+        CompressedPathRaw::second_nibble(path_mask),
+        CompressedPathRaw::NO_MISSING_NIBBLE
+    );
 
-    let full_slice = if end_mask == CompressedPathRaw::HAS_SECOND_NIBBLE {
+    let full_slice = if CompressedPathRaw::has_second_nibble(path_mask) {
         path_slice
     } else {
         &path_slice[0..path_slice.len() - 1]
@@ -33,7 +37,7 @@ pub fn mpt_node_path_to_db_key(path: &dyn CompressedPathTrait) -> Vec<u8> {
         result.push(CompressedPathRaw::first_nibble(*full_byte));
         result.push(CompressedPathRaw::second_nibble(*full_byte));
     }
-    if end_mask != CompressedPathRaw::HAS_SECOND_NIBBLE {
+    if CompressedPathRaw::no_second_nibble(path_mask) {
         result
             .push(CompressedPathRaw::first_nibble(*path_slice.last().unwrap()));
     }
