@@ -999,9 +999,10 @@ pub struct SynchronizationGraph {
     pub verification_config: VerificationConfig,
     pub sync_config: SyncGraphConfig,
     pub statistics: SharedStatistics,
-    /// This is the hash of latest graph ready block
+    /// This is the boolean state shared with the underlying consensus worker
+    /// to indicate whether the worker is now finished all pending blocks.
     /// Since the critical section is very short, a `Mutex` is enough.
-    pub latest_graph_ready_block: Mutex<H256>,
+    consensus_worker_is_busy: Arc<Mutex<bool>>,
 
     /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
@@ -1050,6 +1051,7 @@ impl SynchronizationGraph {
             .block_header_by_hash(&genesis_hash)
             .expect("genesis block header should exist here");
 
+        let consensus_worker_is_busy = Arc::new(Mutex::new(true));
         let mut consensus_receiver = notifications.new_block_hashes.subscribe();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
@@ -1067,7 +1069,7 @@ impl SynchronizationGraph {
             sync_config,
             consensus: consensus.clone(),
             statistics: consensus.get_statistics().clone(),
-            latest_graph_ready_block: Mutex::new(genesis_hash),
+            consensus_worker_is_busy: consensus_worker_is_busy.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             is_full_node,
         };
@@ -1136,6 +1138,7 @@ impl SynchronizationGraph {
                             true, /* update_best_info */
                         )
                     } else {
+                        *consensus_worker_is_busy.lock() = false;
                         yield_now();
                     }
                 }
@@ -1458,8 +1461,6 @@ impl SynchronizationGraph {
                 }
                 if insert_to_consensus {
                     CONSENSUS_WORKER_QUEUE.enqueue(1);
-                    *self.latest_graph_ready_block.lock() =
-                        inner.arena[index].block_header.hash();
 
                     assert!(
                         self.new_block_hashes.send((
@@ -1468,6 +1469,7 @@ impl SynchronizationGraph {
                         )),
                         "consensus receiver dropped"
                     );
+                    *self.consensus_worker_is_busy.lock() = true;
 
                     // maintain not_ready_blocks_frontier
                     inner.not_ready_blocks_count -= 1;
@@ -1675,13 +1677,13 @@ impl SynchronizationGraph {
         // into consensus graph; Otherwise Consensus Worker can handle the
         // block in order asynchronously. In addition, if this block is
         // recovered from db, we can simply ignore body.
-        *self.latest_graph_ready_block.lock() = h;
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
             assert!(
                 self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
             );
+            *self.consensus_worker_is_busy.lock() = true;
 
             if inner.config.enable_state_expose {
                 STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(
@@ -2022,6 +2024,10 @@ impl SynchronizationGraph {
 
         info!("expire_set: {:?}", expire_set);
         inner.remove_blocks(&expire_set);
+    }
+
+    pub fn is_consensus_worker_busy(&self) -> bool {
+        *self.consensus_worker_is_busy.lock()
     }
 }
 
