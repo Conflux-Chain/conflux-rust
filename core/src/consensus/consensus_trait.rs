@@ -79,8 +79,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
     fn update_best_info(&self);
-
-    fn latest_inserted_block(&self) -> H256;
 }
 
 pub type SharedConsensusGraph = Arc<dyn ConsensusGraphTrait>;

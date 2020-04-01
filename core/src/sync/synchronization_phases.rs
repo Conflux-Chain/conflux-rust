@@ -4,7 +4,7 @@
 
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
-    consensus::{ConsensusGraph, ConsensusGraphInner, ConsensusGraphTrait},
+    consensus::{ConsensusGraph, ConsensusGraphInner},
     parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
     sync::{
         message::DynamicCapability,
@@ -432,9 +432,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             let old_sync_inner = &mut *self.graph.inner.write();
             // Wait until all the graph ready blocks in queue are inserted into
             // consensus graph.
-            while *self.graph.latest_graph_ready_block.lock()
-                != consensus.latest_inserted_block()
-            {
+            while self.graph.is_consensus_worker_busy() {
                 thread::sleep(time::Duration::from_millis(100));
             }
             // Now, we can safely acquire the lock of consensus graph.

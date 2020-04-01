@@ -148,9 +148,6 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
-    /// This is the hash of latest block inserted into consensus graph.
-    /// Since the critical section is very short, a `Mutex` is enough.
-    pub latest_inserted_block: Mutex<H256>,
     /// This HashMap stores whether the state in header is correct or not for
     /// pivot blocks from current era genesis to first trusted blame block
     /// after current era stable genesis.
@@ -222,7 +219,6 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Default::default(),
             synced_epoch_id: Default::default(),
             config: conf,
@@ -962,8 +958,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 inner.arena[arena_index].data.state_valid =
                     pivot_block_state_valid_map.remove(&hash);
             }
-
-            *self.latest_inserted_block.lock() = *hash;
         }
 
         // Skip updating best info during recovery
@@ -1201,9 +1195,5 @@ impl ConsensusGraphTrait for ConsensusGraph {
             current_difficulty: inner.current_difficulty,
             bounded_terminal_block_hashes,
         });
-    }
-
-    fn latest_inserted_block(&self) -> H256 {
-        *self.latest_inserted_block.lock()
     }
 }
