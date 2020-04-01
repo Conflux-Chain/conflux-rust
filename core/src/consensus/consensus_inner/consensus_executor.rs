@@ -369,7 +369,7 @@ impl ConsensusExecutor {
                 } else {
                     anticone_cutoff_epoch_anticone_set = ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, anticone_penalty_cutoff_epoch_arena_index);
                 }
-                let ordered_epoch_blocks = inner.get_or_compute_ordered_executable_epoch_blocks(pivot_arena_index);
+                let ordered_epoch_blocks = inner.get_ordered_executable_epoch_blocks(pivot_arena_index).clone();
                 for index in ordered_epoch_blocks.iter() {
                     let block_consensus_node = &inner.arena[*index];
 

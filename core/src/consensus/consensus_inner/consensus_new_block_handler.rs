@@ -999,8 +999,7 @@ impl ConsensusNewBlockHandler {
         {
             inner.arena[me].data.blockset_in_own_view_of_epoch =
                 Default::default();
-            inner.arena[me].data.ordered_executable_epoch_blocks =
-                Default::default();
+            inner.arena[me].data.skipped_epoch_blocks = Default::default();
             inner.arena[me].data.blockset_cleared = true;
         }
     }
@@ -1671,12 +1670,26 @@ impl ConsensusNewBlockHandler {
                 self.txpool
                     .set_tx_packed(&block_body_opt.expect("Already checked"));
             }
-            if new_era_height + ERA_RECYCLE_TRANSACTION_DELAY
+            if new_era_height + RECYCLE_TRANSACTION_DELAY
                 < inner.pivot_index_to_height(inner.pivot_chain.len())
                 && inner.last_recycled_era_block != new_pivot_era_block
             {
                 self.recycle_tx_outside_era(inner, new_pivot_era_block);
                 inner.last_recycled_era_block = new_pivot_era_block;
+            }
+
+            if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
+                let recycle_pivot_index = inner.pivot_chain.len()
+                    - RECYCLE_TRANSACTION_DELAY as usize
+                    - 1;
+                let recycle_arena_index =
+                    inner.pivot_chain[recycle_pivot_index];
+                let skipped_blocks = inner
+                    .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
+                    .clone();
+                for idx in skipped_blocks {
+                    self.recycle_tx_in_block(inner, idx);
+                }
             }
 
             let to_state_pos = if inner

@@ -99,8 +99,12 @@ pub struct ConsensusGraphNodeData {
     /// For cur_era_genesis, this field should NOT be used because they contain
     /// out-of-era blocks not maintained in the memory.
     ordered_executable_epoch_blocks: Vec<usize>,
+    /// If an epoch has more than ``EPOCH_EXECUTED_BLOCK_BOUND''. We will only
+    /// execute the last ``EPOCH_EXECUTED_BLOCK_BOUND'' and skip the
+    /// remaining.
+    skipped_epoch_blocks: Vec<usize>,
     /// It indicates whether `blockset_in_own_view_of_epoch` and
-    /// `ordered_executable_epoch_blocks` are cleared due to its size.
+    /// `skipped_epoch_blocks` are cleared due to its size.
     blockset_cleared: bool,
     /// The sequence number is used to identify the order of each block
     /// entering the consensus. The sequence number of the genesis is used
@@ -143,6 +147,7 @@ impl ConsensusGraphNodeData {
             force_confirm: NULL,
             blockset_in_own_view_of_epoch: Default::default(),
             ordered_executable_epoch_blocks: Default::default(),
+            skipped_epoch_blocks: Default::default(),
             blockset_cleared: true,
             sequence_number,
             past_view_timer_longest_difficulty: 0,
@@ -478,7 +483,7 @@ pub struct ConsensusGraphNode {
     difficulty: U256,
     is_heavy: bool,
     is_timer: bool,
-    /// The total weight of its past set in the era (exclude itself)
+    /// The total number of executed blocks in its past (including self)
     past_num_blocks: u64,
     adaptive: bool,
 
@@ -849,6 +854,24 @@ impl ConsensusGraphInner {
             .data
             .ordered_executable_epoch_blocks
             .push(pivot);
+        if self.arena[pivot].data.ordered_executable_epoch_blocks.len()
+            > EPOCH_EXECUTED_BLOCK_BOUND
+        {
+            let cut_off =
+                self.arena[pivot].data.ordered_executable_epoch_blocks.len()
+                    - EPOCH_EXECUTED_BLOCK_BOUND;
+            self.arena[pivot].data.skipped_epoch_blocks = mem::replace(
+                &mut self.arena[pivot].data.ordered_executable_epoch_blocks,
+                Default::default(),
+            );
+            self.arena[pivot].data.ordered_executable_epoch_blocks = self.arena
+                [pivot]
+                .data
+                .skipped_epoch_blocks
+                .split_off(cut_off);
+        } else {
+            self.arena[pivot].data.skipped_epoch_blocks = Default::default();
+        }
         self.arena[pivot].data.blockset_cleared = false;
     }
 
@@ -873,24 +896,20 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_or_compute_ordered_executable_epoch_blocks(
-        &mut self, index: usize,
-    ) -> Vec<usize> {
-        if self.arena[index].data.blockset_cleared {
-            self.compute_blockset_in_own_view_of_epoch(index);
-        }
-        self.arena[index]
-            .data
-            .ordered_executable_epoch_blocks
-            .clone()
-    }
-
-    #[inline]
     pub fn get_ordered_executable_epoch_blocks(
         &self, index: usize,
     ) -> &Vec<usize> {
-        assert!(!self.arena[index].data.blockset_cleared);
         &self.arena[index].data.ordered_executable_epoch_blocks
+    }
+
+    #[inline]
+    pub fn get_or_compute_skipped_epoch_blocks(
+        &mut self, index: usize,
+    ) -> &Vec<usize> {
+        if self.arena[index].data.blockset_cleared {
+            self.compute_blockset_in_own_view_of_epoch(index);
+        }
+        &self.arena[index].data.skipped_epoch_blocks
     }
 
     fn get_blame(&self, arena_index: usize) -> u32 {

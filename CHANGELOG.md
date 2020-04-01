@@ -11,6 +11,11 @@ address will change to 0x1b5c...
 You need to use new SDK tools to connect with the main chain, otherwise your
 transaction will be rejected as invalid. 
 
+2. Each epoch now has a limit of executing 200 blocks. If there are more than
+200 blocks in an epoch. Only the last 200 blocks will be executed. This change
+is designed to battle DoS attacks about hiding and generating a lot of blocks
+suddenly.
+
 ## RPC/CLI Updates
 
 1. Change the CLI interface subcommand from `debug` to `local`. Its
