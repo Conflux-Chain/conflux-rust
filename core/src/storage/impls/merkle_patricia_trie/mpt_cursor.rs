@@ -46,7 +46,8 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     .into_option()
                     .map(|slice| slice.into()),
                 trie_node.compressed_path_ref().into(),
-            ))
+                node.get_basic_path_node().path_start_steps % 2 != 0,
+            ));
         }
 
         // Unwrap is fine because the TrieProof must be valid unless the Mpt is
@@ -170,7 +171,9 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         let original_compressed_path_ref =
                             last_trie_node.compressed_path_ref();
                         let actual_unmatched_path_remaining =
-                            if original_compressed_path_ref.end_mask() != 0 {
+                            if original_compressed_path_ref.end_mask()
+                                != CompressedPathRaw::HAS_SECOND_NIBBLE
+                            {
                                 CompressedPathRaw::new_and_apply_mask(
                                     &unmatched_path_remaining.path_slice()[0
                                         ..(original_compressed_path_ref
@@ -1015,7 +1018,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                     &mut maybe_pending_child,
                 )?;
             }
-            self.compute_merkle();
+            self.compute_merkle(self.path_start_steps % 2 != 0);
         }
 
         parent.set_concluded_child(self)
@@ -1033,7 +1036,8 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                 &mut self.basic_node.mpt,
                 &mut self.the_first_child_if_pending,
             )?;
-            let merkle = self.compute_merkle();
+            let merkle = self
+                .compute_merkle(/* path_without_first_nibble = */ false);
             *mpt_taken = self.write_out()?;
             Ok(merkle)
         }
@@ -1168,10 +1172,13 @@ impl<Mpt> ReadWritePathNode<Mpt> {
         !self.trie_node.has_value() && self.trie_node.get_children_count() == 0
     }
 
-    fn compute_merkle(&mut self) -> MerkleHash {
-        let path_merkle = self
-            .trie_node
-            .compute_merkle(self.trie_node.get_children_merkles().as_ref());
+    fn compute_merkle(
+        &mut self, path_without_first_nibble: bool,
+    ) -> MerkleHash {
+        let path_merkle = self.trie_node.compute_merkle(
+            self.trie_node.get_children_merkles().as_ref(),
+            path_without_first_nibble,
+        );
         self.trie_node.set_merkle(&path_merkle);
 
         path_merkle
@@ -1267,7 +1274,9 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                         )? {
                             Some(mut child_node) => {
                                 child_node.mpt = mpt_taken;
-                                child_node.compute_merkle();
+                                child_node.compute_merkle(
+                                    child_node.path_start_steps % 2 != 0,
+                                );
 
                                 child_node
                             }
@@ -1298,7 +1307,9 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                         )? {
                             Some(mut child_node) => {
                                 child_node.mpt = self.basic_node.mpt.take();
-                                child_node.compute_merkle();
+                                child_node.compute_merkle(
+                                    child_node.path_start_steps % 2 != 0,
+                                );
 
                                 child_node
                             }

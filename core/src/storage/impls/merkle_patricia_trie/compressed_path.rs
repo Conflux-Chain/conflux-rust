@@ -9,7 +9,8 @@ pub trait CompressedPathTrait: Debug {
     fn path_size(&self) -> u16 { self.path_slice().len() as u16 }
 
     fn path_steps(&self) -> u16 {
-        self.path_size() * 2 - (self.end_mask() != 0) as u16
+        self.path_size() * 2
+            - (self.end_mask() != CompressedPathRaw::HAS_SECOND_NIBBLE) as u16
     }
 
     fn as_ref(&self) -> CompressedPathRef {
@@ -19,29 +20,22 @@ pub trait CompressedPathTrait: Debug {
         }
     }
 
-    // TODO(yz): the format can be optimized to save 1 or 2 bytes: a string with
-    // 0 prefix means path_slice with even length, a string with 1 prefix
-    // means path_slice with odd length.
-    fn rlp_append_parts(&self, s: &mut RlpStream) {
-        s.append(&self.end_mask()).append(&self.path_slice());
-    }
-
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2);
-        self.rlp_append_parts(s);
+        s.append(&self.end_mask()).append(&self.path_slice());
     }
 }
 
 impl CompressedPathTrait for [u8] {
     fn path_slice(&self) -> &[u8] { self }
 
-    fn end_mask(&self) -> u8 { 0 }
+    fn end_mask(&self) -> u8 { CompressedPathRaw::HAS_SECOND_NIBBLE }
 }
 
 impl<'a> CompressedPathTrait for &'a [u8] {
     fn path_slice(&self) -> &[u8] { self }
 
-    fn end_mask(&self) -> u8 { 0 }
+    fn end_mask(&self) -> u8 { CompressedPathRaw::HAS_SECOND_NIBBLE }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -109,6 +103,7 @@ make_parallel_field_maybe_in_place_byte_array_memory_manager!(
 impl CompressedPathRaw {
     const BITS_0_3_MASK: u8 = 0x0f;
     const BITS_4_7_MASK: u8 = 0xf0;
+    pub const HAS_SECOND_NIBBLE: u8 = 0;
 }
 
 impl<'a> CompressedPathTrait for CompressedPathRef<'a> {
@@ -119,7 +114,8 @@ impl<'a> CompressedPathTrait for CompressedPathRef<'a> {
     fn path_size(&self) -> u16 { self.path_slice.len() as u16 }
 
     fn path_steps(&self) -> u16 {
-        (self.path_slice.len() as u16 * 2) - (self.end_mask != 0) as u16
+        (self.path_slice.len() as u16 * 2)
+            - (self.end_mask != CompressedPathRaw::HAS_SECOND_NIBBLE) as u16
     }
 }
 
@@ -132,7 +128,9 @@ impl CompressedPathTrait for CompressedPathRaw {
 }
 
 impl<'a> From<&'a [u8]> for CompressedPathRaw {
-    fn from(x: &'a [u8]) -> Self { CompressedPathRaw::new(x, 0) }
+    fn from(x: &'a [u8]) -> Self {
+        CompressedPathRaw::new(x, Self::HAS_SECOND_NIBBLE)
+    }
 }
 
 impl<'a> From<CompressedPathRef<'a>> for CompressedPathRaw {
@@ -212,18 +210,18 @@ impl CompressedPathRaw {
         let new_size;
         let end_mask;
         // Need to extend the length.
-        if x.end_mask() == 0 {
+        if x.end_mask() == CompressedPathRaw::HAS_SECOND_NIBBLE {
             new_size = x.path_size() + 1;
             end_mask = Self::second_nibble_mask();
         } else {
             new_size = x.path_size();
-            end_mask = 0;
+            end_mask = CompressedPathRaw::HAS_SECOND_NIBBLE;
         }
         let mut ret = Self::new_zeroed(new_size, end_mask);
         ret.path.get_slice_mut(new_size as usize)[0..x.path_size() as usize]
             .copy_from_slice(x.path_slice());
-        // The last byte is a half-byte.
-        if x.end_mask() == 0 {
+        // The last byte will be a half-byte.
+        if x.end_mask() == CompressedPathRaw::HAS_SECOND_NIBBLE {
             *ret.last_byte_mut() = Self::from_first_nibble(child_index);
         } else {
             let last_byte = *ret.last_byte_mut();
@@ -276,7 +274,7 @@ impl CompressedPathRaw {
                 }
             }
 
-            if x.end_mask() == 0 {
+            if x.end_mask() == CompressedPathRaw::HAS_SECOND_NIBBLE {
                 slice[0..x_slice_len].copy_from_slice(x_slice);
             } else {
                 slice[0..x_slice_len - 1]
