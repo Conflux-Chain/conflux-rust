@@ -18,6 +18,7 @@ use crate::rpc::{
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
+use ::std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256};
 use cfxcore::{
@@ -41,7 +42,6 @@ use primitives::{
     TransactionWithSignature,
 };
 use rlp::Rlp;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 #[derive(Default)]
@@ -81,7 +81,7 @@ impl RpcImpl {
 
     fn code(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Bytes> {
+    ) -> RpcResult<Bytes> {
         let epoch_number = epoch_number.unwrap_or(EpochNumber::LatestState);
         let address: H160 = addr.into();
         info!(
@@ -98,8 +98,6 @@ impl RpcImpl {
             .get_code(address, epoch_number.into())
             .map(Bytes::new)
             .map_err(RpcError::invalid_params)
-            .into_future()
-            .boxed()
     }
 
     fn balance(
@@ -822,9 +820,12 @@ impl CfxHandler {
     }
 }
 
+// In order to convert RpcResult return type from RpcImpl to BoxFuture
+// automatically with #[into] attribute.
+use crate::common::rpc_result_to_box_future as std;
 impl Cfx for CfxHandler {
     delegate! {
-        target self.common {
+        to self.common {
             fn best_block_hash(&self) -> RpcResult<RpcH256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> RpcResult<RpcBlock>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
@@ -835,7 +836,8 @@ impl Cfx for CfxHandler {
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
         }
 
-        target self.rpc_impl {
+        to self.rpc_impl {
+            #[into]
             fn code(&self, addr: RpcH160, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
@@ -870,7 +872,7 @@ impl TestRpcImpl {
 
 impl TestRpc for TestRpcImpl {
     delegate! {
-        target self.common {
+        to self.common {
             fn add_latency(&self, id: NodeId, latency_ms: f64) -> RpcResult<()>;
             fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
             fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
@@ -885,7 +887,7 @@ impl TestRpc for TestRpcImpl {
             fn save_node_db(&self) -> RpcResult<()>;
         }
 
-        target self.rpc_impl {
+        to self.rpc_impl {
             fn expire_block_gc(&self, timeout: u64) -> RpcResult<()>;
             fn generate_block_with_blame_info(&self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo) -> RpcResult<H256>;
             fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
@@ -915,7 +917,7 @@ impl LocalRpcImpl {
 
 impl LocalRpc for LocalRpcImpl {
     delegate! {
-        target self.common {
+        to self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
@@ -932,7 +934,7 @@ impl LocalRpc for LocalRpcImpl {
             fn sign(&self, data: Bytes, address: RpcH160, password: Option<String>) -> RpcResult<RpcH520>;
         }
 
-        target self.rpc_impl {
+        to self.rpc_impl {
             fn current_sync_phase(&self) -> RpcResult<String>;
             fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;

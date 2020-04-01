@@ -158,6 +158,23 @@ pub fn initialize_txgens(
     (maybe_multi_genesis_txgen, maybe_direct_txgen_with_contract)
 }
 
+pub mod rpc_result_to_box_future {
+    pub mod convert {
+        use jsonrpc_core::{
+            futures::future::{Future, IntoFuture},
+            BoxFuture, Result as RpcResult,
+        };
+
+        pub trait Into<T> {
+            fn into(x: Self) -> T;
+        }
+
+        impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcResult<T> {
+            fn into(x: Self) -> BoxFuture<T> { x.into_future().boxed() }
+        }
+    }
+}
+
 pub use crate::configuration::Configuration;
 use cfx_types::U256;
 use cfxcore::{
