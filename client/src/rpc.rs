@@ -76,12 +76,16 @@ pub struct HttpConfiguration {
 
 impl HttpConfiguration {
     pub fn new(
-        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, cors: Option<String>,
+        // FIXME: bind_addr
+        ip: Option<(u8, u8, u8, u8)>,
+        port: Option<u16>,
+        cors: Option<String>,
         keep_alive: bool,
     ) -> Self
     {
         let ipv4 = match ip {
             Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
+            // FIXME: unspecified.
             None => Ipv4Addr::new(0, 0, 0, 0),
         };
         HttpConfiguration {
