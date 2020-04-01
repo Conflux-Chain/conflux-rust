@@ -54,10 +54,13 @@ pub fn compute_node_merkle(
 /// buffer := compressed_path_info_byte compressed_path node_merkle;
 ///
 /// compressed_path may exclude half-byte at the beginning or at the end. In
-/// these cases, excluded half-byte is cleared.
+/// these cases, excluded half-byte will be cleared for the merkle computation.
 ///
 /// compressed_path_info_byte := 128 + 64 * (no_first_nibble as bool as int) +
-/// compressed_path.path_steps() % 64
+/// compressed_path.path_steps() % 63
+///
+/// % 63 as we try to avoid power of two which are commonly used in block
+/// cipher.
 ///
 /// It's impossible for compressed_path_info_byte to be 'n' used in node merkle
 /// calculation.
@@ -66,7 +69,14 @@ fn compute_path_merkle(
     node_merkle: &MerkleHash,
 ) -> MerkleHash
 {
-    if compressed_path.path_slice().len() != 0 {
+    // compressed_path is non-empty.
+    //
+    // Trie node without a compressed path which starts with the second
+    // half nibble always has the first half nibble stored
+    // in its compressed_path to help with trie access.
+    // We shouldn't include the compressed path when there isn't
+    // anything.
+    if compressed_path.path_steps() > (without_first_nibble as u16) {
         let mut buffer = Vec::with_capacity(
             1 + compressed_path.path_size() as usize
                 + std::mem::size_of::<MerkleHash>(),
@@ -80,19 +90,13 @@ fn compute_path_merkle(
         let path_info_byte = 128u8
             + 64u8 * (without_first_nibble as u8)
             + (compressed_path.path_steps() as u8 - without_first_nibble as u8)
-                % 64u8;
+                % 63u8;
         buffer.push(path_info_byte);
-        if compressed_path.path_steps() > (without_first_nibble as u16) {
-            // Trie node without a compressed path which starts with the second
-            // half nibble always has the first half nibble stored
-            // in its compressed_path to help with trie access.
-            // We shouldn't include the compressed path when there isn't
-            // anything.
-            buffer.extend_from_slice(compressed_path.path_slice());
-            if without_first_nibble {
-                // Clear out the first nibble.
-                buffer[1] = CompressedPathRaw::second_nibble(buffer[1]);
-            }
+
+        buffer.extend_from_slice(compressed_path.path_slice());
+        if without_first_nibble {
+            // Clear out the first nibble.
+            buffer[1] = CompressedPathRaw::second_nibble(buffer[1]);
         }
         buffer.extend_from_slice(node_merkle.as_bytes());
 

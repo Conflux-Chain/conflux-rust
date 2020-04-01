@@ -1018,6 +1018,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                     &mut maybe_pending_child,
                 )?;
             }
+            self.compute_merkle(self.path_start_steps % 2 != 0);
         }
 
         parent.set_concluded_child(self)
@@ -1359,8 +1360,6 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         self.delta_subtree_size += child_node.delta_subtree_size;
 
         if !child_node.is_node_empty() {
-            child_node.compute_merkle(child_node.path_start_steps % 2 != 0);
-
             let subtree_size = (self
                 .basic_node
                 .trie_node
