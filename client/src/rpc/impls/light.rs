@@ -445,7 +445,7 @@ impl CfxHandler {
 
 impl Cfx for CfxHandler {
     delegate! {
-        target self.common {
+        to self.common {
             fn best_block_hash(&self) -> RpcResult<RpcH256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> RpcResult<RpcBlock>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
@@ -456,7 +456,7 @@ impl Cfx for CfxHandler {
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
         }
 
-        target self.rpc_impl {
+        to self.rpc_impl {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
@@ -495,7 +495,7 @@ impl TestRpcImpl {
 
 impl TestRpc for TestRpcImpl {
     delegate! {
-        target self.common {
+        to self.common {
             fn add_latency(&self, id: NodeId, latency_ms: f64) -> RpcResult<()>;
             fn add_peer(&self, node_id: NodeId, address: SocketAddr) -> RpcResult<()>;
             fn chain(&self) -> RpcResult<Vec<RpcBlock>>;
@@ -540,7 +540,7 @@ impl DebugRpcImpl {
 
 impl LocalRpc for DebugRpcImpl {
     delegate! {
-        target self.common {
+        to self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
@@ -557,7 +557,7 @@ impl LocalRpc for DebugRpcImpl {
             fn sign(&self, data: Bytes, address: RpcH160, password: Option<String>) -> RpcResult<RpcH520>;
         }
 
-        target self.rpc_impl {
+        to self.rpc_impl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
         }
     }
