@@ -158,6 +158,53 @@ pub fn initialize_txgens(
     (maybe_multi_genesis_txgen, maybe_direct_txgen_with_contract)
 }
 
+pub mod delegate_convert {
+    use jsonrpc_core::{
+        futures::future::{Future, IntoFuture},
+        BoxFuture, Result as RpcResult,
+    };
+
+    pub trait Into<T> {
+        fn into(x: Self) -> T;
+    }
+
+    /// Sometimes an rpc method is implemented asynchronously, then the rpc
+    /// trait definition must use BoxFuture for the return type.
+    ///
+    /// This into conversion allow non-async rpc implementation method to
+    /// return RpcResult straight-forward. The delegate! macro with  #[into]
+    /// attribute will automatically call this method to do the return type
+    /// conversion.
+    impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcResult<T> {
+        fn into(x: Self) -> BoxFuture<T> { x.into_future().boxed() }
+    }
+
+    /*
+    /// It's a bad idea to convert a BoxFuture return type to a RpcResult
+    /// return type for rpc call. Simply imagine how the code below runs.
+    impl<T: Send + Sync + 'static> Into<RpcResult<T>> for BoxFuture<T> {
+        fn into(x: Self) -> RpcResult<T> {
+            thread::Builder::new()
+                .name("rpc async waiter".into())
+                .spawn(move || x.wait())
+                .map_err(|e| {
+                    let mut rpc_err = RpcError::internal_error();
+                    rpc_err.message = format!("thread creation error: {}", e);
+
+                    rpc_err
+                })?
+                .join()
+                .map_err(|_| {
+                    let mut rpc_err = RpcError::internal_error();
+                    rpc_err.message = format!("thread join error.");
+
+                    rpc_err
+                })?
+        }
+    }
+    */
+}
+
 pub use crate::configuration::Configuration;
 use cfx_types::U256;
 use cfxcore::{

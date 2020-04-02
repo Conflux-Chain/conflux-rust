@@ -952,9 +952,12 @@ dependencies = [
 
 [[package]]
 name = "delegate"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b69c98ef9a359c096315189967f3ccdf9d9dbaa02d9129ff724ed3426c61f948"
+version = "0.4.2"
+dependencies = [
+ "proc-macro2 1.0.9",
+ "quote 1.0.3",
+ "syn 1.0.16",
+]
 
 [[package]]
 name = "derivative"
