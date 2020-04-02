@@ -33,6 +33,8 @@ pub mod consensus_internal {
     pub const REWARD_EPOCH_COUNT: u64 = 12;
     pub const ANTICONE_PENALTY_UPPER_EPOCH_COUNT: u64 = 10;
     pub const ANTICONE_PENALTY_RATIO: u64 = 100;
+    /// The maximum number of blocks to be executed in each epoch
+    pub const EPOCH_EXECUTED_BLOCK_BOUND: usize = 200;
     // The initial base mining reward in uCFX.
     pub const INITIAL_BASE_MINING_REWARD_IN_UCFX: u64 = 11_300_000;
     // The ultimate base mining reward in uCFX.
@@ -51,8 +53,8 @@ pub mod consensus_internal {
     /// than this number we will use the brute_force O(n) algorithm instead.
     pub const ANTICONE_BARRIER_CAP: usize = 100;
     /// Here is the delay for us to recycle those orphaned blocks in the
-    /// boundary of eras.
-    pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
+    /// boundary of eras and large epochs.
+    pub const RECYCLE_TRANSACTION_DELAY: u64 = 20;
     /// This is the cap of the size of `blockset_in_own_view_of_epoch`. If we
     /// have more than this number, we will not store it in memory
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;

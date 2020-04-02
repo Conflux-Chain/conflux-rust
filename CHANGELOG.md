@@ -7,11 +7,17 @@ All smart contracts address now start with 0x8. Note that your private key will
 still work as long as you replace the first character in your hex address with
 ``0x1``. For example, if your address is 0x7b5c..., after this update your
 address will change to 0x1b5c...
+
 - Changes the state Merkle root calculation method. Merkle is calculated based
 on constructed raw keccak input byte string instead of serialized rlp; checks if
 compressed_path starts on the second nibble of a byte; makes sure that with the
 constructed keccak input string adversary cannot construct a compressed path to
 create a path Merkle of the same value as a node Merkle.
+
+- Each epoch now has a limit of executing 200 blocks. If there are more than
+200 blocks in an epoch. Only the last 200 blocks will be executed. This change
+is designed to battle DoS attacks about hiding and generating a lot of blocks
+suddenly.
 
 You need to use new SDK tools to connect with the main chain, otherwise your
 transaction will be rejected as invalid. 
