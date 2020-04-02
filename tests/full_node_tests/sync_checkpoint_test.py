@@ -13,7 +13,6 @@ from conflux.rpc import RpcClient
 
 class SyncCheckpointTests(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 3
         self.conf_parameters = {
             "dev_snapshot_epoch_count": "10",

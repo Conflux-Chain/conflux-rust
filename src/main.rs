@@ -12,7 +12,6 @@ use client::{
     configuration::Configuration,
     full::FullClient,
     light::LightClient,
-    tg_archive::TgArchiveClient,
 };
 use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
 use log::{info, LevelFilter};
@@ -147,10 +146,6 @@ fn main() -> Result<(), String> {
         info!("Starting full client...");
         FullClient::start(conf, exit.clone())
             .map_err(|e| format!("failed to start full client: {:?}", e))?
-    } else if matches.is_present("tg_archive") {
-        info!("Starting TreeGraph consortium archive client...");
-        TgArchiveClient::start(conf, exit.clone())
-            .map_err(|e| format!("failed to start TgA/run/media/yangzhe/SSDDATA/conflux_project/conflux-rust/client/src/tg_archive/mod.rs:470:5rchive client: {:?}", e))?
     } else {
         info!("Starting archive client...");
         ArchiveClient::start(conf, exit.clone())

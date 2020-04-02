@@ -473,10 +473,10 @@ fn test_not_enough_cash() {
         Err(ExecutionError::NotEnoughCash {
             required,
             got,
-            actual_cost,
+            actual_gas_cost,
         }) if required == U512::from(100_018)
             && got == U512::from(100_017)
-            && correct_cost == actual_cost =>
+            && correct_cost == actual_gas_cost =>
         {
             ()
         }
@@ -692,13 +692,16 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(state.block_number(), 0);
     // withdraw more than staking balance
@@ -720,13 +723,16 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(state.block_number(), 0);
 
@@ -747,14 +753,17 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
@@ -776,14 +785,17 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
@@ -801,13 +813,16 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -826,13 +841,16 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -857,13 +875,16 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(949_975_000_000u64)
+        U256::from(950_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
         U256::from(50_000_000_000u64)
     );
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_975_000_000u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -883,10 +904,13 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(999_949_999_999u64)
+        U256::from(999_999_999_998u64)
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::from(2));
-    assert_eq!(*state.total_issued_tokens(), U256::from(999_950_000_001u64));
+    assert_eq!(
+        *state.total_issued_tokens(),
+        U256::from(1_000_000_000_000u64)
+    );
     assert_eq!(*state.total_staking_tokens(), U256::from(2));
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
@@ -970,7 +994,7 @@ fn test_commission_privilege() {
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
         state.balance(&sender.address()).unwrap(),
-        U256::from(999_999_999_998_900_000u64)
+        U256::from(999_999_999_998_925_000u64)
     );
 
     state
@@ -1031,7 +1055,7 @@ fn test_commission_privilege() {
     let tx = Transaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
-        gas: U256::from(100_000),
+        gas: U256::from(60_000),
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::MAX,
@@ -1057,7 +1081,10 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
-    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(41_976)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
         U256::from(110_000)
@@ -1099,7 +1126,7 @@ fn test_commission_privilege() {
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::from(10_000)
+        U256::from(35_000)
     );
 
     // call with commission privilege and not enough commission balance
@@ -1132,10 +1159,13 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
-    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(25_000)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::from(10_000)
+        U256::from(35_000)
     );
 
     // add more commission balance
@@ -1166,7 +1196,10 @@ fn test_commission_privilege() {
     }
     .sign(caller2.secret());
     assert_eq!(tx.sender(), caller2.address());
-    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(25_000)
+    );
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
         &env,
@@ -1179,10 +1212,13 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
-    assert_eq!(state.balance(&caller2.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller2.address()).unwrap(),
+        U256::from(25_000)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::from(100_000)
+        U256::from(125_000)
     );
 
     // add commission privilege to caller3
@@ -1206,7 +1242,10 @@ fn test_commission_privilege() {
     }
     .sign(caller3.secret());
     assert_eq!(tx.sender(), caller3.address());
-    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(41_976)
+    );
     let Executed { gas_used, .. } = Executive::new(
         &mut state,
         &env,
@@ -1219,10 +1258,13 @@ fn test_commission_privilege() {
 
     assert_eq!(gas_used, U256::from(58_024));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
-    assert_eq!(state.balance(&caller3.address()).unwrap(), U256::from(0));
+    assert_eq!(
+        state.balance(&caller3.address()).unwrap(),
+        U256::from(41_976)
+    );
     assert_eq!(
         state.sponsor_balance_for_gas(&address).unwrap(),
-        U256::zero()
+        U256::from(50_000)
     );
 }
 
@@ -1289,8 +1331,8 @@ fn test_storage_commission_privilege() {
         );
         ex.create(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&sender], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&sender], 64);
 
     state
         .set_sponsor_for_collateral(
@@ -1360,8 +1402,8 @@ fn test_storage_commission_privilege() {
         CollateralCheckResult::Valid
     );
     state.discard_checkpoint();
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&sender], 3);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&sender], 3 * 64);
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
@@ -1405,10 +1447,10 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&caller3], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&caller3], 64);
     assert_eq!(substate.storage_released.len(), 1);
-    assert_eq!(substate.storage_released[&sender], 1);
+    assert_eq!(substate.storage_released[&sender], 64);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(state.balance(&caller3).unwrap(), U256::zero());
     assert_eq!(state.staking_balance(&caller3).unwrap(), U256::zero());
@@ -1447,10 +1489,10 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&address], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&address], 64);
     assert_eq!(substate.storage_released.len(), 1);
-    assert_eq!(substate.storage_released[&caller3], 1);
+    assert_eq!(substate.storage_released[&caller3], 64);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(
         state.balance(&caller1).unwrap(),
@@ -1515,10 +1557,10 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&caller2], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&caller2], 64);
     assert_eq!(substate.storage_released.len(), 1);
-    assert_eq!(substate.storage_released[&address], 1);
+    assert_eq!(substate.storage_released[&address], 64);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(state.balance(&caller2).unwrap(), U256::from(0),);
     assert_eq!(state.staking_balance(&caller2).unwrap(), U256::zero());
@@ -1576,11 +1618,11 @@ fn test_storage_commission_privilege() {
         );
         ex.call(params.clone(), &mut substate).unwrap()
     };
-    assert_eq!(substate.storage_occupied.len(), 1);
-    assert_eq!(substate.storage_occupied[&caller1], 1);
+    assert_eq!(substate.storage_collateralized.len(), 1);
+    assert_eq!(substate.storage_collateralized[&caller1], 64);
     assert_eq!(substate.storage_released.len(), 2);
-    assert_eq!(substate.storage_released[&sender], 1);
-    assert_eq!(substate.storage_released[&caller2], 1);
+    assert_eq!(substate.storage_released[&sender], 64);
+    assert_eq!(substate.storage_released[&caller2], 64);
     assert_eq!(gas_left, U256::from(94983));
     assert_eq!(state.balance(&caller1).unwrap(), U256::zero());
     assert_eq!(state.staking_balance(&caller1).unwrap(), U256::zero());

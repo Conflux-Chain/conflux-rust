@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
-import json
-
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 class WithdrawDepositTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -37,22 +33,18 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
 
     def run_test(self):
-        # Prevent easysolc from configuring the root logger to print to stderr
-        self.log.propagate = False
-
-        solc = Solc()
         file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
         file_path.pop(-1)
         file_path.extend(["internal_contract", "metadata", "Staking.json"])
         file_path = "/".join(file_path)
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
-        staking_contract = solc.get_contract_instance(contract_dict=staking_contract_dict)
+        staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
 
         start_p2p_connection(self.nodes)
 
         self.log.info("Initializing contract")
         genesis_key = default_config["GENESIS_PRI_KEY"]
-        genesis_addr = privtoaddr(genesis_key)
+        genesis_addr = priv_to_addr(genesis_key)
         nonce = 0
         gas_price = 1
         gas = 50000000
@@ -85,7 +77,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         self.wait_for_tx([tx])
         deposit_time = self.get_block_number(client, tx.hash_hex())
         assert_equal(client.get_staking_balance(addr), 10 ** 18)
-        assert_equal(client.get_balance(addr), 4 * 10 ** 18 - gas)
+        assert_equal(client.get_balance(addr), 4 * 10 ** 18 - gas + 12500000)
 
         # withdraw 5 * 10**17
         balance = client.get_balance(addr)
@@ -95,11 +87,9 @@ class WithdrawDepositTest(ConfluxTestFramework):
         client.send_tx(tx)
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
-        duration = withdraw_time - deposit_time
         interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
-        service_charge = capital * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
         assert_equal(client.get_staking_balance(addr), 10 ** 18 - capital)
-        assert_equal(client.get_balance(addr), balance + capital + interest - service_charge - gas)
+        assert_equal(client.get_balance(addr), balance + capital + interest - gas + 12500000)
 
         # lock 4 * 10 ** 17 for 1 day
         balance = client.get_balance(addr)
@@ -107,7 +97,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(client.get_balance(addr), balance - gas)
+        assert_equal(client.get_balance(addr), balance - gas + 12500000)
         assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17)
 
         # withdraw 5 * 10**17 and it should fail
@@ -137,10 +127,8 @@ class WithdrawDepositTest(ConfluxTestFramework):
         client.send_tx(tx)
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
-        duration = withdraw_time - deposit_time
         interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
-        service_charge = capital * (total_num_blocks - duration) * 5 // 10000 // total_num_blocks
-        assert_equal(client.get_balance(addr), balance + capital + interest - service_charge - gas)
+        assert_equal(client.get_balance(addr), balance + capital + interest - gas + 12500000)
         assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17 - capital)
 
         block_gen_thread.stop()

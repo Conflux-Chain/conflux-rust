@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 
-from conflux.utils import privtoaddr, parse_as_int
+from conflux.utils import priv_to_addr, parse_as_int
 from conflux.rpc import RpcClient
 from http.client import CannotSendRequest
 from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.blocktools import create_transaction
+from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_address
 from test_framework.block_gen_thread import BlockGenThread
 from eth_utils import decode_hex
-from easysolc import Solc
 from web3 import Web3
-import copy
 
 class ReentrancyTest(ConfluxTestFramework):
     REQUEST_BASE = {
@@ -25,11 +23,10 @@ class ReentrancyTest(ConfluxTestFramework):
 
         self.nonce_map = {}
         self.genesis_priv_key = default_config['GENESIS_PRI_KEY']
-        self.genesis_addr = privtoaddr(self.genesis_priv_key)
+        self.genesis_addr = priv_to_addr(self.genesis_priv_key)
         self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -37,9 +34,8 @@ class ReentrancyTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def get_nonce(self, sender, inc=True):
-        sender = sender.lower()
         if sender not in self.nonce_map:
-            self.nonce_map[sender] = 0
+            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
         else:
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]
@@ -84,7 +80,7 @@ class ReentrancyTest(ConfluxTestFramework):
         else:
             func = getattr(contract, name)
         attrs = {
-            'nonce': self.get_nonce(privtoaddr(sender_key)),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** ReentrancyTest.REQUEST_BASE
         }
         if contract_addr:
@@ -106,28 +102,25 @@ class ReentrancyTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        self.log.propagate = False
-
         start_p2p_connection(self.nodes)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
         self.log.info("Initializing contract")
        
-        self.buggy_contract = solc.get_contract_instance(
+        self.buggy_contract = get_contract_instance(
             source=os.path.join(file_dir, "contracts/reentrancy.sol"),
             contract_name="Reentrance")
-        self.exploit_contract = solc.get_contract_instance(
+        self.exploit_contract = get_contract_instance(
             source=os.path.join(file_dir, "contracts/reentrancy_exploit.sol"),
             contract_name="ReentranceExploit")
 
         user1, _ = ec_random_keys()
-        user1_addr = privtoaddr(user1)
+        user1_addr = priv_to_addr(user1)
         user2, _ = ec_random_keys()
-        user2_addr = privtoaddr(user2)
+        user2_addr = priv_to_addr(user2)
 
         # setup balance
         value = (10 ** 15 + 2000) * 10 ** 18 + ReentrancyTest.REQUEST_BASE['gas']

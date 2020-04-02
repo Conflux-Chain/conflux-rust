@@ -4,7 +4,7 @@ import eth_utils
 
 from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import privtoaddr
+from conflux.utils import priv_to_addr
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
@@ -17,7 +17,6 @@ LIGHTNODE = 2
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 3
 
     def setup_network(self):
@@ -42,7 +41,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def run_test(self):
         priv_key = default_config["GENESIS_PRI_KEY"]
-        sender = eth_utils.encode_hex(privtoaddr(priv_key))
+        sender = eth_utils.encode_hex(priv_to_addr(priv_key))
 
         # deploy storage test contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)

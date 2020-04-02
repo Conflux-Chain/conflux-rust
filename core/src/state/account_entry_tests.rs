@@ -342,17 +342,15 @@ fn test_deposit_and_withdraw() {
 
     // withdraw
     // 500_000_000_000_000 from `block_number = 1`
-    let (interest, service_charge) = overlay_account.withdraw(
+    let interest = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[1],
-        1, /* withdraw_time */
     );
     assert_eq!(interest, U256::zero());
-    assert_eq!(service_charge, U256::from(250_000_000_000u64));
     assert_eq!(*overlay_account.accumulated_interest_return(), U256::zero());
     assert_eq!(
         *overlay_account.balance(),
-        U256::from(1_388_639_000_000_000u64)
+        U256::from(1_388_889_000_000_000u64)
     );
     assert_eq!(
         *overlay_account.staking_balance(),
@@ -369,20 +367,18 @@ fn test_deposit_and_withdraw() {
     );
 
     // 500_000_000_000_000 from `block_number = 1`
-    let (interest, service_charge) = overlay_account.withdraw(
+    let interest = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[100000],
-        BLOCKS_PER_YEAR + 1, /* withdraw_time */
     );
     assert_eq!(interest, U256::from(31_710_480_387u64));
-    assert_eq!(service_charge, U256::zero());
     assert_eq!(
         *overlay_account.accumulated_interest_return(),
         U256::from(31_710_480_387u64)
     );
     assert_eq!(
         *overlay_account.balance(),
-        U256::from(1_888_670_710_480_387u64)
+        U256::from(1_888_920_710_480_387u64)
     );
     assert_eq!(
         *overlay_account.staking_balance(),
@@ -401,20 +397,18 @@ fn test_deposit_and_withdraw() {
     // 100_000_000_000_000 from `block_number = 2`
     // 10_000_000_000_000 from `block_number = 3`
     // 250_000_000_000 from `block_number = 4`
-    let (interest, service_charge) = overlay_account.withdraw(
+    let interest = overlay_account.withdraw(
         110_250_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[100],
-        100, /* withdraw_time */
     );
     assert_eq!(interest, U256::from(6_845_508u64));
-    assert_eq!(service_charge, U256::from(55_124_914_430u64));
     assert_eq!(
         *overlay_account.accumulated_interest_return(),
         U256::from(31_717_325_895u64)
     );
     assert_eq!(
         *overlay_account.balance(),
-        U256::from(1_998_865_592_411_465u64)
+        U256::from(1_999_170_717_325_895u64)
     );
     assert_eq!(
         *overlay_account.staking_balance(),

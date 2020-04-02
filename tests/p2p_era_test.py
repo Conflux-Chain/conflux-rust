@@ -4,7 +4,7 @@ from rlp.sedes import Binary, BigEndianInt
 
 from conflux import utils
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.blocktools import create_block
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
@@ -12,7 +12,6 @@ from test_framework.util import *
 
 class P2PTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 8
         self.conf_parameters["generate_tx"] = "true"
         # Every node generates 1 tx every second

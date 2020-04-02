@@ -4,39 +4,45 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
+    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         consensus_internal::REWARD_EPOCH_COUNT,
     },
     sync::{
-        message::{Context, DynamicCapability, Handleable, KeyContainer},
+        message::{
+            msgid, Context, DynamicCapability, Handleable, KeyContainer,
+        },
         request_manager::{AsAny, Request},
         state::{
             snapshot_manifest_response::SnapshotManifestResponse,
-            storage::RangedManifest,
+            storage::{RangedManifest, SnapshotSyncCandidate},
         },
         Error, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
 use primitives::{EpochNumber, StateRoot};
+use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
 #[derive(Debug, Clone, RlpDecodable, RlpEncodable)]
 pub struct SnapshotManifestRequest {
     pub request_id: u64,
-    pub snapshot_epoch_id: H256,
+    pub snapshot_to_sync: SnapshotSyncCandidate,
     pub start_chunk: Option<Vec<u8>>,
     pub trusted_blame_block: Option<H256>,
 }
+
+build_msg_with_request_id_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
 
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         // TODO Handle the case where we cannot serve the snapshot
         let snapshot_merkle_root;
         let manifest = match RangedManifest::load(
-            &self.snapshot_epoch_id,
+            &self.snapshot_to_sync,
             self.start_chunk.clone(),
             &ctx.manager.graph.data_man.storage_manager,
             ctx.manager.protocol_config.chunk_size_byte,
@@ -63,7 +69,6 @@ impl Handleable for SnapshotManifestRequest {
         debug!("handle SnapshotManifestRequest {:?}", self,);
         ctx.send_response(&SnapshotManifestResponse {
             request_id: self.request_id,
-            snapshot_epoch_id: self.snapshot_epoch_id.clone(),
             manifest,
             state_root_vec,
             receipt_blame_vec,
@@ -75,10 +80,14 @@ impl Handleable for SnapshotManifestRequest {
 }
 
 impl SnapshotManifestRequest {
-    pub fn new(checkpoint: H256, trusted_blame_block: H256) -> Self {
+    pub fn new(
+        snapshot_sync_candidate: SnapshotSyncCandidate,
+        trusted_blame_block: H256,
+    ) -> Self
+    {
         SnapshotManifestRequest {
             request_id: 0,
-            snapshot_epoch_id: checkpoint,
+            snapshot_to_sync: snapshot_sync_candidate,
             start_chunk: None,
             trusted_blame_block: Some(trusted_blame_block),
         }
@@ -92,7 +101,8 @@ impl SnapshotManifestRequest {
         &self, ctx: &Context,
     ) -> Option<Vec<BlockExecutionResult>> {
         let mut epoch_receipts = Vec::new();
-        let mut epoch_hash = self.snapshot_epoch_id;
+        let mut epoch_hash =
+            self.snapshot_to_sync.get_snapshot_epoch_id().clone();
         for _ in 0..REWARD_EPOCH_COUNT {
             if let Some(block) =
                 ctx.manager.graph.data_man.block_header_by_hash(&epoch_hash)
@@ -158,11 +168,10 @@ impl SnapshotManifestRequest {
             .graph
             .data_man
             .block_header_by_hash(&self.trusted_blame_block?)?;
-        let snapshot_epoch_block = ctx
-            .manager
-            .graph
-            .data_man
-            .block_header_by_hash(&self.snapshot_epoch_id)?;
+        let snapshot_epoch_block =
+            ctx.manager.graph.data_man.block_header_by_hash(
+                self.snapshot_to_sync.get_snapshot_epoch_id(),
+            )?;
         if trusted_block.height() < snapshot_epoch_block.height() {
             warn!(
                 "receive invalid snapshot manifest request from peer={}",

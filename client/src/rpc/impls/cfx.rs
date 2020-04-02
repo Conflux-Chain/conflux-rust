@@ -7,20 +7,19 @@ use delegate::delegate;
 use crate::rpc::{
     helpers::errors::execution_error,
     impls::common::RpcImpl as CommonImpl,
-    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
+    traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
-        sign_call, Account as RpcAccount, BFTStates, BlameInfo,
-        Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-        ConsensusGraphStates, EpochNumber, EstimateGasAndCollateralResponse,
-        Filter as RpcFilter, Log as RpcLog, Receipt as RpcReceipt,
-        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
-        SyncGraphStates, Transaction as RpcTransaction, H160 as RpcH160,
-        H256 as RpcH256, H520 as RpcH520, U128 as RpcU128, U256 as RpcU256,
-        U64 as RpcU64,
+        sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
+        Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
+        SponsorInfo as RpcSponsorInfo, Status as RpcStatus, SyncGraphStates,
+        Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
+        H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
 use blockgen::BlockGenerator;
-use cfx_types::{Public, H160, H256, U256};
+use cfx_types::{H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
@@ -32,7 +31,6 @@ use jsonrpc_core::{
     futures::future::{Future, IntoFuture},
     BoxFuture, Error as RpcError, Result as RpcResult,
 };
-use libra_types::transaction::SignedTransaction as BftSignedTransaction;
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -359,7 +357,7 @@ impl RpcImpl {
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph
-                .transaction_count(
+                .next_nonce(
                     tx.from.clone().into(),
                     BlockHashOrEpochNumber::EpochNumber(
                         EpochNumber::LatestState,
@@ -453,8 +451,9 @@ impl RpcImpl {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, receipt, tx_index) = info;
-            let rpc_receipt = RpcReceipt::new(tx.clone(), receipt, tx_index);
+            let (tx, receipt, tx_index, prior_gas_used) = info;
+            let rpc_receipt =
+                RpcReceipt::new(tx.clone(), receipt, tx_index, prior_gas_used);
             let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
             return Ok(Some(rpc_tx)).into_future().boxed();
         }
@@ -486,6 +485,17 @@ impl RpcImpl {
             Some(result_tuple) => result_tuple,
         };
 
+        let epoch_block_header = self
+            .consensus
+            .get_data_manager()
+            .block_header_by_hash(&epoch_hash)
+            .ok_or(RpcError::internal_error())?;
+        let epoch_number = epoch_block_header.height();
+        if epoch_number > consensus_graph.best_executed_state_epoch_number() {
+            // The receipt is only visible to optimistic execution.
+            return Ok(None);
+        }
+
         // Operations below will not involve the status of ConsensusInner
         let block = self
             .consensus
@@ -503,13 +513,18 @@ impl RpcImpl {
             .get(address.index)
             .ok_or(RpcError::internal_error())?
             .clone();
-        let mut rpc_receipt = RpcReceipt::new(transaction, receipt, address);
-        let epoch_block_header = self
-            .consensus
-            .get_data_manager()
-            .block_header_by_hash(&epoch_hash)
-            .ok_or(RpcError::internal_error())?;
-        let epoch_number = epoch_block_header.height();
+        let prior_gas_used = if address.index == 0 {
+            U256::zero()
+        } else {
+            let prior_receipt = execution_result
+                .receipts
+                .get(address.index - 1)
+                .ok_or(RpcError::internal_error())?
+                .clone();
+            prior_receipt.gas_used
+        };
+        let mut rpc_receipt =
+            RpcReceipt::new(transaction, receipt, address, prior_gas_used);
         rpc_receipt.set_epoch_number(Some(epoch_number));
         rpc_receipt.set_state_root(state_root.into());
         Ok(Some(rpc_receipt))
@@ -734,15 +749,15 @@ impl RpcImpl {
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let caller = request.from.unwrap_or_default();
         let success_executed = self.exec_transaction(request, epoch)?;
-        let mut storage_occupied = U256::zero();
-        for storage_change in &success_executed.storage_occupied {
+        let mut storage_collateralized = 0;
+        for storage_change in &success_executed.storage_collateralized {
             if storage_change.address == caller {
-                storage_occupied = storage_change.amount;
+                storage_collateralized = storage_change.amount;
             }
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: success_executed.gas_used.into(),
-            storage_occupied: storage_occupied.into(),
+            storage_collateralized: storage_collateralized.into(),
         };
         Ok(response)
     }
@@ -854,7 +869,7 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
-            fn transaction_count(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
+            fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
         }
 
         target self.rpc_impl {
@@ -875,11 +890,6 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }
-    }
-
-    not_supported! {
-        fn set_consortium_administrators(&self, admins: Vec<Public>) -> RpcResult<bool>;
-        fn send_new_consortium_member_trans(&self, admin_trans: BftSignedTransaction) -> RpcResult<()>;
     }
 }
 
@@ -929,18 +939,18 @@ impl TestRpc for TestRpcImpl {
     }
 }
 
-pub struct DebugRpcImpl {
+pub struct LocalRpcImpl {
     common: Arc<CommonImpl>,
     rpc_impl: Arc<RpcImpl>,
 }
 
-impl DebugRpcImpl {
+impl LocalRpcImpl {
     pub fn new(common: Arc<CommonImpl>, rpc_impl: Arc<RpcImpl>) -> Self {
-        DebugRpcImpl { common, rpc_impl }
+        LocalRpcImpl { common, rpc_impl }
     }
 }
 
-impl DebugRpc for DebugRpcImpl {
+impl LocalRpc for LocalRpcImpl {
     delegate! {
         target self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
@@ -966,9 +976,5 @@ impl DebugRpc for DebugRpcImpl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
             fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
-    }
-
-    not_supported! {
-        fn bft_state(&self) -> RpcResult<BFTStates>;
     }
 }

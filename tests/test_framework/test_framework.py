@@ -69,7 +69,7 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.setup_clean_chain = False
+        self.setup_clean_chain = True
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
@@ -288,14 +288,14 @@ class ConfluxTestFramework:
         # two halves that can work on competing chains.
         for i in range(self.num_nodes - 1):
             connect_nodes(self.nodes, i, i + 1)
-        self.sync_all()
+        sync_blocks(self.nodes)
 
     def setup_nodes(self, binary=None):
         """Override this method to customize test node setup"""
         self.add_nodes(self.num_nodes, binary=binary)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, is_consortium=False):
+    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=False):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
@@ -312,6 +312,7 @@ class ConfluxTestFramework:
                     rpc_timeout=self.rpc_timewait,
                     confluxd=binary[i],
                     auto_recovery=auto_recovery,
+                    recovery_timeout=recovery_timeout
                 ))
 
     def add_remote_nodes(self, num_nodes, ip, user, rpchost=None, binary=None):
@@ -526,7 +527,6 @@ class SkipTest(Exception):
 
 class DefaultConfluxTestFramework(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 8
 
     def setup_network(self):

@@ -294,6 +294,7 @@ impl Impl for EcRecover {
 
         let bit = match v[31] {
             0 | 1 if &v.0[..31] == &[0; 31] => v[31],
+            27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
             _ => {
                 return Ok(());
             }
@@ -786,12 +787,19 @@ mod tests {
     fn ecrecover() {
         let f = builtin_factory("ecrecover");
 
-        let i = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad0000000000000000000000000000000000000000000000000000000000000000650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+        let i = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
 
         let mut o = [255u8; 32];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
         assert_eq!(&o[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
+
+        let i2 = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad0000000000000000000000000000000000000000000000000000000000000000650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+
+        let mut o2 = [255u8; 32];
+        f.execute(&i2[..], &mut BytesRef::Fixed(&mut o2[..]))
+            .expect("Builtin should not fail");
+        assert_eq!(&o2[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddb").unwrap())[..]);
 
         let mut o8 = [255u8; 8];
         f.execute(&i[..], &mut BytesRef::Fixed(&mut o8[..]))
@@ -806,7 +814,7 @@ mod tests {
             .expect("Builtin should not fail");
         assert_eq!(&o34[..], &(FromHex::from_hex("000000000000000000000000108b5542d177ac6686946920409741463a15dddbffff").unwrap())[..]);
 
-        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001b650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
+        let i_bad = FromHex::from_hex("47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad000000000000000000000000000000000000000000000000000000000000001a650acf9d3f5f0a2c799776a1254355d5f4061762a237396a99a0e0e3fc2bcd6729514a0dacb2e623ac4abd157cb18163ff942280db4d5caad66ddf941ba12e03").unwrap();
         let mut o = [255u8; 32];
         f.execute(&i_bad[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");

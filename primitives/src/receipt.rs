@@ -14,7 +14,8 @@ pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct StorageChange {
     pub address: Address,
-    pub amount: U256,
+    /// Number of bytes.
+    pub amount: u64,
 }
 
 /// Information describing execution of a transaction.
@@ -28,14 +29,14 @@ pub struct Receipt {
     pub logs: Vec<LogEntry>,
     /// Transaction outcome.
     pub outcome_status: u8,
-    pub storage_occupied: Vec<StorageChange>,
+    pub storage_collateralized: Vec<StorageChange>,
     pub storage_released: Vec<StorageChange>,
 }
 
 impl Receipt {
     pub fn new(
         outcome: u8, gas_used: U256, logs: Vec<LogEntry>,
-        storage_occupied: Vec<StorageChange>,
+        storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
     ) -> Self
     {
@@ -47,7 +48,7 @@ impl Receipt {
             }),
             logs,
             outcome_status: outcome,
-            storage_occupied,
+            storage_collateralized,
             storage_released,
         }
     }

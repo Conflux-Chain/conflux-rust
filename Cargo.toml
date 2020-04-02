@@ -13,16 +13,16 @@ serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
 parking_lot = "0.10"
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
-app_dirs = { git = "https://github.com/paritytech/app-dirs-rs" }
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git" }
+panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+app_dirs = "1.2.1"
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 cfxstore = { path = "accounts/cfxstore" }
 cfxcore-accounts = { path = "accounts" }
 home = "0.5.0"
 rpassword = "4.0.1"
 io = { path = "util/io" }
 runtime = { path = "util/runtime" }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 jsonrpc-core = "14.0.0"
 jsonrpc-tcp-server = "14.0.0"
 jsonrpc-http-server = "14.0.0"
@@ -52,22 +52,7 @@ cfxkey = { path = "accounts/cfxkey" }
 parity-wordlist = "1.3.0"
 rustc-hex = "2.0.1"
 env_logger = "0.5"
-libra-config = { path = "core/src/alliance_tree_graph/bft/config" }
-libra-canonical-serialization = { path = "core/src/alliance_tree_graph/bft/common/lcs" }
-libra-types = { path = "core/src/alliance_tree_graph/bft/types" }
-libra-crypto-derive = { path = "core/src/alliance_tree_graph/bft/crypto/crypto-derive" }
-libra-nibble = { path = "core/src/alliance_tree_graph/bft/common/nibble" }
-libra-proptest-helpers = { path = "core/src/alliance_tree_graph/bft/common/proptest-helpers" }
-libra-tools = { path = "core/src/alliance_tree_graph/bft/common/tools" }
-libra-logger = { path = "core/src/alliance_tree_graph/bft/common/logger" }
-libra-metrics = { path = "core/src/alliance_tree_graph/bft/common/metrics" }
-channel = { path = "core/src/alliance_tree_graph/bft/common/channel" }
-futures-semaphore = { path = "core/src/alliance_tree_graph/bft/common/futures-semaphore" }
-libra-prost-ext = { path = "core/src/alliance_tree_graph/bft/common/prost-ext" }
-schemadb = { path = "core/src/alliance_tree_graph/bft/storage/schemadb" }
-scratchpad = { path = "core/src/alliance_tree_graph/bft/storage/scratchpad" }
-libra-state-view = { path="core/src/alliance_tree_graph/bft/storage/state-view" }
-storage-proto = { path = "core/src/alliance_tree_graph/bft/storage/storage-proto" }
+
 
 [[bin]]
 name = "consensus_bench"

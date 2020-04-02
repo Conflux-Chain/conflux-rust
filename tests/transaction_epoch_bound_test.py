@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from conflux.utils import encode_hex, bytes_to_int, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction
 from test_framework.test_framework import DefaultConfluxTestFramework
@@ -10,7 +10,6 @@ from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
 class TransactionTest(DefaultConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
         self.conf_parameters["transaction_epoch_bound"] = "30"
 
@@ -22,10 +21,10 @@ class TransactionTest(DefaultConfluxTestFramework):
     def run_test(self):
         genesis_key = default_config["GENESIS_PRI_KEY"]
         receiver_sk, _ = ec_random_keys()
-        receiver_addr = privtoaddr(receiver_sk)
+        receiver_addr = priv_to_addr(receiver_sk)
         client = RpcClient(self.nodes[0])
 
-        value = 100000000;
+        value = 100000000
         tx = create_transaction(pri_key = genesis_key, receiver=receiver_addr, value = value, nonce = 0, gas_price = 1, epoch_height = 0)
         client.send_tx(tx)
         block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.1)

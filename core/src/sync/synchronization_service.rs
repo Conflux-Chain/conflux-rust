@@ -6,10 +6,6 @@ use super::{
     Error, SharedSynchronizationGraph, SynchronizationProtocolHandler,
 };
 use crate::{
-    alliance_tree_graph::consensus::{
-        NewCandidatePivotCallbackType, NextSelectedPivotCallbackType,
-        SetPivotChainCallbackType, TreeGraphConsensus,
-    },
     light_protocol::Provider as LightProvider,
     parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
@@ -19,10 +15,7 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use libra_types::{
-    block_info::PivotBlockDecision, crypto_proxies::ValidatorVerifier,
-};
-use network::{NetworkService, PeerId, ProtocolId};
+use network::{NetworkService, ProtocolId};
 use primitives::{transaction::SignedTransaction, Block};
 use std::sync::Arc;
 
@@ -57,12 +50,6 @@ impl SynchronizationService {
             protocol_handler: sync_handler,
             protocol: *b"cfx",
         }
-    }
-
-    pub fn update_validator_info(&self, validators: &ValidatorVerifier) {
-        let validator_set =
-            self.protocol_handler.update_validator_info(validators);
-        self.network.update_validator_info(validator_set);
     }
 
     pub fn catch_up_mode(&self) -> bool {
@@ -108,83 +95,6 @@ impl SynchronizationService {
         let hash = block.hash();
         self.protocol_handler.on_mined_block(block);
         self.relay_blocks(vec![hash]);
-    }
-
-    pub fn on_commit_blocks(&self, block_hashes: &Vec<H256>) {
-        let sync_graph = self.get_synchronization_graph();
-        let tg_consensus = sync_graph
-            .consensus
-            .as_any()
-            .downcast_ref::<TreeGraphConsensus>()
-            .expect("downcast to TreeGraphConsensus should success");
-        tg_consensus.on_commit(block_hashes);
-    }
-
-    pub fn get_next_selected_pivot_block(
-        &self, last_pivot_hash: Option<&H256>,
-        callback: NextSelectedPivotCallbackType,
-    )
-    {
-        let sync_graph = self.get_synchronization_graph();
-        let tg_consensus = sync_graph
-            .consensus
-            .as_any()
-            .downcast_ref::<TreeGraphConsensus>()
-            .expect("downcast to TreeGraphConsensus should success");
-        if let Some(block) =
-            tg_consensus.on_next_selected_pivot_block(last_pivot_hash, callback)
-        {
-            self.on_mined_block(block);
-        }
-    }
-
-    pub fn on_new_candidate_pivot(
-        &self, pivot_decision: &PivotBlockDecision, peer_id: Option<PeerId>,
-        callback: NewCandidatePivotCallbackType, ignore_db: bool,
-    )
-    {
-        let sync_graph = self.get_synchronization_graph();
-        let tg_consensus = sync_graph
-            .consensus
-            .as_any()
-            .downcast_ref::<TreeGraphConsensus>()
-            .expect("downcast to TreeGraphConsensus should success");
-        if !tg_consensus.on_new_candidate_pivot(
-            pivot_decision,
-            peer_id,
-            callback,
-        ) {
-            let _res = self.network.with_context(self.protocol, |io| {
-                self.protocol_handler.request_block_headers(
-                    io,
-                    peer_id,
-                    vec![pivot_decision.block_hash],
-                    ignore_db, /* ignore_db */
-                )
-            });
-        }
-    }
-
-    pub fn set_pivot_chain(
-        &self, block_hash: &H256, callback: SetPivotChainCallbackType,
-    ) {
-        let sync_graph = self.get_synchronization_graph();
-        sync_graph.recover_graph_from_db(false /* header_only */);
-        let tg_consensus = sync_graph
-            .consensus
-            .as_any()
-            .downcast_ref::<TreeGraphConsensus>()
-            .expect("downcast to TreeGraphConsensus should success");
-        if !tg_consensus.set_pivot_chain(block_hash, callback) {
-            let _res = self.network.with_context(self.protocol, |io| {
-                self.protocol_handler.request_block_headers(
-                    io,
-                    None, /* peer_id */
-                    vec![*block_hash],
-                    false, /* ignore_db */
-                )
-            });
-        }
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {

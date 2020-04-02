@@ -4,7 +4,7 @@
 
 use crate::{
     block_data_manager::StateAvailabilityBoundary,
-    consensus::{ConsensusGraph, ConsensusGraphInner, ConsensusGraphTrait},
+    consensus::{ConsensusGraph, ConsensusGraphInner},
     parameters::{consensus::NULL, sync::CATCH_UP_EPOCH_LAG_THRESHOLD},
     sync::{
         message::DynamicCapability,
@@ -320,8 +320,16 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return SyncPhaseType::CatchUpRecoverBlockFromDB;
         }
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
-        self.state_sync
-            .update_status(epoch_to_sync, io, sync_handler);
+        let current_era_genesis = sync_handler
+            .graph
+            .data_man
+            .get_cur_consensus_era_genesis_hash();
+        self.state_sync.update_status(
+            current_era_genesis,
+            epoch_to_sync,
+            io,
+            sync_handler,
+        );
         if self.state_sync.status() == Status::Completed {
             self.state_sync.restore_execution_state(sync_handler);
             *sync_handler.synced_epoch_id.lock() = Some(epoch_to_sync);
@@ -337,6 +345,10 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     )
     {
         info!("start phase {:?}", self.name());
+        let current_era_genesis = sync_handler
+            .graph
+            .data_man
+            .get_cur_consensus_era_genesis_hash();
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
         if let Some(commitment) = sync_handler
@@ -360,8 +372,12 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             return;
         }
 
-        self.state_sync
-            .update_status(epoch_to_sync, io, sync_handler);
+        self.state_sync.update_status(
+            current_era_genesis,
+            epoch_to_sync,
+            io,
+            sync_handler,
+        );
     }
 }
 
@@ -416,9 +432,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
             let old_sync_inner = &mut *self.graph.inner.write();
             // Wait until all the graph ready blocks in queue are inserted into
             // consensus graph.
-            while *self.graph.latest_graph_ready_block.lock()
-                != consensus.latest_inserted_block()
-            {
+            while self.graph.is_consensus_worker_busy() {
                 thread::sleep(time::Duration::from_millis(100));
             }
             // Now, we can safely acquire the lock of consensus graph.

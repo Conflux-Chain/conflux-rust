@@ -12,7 +12,6 @@ from conflux.rpc import RpcClient
 
 class NodeReputationTests(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 4
 
         # try to create more outgoing connections timely

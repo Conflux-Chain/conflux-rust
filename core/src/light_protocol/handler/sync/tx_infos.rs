@@ -4,7 +4,7 @@
 
 extern crate lru_time_cache;
 
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 use primitives::{Receipt, SignedTransaction, TransactionIndex};
@@ -41,7 +41,7 @@ struct Statistics {
 // prioritize earlier requests
 type MissingTxInfo = TimeOrdered<H256>;
 
-type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex);
+type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
 
 pub struct TxInfos {
     // block tx sync manager
@@ -172,15 +172,17 @@ impl TxInfos {
         assert!(block_txs.len() == block_receipts.len());
         let items = block_txs.into_iter().zip(block_receipts.into_iter());
 
+        let mut prior_gas_used = U256::zero();
         for (index, (tx, receipt)) in items.enumerate() {
             let hash = tx.hash();
             let address = TransactionIndex { block_hash, index };
-
+            let receipt_gas_used = receipt.gas_used;
             self.verified
                 .write()
                 .entry(hash)
                 .or_insert(PendingItem::pending())
-                .set((tx, receipt, address));
+                .set((tx, receipt, address, prior_gas_used));
+            prior_gas_used = receipt_gas_used;
 
             self.sync_manager.remove_in_flight(&hash);
         }

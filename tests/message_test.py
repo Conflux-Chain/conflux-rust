@@ -12,7 +12,6 @@ from test_framework.util import *
 
 class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 4
 
     def setup_network(self):
@@ -28,7 +27,6 @@ class MessageTest(ConfluxTestFramework):
         # control the blocks and transactions.
         blocks = [default_node.genesis.block_header.hash]
         new_block = create_block(blocks[0], 1)
-        new_transaction = create_transaction(gas_price = 1000)
 
         # This message is not used in current Conflux sync protocol
         # self.log.info("Send GetBlockHashes message")

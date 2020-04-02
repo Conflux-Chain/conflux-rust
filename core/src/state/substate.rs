@@ -19,7 +19,7 @@ pub struct Substate {
     pub touched: HashSet<Address>,
 
     /// Any accounts that occupy some storage.
-    pub storage_occupied: HashMap<Address, u64>,
+    pub storage_collateralized: HashMap<Address, u64>,
 
     /// Any accounts that release some storage.
     pub storage_released: HashMap<Address, u64>,
@@ -46,8 +46,8 @@ impl Substate {
         self.logs.extend(s.logs);
         self.sstore_clears_refund += s.sstore_clears_refund;
         self.contracts_created.extend(s.contracts_created);
-        for (address, amount) in s.storage_occupied {
-            *self.storage_occupied.entry(address).or_insert(0) += amount;
+        for (address, amount) in s.storage_collateralized {
+            *self.storage_collateralized.entry(address).or_insert(0) += amount;
         }
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;

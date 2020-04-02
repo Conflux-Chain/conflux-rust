@@ -7,7 +7,10 @@ use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
     },
-    consensus::ConsensusGraphInner,
+    consensus::{
+        consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
+        ConsensusGraphInner,
+    },
     executive::{Executed, ExecutionError, Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
@@ -360,11 +363,11 @@ impl ConsensusExecutor {
                 let anticone_cutoff_epoch_anticone_set_ref_opt = inner
                     .anticone_cache
                     .get(anticone_penalty_cutoff_epoch_arena_index);
-                let anticone_cutoff_epoch_anticone_set_opt;
+                let anticone_cutoff_epoch_anticone_set;
                 if let Some(r) = anticone_cutoff_epoch_anticone_set_ref_opt {
-                    anticone_cutoff_epoch_anticone_set_opt = Some(r.clone());
+                    anticone_cutoff_epoch_anticone_set = r.clone();
                 } else {
-                    anticone_cutoff_epoch_anticone_set_opt = None;
+                    anticone_cutoff_epoch_anticone_set = ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, anticone_penalty_cutoff_epoch_arena_index);
                 }
                 let ordered_epoch_blocks = inner.get_or_compute_ordered_executable_epoch_blocks(pivot_arena_index);
                 for index in ordered_epoch_blocks.iter() {
@@ -392,52 +395,42 @@ impl ConsensusExecutor {
                     if !no_reward {
                         let block_consensus_node_anticone_opt =
                             inner.anticone_cache.get(*index);
-                        if block_consensus_node_anticone_opt.is_none()
-                            || anticone_cutoff_epoch_anticone_set_opt.is_none()
-                        {
-                            anticone_difficulty = U512::from(U256::from(
-                                inner.recompute_anticone_weight(
-                                    *index,
-                                    anticone_penalty_cutoff_epoch_arena_index,
-                                ),
-                            ));
+                        let block_consensus_node_anticone = if let Some(r) = block_consensus_node_anticone_opt {
+                            r.clone()
                         } else {
-                            let block_consensus_node_anticone: HashSet<usize> =
-                                block_consensus_node_anticone_opt
-                                    .unwrap()
-                                    .iter()
-                                    .filter(|idx| {
-                                        inner.is_same_era(
-                                            **idx,
-                                            pivot_arena_index,
-                                        )
-                                    })
-                                    .map(|idx| *idx)
-                                    .collect();
-                            let anticone_cutoff_epoch_anticone_set: HashSet<
-                                usize,
-                            > = anticone_cutoff_epoch_anticone_set_opt
-                                .as_ref()
-                                .unwrap()
+                            ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, *index)
+                        };
+
+                        let block_consensus_node_anticone_same_era: HashSet<usize> =
+                            block_consensus_node_anticone
                                 .iter()
                                 .filter(|idx| {
-                                    inner.is_same_era(**idx, pivot_arena_index)
+                                    inner.is_same_era(
+                                        **idx,
+                                        pivot_arena_index,
+                                    )
                                 })
                                 .map(|idx| *idx)
                                 .collect();
-                            let anticone_set = block_consensus_node_anticone
-                                .difference(&anticone_cutoff_epoch_anticone_set)
-                                .cloned()
-                                .collect::<HashSet<_>>();
-                            for a_index in anticone_set {
-                                // TODO: Maybe consider to use base difficulty
-                                // Check with the spec!
-                                anticone_difficulty +=
-                                    U512::from(U256::from(inner.block_weight(
-                                        a_index
-                                    )));
-                            }
-                        };
+                        let anticone_cutoff_epoch_anticone_set_same_era: HashSet<usize> = anticone_cutoff_epoch_anticone_set
+                            .iter()
+                            .filter(|idx| {
+                                inner.is_same_era(**idx, pivot_arena_index)
+                            })
+                            .map(|idx| *idx)
+                            .collect();
+                        let anticone_set = block_consensus_node_anticone_same_era
+                            .difference(&anticone_cutoff_epoch_anticone_set_same_era)
+                            .cloned()
+                            .collect::<HashSet<_>>();
+                        for a_index in anticone_set {
+                            // TODO: Maybe consider to use base difficulty
+                            // Check with the spec!
+                            anticone_difficulty +=
+                                U512::from(U256::from(inner.block_weight(
+                                    a_index
+                                )));
+                        }
 
                         // TODO: check the clear definition of anticone penalty,
                         // normally and around the time of difficulty
@@ -946,7 +939,6 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .expect("State exists"),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
@@ -1005,7 +997,6 @@ impl ConsensusExecutionHandler {
             "compute_epoch: on_local_pivot={}, epoch={:?} state_root={:?} receipt_root={:?}, logs_bloom_hash={:?}",
             on_local_pivot, epoch_hash, state_root, epoch_execution_commitment.receipts_root, epoch_execution_commitment.logs_bloom_hash,
         );
-
         self.data_man
             .state_availability_boundary
             .write()
@@ -1051,7 +1042,7 @@ impl ConsensusExecutionHandler {
                 let mut transaction_logs = Vec::new();
                 let mut nonce_increased = false;
                 let mut storage_released = Vec::new();
-                let mut storage_occupied = Vec::new();
+                let mut storage_collateralized = Vec::new();
                 let pivot_height = pivot_block.block_header.height();
 
                 // If the transaction's chain_id is not match the best chain id
@@ -1127,11 +1118,26 @@ impl ConsensusExecutionHandler {
                                     to_pending.push(transaction.clone());
                                 }
                             }
+                            Err(ExecutionError::NotEnoughCash {
+                                required: _,
+                                got: _,
+                                actual_gas_cost,
+                            }) => {
+                                /* We charge `actual_gas_cost`, so increase
+                                 * `env.gas_used` to make
+                                 * this charged balance distributed to
+                                 * miners.
+                                 * Note for the case that `balance < tx_fee`,
+                                 * the amount
+                                 * of remainder is lost forever. */
+                                env.gas_used +=
+                                    actual_gas_cost / transaction.gas_price;
+                            }
                             Ok(ref executed) => {
                                 env.gas_used = executed.cumulative_gas_used;
                                 transaction_logs = executed.logs.clone();
-                                storage_occupied =
-                                    executed.storage_occupied.clone();
+                                storage_collateralized =
+                                    executed.storage_collateralized.clone();
                                 storage_released =
                                     executed.storage_released.clone();
                                 if executed.exception.is_some() {
@@ -1164,7 +1170,7 @@ impl ConsensusExecutionHandler {
                     tx_outcome_status,
                     env.gas_used,
                     transaction_logs,
-                    storage_occupied,
+                    storage_collateralized,
                     storage_released,
                 );
                 receipts.push(receipt);
@@ -1505,7 +1511,6 @@ impl ConsensusExecutionHandler {
                     // Unwrapping is safe because the state exists.
                     .unwrap(),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
@@ -1553,7 +1558,6 @@ impl ConsensusExecutionHandler {
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
-            0.into(), /* account_start_nonce */
             self.vm.clone(),
             0, /* block_number */
         );

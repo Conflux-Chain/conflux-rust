@@ -7,7 +7,7 @@ pub mod consensus {
     pub const EPOCH_SET_PERSISTENCE_DELAY: u64 = 100;
 
     pub const ADAPTIVE_WEIGHT_DEFAULT_BETA: u64 = 1000;
-    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 330;
+    pub const HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 250;
     pub const TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO: u64 = 180;
     pub const TIMER_CHAIN_DEFAULT_BETA: u64 = 240;
     // The number of epochs per era. Each era is a potential checkpoint
@@ -49,7 +49,7 @@ pub mod consensus_internal {
 
     /// This is the cap of the size of the anticone barrier. If we have more
     /// than this number we will use the brute_force O(n) algorithm instead.
-    pub const ANTICONE_BARRIER_CAP: usize = 1000;
+    pub const ANTICONE_BARRIER_CAP: usize = 100;
     /// Here is the delay for us to recycle those orphaned blocks in the
     /// boundary of eras.
     pub const ERA_RECYCLE_TRANSACTION_DELAY: u64 = 20;
@@ -58,7 +58,7 @@ pub mod consensus_internal {
     pub const BLOCKSET_IN_OWN_VIEW_OF_EPOCH_CAP: u64 = 1000;
 
     /// This is the minimum risk that the confirmation meter tries to maintain.
-    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.000001;
+    pub const CONFIRMATION_METER_MIN_MAINTAINED_RISK: f64 = 0.00000001;
     /// The maximum number of epochs that the confirmation meter tries to
     /// maintain internally.
     pub const CONFIRMATION_METER_MAX_NUM_MAINTAINED_RISK: usize = 100;
@@ -108,11 +108,16 @@ pub mod sync {
     /// the consensus layer.
     pub const BLOCK_PROPAGATION_DELAY: u64 = 10;
 
-    // The waiting time duration that will be accumulated for resending a
-    // timeout request.
     lazy_static! {
+        // The waiting time duration that will be accumulated for resending a
+        // timeout request.
         pub static ref REQUEST_START_WAITING_TIME: Duration =
             Duration::from_secs(1);
+
+        // The waiting time duration before resending a request which failed
+        // due to sending error.
+        pub static ref FAILED_REQUEST_RESEND_WAIT: Duration =
+            Duration::from_millis(50);
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
     pub const DEFAULT_CHUNK_SIZE: u64 = 1 * 1024 * 1024;
@@ -146,8 +151,11 @@ pub mod block {
     // per block. With two blocks per second, we will have 4000TPS at the
     // peak with only simple payment, which is good enough for now.
     pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
+    // The maximum number of transactions to be packed in a block given
+    // `MAX_BLOCK_SIZE_IN_BYTES`, assuming 50-byte transactions.
+    pub const ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT: usize = 4096;
     // The maximum number of referees allowed for each block
-    pub const REFEREE_BOUND: usize = 200;
+    pub const REFEREE_DEFAULT_BOUND: usize = 200;
     // The maximal length of custom data in block header
     pub const HEADER_CUSTOM_LENGTH_BOUND: usize = 64;
     // If a new block is more than valid_time_drift ahead of the current system
@@ -180,9 +188,11 @@ pub mod staking {
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
 
     lazy_static! {
+        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes.
+        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(CONFLUX_TOKEN / NUM_BYTES_PER_CONFLUX_TOKEN);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = U256::from(CONFLUX_TOKEN / (NUM_BYTES_PER_CONFLUX_TOKEN / 64));
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(64);
         /// This is the scale factor for accumulated interest rate: `BLOCKS_PER_YEAR * 2 ^ 80`.
         /// The actual accumulate interest rate stored will be `accumulate_interest_rate / INTEREST_RATE_SCALE`.
         pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR) << 80;

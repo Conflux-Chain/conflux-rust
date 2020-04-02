@@ -11,7 +11,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     hash::keccak,
     machine::Machine,
-    parameters::staking::COLLATERAL_PER_STORAGE_KEY,
+    parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, CleanDustMode,
@@ -1224,10 +1224,9 @@ impl<'a> Executive<'a> {
     ) -> ExecutionResult<Executed> {
         let sender = tx.sender();
         let balance = self.state.balance(&sender)?;
-        let needed_balance =
-            tx.value.saturating_add(tx.gas.saturating_mul(tx.gas_price));
+        // Give the sender a sufficient balance.
+        let needed_balance = U256::MAX / U256::from(2);
         if balance < needed_balance {
-            // give the sender a sufficient balance
             self.state.add_balance(
                 &sender,
                 &(needed_balance - balance),
@@ -1328,9 +1327,9 @@ impl<'a> Executive<'a> {
         if balance512 < total_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
-            let actual_cost: U256;
+            let actual_gas_cost: U256;
             if !free_of_charge {
-                actual_cost = if gas_cost > balance512 {
+                actual_gas_cost = if gas_cost > balance512 {
                     balance512
                 } else {
                     gas_cost
@@ -1339,19 +1338,21 @@ impl<'a> Executive<'a> {
                 .unwrap();
                 self.state.sub_balance(
                     &sender,
-                    &actual_cost,
+                    &actual_gas_cost,
                     &mut substate.to_cleanup_mode(&spec),
                 )?;
             } else {
                 // We have checked that the sponsor has enough balance.
-                actual_cost = gas_cost.try_into().unwrap();
-                self.state
-                    .sub_sponsor_balance_for_gas(&code_address, &actual_cost)?;
+                actual_gas_cost = gas_cost.try_into().unwrap();
+                self.state.sub_sponsor_balance_for_gas(
+                    &code_address,
+                    &actual_gas_cost,
+                )?;
             }
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
-                actual_cost,
+                actual_gas_cost,
             });
         }
 
@@ -1379,12 +1380,18 @@ impl<'a> Executive<'a> {
             } else {
                 U256::zero()
             };
-            if tx.storage_limit >= sponsored_balance {
-                if tx.storage_limit - sponsored_balance
+            let storage_limit_in_drip =
+                if tx.storage_limit >= U256::MAX / *COLLATERAL_PER_BYTE {
+                    U256::MAX
+                } else {
+                    tx.storage_limit * *COLLATERAL_PER_BYTE
+                };
+            if storage_limit_in_drip >= sponsored_balance {
+                if storage_limit_in_drip - sponsored_balance
                     <= U256::MAX - collateral_for_storage
                 {
                     // The incremental storage cost will be payed by the sender.
-                    tx.storage_limit - sponsored_balance
+                    storage_limit_in_drip - sponsored_balance
                         + collateral_for_storage
                 } else {
                     U256::MAX
@@ -1458,13 +1465,20 @@ impl<'a> Executive<'a> {
             }
         };
 
-        Ok(self.finalize(tx, substate, result, output)?)
+        let refund_receiver = if free_of_charge {
+            Some(code_address)
+        } else {
+            None
+        };
+
+        Ok(self.finalize(tx, substate, result, output, refund_receiver)?)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
-        &mut self, tx: &SignedTransaction, substate: Substate,
+        &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
+        refund_receiver: Option<Address>,
     ) -> ExecutionResult<Executed>
     {
         let gas_left = match result {
@@ -1474,7 +1488,35 @@ impl<'a> Executive<'a> {
 
         // gas_used is only used to estimate gas needed
         let gas_used = tx.gas - gas_left;
-        let fees_value = tx.gas * tx.gas_price;
+        // gas_left should be smaller than 1/4 of gas_limit, otherwise
+        // 3/4 of gas_limit is charged.
+        let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
+        let (cumulative_gas_used, fees_value, refund_value) = if charge_all {
+            let gas_refunded = tx.gas >> 2;
+            let gas_charged = tx.gas - gas_refunded;
+            (
+                self.env.gas_used + gas_charged,
+                gas_charged * tx.gas_price,
+                gas_refunded * tx.gas_price,
+            )
+        } else {
+            (
+                self.env.gas_used + gas_used,
+                gas_used * tx.gas_price,
+                gas_left * tx.gas_price,
+            )
+        };
+
+        if let Some(r) = refund_receiver {
+            self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
+        } else {
+            let spec = self.spec;
+            self.state.add_balance(
+                &tx.sender(),
+                &refund_value,
+                substate.to_cleanup_mode(&spec),
+            )?;
+        };
 
         // perform suicides
         for address in &substate.suicides {
@@ -1504,20 +1546,23 @@ impl<'a> Executive<'a> {
                 exception: Some(exception),
                 gas: tx.gas,
                 gas_used: tx.gas,
-                fee: fees_value,
+                fee: tx.gas * tx.gas_price,
                 cumulative_gas_used: self.env.gas_used + tx.gas,
                 logs: vec![],
                 contracts_created: vec![],
-                storage_occupied: Vec::new(),
+                storage_collateralized: Vec::new(),
                 storage_released: Vec::new(),
                 output,
             }),
             Ok(r) => {
-                let mut storage_occupied = Vec::new();
+                let mut storage_collateralized = Vec::new();
                 let mut storage_released = Vec::new();
                 if r.apply_state {
-                    let affected_address1: HashSet<_> =
-                        substate.storage_occupied.keys().cloned().collect();
+                    let affected_address1: HashSet<_> = substate
+                        .storage_collateralized
+                        .keys()
+                        .cloned()
+                        .collect();
                     let affected_address2: HashSet<_> =
                         substate.storage_released.keys().cloned().collect();
                     let mut affected_address: Vec<_> =
@@ -1525,7 +1570,7 @@ impl<'a> Executive<'a> {
                     affected_address.sort();
                     for address in affected_address {
                         let inc = substate
-                            .storage_occupied
+                            .storage_collateralized
                             .get(address)
                             .cloned()
                             .unwrap_or(0);
@@ -1535,20 +1580,19 @@ impl<'a> Executive<'a> {
                             .cloned()
                             .unwrap_or(0);
                         if inc > sub {
-                            storage_occupied.push(StorageChange {
+                            storage_collateralized.push(StorageChange {
                                 address: *address,
-                                amount: U256::from(inc - sub)
-                                    * *COLLATERAL_PER_STORAGE_KEY,
+                                amount: inc - sub,
                             });
                         } else if inc < sub {
                             storage_released.push(StorageChange {
                                 address: *address,
-                                amount: U256::from(sub - inc)
-                                    * *COLLATERAL_PER_STORAGE_KEY,
+                                amount: sub - inc,
                             });
                         }
                     }
                 }
+
                 Ok(Executed {
                     exception: if r.apply_state {
                         None
@@ -1558,10 +1602,10 @@ impl<'a> Executive<'a> {
                     gas: tx.gas,
                     gas_used,
                     fee: fees_value,
-                    cumulative_gas_used: self.env.gas_used + tx.gas,
+                    cumulative_gas_used,
                     logs: substate.logs,
                     contracts_created: substate.contracts_created,
-                    storage_occupied,
+                    storage_collateralized,
                     storage_released,
                     output,
                 })

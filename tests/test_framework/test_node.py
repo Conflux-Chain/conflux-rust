@@ -36,7 +36,7 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None, auto_recovery=False):
+                 rpcport=None, auto_recovery=False, recovery_timeout=30):
         self.index = index
         self.datadir = datadir
         self.stdout_dir = os.path.join(self.datadir, "stdout")
@@ -45,6 +45,7 @@ class TestNode:
         self.remote = remote
         self.rpchost = rpchost
         self.auto_recovery = auto_recovery
+        self.recovery_timeout = recovery_timeout
         if remote:
             self.ip = ip
             self.user = user

@@ -79,7 +79,6 @@ fn txexe_benchmark(c: &mut Criterion) {
                         .unwrap()
                         .unwrap(),
                 ),
-                0.into(), /* account_start_nonce */
                 VmFactory::new(1024 * 32),
                 0, /* block_number */
             );

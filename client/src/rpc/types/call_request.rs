@@ -34,8 +34,10 @@ pub struct CallRequest {
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EstimateGasAndCollateralResponse {
+    /// The amount of gas used in the execution.
     pub gas_used: U256,
-    pub storage_occupied: U256,
+    /// The number of bytes collateralized in the execution.
+    pub storage_collateralized: u64,
 }
 
 pub fn sign_call(
@@ -43,7 +45,7 @@ pub fn sign_call(
 ) -> Result<SignedTransaction, Error> {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_default();
+    let from = request.from.unwrap_or_else(|| H160::random());
 
     Ok(PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),

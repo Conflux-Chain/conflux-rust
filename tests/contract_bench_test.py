@@ -17,14 +17,12 @@ from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 
 from web3 import Web3
-from easysolc import Solc
 
 class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -44,9 +42,8 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(len(logs), l + 1)
 
         # construct contract object 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        contract = solc.get_contract_instance(
+        contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/event_abi_new.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -96,9 +93,8 @@ class ContractBenchTest(SmartContractBenchBase):
         l = len(logs)
 
         # construct contract object 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        contract = solc.get_contract_instance(
+        contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/ballot_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -127,9 +123,8 @@ class ContractBenchTest(SmartContractBenchBase):
         l = len(logs)
 
         # construct contract object 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        contract = solc.get_contract_instance(
+        contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/htlc_abi_new.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -162,7 +157,7 @@ class ContractBenchTest(SmartContractBenchBase):
         c1 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(len(logs), l + 2)
         assert_equal(self.rpc.get_balance(contractAddr), cost)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - fee - (c1 - c0))
+        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - (fee - 2500000) - (c1 - c0))
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
@@ -186,7 +181,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(self.rpc.get_balance(contractAddr), 0)
         c2 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(c2 - c1, 125000000000000000)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - fee * 2 - (c2 - c0))
+        assert_equal(self.rpc.get_balance(self.sender), b0 - (fee - 2500000) * 2 - (c2 - c0))
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 
@@ -211,9 +206,8 @@ class ContractBenchTest(SmartContractBenchBase):
         l = len(logs)
 
         # construct contract object 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        contract = solc.get_contract_instance(
+        contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/pay_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -249,9 +243,8 @@ class ContractBenchTest(SmartContractBenchBase):
         l = len(logs)
 
         # construct contract object 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        contract = solc.get_contract_instance(
+        contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/mapping_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -300,9 +293,8 @@ class ContractBenchTest(SmartContractBenchBase):
         l = len(logs)
 
         # construct contract object 
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        contract = solc.get_contract_instance(
+        contract = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/Dai_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -409,10 +401,9 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(int(result, 0) == 50000)
 
     def testDaiJoinContract(self):
-        solc = Solc()
         CONTRACT_PATH = "contracts/Dai_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        dai = solc.get_contract_instance(
+        dai = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/Dai_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -422,7 +413,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         CONTRACT_PATH = "contracts/Vat_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        vat = solc.get_contract_instance(
+        vat = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/Vat_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -432,7 +423,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         CONTRACT_PATH = "contracts/DaiJoin_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        dai_join = solc.get_contract_instance(
+        dai_join = get_contract_instance(
             abi_file = os.path.join(file_dir, "contracts/DaiJoin_abi.json"),
             bytecode_file = os.path.join(file_dir, CONTRACT_PATH),
         )
@@ -511,20 +502,18 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(int(result, 0), 0)
 
     def run_test(self):
-        solc = Solc()
-        file_dir = os.path.dirname(os.path.realpath(__file__))
         file_path = os.path.dirname(os.path.realpath(__file__)).split("/")
         file_path.pop(-1)
         file_path.extend(["internal_contract", "metadata", "Staking.json"])
         file_path = "/".join(file_path)
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
-        staking_contract = solc.get_contract_instance(contract_dict=staking_contract_dict)
+        staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
         staking_contract_addr = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
 
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"
         self.priv_key = default_config["GENESIS_PRI_KEY"]
-        self.sender = encode_hex_0x(privtoaddr(self.priv_key))
+        self.sender = encode_hex_0x(priv_to_addr(self.priv_key))
         self.sender_checksum = Web3.toChecksumAddress(self.sender)
         self.pub = []
         self.pri = []
@@ -541,7 +530,7 @@ class ContractBenchTest(SmartContractBenchBase):
 
         for i in range(10):
             priv_key = random.randint(0, 2 ** 256).to_bytes(32, "big")
-            pub_key = encode_hex_0x(privtoaddr(priv_key))
+            pub_key = encode_hex_0x(priv_to_addr(priv_key))
             self.pub.append(pub_key)
             self.pri.append(priv_key)
             transaction = self.rpc.new_tx(sender=self.sender, receiver=pub_key, value=1000000 * 10 ** 18, priv_key=self.priv_key)

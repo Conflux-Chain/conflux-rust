@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
+from http.client import CannotSendRequest
 
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
-from conflux.utils import encode_hex, privtoaddr, parse_as_int
+from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_transaction, encode_hex_0x
+from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
-from easysolc import Solc
 
 class AdminControlTest(ConfluxTestFramework):
     REQUEST_BASE = {
@@ -23,11 +23,10 @@ class AdminControlTest(ConfluxTestFramework):
 
         self.nonce_map = {}
         self.genesis_priv_key = default_config['GENESIS_PRI_KEY']
-        self.genesis_addr = privtoaddr(self.genesis_priv_key)
+        self.genesis_addr = priv_to_addr(self.genesis_priv_key)
         self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -35,9 +34,8 @@ class AdminControlTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
     def get_nonce(self, sender, inc=True):
-        sender = sender.lower()
         if sender not in self.nonce_map:
-            self.nonce_map[sender] = 0
+            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
         else:
             self.nonce_map[sender] += 1
         return self.nonce_map[sender]
@@ -82,7 +80,7 @@ class AdminControlTest(ConfluxTestFramework):
         else:
             func = getattr(contract, name)
         attrs = {
-            'nonce': self.get_nonce(privtoaddr(sender_key)),
+            'nonce': self.get_nonce(priv_to_addr(sender_key)),
             ** AdminControlTest.REQUEST_BASE
         }
         if contract_addr:
@@ -104,17 +102,14 @@ class AdminControlTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        self.log.propagate = False
-
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
-        pay_contract = solc.get_contract_instance(
+        pay_contract = get_contract_instance(
             abi_file=os.path.join(file_dir, "contracts/pay_abi.json"),
             bytecode_file=os.path.join(file_dir, "contracts/pay_bytecode.dat"),
         )
 
-        admin_control_contract = solc.get_contract_instance(
+        admin_control_contract = get_contract_instance(
             abi_file=os.path.join(file_dir, "contracts/admin_control_abi.json"),
             bytecode_file=os.path.join(file_dir, "contracts/admin_control_bytecode.dat"),
         )
@@ -169,7 +164,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 10 ** 18)
-        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - gas)
+        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - gas + gas // 4)
         assert_equal(client.get_admin(contract_addr), addr)
 
         # transfer admin (fail)
@@ -204,7 +199,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 0)
-        assert_equal(client.get_balance(addr2), 5999999999900000000)
+        assert_equal(client.get_balance(addr2), 5999999999912500000 + gas // 4)
 
         self.log.info("Pass")
 

@@ -1,15 +1,18 @@
 use crate::{
-    message::RequestId,
+    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
     sync::{
-        message::{Context, DynamicCapability, Handleable, KeyContainer},
+        message::{
+            msgid, Context, DynamicCapability, Handleable, KeyContainer,
+        },
         request_manager::{AsAny, Request},
         state::{
             state_sync_candidate_response::StateSyncCandidateResponse,
             storage::SnapshotSyncCandidate,
         },
-        Error, ErrorKind, ProtocolConfiguration,
+        Error, ProtocolConfiguration,
     },
 };
+use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
@@ -19,9 +22,12 @@ pub struct StateSyncCandidateRequest {
     pub candidates: Vec<SnapshotSyncCandidate>,
 }
 
+build_msg_with_request_id_impl! { StateSyncCandidateRequest, msgid::STATE_SYNC_CANDIDATE_REQUEST, "StateSyncCandidateRequest" }
+
 impl Handleable for StateSyncCandidateRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let mut supported_candidates = Vec::new();
+        let mut supported_candidates =
+            Vec::with_capacity(self.candidates.len());
         let storage_manager = ctx
             .manager
             .graph
@@ -46,10 +52,10 @@ impl Handleable for StateSyncCandidateRequest {
                                     },
                                 );
                             } else {
-                                warn!("Invalid SnapshotSyncCandidate, height unmatch: get {:?}, local_height of the snapshot is {}", candidate, snapshot_info.height);
-                                bail!(ErrorKind::UnexpectedMessage(
-                                    "Invalid snapshot sync candidate".into(),
-                                ));
+                                warn!(
+                                    "Invalid SnapshotSyncCandidate, height unmatch: get {:?}, \
+                                    local_height of the snapshot is {}",
+                                    candidate, snapshot_info.height);
                             }
                         }
                         None => {
@@ -62,7 +68,6 @@ impl Handleable for StateSyncCandidateRequest {
                 }
                 _ => {
                     warn!("Unsupported candidate: {:?}", candidate);
-                    bail!(ErrorKind::UnexpectedMessage("candidate in StateSyncCandidateRequest is not supported".into()));
                 }
             }
         }

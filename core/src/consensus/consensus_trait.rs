@@ -58,7 +58,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex)>;
+    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)>;
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
 
@@ -79,8 +79,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
     fn update_best_info(&self);
-
-    fn latest_inserted_block(&self) -> H256;
 }
 
 pub type SharedConsensusGraph = Arc<dyn ConsensusGraphTrait>;

@@ -26,6 +26,7 @@ use crate::{
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
     RwLockExtensions,
@@ -74,6 +75,10 @@ pub struct TxPoolConfig {
     pub transaction_epoch_bound: u64,
 }
 
+impl MallocSizeOf for TxPoolConfig {
+    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+}
+
 impl Default for TxPoolConfig {
     fn default() -> Self {
         TxPoolConfig {
@@ -99,6 +104,26 @@ pub struct TransactionPool {
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
+}
+
+impl MallocSizeOf for TransactionPool {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let inner_size = self.inner.read().size_of(ops);
+        let to_propagate_trans_size =
+            self.to_propagate_trans.read().size_of(ops);
+        let consensus_best_info_size =
+            self.consensus_best_info.lock().size_of(ops);
+        let set_tx_requests_size = self.set_tx_requests.lock().size_of(ops);
+        let recycle_tx_requests_size =
+            self.recycle_tx_requests.lock().size_of(ops);
+        self.config.size_of(ops)
+            + inner_size
+            + to_propagate_trans_size
+            + self.data_man.size_of(ops)
+            + consensus_best_info_size
+            + set_tx_requests_size
+            + recycle_tx_requests_size
+    }
 }
 
 pub type SharedTransactionPool = Arc<TransactionPool>;

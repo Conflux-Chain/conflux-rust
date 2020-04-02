@@ -125,7 +125,6 @@ class ConsensusBlockStatus(object):
         self.hash = json_data['blockHash']
         self.best_block_hash = json_data['bestBlockHash']
         self.block_status = BlockStatus(json_data['blockStatus'])
-        self.past_era_weight = json_data['pastEraWeight']
         self.era_block_hash = json_data['eraBlockHash']
         self.adaptive = json_data['adaptive']
 
@@ -138,7 +137,6 @@ class ConsensusBlockStatus(object):
                 self.era_block_hash != other.era_block_hash:
             return False
         return self.hash == other.hash and \
-            self.past_era_weight == other.past_era_weight and \
             self.block_status == other.block_status and \
             self.adaptive == other.adaptive
 
@@ -147,13 +145,11 @@ class ConsensusBlockStatus(object):
                 hash={}, \
                 best_block_hash={}, \
                 block_status={}, \
-                past_era_weight={}, \
                 era_block={}, \
                 adaptive={})".format(
             self.hash,
             self.best_block_hash,
             self.block_status,
-            self.past_era_weight,
             self.era_block_hash,
             self.adaptive)
 
@@ -206,8 +202,6 @@ class ConsensusSnapshot(object):
                 assert block.era_block_hash == verified_block.era_block_hash or \
                     block.era_block_hash == DEFAULT_HASH, "peer[{}] block[{}] era_block_hash[{}], expect [{}]".format(
                         self.peer_id, block.hash, block.era_block_hash, verified_block.era_block_hash)
-                assert block.past_era_weight == verified_block.past_era_weight, "peer[{}] block[{}] past_era_weight[{}], expect [{}]".format(
-                    self.peer_id, block.hash, block.past_era_weight, verified_block.past_era_weight)
         elif block.hash in self.block_status_unverified:
             unverified_block = self.block_status_unverified[block.hash]
             if unverified_block.block_status == BlockStatus.Pending:
@@ -222,8 +216,6 @@ class ConsensusSnapshot(object):
                         block.era_block_hash == DEFAULT_HASH or \
                         unverified_block.era_block_hash == DEFAULT_HASH, "peer[{}] block[{}] era_block_hash[{}], expect [{}]".format(
                             self.peer_id, block.hash, block.era_block_hash, unverified_block.era_block_hash)
-                    assert block.past_era_weight == unverified_block.past_era_weight, "peer[{}] block[{}] past_era_weight[{}], expect [{}]".format(
-                        self.peer_id, block.hash, block.past_era_weight, unverified_block.past_era_weight)
         else:
             self.block_status_unverified[block.hash] = block
 
@@ -438,7 +430,7 @@ class ConfluxTracing(ConfluxTestFramework):
                 self._block_txs[block_hash] = eth_utils.encode_hex(rlp.encode(txs))
                 self.log.info("peer[%d] generate block[%s]", chosen_peer, block_hash)
         except Exception as e:
-            self.log.info('got exception[{}] when {} generates block'.format(repr(e), chosen_peer))
+            self.log.info('got exception[{}] when generateing block'.format(repr(e)))
             self.persist_snapshot()
             raise e
 
@@ -462,7 +454,6 @@ class ConfluxTracing(ConfluxTestFramework):
             raise e
 
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 11
         self.conf_parameters = {
             "generate_tx": "true",
@@ -471,13 +462,13 @@ class ConfluxTracing(ConfluxTestFramework):
             "era_epoch_count": 100,
             "dev_snapshot_epoch_count": 50,
             "adaptive_weight_beta": "1",
-            "timer_chain_block_difficulty_ratio": "3",
-            "timer_chain_beta": "20",
+            "timer_chain_block_difficulty_ratio": "10",
+            "timer_chain_beta": "40",
             "anticone_penalty_ratio": "10",
         }
 
     def setup_nodes(self):
-        self.add_nodes(self.num_nodes, auto_recovery=True)
+        self.add_nodes(self.num_nodes, auto_recovery=True, recovery_timeout=300)
         if self.options.archive:
             self.start_nodes()
         else:

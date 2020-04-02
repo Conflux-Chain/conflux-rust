@@ -40,6 +40,11 @@ impl Statistics {
         inner.consensus_graph.processed_block_count += 1;
     }
 
+    pub fn inc_consensus_graph_activated_block_count(&self) {
+        let mut inner = self.inner.write();
+        inner.consensus_graph.activated_block_count += 1;
+    }
+
     pub fn set_consensus_graph_inserted_block_count(&self, count: usize) {
         let mut inner = self.inner.write();
         inner.consensus_graph.inserted_block_count = count;

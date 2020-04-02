@@ -7,7 +7,6 @@ use super::{
     synchronization_state::SynchronizationState,
 };
 use crate::{
-    alliance_tree_graph::hsb_sync_protocol::sync_protocol::RpcResponse,
     parameters::sync::REQUEST_START_WAITING_TIME,
     sync::{
         message::{
@@ -21,7 +20,6 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use futures::{channel::oneshot, future::Future};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
 };
@@ -166,25 +164,6 @@ impl RequestManager {
             .len() as u64
     }
 
-    /// Send a unary rpc request to remote peer `recipient`.
-    pub async fn unary_rpc<'a>(
-        &'a self, io: &'a dyn NetworkContext, recipient: Option<PeerId>,
-        mut request: Box<dyn Request>,
-    ) -> impl Future<Output = Result<Box<dyn RpcResponse>, Error>> + 'a
-    {
-        async move {
-            // ask network to fulfill rpc request
-            let (res_tx, res_rx) = oneshot::channel();
-            request.set_response_notification(res_tx);
-
-            self.request_with_delay(io, request, recipient, None);
-
-            // wait for response
-            let response = res_rx.await??;
-            Ok(response)
-        }
-    }
-
     /// Send request to remote peer with delay mechanism. If failed,
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(
@@ -269,6 +248,7 @@ impl RequestManager {
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
+        debug!("request_blocks: hashes={:?}", hashes);
 
         let request = GetBlocks {
             request_id: 0,
@@ -506,6 +486,7 @@ impl RequestManager {
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
+        debug!("request_compact_blocks: hashes={:?}", hashes);
 
         let request = GetCompactBlocks {
             request_id: 0,
@@ -517,7 +498,7 @@ impl RequestManager {
 
     pub fn request_blocktxn(
         &self, io: &dyn NetworkContext, peer_id: PeerId, block_hash: H256,
-        indexes: Vec<usize>, delay: Option<Duration>,
+        index_skips: Vec<usize>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -525,13 +506,13 @@ impl RequestManager {
         let request = GetBlockTxn {
             request_id: 0,
             block_hash: block_hash.clone(),
-            indexes,
+            index_skips,
         };
 
         self.request_with_delay(io, Box::new(request), Some(peer_id), delay);
     }
 
-    pub fn send_request_again(
+    fn send_request_again(
         &self, io: &dyn NetworkContext, msg: &RequestMessage,
     ) {
         debug!("send_request_again, request={:?}", msg.request);
@@ -546,7 +527,11 @@ impl RequestManager {
         }
     }
 
-    pub fn remove_mismatch_request(
+    pub fn send_pending_requests(&self, io: &dyn NetworkContext, peer: PeerId) {
+        self.request_handler.send_pending_requests(io, peer)
+    }
+
+    pub fn resend_request_to_another_peer(
         &self, io: &dyn NetworkContext, req: &RequestMessage,
     ) {
         req.request.on_removed(&self.inflight_keys);
@@ -556,9 +541,9 @@ impl RequestManager {
     // Match request with given response.
     // No need to let caller handle request resending.
     pub fn match_request(
-        &self, io: &dyn NetworkContext, peer_id: PeerId, request_id: u64,
+        &self, peer_id: PeerId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
-        self.request_handler.match_request(io, peer_id, request_id)
+        self.request_handler.match_request(peer_id, request_id)
     }
 
     /// Remove inflight keys when a header is received.
@@ -651,7 +636,7 @@ impl RequestManager {
     /// received or will be requested by the caller again (the case for
     /// `Blocktxn`).
     pub fn blocks_received(
-        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>, with_public: bool, delay: Option<Duration>,
     )
@@ -659,12 +644,12 @@ impl RequestManager {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
         debug!(
             "blocks_received: req_hashes={:?} received_blocks={:?} peer={:?}",
-            req_hashes, received_blocks, peer
+            requested_hashes, received_blocks, peer
         );
         let missing_blocks = {
             let mut inflight_keys = self.inflight_keys.write(msgid::GET_BLOCKS);
             let mut missing_blocks = Vec::new();
-            for req_hash in &req_hashes {
+            for req_hash in &requested_hashes {
                 if !received_blocks.remove(req_hash) {
                     // If `req_hash` is not in `blocks_in_flight`, it may has
                     // been received or requested
@@ -825,10 +810,11 @@ impl RequestManager {
 
     pub fn resend_timeout_requests(&self, io: &dyn NetworkContext) {
         debug!("resend_timeout_requests: start");
-        let timeout_requests = self.request_handler.get_timeout_requests(io);
+        let timeout_requests =
+            self.request_handler.process_timeout_requests(io);
         for req in timeout_requests {
             debug!("Timeout requests: {:?}", req);
-            self.remove_mismatch_request(io, &req);
+            self.resend_request_to_another_peer(io, &req);
         }
     }
 
@@ -846,6 +832,7 @@ impl RequestManager {
                 break;
             } else if req.request.1 > *DEFAULT_REQUEST_DELAY_UPPER_BOUND {
                 // Discard stale requests
+                warn!("Request is in-flight for over an hour: {:?}", req);
                 req.request.0.on_removed(&self.inflight_keys);
                 continue;
             }
@@ -902,17 +889,12 @@ impl RequestManager {
     }
 
     pub fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
-        if let Some(mut unfinished_requests) =
+        if let Some(unfinished_requests) =
             self.request_handler.remove_peer(peer)
         {
-            {
-                for msg in &unfinished_requests {
-                    msg.request.on_removed(&self.inflight_keys);
-                }
-            }
-            for msg in unfinished_requests.iter_mut() {
+            for mut msg in unfinished_requests {
                 msg.delay = None;
-                self.send_request_again(io, &msg);
+                self.resend_request_to_another_peer(io, &msg);
             }
         } else {
             debug!("Peer already removed form request manager when disconnected peer={}", peer);

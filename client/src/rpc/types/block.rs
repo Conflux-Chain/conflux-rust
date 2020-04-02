@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{Receipt, Transaction, H160, H256, U256};
+use cfx_types::U256 as CfxU256;
 use cfxcore::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     consensus::ConsensusGraphInner,
@@ -149,6 +150,11 @@ impl Block {
                         .enumerate()
                         .map(|(idx, tx)| {
                             let receipt = execution_result.receipts.get(idx).unwrap();
+                            let prior_gas_used = if idx == 0 {
+                                CfxU256::zero()
+                            } else {
+                                execution_result.receipts.get(idx - 1).unwrap().gas_used
+                            };
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
                                 | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
@@ -161,6 +167,7 @@ impl Block {
                                                 block_hash: b.hash(),
                                                 index: idx,
                                             },
+                                            prior_gas_used,
                                         )),
                                     )
                                 }

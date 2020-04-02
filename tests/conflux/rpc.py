@@ -5,7 +5,7 @@ import rlp
 from .config import default_config
 from .transactions import Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import privtoaddr, sha3_256
+from .utils import priv_to_addr, sha3_256
 
 import sys
 sys.path.append("..")
@@ -34,8 +34,8 @@ class RpcClient:
         self.UPDATE_NODE_OP_REMOVE = "Remove"
 
         # hash/address definitions
+        self.GENESIS_ADDR = eth_utils.encode_hex(priv_to_addr(default_config["GENESIS_PRI_KEY"]))
         self.GENESIS_PRI_KEY = default_config["GENESIS_PRI_KEY"]
-        self.GENESIS_ADDR = eth_utils.encode_hex(privtoaddr(default_config["GENESIS_PRI_KEY"]))
         self.COINBASE_ADDR = eth_utils.encode_hex(default_config["GENESIS_COINBASE"])
         self.GENESIS_ORIGIN_COIN = default_config["TOTAL_COIN"]
         self.ZERO_HASH = eth_utils.encode_hex(b'\x00' * 32)
@@ -54,7 +54,7 @@ class RpcClient:
 
     def rand_account(self) -> (str, bytes):
         priv_key = eth_utils.encode_hex(os.urandom(32))
-        addr = eth_utils.encode_hex(privtoaddr(priv_key))
+        addr = eth_utils.encode_hex(priv_to_addr(priv_key))
         return (addr, priv_key)
 
     def rand_hash(self, seed: bytes = None) -> str:
@@ -193,11 +193,11 @@ class RpcClient:
     ''' Ignore block_hash if epoch is not None '''
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
         if epoch is None and block_hash is None:
-            return int(self.node.cfx_getTransactionCount(addr), 0)
+            return int(self.node.cfx_getNextNonce(addr), 0)
         elif epoch is None:
-            return int(self.node.cfx_getTransactionCount(addr, "hash:"+block_hash), 0)
+            return int(self.node.cfx_getNextNonce(addr, "hash:"+block_hash), 0)
         else:
-            return int(self.node.cfx_getTransactionCount(addr, epoch), 0)
+            return int(self.node.cfx_getNextNonce(addr, epoch), 0)
 
     def send_raw_tx(self, raw_tx: str) -> str:
         tx_hash = self.node.cfx_sendRawTransaction(raw_tx)
@@ -343,15 +343,16 @@ class RpcClient:
         tx = self.new_tx_for_call(contract_addr, data_hex)
         response = self.node.cfx_estimateGasAndCollateral(tx)
         return int(response['gasUsed'], 0)
-    
-    def estimate_collateral(self, contract_addr:str, data_hex:str, sender:str) -> int:
+
+    def estimate_collateral(self, contract_addr:str, data_hex:str, sender:str=None) -> int:
         tx = self.new_tx_for_call(contract_addr, data_hex, sender=sender)
+        if contract_addr == "0x":
+            del tx['to']
         response = self.node.cfx_estimateGasAndCollateral(tx)
-        return int(response['storageOccupied'], 0)
+        return response['storageCollateralized']
 
     def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
-        
         if epoch is None:
             return self.node.cfx_call(tx)
         else:

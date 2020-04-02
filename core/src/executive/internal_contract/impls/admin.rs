@@ -5,7 +5,7 @@
 use super::super::InternalContractTrait;
 use crate::{
     bytes::Bytes,
-    parameters::{consensus_internal::CONFLUX_TOKEN, staking::*},
+    parameters::staking::*,
     state::{State, Substate},
     vm::{self, ActionParams, Spec},
 };
@@ -34,8 +34,7 @@ pub fn suicide(
     let code_owner = state
         .code_owner(contract_address)?
         .expect("code owner exists");
-    let collateral_for_code = U256::from(code_size) * U256::from(CONFLUX_TOKEN)
-        / U256::from(NUM_BYTES_PER_CONFLUX_TOKEN);
+    let collateral_for_code = U256::from(code_size) * *COLLATERAL_PER_BYTE;
     state.sub_collateral_for_storage(&code_owner, &collateral_for_code)?;
     let sponsor_for_gas = state.sponsor_for_gas(contract_address)?;
     let sponsor_for_collateral =
@@ -44,6 +43,10 @@ pub fn suicide(
         state.sponsor_balance_for_gas(contract_address)?;
     let sponsor_balance_for_collateral =
         state.sponsor_balance_for_collateral(contract_address)?;
+    *substate
+        .storage_collateralized
+        .entry(code_owner)
+        .or_insert(0) += code_size as u64;
     if !sponsor_for_gas.is_zero() {
         state.add_balance(
             &sponsor_for_gas,

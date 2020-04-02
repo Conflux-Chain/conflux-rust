@@ -7,7 +7,6 @@ use super::{
     ErrorKind, SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
-    alliance_tree_graph::consensus::TreeGraphConsensus,
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
@@ -27,12 +26,10 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
-use libra_types::crypto_proxies::ValidatorVerifier;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
-    node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
-    HandlerWorkType, NetworkContext, NetworkProtocolHandler, PeerId,
-    UpdateNodeOperation,
+    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
+    NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
@@ -69,7 +66,6 @@ const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 6;
 const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
 const EXPIRE_BLOCK_GC_TIMER: TimerToken = 8;
 const HEARTBEAT_TIMER: TimerToken = 9;
-const EXPIRE_BFT_EXECUTION_TIMER: TimerToken = 10;
 pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
@@ -338,13 +334,6 @@ impl SynchronizationProtocolHandler {
 
     pub fn is_consortium(&self) -> bool { self.protocol_config.is_consortium }
 
-    pub fn update_validator_info(
-        &self, validators: &ValidatorVerifier,
-    ) -> HashSet<NodeId> {
-        assert!(self.is_consortium());
-        self.syn.update_validator_info(validators)
-    }
-
     fn get_to_propagate_trans(&self) -> HashMap<H256, Arc<SignedTransaction>> {
         self.graph.get_to_propagate_trans()
     }
@@ -449,8 +438,16 @@ impl SynchronizationProtocolHandler {
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
         match e.0 {
-            ErrorKind::Invalid => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Demotion),
+            ErrorKind::InvalidGetBlockTxn(_) => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
+            ErrorKind::InvalidStatus(_) => {
+                op = Some(UpdateNodeOperation::Failure)
+            }
             ErrorKind::InvalidMessageFormat => {
+                // TODO: Shall we blacklist a node when the message format is
+                // wrong? maybe it's a different version of sync protocol?
                 op = Some(UpdateNodeOperation::Remove)
             }
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
@@ -508,7 +505,7 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Failure)
                 }
             },
-            ErrorKind::Storage(_) => {}
+            ErrorKind::Storage(_) => disconnect = false,
             ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
             ErrorKind::__Nonexhaustive {} => {
                 op = Some(UpdateNodeOperation::Failure)
@@ -519,6 +516,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
+            ErrorKind::NotSupported(_) => disconnect = false,
         }
 
         if disconnect {
@@ -559,7 +557,7 @@ impl SynchronizationProtocolHandler {
             if missing_hashes.is_empty() {
                 return;
             }
-            to_request = missing_hashes.iter().cloned().collect::<Vec<H256>>();
+            to_request = missing_hashes.drain().collect::<Vec<H256>>();
             missing_hashes.clear();
         }
         let chosen_peer =
@@ -843,16 +841,16 @@ impl SynchronizationProtocolHandler {
                     }
                 }
             }
-            let (success, to_relay) = self.graph.insert_block(
+            let insert_result = self.graph.insert_block(
                 block, true,  /* need_to_verify */
                 true,  /* persistent */
                 false, /* recover_from_db */
             );
-            if success {
+            if insert_result.is_valid() {
                 // The requested block is correctly received
                 received_blocks.insert(hash);
             }
-            if to_relay {
+            if insert_result.should_relay() {
                 need_to_relay.push(hash);
             }
         }
@@ -947,12 +945,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message(&self) -> Status {
         let best_info = self.graph.consensus.best_info();
 
-        let terminal_hashes = if let Some(x) = &best_info.terminal_block_hashes
-        {
-            x.clone()
-        } else {
-            best_info.bounded_terminal_block_hashes.clone()
-        };
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
@@ -1413,14 +1406,14 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn blocks_received(
-        &self, io: &dyn NetworkContext, req_hashes: HashSet<H256>,
+        &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<PeerId>, delay: Option<Duration>,
     )
     {
         self.request_manager.blocks_received(
             io,
-            req_hashes,
+            requested_hashes,
             returned_blocks,
             ask_full_block,
             peer,
@@ -1436,25 +1429,19 @@ impl SynchronizationProtocolHandler {
     pub fn expire_block_gc(
         &self, io: &dyn NetworkContext, timeout: u64,
     ) -> Result<(), Error> {
+        if self.in_recover_from_db_phase() {
+            // In recover_from_db phase, this will be done at the end of
+            // recovery, and if we allow `resolve_outside_dependencies` here,
+            // it will cause inconsistency.
+            return Ok(());
+        }
+        // TODO This may not be needed now, but we should double check it.
         let need_to_relay = self.graph.resolve_outside_dependencies(
             false, /* recover_from_db */
             self.insert_header_to_consensus(),
         );
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
-    }
-
-    fn remove_expired_bft_execution(&self) {
-        let sync_graph = self.get_synchronization_graph();
-        if !sync_graph.is_consortium() {
-            return;
-        }
-        let tg_consensus = sync_graph
-            .consensus
-            .as_any()
-            .downcast_ref::<TreeGraphConsensus>()
-            .expect("downcast to TreeGraphConsensus should success");
-        tg_consensus.remove_expired_bft_execution();
     }
 }
 
@@ -1501,14 +1488,6 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.protocol_config.expire_block_gc_period,
         )
         .expect("Error registering EXPIRE_BLOCK_GC_TIMER");
-
-        if self.is_consortium() {
-            io.register_timer(
-                EXPIRE_BFT_EXECUTION_TIMER,
-                Duration::from_millis(4_000),
-            )
-            .expect("Error registering log_statistics timer");
-        }
     }
 
     fn send_local_message(&self, io: &dyn NetworkContext, message: Vec<u8>) {
@@ -1533,6 +1512,10 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
 
         self.dispatch_message(io, peer, msg_id.into(), rlp)
             .unwrap_or_else(|e| self.handle_error(io, peer, msg_id.into(), e));
+
+        // TODO: Only call when the message is a Response. But maybe not worth
+        // doing since the check for available request_id is cheap.
+        self.request_manager.send_pending_requests(io, peer);
     }
 
     fn on_work_dispatch(
@@ -1619,11 +1602,13 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             EXPIRE_BLOCK_GC_TIMER => {
                 // remove expire blocks every `expire_block_gc_period`
                 // TODO Parameterize this timeout.
-                self.expire_block_gc(io, 120).ok();
-            }
-            EXPIRE_BFT_EXECUTION_TIMER => {
-                debug!("timeout: remove_expired_bft_execution");
-                self.remove_expired_bft_execution();
+                // Set to twice expire period to ensure that stale blocks will
+                // exist in the frontier across two consecutive GC.
+                self.expire_block_gc(
+                    io,
+                    self.protocol_config.expire_block_gc_period.as_secs() * 2,
+                )
+                .ok();
             }
             _ => warn!("Unknown timer {} triggered.", timer),
         }

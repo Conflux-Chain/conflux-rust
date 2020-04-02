@@ -4,14 +4,10 @@
 
 use crate::rpc::impls::cfx::RpcImplConfiguration;
 use cfx_types::H256;
-use cfxcore::cache_config::DEFAULT_LEDGER_CACHE_SIZE;
-
 use cfxcore::{
-    alliance_tree_graph::consensus::{
-        consensus_inner::ConsensusInnerConfig as TreeGraphConsensusInnerConfig,
-        ConsensusConfig as TreeGraphConsensusConfig,
-    },
     block_data_manager::{DataManagerConfiguration, DbType},
+    block_parameters::*,
+    cache_config::DEFAULT_LEDGER_CACHE_SIZE,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
         ConsensusConfig, ConsensusInnerConfig,
@@ -110,6 +106,7 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (network_id, (u64), 1)
+        (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
@@ -146,7 +143,11 @@ build_config! {
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
         (max_download_state_peers, (usize), 8)
+        (max_handshakes, (usize), 64)
+        (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
+        (max_outgoing_peers, (usize), 16)
+        (max_outgoing_peers_archive, (usize), 0)
         (max_peers_tx_propagation, (usize), 128)
         (min_peers_tx_propagation, (usize), 8)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
@@ -294,6 +295,11 @@ impl Configuration {
         network_config.housekeeping_timeout = Duration::from_millis(
             self.raw_conf.discovery_housekeeping_timeout_ms,
         );
+        network_config.max_handshakes = self.raw_conf.max_handshakes;
+        network_config.max_incoming_peers = self.raw_conf.max_incoming_peers;
+        network_config.max_outgoing_peers = self.raw_conf.max_outgoing_peers;
+        network_config.max_outgoing_peers_archive =
+            self.raw_conf.max_outgoing_peers_archive;
         Ok(network_config)
     }
 
@@ -323,23 +329,6 @@ impl Configuration {
         )
     }
 
-    pub fn tg_consensus_config(&self) -> TreeGraphConsensusConfig {
-        TreeGraphConsensusConfig {
-            debug_dump_dir_invalid_state_root: self
-                .raw_conf
-                .debug_dump_dir_invalid_state_root
-                .clone(),
-            inner_conf: TreeGraphConsensusInnerConfig {
-                era_epoch_count: self.raw_conf.era_epoch_count,
-                enable_state_expose: self.raw_conf.enable_state_expose,
-                candidate_pivot_waiting_timeout_ms: self
-                    .raw_conf
-                    .candidate_pivot_waiting_timeout_ms,
-            },
-            bench_mode: false,
-        }
-    }
-
     pub fn consensus_config(&self) -> ConsensusConfig {
         let enable_optimistic_execution = if DEFERRED_STATE_EPOCH_COUNT <= 1 {
             false
@@ -366,6 +355,7 @@ impl Configuration {
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
+            referee_bound: self.raw_conf.referee_bound,
         }
     }
 
@@ -395,7 +385,10 @@ impl Configuration {
     }
 
     pub fn verification_config(&self) -> VerificationConfig {
-        VerificationConfig::new(self.is_test_mode())
+        VerificationConfig::new(
+            self.is_test_mode(),
+            self.raw_conf.referee_bound,
+        )
     }
 
     pub fn tx_gen_config(&self) -> Option<TransactionGeneratorConfig> {

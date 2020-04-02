@@ -11,7 +11,6 @@ from test_framework.util import *
 
 class InvalidMessageTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 4
 
     def setup_network(self):

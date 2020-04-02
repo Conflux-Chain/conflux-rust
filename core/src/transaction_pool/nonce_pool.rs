@@ -1,13 +1,16 @@
 use cfx_types::U256;
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::SignedTransaction;
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::{cmp::Ordering, mem, ops::Deref, sync::Arc};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
+    pub sponsored_gas: U256,
 }
 
 impl TxWithReadyInfo {
@@ -45,7 +48,7 @@ pub enum InsertResult {
     Updated(TxWithReadyInfo),
 }
 
-#[derive(Debug)]
+#[derive(Debug, DeriveMallocSizeOf)]
 struct NoncePoolNode {
     /// transaction in current node
     tx: TxWithReadyInfo,
@@ -66,7 +69,7 @@ impl NoncePoolNode {
         NoncePoolNode {
             tx: tx.clone(),
             subtree_unpacked: 1 - tx.packed as u32,
-            subtree_cost: tx.value + tx.gas * tx.gas_price,
+            subtree_cost: tx.value + (tx.gas - tx.sponsored_gas) * tx.gas_price,
             subtree_size: 1,
             priority,
             child: [None, None],
@@ -204,7 +207,9 @@ impl NoncePoolNode {
                 } else {
                     let mut ret = NoncePoolNode::size(&node.child[0]);
                     ret.0 += 1;
-                    ret.1 += node.tx.value + node.tx.gas * node.tx.gas_price;
+                    ret.1 += node.tx.value
+                        + (node.tx.gas - node.tx.sponsored_gas)
+                            * node.tx.gas_price;
                     if cmp == Ordering::Greater {
                         let tmp = NoncePoolNode::rank(&node.child[1], nonce);
                         ret.0 += tmp.0;
@@ -268,7 +273,8 @@ impl NoncePoolNode {
     /// update subtree info: last_packed_ts and cost_sum
     fn update(&mut self) {
         self.subtree_unpacked = 1 - self.tx.packed as u32;
-        self.subtree_cost = self.tx.value + self.tx.gas * self.tx.gas_price;
+        self.subtree_cost = self.tx.value
+            + (self.tx.gas - self.tx.sponsored_gas) * self.tx.gas_price;
         self.subtree_size = 1;
         for i in 0..2 {
             if self.child[i as usize].is_some() {
@@ -296,6 +302,12 @@ impl NoncePoolNode {
 pub struct NoncePool {
     root: Option<Box<NoncePoolNode>>,
     rng: XorShiftRng,
+}
+
+impl MallocSizeOf for NoncePool {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.root.size_of(ops)
+    }
 }
 
 impl NoncePool {
@@ -420,6 +432,7 @@ mod nonce_pool_test {
         TxWithReadyInfo {
             transaction,
             packed,
+            sponsored_gas: U256::from(0),
         }
     }
 
@@ -585,7 +598,7 @@ mod nonce_pool_test {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
         while let Some(tx) = nonce_pool.get(&next_nonce) {
-            let cost = tx.value + tx.gas_price * tx.gas;
+            let cost = tx.value + tx.gas_price * (tx.gas - tx.sponsored_gas);
             if balance_left < cost {
                 return None;
             }

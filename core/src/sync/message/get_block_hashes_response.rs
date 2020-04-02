@@ -27,7 +27,6 @@ impl Handleable for GetBlockHashesResponse {
         let epoch_req = req.downcast_ref::<GetBlockHashesByEpoch>(
             ctx.io,
             &ctx.manager.request_manager,
-            true,
         )?;
 
         // assume received everything

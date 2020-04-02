@@ -5,13 +5,11 @@ import eth_utils
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.utils import sha3 as keccak, privtoaddr
+from conflux.utils import sha3 as keccak, priv_to_addr
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
-from web3 import Web3
-from easysolc import Solc
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
 CONSTRUCTED_TOPIC = encode_hex_0x(keccak(b"Constructed(address,address)"))
@@ -20,7 +18,6 @@ NUM_CALLS = 20
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 1
 
     def setup_network(self):
@@ -28,7 +25,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
     def run_test(self):
         priv_key = default_config["GENESIS_PRI_KEY"]
-        sender = eth_utils.encode_hex(privtoaddr(priv_key))
+        sender = eth_utils.encode_hex(priv_to_addr(priv_key))
 
         self.rpc = RpcClient(self.nodes[0])
 

@@ -4,9 +4,9 @@
 
 use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
-    traits::{cfx::Cfx, debug::DebugRpc, test::TestRpc},
+    traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
-        Account as RpcAccount, BFTStates, BlameInfo, Block as RpcBlock,
+        Account as RpcAccount, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
@@ -15,12 +15,11 @@ use crate::rpc::{
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
 };
-use cfx_types::{Public, H160, H256, U256};
+use cfx_types::{H160, H256, U256};
 use cfxcore::{LightQueryService, PeerInfo};
 use delegate::delegate;
 use futures::future::{FutureExt, TryFutureExt};
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
-use libra_types::transaction::SignedTransaction;
 use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
@@ -414,12 +413,20 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let (tx, receipt, address, maybe_epoch, maybe_state_root) = light
+            let (
+                tx,
+                receipt,
+                address,
+                maybe_epoch,
+                maybe_state_root,
+                prior_gas_used,
+            ) = light
                 .get_tx_info(hash)
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            let mut receipt = RpcReceipt::new(tx, receipt, address);
+            let mut receipt =
+                RpcReceipt::new(tx, receipt, address, prior_gas_used);
             receipt.set_epoch_number(maybe_epoch);
 
             if let Some(state_root) = maybe_state_root {
@@ -454,7 +461,7 @@ impl Cfx for CfxHandler {
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
-            fn transaction_count(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
+            fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
         }
 
         target self.rpc_impl {
@@ -478,8 +485,6 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
-        fn set_consortium_administrators(&self, admins: Vec<Public>) -> RpcResult<bool>;
-        fn send_new_consortium_member_trans(&self, admin_trans: SignedTransaction) -> RpcResult<()>;
     }
 }
 
@@ -541,7 +546,7 @@ impl DebugRpcImpl {
     }
 }
 
-impl DebugRpc for DebugRpcImpl {
+impl LocalRpc for DebugRpcImpl {
     delegate! {
         target self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
@@ -570,6 +575,5 @@ impl DebugRpc for DebugRpcImpl {
         fn current_sync_phase(&self) -> RpcResult<String>;
         fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates>;
         fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
-        fn bft_state(&self) -> RpcResult<BFTStates>;
     }
 }

@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import conflux.config
 from conflux.rpc import RpcClient
+from conflux.utils import encode_hex, bytes_to_int, priv_to_addr, parse_as_int, pub_to_addr
 from test_framework.test_framework import ConfluxTestFramework, OptionHelper
 from test_framework.util import *
 import time
@@ -42,7 +43,6 @@ Setup and run conflux nodes on multiple vms with a few nodes on each vm.
 """
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.rpc_timewait = 60
         # Have to have a num_nodes due to assert in base class.
         self.num_nodes = None

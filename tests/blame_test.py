@@ -8,7 +8,6 @@ from conflux.rpc import RpcClient
 
 class BlameTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
 
     def setup_network(self):

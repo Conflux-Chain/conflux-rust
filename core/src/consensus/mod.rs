@@ -22,7 +22,7 @@ use crate::{
     bytes::Bytes,
     consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
     executive::Executed,
-    parameters::{block::REFEREE_BOUND, consensus::*, consensus_internal::*},
+    parameters::{consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     state::State,
     statedb::StateDb,
@@ -33,6 +33,8 @@ use crate::{
     Notifications,
 };
 use cfx_types::{Bloom, H160, H256, U256};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
@@ -46,6 +48,7 @@ use primitives::{
 use rayon::prelude::*;
 use std::{
     any::Any,
+    cmp::min,
     collections::{HashMap, HashSet},
     sync::Arc,
     thread::sleep,
@@ -74,11 +77,14 @@ pub struct ConsensusConfig {
     /// [tx.epoch_height - transaction_epoch_bound, tx.epoch_height +
     /// transaction_epoch_bound]
     pub transaction_epoch_bound: u64,
+    /// The number of referees that are allowed for a block.
+    pub referee_bound: usize,
 }
 
 #[derive(Debug)]
 pub struct ConsensusGraphStatistics {
     pub inserted_block_count: usize,
+    pub activated_block_count: usize,
     pub processed_block_count: usize,
 }
 
@@ -86,24 +92,23 @@ impl ConsensusGraphStatistics {
     pub fn new() -> ConsensusGraphStatistics {
         ConsensusGraphStatistics {
             inserted_block_count: 0,
+            activated_block_count: 0,
             processed_block_count: 0,
         }
     }
 
     pub fn clear(&mut self) {
         self.inserted_block_count = 0;
+        self.activated_block_count = 0;
         self.processed_block_count = 0;
     }
 }
 
-#[derive(Default)]
+#[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
-    // terminal_block_hashes will be None if it is same as the
-    // bounded_terminal_block_hashes. This is just to save some space.
-    pub terminal_block_hashes: Option<Vec<H256>>,
     pub bounded_terminal_block_hashes: Vec<H256>,
 }
 
@@ -143,9 +148,6 @@ pub struct ConsensusGraph {
     /// Make sure that it is only modified when holding inner lock to prevent
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
-    /// This is the hash of latest block inserted into consensus graph.
-    /// Since the critical section is very short, a `Mutex` is enough.
-    pub latest_inserted_block: Mutex<H256>,
     /// This HashMap stores whether the state in header is correct or not for
     /// pivot blocks from current era genesis to first trusted blame block
     /// after current era stable genesis.
@@ -155,6 +157,20 @@ pub struct ConsensusGraph {
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
+    pub config: ConsensusConfig,
+}
+
+impl MallocSizeOf for ConsensusGraph {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let best_info_size = self.best_info.read().size_of(ops);
+        let pivot_block_state_valid_map_size =
+            self.pivot_block_state_valid_map.lock().size_of(ops);
+        self.inner.read().size_of(ops)
+            + self.txpool.size_of(ops)
+            + self.data_man.size_of(ops)
+            + best_info_size
+            + pivot_block_state_valid_map_size
+    }
 }
 
 impl ConsensusGraph {
@@ -194,7 +210,7 @@ impl ConsensusGraph {
             executor: executor.clone(),
             statistics: statistics.clone(),
             new_block_handler: ConsensusNewBlockHandler::new(
-                conf,
+                conf.clone(),
                 txpool,
                 data_man,
                 executor,
@@ -203,9 +219,9 @@ impl ConsensusGraph {
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
-            latest_inserted_block: Mutex::new(*era_genesis_block_hash),
             pivot_block_state_valid_map: Default::default(),
             synced_epoch_id: Default::default(),
+            config: conf,
         };
         graph.update_best_info();
         graph
@@ -296,7 +312,7 @@ impl ConsensusGraph {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestMined => self.best_epoch_number(),
-            EpochNumber::LatestState => self.executed_best_state_epoch_number(),
+            EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.best_epoch_number() {
@@ -366,7 +382,7 @@ impl ConsensusGraph {
             }
             EpochNumber::Number(num) => {
                 let latest_state_epoch =
-                    self.executed_best_state_epoch_number();
+                    self.best_executed_state_epoch_number();
                 if *num > latest_state_epoch {
                     return Err(format!("Specified epoch {} is not executed, the latest state epoch is {}", num, latest_state_epoch));
                 }
@@ -382,16 +398,22 @@ impl ConsensusGraph {
     ) -> Result<StateDb, String> {
         self.validate_stated_epoch(&epoch_number)?;
         let height = self.get_height_from_epoch_number(epoch_number)?;
+        debug!("Get pivot height={:?}", height);
         let hash =
             self.inner.read().get_pivot_hash_from_epoch_number(height)?;
+        debug!("Get pivot hash={:?}", hash);
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
         if !state_availability_boundary.check_availability(height, &hash) {
+            debug!(
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                height, hash, state_availability_boundary
+            );
             return Err(format!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
-                height, hash, self.data_man.state_availability_boundary.read()
+                height, hash, state_availability_boundary
             )
             .into());
         }
@@ -618,20 +640,27 @@ impl ConsensusGraph {
         self.best_info.read_recursive().best_block_hash
     }
 
-    /// Returns the latest epoch with executed state.
-    pub fn executed_best_state_epoch_number(&self) -> u64 {
-        self.inner
-            .read_recursive()
-            .executed_best_state_epoch_number()
-    }
-
-    /// Returns the latest epoch whose state execution has been enqueued.
-    /// And this state should be the `deferred_state` of the block being mined.
-    ///
-    /// Note that the state may not exist, and the caller should wait for the
-    /// result if the state is going to be used.
-    pub fn best_state_epoch_number(&self) -> u64 {
-        self.inner.read_recursive().best_state_epoch_number()
+    /// Returns the latest epoch whose state can be exposed safely, which means
+    /// its state is available and it's not only visible to optimistic
+    /// execution.
+    pub fn best_executed_state_epoch_number(&self) -> u64 {
+        let state_upper_bound =
+            self.data_man.state_availability_boundary.read().upper_bound;
+        // Here we can also get `best_state_epoch` from `inner`, but that
+        // would acquire the inner read lock.
+        let best_epoch_number = self.best_info.read().best_epoch_number;
+        let deferred_state_height =
+            if best_epoch_number < DEFERRED_STATE_EPOCH_COUNT {
+                0
+            } else {
+                best_epoch_number - DEFERRED_STATE_EPOCH_COUNT + 1
+            };
+        // state upper bound can be lower than deferred_state_height because
+        // the execution is async. It can also be higher
+        // because of optimistic execution. Here we guarantee
+        // to return an available state without exposing optimistically
+        // executed states.
+        min(state_upper_bound, deferred_state_height)
     }
 
     pub fn get_transaction_receipt_and_block_info(
@@ -669,7 +698,7 @@ impl ConsensusGraph {
         }
     }
 
-    pub fn transaction_count(
+    pub fn next_nonce(
         &self, address: H160,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
     ) -> Result<U256, String>
@@ -687,7 +716,6 @@ impl ConsensusGraph {
         // FIXME: check if we should fill the correct `block_number`.
         let state = State::new(
             state_db,
-            0.into(),           /* account_start_nonce */
             Default::default(), /* vm */
             0,                  /* block_number */
         );
@@ -945,8 +973,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 inner.arena[arena_index].data.state_valid =
                     pivot_block_state_valid_map.remove(&hash);
             }
-
-            *self.latest_inserted_block.lock() = *hash;
         }
 
         // Skip updating best info during recovery
@@ -1049,11 +1075,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex)> {
+    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)> {
         // We need to hold the inner lock to ensure that tx_index and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((receipt, tx_index)) =
+        if let Some((receipt, tx_index, prior_gas_used)) =
             inner.get_transaction_receipt_with_address(hash)
         {
             let block = self.data_man.block_by_hash(
@@ -1061,7 +1087,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 false, /* update_cache */
             )?;
             let transaction = (*block.transactions[tx_index.index]).clone();
-            Some((transaction, receipt, tx_index))
+            Some((transaction, receipt, tx_index, prior_gas_used))
         } else {
             None
         }
@@ -1100,9 +1126,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
                         .map(|db| {
                             State::new(
                                 StateDb::new(db),
-                                0.into(), /* account_start_nonce */
                                 Default::default(), /* vm */
-                                past_num_blocks, /* block_numer */
+                                past_num_blocks,    /* block_numer */
                             )
                         })
                         .expect("Best state has been executed");
@@ -1162,27 +1187,28 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// store a version of best_info outside the inner to prevent keep
     /// getting inner locks.
     fn update_best_info(&self) {
-        let inner = self.inner.read();
+        let mut inner = self.inner.write();
         let mut best_info = self.best_info.write();
 
         let terminal_hashes = inner.terminal_hashes();
-        let (terminal_block_hashes, bounded_terminal_block_hashes) =
-            if terminal_hashes.len() > REFEREE_BOUND {
-                (Some(terminal_hashes), inner.best_terminals(REFEREE_BOUND))
+        let best_block_hash = inner.best_block_hash();
+        let best_block_arena_index =
+            *inner.hash_to_arena_indices.get(&best_block_hash).unwrap();
+        let bounded_terminal_block_hashes =
+            if terminal_hashes.len() > self.config.referee_bound {
+                inner.best_terminals(
+                    best_block_arena_index,
+                    self.config.referee_bound,
+                )
             } else {
-                (None, terminal_hashes)
+                terminal_hashes
             };
 
         *best_info = Arc::new(BestInformation {
             best_block_hash: inner.best_block_hash(),
             best_epoch_number: inner.best_epoch_number(),
             current_difficulty: inner.current_difficulty,
-            terminal_block_hashes,
             bounded_terminal_block_hashes,
         });
-    }
-
-    fn latest_inserted_block(&self) -> H256 {
-        *self.latest_inserted_block.lock()
     }
 }

@@ -205,29 +205,35 @@ impl ConfirmationMeter {
         // epoch_num, g_inner.cur_era_genesis_block_arena_index);
 
         // Compute risk
-        let m_2 = 2i128 * m;
-        let e_1 = m_2 / 5i128;
-        let e_2 = m_2 / 7i128;
-        let n_min_1 = e_1 + 13i128;
-        let n_min_2 = e_2 + 36i128;
-        let n_min = if n_min_1 < n_min_2 { n_min_1 } else { n_min_2 };
-
+        let m_n_diff = m as f64 - n as f64;
         let mut risk = 0.9;
-        if n <= n_min {
+        let threshold_1 = if 0.75 * m as f64 - 22.0 < 2250.0 {
+            0.75 * m as f64 - 22.0
+        } else {
+            2250.0
+        };
+        if m_n_diff >= threshold_1 {
             return risk;
         }
-
         risk = 0.0001;
-
-        let n_min_1 = e_1 + 19i128;
-        let n_min_2 = e_2 + 57i128;
-        let n_min = if n_min_1 < n_min_2 { n_min_1 } else { n_min_2 };
-
-        if n <= n_min {
+        let threshold_2 = if 0.70 * m as f64 - 22.0 < 1500.0 {
+            0.70 * m as f64 - 22.0
+        } else {
+            1500.0
+        };
+        if m_n_diff >= threshold_2 {
             return risk;
         }
-
         risk = 0.000001;
+        let threshold_3 = if 0.65 * m as f64 - 22.0 < 750.0 {
+            0.65 * m as f64
+        } else {
+            750.0
+        };
+        if m_n_diff >= threshold_3 {
+            return risk;
+        }
+        risk = 0.00000001;
         risk
     }
 
@@ -335,15 +341,17 @@ impl ConfirmationMeter {
                     }
                 }
             }
-            let x_2 = (total_weight
+            let n_j = (y
+                - x_1
+                - x_3
+                - self.inner.read().total_weight_in_past_2d.delta)
+                / d;
+            let m_j = (total_weight
                 - g_inner.pivot_chain_metadata[a_pivot_index].past_weight)
-                - y;
-            let x = x_1 + x_2 + x_3;
-            let y_n = y / d;
-            let x_n = x / d;
+                / d;
 
             let i_risk =
-                10f64.powf(-(3 * y_n - 2 * x_n - 18000) as f64 / 3500f64);
+                10f64.powf((m_j as f64 / 3.0 - n_j as f64) / 700.0 + 5.3);
             adaptive_risk += i_risk;
         }
 

@@ -10,7 +10,6 @@ from test_framework.util import *
 
 class ExpireBlockTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.conf_parameters["adaptive_weight_beta"] = "1"
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["timer_chain_beta"] = "15"

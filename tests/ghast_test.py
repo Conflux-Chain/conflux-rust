@@ -13,7 +13,6 @@ INITIAL_DIFFICULTY = 1000
 
 class GHASTTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
         self.num_nodes = 2
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = TIMER_RATIO
         self.conf_parameters["timer_chain_beta"] = TIMER_BETA

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-from conflux.utils import privtoaddr
+from conflux.utils import priv_to_addr
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
-from easysolc import Solc
-
 from web3 import Web3
 import os
+
+from test_framework.util import get_contract_instance
 
 
 class FixedTokenSupplyTokenTest(SmartContractBenchBase):
@@ -16,9 +16,8 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
         self.accounts = []
 
     def setup_contract(self):
-        solc = Solc()
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        self.contract = solc.get_contract_instance(source=os.path.join(file_dir, "contracts/fixed_supply_token.sol"),
+        self.contract = get_contract_instance(source=os.path.join(file_dir, "contracts/fixed_supply_token.sol"),
                                                    contract_name="FixedSupplyToken")
         self.log.info("Initializing contract")
 
@@ -28,14 +27,14 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
 
     def generate_transactions(self, _):
         self.call_contract_function(self.contract, "transfer",
-                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[0])), 1000],
+                                    [Web3.toChecksumAddress(priv_to_addr(self.accounts[0])), 1000],
                                     self.default_account_key, self.contract_address, True, True)
         self.call_contract_function(self.contract, "approve",
-                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[1])), 500],
+                                    [Web3.toChecksumAddress(priv_to_addr(self.accounts[1])), 500],
                                     self.accounts[0], self.contract_address, True, True)
         self.call_contract_function(self.contract, "transferFrom",
-                                    [Web3.toChecksumAddress(privtoaddr(self.accounts[0])),
-                                     Web3.toChecksumAddress(privtoaddr(self.default_account_key)), 300],
+                                    [Web3.toChecksumAddress(priv_to_addr(self.accounts[0])),
+                                     Web3.toChecksumAddress(priv_to_addr(self.default_account_key)), 300],
                                     self.accounts[1], self.contract_address, True, True)
 
 

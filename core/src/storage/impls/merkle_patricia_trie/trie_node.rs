@@ -51,9 +51,12 @@ pub trait TrieNodeTrait: Default {
 
     fn compute_merkle(
         &self, children_merkles: MaybeMerkleTableRef,
-    ) -> MerkleHash {
+        path_without_first_nibble: bool,
+    ) -> MerkleHash
+    {
         compute_merkle(
             self.compressed_path_ref(),
+            path_without_first_nibble,
             children_merkles,
             self.value_as_slice().into_option(),
         )

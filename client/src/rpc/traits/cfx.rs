@@ -9,10 +9,8 @@ use super::super::types::{
     H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
-use cfx_types::Public;
 use jsonrpc_core::{BoxFuture, Result as RpcResult};
 use jsonrpc_derive::rpc;
-use libra_types::transaction::SignedTransaction;
 
 /// Cfx rpc interface.
 #[rpc(server)]
@@ -107,10 +105,10 @@ pub trait Cfx {
     #[rpc(name = "cfx_getBestBlockHash")]
     fn best_block_hash(&self) -> RpcResult<RpcH256>;
 
-    /// Returns the number of transactions sent from given address at given time
-    /// (epoch number).
-    #[rpc(name = "cfx_getTransactionCount")]
-    fn transaction_count(
+    /// Returns the nonce should be filled in next sending transaction from
+    /// given address at given time (epoch number).
+    #[rpc(name = "cfx_getNextNonce")]
+    fn next_nonce(
         &self, addr: RpcH160, epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<RpcU256>;
 
@@ -122,16 +120,6 @@ pub trait Cfx {
     //        /// Returns the number of transactions in a block with given block
     // number.        #[rpc(name = "cfx_getBlockTransactionCountByNumber")]
     //        fn block_trasaction_count_by_number(&self, BlockNumber) ->
-    // BoxFuture<Option<RpcU256>>;
-
-    //        /// Returns the number of uncles in a block with given hash.
-    //        #[rpc(name = "cfx_getUncleCountByBlockHash")]
-    //        fn block_uncles_count_by_hash(&self, RpcH256) ->
-    // BoxFuture<Option<RpcU256>>;
-
-    //        /// Returns the number of uncles in a block with given block
-    // number.        #[rpc(name = "cfx_getUnclesCountByBlockNumber")]
-    //        fn block_uncles_count_by_number(&self, BlockNumber) ->
     // BoxFuture<Option<RpcU256>>;
 
     /// Sends signed transaction, returning its hash.
@@ -191,18 +179,6 @@ pub trait Cfx {
     fn accumulate_interest_rate(
         &self, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<RpcU256>;
-
-    /// Set administrators for consortium chain.
-    #[rpc(name = "cfx_setConsortiumAdministrators")]
-    fn set_consortium_administrators(
-        &self, admins: Vec<Public>,
-    ) -> RpcResult<bool>;
-
-    /// Send admin transaction for alliance membership change.
-    #[rpc(name = "cfx_sendNewConsortiumMembershipTrans")]
-    fn send_new_consortium_member_trans(
-        &self, admin_trans: SignedTransaction,
-    ) -> RpcResult<()>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
