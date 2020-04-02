@@ -2104,7 +2104,7 @@ impl ConsensusGraphInner {
 
     pub fn get_transaction_receipt_with_address(
         &self, tx_hash: &H256,
-    ) -> Option<(Receipt, TransactionIndex)> {
+    ) -> Option<(Receipt, TransactionIndex, U256)> {
         trace!("Get receipt with tx_hash {}", tx_hash);
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
@@ -2117,12 +2117,20 @@ impl ConsensusGraphInner {
             )?
             .1
             .receipts;
+
+        let prior_gas_used = if tx_index.index == 0 {
+            U256::zero()
+        } else {
+            receipts[tx_index.index - 1].gas_used
+        };
+
         Some((
             receipts
                 .get(tx_index.index)
                 .expect("Error: can't get receipt by tx_index ")
                 .clone(),
             tx_index,
+            prior_gas_used,
         ))
     }
 

@@ -16,7 +16,7 @@ use crate::{
     },
     sync::SynchronizationGraph,
 };
-use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM};
+use cfx_types::{Bloom, H160, H256, KECCAK_EMPTY_BLOOM, U256};
 use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
@@ -35,6 +35,7 @@ type TxInfo = (
     TransactionIndex,
     Option<u64>,  /* maybe_epoch */
     Option<H256>, /* maybe_state_root */
+    U256,
 );
 
 // As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
@@ -202,7 +203,8 @@ impl QueryService {
 
     async fn retrieve_tx_info(
         &self, hash: H256,
-    ) -> Result<(SignedTransaction, Receipt, TransactionIndex), String> {
+    ) -> Result<(SignedTransaction, Receipt, TransactionIndex, U256), String>
+    {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         with_timeout(
@@ -312,7 +314,8 @@ impl QueryService {
         // Note: if a transaction does not exist, we fail with timeout, as
         //       peers cannot provide non-existence proofs for transactions.
         // FIXME: is there a better way?
-        let (tx, receipt, address) = self.retrieve_tx_info(hash).await?;
+        let (tx, receipt, address, prior_gas_used) =
+            self.retrieve_tx_info(hash).await?;
 
         let hash = address.block_hash;
         let epoch = self.consensus.get_block_epoch_number(&hash);
@@ -321,7 +324,7 @@ impl QueryService {
             .and_then(|e| self.handler.witnesses.root_hashes_of(e))
             .map(|(state_root, _, _)| state_root);
 
-        Ok((tx, receipt, address, epoch, root))
+        Ok((tx, receipt, address, epoch, root, prior_gas_used))
     }
 
     /// Relay raw transaction to all peers.

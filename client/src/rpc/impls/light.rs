@@ -405,12 +405,20 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
-            let (tx, receipt, address, maybe_epoch, maybe_state_root) = light
+            let (
+                tx,
+                receipt,
+                address,
+                maybe_epoch,
+                maybe_state_root,
+                prior_gas_used,
+            ) = light
                 .get_tx_info(hash)
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            let mut receipt = RpcReceipt::new(tx, receipt, address);
+            let mut receipt =
+                RpcReceipt::new(tx, receipt, address, prior_gas_used);
             receipt.set_epoch_number(maybe_epoch);
 
             if let Some(state_root) = maybe_state_root {

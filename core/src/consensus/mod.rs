@@ -1060,11 +1060,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex)> {
+    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)> {
         // We need to hold the inner lock to ensure that tx_index and receipts
         // are consistent
         let inner = self.inner.read();
-        if let Some((receipt, tx_index)) =
+        if let Some((receipt, tx_index, prior_gas_used)) =
             inner.get_transaction_receipt_with_address(hash)
         {
             let block = self.data_man.block_by_hash(
@@ -1072,7 +1072,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 false, /* update_cache */
             )?;
             let transaction = (*block.transactions[tx_index.index]).clone();
-            Some((transaction, receipt, tx_index))
+            Some((transaction, receipt, tx_index, prior_gas_used))
         } else {
             None
         }

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{Log, H256, U256};
-use cfx_types::{Address, Bloom};
+use cfx_types::{Address, Bloom, U256 as CfxU256};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::Receipt as PrimitiveReceipt, transaction::Action,
@@ -27,7 +27,7 @@ pub struct Receipt {
     /// address of the receiver, null when it's a contract creation
     /// transaction.
     pub to: Option<Address>,
-    /// The total gas used in the block following execution of the transaction.
+    /// The gas used in the execution of the transaction.
     pub gas_used: U256,
     /// Address of contracts created during execution of transaction.
     pub contract_created: Option<Address>,
@@ -44,7 +44,7 @@ pub struct Receipt {
 impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
-        transaction_index: TransactionIndex,
+        transaction_index: TransactionIndex, prior_gas_used: CfxU256,
     ) -> Receipt
     {
         let mut address = None;
@@ -61,7 +61,7 @@ impl Receipt {
             transaction_hash: transaction.hash.into(),
             index: transaction_index.index,
             block_hash: transaction_index.block_hash.into(),
-            gas_used: receipt.gas_used.into(),
+            gas_used: (receipt.gas_used - prior_gas_used).into(),
             from: transaction.sender,
             to: match transaction.action {
                 Action::Create => None,
