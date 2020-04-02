@@ -7,6 +7,8 @@
 //! ## Features:
 //! - Delegate to a method with a different name
 //! ```rust
+//! use delegate::delegate;
+//!
 //! struct Stack {
 //!     inner: Vec<u32>,
 //! }
@@ -21,7 +23,8 @@
 //! ```
 //! - Use an arbitrary inner field expression
 //! ```rust
-//! use std::{cell::RefCell, rc::Rc};
+//! use delegate::delegate;
+//! use std::{cell::RefCell, ops::Deref, rc::Rc};
 //!
 //! struct Wrapper {
 //!     inner: Rc<RefCell<Vec<u32>>>,
@@ -37,6 +40,9 @@
 //! - Change the return type of the delegated method using a `From` impl or omit
 //!   it altogether
 //! ```rust
+//! use delegate::delegate;
+//! use std::convert as delegate_convert;
+//!
 //! struct Inner;
 //! impl Inner {
 //!     pub fn method(&self, num: u32) -> u32 { num }
@@ -47,10 +53,11 @@
 //! impl Wrapper {
 //!     delegate! {
 //!         to self.inner {
-//!             //! calls method, converts result to u64
+//!             // calls method, converts result to u64
+//!             #[into]
 //!             pub fn method(&self, num: u32) -> u64;
 //!
-//!             //! calls method, returns ()
+//!             // calls method, returns ()
 //!             #[call(method)]
 //!             pub fn method_noreturn(&self, num: u32);
 //!         }
@@ -59,6 +66,8 @@
 //! ```
 //! - Delegate to multiple fields
 //! ```rust
+//! use delegate::delegate;
+//!
 //! struct MultiStack {
 //!     left: Vec<u32>,
 //!     right: Vec<u32>,

@@ -810,8 +810,8 @@ impl CfxHandler {
     }
 }
 
-// In order to convert RpcResult return type from RpcImpl to BoxFuture
-// automatically with #[into] attribute.
+// Use the #[into] attribute to convert from RpcResult to BoxFuture
+// automatically.
 use crate::common::delegate_convert;
 impl Cfx for CfxHandler {
     delegate! {
