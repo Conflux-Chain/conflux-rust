@@ -5,6 +5,7 @@
 // Recursion limit raised for error_chain
 #![recursion_limit = "512"]
 #![allow(deprecated)]
+#![feature(matches_macro)]
 
 extern crate cfx_bytes as bytes;
 extern crate cfxkey as keylib;
