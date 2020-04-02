@@ -19,7 +19,7 @@ use crate::rpc::{
     },
 };
 use blockgen::BlockGenerator;
-use cfx_types::{H160, H256};
+use cfx_types::{H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
@@ -426,8 +426,9 @@ impl RpcImpl {
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
         if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
-            let (tx, receipt, tx_index) = info;
-            let rpc_receipt = RpcReceipt::new(tx.clone(), receipt, tx_index);
+            let (tx, receipt, tx_index, prior_gas_used) = info;
+            let rpc_receipt =
+                RpcReceipt::new(tx.clone(), receipt, tx_index, prior_gas_used);
             let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
             return Ok(Some(rpc_tx)).into_future().boxed();
         }
@@ -487,7 +488,18 @@ impl RpcImpl {
             .get(address.index)
             .ok_or(RpcError::internal_error())?
             .clone();
-        let mut rpc_receipt = RpcReceipt::new(transaction, receipt, address);
+        let prior_gas_used = if address.index == 0 {
+            U256::zero()
+        } else {
+            let prior_receipt = execution_result
+                .receipts
+                .get(address.index - 1)
+                .ok_or(RpcError::internal_error())?
+                .clone();
+            prior_receipt.gas_used
+        };
+        let mut rpc_receipt =
+            RpcReceipt::new(transaction, receipt, address, prior_gas_used);
         rpc_receipt.set_epoch_number(Some(epoch_number));
         rpc_receipt.set_state_root(state_root.into());
         Ok(Some(rpc_receipt))

@@ -58,7 +58,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
-    ) -> Option<(SignedTransaction, Receipt, TransactionIndex)>;
+    ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)>;
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64>;
 
