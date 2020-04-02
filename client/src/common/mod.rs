@@ -180,6 +180,7 @@ pub mod delegate_convert {
         fn into(x: Self) -> BoxFuture<T> { x.into_future().boxed() }
     }
 
+    /*
     /// It's a bad idea to convert a BoxFuture return type to a RpcResult
     /// return type for rpc call. Simply imagine how the code below runs.
     impl<T: Send + Sync + 'static> Into<RpcResult<T>> for BoxFuture<T> {
@@ -202,7 +203,7 @@ pub mod delegate_convert {
                 })?
         }
     }
-
+    */
 }
 
 pub use crate::configuration::Configuration;
