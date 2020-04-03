@@ -210,10 +210,24 @@ impl RpcImpl {
     }
 
     pub fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>> {
-        info!("RPC Request: cfx_getBlocks epoch_number={:?}", num);
+        info!("RPC Request: cfx_getBlocksByEpoch epoch_number={:?}", num);
 
         self.consensus
             .get_block_hashes_by_epoch(num.into())
+            .map_err(RpcError::invalid_params)
+            .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
+    }
+
+    pub fn skipped_blocks_by_epoch(
+        &self, num: EpochNumber,
+    ) -> RpcResult<Vec<RpcH256>> {
+        info!(
+            "RPC Request: cfx_getSkippedBlocksByEpoch epoch_number={:?}",
+            num
+        );
+
+        self.consensus
+            .get_skipped_block_hashes_by_epoch(num.into())
             .map_err(RpcError::invalid_params)
             .and_then(|vec| Ok(vec.into_iter().map(|x| x.into()).collect()))
     }

@@ -407,6 +407,22 @@ subcommands:
                         long: epoch
                         required: true
                         takes_value: true
+            - skipped-blocks:
+                  about: Get skipped blocks of specified epoch
+                  args:
+                      - rpc-method:
+                            default_value: cfx_getSkippedBlocksByEpoch
+                            hidden: true
+                      - rpc-args:
+                            multiple: true
+                            use_delimiter: true
+                            default_value: epoch
+                            hidden: true
+                      - epoch:
+                            help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                            long: epoch
+                            required: true
+                            takes_value: true
             - receipt:
                 about: Get receipt by transaction hash
                 args:

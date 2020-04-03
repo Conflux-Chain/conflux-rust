@@ -59,7 +59,7 @@ impl Handleable for GetBlockHashesByEpoch {
             .epochs
             .iter()
             .take(MAX_EPOCHS_TO_SEND as usize)
-            .map(|&e| ctx.manager.graph.get_block_hashes_by_epoch(e))
+            .map(|&e| ctx.manager.graph.get_all_block_hashes_by_epoch(e))
             .filter_map(Result::ok)
             .fold(vec![], |mut res, sub| {
                 res.extend(sub);
