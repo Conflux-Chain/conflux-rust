@@ -4,7 +4,6 @@
 
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, U256};
-use keylib::Error;
 use primitives::{
     transaction::Action, SignedTransaction, Transaction as PrimitiveTransaction,
 };
@@ -42,12 +41,12 @@ pub struct EstimateGasAndCollateralResponse {
 
 pub fn sign_call(
     epoch_height: u64, chain_id: u64, request: CallRequest,
-) -> Result<SignedTransaction, Error> {
+) -> SignedTransaction {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
     let from = request.from.unwrap_or_else(|| H160::random());
 
-    Ok(PrimitiveTransaction {
+    PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),
         action: request.to.map_or(Action::Create, Action::Call),
         gas,
@@ -58,7 +57,7 @@ pub fn sign_call(
         chain_id,
         data: request.data.unwrap_or_default().into_vec(),
     }
-    .fake_sign(from))
+    .fake_sign(from)
 }
 
 #[cfg(test)]
