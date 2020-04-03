@@ -27,7 +27,13 @@ transaction will be rejected as invalid.
 - Change the CLI interface subcommand from `debug` to `local`. Its
 functionality remains the same.
 
+- Add a RPC cfx_getSkippedBlocksByEpoch to query skipped blocks of an epoch
+
+- Add a corresponding CLI interface to query skipped blocks via local RPC
+
 ## Bug Fixes
+
+- Fix an issue that may cause the P2P layer to not propagate out-of-era blocks properly
 
 ## Improvements
 
