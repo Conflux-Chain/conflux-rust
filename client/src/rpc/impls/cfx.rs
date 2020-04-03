@@ -719,6 +719,12 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let caller = request.from.unwrap_or_default();
+        // FIXME: what's the definition of "exception" for the execution of this
+        // transaction? FIXME: How can a transaction fail to execute? Is
+        // it possible that a transaction FIXME: execution fail but
+        // still legit? We can not refuse to estimate gas for a legit
+        // transaction. FIXME: The transaction must have no side effect
+        // in order to be illegal.
         let success_executed = self.exec_transaction(request, epoch)?;
         let mut storage_collateralized = 0;
         for storage_change in &success_executed.storage_collateralized {
@@ -751,9 +757,10 @@ impl RpcImpl {
             consensus_graph.call_virtual(&signed_tx, epoch.into())?;
         match executed.exception {
             None => Ok(executed),
-            Some(exception) => {
-                bail!(execution_error(exception.to_string(), executed.output))
-            }
+            Some(exception) => bail!(call_execution_error(
+                exception.to_string(),
+                executed.output
+            )),
         }
     }
 

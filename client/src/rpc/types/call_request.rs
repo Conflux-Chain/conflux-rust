@@ -35,6 +35,7 @@ pub struct CallRequest {
 pub struct EstimateGasAndCollateralResponse {
     /// The amount of gas used in the execution.
     pub gas_used: U256,
+    // TODO: U64
     /// The number of bytes collateralized in the execution.
     pub storage_collateralized: U256,
 }
