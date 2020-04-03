@@ -796,6 +796,24 @@ impl BlockDataManager {
         }
     }
 
+    pub fn all_epoch_set_hashes_from_db(
+        &self, epoch_number: u64,
+    ) -> Option<Vec<H256>> {
+        if epoch_number != 0 {
+            let mut res = self
+                .db_manager
+                .skipped_epoch_set_hashes_from_db(epoch_number)?;
+            res.append(
+                &mut self
+                    .db_manager
+                    .executed_epoch_set_hashes_from_db(epoch_number)?,
+            );
+            Some(res)
+        } else {
+            Some(vec![self.true_genesis.hash()])
+        }
+    }
+
     /// Return `false` if there is no executed results for given `block_hash`
     pub fn receipts_retain_epoch(
         &self, block_hash: &H256, epoch: &H256,

@@ -1865,17 +1865,13 @@ impl SynchronizationGraph {
     pub fn get_all_block_hashes_by_epoch(
         &self, epoch_number: u64,
     ) -> Result<Vec<H256>, String> {
-        let mut skipped_blocks =
-            self.consensus.get_skipped_block_hashes_by_epoch(
-                EpochNumber::Number(epoch_number.into()),
-            )?;
-        let mut executed_blocks =
-            self.consensus
-                .get_block_hashes_by_epoch(EpochNumber::Number(
-                    epoch_number.into(),
-                ))?;
-        skipped_blocks.append(&mut executed_blocks);
-        Ok(skipped_blocks)
+        let mut res = self.consensus.get_skipped_block_hashes_by_epoch(
+            EpochNumber::Number(epoch_number.into()),
+        )?;
+        res.append(&mut self.consensus.get_block_hashes_by_epoch(
+            EpochNumber::Number(epoch_number.into()),
+        )?);
+        Ok(res)
     }
 
     pub fn log_statistics(&self) { self.statistics.log_statistics(); }
