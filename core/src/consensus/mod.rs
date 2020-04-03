@@ -550,6 +550,7 @@ impl ConsensusGraph {
         }
     }
 
+    // FIXME: H160::zero or Option<H160>
     /// Get the current admin of a contract
     pub fn get_admin(
         &self, address: H160, epoch_number: EpochNumber,

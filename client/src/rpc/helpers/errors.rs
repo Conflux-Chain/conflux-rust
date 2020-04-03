@@ -23,7 +23,7 @@ use std::fmt;
 use crate::rpc::types::Bytes;
 use jsonrpc_core::{Error, ErrorCode, Value};
 
-mod codes {
+pub mod codes {
     // NOTE [ToDr] Codes from [-32099, -32000]
     pub const UNSUPPORTED_REQUEST: i64 = -32000;
     pub const NO_WORK: i64 = -32001;
