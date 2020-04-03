@@ -930,7 +930,7 @@ impl ConsensusGraphInner {
         if self.arena[index].data.blockset_cleared {
             None
         } else {
-            Some(&self.arena[index].data.ordered_executable_epoch_blocks)
+            Some(&self.arena[index].data.skipped_epoch_blocks)
         }
     }
 
