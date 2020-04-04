@@ -129,7 +129,9 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
 
         let cost = match instruction {
             instructions::JUMPDEST => Request::Gas(Gas::from(1)),
-            instructions::SSTORE => Request::Gas(Gas::from(spec.sstore_reset_gas)),
+            instructions::SSTORE => {
+                Request::Gas(Gas::from(spec.sstore_reset_gas))
+            }
             instructions::SLOAD => Request::Gas(Gas::from(spec.sload_gas)),
             instructions::BALANCE => Request::Gas(Gas::from(spec.balance_gas)),
             instructions::EXTCODESIZE => {
