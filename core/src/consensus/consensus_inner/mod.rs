@@ -101,7 +101,8 @@ pub struct ConsensusGraphNodeData {
     ordered_executable_epoch_blocks: Vec<usize>,
     /// If an epoch has more than ``EPOCH_EXECUTED_BLOCK_BOUND''. We will only
     /// execute the last ``EPOCH_EXECUTED_BLOCK_BOUND'' and skip the
-    /// remaining.
+    /// remaining. The `skipped_epoch_blocks` also contain those blocks that
+    /// are not in the same era of the pivot block.
     skipped_epoch_blocks: Vec<usize>,
     /// It indicates whether `blockset_in_own_view_of_epoch` and
     /// `skipped_epoch_blocks` are cleared due to its size.
@@ -846,12 +847,12 @@ impl ConsensusGraphInner {
         }
 
         let mut filtered_blockset = HashSet::new();
-        let mut out_of_era_blocks = Vec::new();
+        let mut different_era_blocks = Vec::new();
         for idx in &self.arena[pivot].data.blockset_in_own_view_of_epoch {
             if self.is_same_era(*idx, pivot) {
                 filtered_blockset.insert(*idx);
             } else {
-                out_of_era_blocks.push(*idx);
+                different_era_blocks.push(*idx);
             }
         }
 
@@ -882,7 +883,7 @@ impl ConsensusGraphInner {
         self.arena[pivot]
             .data
             .skipped_epoch_blocks
-            .append(&mut out_of_era_blocks);
+            .append(&mut different_era_blocks);
         self.arena[pivot].data.blockset_cleared = false;
     }
 
