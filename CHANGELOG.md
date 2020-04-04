@@ -19,6 +19,16 @@ create a path Merkle of the same value as a node Merkle.
 is designed to battle DoS attacks about hiding and generating a lot of blocks
 suddenly.
 
+- Add storage_root support in Conflux MPT. In the current Conflux MPT design,
+the root node of this trie might not actually exist, as it might be in the
+middle of a compressed path, thus preventing us from computing the storage
+root. To provide a storage root (which can be used to check whether a
+contract's storage has changed or not), we have two options: 1) Define storage
+root as the Merkle root computed on the account node's children (i.e. ignoring
+the compressed path and value); 2) Force the storage root node to exist. This
+way, we can also store storage meta-information here, e.g. storage layout and
+layout version.
+
 You need to use new SDK tools to connect with the main chain, otherwise your
 transaction will be rejected as invalid. 
 
@@ -31,13 +41,18 @@ functionality remains the same.
 
 - Add a corresponding CLI interface to query skipped blocks via local RPC
 
+- Refactor RPC interface now most RPC takes HEX parameters and returns HEX
+
 ## Bug Fixes
 
 - Fix an issue that may cause the P2P layer to not propagate out-of-era blocks properly
 
+- Fix an issue that Conflux RPC may return incorrect estimate.
+
+- Fix an issue that virtual call RPC may fail if the caller does not have enough balance
+
 ## Improvements
 
-- Make the consensus layer to prioritize meaning blocks first. It will improve
-the overall performance in facing of DoS attacks. It will also prioritize
-self-mined blocks as a desirable effect.
-
+- Make the consensus layer to prioritize meaningful blocks first. It will
+improve the overall performance in facing of DoS attacks. It will also
+prioritize self-mined blocks as a desirable effect.
