@@ -518,6 +518,21 @@ impl ConsensusGraph {
         })
     }
 
+    /// Get storage root of a contract
+    pub fn get_storage_root(
+        &self, address: H160, epoch_number: EpochNumber,
+    ) -> Result<Option<H256>, String> {
+        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
+
+        match state_db.get_storage_root(&address) {
+            Ok(maybe_storage_hash) => Ok(maybe_storage_hash),
+            Err(e) => {
+                error!("db error occurred: {:?}", e);
+                Err("db error occurred".into())
+            }
+        }
+    }
+
     /// Get storage entry of a contract
     pub fn get_storage(
         &self, address: H160, position: H256, epoch_number: EpochNumber,

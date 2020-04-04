@@ -21,21 +21,20 @@ pub mod filter;
 pub mod log_entry;
 pub mod receipt;
 pub mod state_root;
+pub mod storage;
 pub mod storage_key;
 pub mod transaction;
 pub mod transaction_index;
 
 pub use crate::{
-    account::{
-        Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo,
-        StorageValue,
-    },
+    account::{Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo},
     block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
     log_entry::LogEntry,
     receipt::Receipt,
     state_root::*,
+    storage::{StorageLayout, StorageValue},
     storage_key::*,
     transaction::{
         Action, ChainIdParams, SignedTransaction, Transaction,

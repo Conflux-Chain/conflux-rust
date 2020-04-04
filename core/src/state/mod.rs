@@ -14,7 +14,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey, StorageValue};
+use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -729,16 +729,20 @@ impl State {
             self.db
                 .delete_all(StorageKey::new_code_root_key(&address))?;
             if let Some(storage_key_value) = storages_opt {
-                for (_, value) in storage_key_value {
-                    let storage_value =
-                        rlp::decode::<StorageValue>(value.as_ref())?;
-                    assert!(self
-                        .exists(&storage_value.owner)
-                        .expect("no db error"));
-                    self.sub_collateral_for_storage(
-                        &storage_value.owner,
-                        &COLLATERAL_PER_STORAGE_KEY,
-                    )?;
+                for (key, value) in storage_key_value {
+                    if let StorageKey::StorageKey { .. } =
+                        StorageKey::from_delta_mpt_key(&key[..])
+                    {
+                        let storage_value =
+                            rlp::decode::<StorageValue>(value.as_ref())?;
+                        assert!(self
+                            .exists(&storage_value.owner)
+                            .expect("no db error"));
+                        self.sub_collateral_for_storage(
+                            &storage_value.owner,
+                            &COLLATERAL_PER_STORAGE_KEY,
+                        )?;
+                    }
                 }
             }
         }
@@ -1022,6 +1026,26 @@ impl State {
         if self.storage_at(address, &key)? != value {
             self.require(address, false)?.set_storage(key, value, owner)
         }
+        Ok(())
+    }
+
+    pub fn set_storage_layout(
+        &mut self, address: &Address, layout: StorageLayout,
+    ) -> DbResult<()> {
+        self.require_or_from(
+            address,
+            false,
+            || {
+                OverlayAccount::new_contract(
+                    address,
+                    0.into(),
+                    self.account_start_nonce,
+                    false,
+                )
+            },
+            |_| {},
+        )?
+        .set_storage_layout(layout);
         Ok(())
     }
 
