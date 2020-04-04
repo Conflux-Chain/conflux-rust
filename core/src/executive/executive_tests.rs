@@ -101,7 +101,7 @@ fn test_sender_balance() {
         ex.create(params, &mut substate).unwrap()
     };
 
-    assert_eq!(gas_left, U256::from(79_595));
+    assert_eq!(gas_left, U256::from(94_595));
     assert_eq!(
         state.storage_at(&address, &H256::zero()).unwrap(),
         BigEndianHash::from_uint(
@@ -289,7 +289,7 @@ fn test_call_to_create() {
         *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
     );
 
-    assert_eq!(gas_left, U256::from(44_752));
+    assert_eq!(gas_left, U256::from(59_752));
 }
 
 #[test]
@@ -352,7 +352,7 @@ fn test_revert() {
     (&mut output)
         .copy_from_slice(&return_data[..(cmp::min(14, return_data.len()))]);
 
-    assert_eq!(result, U256::from(1));
+    assert_eq!(result, U256::from(15_001));
     assert_eq!(output[..], returns[..]);
     assert_eq!(
         state
@@ -1345,7 +1345,7 @@ fn test_storage_commission_privilege() {
         state.sponsor_balance_for_collateral(&address).unwrap(),
         *COLLATERAL_PER_STORAGE_KEY,
     );
-    assert_eq!(gas_left, U256::from(79983));
+    assert_eq!(gas_left, U256::from(94_983));
     assert_eq!(substate.contracts_created.len(), 0);
     assert_eq!(
         state.balance(&address).unwrap(),
