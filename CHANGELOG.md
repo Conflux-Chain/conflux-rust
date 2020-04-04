@@ -19,15 +19,10 @@ create a path Merkle of the same value as a node Merkle.
 is designed to battle DoS attacks about hiding and generating a lot of blocks
 suddenly.
 
-- Add storage_root support in Conflux MPT. In the current Conflux MPT design,
-the root node of this trie might not actually exist, as it might be in the
-middle of a compressed path, thus preventing us from computing the storage
-root. To provide a storage root (which can be used to check whether a
-contract's storage has changed or not), we have two options: 1) Define storage
-root as the Merkle root computed on the account node's children (i.e. ignoring
-the compressed path and value); 2) Force the storage root node to exist. This
-way, we can also store storage meta-information here, e.g. storage layout and
-layout version.
+- Add storage_root support in Conflux MPT. Define storage root as the Merkle
+root computed on the account's storage subtree root node, ignoring the
+compressed path; 2) force the storage root node to existing by setting a
+StorageLayout value at the storage node. 
 
 You need to use new SDK tools to connect with the main chain, otherwise your
 transaction will be rejected as invalid. 
