@@ -379,7 +379,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<RpcH256>> {
+    ) -> RpcResult<Option<RpcH256>> {
         let address: H160 = address.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -398,8 +398,6 @@ impl RpcImpl {
             .get_storage_root(address, epoch_num.into())
             .map(|maybe_hash| maybe_hash.map(Into::into))
             .map_err(RpcError::invalid_params)
-            .into_future()
-            .boxed()
     }
 
     fn send_usable_genesis_accounts(
@@ -969,6 +967,7 @@ impl LocalRpc for LocalRpcImpl {
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
             #[into]
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
+            #[into]
             fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
     }
