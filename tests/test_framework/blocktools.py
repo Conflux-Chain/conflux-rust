@@ -84,6 +84,7 @@ def wait_for_initial_nonce_for_privkey(node, key, timeout=10):
 
 
 def wait_for_initial_nonce_for_address(node, addr, timeout=10):
+    return 0
     addr = encode_hex_0x(addr)
     if addr == encode_hex_0x(priv_to_addr(default_config["GENESIS_PRI_KEY"])).lower():
         return 0
