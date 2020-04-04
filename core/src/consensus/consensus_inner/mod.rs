@@ -101,7 +101,8 @@ pub struct ConsensusGraphNodeData {
     ordered_executable_epoch_blocks: Vec<usize>,
     /// If an epoch has more than ``EPOCH_EXECUTED_BLOCK_BOUND''. We will only
     /// execute the last ``EPOCH_EXECUTED_BLOCK_BOUND'' and skip the
-    /// remaining.
+    /// remaining. The `skipped_epoch_blocks` also contain those blocks that
+    /// are not in the same era of the pivot block.
     skipped_epoch_blocks: Vec<usize>,
     /// It indicates whether `blockset_in_own_view_of_epoch` and
     /// `skipped_epoch_blocks` are cleared due to its size.
@@ -446,7 +447,6 @@ pub struct ConsensusGraphInner {
     anticone_cache: AnticoneCache,
     pastset_cache: PastSetCache,
     sequence_number_of_block_entrance: u64,
-    last_recycled_era_block: usize,
     /// Block set of each old era. It will garbage collected by sync graph via
     /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
     /// which blocks it can safely remove
@@ -558,8 +558,6 @@ impl ConsensusGraphInner {
             anticone_cache: AnticoneCache::new(),
             pastset_cache: Default::default(),
             sequence_number_of_block_entrance: 0,
-            // TODO handle checkpoint in recovery
-            last_recycled_era_block: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
         };
 
@@ -637,7 +635,7 @@ impl ConsensusGraphInner {
         inner
     }
 
-    fn persist_epoch_set_hashes(&self, pivot_index: usize) {
+    fn persist_epoch_set_hashes(&mut self, pivot_index: usize) {
         let height = self.pivot_index_to_height(pivot_index);
         let arena_index = self.pivot_chain[pivot_index];
         let epoch_set_hashes = self
@@ -645,8 +643,16 @@ impl ConsensusGraphInner {
             .iter()
             .map(|arena_index| self.arena[*arena_index].hash)
             .collect();
+        let skipped_set_hashes = self
+            .get_or_compute_skipped_epoch_blocks(arena_index)
+            .clone()
+            .iter()
+            .map(|arena_index| self.arena[*arena_index].hash)
+            .collect();
         self.data_man
-            .insert_epoch_set_hashes_to_db(height, &epoch_set_hashes);
+            .insert_executed_epoch_set_hashes_to_db(height, &epoch_set_hashes);
+        self.data_man
+            .insert_skipped_epoch_set_hashes_to_db(height, &skipped_set_hashes);
     }
 
     #[inline]
@@ -840,13 +846,15 @@ impl ConsensusGraphInner {
             self.compute_blockset_in_own_view_of_epoch_impl(lca, pivot);
         }
 
-        let filtered_blockset = self.arena[pivot]
-            .data
-            .blockset_in_own_view_of_epoch
-            .iter()
-            .filter(|idx| self.is_same_era(**idx, pivot))
-            .map(|idx| *idx)
-            .collect();
+        let mut filtered_blockset = HashSet::new();
+        let mut different_era_blocks = Vec::new();
+        for idx in &self.arena[pivot].data.blockset_in_own_view_of_epoch {
+            if self.is_same_era(*idx, pivot) {
+                filtered_blockset.insert(*idx);
+            } else {
+                different_era_blocks.push(*idx);
+            }
+        }
 
         self.arena[pivot].data.ordered_executable_epoch_blocks =
             self.topological_sort(&filtered_blockset);
@@ -872,6 +880,10 @@ impl ConsensusGraphInner {
         } else {
             self.arena[pivot].data.skipped_epoch_blocks = Default::default();
         }
+        self.arena[pivot]
+            .data
+            .skipped_epoch_blocks
+            .append(&mut different_era_blocks);
         self.arena[pivot].data.blockset_cleared = false;
     }
 
@@ -910,6 +922,17 @@ impl ConsensusGraphInner {
             self.compute_blockset_in_own_view_of_epoch(index);
         }
         &self.arena[index].data.skipped_epoch_blocks
+    }
+
+    #[inline]
+    pub fn get_skipped_epoch_blocks(
+        &self, index: usize,
+    ) -> Option<&Vec<usize>> {
+        if self.arena[index].data.blockset_cleared {
+            None
+        } else {
+            Some(&self.arena[index].data.skipped_epoch_blocks)
+        }
     }
 
     fn get_blame(&self, arena_index: usize) -> u32 {
@@ -1982,7 +2005,7 @@ impl ConsensusGraphInner {
                 Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
             }
         } else {
-            self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
+            self.data_man.executed_epoch_set_hashes_from_db(epoch_number).ok_or(
                 format!("get_hash_from_epoch_number: Epoch hash set not in db, epoch_number={}", epoch_number).into()
             ).and_then(|epoch_hashes|
                 epoch_hashes.last().map(Clone::clone).ok_or("Epoch set is empty".into())
@@ -2007,30 +2030,75 @@ impl ConsensusGraphInner {
             epoch_number,
             self.pivot_chain.len()
         );
+
+        let e;
+        // We first try to get it from the consensus. Note that we cannot use
+        // the info for the genesis because it may contain out-of-era
+        // blocks that is not maintained anymore.
         match self.get_arena_index_from_epoch_number(epoch_number) {
             Ok(pivot_arena_index) => {
-                if pivot_arena_index == self.cur_era_genesis_block_arena_index {
-                    self.data_man
-                        .epoch_set_hashes_from_db(epoch_number)
-                        .ok_or("Fail to load the epoch set for current era genesis in db".into())
-                } else {
-                    Ok(self
+                if pivot_arena_index != self.cur_era_genesis_block_arena_index {
+                    return Ok(self
                         .get_ordered_executable_epoch_blocks(pivot_arena_index)
                         .iter()
                         .map(|index| self.arena[*index].hash)
-                        .collect())
+                        .collect());
                 }
+                e = "Epoch set of the current genesis is not maintained".into();
             }
-            Err(e) => {
-                self.data_man.epoch_set_hashes_from_db(epoch_number).ok_or(
-                    format!(
-                        "Epoch set not in db epoch_number={}, in mem err={:?}",
-                        epoch_number, e
-                    )
-                    .into(),
-                )
-            }
+            Err(err) => e = err,
         }
+
+        self.data_man
+            .executed_epoch_set_hashes_from_db(epoch_number)
+            .ok_or(
+                format!(
+                    "Epoch set not in db epoch_number={}, in mem err={:?}",
+                    epoch_number, e
+                )
+                .into(),
+            )
+    }
+
+    pub fn skipped_block_hashes_by_epoch(
+        &self, epoch_number: u64,
+    ) -> Result<Vec<H256>, String> {
+        debug!(
+            "skipped_block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}",
+            epoch_number,
+            self.pivot_chain.len()
+        );
+
+        let e;
+        // We first try to get it from the consensus. Note that we cannot use
+        // the info for the genesis because it may contain out-of-era
+        // blocks that is not maintained anymore.
+        match self.get_arena_index_from_epoch_number(epoch_number) {
+            Ok(pivot_arena_index) => {
+                if pivot_arena_index != self.cur_era_genesis_block_arena_index {
+                    if let Some(skipped_block_set) =
+                        self.get_skipped_epoch_blocks(pivot_arena_index)
+                    {
+                        return Ok(skipped_block_set
+                            .iter()
+                            .map(|index| self.arena[*index].hash)
+                            .collect());
+                    }
+                }
+                e = "Skipped epoch set of the current genesis is not maintained".into();
+            }
+            Err(err) => e = err,
+        }
+
+        self.data_man
+            .skipped_epoch_set_hashes_from_db(epoch_number)
+            .ok_or(
+                format!(
+                "Skipped epoch set not in db epoch_number={}, in mem err={:?}",
+                epoch_number, e
+            )
+                .into(),
+            )
     }
 
     fn get_epoch_hash_for_block(&self, hash: &H256) -> Option<H256> {

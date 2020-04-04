@@ -738,7 +738,7 @@ impl ConsensusGraph {
                     // the epoch set from db
                     let epoch_set = self
                         .data_man
-                        .epoch_set_hashes_from_db(epoch_number)
+                        .executed_epoch_set_hashes_from_db(epoch_number)
                         .expect("epoch set past checkpoint should exist");
                     let epoch_hash = epoch_set.last().expect("Not empty");
                     for hash in &epoch_set {
@@ -1055,6 +1055,17 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
                 self.inner.read_recursive().block_hashes_by_epoch(height)
+            })
+    }
+
+    fn get_skipped_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| {
+                self.inner
+                    .read_recursive()
+                    .skipped_block_hashes_by_epoch(height)
             })
     }
 

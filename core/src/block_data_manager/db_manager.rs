@@ -22,6 +22,8 @@ const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
 const BLOCK_EXECUTION_RESULT_SUFFIX_BYTE: u8 = 3;
 const EPOCH_EXECUTION_CONTEXT_SUFFIX_BYTE: u8 = 4;
 const EPOCH_CONSENSUS_EXECUTION_INFO_SUFFIX_BYTE: u8 = 5;
+const EPOCH_EXECUTED_BLOCK_SET_SUFFIX_BYTE: u8 = 6;
+const EPOCH_SKIPPED_BLOCK_SET_SUFFIX_BYTE: u8 = 7;
 
 #[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
 enum DBTable {
@@ -245,20 +247,41 @@ impl DBManager {
         Some((checkpoints.prev_hash, checkpoints.cur_hash))
     }
 
-    pub fn insert_epoch_set_hashes_to_db(
-        &self, epoch: u64, hashes: &Vec<H256>,
+    pub fn insert_executed_epoch_set_hashes_to_db(
+        &self, epoch: u64, executed_hashes: &Vec<H256>,
     ) {
         self.insert_encodable_list(
             DBTable::EpochNumbers,
-            &epoch_set_key(epoch)[0..8],
-            hashes,
+            &executed_epoch_set_key(epoch)[0..9],
+            executed_hashes,
         );
     }
 
-    pub fn epoch_set_hashes_from_db(&self, epoch: u64) -> Option<Vec<H256>> {
+    pub fn insert_skipped_epoch_set_hashes_to_db(
+        &self, epoch: u64, skipped_hashes: &Vec<H256>,
+    ) {
+        self.insert_encodable_list(
+            DBTable::EpochNumbers,
+            &skipped_epoch_set_key(epoch)[0..9],
+            skipped_hashes,
+        );
+    }
+
+    pub fn executed_epoch_set_hashes_from_db(
+        &self, epoch: u64,
+    ) -> Option<Vec<H256>> {
         self.load_decodable_list(
             DBTable::EpochNumbers,
-            &epoch_set_key(epoch)[0..8],
+            &executed_epoch_set_key(epoch)[0..9],
+        )
+    }
+
+    pub fn skipped_epoch_set_hashes_from_db(
+        &self, epoch: u64,
+    ) -> Option<Vec<H256>> {
+        self.load_decodable_list(
+            DBTable::EpochNumbers,
+            &skipped_epoch_set_key(epoch)[0..9],
         )
     }
 
@@ -397,9 +420,17 @@ fn block_body_key(block_hash: &H256) -> Vec<u8> {
     append_suffix(block_hash, BLOCK_BODY_SUFFIX_BYTE)
 }
 
-fn epoch_set_key(epoch_number: u64) -> [u8; 8] {
-    let mut epoch_key = [0; 8];
+fn executed_epoch_set_key(epoch_number: u64) -> [u8; 9] {
+    let mut epoch_key = [0; 9];
     LittleEndian::write_u64(&mut epoch_key[0..8], epoch_number);
+    epoch_key[8] = EPOCH_EXECUTED_BLOCK_SET_SUFFIX_BYTE;
+    epoch_key
+}
+
+fn skipped_epoch_set_key(epoch_number: u64) -> [u8; 9] {
+    let mut epoch_key = [0; 9];
+    LittleEndian::write_u64(&mut epoch_key[0..8], epoch_number);
+    epoch_key[8] = EPOCH_SKIPPED_BLOCK_SET_SUFFIX_BYTE;
     epoch_key
 }
 

@@ -760,18 +760,55 @@ impl BlockDataManager {
         self.db_manager.terminals_from_db()
     }
 
-    pub fn insert_epoch_set_hashes_to_db(
+    pub fn insert_executed_epoch_set_hashes_to_db(
         &self, epoch_number: u64, epoch_set: &Vec<H256>,
     ) {
         self.db_manager
-            .insert_epoch_set_hashes_to_db(epoch_number, epoch_set)
+            .insert_executed_epoch_set_hashes_to_db(epoch_number, epoch_set);
     }
 
-    pub fn epoch_set_hashes_from_db(
+    pub fn insert_skipped_epoch_set_hashes_to_db(
+        &self, epoch_number: u64, skipped_set: &Vec<H256>,
+    ) {
+        self.db_manager
+            .insert_skipped_epoch_set_hashes_to_db(epoch_number, skipped_set);
+    }
+
+    pub fn executed_epoch_set_hashes_from_db(
         &self, epoch_number: u64,
     ) -> Option<Vec<H256>> {
         if epoch_number != 0 {
-            self.db_manager.epoch_set_hashes_from_db(epoch_number)
+            self.db_manager
+                .executed_epoch_set_hashes_from_db(epoch_number)
+        } else {
+            Some(vec![self.true_genesis.hash()])
+        }
+    }
+
+    pub fn skipped_epoch_set_hashes_from_db(
+        &self, epoch_number: u64,
+    ) -> Option<Vec<H256>> {
+        if epoch_number != 0 {
+            self.db_manager
+                .skipped_epoch_set_hashes_from_db(epoch_number)
+        } else {
+            Some(vec![])
+        }
+    }
+
+    pub fn all_epoch_set_hashes_from_db(
+        &self, epoch_number: u64,
+    ) -> Option<Vec<H256>> {
+        if epoch_number != 0 {
+            let mut res = self
+                .db_manager
+                .skipped_epoch_set_hashes_from_db(epoch_number)?;
+            res.append(
+                &mut self
+                    .db_manager
+                    .executed_epoch_set_hashes_from_db(epoch_number)?,
+            );
+            Some(res)
         } else {
             Some(vec![self.true_genesis.hash()])
         }
