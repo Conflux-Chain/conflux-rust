@@ -16,7 +16,7 @@ use crate::{
     },
 };
 use cfx_types::{Address, H256, U256};
-use primitives::transaction::UNSIGNED_SENDER;
+use primitives::{transaction::UNSIGNED_SENDER, StorageLayout};
 use std::sync::Arc;
 
 /// Policy for handling output data on `RETURN` opcode.
@@ -358,11 +358,18 @@ impl<'a> ContextTrait for Context<'a> {
                     &self.origin.original_sender,
                     &collateral_for_code,
                 )?;
+
                 self.state.init_code(
                     &self.origin.address,
                     data.to_vec(),
                     self.origin.original_sender,
                 )?;
+
+                self.state.set_storage_layout(
+                    &self.origin.address,
+                    StorageLayout::Regular(0),
+                )?;
+
                 Ok(*gas - return_cost)
             }
             OutputPolicy::InitContract => Ok(*gas),

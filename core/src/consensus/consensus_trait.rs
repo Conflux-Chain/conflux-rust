@@ -56,6 +56,10 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String>;
 
+    fn get_skipped_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String>;
+
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, Receipt, TransactionIndex, U256)>;

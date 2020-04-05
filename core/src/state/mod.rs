@@ -14,7 +14,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, EpochId, StorageKey, StorageValue};
+use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
 use std::{
     cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -30,7 +30,7 @@ mod account_entry;
 mod substate;
 
 pub use self::{account_entry::OverlayAccount, substate::Substate};
-use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
+//use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -97,9 +97,12 @@ impl State {
             db.get_total_staking_tokens().expect("No db error");
         let total_storage_tokens =
             db.get_total_storage_tokens().expect("No db error");
+        /*
         let account_start_nonce = (block_number
             * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64)
             .into();
+        */
+        let account_start_nonce = 0.into();
         State {
             db,
             cache: RefCell::new(HashMap::new()),
@@ -123,8 +126,8 @@ impl State {
     pub fn increase_block_number(&mut self) -> U256 {
         assert!(self.staking_state_checkpoints.borrow().is_empty());
         self.block_number += 1;
-        self.account_start_nonce +=
-            ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
+        //self.account_start_nonce +=
+        //    ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
         self.staking_state.accumulate_interest_rate =
             self.staking_state.accumulate_interest_rate
                 * (*INTEREST_RATE_PER_BLOCK_SCALE
@@ -726,16 +729,20 @@ impl State {
             self.db
                 .delete_all(StorageKey::new_code_root_key(&address))?;
             if let Some(storage_key_value) = storages_opt {
-                for (_, value) in storage_key_value {
-                    let storage_value =
-                        rlp::decode::<StorageValue>(value.as_ref())?;
-                    assert!(self
-                        .exists(&storage_value.owner)
-                        .expect("no db error"));
-                    self.sub_collateral_for_storage(
-                        &storage_value.owner,
-                        &COLLATERAL_PER_STORAGE_KEY,
-                    )?;
+                for (key, value) in storage_key_value {
+                    if let StorageKey::StorageKey { .. } =
+                        StorageKey::from_delta_mpt_key(&key[..])
+                    {
+                        let storage_value =
+                            rlp::decode::<StorageValue>(value.as_ref())?;
+                        assert!(self
+                            .exists(&storage_value.owner)
+                            .expect("no db error"));
+                        self.sub_collateral_for_storage(
+                            &storage_value.owner,
+                            &COLLATERAL_PER_STORAGE_KEY,
+                        )?;
+                    }
                 }
             }
         }
@@ -1019,6 +1026,26 @@ impl State {
         if self.storage_at(address, &key)? != value {
             self.require(address, false)?.set_storage(key, value, owner)
         }
+        Ok(())
+    }
+
+    pub fn set_storage_layout(
+        &mut self, address: &Address, layout: StorageLayout,
+    ) -> DbResult<()> {
+        self.require_or_from(
+            address,
+            false,
+            || {
+                OverlayAccount::new_contract(
+                    address,
+                    0.into(),
+                    self.account_start_nonce,
+                    false,
+                )
+            },
+            |_| {},
+        )?
+        .set_storage_layout(layout);
         Ok(())
     }
 

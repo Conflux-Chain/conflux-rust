@@ -10,7 +10,7 @@ use crate::{
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use primitives::{
     Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo, StorageKey,
-    StorageValue,
+    StorageLayout, StorageValue,
 };
 use rlp::RlpStream;
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
@@ -47,9 +47,13 @@ pub struct OverlayAccount {
     // This is a cache for storage change.
     storage_cache: RefCell<HashMap<H256, H256>>,
     storage_changes: HashMap<H256, H256>,
+
     // This is a cache for storage ownership change.
     ownership_cache: RefCell<HashMap<H256, Option<Address>>>,
     ownership_changes: HashMap<H256, Address>,
+
+    // Storage layout change.
+    storage_layout_change: Option<StorageLayout>,
 
     // This is the number of tokens used in staking.
     staking_balance: U256,
@@ -93,6 +97,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            storage_layout_change: None,
             staking_balance: account.staking_balance,
             withdrawable_staking_balance: 0.into(),
             collateral_for_storage: account.collateral_for_storage,
@@ -143,6 +148,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            storage_layout_change: None,
             staking_balance: 0.into(),
             withdrawable_staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -171,6 +177,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            storage_layout_change: None,
             staking_balance: 0.into(),
             withdrawable_staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -201,6 +208,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            storage_layout_change: None,
             staking_balance: 0.into(),
             withdrawable_staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -566,6 +574,7 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            storage_layout_change: None,
             staking_balance: self.staking_balance,
             withdrawable_staking_balance: self.withdrawable_staking_balance,
             collateral_for_storage: self.collateral_for_storage,
@@ -587,12 +596,17 @@ impl OverlayAccount {
         account.storage_cache = self.storage_cache.clone();
         account.ownership_cache = self.ownership_cache.clone();
         account.ownership_changes = self.ownership_changes.clone();
+        account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
 
     pub fn set_storage(&mut self, key: H256, value: H256, owner: Address) {
         self.storage_changes.insert(key, value);
         self.ownership_changes.insert(key, owner);
+    }
+
+    pub fn set_storage_layout(&mut self, layout: StorageLayout) {
+        self.storage_layout_change = Some(layout);
     }
 
     pub fn cached_storage_at(&self, key: &H256) -> Option<H256> {
@@ -689,6 +703,7 @@ impl OverlayAccount {
         self.storage_changes = other.storage_changes;
         self.ownership_cache = other.ownership_cache;
         self.ownership_changes = other.ownership_changes;
+        self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.withdrawable_staking_balance = other.withdrawable_staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
@@ -807,6 +822,7 @@ impl OverlayAccount {
                 )?,
             }
         }
+
         match self.code() {
             None => {}
             Some(code) => {
@@ -824,6 +840,11 @@ impl OverlayAccount {
                     )?;
                 }
             }
+        }
+
+        if let Some(ref layout) = self.storage_layout_change {
+            let key = StorageKey::new_storage_root_key(&self.address);
+            db.set_raw(key, layout.to_bytes().into_boxed_slice())?;
         }
 
         Ok(())

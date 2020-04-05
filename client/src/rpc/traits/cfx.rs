@@ -157,6 +157,11 @@ pub trait Cfx {
         &self, epoch_number: EpochNumber,
     ) -> RpcResult<Vec<RpcH256>>;
 
+    #[rpc(name = "cfx_getSkippedBlocksByEpoch")]
+    fn skipped_blocks_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> RpcResult<Vec<RpcH256>>;
+
     #[rpc(name = "cfx_getTransactionReceipt")]
     fn transaction_receipt(
         &self, tx_hash: RpcH256,

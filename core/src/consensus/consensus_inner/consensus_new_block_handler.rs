@@ -859,39 +859,6 @@ impl ConsensusNewBlockHandler {
         self.txpool.recycle_transactions(block.transactions.clone());
     }
 
-    /// This recycles txs in all blocks outside the era represented by the era
-    /// block.
-    fn recycle_tx_outside_era(
-        &self, inner: &mut ConsensusGraphInner, era_block: usize,
-    ) {
-        let mut anticone_tmp = HashSet::new();
-        let anticone = if let Some(x) = inner.anticone_cache.get(era_block) {
-            x
-        } else {
-            let anticone_bitset =
-                ConsensusNewBlockHandler::compute_anticone_bruteforce(
-                    inner, era_block,
-                );
-            for idx in anticone_bitset.iter() {
-                anticone_tmp.insert(idx as usize);
-            }
-            &anticone_tmp
-        };
-
-        for idx in anticone.iter() {
-            self.recycle_tx_in_block(inner, *idx);
-        }
-
-        let future = inner.compute_future_bitset(era_block);
-        for idx in future.iter() {
-            let index = idx as usize;
-            let lca = inner.lca(index, era_block);
-            if lca != era_block {
-                self.recycle_tx_in_block(inner, index);
-            }
-        }
-    }
-
     fn should_move_stable_height(
         &self, inner: &mut ConsensusGraphInner,
     ) -> u64 {
@@ -1517,10 +1484,6 @@ impl ConsensusNewBlockHandler {
         // value will become obsolete
         let old_pivot_chain_height =
             inner.pivot_index_to_height(old_pivot_chain_len);
-        let new_pivot_era_block = inner.get_era_genesis_block_with_parent(
-            *inner.pivot_chain.last().unwrap(),
-        );
-        let new_era_height = inner.arena[new_pivot_era_block].height;
 
         if inner.best_epoch_number() > inner.cur_era_stable_height
             && inner.arena
@@ -1669,13 +1632,6 @@ impl ConsensusNewBlockHandler {
             if era_block == cur_pivot_era_block {
                 self.txpool
                     .set_tx_packed(&block_body_opt.expect("Already checked"));
-            }
-            if new_era_height + RECYCLE_TRANSACTION_DELAY
-                < inner.pivot_index_to_height(inner.pivot_chain.len())
-                && inner.last_recycled_era_block != new_pivot_era_block
-            {
-                self.recycle_tx_outside_era(inner, new_pivot_era_block);
-                inner.last_recycled_era_block = new_pivot_era_block;
             }
 
             if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {

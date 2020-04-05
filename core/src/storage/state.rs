@@ -41,10 +41,14 @@ pub trait StateTrait {
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
     fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
     fn revert(&mut self);
+
+    fn get_merkle_hash_wo_compressed_path(
+        &self, access_key: StorageKey,
+    ) -> Result<Option<MerkleHash>>;
 }
 
 use super::{
     impls::{errors::*, state_proof::StateProof},
     StateRootWithAuxInfo,
 };
-use primitives::{EpochId, StorageKey};
+use primitives::{EpochId, MerkleHash, StorageKey};

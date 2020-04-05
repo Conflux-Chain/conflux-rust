@@ -636,7 +636,7 @@ impl SynchronizationProtocolHandler {
             let from = cmp::max(my_best_epoch, *latest_requested) + 1;
             // Check epochs from db
             if let Some(epoch_hashes) =
-                self.graph.data_man.epoch_set_hashes_from_db(from)
+                self.graph.data_man.all_epoch_set_hashes_from_db(from)
             {
                 debug!("Recovered epoch {} from db", from);
                 // FIXME better handle this in our event loop separately

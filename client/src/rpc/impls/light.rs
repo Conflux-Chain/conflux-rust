@@ -344,6 +344,14 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
+    #[allow(unused_variables)]
+    fn storage_root(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> BoxFuture<Option<RpcH256>> {
+        // TODO(thegaram)
+        unimplemented!();
+    }
+
     fn storage_at(
         &self, address: RpcH160, position: RpcH256,
         epoch_num: Option<EpochNumber>,
@@ -451,6 +459,7 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: RpcH256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
+            fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
@@ -559,6 +568,7 @@ impl LocalRpc for DebugRpcImpl {
 
         to self.rpc_impl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
     }
 

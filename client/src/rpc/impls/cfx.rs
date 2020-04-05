@@ -377,6 +377,29 @@ impl RpcImpl {
             .and_then(|tx| self.send_transaction_with_signature(tx))
     }
 
+    fn storage_root(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<Option<RpcH256>> {
+        let address: H160 = address.into();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+
+        info!(
+            "RPC Request: storage_hash address={:?} epoch_num={:?}",
+            address, epoch_num
+        );
+
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+
+        consensus_graph
+            .get_storage_root(address, epoch_num.into())
+            .map(|maybe_hash| maybe_hash.map(Into::into))
+            .map_err(RpcError::invalid_params)
+    }
+
     fn send_usable_genesis_accounts(
         &self, account_start_index: usize,
     ) -> RpcResult<Bytes> {
@@ -821,6 +844,7 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: RpcH256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
+            fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
@@ -943,6 +967,8 @@ impl LocalRpc for LocalRpcImpl {
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
             #[into]
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
+            #[into]
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
     }
 }

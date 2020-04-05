@@ -360,7 +360,7 @@ impl Provider {
             .epochs
             .iter()
             .take(MAX_EPOCHS_TO_SEND)
-            .filter_map(|&e| self.graph.get_block_hashes_by_epoch(e).ok())
+            .filter_map(|&e| self.graph.get_all_block_hashes_by_epoch(e).ok())
             .fold(vec![], |mut res, sub| {
                 res.extend(sub);
                 res

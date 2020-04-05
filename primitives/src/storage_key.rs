@@ -5,7 +5,7 @@
 // The original StorageKeys unprocessed, in contrary to StorageKey which is
 // processed to use in DeltaMpt.
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StorageKey<'a> {
     AccountKey(&'a [u8]),
     StorageRootKey(&'a [u8]),
@@ -421,14 +421,13 @@ mod delta_mpt_storage_key {
                 }
                 remaining_bytes = &remaining_bytes[ACCOUNT_KEYPART_BYTES..];
                 if remaining_bytes.starts_with(Self::STORAGE_PREFIX) {
-                    let bytes = &remaining_bytes[KEY_PADDING_BYTES..];
-                    if bytes.len() > 0 {
+                    if remaining_bytes.len() == Self::STORAGE_PREFIX_LEN {
+                        StorageKey::StorageRootKey(address_bytes)
+                    } else {
                         StorageKey::StorageKey {
                             address_bytes,
-                            storage_key: bytes,
+                            storage_key: &remaining_bytes[KEY_PADDING_BYTES..],
                         }
-                    } else {
-                        StorageKey::StorageRootKey(address_bytes)
                     }
                 } else if remaining_bytes.starts_with(Self::CODE_HASH_PREFIX) {
                     let bytes = &remaining_bytes[Self::CODE_HASH_PREFIX_LEN..];
@@ -465,3 +464,86 @@ use std::{
     ops::{Deref, DerefMut},
     vec::Vec,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::{delta_mpt_storage_key::*, DeltaMptKeyPadding, StorageKey};
+    use cfx_types::{Address, H256};
+
+    #[test]
+    fn test_delta_mpt_account_key() {
+        let padding = DeltaMptKeyPadding([0; KEY_PADDING_BYTES]);
+
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        let key = StorageKey::new_account_key(&address);
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+    }
+
+    #[test]
+    fn test_delta_mpt_storage_root_key() {
+        let padding = DeltaMptKeyPadding([0; KEY_PADDING_BYTES]);
+
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        let key = StorageKey::new_storage_root_key(&address);
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+    }
+
+    #[test]
+    fn test_delta_mpt_storage_key() {
+        let padding = DeltaMptKeyPadding([0; KEY_PADDING_BYTES]);
+
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        let storage_key = &[99; 32];
+
+        let key = StorageKey::new_storage_key(&address, storage_key);
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+    }
+
+    #[test]
+    fn test_delta_mpt_code_root_key() {
+        let padding = DeltaMptKeyPadding([0; KEY_PADDING_BYTES]);
+
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        let key = StorageKey::new_code_root_key(&address);
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+    }
+
+    #[test]
+    fn test_delta_mpt_code_key() {
+        let padding = DeltaMptKeyPadding([0; KEY_PADDING_BYTES]);
+
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        let code_hash =
+            "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec66d2d6c7b5ec66d2d6c7b5ec6"
+                .parse::<H256>()
+                .unwrap();
+
+        let key = StorageKey::new_code_key(&address, &code_hash);
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+    }
+}
