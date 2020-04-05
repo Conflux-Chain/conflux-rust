@@ -986,13 +986,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let key = BigEndianHash::from_uint(&self.stack.pop_back());
                 let val = self.stack.pop_back();
 
-                let current_val = context.storage_at(&key)?.into_uint();
-                if !current_val.is_zero() && val.is_zero() {
-                    let sstore_clears_schedule =
-                        context.spec().sstore_refund_gas;
-                    context.add_sstore_refund(sstore_clears_schedule);
-                }
-
                 context.set_storage(key, BigEndianHash::from_uint(&val))?;
             }
             instructions::PC => {

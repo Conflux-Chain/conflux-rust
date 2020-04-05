@@ -19,7 +19,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::u256_to_address;
-use cfx_types::{BigEndianHash, U256};
+use cfx_types::U256;
 use std::cmp;
 
 use super::{
@@ -130,20 +130,7 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
         let cost = match instruction {
             instructions::JUMPDEST => Request::Gas(Gas::from(1)),
             instructions::SSTORE => {
-                let address = BigEndianHash::from_uint(stack.peek(0));
-                let newval = stack.peek(1);
-                let val = context.storage_at(&address)?.into_uint();
-
-                let gas = if val.is_zero() && !newval.is_zero() {
-                    spec.sstore_set_gas
-                } else {
-                    // Refund for below case is added when actually
-                    // executing sstore
-                    // !is_zero(&val) && is_zero(newval)
-                    spec.sstore_reset_gas
-                };
-
-                Request::Gas(Gas::from(gas))
+                Request::Gas(Gas::from(spec.sstore_reset_gas))
             }
             instructions::SLOAD => Request::Gas(Gas::from(spec.sload_gas)),
             instructions::BALANCE => Request::Gas(Gas::from(spec.balance_gas)),
