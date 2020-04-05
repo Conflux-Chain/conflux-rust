@@ -19,6 +19,7 @@ class RemoteSimulateConfig:
         self.txs_per_block = txs_per_block
         self.tx_size = tx_size
         self.num_blocks = num_blocks
+        self.data_propagate_enabled = False
 
     def __str__(self):
         return str(self.__dict__)

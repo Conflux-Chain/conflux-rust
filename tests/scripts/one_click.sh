@@ -55,17 +55,17 @@ run_latency_exp () {
 
     # Terminate master instance and delete slave images
     # Comment this line if the data on the master instances are needed for further analysis
-    ./terminate-on-demand.sh
+    # ./terminate-on-demand.sh
 }
 
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
-exp_config="250:1:300000:2000"
+exp_config="250:1:300000:2400"
 
 # For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
 
-tps=3000
+tps=8000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps
 

@@ -27,11 +27,11 @@ def execute(cmd, retry, cmd_description):
         retry -= 1
         time.sleep(1)
 
-def pssh(ips_file:str, remote_cmd:str, retry=0, cmd_description=""):
+def pssh(ips_file:str, remote_cmd:str, retry=3, cmd_description=""):
     cmd = f'parallel-ssh -O "StrictHostKeyChecking no" -h {ips_file} -p 400 "{remote_cmd}" > /dev/null 2>&1'
     execute(cmd, retry, cmd_description)
 
-def pscp(ips_file:str, local:str, remote:str, retry=0, cmd_description=""):
+def pscp(ips_file:str, local:str, remote:str, retry=3, cmd_description=""):
     cmd = f'parallel-scp -O "StrictHostKeyChecking no" -h {ips_file} -p 400 {local} {remote} > /dev/null 2>&1'
     execute(cmd, retry, cmd_description)
 
@@ -43,7 +43,7 @@ Setup and run conflux nodes on multiple vms with a few nodes on each vm.
 """
 class RemoteSimulate(ConfluxTestFramework):
     def set_test_params(self):
-        self.rpc_timewait = 60
+        self.rpc_timewait = 600
         # Have to have a num_nodes due to assert in base class.
         self.num_nodes = None
 
