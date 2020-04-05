@@ -27,6 +27,11 @@ StorageLayout value at the storage node.
 You need to use new SDK tools to connect with the main chain, otherwise your
 transaction will be rejected as invalid. 
 
+## EVM Updates
+
+- Change the gas used in SSTORE operation to 5000 gas, no matter the zero-ness
+is changed or not. And we no longer refund gas in releasing storage entry. 
+
 ## RPC/CLI Updates
 
 - Change the CLI interface subcommand from `debug` to `local`. Its
