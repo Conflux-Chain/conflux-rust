@@ -129,7 +129,7 @@ pub fn initialize_txgens(
     let maybe_multi_genesis_txgen = if let Some(txgen_conf) =
         conf.tx_gen_config()
     {
-        let mut multi_genesis_txgen = Arc::new(TransactionGenerator::new(
+        let multi_genesis_txgen = Arc::new(TransactionGenerator::new(
             consensus.clone(),
             txpool.clone(),
             sync.clone(),
@@ -147,9 +147,7 @@ pub fn initialize_txgens(
                     );
                 })
                 .expect("should succeed");
-        Arc::get_mut(&mut multi_genesis_txgen)
-            .unwrap()
-            .set_join_handle(join_handle);
+        multi_genesis_txgen.set_join_handle(join_handle);
         Some(multi_genesis_txgen)
     } else {
         None

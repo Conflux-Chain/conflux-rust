@@ -16,7 +16,7 @@ function init_log_dir() {
 }
 
 function wait_for_copy() {
-  $dest_file_name=$1
+  dest_file_name=$1
   while true
   do
       n=`ps -ef|grep [s]cp|grep "$dest_file_name"|grep -v grep|wc -l`
@@ -33,7 +33,7 @@ function expand_logs() {
   log_dir=$1
   dest_file_name=$2
 
-  for file in "$log_dir/logs_tmp/*$dest_file_name"
+  for file in `ls $log_dir/logs_tmp/*$dest_file_name`
   do
       tar_dir=${file%$dest_file_name}
       mkdir "$tar_dir"
