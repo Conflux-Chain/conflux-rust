@@ -13,8 +13,8 @@ use std::{
 
 use cfx_types::{Address, H256, U128};
 use cfxcore::{
-    BlockDataManager, ConsensusGraph, PeerInfo, SharedConsensusGraph,
-    SharedTransactionPool,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -337,10 +337,19 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
         info!("RPC Request: get_goodput");
+        let mut all_block_set = HashSet::new();
+        for epoch_number in 1..consensus_graph.best_epoch_number() {
+            for block_hash in consensus_graph
+                .get_block_hashes_by_epoch(epoch_number.into())
+                .map_err(|_| RpcError::internal_error())?
+            {
+                all_block_set.insert(block_hash);
+            }
+        }
         let mut set = HashSet::new();
         let mut min = std::u64::MAX;
         let mut max: u64 = 0;
-        for key in consensus_graph.inner.read().hash_to_arena_indices.keys() {
+        for key in &all_block_set {
             if let Some(block) =
                 self.data_man.block_by_hash(key, false /* update_cache */)
             {
@@ -361,8 +370,7 @@ impl RpcImpl {
             let lower_bound = min + ((max - min) as f64 * 0.3) as u64;
             let upper_bound = min + ((max - min) as f64 * 0.8) as u64;
             let mut ranged_set = HashSet::new();
-            for key in consensus_graph.inner.read().hash_to_arena_indices.keys()
-            {
+            for key in &all_block_set {
                 if let Some(block) = self
                     .data_man
                     .block_by_hash(key, false /* update_cache */)

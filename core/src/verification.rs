@@ -175,7 +175,7 @@ impl VerificationConfig {
         if block_size > MAX_BLOCK_SIZE_IN_BYTES {
             return Err(From::from(BlockError::InvalidBlockSize(
                 OutOfBounds {
-                    min: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
+                    min: None,
                     max: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
                     found: block_size as u64,
                 },

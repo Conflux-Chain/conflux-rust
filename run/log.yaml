@@ -4,7 +4,7 @@ appenders:
   stdout:
     kind: console
     encoder:
-        pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"
+        pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m:10.20000}{n}"
     filters: 
       -
         kind: "threshold"
@@ -15,7 +15,7 @@ appenders:
     kind: rolling_file
     path: "log/conflux.log"
     encoder:
-        pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m}{n}"
+        pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m:.20000}{n}"
 
     policy:
       kind: compound
