@@ -51,6 +51,8 @@ functionality remains the same.
 
 - Fix an issue that virtual call RPC may fail if the caller does not have enough balance
 
+- Fix an issue that failing to send a pending request can make a block not received.
+
 ## Improvements
 
 - Make the consensus layer to prioritize meaningful blocks first. It will
