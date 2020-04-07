@@ -53,6 +53,8 @@ functionality remains the same.
 
 - Fix an issue that failing to send a pending request can make a block not received.
 
+- Fix an issue that not-graph-ready compact blocks are not fully received.
+
 ## Improvements
 
 - Make the consensus layer to prioritize meaningful blocks first. It will
