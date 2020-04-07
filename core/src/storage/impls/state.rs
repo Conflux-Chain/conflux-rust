@@ -239,6 +239,34 @@ impl StateTrait for State {
         self.get_from_all_tries(access_key, true)
     }
 
+    fn get_merkle_hash_wo_compressed_path(
+        &self, access_key: StorageKey,
+    ) -> Result<Option<MerkleHash>> {
+        // Get won't create any new nodes so it's fine to pass an empty
+        // owned_node_set.
+        let mut empty_owned_node_set: Option<OwnedNodeSet> =
+            Some(Default::default());
+
+        // TODO(thegaram): get from intermediate or snapshot if necessary
+
+        match self.delta_trie_root.clone() {
+            None => Ok(None),
+            Some(root_node) => {
+                let key = access_key
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+
+                let maybe_merkle = SubTrieVisitor::new(
+                    &self.delta_trie,
+                    root_node.clone(),
+                    &mut empty_owned_node_set,
+                )?
+                .get_merkle_hash_wo_compressed_path(&key)?;
+
+                Ok(maybe_merkle)
+            }
+        }
+    }
+
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
         self.pre_modification();
 

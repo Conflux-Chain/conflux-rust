@@ -5,7 +5,7 @@ sys.path.append("..")
 
 from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import priv_to_addr, int_to_hex, encode_hex
+from conflux.utils import priv_to_addr, int_to_hex, encode_hex, parse_as_int
 from test_framework.util import assert_equal, assert_is_hash_string
 from web3 import Web3
 
@@ -34,7 +34,7 @@ class TestContract(RpcClient):
             contract_addr="0x",
             data_hex="0x60806040526000805534801561001457600080fd5b506040516101b73803806101b78339818101604052602081101561003757600080fd5b810190808051906020019092919050505080600081905550506101588061005f6000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80636d4ce63c146100465780637b0cb83914610064578063812600df1461006e575b600080fd5b61004e6100b0565b6040518082815260200191505060405180910390f35b61006c6100b9565b005b61009a6004803603602081101561008457600080fd5b810190808035906020019092919050505061010b565b6040518082815260200191505060405180910390f35b60008054905090565b3373ffffffffffffffffffffffffffffffffffffffff167ffceb437c298f40d64702ac26411b2316e79f3c28ffa60edfc891ad4fc8ab82ca6000546040518082815260200191505060405180910390a2565b60008160008082825401925050819055905091905056fea264697066735822122032510ec4ba70a57be7ecbd80920213f49c97b68e3264707e93d653ff2e37064a64736f6c63430006010033000000000000000000000000000000000000000000000000000000000000000a",
             sender=addr)
-        assert_equal(collateral, 408)
+        assert_equal(parse_as_int(collateral), 408)
 
         tx = self.new_tx(
             sender=self.GENESIS_ADDR,
@@ -50,7 +50,7 @@ class TestContract(RpcClient):
             contract_addr=contract_addr,
             data_hex="0x60fe47b10000000000000000000000000000000000000000000000000000000000000006",
             sender=addr)
-        assert_equal(collateral, 64)
+        assert_equal(parse_as_int(collateral), 64)
         assert_equal(self.get_collateral_for_storage(addr), 0)
 
         # send tx to set the storage from 5 to 6
@@ -68,7 +68,7 @@ class TestContract(RpcClient):
             contract_addr=contract_addr,
             data_hex="0x60fe47b10000000000000000000000000000000000000000000000000000000000000007",
             sender=addr)
-        assert_equal(collateral, 0)
+        assert_equal(parse_as_int(collateral), 0)
         assert_equal(self.get_collateral_for_storage(addr), 10 ** 18 // 16)
 
     def test_call_result(self):
