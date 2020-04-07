@@ -52,7 +52,7 @@ class RemoteSimulate(ConfluxTestFramework):
         bandwidth = 20,
         connect_peers = 3,
         enable_flamegraph = False,
-        enable_tx_propagation = True,
+        enable_tx_propagation = False,
         ips_file = "ips",
         generation_period_ms = 500,
         nodes_per_host = 3,
@@ -201,7 +201,7 @@ class RemoteSimulate(ConfluxTestFramework):
 
             if self.enable_tx_propagation:
                 # Generate a block with the transactions in the node's local tx pool
-                thread = SimpleGenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = SimpleGenerateThread(self.nodes, p, self.options.max_block_size_in_bytes, self.log, rpc_times)
             else:
                 # Generate a fixed-size block with fake tx
                 thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
@@ -305,12 +305,13 @@ class RemoteSimulate(ConfluxTestFramework):
 
 
 class GenerateThread(threading.Thread):
-    def __init__(self, nodes, i, tx_n, tx_data_len, log, rpc_times:list):
+    def __init__(self, nodes, i, tx_n, tx_data_len, max_block_size, log, rpc_times:list):
         threading.Thread.__init__(self, daemon=True)
         self.nodes = nodes
         self.i = i
         self.tx_n = tx_n
         self.tx_data_len = tx_data_len
+        self.max_block_size = max_block_size
         self.log = log
         self.rpc_times = rpc_times
 
@@ -328,7 +329,7 @@ class GenerateThread(threading.Thread):
             encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
 
             start = time.time()
-            h = self.nodes[self.i].test_generateblockwithfaketxs(encoded_txs, self.tx_data_len)
+            h = self.nodes[self.i].test_generateblockwithfaketxs(encoded_txs, False, self.tx_data_len)
             self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
@@ -336,13 +337,21 @@ class GenerateThread(threading.Thread):
             self.log.error(str(e))
 
 
-class SimpleGenerateThread(GenerateThread):
+class SimpleGenerateThread(threading.Thread):
+    def __init__(self, nodes, i, max_block_size, log, rpc_times:list):
+        threading.Thread.__init__(self, daemon=True)
+        self.nodes = nodes
+        self.i = i
+        self.max_block_size = max_block_size
+        self.log = log
+        self.rpc_times = rpc_times
+
     def run(self):
         try:
             client = RpcClient(self.nodes[self.i])
             # Do not limit num tx in blocks, and block size is already limited by `max_block_size_in_bytes`
             start = time.time()
-            h = client.generate_block(10000000)
+            h = client.generate_block(10000000, self.max_block_size)
             self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:

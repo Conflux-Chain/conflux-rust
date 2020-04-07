@@ -63,7 +63,8 @@ run_latency_exp () {
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
 exp_config="250:1:300000:4000"
 
-# For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
+# For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will take effects.
+# Block size is limited by `max_block_size_in_bytes`.
 
 tps=4000
 echo "start run $branch"
