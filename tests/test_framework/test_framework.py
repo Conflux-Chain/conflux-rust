@@ -550,6 +550,7 @@ class OptionHelper:
                 args.append(OptionHelper.to_argument_str(arg_name))
                 args.append(str(value))
             elif value:
+                # FIXME: This only allows setting boolean to True.
                 args.append(OptionHelper.to_argument_str(arg_name))
         return args
 
