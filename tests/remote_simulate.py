@@ -52,7 +52,7 @@ class RemoteSimulate(ConfluxTestFramework):
         bandwidth = 20,
         connect_peers = 3,
         enable_flamegraph = False,
-        enable_tx_propagation = False,
+        enable_tx_propagation = True,
         ips_file = "ips",
         generation_period_ms = 500,
         nodes_per_host = 3,
@@ -76,6 +76,7 @@ class RemoteSimulate(ConfluxTestFramework):
         send_tx_period_ms = 1300,
         txgen_account_count = 1000,
         tx_pool_size = conflux.config.default_conflux_conf["tx_pool_size"],
+        max_block_size_in_bytes = conflux.config.default_config["MAX_BLOCK_SIZE_IN_BYTES"]
     )
 
     def add_options(self, parser:ArgumentParser):
@@ -339,9 +340,9 @@ class SimpleGenerateThread(GenerateThread):
     def run(self):
         try:
             client = RpcClient(self.nodes[self.i])
-            # Do not limit num tx in blocks, only limit it with block size
+            # Do not limit num tx in blocks, and block size is already limited by `max_block_size_in_bytes`
             start = time.time()
-            h = client.generate_block(10000000, self.tx_n * self.tx_data_len)
+            h = client.generate_block(10000000)
             self.rpc_times.append(round(time.time() - start, 3))
             self.log.debug("node %d actually generate block %s", self.i, h)
         except Exception as e:
