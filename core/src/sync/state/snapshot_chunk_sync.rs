@@ -32,8 +32,8 @@ use cfx_types::H256;
 use network::{NetworkContext, PeerId};
 use parking_lot::RwLock;
 use primitives::{
-    BlockHeaderBuilder, EpochId, EpochNumber, Receipt, StateRoot, StorageKey,
-    NULL_EPOCH,
+    BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
+    StorageKey, NULL_EPOCH,
 };
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
@@ -98,7 +98,7 @@ struct Inner {
     blame_vec_offset: usize,
     receipt_blame_vec: Vec<H256>,
     bloom_blame_vec: Vec<H256>,
-    epoch_receipts: Vec<(H256, H256, Arc<Vec<Receipt>>)>,
+    epoch_receipts: Vec<(H256, H256, Arc<BlockReceipts>)>,
     snapshot_info: SnapshotInfo,
 
     pending_chunks: VecDeque<ChunkKey>,
@@ -784,7 +784,7 @@ impl SnapshotChunkSync {
         ctx: &Context, blame_vec_offset: usize, snapshot_epoch_id: &EpochId,
         receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
         block_receipts: &Vec<BlockExecutionResult>,
-    ) -> Option<Vec<(H256, H256, Arc<Vec<Receipt>>)>>
+    ) -> Option<Vec<(H256, H256, Arc<BlockReceipts>)>>
     {
         let mut epoch_hash = snapshot_epoch_id.clone();
         let checkpoint = ctx
@@ -820,13 +820,7 @@ impl SnapshotChunkSync {
                 if let Some(block_receipt) =
                     block_receipts.get(receipts_vec_offset + i)
                 {
-                    epoch_receipts.push(Arc::new(
-                        block_receipt
-                            .receipts
-                            .iter()
-                            .cloned()
-                            .collect::<Vec<_>>(),
-                    ));
+                    epoch_receipts.push(block_receipt.block_receipts.clone());
                 } else {
                     // Invalid block_receipts vector length.
                     return None;

@@ -29,7 +29,8 @@ use parity_bytes::ToPretty;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+        BlockReceipts, Receipt,
+        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
@@ -942,13 +943,12 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
-        let (epoch_receipts, secondary_reward) = self
-            .process_epoch_transactions(
-                &mut state,
-                &epoch_blocks,
-                start_block_number,
-                on_local_pivot,
-            );
+        let epoch_receipts = self.process_epoch_transactions(
+            &mut state,
+            &epoch_blocks,
+            start_block_number,
+            on_local_pivot,
+        );
 
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
@@ -956,7 +956,6 @@ impl ConsensusExecutionHandler {
             self.process_rewards_and_fees(
                 &mut state,
                 &reward_execution_info,
-                secondary_reward,
                 on_local_pivot,
                 debug_record,
             );
@@ -1006,7 +1005,7 @@ impl ConsensusExecutionHandler {
     fn process_epoch_transactions(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64, on_local_pivot: bool,
-    ) -> (Vec<Arc<Vec<Receipt>>>, U256)
+    ) -> Vec<Arc<BlockReceipts>>
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
@@ -1015,7 +1014,6 @@ impl ConsensusExecutionHandler {
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
-        let mut secondary_reward: U256 = U256::zero();
         for block in epoch_blocks.iter() {
             let mut receipts = Vec::new();
             debug!(
@@ -1032,7 +1030,7 @@ impl ConsensusExecutionHandler {
                 last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
             };
-            secondary_reward += state.increase_block_number();
+            let secondary_reward = state.increase_block_number();
             assert_eq!(state.block_number(), env.number);
 
             block_number += 1;
@@ -1190,7 +1188,10 @@ impl ConsensusExecutionHandler {
                 }
             }
 
-            let block_receipts = Arc::new(receipts);
+            let block_receipts = Arc::new(BlockReceipts {
+                receipts,
+                secondary_reward,
+            });
             self.data_man.insert_block_results(
                 block.hash(),
                 pivot_block.hash(),
@@ -1206,7 +1207,7 @@ impl ConsensusExecutionHandler {
         }
 
         debug!("Finish processing tx for epoch");
-        (epoch_receipts, secondary_reward)
+        epoch_receipts
     }
 
     fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
@@ -1227,7 +1228,7 @@ impl ConsensusExecutionHandler {
     /// anticone difficulty
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
-        secondary_reward: U256, on_local_pivot: bool,
+        on_local_pivot: bool,
         debug_record: &mut Option<ComputeEpochDebugRecord>,
     )
     {
@@ -1335,19 +1336,20 @@ impl ConsensusExecutionHandler {
         // Compute tx_fee of each block based on gas_used and gas_price of every
         // tx
         let mut epoch_receipts = None;
+        let mut secondary_reward = U256::zero();
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
             let block_hash = block.hash();
             // TODO: better redesign to avoid recomputation.
             // FIXME: check state availability boundary here. Actually, it seems
             // FIXME: we should never recompute states here.
-            let receipts = match self
+            let block_receipts = match self
                 .data_man
                 .block_execution_result_by_hash_with_epoch(
                     &block_hash,
                     &reward_epoch_hash,
                     true, /* update_cache */
                 ) {
-                Some(receipts) => receipts.receipts,
+                Some(block_exec_result) => block_exec_result.block_receipts,
                 None => {
                     let ctx = self
                         .data_man
@@ -1369,10 +1371,14 @@ impl ConsensusExecutionHandler {
                 }
             };
 
+            secondary_reward += block_receipts.secondary_reward;
             let mut last_gas_used = U256::zero();
-            debug_assert!(receipts.len() == block.transactions.len());
+            debug_assert!(
+                block_receipts.receipts.len() == block.transactions.len()
+            );
             for (idx, tx) in block.transactions.iter().enumerate() {
-                let gas_used = receipts[idx].gas_used - last_gas_used;
+                let gas_used =
+                    block_receipts.receipts[idx].gas_used - last_gas_used;
                 let fee = tx.gas_price * gas_used;
                 let info = tx_fee
                     .entry(tx.hash())
@@ -1389,7 +1395,7 @@ impl ConsensusExecutionHandler {
                 if !fee.is_zero() && info.0.is_zero() {
                     info.0 = fee;
                 }
-                last_gas_used = receipts[idx].gas_used;
+                last_gas_used = block_receipts.receipts[idx].gas_used;
             }
         }
 
@@ -1482,7 +1488,7 @@ impl ConsensusExecutionHandler {
     fn recompute_states(
         &self, pivot_hash: &H256, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64,
-    ) -> Vec<Arc<Vec<Receipt>>>
+    ) -> Vec<Arc<BlockReceipts>>
     {
         debug!(
             "Recompute receipts epoch_id={}, block_count={}",
@@ -1520,7 +1526,6 @@ impl ConsensusExecutionHandler {
             start_block_number,
             false,
         )
-        .0
     }
 
     pub fn call_virtual(

@@ -20,7 +20,7 @@ use crate::{
         CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
         RECEIPT_REQUEST_TIMEOUT,
     },
-    primitives::{BlockHeaderBuilder, Receipt},
+    primitives::{BlockHeaderBuilder, BlockReceipts},
     UniqueId,
 };
 
@@ -47,7 +47,7 @@ pub struct Receipts {
     sync_manager: SyncManager<u64, MissingReceipts>,
 
     // epoch receipts received from full node
-    verified: Arc<RwLock<LruCache<u64, PendingItem<Vec<Vec<Receipt>>>>>>,
+    verified: Arc<RwLock<LruCache<u64, PendingItem<Vec<BlockReceipts>>>>>,
 
     // witness sync manager
     witnesses: Arc<Witnesses>,
@@ -84,7 +84,7 @@ impl Receipts {
     #[inline]
     pub fn request(
         &self, epoch: u64,
-    ) -> impl Future<Output = Vec<Vec<Receipt>>> {
+    ) -> impl Future<Output = Vec<BlockReceipts>> {
         if epoch == 0 {
             self.verified.write().insert(0, PendingItem::ready(vec![]));
         }
@@ -103,12 +103,19 @@ impl Receipts {
         receipts: impl Iterator<Item = ReceiptsWithEpoch>,
     ) -> Result<(), Error>
     {
-        for ReceiptsWithEpoch { epoch, receipts } in receipts {
-            info!("Validating receipts {:?} with epoch {}", receipts, epoch);
+        for ReceiptsWithEpoch {
+            epoch,
+            epoch_receipts,
+        } in receipts
+        {
+            info!(
+                "Validating receipts {:?} with epoch {}",
+                epoch_receipts, epoch
+            );
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
-                Some(_) => self.validate_and_store(epoch, receipts)?,
+                Some(_) => self.validate_and_store(epoch, epoch_receipts)?,
             };
         }
 
@@ -117,7 +124,7 @@ impl Receipts {
 
     #[inline]
     pub fn validate_and_store(
-        &self, epoch: u64, receipts: Vec<Vec<Receipt>>,
+        &self, epoch: u64, receipts: Vec<BlockReceipts>,
     ) -> Result<(), Error> {
         // validate receipts
         self.validate_receipts(epoch, &receipts)?;
@@ -175,7 +182,7 @@ impl Receipts {
 
     #[inline]
     fn validate_receipts(
-        &self, epoch: u64, receipts: &Vec<Vec<Receipt>>,
+        &self, epoch: u64, receipts: &Vec<BlockReceipts>,
     ) -> Result<(), Error> {
         // calculate received receipts root
         // convert Vec<Vec<Receipt>> -> Vec<Arc<Vec<Receipt>>>

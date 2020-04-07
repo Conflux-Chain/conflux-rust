@@ -24,8 +24,8 @@ use futures::{
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
-    Account, ChainIdParams, CodeInfo, EpochNumber, Receipt, SignedTransaction,
-    StateRoot, StorageKey, StorageValue, TransactionIndex,
+    Account, BlockReceipts, ChainIdParams, CodeInfo, EpochNumber, Receipt,
+    SignedTransaction, StateRoot, StorageKey, StorageValue, TransactionIndex,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
@@ -174,7 +174,7 @@ impl QueryService {
 
     async fn retrieve_receipts(
         &self, epoch: u64,
-    ) -> Result<(u64, Vec<Vec<Receipt>>), String> {
+    ) -> Result<(u64, Vec<BlockReceipts>), String> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
         with_timeout(
@@ -403,8 +403,9 @@ impl QueryService {
 
     /// Apply filter to all receipts within a block.
     fn filter_block_receipts(
-        epoch: u64, hash: H256, mut receipts: Vec<Receipt>, filter: Filter,
+        epoch: u64, hash: H256, block_receipts: BlockReceipts, filter: Filter,
     ) -> impl Iterator<Item = LocalizedLogEntry> {
+        let mut receipts = block_receipts.receipts;
         // number of receipts in this block
         let num_receipts = receipts.len();
 
@@ -431,7 +432,7 @@ impl QueryService {
 
     /// Apply filter to all receipts within an epoch.
     fn filter_epoch_receipts(
-        &self, epoch: u64, mut receipts: Vec<Vec<Receipt>>, filter: Filter,
+        &self, epoch: u64, mut receipts: Vec<BlockReceipts>, filter: Filter,
     ) -> Result<impl Iterator<Item = LocalizedLogEntry>, String> {
         // get epoch blocks in execution order
         let mut hashes = self

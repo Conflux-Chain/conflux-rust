@@ -484,6 +484,7 @@ impl RpcImpl {
             .as_ref()
             .clone();
         let receipt = execution_result
+            .block_receipts
             .receipts
             .get(address.index)
             .ok_or(RpcError::internal_error())?
@@ -492,6 +493,7 @@ impl RpcImpl {
             U256::zero()
         } else {
             let prior_receipt = execution_result
+                .block_receipts
                 .receipts
                 .get(address.index - 1)
                 .ok_or(RpcError::internal_error())?
