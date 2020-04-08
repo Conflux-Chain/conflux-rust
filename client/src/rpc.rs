@@ -9,9 +9,7 @@ use crate::{
     },
     tcp::{self, Server as TcpServer, ServerBuilder as TcpServerBuilder},
 };
-use jsonrpc_core::{
-    Error as JsonRpcError, MetaIoHandler, Result as JsonRpcResult,
-};
+use jsonrpc_core::{MetaIoHandler, Result as JsonRpcResult};
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
@@ -99,7 +97,10 @@ use self::{
 pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
-    rpc::interceptor::{RpcInterceptor, RpcProxy},
+    rpc::{
+        helpers::errors::request_rejected_too_many_request_error,
+        interceptor::{RpcInterceptor, RpcProxy},
+    },
 };
 pub use metadata::Metadata;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
@@ -294,7 +295,6 @@ impl ThrottleInterceptor {
     }
 }
 
-// FIXME: check if we use RpcResult?
 impl RpcInterceptor for ThrottleInterceptor {
     fn before(&self, name: &String) -> JsonRpcResult<()> {
         let bucket = match self.manager.get(name) {
@@ -308,16 +308,16 @@ impl RpcInterceptor for ThrottleInterceptor {
             ThrottleResult::Success => Ok(()),
             ThrottleResult::Throttled(wait_time) => {
                 debug!("RPC {} throttled in {:?}", name, wait_time);
-                bail!(JsonRpcError::invalid_params(format!(
+                bail!(request_rejected_too_many_request_error(Some(format!(
                     "throttled in {:?}",
                     wait_time
-                )))
+                ))))
             }
             ThrottleResult::AlreadyThrottled => {
                 debug!("RPC {} already throttled", name);
-                bail!(JsonRpcError::invalid_params(
-                    "already throttled, please try again later",
-                ))
+                bail!(request_rejected_too_many_request_error(Some(
+                    "already throttled, please try again later".into()
+                )))
             }
         }
     }
