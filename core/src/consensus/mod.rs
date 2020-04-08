@@ -557,14 +557,10 @@ impl ConsensusGraph {
     pub fn get_sponsor_info(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<SponsorInfo, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc
-                .map_or(Default::default(), |acc| acc.sponsor_info)
-                .into()
-        } else {
-            Default::default()
-        })
+        Ok(self
+            .get_account(address, epoch_number)?
+            .map(|account| account.sponsor_info.clone())
+            .unwrap_or_default())
     }
 
     /// Get the current bank balance of an address
