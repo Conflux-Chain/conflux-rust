@@ -19,8 +19,7 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch,
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
+    block_data_manager::BlockExecutionResultWithEpoch, executive::Executed,
     state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -518,11 +517,16 @@ impl RpcImpl {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
-            hashes.push(self.block_gen.generate_block(
-                0,
-                MAX_BLOCK_SIZE_IN_BYTES,
-                vec![],
-            ));
+            hashes.push(
+                self.block_gen.generate_block(
+                    0,
+                    self.sync
+                        .get_synchronization_graph()
+                        .verification_config
+                        .max_block_size_in_bytes,
+                    vec![],
+                ),
+            );
         }
         Ok(hashes)
     }

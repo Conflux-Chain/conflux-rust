@@ -1814,7 +1814,7 @@ impl SynchronizationGraph {
                 Err(e) => {
                     warn!(
                         "Invalid block! inserted_block={:?} err={:?}",
-                        block, e
+                        block.block_header, e
                     );
                     inner.arena[me].graph_status = BLOCK_INVALID;
                 }

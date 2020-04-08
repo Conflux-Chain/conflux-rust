@@ -83,6 +83,7 @@ build_config! {
         (generate_tx_period_us, (Option<u64>), Some(100_000))
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
+        (max_block_size_in_bytes, (usize), MAX_BLOCK_SIZE_IN_BYTES)
         (metrics_enabled, (bool), false)
         (metrics_influxdb_host, (Option<String>), None)
         (metrics_influxdb_db, (String), "conflux".into())
@@ -388,6 +389,7 @@ impl Configuration {
         VerificationConfig::new(
             self.is_test_mode(),
             self.raw_conf.referee_bound,
+            self.raw_conf.max_block_size_in_bytes,
         )
     }
 

@@ -16,6 +16,7 @@ run_latency_exp () {
     branch=$1
     exp_config=$2
     tps=$3
+    max_block_size_in_bytes=$4
 
     #1) Create master instance and slave image
     ./create_slave_image.sh $key_pair $branch $repo
@@ -34,7 +35,7 @@ run_latency_exp () {
     if [ $enable_flamegraph = true ]; then
         flamegraph_option="--enable-flamegraph"
     fi
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --vms $slave_count --batch-config \"$exp_config\" --storage-memory-gb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 200 $flamegraph_option "
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --vms $slave_count --batch-config \"$exp_config\" --storage-memory-gb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 200 $flamegraph_option --max-block-size-in-bytes $max_block_size_in_bytes"
 
     #5) Terminate slave instances
     rm -rf tmp_data
@@ -61,13 +62,15 @@ run_latency_exp () {
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
 # Different experiments in a batch is divided by commas
 # Example: "250:1:150000:1000,250:1:150000:1000,250:1:150000:1000,250:1:150000:1000"
-exp_config="250:1:300000:2400"
+exp_config="250:1:300000:4000"
 
-# For experiments with --enable-tx-propagation , <txs_per_block> * <tx_size> will be used as block size 
+# For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will take effects.
+# Block size is limited by `max_block_size_in_bytes`.
 
-tps=8000
+tps=4000
+max_block_size_in_bytes=1000000
 echo "start run $branch"
-run_latency_exp $branch $exp_config $tps
+run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
 
 # Comment this line if the data on the master instances are needed for further analysis
 # ./terminate-on-demand.sh
