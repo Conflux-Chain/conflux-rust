@@ -51,7 +51,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getAdmin")]
     fn admin(
         &self, addr: RpcH160, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160>;
+    ) -> BoxFuture<Option<RpcH160>>;
 
     /// Returns sponsor information of the given contract
     #[rpc(name = "cfx_getSponsorInfo")]

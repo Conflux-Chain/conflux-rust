@@ -33,7 +33,7 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::Filter, transaction::Action::Call, SignedTransaction,
+    filter::Filter, transaction::Action::Call, Account, SignedTransaction,
     TransactionWithSignature,
 };
 use rlp::Rlp;
@@ -116,7 +116,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> RpcResult<RpcH160> {
+    ) -> RpcResult<Option<RpcH160>> {
         let num = num.unwrap_or(EpochNumber::LatestState);
         let address: H160 = address.into();
         info!(
@@ -130,7 +130,9 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
 
-        Ok(cg.get_admin(address, num.into())?.into())
+        Ok(cg
+            .get_admin(address, num.into())?
+            .map(|address| address.into()))
     }
 
     fn sponsor_info(
@@ -214,7 +216,15 @@ impl RpcImpl {
             .expect("downcast should succeed");
 
         Ok(RpcAccount::new(
-            consensus_graph.get_account(address, epoch_num.into())?,
+            consensus_graph
+                .get_account(address, epoch_num.into())?
+                .unwrap_or_else(|| {
+                    Account::new_empty_with_balance(
+                        &address,
+                        &U256::zero(), /* balance */
+                        &U256::zero(), /* nonce */
+                    )
+                }),
         ))
     }
 
@@ -860,7 +870,8 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> JsonRpcResult<RpcU256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> JsonRpcResult<RpcU256>;
-            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
+            fn admin(&self, address: RpcH160, num: Option<EpochNumber>)
+                -> BoxFuture<Option<RpcH160>>;
             fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>)
                 -> BoxFuture<RpcSponsorInfo>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
