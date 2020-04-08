@@ -429,6 +429,7 @@ impl TransactionPool {
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write();
+        debug!("pack_transactions: after inner lock");
         let height_lower_bound =
             if best_epoch_height > self.config.transaction_epoch_bound {
                 best_epoch_height - self.config.transaction_epoch_bound
@@ -544,7 +545,9 @@ impl TransactionPool {
         additional_transactions: Vec<Arc<SignedTransaction>>,
     ) -> (Arc<BestInformation>, Vec<Arc<SignedTransaction>>)
     {
+        debug!("get_best_info_with_packed_transactions: start");
         let consensus_best_info = self.consensus_best_info.lock();
+        debug!("get_best_info_with_packed_transactions: after best_info lock");
 
         let transactions_from_pool = self.pack_transactions(
             num_txs,
@@ -552,6 +555,7 @@ impl TransactionPool {
             block_size_limit,
             consensus_best_info.best_epoch_number,
         );
+        debug!("get_best_info_with_packed_transactions: after packing");
 
         let transactions = [
             additional_transactions.as_slice(),
