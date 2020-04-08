@@ -300,6 +300,13 @@ impl TransactionPoolInner {
                 break;
             }
 
+            // Accounts which are not in `deferred_pool` may be inserted into
+            // `garbage_collector`, we can just ignore them.
+            if !self.deferred_pool.contain_address(&addr) {
+                self.garbage_collector.pop();
+                continue;
+            }
+
             let (ready_nonce, _) = self
                 .get_local_nonce_and_balance(&addr)
                 .unwrap_or((0.into(), 0.into()));
