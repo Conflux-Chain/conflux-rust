@@ -97,7 +97,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160> {
+    ) -> BoxFuture<Option<RpcH160>> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -115,9 +115,7 @@ impl RpcImpl {
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            Ok(account
-                .map(|account| account.admin.into())
-                .unwrap_or_default())
+            Ok(account.map(|account| account.admin.into()))
         };
 
         Box::new(fut.boxed().compat())
@@ -472,7 +470,8 @@ impl Cfx for CfxHandler {
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
+            fn admin(&self, address: RpcH160, num: Option<EpochNumber>)
+                -> BoxFuture<Option<RpcH160>>;
             fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
