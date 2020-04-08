@@ -158,3 +158,13 @@ pub fn call_execution_error(message: String, output: Vec<u8>) -> Error {
         )),
     }
 }
+
+pub fn request_rejected_too_many_request_error(
+    details: Option<String>,
+) -> Error {
+    Error {
+        code: ErrorCode::ServerError(codes::REQUEST_REJECTED_TOO_MANY_REQUESTS),
+        message: "Request rejected.".into(),
+        data: details.map(Value::String),
+    }
+}
