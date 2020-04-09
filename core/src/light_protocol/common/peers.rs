@@ -10,7 +10,8 @@ use std::{
     sync::Arc,
 };
 
-use crate::{message::MsgId, network::PeerId};
+use crate::message::MsgId;
+use network::node_table::NodeId;
 use rand::prelude::SliceRandom;
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
@@ -32,18 +33,18 @@ pub struct LightPeerState {
 }
 
 #[derive(Default)]
-pub struct Peers<T: Default>(RwLock<HashMap<PeerId, Arc<RwLock<T>>>>);
+pub struct Peers<T: Default>(RwLock<HashMap<NodeId, Arc<RwLock<T>>>>);
 
 impl<T> Peers<T>
 where T: Default
 {
     pub fn new() -> Peers<T> { Self::default() }
 
-    pub fn get(&self, peer: &PeerId) -> Option<Arc<RwLock<T>>> {
+    pub fn get(&self, peer: &NodeId) -> Option<Arc<RwLock<T>>> {
         self.0.read().get(&peer).cloned()
     }
 
-    pub fn insert(&self, peer: PeerId) {
+    pub fn insert(&self, peer: NodeId) {
         self.0
             .write()
             .entry(peer)
@@ -52,13 +53,13 @@ where T: Default
 
     pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
-    pub fn contains(&self, peer: &PeerId) -> bool {
+    pub fn contains(&self, peer: &NodeId) -> bool {
         self.0.read().contains_key(&peer)
     }
 
-    pub fn remove(&self, peer: &PeerId) { self.0.write().remove(&peer); }
+    pub fn remove(&self, peer: &NodeId) { self.0.write().remove(&peer); }
 
-    pub fn all_peers_satisfying<F>(&self, mut predicate: F) -> Vec<PeerId>
+    pub fn all_peers_satisfying<F>(&self, mut predicate: F) -> Vec<NodeId>
     where F: FnMut(&mut T) -> bool {
         self.0
             .read()
@@ -97,13 +98,13 @@ impl FullPeerFilter {
         self
     }
 
-    pub fn select(self, peers: Arc<Peers<FullPeerState>>) -> Option<PeerId> {
+    pub fn select(self, peers: Arc<Peers<FullPeerState>>) -> Option<NodeId> {
         self.select_all(peers)
             .choose(&mut rand::thread_rng())
             .cloned()
     }
 
-    pub fn select_all(self, peers: Arc<Peers<FullPeerState>>) -> Vec<PeerId> {
+    pub fn select_all(self, peers: Arc<Peers<FullPeerState>>) -> Vec<NodeId> {
         peers.all_peers_satisfying(|peer| {
             if peer.throttled_msgs.check_throttled(&self.msg_id) {
                 return false;

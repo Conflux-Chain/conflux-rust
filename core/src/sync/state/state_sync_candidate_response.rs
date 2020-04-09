@@ -25,7 +25,7 @@ impl Handleable for StateSyncCandidateResponse {
             &ctx.manager.request_manager,
         )?;
         ctx.manager.state_sync.handle_snapshot_candidate_response(
-            &ctx.peer,
+            &ctx.node_id,
             &self.supported_candidates,
             &request.candidates,
         );

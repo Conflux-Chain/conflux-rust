@@ -17,7 +17,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         CACHE_TIMEOUT, MAX_TXS_IN_FLIGHT, TX_REQUEST_BATCH_SIZE,
         TX_REQUEST_TIMEOUT,
@@ -26,6 +26,7 @@ use crate::{
 };
 
 use super::common::{FutureItem, PendingItem, SyncManager, TimeOrdered};
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -90,7 +91,7 @@ impl Txs {
 
     #[inline]
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         txs: impl Iterator<Item = SignedTransaction>,
     ) -> Result<(), Error>
     {
@@ -137,7 +138,7 @@ impl Txs {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 

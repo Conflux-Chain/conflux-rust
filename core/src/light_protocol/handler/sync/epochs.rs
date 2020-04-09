@@ -11,7 +11,7 @@ use crate::{
         Error,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         EPOCH_REQUEST_BATCH_SIZE, EPOCH_REQUEST_TIMEOUT,
         MAX_PARALLEL_EPOCH_REQUESTS, NUM_EPOCHS_TO_REQUEST,
@@ -19,6 +19,7 @@ use crate::{
     },
     UniqueId,
 };
+use network::node_table::NodeId;
 use parking_lot::RwLock;
 use std::{
     cmp,
@@ -160,7 +161,7 @@ impl Epochs {
 
     #[inline]
     fn request_epochs(
-        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
         info!("request_epochs peer={:?} epochs={:?}", peer, epochs);
 
@@ -207,7 +208,7 @@ impl Epochs {
             };
 
             // request epoch batch
-            match self.request_epochs(io, peer, batch.to_vec()) {
+            match self.request_epochs(io, &peer, batch.to_vec()) {
                 Ok(None) => {}
                 Ok(Some(id)) => {
                     self.insert_in_flight(id, batch.to_vec());

@@ -953,7 +953,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
-            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
+            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;

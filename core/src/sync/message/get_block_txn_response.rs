@@ -121,7 +121,7 @@ impl Handleable for GetBlockTxnResponse {
         }
 
         let peer = if request_from_same_peer {
-            Some(ctx.peer)
+            Some(ctx.node_id.clone())
         } else {
             None
         };

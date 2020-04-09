@@ -52,7 +52,7 @@ impl Handleable for GetBlockHashesResponse {
 
         ctx.manager.request_block_headers(
             ctx.io,
-            Some(ctx.peer),
+            Some(ctx.node_id),
             missing_headers,
             true, /* ignore_db */
         );

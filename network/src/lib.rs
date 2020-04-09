@@ -219,6 +219,7 @@ pub enum NetworkIoMessage {
     HandleProtocolMessage {
         protocol: ProtocolId,
         peer: PeerId,
+        node_id: NodeId,
         data: Vec<u8>,
     },
 }
@@ -226,11 +227,13 @@ pub enum NetworkIoMessage {
 pub trait NetworkProtocolHandler: Sync + Send {
     fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, data: &[u8]);
+    fn on_message(
+        &self, io: &dyn NetworkContext, node_id: &NodeId, data: &[u8],
+    );
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId);
+    fn on_peer_connected(&self, io: &dyn NetworkContext, node_id: &NodeId);
 
-    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId);
+    fn on_peer_disconnected(&self, io: &dyn NetworkContext, node_id: &NodeId);
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken);
 
@@ -250,18 +253,16 @@ pub enum UpdateNodeOperation {
 }
 
 pub trait NetworkContext {
-    fn get_peer_node_id(&self, peer: PeerId) -> NodeId;
-
     fn get_protocol(&self) -> ProtocolId;
 
-    fn get_peer_connection_origin(&self, peer: PeerId) -> Option<bool>;
+    fn get_peer_connection_origin(&self, node_id: &NodeId) -> Option<bool>;
 
     fn send(
-        &self, peer: PeerId, msg: Vec<u8>, priority: SendQueuePriority,
+        &self, node_id: &NodeId, msg: Vec<u8>, priority: SendQueuePriority,
     ) -> Result<(), Error>;
 
     fn disconnect_peer(
-        &self, peer: PeerId, op: Option<UpdateNodeOperation>, reason: &str,
+        &self, node_id: &NodeId, op: Option<UpdateNodeOperation>, reason: &str,
     );
 
     /// Register a new IO timer. 'IoHandler::timeout' will be called with the
@@ -272,7 +273,9 @@ pub trait NetworkContext {
 
     fn dispatch_work(&self, work_type: HandlerWorkType);
 
-    fn insert_peer_node_tag(&self, peer: PeerId, key: &str, value: &str);
+    fn is_peer_self(&self, _node_id: &NodeId) -> bool { false }
+
+    fn self_node_id(&self) -> NodeId;
 }
 
 #[derive(Debug, Clone)]
