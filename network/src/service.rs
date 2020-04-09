@@ -1006,7 +1006,6 @@ impl NetworkServiceInner {
         let mut messages: Vec<(ProtocolId, Vec<u8>)> = Vec::new();
         let mut kill = false;
         let mut token_to_disconnect = None;
-        let mut ready_node_id = Default::default();
         let mut message_node_id = None;
 
         // if let Some(session) = session.clone()
@@ -1014,10 +1013,10 @@ impl NetworkServiceInner {
             {
                 // We check dropped_nodes first to make sure we stop processing
                 // communications from any dropped peers
-                let sess = session.read();
-                if let Some(node_id) = sess.id() {
+                let sess_id = session.read().id().map(|id| *id);
+                if let Some(node_id) = sess_id {
                     let to_drop =
-                        { self.dropped_nodes.read().contains(node_id) };
+                        { self.dropped_nodes.read().contains(&node_id) };
                     self.drop_peers(io);
                     if to_drop {
                         return;
@@ -1033,7 +1032,7 @@ impl NetworkServiceInner {
                         match session_data.session_data {
                             SessionData::Ready => {
                                 //let mut sess = session.lock();
-                                ready_node_id = *sess.id().unwrap();
+                                message_node_id = Some(*sess.id().unwrap());
                                 for (protocol, _) in self.handlers.read().iter()
                                 {
                                     if sess.have_capability(*protocol) {
@@ -1098,7 +1097,7 @@ impl NetworkServiceInner {
                         debug!("session handshaked, token = {}", stream);
                         handler.on_peer_connected(
                             &NetworkContext::new(io, protocol, self),
-                            &ready_node_id,
+                            message_node_id.as_ref().unwrap(),
                         );
                     }
                 }
@@ -1128,10 +1127,10 @@ impl NetworkServiceInner {
             {
                 // We check dropped_nodes first to make sure we stop processing
                 // communications from any dropped peers
-                let sess = session.read();
-                if let Some(node_id) = sess.id() {
+                let sess_id = session.read().id().map(|id| *id);
+                if let Some(node_id) = sess_id {
                     let to_drop =
-                        { self.dropped_nodes.read().contains(node_id) };
+                        { self.dropped_nodes.read().contains(&node_id) };
                     if to_drop {
                         self.drop_peers(io);
                     }

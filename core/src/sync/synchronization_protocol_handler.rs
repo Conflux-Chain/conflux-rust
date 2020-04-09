@@ -1389,7 +1389,8 @@ impl SynchronizationProtocolHandler {
             // The parameter `failed_peer` is only used when there exist some
             // blocks in `requested` but not in `blocks`.
             // Here `requested` and `blocks` have the same block, so it's okay
-            // to set `failed_peer` to 0 since it will not be used.
+            // to set `failed_peer` to Default::default() since it will not be
+            // used.
             let mut requested = HashSet::new();
             requested.insert(block.hash());
             self.recover_public_queue.dispatch(
