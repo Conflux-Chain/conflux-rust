@@ -11,7 +11,9 @@ use crate::{
     },
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, CodeInfo, EpochId, StorageKey};
+use primitives::{
+    Account, CodeInfo, EpochId, StorageKey, StorageLayout, StorageRoot,
+};
 
 mod error;
 
@@ -74,12 +76,17 @@ impl StateDb {
         self.get::<Account>(StorageKey::new_account_key(address))
     }
 
-    pub fn get_storage_root(&self, address: &Address) -> Result<Option<H256>> {
+    #[allow(unused_variables)]
+    pub fn get_storage_root(
+        &self, address: &Address,
+    ) -> Result<Option<StorageRoot>> {
         let key = StorageKey::new_storage_root_key(address);
 
-        self.storage
-            .get_merkle_hash_wo_compressed_path(key)
-            .map_err(|e| e.into())
+        // self.storage
+        //     .get_merkle_hash_wo_compressed_path(key)
+        //     .map_err(|e| e.into())
+
+        todo!()
     }
 
     pub fn get_raw(&self, key: StorageKey) -> Result<Option<Box<[u8]>>> {

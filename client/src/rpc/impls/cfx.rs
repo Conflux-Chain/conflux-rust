@@ -11,7 +11,8 @@ use crate::rpc::{
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
-        SponsorInfo as RpcSponsorInfo, Status as RpcStatus, SyncGraphStates,
+        SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
@@ -378,7 +379,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcH256>> {
+    ) -> RpcResult<Option<RpcStorageRoot>> {
         let address: H160 = address.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -393,10 +394,12 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
 
-        consensus_graph
+        // FIXME(thegaram): how to signal db error?
+        let maybe_storage_root = consensus_graph
             .get_storage_root(address, epoch_num.into())
-            .map(|maybe_hash| maybe_hash.map(Into::into))
-            .map_err(RpcError::invalid_params)
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(maybe_storage_root.map(RpcStorageRoot::from_primitive))
     }
 
     fn send_usable_genesis_accounts(
@@ -887,6 +890,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             #[into]
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Option<RpcStorageRoot>>;
         }
     }
 }
@@ -973,8 +977,6 @@ impl LocalRpc for LocalRpcImpl {
             fn sync_graph_state(&self) -> RpcResult<SyncGraphStates>;
             #[into]
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
-            #[into]
-            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
     }
 }
