@@ -16,7 +16,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT,
         STATE_ROOT_REQUEST_BATCH_SIZE, STATE_ROOT_REQUEST_TIMEOUT,
@@ -28,6 +28,7 @@ use super::{
     common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     witnesses::Witnesses,
 };
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -107,7 +108,7 @@ impl StateRoots {
 
     #[inline]
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         state_roots: impl Iterator<Item = StateRootWithEpoch>,
     ) -> Result<(), Error>
     {
@@ -157,7 +158,7 @@ impl StateRoots {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} epochs={:?}", peer, epochs);
 

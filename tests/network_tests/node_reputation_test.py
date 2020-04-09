@@ -62,7 +62,7 @@ class NodeReputationTests(ConfluxTestFramework):
     def test_disconnect_with_failure(self, client0: RpcClient):
         n = self.connect_nodes(client0, 1)
 
-        assert client0.disconnect_peer(self.nodes[1].key, client0.UPDATE_NODE_OP_FAILURE) == n[1]["streamToken"]
+        assert client0.disconnect_peer(self.nodes[1].key, client0.UPDATE_NODE_OP_FAILURE)
 
         # Node 1 is still in trusted node table, only marked as failure.
         # But it may be auto connected again (by timer).
@@ -85,7 +85,7 @@ class NodeReputationTests(ConfluxTestFramework):
     def test_disconnect_with_demote(self, client0: RpcClient):
         n = self.connect_nodes(client0, 2)
 
-        assert client0.disconnect_peer(self.nodes[2].key, client0.UPDATE_NODE_OP_DEMOTE) == n[1]["streamToken"]
+        assert client0.disconnect_peer(self.nodes[2].key, client0.UPDATE_NODE_OP_DEMOTE)
 
         # demote to untrusted node table
         node = client0.get_node(self.nodes[2].key)
@@ -101,7 +101,7 @@ class NodeReputationTests(ConfluxTestFramework):
     def test_disconnect_with_remove(self, client0: RpcClient):
         n = self.connect_nodes(client0, 3)
 
-        assert client0.disconnect_peer(self.nodes[3].key, client0.UPDATE_NODE_OP_REMOVE) == n[1]["streamToken"]
+        assert client0.disconnect_peer(self.nodes[3].key, client0.UPDATE_NODE_OP_REMOVE)
 
         # On node 0: node 3 is blacklisted, and cannot immediately add it again
         assert client0.get_node(self.nodes[3].key) is None

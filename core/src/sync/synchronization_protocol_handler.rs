@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    msg_sender::NULL, random, request_manager::RequestManager, Error,
-    ErrorKind, SharedSynchronizationGraph, SynchronizationState,
+    random, request_manager::RequestManager, Error, ErrorKind,
+    SharedSynchronizationGraph, SynchronizationState,
 };
 use crate::{
     block_data_manager::BlockStatus,
@@ -28,8 +28,9 @@ use cfx_types::H256;
 use io::TimerToken;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
-    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
-    NetworkContext, NetworkProtocolHandler, PeerId, UpdateNodeOperation,
+    node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
+    HandlerWorkType, NetworkContext, NetworkProtocolHandler,
+    UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
@@ -105,13 +106,13 @@ pub struct RecoverPublicTask {
     blocks: Vec<Block>,
     requested: HashSet<H256>,
     delay: Option<Duration>,
-    failed_peer: PeerId,
+    failed_peer: NodeId,
     compact: bool,
 }
 
 impl RecoverPublicTask {
     pub fn new(
-        blocks: Vec<Block>, requested: HashSet<H256>, failed_peer: PeerId,
+        blocks: Vec<Block>, requested: HashSet<H256>, failed_peer: NodeId,
         compact: bool, delay: Option<Duration>,
     ) -> Self
     {
@@ -379,11 +380,11 @@ impl SynchronizationProtocolHandler {
     }
 
     fn dispatch_message(
-        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
-        if peer != NULL {
-            if !self.syn.contains_peer(&peer) {
+        if !io.is_peer_self(peer) {
+            if !self.syn.contains_peer(peer) {
                 debug!(
                     "dispatch_message: Peer does not exist: peer={} msg_id={}",
                     peer, msg_id
@@ -391,19 +392,19 @@ impl SynchronizationProtocolHandler {
                 // We may only receive status message from a peer not in
                 // `syn.peers`, and this peer should be in
                 // `syn.handshaking_peers`
-                if !self.syn.handshaking_peers.read().contains_key(&peer)
+                if !self.syn.handshaking_peers.read().contains_key(peer)
                     || msg_id != msgid::STATUS
                 {
                     warn!("Message from unknown peer {:?}", msg_id);
                     return Ok(());
                 }
             } else {
-                self.syn.update_heartbeat(&peer);
+                self.syn.update_heartbeat(peer);
             }
         }
 
         let ctx = Context {
-            peer,
+            node_id: *peer,
             io,
             manager: self,
         };
@@ -424,7 +425,7 @@ impl SynchronizationProtocolHandler {
 
     /// Error handling for dispatched messages.
     fn handle_error(
-        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error,
+        &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
         warn!(
             "Error while handling message, peer={}, msgid={:?}, error={:?}",
@@ -453,7 +454,9 @@ impl SynchronizationProtocolHandler {
             ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
-            ErrorKind::UnexpectedResponse => disconnect = true,
+            ErrorKind::UnexpectedResponse => {
+                op = Some(UpdateNodeOperation::Demotion)
+            }
             ErrorKind::RequestNotFound => disconnect = false,
             ErrorKind::TooManyTrans => {}
             ErrorKind::InvalidTimestamp => {
@@ -571,7 +574,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn request_missing_terminals(&self, io: &dyn NetworkContext) {
-        let peers: Vec<PeerId> =
+        let peers: Vec<NodeId> =
             self.syn.peers.read().keys().cloned().collect();
 
         let mut requested = HashSet::new();
@@ -706,7 +709,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn request_block_headers(
-        &self, io: &dyn NetworkContext, peer: Option<usize>,
+        &self, io: &dyn NetworkContext, peer: Option<NodeId>,
         mut header_hashes: Vec<H256>, ignore_db: bool,
     )
     {
@@ -768,7 +771,7 @@ impl SynchronizationProtocolHandler {
             block_headers_resp.headers = headers;
 
             let ctx = Context {
-                peer: NULL,
+                node_id: NodeId::default(),
                 io,
                 manager: self,
             };
@@ -867,7 +870,7 @@ impl SynchronizationProtocolHandler {
             task.requested,
             received_blocks,
             !task.compact,
-            chosen_peer,
+            chosen_peer.clone(),
             task.delay,
         );
         self.request_blocks(io, chosen_peer, missing_dependencies);
@@ -884,7 +887,7 @@ impl SynchronizationProtocolHandler {
 
     fn on_local_message_task(&self, io: &dyn NetworkContext) {
         let task = self.local_message.pop().unwrap();
-        self.on_message(io, NULL, task.message.as_slice());
+        self.on_message(io, &io.self_node_id(), task.message.as_slice());
     }
 
     pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
@@ -914,14 +917,14 @@ impl SynchronizationProtocolHandler {
     }
 
     fn broadcast_message(
-        &self, io: &dyn NetworkContext, skip_id: PeerId, msg: &dyn Message,
+        &self, io: &dyn NetworkContext, skip_id: &NodeId, msg: &dyn Message,
     ) -> Result<(), NetworkError> {
-        let mut peer_ids: Vec<PeerId> = self
+        let mut peer_ids: Vec<NodeId> = self
             .syn
             .peers
             .read()
             .keys()
-            .filter(|&id| *id != skip_id)
+            .filter(|&id| *id != *skip_id)
             .map(|x| *x)
             .collect();
 
@@ -936,7 +939,7 @@ impl SynchronizationProtocolHandler {
         }
 
         for id in peer_ids {
-            msg.send(io, id)?;
+            msg.send(io, &id)?;
         }
 
         Ok(())
@@ -956,7 +959,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn send_status(
-        &self, io: &dyn NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: &NodeId,
     ) -> Result<(), NetworkError> {
         let status_message = self.produce_status_message();
         debug!("Sending status message to {:?}: {:?}", peer, status_message);
@@ -968,7 +971,7 @@ impl SynchronizationProtocolHandler {
         debug!("Broadcasting status message: {:?}", status_message);
 
         if self
-            .broadcast_message(io, PeerId::max_value(), &status_message)
+            .broadcast_message(io, &Default::default(), &status_message)
             .is_err()
         {
             warn!("Error broadcsting status message");
@@ -985,7 +988,7 @@ impl SynchronizationProtocolHandler {
                 });
             self.broadcast_message(
                 io,
-                PeerId::max_value(),
+                &Default::default(),
                 new_block_hash_msg.as_ref(),
             )
             .unwrap_or_else(|e| {
@@ -1002,7 +1005,7 @@ impl SynchronizationProtocolHandler {
         Ok(())
     }
 
-    fn select_peers_for_transactions(&self) -> Vec<PeerId> {
+    fn select_peers_for_transactions(&self) -> Vec<NodeId> {
         let num_peers = self.syn.peers.read().len() as f64;
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
 
@@ -1019,7 +1022,7 @@ impl SynchronizationProtocolHandler {
     }
 
     fn propagate_transactions_to_peers(
-        &self, io: &dyn NetworkContext, peers: Vec<PeerId>,
+        &self, io: &dyn NetworkContext, peers: Vec<NodeId>,
     ) {
         let _timer = MeterTimer::time_func(PROPAGATE_TX_TIMER.as_ref());
         let lucky_peers = {
@@ -1149,7 +1152,7 @@ impl SynchronizationProtocolHandler {
                 short_ids_part.pop().unwrap(),
                 tx_hashes_part.clone(),
             );
-            match tx_msg.send(io, peer_id) {
+            match tx_msg.send(io, &peer_id) {
                 Ok(_) => {
                     trace!(
                         "{:02} <- Transactions ({} entries)",
@@ -1289,7 +1292,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn request_missing_blocks(
-        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>,
     ) -> Result<(), Error>
     {
@@ -1306,7 +1309,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn request_blocks(
-        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         mut hashes: Vec<H256>,
     )
     {
@@ -1386,7 +1389,8 @@ impl SynchronizationProtocolHandler {
             // The parameter `failed_peer` is only used when there exist some
             // blocks in `requested` but not in `blocks`.
             // Here `requested` and `blocks` have the same block, so it's okay
-            // to set `failed_peer` to 0 since it will not be used.
+            // to set `failed_peer` to Default::default() since it will not be
+            // used.
             let mut requested = HashSet::new();
             requested.insert(block.hash());
             self.recover_public_queue.dispatch(
@@ -1394,7 +1398,7 @@ impl SynchronizationProtocolHandler {
                 RecoverPublicTask::new(
                     vec![block.as_ref().clone()],
                     requested,
-                    0,
+                    Default::default(),
                     false,
                     None,
                 ),
@@ -1408,7 +1412,7 @@ impl SynchronizationProtocolHandler {
     pub fn blocks_received(
         &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         returned_blocks: HashSet<H256>, ask_full_block: bool,
-        peer: Option<PeerId>, delay: Option<Duration>,
+        peer: Option<NodeId>, delay: Option<Duration>,
     )
     {
         self.request_manager.blocks_received(
@@ -1495,7 +1499,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             .dispatch(io, LocalMessageTask { message });
     }
 
-    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
         let (msg_id, rlp) = match decode_msg(raw) {
             Some(msg) => msg,
             None => {
@@ -1534,7 +1538,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         }
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
@@ -1547,14 +1551,14 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.syn
                 .handshaking_peers
                 .write()
-                .insert(peer, Instant::now());
+                .insert(*peer, Instant::now());
         }
     }
 
-    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         info!("Peer disconnected: peer={:?}", peer);
-        self.syn.peers.write().remove(&peer);
-        self.syn.handshaking_peers.write().remove(&peer);
+        self.syn.peers.write().remove(peer);
+        self.syn.handshaking_peers.write().remove(peer);
         self.request_manager.on_peer_disconnected(io, peer);
         self.state_sync.on_peer_disconnected(&peer);
     }
@@ -1593,7 +1597,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     self.syn.get_heartbeat_timeout_peers(timeout);
                 for peer in timeout_peers {
                     io.disconnect_peer(
-                        peer,
+                        &peer,
                         Some(UpdateNodeOperation::Failure),
                         "sync heartbeat timeout", /* reason */
                     );

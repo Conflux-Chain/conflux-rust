@@ -53,7 +53,7 @@ pub trait LocalRpc {
     #[rpc(name = "net_disconnect_node")]
     fn net_disconnect_node(
         &self, id: NodeId, op: Option<UpdateNodeOperation>,
-    ) -> RpcResult<Option<usize>>;
+    ) -> RpcResult<bool>;
 
     #[rpc(name = "net_sessions")]
     fn net_sessions(

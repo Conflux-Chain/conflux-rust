@@ -104,9 +104,13 @@ impl Handleable for GetCompactBlocksResponse {
             if !missing.is_empty() {
                 debug!("Request {} missing tx in {}", missing.len(), hash);
                 ctx.manager.graph.data_man.insert_compact_block(cmpct);
-                ctx.manager
-                    .request_manager
-                    .request_blocktxn(ctx.io, ctx.peer, hash, missing, None);
+                ctx.manager.request_manager.request_blocktxn(
+                    ctx.io,
+                    ctx.node_id.clone(),
+                    hash,
+                    missing,
+                    None,
+                );
                 // The block remains inflight.
                 requested_except_inflight_txn.remove(&hash);
             } else {
@@ -153,7 +157,7 @@ impl Handleable for GetCompactBlocksResponse {
             compact_block_responded_requests.clone(),
             received_reconstructed_blocks.iter().cloned().collect(),
             true,
-            Some(ctx.peer),
+            Some(ctx.node_id.clone()),
             delay,
         );
 
@@ -162,7 +166,7 @@ impl Handleable for GetCompactBlocksResponse {
             RecoverPublicTask::new(
                 self.blocks,
                 received_full_blocks,
-                ctx.peer,
+                ctx.node_id.clone(),
                 true,
                 delay,
             ),

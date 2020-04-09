@@ -22,7 +22,7 @@ use crate::{
         Error,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         HEADER_REQUEST_BATCH_SIZE, HEADER_REQUEST_TIMEOUT,
         MAX_HEADERS_IN_FLIGHT,
@@ -32,6 +32,7 @@ use crate::{
 };
 
 use super::common::{HasKey, SyncManager};
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -141,7 +142,7 @@ impl Headers {
 
     #[inline]
     pub fn request_now_from_peer<I>(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: I,
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: I,
         source: HashSource,
     ) where
         I: Iterator<Item = H256>,
@@ -163,7 +164,7 @@ impl Headers {
     }
 
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         headers: impl Iterator<Item = BlockHeader>,
     ) -> Result<(), Error>
     {
@@ -227,7 +228,7 @@ impl Headers {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 

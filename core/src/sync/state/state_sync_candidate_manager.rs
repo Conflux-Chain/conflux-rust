@@ -1,4 +1,5 @@
-use crate::{message::PeerId, sync::state::storage::SnapshotSyncCandidate};
+use crate::sync::state::storage::SnapshotSyncCandidate;
+use network::node_table::NodeId;
 use primitives::EpochId;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -36,16 +37,16 @@ pub struct StateSyncCandidateManager {
 
     /// The map from state candidates to the set of peers that can support this
     /// state
-    candidates_map: BTreeMap<SnapshotSyncCandidate, HashSet<PeerId>>,
+    candidates_map: BTreeMap<SnapshotSyncCandidate, HashSet<NodeId>>,
     /// The peers who have been requested for candidate response but has not
     /// replied
-    pending_peers: HashSet<PeerId>,
+    pending_peers: HashSet<NodeId>,
 
     /// The chosen candidate that we are actually requesting state manifest and
     /// chunks
     active_candidate: Option<usize>,
     /// The peers that can serve `active_candidate`.
-    active_peers: HashSet<PeerId>,
+    active_peers: HashSet<NodeId>,
 }
 
 impl StateSyncCandidateManager {
@@ -63,7 +64,7 @@ impl StateSyncCandidateManager {
 
     pub fn reset(
         &mut self, current_era_genesis: EpochId,
-        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
+        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<NodeId>,
     )
     {
         let mut candidates_map = BTreeMap::new();
@@ -82,7 +83,7 @@ impl StateSyncCandidateManager {
     /// Update the status about candidate choosing.
     /// Return the peer and epoch to retrieve the state manifest
     pub fn on_peer_response(
-        &mut self, peer: &PeerId,
+        &mut self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
     ) -> Option<SnapshotSyncCandidate>
@@ -137,7 +138,7 @@ impl StateSyncCandidateManager {
         None
     }
 
-    pub fn on_peer_disconnected(&mut self, peer: &PeerId) {
+    pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
         self.active_peers.remove(peer);
         for peers in self.candidates_map.values_mut() {
             peers.remove(peer);
@@ -150,14 +151,14 @@ impl StateSyncCandidateManager {
         self.active_candidate.is_none() || self.active_peers.is_empty()
     }
 
-    pub fn active_peers(&self) -> &HashSet<PeerId> { &self.active_peers }
+    pub fn active_peers(&self) -> &HashSet<NodeId> { &self.active_peers }
 
     pub fn get_active_candidate(&self) -> Option<SnapshotSyncCandidate> {
         self.active_candidate.map(|i| self.candidates[i].clone())
     }
 
     /// `peer` cannot support the active candidate now
-    pub fn note_state_sync_failure(&mut self, peer: &PeerId) {
+    pub fn note_state_sync_failure(&mut self, peer: &NodeId) {
         self.pending_peers.remove(peer);
         if self.pending_peers.is_empty() {
             // Rely on periodic phase checks to start state sync

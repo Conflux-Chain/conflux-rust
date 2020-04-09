@@ -19,8 +19,7 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch,
-    block_parameters::MAX_BLOCK_SIZE_IN_BYTES, executive::Executed,
+    block_data_manager::BlockExecutionResultWithEpoch, executive::Executed,
     state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -485,6 +484,7 @@ impl RpcImpl {
             .as_ref()
             .clone();
         let receipt = execution_result
+            .block_receipts
             .receipts
             .get(address.index)
             .ok_or(RpcError::internal_error())?
@@ -493,6 +493,7 @@ impl RpcImpl {
             U256::zero()
         } else {
             let prior_receipt = execution_result
+                .block_receipts
                 .receipts
                 .get(address.index - 1)
                 .ok_or(RpcError::internal_error())?
@@ -518,11 +519,16 @@ impl RpcImpl {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
-            hashes.push(self.block_gen.generate_block(
-                0,
-                MAX_BLOCK_SIZE_IN_BYTES,
-                vec![],
-            ));
+            hashes.push(
+                self.block_gen.generate_block(
+                    0,
+                    self.sync
+                        .get_synchronization_graph()
+                        .verification_config
+                        .max_block_size_in_bytes,
+                    vec![],
+                ),
+            );
         }
         Ok(hashes)
     }
@@ -947,7 +953,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
-            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
+            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;

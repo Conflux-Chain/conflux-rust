@@ -22,7 +22,7 @@ impl Handleable for NewBlockHashes {
             // If a node is in catch-up mode and we are not in test-mode, we
             // just simple ignore new block hashes.
             if ctx.manager.protocol_config.test_mode {
-                if let Ok(info) = ctx.manager.syn.get_peer_info(&ctx.peer) {
+                if let Ok(info) = ctx.manager.syn.get_peer_info(&ctx.node_id) {
                     let mut info = info.write();
                     self.block_hashes.iter().for_each(|h| {
                         info.latest_block_hashes.insert(*h);
@@ -41,7 +41,7 @@ impl Handleable for NewBlockHashes {
 
         ctx.manager.request_block_headers(
             ctx.io,
-            Some(ctx.peer),
+            Some(ctx.node_id.clone()),
             headers_to_request,
             true, /* ignore_db */
         );

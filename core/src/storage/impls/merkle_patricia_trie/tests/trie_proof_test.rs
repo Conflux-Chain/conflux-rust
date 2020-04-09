@@ -13,7 +13,10 @@ fn test_rlp() {
     let node1 = TrieProofNode::new(
         Default::default(),
         Some(Box::new([0x03, 0x04, 0x05])),
-        (&[0x00, 0x01, 0x02][..]).into(),
+        CompressedPathRaw::new(
+            &[0x00, 0x01, 0x02],
+            CompressedPathRaw::first_nibble_mask(),
+        ),
         /* path_without_first_nibble = */ true,
     );
     assert_eq!(node1, rlp::decode(&rlp::encode(&node1)).unwrap());
@@ -62,14 +65,20 @@ fn test_proofs() {
     let leaf1 = TrieProofNode::new(
         Default::default(),
         Some(Box::new(value1)),
-        (&[0x20u8][..]).into(),
+        CompressedPathRaw::new(
+            &[0x20u8][..],
+            CompressedPathRaw::first_nibble_mask(),
+        ),
         /* path_without_first_nibble = */ true,
     );
 
     let leaf2 = TrieProofNode::new(
         Default::default(),
         Some(Box::new(value2)),
-        (&[0x30u8][..]).into(),
+        CompressedPathRaw::new(
+            &[0x30u8][..],
+            CompressedPathRaw::first_nibble_mask(),
+        ),
         /* path_without_first_nibble = */ true,
     );
 
@@ -82,7 +91,10 @@ fn test_proofs() {
             // There must be some value for this node otherwise it contradicts
             // with path compression.
             Some(Default::default()),
-            (&[0x00u8, 0x00u8][..]).into(),
+            CompressedPathRaw::new(
+                &[0x00u8, 0x00u8][..],
+                CompressedPathRaw::first_nibble_mask(),
+            ),
             /* path_without_first_nibble = */ true,
         )
     };

@@ -39,7 +39,7 @@ use parking_lot::RwLock;
 use primitives::{
     filter::Filter,
     log_entry::{LocalizedLogEntry, LogEntry},
-    BlockHeader, Receipt,
+    BlockHeader, BlockReceipts,
 };
 use runtime::Executor;
 use tokio_timer::sleep;
@@ -314,7 +314,7 @@ impl ChainNotificationHandler {
     // before the corresponding execution results are computed
     async fn retrieve_block_receipts(
         &self, block: &H256, pivot: &H256,
-    ) -> Option<Arc<Vec<Receipt>>> {
+    ) -> Option<Arc<BlockReceipts>> {
         const NUM_POLLS: i8 = 10;
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
 
@@ -322,7 +322,7 @@ impl ChainNotificationHandler {
             match self.data_man.block_execution_result_by_hash_with_epoch(
                 &block, &pivot, true, /* update_cache */
             ) {
-                Some(res) => return Some(res.receipts.clone()),
+                Some(res) => return Some(res.block_receipts.clone()),
                 None => {
                     trace!("Cannot find receipts with {:?}/{:?}", block, pivot);
                     let _ = sleep(POLL_INTERVAL_MS).compat().await;
@@ -353,7 +353,7 @@ impl ChainNotificationHandler {
         let mut logs = vec![];
         let mut log_index = 0;
 
-        for (block_hash, receipts) in zip(hashes, receipts) {
+        for (block_hash, block_receipts) in zip(hashes, receipts) {
             // retrieve block transactions
             let block = match self
                 .data_man
@@ -367,10 +367,12 @@ impl ChainNotificationHandler {
             };
 
             let txs = &block.transactions;
-            assert_eq!(receipts.len(), txs.len());
+            assert_eq!(block_receipts.receipts.len(), txs.len());
 
             // construct logs
-            for (txid, (receipt, tx)) in zip(&*receipts, txs).enumerate() {
+            for (txid, (receipt, tx)) in
+                zip(&block_receipts.receipts, txs).enumerate()
+            {
                 for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
                     logs.push(LocalizedLogEntry {
                         entry,
