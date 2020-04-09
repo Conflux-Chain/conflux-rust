@@ -13,6 +13,7 @@ import pickle
 class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["tx_pool_size"] = "500000"
 
     def setup_network(self):
         # self.setup_nodes(binary=[os.path.join(
@@ -25,11 +26,13 @@ class SingleBench(ConfluxTestFramework):
         self.node = self.nodes[0]
         start_p2p_connection([self.node])
 
-        block_gen_thread = BlockGenThread([self.node], self.log, num_txs=10000, interval_fixed=0.2)
+        block_gen_thread = BlockGenThread([self.node], self.log, num_txs=10000, interval_fixed=0.02)
         block_gen_thread.start()
-        tx_n = 100000
+        tx_n = 1000000
+        batch_size = 10
+        send_tps = 5000
 
-        generate = False
+        generate = True
         if generate:
             f = open("encoded_tx", "wb")
             '''Test Random Transactions'''
@@ -38,12 +41,12 @@ class SingleBench(ConfluxTestFramework):
             nonce_map = {genesis_key: 0}
             all_txs = []
             gas_price = 1
-            account_n = 10
+            account_n = 1000
 
             # Initialize new accounts
             new_keys = set()
             for _ in range(account_n):
-                value = int(balance_map[genesis_key] * 0.5)
+                value = int(balance_map[genesis_key] / (account_n * 2))
                 receiver_sk, _ = ec_random_keys()
                 new_keys.add(receiver_sk)
                 tx = create_transaction(pri_key=genesis_key, receiver=priv_to_addr(receiver_sk), value=value,
@@ -59,7 +62,7 @@ class SingleBench(ConfluxTestFramework):
             self.log.info("start to generate %d transactions", tx_n)
             for i in range(tx_n):
                 if i % 1000 == 0:
-                    self.log.debug("generated %d tx", i)
+                    self.log.info("generated %d tx", i)
                 sender_key = random.choice(list(balance_map))
                 if sender_key not in nonce_map:
                     nonce_map[sender_key] = wait_for_initial_nonce_for_privkey(self.nodes[0], sender_key)
@@ -81,7 +84,7 @@ class SingleBench(ConfluxTestFramework):
             for tx in all_txs:
                 batch_tx.append(tx)
                 i += 1
-                if i  % 1000 == 0:
+                if i  % batch_size == 0:
                     encoded = rlp.encode(Transactions(transactions=batch_tx))
                     encoded_txs.append(encoded)
                     batch_tx = []
@@ -93,14 +96,21 @@ class SingleBench(ConfluxTestFramework):
             balance_map = pickle.load(f)
 
         f.close()
-        start_time = datetime.datetime.now()
+        start_time = time.time()
+        i = 0
         for encoded in encoded_txs:
-            self.node.p2p.send_protocol_packet(int_to_bytes(
-                TRANSACTIONS) + encoded)
+            i += 1
+            if i * batch_size % send_tps == 0:
+                time_used = time.time() - start_time
+                time.sleep(i*batch_size/send_tps - time_used)
+            self.node.p2p.send_protocol_packet(encoded + int_to_bytes(
+                TRANSACTIONS))
+        self.log.info(f"Time used to send {tx_n} transactions: {time_used}")
+
+        start_time = time.time()
         for k in balance_map:
                 wait_until(lambda: self.check_account(k, balance_map))
-        end_time = datetime.datetime.now()
-        time_used = (end_time - start_time).total_seconds()
+        time_used = time.time() - start_time
         block_gen_thread.stop()
         block_gen_thread.join()
         self.log.info("Time used: %f seconds", time_used)
