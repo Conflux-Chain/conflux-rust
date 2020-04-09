@@ -54,6 +54,22 @@ impl StateDb {
         self.get::<CodeInfo>(StorageKey::new_code_key(address, code_hash))
     }
 
+    pub fn get_storage_layout(
+        &self, address: &Address,
+    ) -> Result<Option<StorageLayout>> {
+        match self.get_raw(StorageKey::new_storage_root_key(address))? {
+            None => Ok(None),
+            Some(raw) => Ok(Some(StorageLayout::from_bytes(raw.as_ref())?)),
+        }
+    }
+
+    pub fn set_storage_layout(
+        &mut self, address: &Address, layout: &StorageLayout,
+    ) -> Result<()> {
+        let key = StorageKey::new_storage_root_key(address);
+        self.set_raw(key, layout.to_bytes().into_boxed_slice())
+    }
+
     pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {
         self.get::<Account>(StorageKey::new_account_key(address))
     }
