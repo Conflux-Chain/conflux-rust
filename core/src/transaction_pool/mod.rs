@@ -55,6 +55,10 @@ lazy_static! {
         register_meter_with_group("txpool", "insert_txs_failure_tps");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
+    static ref TX_POOL_VERIFY_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::verify");
+    static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::get_state");
     static ref INSERT_TXS_QUOTA_LOCK: Lock =
         Lock::register("txpool_insert_txs_quota_lock");
     static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
@@ -288,6 +292,7 @@ impl TransactionPool {
     fn verify_transaction(
         &self, transaction: &TransactionWithSignature,
     ) -> Result<(), String> {
+        let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
         // Check the epoch height is in bound. Because this is such a loose
         // bound, we can check it here as if it will not change at all
         // during its life time.
@@ -582,6 +587,7 @@ impl TransactionPool {
     }
 
     fn get_best_state_account_cache(&self) -> AccountCache {
+        let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         AccountCache::new((&*self.best_executed_state.lock()).clone())
     }
 }

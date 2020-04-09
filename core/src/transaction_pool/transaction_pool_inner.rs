@@ -708,6 +708,7 @@ impl TransactionPoolInner {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
+        let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let mut sponsored_gas = U256::from(0);
 
         // Compute sponsored_gas for `transaction`
@@ -766,7 +767,6 @@ impl TransactionPoolInner {
             ));
         }
 
-        let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let result = self.insert_transaction_without_readiness_check(
             transaction.clone(),
             packed,
