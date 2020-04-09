@@ -141,6 +141,7 @@ build_config! {
         (expire_block_gc_period_s, (u64), 900)
         (headers_request_timeout_ms, (u64), 10_000)
         (heartbeat_period_interval_ms, (u64), 30_000)
+        (heartbeat_timeout_ms, (u64), 180_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
         (max_download_state_peers, (usize), 8)
@@ -512,6 +513,9 @@ impl Configuration {
                 .raw_conf
                 .max_allowed_timeout_in_observing_period,
             demote_peer_for_timeout: self.raw_conf.demote_peer_for_timeout,
+            heartbeat_timeout: Duration::from_millis(
+                self.raw_conf.heartbeat_timeout_ms,
+            ),
         }
     }
 
