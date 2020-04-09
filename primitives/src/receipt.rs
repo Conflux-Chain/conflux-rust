@@ -65,3 +65,18 @@ impl MallocSizeOf for Receipt {
             + self.storage_released.size_of(ops)
     }
 }
+
+/// Information describing execution of a block.
+#[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
+pub struct BlockReceipts {
+    /// This is the receipts of transaction execution in this block.
+    pub receipts: Vec<Receipt>,
+    /// This is the amount of secondary reward this block.
+    pub secondary_reward: U256,
+}
+
+impl MallocSizeOf for BlockReceipts {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.receipts.size_of(ops)
+    }
+}

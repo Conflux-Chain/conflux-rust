@@ -169,8 +169,10 @@ impl TxInfos {
         let block_receipts = epoch_receipts.swap_remove(block_index);
 
         // `block_txs` is valid and `block_hash` exists in epoch
-        assert!(block_txs.len() == block_receipts.len());
-        let items = block_txs.into_iter().zip(block_receipts.into_iter());
+        assert!(block_txs.len() == block_receipts.receipts.len());
+        let items = block_txs
+            .into_iter()
+            .zip(block_receipts.receipts.into_iter());
 
         let mut prior_gas_used = U256::zero();
         for (index, (tx, receipt)) in items.enumerate() {

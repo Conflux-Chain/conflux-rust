@@ -451,7 +451,10 @@ impl Provider {
             .into_iter()
             .map(|e| self.ledger.receipts_of(e).map(|receipts| (e, receipts)))
             .filter_map(Result::ok)
-            .map(|(epoch, receipts)| ReceiptsWithEpoch { epoch, receipts })
+            .map(|(epoch, epoch_receipts)| ReceiptsWithEpoch {
+                epoch,
+                epoch_receipts,
+            })
             .collect();
 
         let msg: Box<dyn Message> = Box::new(GetReceiptsResponse {
