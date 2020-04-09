@@ -569,13 +569,14 @@ impl TransactionPool {
     pub fn set_best_executed_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StorageResult<()> {
-        *self.best_executed_state.lock() = Arc::new(StateDb::new(
+        let best_executed_state = Arc::new(StateDb::new(
             self.data_man
                 .storage_manager
                 .get_state_no_commit(best_executed_epoch)?
                 // Safe because the state is guaranteed to be available.
                 .unwrap(),
         ));
+        *self.best_executed_state.lock() = best_executed_state;
 
         Ok(())
     }

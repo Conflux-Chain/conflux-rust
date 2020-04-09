@@ -14,6 +14,7 @@ class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["tx_pool_size"] = "500000"
+        self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
 
     def setup_network(self):
         # self.setup_nodes(binary=[os.path.join(
@@ -30,9 +31,9 @@ class SingleBench(ConfluxTestFramework):
         block_gen_thread.start()
         tx_n = 1000000
         batch_size = 10
-        send_tps = 5000
+        send_tps = 20000
 
-        generate = True
+        generate = False
         if generate:
             f = open("encoded_tx", "wb")
             '''Test Random Transactions'''
@@ -109,7 +110,7 @@ class SingleBench(ConfluxTestFramework):
 
         start_time = time.time()
         for k in balance_map:
-                wait_until(lambda: self.check_account(k, balance_map))
+                wait_until(lambda: self.check_account(k, balance_map), timeout=600)
         time_used = time.time() - start_time
         block_gen_thread.stop()
         block_gen_thread.join()
