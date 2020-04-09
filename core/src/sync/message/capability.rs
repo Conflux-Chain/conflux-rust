@@ -9,7 +9,7 @@ use crate::{
         Error, SynchronizationState,
     },
 };
-use network::{NetworkContext, PeerId};
+use network::{node_table::NodeId, NetworkContext};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 
@@ -28,12 +28,12 @@ impl DynamicCapability {
     }
 
     pub fn broadcast_with_peers(
-        self, io: &dyn NetworkContext, peers: Vec<PeerId>,
+        self, io: &dyn NetworkContext, peers: Vec<NodeId>,
     ) {
         let msg = DynamicCapabilityChange { changed: self };
 
         for peer in peers {
-            if let Err(e) = msg.send(io, peer) {
+            if let Err(e) = msg.send(io, &peer) {
                 debug!("Failed to send capability change message, peer = {}, message = {:?}, err = {:?}", peer, msg, e);
             }
         }
@@ -97,7 +97,7 @@ pub struct DynamicCapabilityChange {
 
 impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let peer = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
         peer.write().capabilities.insert(self.changed);
         Ok(())
     }

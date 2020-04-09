@@ -23,7 +23,7 @@ use cfx_types::H256;
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
 };
-use network::{NetworkContext, PeerId};
+use network::{node_table::NodeId, NetworkContext};
 use parking_lot::{Mutex, RwLock};
 use primitives::{SignedTransaction, TransactionWithSignature};
 pub use request_handler::{
@@ -168,7 +168,7 @@ impl RequestManager {
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(
         &self, io: &dyn NetworkContext, mut request: Box<dyn Request>,
-        peer: Option<PeerId>, delay: Option<Duration>,
+        peer: Option<NodeId>, delay: Option<Duration>,
     )
     {
         // retain the request items that not in flight.
@@ -213,13 +213,13 @@ impl RequestManager {
     }
 
     pub fn request_block_headers(
-        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
 
-        debug!("request_block_headers: {:?}, peer {:?}", hashes, &peer_id);
+        debug!("request_block_headers: {:?}, peer {:?}", hashes, peer_id);
 
         let request = GetBlockHeaders {
             request_id: 0,
@@ -230,7 +230,7 @@ impl RequestManager {
     }
 
     pub fn request_epoch_hashes(
-        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         epochs: Vec<u64>, delay: Option<Duration>,
     )
     {
@@ -243,7 +243,7 @@ impl RequestManager {
     }
 
     pub fn request_blocks(
-        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, with_public: bool, delay: Option<Duration>,
     )
     {
@@ -260,7 +260,7 @@ impl RequestManager {
     }
 
     pub fn request_transactions_from_digest(
-        &self, io: &dyn NetworkContext, peer_id: PeerId,
+        &self, io: &dyn NetworkContext, peer_id: NodeId,
         transaction_digests: &TransactionDigests,
     )
     {
@@ -336,7 +336,7 @@ impl RequestManager {
                             key1,
                             key2,
                             i,
-                            peer_id,
+                            peer_id.clone(),
                         ),
                     );
                     INFLIGHT_TX_PENDING_POOL_METER.mark(1);
@@ -373,7 +373,7 @@ impl RequestManager {
             "Request {} tx and {} tx hashes from peer={}",
             tx_request_indices.len(),
             hashes_request_indices.len(),
-            peer_id
+            peer_id.clone()
         );
 
         let request = GetTransactions {
@@ -409,7 +409,7 @@ impl RequestManager {
     }
 
     pub fn request_transactions_from_tx_hashes(
-        &self, io: &dyn NetworkContext, peer_id: PeerId,
+        &self, io: &dyn NetworkContext, peer_id: NodeId,
         responded_tx_hashes: Vec<H256>, window_index: usize,
         tx_hashes_indices: &Vec<usize>,
     )
@@ -481,7 +481,7 @@ impl RequestManager {
     }
 
     pub fn request_compact_blocks(
-        &self, io: &dyn NetworkContext, peer_id: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, delay: Option<Duration>,
     )
     {
@@ -497,7 +497,7 @@ impl RequestManager {
     }
 
     pub fn request_blocktxn(
-        &self, io: &dyn NetworkContext, peer_id: PeerId, block_hash: H256,
+        &self, io: &dyn NetworkContext, peer_id: NodeId, block_hash: H256,
         index_skips: Vec<usize>, delay: Option<Duration>,
     )
     {
@@ -527,7 +527,9 @@ impl RequestManager {
         }
     }
 
-    pub fn send_pending_requests(&self, io: &dyn NetworkContext, peer: PeerId) {
+    pub fn send_pending_requests(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+    ) {
         self.request_handler.send_pending_requests(io, peer)
     }
 
@@ -541,7 +543,7 @@ impl RequestManager {
     // Match request with given response.
     // No need to let caller handle request resending.
     pub fn match_request(
-        &self, peer_id: PeerId, request_id: u64,
+        &self, peer_id: &NodeId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         self.request_handler.match_request(peer_id, request_id)
     }
@@ -638,7 +640,7 @@ impl RequestManager {
     pub fn blocks_received(
         &self, io: &dyn NetworkContext, requested_hashes: HashSet<H256>,
         mut received_blocks: HashSet<H256>, ask_full_block: bool,
-        peer: Option<PeerId>, with_public: bool, delay: Option<Duration>,
+        peer: Option<NodeId>, with_public: bool, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
@@ -737,7 +739,7 @@ impl RequestManager {
         for request in requests {
             let tx_request = GetTransactions {
                 request_id: 0,
-                window_index: request.peer_id,
+                window_index: request.window_index,
                 indices: vec![request.index],
                 tx_hashes_indices: vec![],
                 short_ids: {
@@ -884,11 +886,11 @@ impl RequestManager {
         }
     }
 
-    pub fn on_peer_connected(&self, peer: PeerId) {
-        self.request_handler.add_peer(peer);
+    pub fn on_peer_connected(&self, peer: &NodeId) {
+        self.request_handler.add_peer(*peer);
     }
 
-    pub fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
+    pub fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         if let Some(unfinished_requests) =
             self.request_handler.remove_peer(peer)
         {
@@ -906,12 +908,12 @@ impl RequestManager {
 struct TimedWaitingRequest {
     time_to_send: Instant,
     request: WaitingRequest,
-    peer: Option<PeerId>,
+    peer: Option<NodeId>,
 }
 
 impl TimedWaitingRequest {
     fn new(
-        time_to_send: Instant, request: WaitingRequest, peer: Option<PeerId>,
+        time_to_send: Instant, request: WaitingRequest, peer: Option<NodeId>,
     ) -> Self {
         Self {
             time_to_send,

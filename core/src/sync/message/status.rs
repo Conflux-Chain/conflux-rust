@@ -30,7 +30,7 @@ impl Handleable for Status {
         if genesis_hash != self.genesis_hash {
             debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
-                ctx.peer, genesis_hash, self.genesis_hash
+                ctx.node_id, genesis_hash, self.genesis_hash
             );
             bail!(ErrorKind::InvalidStatus("genesis hash mismatches".into()));
         }
@@ -38,7 +38,7 @@ impl Handleable for Status {
         let latest: HashSet<H256> =
             self.terminal_block_hashes.iter().cloned().collect();
 
-        if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.peer) {
+        if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.node_id) {
             let latest_updated = {
                 let mut peer_info = peer_info.write();
                 if peer_info.protocol_version != self.protocol_version {
@@ -67,8 +67,8 @@ impl Handleable for Status {
                 ctx.manager.start_sync(ctx.io);
             }
         } else {
-            if !ctx.manager.syn.on_status_in_handshaking(ctx.peer) {
-                warn!("Unexpected Status message from peer={}", ctx.peer);
+            if !ctx.manager.syn.on_status_in_handshaking(&ctx.node_id) {
+                warn!("Unexpected Status message from peer={}", ctx.node_id);
                 return Err(ErrorKind::UnknownPeer.into());
             }
 
@@ -82,7 +82,6 @@ impl Handleable for Status {
                 };
 
             let mut peer_state = SynchronizationPeerState {
-                id: ctx.peer,
                 node_id: ctx.node_id(),
                 is_validator: false,
                 protocol_version: self.protocol_version,
@@ -106,9 +105,11 @@ impl Handleable for Status {
                 self.protocol_version, self.genesis_hash
             );
 
-            debug!("Peer {:?} connected", ctx.peer);
-            ctx.manager.syn.peer_connected(ctx.peer, peer_state);
-            ctx.manager.request_manager.on_peer_connected(ctx.peer);
+            debug!("Peer {:?} connected", ctx.node_id);
+            ctx.manager
+                .syn
+                .peer_connected(ctx.node_id.clone(), peer_state);
+            ctx.manager.request_manager.on_peer_connected(&ctx.node_id);
 
             ctx.manager.start_sync(ctx.io);
         }

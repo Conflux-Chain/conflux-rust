@@ -341,7 +341,7 @@ impl QueryService {
         for peer in peers {
             // relay to peer
             let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                self.handler.send_raw_tx(io, peer, raw.clone())
+                self.handler.send_raw_tx(io, &peer, raw.clone())
             });
 
             // check error

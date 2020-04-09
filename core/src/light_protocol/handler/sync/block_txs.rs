@@ -16,7 +16,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOCK_TXS_IN_FLIGHT,
@@ -25,6 +25,7 @@ use crate::{
 };
 use cfx_types::H256;
 use lru_time_cache::LruCache;
+use network::node_table::NodeId;
 use parking_lot::RwLock;
 use primitives::{Block, SignedTransaction};
 use std::{future::Future, sync::Arc};
@@ -101,7 +102,7 @@ impl BlockTxs {
 
     #[inline]
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         block_txs: impl Iterator<Item = BlockTxsWithHash>,
     ) -> Result<(), Error>
     {
@@ -153,7 +154,7 @@ impl BlockTxs {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 

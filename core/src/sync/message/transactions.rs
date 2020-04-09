@@ -35,10 +35,10 @@ impl Handleable for Transactions {
         debug!(
             "Received {:?} transactions from Peer {:?}",
             transactions.len(),
-            ctx.peer
+            ctx.node_id
         );
 
-        let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+        let peer_info = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
         let should_disconnect = {
             let mut peer_info = peer_info.write();
             if peer_info
@@ -91,7 +91,7 @@ pub struct TransactionDigests {
 impl Handleable for TransactionDigests {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         {
-            let peer_info = ctx.manager.syn.get_peer_info(&ctx.peer)?;
+            let peer_info = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
 
             let mut peer_info = peer_info.write();
             if peer_info
@@ -117,7 +117,11 @@ impl Handleable for TransactionDigests {
 
         ctx.manager
             .request_manager
-            .request_transactions_from_digest(ctx.io, ctx.peer, &self);
+            .request_transactions_from_digest(
+                ctx.io,
+                ctx.node_id.clone(),
+                &self,
+            );
 
         Ok(())
     }
@@ -533,7 +537,7 @@ impl Handleable for GetTransactionsResponse {
             "Received {:?} transactions and {:?} tx hashes from Peer {:?}",
             self.transactions.len(),
             self.tx_hashes.len(),
-            ctx.peer
+            ctx.node_id
         );
 
         let (signed_trans, _) = ctx
@@ -554,7 +558,7 @@ impl Handleable for GetTransactionsResponse {
                 .request_manager
                 .request_transactions_from_tx_hashes(
                     ctx.io,
-                    ctx.peer,
+                    ctx.node_id.clone(),
                     self.tx_hashes,
                     req.window_index,
                     &req.tx_hashes_indices,
@@ -592,7 +596,7 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
         debug!(
             "Received {:?} transactions from Peer {:?}",
             self.transactions.len(),
-            ctx.peer
+            ctx.node_id
         );
 
         let (signed_trans, _) = ctx
