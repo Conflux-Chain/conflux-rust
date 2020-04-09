@@ -1006,23 +1006,20 @@ impl NetworkServiceInner {
         let mut messages: Vec<(ProtocolId, Vec<u8>)> = Vec::new();
         let mut kill = false;
         let mut token_to_disconnect = None;
-        let mut message_node_id = None;
 
         // if let Some(session) = session.clone()
         if let Some(session) = self.sessions.get(stream) {
-            {
-                // We check dropped_nodes first to make sure we stop processing
-                // communications from any dropped peers
-                let sess_id = session.read().id().map(|id| *id);
-                if let Some(node_id) = sess_id {
-                    let to_drop =
-                        { self.dropped_nodes.read().contains(&node_id) };
-                    self.drop_peers(io);
-                    if to_drop {
-                        return;
-                    }
+            // We check dropped_nodes first to make sure we stop processing
+            // communications from any dropped peers
+            let session_node_id = session.read().id().map(|id| *id);
+            if let Some(node_id) = session_node_id {
+                let to_drop = { self.dropped_nodes.read().contains(&node_id) };
+                self.drop_peers(io);
+                if to_drop {
+                    return;
                 }
             }
+
             loop {
                 let mut sess = session.write();
                 let data = sess.readable(io, self);
@@ -1031,8 +1028,6 @@ impl NetworkServiceInner {
                         token_to_disconnect = session_data.token_to_disconnect;
                         match session_data.session_data {
                             SessionData::Ready => {
-                                //let mut sess = session.lock();
-                                message_node_id = Some(*sess.id().unwrap());
                                 for (protocol, _) in self.handlers.read().iter()
                                 {
                                     if sess.have_capability(*protocol) {
@@ -1047,10 +1042,6 @@ impl NetworkServiceInner {
                                         protocol
                                     ),
                                     Some(_) => {
-                                        if message_node_id.is_none() {
-                                            message_node_id =
-                                                Some(*sess.id().unwrap());
-                                        }
                                         messages.push((protocol, data));
                                     }
                                 }
@@ -1066,57 +1057,58 @@ impl NetworkServiceInner {
                     }
                 }
             }
-        }
 
-        if let Some(token_to_disconnect) = token_to_disconnect {
-            self.kill_connection_by_token(
-                token_to_disconnect.0,
-                io,
-                true,
-                Some(UpdateNodeOperation::Failure),
-                token_to_disconnect.1.as_str(), // reason
-            );
-        }
+            if let Some(token_to_disconnect) = token_to_disconnect {
+                self.kill_connection_by_token(
+                    token_to_disconnect.0,
+                    io,
+                    true,
+                    Some(UpdateNodeOperation::Failure),
+                    token_to_disconnect.1.as_str(), // reason
+                );
+            }
 
-        if kill {
-            self.kill_connection_by_token(
-                stream,
-                io,
-                true,
-                Some(UpdateNodeOperation::Failure),
-                "session readable error", // reason
-            );
-            return;
-        }
+            if kill {
+                self.kill_connection_by_token(
+                    stream,
+                    io,
+                    true,
+                    Some(UpdateNodeOperation::Failure),
+                    "session readable error", // reason
+                );
+                return;
+            }
 
-        if !ready_protocols.is_empty() {
-            {
-                let handlers = self.handlers.read();
-                for protocol in ready_protocols {
-                    if let Some(handler) = handlers.get(&protocol).clone() {
-                        debug!("session handshaked, token = {}", stream);
-                        handler.on_peer_connected(
-                            &NetworkContext::new(io, protocol, self),
-                            message_node_id.as_ref().unwrap(),
-                        );
+            if !ready_protocols.is_empty() {
+                {
+                    let handlers = self.handlers.read();
+                    for protocol in ready_protocols {
+                        if let Some(handler) = handlers.get(&protocol).clone() {
+                            debug!("session handshaked, token = {}", stream);
+                            handler.on_peer_connected(
+                                &NetworkContext::new(io, protocol, self),
+                                session_node_id.as_ref().unwrap(),
+                            );
+                        }
                     }
                 }
             }
-        }
 
-        for (protocol, data) in messages {
-            io.handle(
-                stream,
-                0, /* We only have one handler for the execution event_loop,
-                    * so the handler_id is always 0 */
-                NetworkIoMessage::HandleProtocolMessage {
-                    protocol,
-                    peer: stream,
-                    node_id: message_node_id.as_ref().unwrap().clone(),
-                    data,
-                },
-            )
-            .expect("Fail to send NetworkIoMessage::HandleNetworkWork");
+            for (protocol, data) in messages {
+                io.handle(
+                    stream,
+                    0, /* We only have one handler for the execution
+                        * event_loop,
+                        * so the handler_id is always 0 */
+                    NetworkIoMessage::HandleProtocolMessage {
+                        protocol,
+                        peer: stream,
+                        node_id: session_node_id.as_ref().unwrap().clone(),
+                        data,
+                    },
+                )
+                .expect("Fail to send NetworkIoMessage::HandleNetworkWork");
+            }
         }
     }
 
