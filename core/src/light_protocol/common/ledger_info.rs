@@ -4,8 +4,8 @@
 
 use cfx_types::{Bloom, H256};
 use primitives::{
-    Block, BlockHeader, BlockHeaderBuilder, EpochNumber, Receipt, StateRoot,
-    StorageKey,
+    Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, EpochNumber,
+    StateRoot, StorageKey,
 };
 
 use crate::{
@@ -170,7 +170,7 @@ impl LedgerInfo {
     /// Get the epoch receipts corresponding to the execution of `epoch`.
     /// Returns a vector of receipts for each block in `epoch`.
     #[inline]
-    pub fn receipts_of(&self, epoch: u64) -> Result<Vec<Vec<Receipt>>, Error> {
+    pub fn receipts_of(&self, epoch: u64) -> Result<Vec<BlockReceipts>, Error> {
         if epoch == 0 {
             return Ok(vec![]);
         }
@@ -186,7 +186,7 @@ impl LedgerInfo {
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_cache */
                     )
-                    .map(|res| (*res.receipts).clone())
+                    .map(|res| (*res.block_receipts).clone())
                     .ok_or(ErrorKind::InternalError.into())
             })
             .collect()

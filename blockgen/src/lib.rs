@@ -265,7 +265,8 @@ impl BlockGenerator {
                 )?;
 
         let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
-        let block_size_limit = MAX_BLOCK_SIZE_IN_BYTES;
+        let block_size_limit =
+            self.graph.verification_config.max_block_size_in_bytes;
 
         let transactions = self.txpool.pack_transactions(
             num_txs,
@@ -723,7 +724,7 @@ impl BlockGenerator {
 
                 current_mining_block = Some(bg.assemble_new_block(
                     MAX_TRANSACTION_COUNT_PER_BLOCK,
-                    MAX_BLOCK_SIZE_IN_BYTES,
+                    bg.graph.verification_config.max_block_size_in_bytes,
                     vec![],
                 ));
 
@@ -791,7 +792,11 @@ impl BlockGenerator {
                 _ => {}
             }
             if !self.sync.catch_up_mode() {
-                self.generate_block(3000, MAX_BLOCK_SIZE_IN_BYTES, vec![]);
+                self.generate_block(
+                    3000,
+                    self.graph.verification_config.max_block_size_in_bytes,
+                    vec![],
+                );
             }
             thread::sleep(interval);
         }

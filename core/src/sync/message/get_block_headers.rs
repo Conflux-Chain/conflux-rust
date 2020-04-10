@@ -78,7 +78,7 @@ impl Handleable for GetBlockHeaders {
         debug!(
             "Returned {:?} block headers to peer {:?}",
             block_headers_resp.headers.len(),
-            ctx.peer,
+            ctx.node_id,
         );
 
         ctx.send_response(&block_headers_resp)

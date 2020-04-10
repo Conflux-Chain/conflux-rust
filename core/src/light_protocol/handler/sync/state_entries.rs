@@ -15,7 +15,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         CACHE_TIMEOUT, MAX_STATE_ENTRIES_IN_FLIGHT,
         STATE_ENTRY_REQUEST_BATCH_SIZE, STATE_ENTRY_REQUEST_TIMEOUT,
@@ -28,6 +28,7 @@ use super::{
     common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     state_roots::StateRoots,
 };
+use network::node_table::NodeId;
 
 pub type StateEntry = Option<Vec<u8>>;
 
@@ -114,7 +115,7 @@ impl StateEntries {
 
     #[inline]
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         entries: impl Iterator<Item = StateEntryWithKey>,
     ) -> Result<(), Error>
     {
@@ -162,7 +163,7 @@ impl StateEntries {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, keys: Vec<StateKey>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, keys: Vec<StateKey>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} keys={:?}", peer, keys);
 

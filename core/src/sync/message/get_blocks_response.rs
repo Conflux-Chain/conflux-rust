@@ -62,7 +62,7 @@ impl Handleable for GetBlocksResponse {
             RecoverPublicTask::new(
                 self.blocks,
                 requested_blocks,
-                ctx.peer,
+                ctx.node_id.clone(),
                 false,
                 delay,
             ),
@@ -110,7 +110,7 @@ impl Handleable for GetBlocksWithPublicResponse {
             RecoverPublicTask::new(
                 self.blocks,
                 req_hashes,
-                ctx.peer,
+                ctx.node_id.clone(),
                 false, /* compact */
                 delay,
             ),

@@ -3,8 +3,11 @@ target
 **/target
 **/*.rs.bk
 **/__pycache__
+.idea/
+.git/
+.gitmodules
+.phabricator*
 build/
-.*
 **/blockchain_db/
 **/sqlite_db/
 **/net_config/

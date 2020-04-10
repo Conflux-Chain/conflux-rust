@@ -4,7 +4,8 @@
 
 use io::TimerToken;
 use network::{
-    NetworkContext, NetworkProtocolHandler, NetworkService, PeerId, ProtocolId,
+    node_table::NodeId, NetworkContext, NetworkProtocolHandler, NetworkService,
+    ProtocolId,
 };
 use parking_lot::RwLock;
 use priority_send_queue::SendQueuePriority;
@@ -16,7 +17,7 @@ const PROTOCOL_VERSION_DATA_PROPAGATION: u8 = 1;
 pub struct DataPropagation {
     interval: Duration,
     size: usize,
-    peers: RwLock<HashSet<PeerId>>,
+    peers: RwLock<HashSet<NodeId>>,
 }
 
 impl DataPropagation {
@@ -60,7 +61,7 @@ impl NetworkProtocolHandler for DataPropagation {
         }
     }
 
-    fn on_message(&self, _io: &dyn NetworkContext, peer: PeerId, data: &[u8]) {
+    fn on_message(&self, _io: &dyn NetworkContext, peer: &NodeId, data: &[u8]) {
         if data.len() != self.size {
             error!("DataPropagation.on_message: received invalid data, len = {}, expected = {}", data.len(), self.size);
         }
@@ -71,31 +72,29 @@ impl NetworkProtocolHandler for DataPropagation {
         );
     }
 
-    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
         debug!(
             "DataPropagation.on_peer_connected: new peer {} connected",
             peer
         );
-        self.peers.write().insert(peer);
+        self.peers.write().insert(*peer);
     }
 
-    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
         debug!(
             "DataPropagation.on_peer_disconnected: peer {} disconnected",
             peer
         );
-        self.peers.write().remove(&peer);
+        self.peers.write().remove(peer);
     }
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
         assert_eq!(timer, 0);
 
         for p in self.peers.read().iter() {
-            if let Err(e) = io.send(
-                p.clone(),
-                vec![0; self.size],
-                SendQueuePriority::Normal,
-            ) {
+            if let Err(e) =
+                io.send(p, vec![0; self.size], SendQueuePriority::Normal)
+            {
                 warn!(
                     "failed to propagate data to peer {}: {:?}",
                     p.clone(),

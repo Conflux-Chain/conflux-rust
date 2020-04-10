@@ -17,19 +17,24 @@ use unexpected::{Mismatch, OutOfBounds};
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
     pub referee_bound: usize,
+    pub max_block_size_in_bytes: usize,
 }
 
 impl VerificationConfig {
-    pub fn new(test_mode: bool, referee_bound: usize) -> Self {
+    pub fn new(
+        test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
+    ) -> Self {
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
                 referee_bound,
+                max_block_size_in_bytes,
             }
         } else {
             VerificationConfig {
                 verify_timestamp: true,
                 referee_bound,
+                max_block_size_in_bytes,
             }
         }
     }
@@ -172,11 +177,11 @@ impl VerificationConfig {
             block_gas_limit += *t.gas_limit();
         }
 
-        if block_size > MAX_BLOCK_SIZE_IN_BYTES {
+        if block_size > self.max_block_size_in_bytes {
             return Err(From::from(BlockError::InvalidBlockSize(
                 OutOfBounds {
-                    min: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
-                    max: Some(MAX_BLOCK_SIZE_IN_BYTES as u64),
+                    min: None,
+                    max: Some(self.max_block_size_in_bytes as u64),
                     found: block_size as u64,
                 },
             )));

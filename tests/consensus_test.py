@@ -18,13 +18,17 @@ class FixedGenerateTest(ConfluxTestFramework):
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
-        blocks = self.nodes[0].generate_empty_blocks(3)
+        blocks = []
+        for _ in range(3):
+            blocks.extend(self.nodes[0].generate_empty_blocks(1))
         assert (self.nodes[0].getblockcount() == 4)
         besthash0 = self.nodes[0].best_block_hash()
         assert (besthash0 == blocks[2])
         self.log.info("Generate three blocks in one chain for node 0")
 
-        blocks1 = self.nodes[1].generate_empty_blocks(4)
+        blocks1 = []
+        for _ in range(4):
+            blocks1.extend(self.nodes[1].generate_empty_blocks(1))
         assert (self.nodes[1].getblockcount() == 5)
         besthash1 = self.nodes[1].best_block_hash()
         self.log.info("Generate four blocks in another chain for node 1")

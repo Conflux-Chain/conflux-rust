@@ -6,7 +6,7 @@ import os, sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import argparse
-from remote_simulate import RemoteSimulate, pssh, kill_remote_conflux
+from remote_simulate import RemoteSimulate, pssh, kill_remote_conflux, execute
 import subprocess
 from test_framework.test_framework import OptionHelper
 
@@ -19,6 +19,7 @@ class RemoteSimulateConfig:
         self.txs_per_block = txs_per_block
         self.tx_size = tx_size
         self.num_blocks = num_blocks
+        self.data_propagate_enabled = False
 
     def __str__(self):
         return str(self.__dict__)
@@ -67,7 +68,7 @@ class LatencyExperiment:
             return k
 
         remote_simulate_options = dict(filter(
-            lambda kv: k_from_kv(kv) in set(["bandwidth", "profiler", "enable_tx_propagation", "ips_file"]),
+            lambda kv: k_from_kv(kv) in set(["bandwidth", "profiler", "enable_tx_propagation", "ips_file", "enable_flamegraph"]),
             list(RemoteSimulate.SIMULATE_OPTIONS.items())))
         remote_simulate_options.update(RemoteSimulate.PASS_TO_CONFLUX_OPTIONS)
         # Configs with different default values than RemoteSimulate

@@ -828,11 +828,12 @@ impl ConsensusGraph {
             .flat_map(move |blocks_chunk| {
                 blocks_chunk.into_par_iter()
                     .filter_map(|hash|
-                        self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, r.0, (*r.1.receipts).clone()))
+                        self.inner.read().block_execution_results_by_hash(&hash, false /* update_cache */).map(|r| (hash, r.0, (*r.1.block_receipts).clone()))
                     )
-                    .filter_map(|(hash, epoch_hash, receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, epoch_hash, receipts, b.transaction_hashes())))
-                    .filter_map(|(hash, epoch_hash, receipts, hashes)| self.data_man.block_by_hash(&epoch_hash, false /* update_cache */).map(|b| (hash, b.block_header.height(), receipts, hashes)))
-                    .flat_map(|(hash, epoch, mut receipts, mut hashes)| {
+                    .filter_map(|(hash, epoch_hash, block_receipts)| self.data_man.block_by_hash(&hash, false /* update_cache */).map(|b| (hash, epoch_hash, block_receipts, b.transaction_hashes())))
+                    .filter_map(|(hash, epoch_hash, block_receipts, hashes)| self.data_man.block_by_hash(&epoch_hash, false /* update_cache */).map(|b| (hash, b.block_header.height(), block_receipts, hashes)))
+                    .flat_map(|(hash, epoch, block_receipts, mut hashes)| {
+                        let mut receipts = block_receipts.receipts;
                         if receipts.len() != hashes.len() {
                             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", hash, receipts.len(), hashes.len());
                             assert!(false);

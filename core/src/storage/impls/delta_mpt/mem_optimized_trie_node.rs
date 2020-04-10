@@ -29,11 +29,14 @@ pub struct MemOptimizedTrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     /// When there is only one half-byte in path and it's the "first half",
     /// path_end_mask is set. When there is only one half-byte in path and
     /// it's the "second half", compressed_path is set to one full byte
-    /// with the missing "first half", and path_end_mask is set to "no
-    /// mask". In comparison it still matches the corresponding byte of the
-    /// key. We don't store path_begin_mask because it isn't used at all in
-    /// comparison.
-    path_end_mask: u8,
+    /// with the missing "first half", and path_begin_mask is set to second
+    /// half, path_end_mask is set to "no mask". In comparison it still
+    /// matches the corresponding byte of the  key.
+    ///
+    /// We combine path_begin_mask and path_end_mask into path_mask.
+    /// 0xf0 -> no end nibble; 0x0f -> no start nibble;
+    /// 0xff -> no start & end nibble; 0x00 -> full bytes;
+    path_mask: u8,
     /// 4 bits per step.
     /// We limit the maximum key steps by u16.
     path_size: u16,
@@ -177,7 +180,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
             self.path_memory_manager.drop_value();
         }
         self.path_size = new_path.path_size();
-        self.path_end_mask = new_path.end_mask();
+        self.path_mask = new_path.path_mask();
         let path_slice = new_path.path_slice();
         self.path =
             MaybeInPlaceByteArray::copy_from(path_slice, path_slice.len());
@@ -257,7 +260,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
         let size = self.path_size;
         CompressedPathRef::new(
             self.path.get_slice(size as usize),
-            self.path_end_mask,
+            self.path_mask,
         )
     }
 
@@ -279,7 +282,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 
     fn set_compressed_path(&mut self, mut path: CompressedPathRaw) {
-        self.path_end_mask = path.end_mask();
+        self.path_mask = path.path_mask();
 
         path.byte_array_memory_manager
             .move_to(&mut self.path_memory_manager);
@@ -508,7 +511,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
                 ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT,
             children_table: Default::default(),
             merkle_hash: Default::default(),
-            path_end_mask: CompressedPathRaw::HAS_SECOND_NIBBLE,
+            path_mask: CompressedPathRaw::NO_MISSING_NIBBLE,
             path_size: 0,
             path: Default::default(),
             path_memory_manager: Default::default(),

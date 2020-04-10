@@ -149,11 +149,11 @@ impl Block {
                         .iter()
                         .enumerate()
                         .map(|(idx, tx)| {
-                            let receipt = execution_result.receipts.get(idx).unwrap();
+                            let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
                             let prior_gas_used = if idx == 0 {
                                 CfxU256::zero()
                             } else {
-                                execution_result.receipts.get(idx - 1).unwrap().gas_used
+                                execution_result.block_receipts.receipts.get(idx - 1).unwrap().gas_used
                             };
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS

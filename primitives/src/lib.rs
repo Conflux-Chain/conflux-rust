@@ -32,7 +32,7 @@ pub use crate::{
     block_header::{BlockHeader, BlockHeaderBuilder},
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
     log_entry::LogEntry,
-    receipt::Receipt,
+    receipt::{BlockReceipts, Receipt},
     state_root::*,
     storage::{StorageLayout, StorageValue},
     storage_key::*,

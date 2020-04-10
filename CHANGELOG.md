@@ -51,7 +51,12 @@ functionality remains the same.
 
 - Fix an issue that virtual call RPC may fail if the caller does not have enough balance
 
+- Fix an issue that failing to send a pending request can make a block not received.
+
+- Fix an issue that not-graph-ready compact blocks are not fully received.
+
 - Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
+
 
 ## Improvements
 

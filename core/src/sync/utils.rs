@@ -7,7 +7,7 @@ use crate::{
     },
     db::NUM_COLUMNS,
     parameters::{
-        block::REFEREE_DEFAULT_BOUND,
+        block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
         consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
@@ -192,8 +192,11 @@ pub fn initialize_synchronization_graph_with_data_manager(
         },
     ));
 
-    let verification_config =
-        VerificationConfig::new(true, REFEREE_DEFAULT_BOUND);
+    let verification_config = VerificationConfig::new(
+        true,
+        REFEREE_DEFAULT_BOUND,
+        MAX_BLOCK_SIZE_IN_BYTES,
+    );
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,

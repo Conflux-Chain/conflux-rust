@@ -49,7 +49,6 @@ pub mod msg_sender {
     use super::message::msgid;
     use crate::message::MsgId;
     use metrics::{register_meter_with_group, Meter};
-    use network::PeerId;
     use std::sync::Arc;
 
     pub const NULL: usize = !0;
@@ -296,11 +295,7 @@ pub mod msg_sender {
             );
     }
 
-    pub fn metric_message(peer: PeerId, msg_id: MsgId, size: usize) {
-        if peer == NULL {
-            return;
-        }
-
+    pub fn metric_message(msg_id: MsgId, size: usize) {
         match msg_id {
             msgid::STATUS => ON_STATUS_METER.mark(size),
             msgid::GET_BLOCK_HEADERS_RESPONSE => {

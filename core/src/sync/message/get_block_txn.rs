@@ -69,7 +69,7 @@ impl Handleable for GetBlockTxn {
                     if last >= block.transactions.len() {
                         warn!(
                             "Request tx index out of bound, peer={}, hash={}",
-                            ctx.peer,
+                            ctx.node_id,
                             block.hash()
                         );
                         return Err(ErrorKind::InvalidGetBlockTxn(

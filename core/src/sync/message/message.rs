@@ -295,7 +295,7 @@ fn handle_message<T: Decodable + Handleable + Message>(
 
     trace!(
         "handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}",
-        ctx.peer, msg_id, msg_name, req_id,
+        ctx.node_id, msg_id, msg_name, req_id,
     );
 
     msg.throttle(ctx)?;
@@ -303,7 +303,7 @@ fn handle_message<T: Decodable + Handleable + Message>(
     if let Err(e) = msg.handle(ctx) {
         debug!(
             "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
-            ctx.peer, msg_id, msg_name, req_id, e.0,
+            ctx.node_id, msg_id, msg_name, req_id, e.0,
         );
 
         return Err(e);
