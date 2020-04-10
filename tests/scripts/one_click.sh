@@ -35,7 +35,17 @@ run_latency_exp () {
     if [ $enable_flamegraph = true ]; then
         flamegraph_option="--enable-flamegraph"
     fi
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --vms $slave_count --batch-config \"$exp_config\" --storage-memory-gb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 200 $flamegraph_option --max-block-size-in-bytes $max_block_size_in_bytes"
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py
+    --vms $slave_count
+    --batch-config \"$exp_config\"
+    --storage-memory-gb 16
+    --bandwidth 20
+    --tps $tps
+    --enable-tx-propagation
+    --send-tx-period-ms 200
+    $flamegraph_option
+    --max-block-size-in-bytes $max_block_size_in_bytes
+    --conflux-binary \"~/conflux\""
 
     #5) Terminate slave instances
 #    rm -rf tmp_data
