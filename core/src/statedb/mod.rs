@@ -13,6 +13,7 @@ use crate::{
 use cfx_types::{Address, H256, U256};
 use primitives::{
     Account, CodeInfo, EpochId, StorageKey, StorageLayout, StorageRoot,
+    MERKLE_NULL_NODE,
 };
 
 mod error;
@@ -82,11 +83,17 @@ impl StateDb {
     ) -> Result<Option<StorageRoot>> {
         let key = StorageKey::new_storage_root_key(address);
 
-        // self.storage
-        //     .get_merkle_hash_wo_compressed_path(key)
-        //     .map_err(|e| e.into())
-
-        todo!()
+        match self.storage.get_node_merkle_all_versions(key)? {
+            (None, None, None) => Ok(None),
+            (maybe_delta, maybe_intermediate, maybe_snapshot) => {
+                Ok(Some(StorageRoot {
+                    delta: maybe_delta.unwrap_or(MERKLE_NULL_NODE),
+                    intermediate: maybe_intermediate
+                        .unwrap_or(MERKLE_NULL_NODE),
+                    snapshot: maybe_snapshot.unwrap_or(MERKLE_NULL_NODE),
+                }))
+            }
+        }
     }
 
     pub fn get_raw(&self, key: StorageKey) -> Result<Option<Box<[u8]>>> {
