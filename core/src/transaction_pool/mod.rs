@@ -63,6 +63,8 @@ lazy_static! {
         Lock::register("txpool_insert_txs_quota_lock");
     static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
         Lock::register("txpool_insert_txs_enqueue_lock");
+    static ref PACK_TRANSACTION_LOCK: Lock =
+        Lock::register("txpool_pack_transactions");
 }
 
 pub const DEFAULT_MAX_TRANSACTION_GAS_LIMIT: u64 = 100_000_000;
@@ -433,7 +435,7 @@ impl TransactionPool {
         best_epoch_height: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         debug!("pack_transactions: after inner lock");
         let height_lower_bound =
             if best_epoch_height > self.config.transaction_epoch_bound {

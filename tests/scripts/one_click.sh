@@ -19,13 +19,13 @@ run_latency_exp () {
     max_block_size_in_bytes=$4
 
     #1) Create master instance and slave image
-    ./create_slave_image.sh $key_pair $branch $repo
-    ./ip.sh --public
+#    ./create_slave_image.sh $key_pair $branch $repo
+#    ./ip.sh --public
 
     #2) Launch slave instances
     master_ip=`cat ips`
     slave_image=`cat slave_image`
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
+#    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
     #3) compile, and distributed binary to slaves: You can make change on the MASTER node and run the changed code against SLAVES nodes.
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;cargo build --release --features \"deadlock_detection\";parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
