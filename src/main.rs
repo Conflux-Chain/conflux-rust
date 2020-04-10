@@ -39,12 +39,12 @@ fn main() -> Result<(), String> {
                 continue;
             }
 
-            println!("{} deadlocks detected", deadlocks.len());
+            eprintln!("{} deadlocks detected", deadlocks.len());
             for (i, threads) in deadlocks.iter().enumerate() {
-                println!("Deadlock #{}", i);
+                eprintln!("Deadlock #{}", i);
                 for t in threads {
-                    println!("Thread Id {:#?}", t.thread_id());
-                    println!("{:#?}", t.backtrace());
+                    eprintln!("Thread Id {:#?}", t.thread_id());
+                    eprintln!("{:#?}", t.backtrace());
                 }
             }
         });
