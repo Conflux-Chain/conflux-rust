@@ -77,7 +77,7 @@ exp_config="250:1:300000:4000"
 # Block size is limited by `max_block_size_in_bytes`.
 
 tps=4000
-max_block_size_in_bytes=1000000
+max_block_size_in_bytes=300000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
 
