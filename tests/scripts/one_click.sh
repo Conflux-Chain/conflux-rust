@@ -38,12 +38,12 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;python3 ./exp_latency.py --vms $slave_count --batch-config \"$exp_config\" --storage-memory-gb 16 --bandwidth 20 --tps $tps --enable-tx-propagation --send-tx-period-ms 200 $flamegraph_option --max-block-size-in-bytes $max_block_size_in_bytes"
 
     #5) Terminate slave instances
-    rm -rf tmp_data
-    mkdir tmp_data
-    cd tmp_data
-    ../list-on-demand.sh $slave_role || true
-    ../terminate-on-demand.sh
-    cd ..
+#    rm -rf tmp_data
+#    mkdir tmp_data
+#    cd tmp_data
+#    ../list-on-demand.sh $slave_role || true
+#    ../terminate-on-demand.sh
+#    cd ..
 
     # Download results
     archive_file="exp_stat_latency.tgz"
@@ -67,7 +67,7 @@ exp_config="250:1:300000:4000"
 # For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will take effects.
 # Block size is limited by `max_block_size_in_bytes`.
 
-tps=4000
+tps=6000
 max_block_size_in_bytes=1000000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
