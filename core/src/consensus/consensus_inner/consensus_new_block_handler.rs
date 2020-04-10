@@ -161,6 +161,13 @@ impl ConsensusNewBlockHandler {
                 .data
                 .blockset_in_own_view_of_epoch
                 .retain(|v| new_era_block_arena_index_set.contains(v));
+            // FIXME: This causes inconsistency between the db and the memory.
+            // FIXME: Although it does not impact the sync process. We should
+            // consider fix it.
+            inner.arena[me]
+                .data
+                .skipped_epoch_blocks
+                .retain(|v| new_era_block_arena_index_set.contains(v));
             if !new_era_block_arena_index_set.contains(
                 &inner.arena[me].data.past_view_last_timer_block_arena_index,
             ) {

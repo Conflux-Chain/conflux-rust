@@ -64,7 +64,7 @@ pub trait TestRpc {
     fn generate_one_block_with_direct_txgen(
         &self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize,
         num_txs_erc20: usize,
-    ) -> RpcResult<()>;
+    ) -> RpcResult<H256>;
 
     #[rpc(name = "test_generatecustomblock")]
     fn generate_custom_block(
