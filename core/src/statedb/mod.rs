@@ -77,7 +77,6 @@ impl StateDb {
         self.get::<Account>(StorageKey::new_account_key(address))
     }
 
-    #[allow(unused_variables)]
     pub fn get_storage_root(
         &self, address: &Address,
     ) -> Result<Option<StorageRoot>> {

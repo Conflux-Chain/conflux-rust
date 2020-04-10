@@ -805,6 +805,7 @@ impl OverlayAccount {
         }
 
         // reinsert storage_layout to delta trie if storage is updated
+        // FIXME: load storage layout on first storage access instead
         if !self.storage_changes.is_empty()
             && self.storage_layout_change.is_none()
         {
