@@ -226,6 +226,7 @@ class RemoteSimulate(ConfluxTestFramework):
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
         # The monitor will check the block_count of nodes[0]
+        self.progress = 0
         monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
         monitor_thread.start()
 
