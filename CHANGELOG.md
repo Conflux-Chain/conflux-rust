@@ -51,6 +51,8 @@ functionality remains the same.
 
 - Fix an issue that virtual call RPC may fail if the caller does not have enough balance
 
+- Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
+
 ## Improvements
 
 - Make the consensus layer to prioritize meaningful blocks first. It will
