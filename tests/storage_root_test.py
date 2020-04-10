@@ -58,7 +58,6 @@ class StorageRootTest(ConfluxTestFramework):
 
         # get storage root; expect: (D0, I0, S0) = (?, NULL, NULL)
         root0 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
-        self.log.info(root0)
 
         assert(root0 != None)
         assert(root0["delta"]        != NULL_NODE)
@@ -69,7 +68,6 @@ class StorageRootTest(ConfluxTestFramework):
         # NOTE: call_contract will generate some blocks but it should be < 50
         self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"increment()")))
         root1 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
-        self.log.info(root1)
 
         assert(root1["delta"]        != root0["delta"])
         assert(root1["intermediate"] == root0["intermediate"])
@@ -82,7 +80,6 @@ class StorageRootTest(ConfluxTestFramework):
         # (the previous delta trie became the current intermediate trie)
         # (note that storage root in the snapshot will not match due to differences in padding)
         root2 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
-        self.log.info(root2)
 
         assert(root2["delta"]        == NULL_NODE)
         assert(root2["intermediate"] == root1["delta"])
@@ -91,7 +88,6 @@ class StorageRootTest(ConfluxTestFramework):
         # NOTE: call_contract will generate some blocks but it should be < 50
         self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"increment()")))
         root3 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
-        self.log.info(root3)
 
         assert(root3["delta"]        != root2["delta"])
         assert(root3["intermediate"] == root2["intermediate"])
@@ -104,7 +100,6 @@ class StorageRootTest(ConfluxTestFramework):
         # (the previous delta trie became the current intermediate trie)
         # (note that storage root in the snapshot will not match due to differences in padding)
         root4 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
-        self.log.info(root4)
 
         assert(root4["delta"]        == NULL_NODE)
         assert(root4["intermediate"] == root3["delta"])
