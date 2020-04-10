@@ -1011,7 +1011,7 @@ impl NetworkServiceInner {
         if let Some(session) = self.sessions.get(stream) {
             // We check dropped_nodes first to make sure we stop processing
             // communications from any dropped peers
-            let session_node_id = session.read().id().map(|id| *id);
+            let mut session_node_id = session.read().id().map(|id| *id);
             if let Some(node_id) = session_node_id {
                 let to_drop = { self.dropped_nodes.read().contains(&node_id) };
                 self.drop_peers(io);
@@ -1034,6 +1034,7 @@ impl NetworkServiceInner {
                                         ready_protocols.push(*protocol);
                                     }
                                 }
+                                session_node_id = Some(*sess.id().unwrap());
                             }
                             SessionData::Message { data, protocol } => {
                                 match self.handlers.read().get(&protocol) {

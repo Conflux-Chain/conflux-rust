@@ -256,6 +256,7 @@ pub struct ProtocolConfiguration {
     pub send_tx_period: Duration,
     pub check_request_period: Duration,
     pub heartbeat_period_interval: Duration,
+    pub heartbeat_timeout: Duration,
     pub block_cache_gc_period: Duration,
     pub expire_block_gc_period: Duration,
     pub headers_request_timeout: Duration,
@@ -1592,9 +1593,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 self.update_total_weight_delta_heartbeat();
             }
             CHECK_PEER_HEARTBEAT_TIMER => {
-                let timeout = Duration::from_secs(180);
-                let timeout_peers =
-                    self.syn.get_heartbeat_timeout_peers(timeout);
+                let timeout_peers = self.syn.get_heartbeat_timeout_peers(
+                    self.protocol_config.heartbeat_timeout,
+                );
                 for peer in timeout_peers {
                     io.disconnect_peer(
                         &peer,
