@@ -47,7 +47,8 @@ pub enum CleanupMode<'a> {
     /// Don't delete null accounts upon touching, but also don't create them.
     NoEmpty,
     /// Mark all touched accounts.
-    /// TODO: We have not implemented the correct behavior of TrackTouched for internal Contracts.
+    /// TODO: We have not implemented the correct behavior of TrackTouched for
+    /// internal Contracts.
     TrackTouched(&'a mut HashSet<Address>),
 }
 
@@ -368,12 +369,15 @@ impl State {
     pub fn is_contract(&self, address: &Address) -> bool {
         self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| acc.is_contract())
-        }).unwrap_or(false)
+        })
+        .unwrap_or(false)
     }
 
     pub fn sponsor_for_gas(&self, address: &Address) -> DbResult<Address> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(Address::zero(), |acc| acc.sponsor_info().sponsor_for_gas)
+            acc.map_or(Address::zero(), |acc| {
+                acc.sponsor_info().sponsor_for_gas
+            })
         })
     }
 
@@ -381,7 +385,9 @@ impl State {
         &self, address: &Address,
     ) -> DbResult<Address> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(Address::zero(), |acc| acc.sponsor_info().sponsor_for_collateral)
+            acc.map_or(Address::zero(), |acc| {
+                acc.sponsor_info().sponsor_for_collateral
+            })
         })
     }
 
@@ -390,11 +396,13 @@ impl State {
         upper_bound: &U256,
     ) -> DbResult<()>
     {
-        if *sponsor != self.sponsor_for_gas(address)? || *sponsor_balance != self.sponsor_balance_for_gas(address)? {
+        if *sponsor != self.sponsor_for_gas(address)?
+            || *sponsor_balance != self.sponsor_balance_for_gas(address)?
+        {
             self.require(address, false).map(|mut x| {
                 x.set_sponsor_for_gas(sponsor, sponsor_balance, upper_bound)
             })
-        }else{
+        } else {
             Ok(())
         }
     }
@@ -402,10 +410,14 @@ impl State {
     pub fn set_sponsor_for_collateral(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
     ) -> DbResult<()> {
-        if *sponsor != self.sponsor_for_collateral(address)? || *sponsor_balance != self.sponsor_balance_for_collateral(address)? {
-            self.require(address, false)
-                .map(|mut x| x.set_sponsor_for_collateral(sponsor, sponsor_balance))
-        }else{
+        if *sponsor != self.sponsor_for_collateral(address)?
+            || *sponsor_balance
+                != self.sponsor_balance_for_collateral(address)?
+        {
+            self.require(address, false).map(|mut x| {
+                x.set_sponsor_for_collateral(sponsor, sponsor_balance)
+            })
+        } else {
             Ok(())
         }
     }
@@ -418,7 +430,9 @@ impl State {
 
     pub fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |acc| acc.sponsor_info().sponsor_balance_for_gas)
+            acc.map_or(U256::zero(), |acc| {
+                acc.sponsor_info().sponsor_balance_for_gas
+            })
         })
     }
 
@@ -426,7 +440,9 @@ impl State {
         &self, address: &Address,
     ) -> DbResult<U256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |acc| acc.sponsor_info().sponsor_balance_for_collateral)
+            acc.map_or(U256::zero(), |acc| {
+                acc.sponsor_info().sponsor_balance_for_collateral
+            })
         })
     }
 
@@ -436,11 +452,14 @@ impl State {
     ) -> DbResult<()>
     {
         if self.ensure_cached(contract_address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc|
-                acc.is_contract() && (acc.admin().is_zero() || acc.admin() == requester) && acc.admin() != admin,
-            )
+            acc.map_or(false, |acc| {
+                acc.is_contract()
+                    && (acc.admin().is_zero() || acc.admin() == requester)
+                    && acc.admin() != admin
+            })
         })? {
-            self.require(&contract_address, false)?.set_admin(requester, admin);
+            self.require(&contract_address, false)?
+                .set_admin(requester, admin);
         }
         Ok(())
     }
@@ -449,7 +468,8 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.sub_sponsor_balance_for_gas(by);
+            self.require(address, false)?
+                .sub_sponsor_balance_for_gas(by);
         }
         Ok(())
     }
@@ -458,7 +478,8 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.add_sponsor_balance_for_gas(by);
+            self.require(address, false)?
+                .add_sponsor_balance_for_gas(by);
         }
         Ok(())
     }
@@ -467,7 +488,8 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.sub_sponsor_balance_for_collateral(by);
+            self.require(address, false)?
+                .sub_sponsor_balance_for_collateral(by);
         }
         Ok(())
     }
@@ -476,7 +498,8 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.add_sponsor_balance_for_collateral(by);
+            self.require(address, false)?
+                .add_sponsor_balance_for_collateral(by);
         }
         Ok(())
     }
@@ -484,12 +507,22 @@ impl State {
     pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        match self.ensure_cached(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, RequireCache::None, |acc| {
-            acc.map_or(Ok(false), |acc| acc.check_commission_privilege(&self.db, contract_address, user))
-        }) {
+        match self.ensure_cached(
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            RequireCache::None,
+            |acc| {
+                acc.map_or(Ok(false), |acc| {
+                    acc.check_commission_privilege(
+                        &self.db,
+                        contract_address,
+                        user,
+                    )
+                })
+            },
+        ) {
             Ok(Ok(bool)) => Ok(bool),
             Ok(Err(e)) => Err(e),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 
