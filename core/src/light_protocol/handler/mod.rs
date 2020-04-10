@@ -22,7 +22,7 @@ use crate::{
         Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
     },
     message::{decode_msg, Message, MsgId},
-    network::{NetworkContext, NetworkProtocolHandler, PeerId},
+    network::{NetworkContext, NetworkProtocolHandler},
     parameters::light::{
         CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
     },
@@ -31,6 +31,7 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
+use network::node_table::NodeId;
 use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
@@ -189,7 +190,7 @@ impl Handler {
 
     #[inline]
     fn get_existing_peer_state(
-        &self, peer: &PeerId,
+        &self, peer: &NodeId,
     ) -> Result<Arc<RwLock<FullPeerState>>, Error> {
         match self.peers.get(&peer) {
             Some(state) => Ok(state),
@@ -204,7 +205,7 @@ impl Handler {
 
     #[inline]
     fn validate_peer_state(
-        &self, peer: PeerId, msg_id: MsgId,
+        &self, peer: &NodeId, msg_id: MsgId,
     ) -> Result<(), Error> {
         let state = self.get_existing_peer_state(&peer)?;
 
@@ -240,7 +241,7 @@ impl Handler {
 
     #[rustfmt::skip]
     fn dispatch_message(
-        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
@@ -318,7 +319,7 @@ impl Handler {
 
     #[inline]
     fn send_status(
-        &self, io: &dyn NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: &NodeId,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(StatusPing {
             genesis_hash: self.consensus.get_data_manager().true_genesis.hash(),
@@ -332,7 +333,7 @@ impl Handler {
 
     #[inline]
     pub fn send_raw_tx(
-        &self, io: &dyn NetworkContext, peer: PeerId, raw: Vec<u8>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, raw: Vec<u8>,
     ) -> Result<(), Error> {
         let msg: Box<dyn Message> = Box::new(SendRawTx { raw });
         msg.send(io, peer)?;
@@ -340,7 +341,7 @@ impl Handler {
     }
 
     fn on_status(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let status: StatusPong = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
@@ -349,7 +350,7 @@ impl Handler {
         self.validate_genesis_hash(status.genesis_hash)?;
 
         {
-            let state = self.get_existing_peer_state(&peer)?;
+            let state = self.get_existing_peer_state(peer)?;
             let mut state = state.write();
             state.best_epoch = status.best_epoch;
             state.handshake_completed = true;
@@ -364,7 +365,7 @@ impl Handler {
     }
 
     fn on_block_hashes(
-        &self, io: &dyn NetworkContext, _peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, _peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockHashesResponse = rlp.as_val()?;
         info!("on_block_hashes resp={:?}", resp);
@@ -379,7 +380,7 @@ impl Handler {
     }
 
     fn on_block_headers(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockHeadersResponse = rlp.as_val()?;
         info!("on_block_headers resp={:?}", resp);
@@ -395,7 +396,7 @@ impl Handler {
     }
 
     fn on_block_txs(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBlockTxsResponse = rlp.as_val()?;
         info!("on_block_txs resp={:?}", resp);
@@ -411,7 +412,7 @@ impl Handler {
     }
 
     fn on_blooms(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetBloomsResponse = rlp.as_val()?;
         info!("on_blooms resp={:?}", resp);
@@ -424,13 +425,13 @@ impl Handler {
     }
 
     fn on_new_block_hashes(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let msg: NewBlockHashes = rlp.as_val()?;
         info!("on_new_block_hashes msg={:?}", msg);
 
         if self.catch_up_mode() {
-            if let Some(state) = self.peers.get(&peer) {
+            if let Some(state) = self.peers.get(peer) {
                 let mut state = state.write();
                 state.terminals.extend(msg.hashes);
             }
@@ -449,7 +450,7 @@ impl Handler {
     }
 
     fn on_receipts(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetReceiptsResponse = rlp.as_val()?;
         info!("on_receipts resp={:?}", resp);
@@ -465,7 +466,7 @@ impl Handler {
     }
 
     fn on_state_entries(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateEntriesResponse = rlp.as_val()?;
         info!("on_state_entries resp={:?}", resp);
@@ -481,7 +482,7 @@ impl Handler {
     }
 
     fn on_state_roots(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetStateRootsResponse = rlp.as_val()?;
         info!("on_state_roots resp={:?}", resp);
@@ -497,7 +498,7 @@ impl Handler {
     }
 
     fn on_txs(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetTxsResponse = rlp.as_val()?;
         info!("on_txs resp={:?}", resp);
@@ -510,7 +511,7 @@ impl Handler {
     }
 
     fn on_tx_infos(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetTxInfosResponse = rlp.as_val()?;
         info!("on_tx_infos resp={:?}", resp);
@@ -523,7 +524,7 @@ impl Handler {
     }
 
     fn on_witness_info(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: GetWitnessInfoResponse = rlp.as_val()?;
         info!("on_witness_info resp={:?}", resp);
@@ -577,12 +578,12 @@ impl Handler {
     }
 
     fn on_throttled(
-        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let resp: Throttled = rlp.as_val()?;
         info!("on_throttled resp={:?}", resp);
 
-        let peer = self.get_existing_peer_state(&peer)?;
+        let peer = self.get_existing_peer_state(peer)?;
         peer.write().throttled_msgs.set_throttled(
             resp.msg_id,
             Instant::now() + Duration::from_nanos(resp.wait_time_nanos),
@@ -611,7 +612,7 @@ impl NetworkProtocolHandler for Handler {
             .expect("Error registering request cleanup timer");
     }
 
-    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
         let (msg_id, rlp) = match decode_msg(raw) {
@@ -633,16 +634,16 @@ impl NetworkProtocolHandler for Handler {
         }
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
         info!("on_peer_connected: peer={:?}", peer);
 
         match self.send_status(io, peer) {
             Ok(_) => {
                 // insert handshaking peer
-                self.peers.insert(peer);
+                self.peers.insert(*peer);
 
                 if let Some(ref file) = self.throttling_config_file {
-                    let peer = self.peers.get(&peer).expect("peer not found");
+                    let peer = self.peers.get(peer).expect("peer not found");
                     peer.write().unexpected_msgs = TokenBucketManager::load(
                         file,
                         Some("light_protocol::unexpected_msgs"),
@@ -662,9 +663,9 @@ impl NetworkProtocolHandler for Handler {
         }
     }
 
-    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
         info!("on_peer_disconnected: peer={:?}", peer);
-        self.peers.remove(&peer);
+        self.peers.remove(peer);
     }
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {

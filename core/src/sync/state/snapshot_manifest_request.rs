@@ -149,7 +149,7 @@ impl SnapshotManifestRequest {
             } else {
                 warn!(
                     "failed to find block={} in db, peer={}",
-                    epoch_hash, ctx.peer
+                    epoch_hash, ctx.node_id
                 );
                 return None;
             }
@@ -175,7 +175,7 @@ impl SnapshotManifestRequest {
         if trusted_block.height() < snapshot_epoch_block.height() {
             warn!(
                 "receive invalid snapshot manifest request from peer={}",
-                ctx.peer
+                ctx.node_id
             );
             return None;
         }
@@ -236,7 +236,7 @@ impl SnapshotManifestRequest {
                 } else {
                     warn!(
                         "failed to find block={} in db, peer={}",
-                        block_hash, ctx.peer
+                        block_hash, ctx.node_id
                     );
                     return None;
                 }
@@ -257,7 +257,7 @@ impl SnapshotManifestRequest {
             } else {
                 warn!(
                     "failed to find block={} in db, peer={}",
-                    block_hash, ctx.peer
+                    block_hash, ctx.node_id
                 );
                 return None;
             }

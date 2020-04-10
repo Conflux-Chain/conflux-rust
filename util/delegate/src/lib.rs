@@ -249,7 +249,7 @@ fn parse_attributes<'a>(
         .collect();
 
     drop(map);
-    (attrs, name, into.unwrap_or(false))
+    (attrs, name, into.unwrap_or(true))
 }
 
 /// Returns true if there are any `inline` attributes in the input.

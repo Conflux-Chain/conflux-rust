@@ -44,21 +44,24 @@ class ThrottleRpcTests(ConfluxTestFramework):
             client.epoch_number()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
-            assert e.response.message.startswith("throttled in ")
+            assert e.response.code == -32072
+            assert e.response.data.startswith("throttled in ")
 
-        # allow to tolerate 1 time even throttled
+    # allow to tolerate 1 time even throttled
         try:
             client.epoch_number()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
-            assert e.response.message.startswith("throttled in ")
+            assert e.response.code == -32072
+            assert e.response.data.startswith("throttled in ")
 
         # already throttled
         try:
             client.epoch_number()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
-            assert e.response.message == "already throttled, please try again later"
+            assert e.response.code == -32072
+            assert e.response.data == "already throttled, please try again later"
 
     def test_recharged(self, client):
         # allow 5 times
@@ -70,14 +73,16 @@ class ThrottleRpcTests(ConfluxTestFramework):
             client.best_block_hash()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
-            assert e.response.message.startswith("throttled in ")
+            assert e.response.code == -32072
+            assert e.response.data.startswith("throttled in ")
 
         # do not tolerate once throttled
         try:
             client.best_block_hash()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
-            assert e.response.message == "already throttled, please try again later"
+            assert e.response.code == -32072
+            assert e.response.data == "already throttled, please try again later"
 
         # sleep 1 second to recharge tokens
         time.sleep(1)
@@ -91,7 +96,8 @@ class ThrottleRpcTests(ConfluxTestFramework):
             client.best_block_hash()
             assert "should be throttled"
         except ReceivedErrorResponseError as e:
-            assert e.response.message.startswith("throttled in ")
+            assert e.response.code == -32072
+            assert e.response.data.startswith("throttled in ")
 
 if __name__ == "__main__":
     ThrottleRpcTests().main()

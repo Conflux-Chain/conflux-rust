@@ -466,7 +466,7 @@ impl RpcImpl {
 
     pub fn net_disconnect_node(
         &self, id: NodeId, op: Option<UpdateNodeOperation>,
-    ) -> RpcResult<Option<usize>> {
+    ) -> RpcResult<bool> {
         Ok(self.network.disconnect_node(&id, op))
     }
 

@@ -14,7 +14,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         light::{
@@ -27,6 +27,7 @@ use crate::{
 };
 
 use super::common::{KeyReverseOrdered, LedgerProof, SyncManager};
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -146,7 +147,7 @@ impl Witnesses {
     }
 
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         witnesses: impl Iterator<Item = WitnessInfoWithHeight>,
     ) -> Result<(), Error>
     {
@@ -190,7 +191,7 @@ impl Witnesses {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, witnesses: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, witnesses: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} witnesses={:?}", peer, witnesses);
 

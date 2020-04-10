@@ -14,6 +14,7 @@ pub use crate::network::{
     PeerId,
 };
 use crate::sync::msg_sender::metric_message;
+use network::node_table::NodeId;
 
 macro_rules! build_msgid {
     ($($name:ident = $value:expr)*) => {
@@ -45,14 +46,16 @@ pub trait Message: Send + Sync + GetMaybeRequestId {
     fn encode(&self) -> Vec<u8>;
 
     fn send(
-        &self, io: &dyn NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
     ) -> Result<(), NetworkError> {
-        self.send_with_throttling(io, peer, false)
+        self.send_with_throttling(io, node_id, false)
     }
 
     fn send_with_throttling(
-        &self, io: &dyn NetworkContext, peer: PeerId, throttling_disabled: bool,
-    ) -> Result<(), NetworkError> {
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
+        throttling_disabled: bool,
+    ) -> Result<(), NetworkError>
+    {
         if !throttling_disabled && self.is_size_sensitive() {
             if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
                 debug!("Throttling failure: {:?}", e);
@@ -63,20 +66,21 @@ pub trait Message: Send + Sync + GetMaybeRequestId {
         let msg = self.encode();
         let size = msg.len();
 
-        if let Err(e) = io.send(peer, msg, self.priority()) {
+        if let Err(e) = io.send(node_id, msg, self.priority()) {
             debug!("Error sending message: {:?}", e);
             return Err(e);
         };
 
         debug!(
-            "Send message({}) to peer {} {:?}, protocol {:?}",
+            "Send message({}) to peer {:?}, protocol {:?}",
             self.msg_name(),
-            peer,
-            io.get_peer_node_id(peer),
+            node_id,
             io.get_protocol(),
         );
 
-        metric_message(peer, self.msg_id(), size);
+        if !io.is_peer_self(node_id) {
+            metric_message(self.msg_id(), size);
+        }
 
         Ok(())
     }

@@ -35,7 +35,7 @@ use crate::{
     message::{decode_msg, Message, MsgId},
     network::{
         throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
-        NetworkService, PeerId,
+        NetworkService,
     },
     parameters::light::{
         MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_TXS_TO_SEND,
@@ -43,6 +43,7 @@ use crate::{
     sync::{message::Throttled, SynchronizationGraph},
     TransactionPool,
 };
+use network::node_table::NodeId;
 use rand::prelude::SliceRandom;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
@@ -106,9 +107,9 @@ impl Provider {
 
     #[inline]
     fn get_existing_peer_state(
-        &self, peer: &PeerId,
+        &self, peer: &NodeId,
     ) -> Result<Arc<RwLock<LightPeerState>>, Error> {
-        match self.peers.get(&peer) {
+        match self.peers.get(peer) {
             Some(state) => Ok(state),
             None => {
                 // NOTE: this should not happen as we register
@@ -121,7 +122,7 @@ impl Provider {
 
     #[inline]
     fn validate_peer_state(
-        &self, peer: PeerId, msg_id: MsgId,
+        &self, peer: &NodeId, msg_id: MsgId,
     ) -> Result<(), Error> {
         let state = self.get_existing_peer_state(&peer)?;
 
@@ -135,7 +136,7 @@ impl Provider {
 
     #[rustfmt::skip]
     fn dispatch_message(
-        &self, io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, rlp: Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, rlp: Rlp,
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
@@ -158,7 +159,7 @@ impl Provider {
     }
 
     #[inline]
-    fn all_light_peers(&self) -> Vec<PeerId> {
+    fn all_light_peers(&self) -> Vec<NodeId> {
         // peers completing the handshake are guaranteed to be light peers
         self.peers.all_peers_satisfying(|s| s.handshake_completed)
     }
@@ -231,7 +232,7 @@ impl Provider {
     }
 
     fn send_status(
-        &self, io: &dyn NetworkContext, peer: PeerId,
+        &self, io: &dyn NetworkContext, peer: &NodeId,
     ) -> Result<(), Error> {
         let best_info = self.consensus.best_info();
         let genesis_hash = self.graph.data_man.true_genesis.hash();
@@ -273,11 +274,11 @@ impl Provider {
     }
 
     fn on_status(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let status: StatusPing = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
-        self.throttle(&peer, &status)?;
+        self.throttle(peer, &status)?;
 
         self.validate_peer_type(&status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
@@ -287,7 +288,7 @@ impl Provider {
             return Err(ErrorKind::SendStatusFailed.into());
         };
 
-        let state = self.get_existing_peer_state(&peer)?;
+        let state = self.get_existing_peer_state(peer)?;
         let mut state = state.write();
         state.handshake_completed = true;
         state.protocol_version = status.protocol_version;
@@ -295,11 +296,11 @@ impl Provider {
     }
 
     fn on_get_state_roots(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetStateRoots = rlp.as_val()?;
         info!("on_get_state_roots req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let state_roots = req
@@ -320,11 +321,11 @@ impl Provider {
     }
 
     fn on_get_state_entries(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetStateEntries = rlp.as_val()?;
         info!("on_get_state_entries req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let entries = req
@@ -349,11 +350,11 @@ impl Provider {
     }
 
     fn on_get_block_hashes_by_epoch(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlockHashesByEpoch = rlp.as_val()?;
         info!("on_get_block_hashes_by_epoch req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let hashes = req
@@ -374,11 +375,11 @@ impl Provider {
     }
 
     fn on_get_block_headers(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlockHeaders = rlp.as_val()?;
         info!("on_get_block_headers req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let headers = req
@@ -403,11 +404,11 @@ impl Provider {
     }
 
     fn on_send_raw_tx(
-        &self, _io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, _io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: SendRawTx = rlp.as_val()?;
         info!("on_send_raw_tx req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let tx: TransactionWithSignature = rlp::decode(&req.raw)?;
 
         let (passed, failed) = self.tx_pool.insert_new_transactions(vec![tx]);
@@ -439,11 +440,11 @@ impl Provider {
     }
 
     fn on_get_receipts(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetReceipts = rlp.as_val()?;
         info!("on_get_receipts req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let receipts = req
@@ -467,11 +468,11 @@ impl Provider {
     }
 
     fn on_get_txs(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetTxs = rlp.as_val()?;
         info!("on_get_txs req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let txs = req
@@ -489,11 +490,11 @@ impl Provider {
     }
 
     fn on_get_witness_info(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetWitnessInfo = rlp.as_val()?;
         info!("on_get_witness_info req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let infos = req
@@ -510,11 +511,11 @@ impl Provider {
     }
 
     fn on_get_blooms(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlooms = rlp.as_val()?;
         info!("on_get_blooms req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let blooms = req
@@ -533,11 +534,11 @@ impl Provider {
     }
 
     fn on_get_block_txs(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetBlockTxs = rlp.as_val()?;
         info!("on_get_block_txs req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         let block_txs = req
@@ -569,11 +570,11 @@ impl Provider {
     }
 
     fn on_get_tx_infos(
-        &self, io: &dyn NetworkContext, peer: PeerId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
     ) -> Result<(), Error> {
         let req: GetTxInfos = rlp.as_val()?;
         info!("on_get_tx_infos req={:?}", req);
-        self.throttle(&peer, &req)?;
+        self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
         // TODO(thegaram): consider merging overlapping tx infos
@@ -591,7 +592,7 @@ impl Provider {
     }
 
     fn broadcast(
-        &self, io: &dyn NetworkContext, mut peers: Vec<PeerId>,
+        &self, io: &dyn NetworkContext, mut peers: Vec<NodeId>,
         msg: &dyn Message,
     ) -> Result<(), Error>
     {
@@ -611,7 +612,7 @@ impl Provider {
         }
 
         for id in peers {
-            msg.send(io, id)?;
+            msg.send(io, &id)?;
         }
 
         Ok(())
@@ -647,7 +648,7 @@ impl Provider {
     }
 
     fn throttle<T: Message>(
-        &self, peer: &PeerId, msg: &T,
+        &self, peer: &NodeId, msg: &T,
     ) -> Result<(), Error> {
         let peer = self.get_existing_peer_state(peer)?;
 
@@ -680,7 +681,7 @@ impl Provider {
 impl NetworkProtocolHandler for Provider {
     fn initialize(&self, _io: &dyn NetworkContext) {}
 
-    fn on_message(&self, io: &dyn NetworkContext, peer: PeerId, raw: &[u8]) {
+    fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
 
         let (msg_id, rlp) = match decode_msg(raw) {
@@ -702,23 +703,23 @@ impl NetworkProtocolHandler for Provider {
         }
     }
 
-    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
         info!("on_peer_connected: peer={:?}", peer);
 
         // insert handshaking peer, wait for StatusPing
-        self.peers.insert(peer);
+        self.peers.insert(*peer);
 
         if let Some(ref file) = self.throttling_config_file {
-            let peer = self.peers.get(&peer).expect("peer not found");
+            let peer = self.peers.get(peer).expect("peer not found");
             peer.write().throttling =
                 TokenBucketManager::load(file, Some("light_protocol"))
                     .expect("invalid throttling configuration file");
         }
     }
 
-    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: PeerId) {
+    fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
         info!("on_peer_disconnected: peer={:?}", peer);
-        self.peers.remove(&peer);
+        self.peers.remove(peer);
     }
 
     fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {

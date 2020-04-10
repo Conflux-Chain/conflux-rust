@@ -99,7 +99,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160> {
+    ) -> BoxFuture<Option<RpcH160>> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -117,9 +117,7 @@ impl RpcImpl {
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            Ok(account
-                .map(|account| account.admin.into())
-                .unwrap_or_default())
+            Ok(account.map(|account| account.admin.into()))
         };
 
         Box::new(fut.boxed().compat())
@@ -453,6 +451,8 @@ impl CfxHandler {
     }
 }
 
+// To convert from RpcResult to BoxFuture by delegate! macro automatically.
+use crate::common::delegate_convert;
 impl Cfx for CfxHandler {
     delegate! {
         to self.common {
@@ -469,7 +469,7 @@ impl Cfx for CfxHandler {
 
         to self.rpc_impl {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
-            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
+            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<Option<RpcH160>>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
@@ -487,8 +487,8 @@ impl Cfx for CfxHandler {
     }
 
     not_supported! {
-        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
     }
 }
 
@@ -529,7 +529,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
-        fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
+        fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<H256>;
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
@@ -555,7 +555,7 @@ impl LocalRpc for DebugRpcImpl {
         to self.common {
             fn clear_tx_pool(&self) -> RpcResult<()>;
             fn net_node(&self, id: NodeId) -> RpcResult<Option<(String, Node)>>;
-            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<Option<usize>>;
+            fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> RpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> RpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;

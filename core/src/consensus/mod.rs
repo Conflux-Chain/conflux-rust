@@ -493,17 +493,11 @@ impl ConsensusGraph {
 
     pub fn get_account(
         &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<Account, String> {
+    ) -> Result<Option<Account>, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        if let Ok(maybe_acc) = state_db.get_account(&address) {
-            Ok(maybe_acc.unwrap_or(Account::new_empty_with_balance(
-                &address,
-                &U256::zero(), /* balance */
-                &U256::zero(), /* nonce */
-            )))
-        } else {
-            Err("db error occurred".into())
-        }
+        state_db
+            .get_account(&address)
+            .or_else(|_| Err("db error occurred".into()))
     }
 
     /// Get the current balance of an address
@@ -550,30 +544,23 @@ impl ConsensusGraph {
         }
     }
 
-    /// Get the current admin of a contract
+    /// Get the current admin of a contract.
     pub fn get_admin(
         &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<H160, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc.map_or(H160::zero(), |acc| acc.admin).into()
-        } else {
-            H160::zero()
-        })
+    ) -> Result<Option<H160>, String> {
+        Ok(self
+            .get_account(address, epoch_number)?
+            .map(|account| account.admin))
     }
 
     /// Get the current sponsor of a contract
     pub fn get_sponsor_info(
         &self, address: H160, epoch_number: EpochNumber,
     ) -> Result<SponsorInfo, String> {
-        let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        Ok(if let Ok(maybe_acc) = state_db.get_account(&address) {
-            maybe_acc
-                .map_or(Default::default(), |acc| acc.sponsor_info)
-                .into()
-        } else {
-            Default::default()
-        })
+        Ok(self
+            .get_account(address, epoch_number)?
+            .map(|account| account.sponsor_info.clone())
+            .unwrap_or_default())
     }
 
     /// Get the current bank balance of an address

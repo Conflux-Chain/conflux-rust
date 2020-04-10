@@ -13,7 +13,8 @@ use crate::{
     },
 };
 use network::{
-    ErrorKind as NetworkErrorKind, NetworkContext, PeerId, UpdateNodeOperation,
+    node_table::NodeId, ErrorKind as NetworkErrorKind, NetworkContext,
+    UpdateNodeOperation,
 };
 use parking_lot::Mutex;
 use std::{
@@ -31,7 +32,7 @@ use std::{
 
 pub struct RequestHandler {
     protocol_config: ProtocolConfiguration,
-    peers: Mutex<HashMap<PeerId, RequestContainer>>,
+    peers: Mutex<HashMap<NodeId, RequestContainer>>,
     requests_queue: Mutex<BinaryHeap<Arc<TimedSyncRequests>>>,
 }
 
@@ -44,7 +45,7 @@ impl RequestHandler {
         }
     }
 
-    pub fn add_peer(&self, peer_id: PeerId) {
+    pub fn add_peer(&self, peer_id: NodeId) {
         self.peers.lock().insert(
             peer_id,
             RequestContainer {
@@ -66,18 +67,20 @@ impl RequestHandler {
     // 2. UnknownPeer:
     //      No need to let caller handle request resending;
     pub fn match_request(
-        &self, peer_id: PeerId, request_id: u64,
+        &self, peer_id: &NodeId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
         let mut peers = self.peers.lock();
-        if let Some(peer) = peers.get_mut(&peer_id) {
+        if let Some(peer) = peers.get_mut(peer_id) {
             peer.match_request(request_id)
         } else {
             bail!(ErrorKind::UnknownPeer);
         }
     }
 
-    pub fn send_pending_requests(&self, io: &dyn NetworkContext, peer: PeerId) {
-        if let Some(peer_info) = self.peers.lock().get_mut(&peer) {
+    pub fn send_pending_requests(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+    ) {
+        if let Some(peer_info) = self.peers.lock().get_mut(peer) {
             peer_info.send_pending_requests(
                 io,
                 &mut *self.requests_queue.lock(),
@@ -89,7 +92,7 @@ impl RequestHandler {
     /// Send request to the specified peer. If peer is `None` or send request
     /// failed, return the request back to caller to handle in advance.
     pub fn send_request(
-        &self, io: &dyn NetworkContext, peer: Option<PeerId>,
+        &self, io: &dyn NetworkContext, peer: Option<NodeId>,
         request: Box<dyn Request>, delay: Option<Duration>,
     ) -> Result<(), Box<dyn Request>>
     {
@@ -157,9 +160,9 @@ impl RequestHandler {
         let mut peers_to_send_pending_requests = HashSet::new();
         for sync_req in self.get_timeout_sync_requests() {
             if let Ok(mut req) =
-                self.match_request(sync_req.peer_id, sync_req.request_id)
+                self.match_request(&sync_req.peer_id, sync_req.request_id)
             {
-                let peer_id = sync_req.peer_id;
+                let peer_id = sync_req.peer_id.clone();
                 if let Some(request_container) =
                     self.peers.lock().get_mut(&peer_id)
                 {
@@ -186,30 +189,30 @@ impl RequestHandler {
             // Note `self.peers` will be used in `disconnect_peer`, so we must
             // call it without locking `self.peers`.
             io.disconnect_peer(
-                peer_id,
+                &peer_id,
                 op,
                 "too many timeout requests", /* reason */
             );
         }
         for peer_id in peers_to_send_pending_requests {
-            self.send_pending_requests(io, peer_id);
+            self.send_pending_requests(io, &peer_id);
         }
 
         timeout_requests
     }
 
     /// Return unfinished_requests
-    pub fn remove_peer(&self, peer_id: PeerId) -> Option<Vec<RequestMessage>> {
+    pub fn remove_peer(&self, peer_id: &NodeId) -> Option<Vec<RequestMessage>> {
         self.peers
             .lock()
-            .remove(&peer_id)
+            .remove(peer_id)
             .map(|mut p| p.get_unfinished_requests())
     }
 }
 
 #[derive(Default)]
 struct RequestContainer {
-    peer_id: PeerId,
+    peer_id: NodeId,
     pub inflight_requests: HashMap<u64, SynchronizationPeerRequest>,
     pub next_request_id: u64,
     pub max_inflight_request_count: u64,
@@ -308,7 +311,7 @@ impl RequestContainer {
     )
     {
         request_message.request.set_request_id(request_id);
-        let res = request_message.request.send(io, self.peer_id);
+        let res = request_message.request.send(io, &self.peer_id);
         let is_send_error = if let Err(e) = res {
             match e.kind() {
                 NetworkErrorKind::OversizedPacket => {
@@ -496,7 +499,7 @@ impl RequestMessage {
 
 #[derive(Debug)]
 pub struct TimedSyncRequests {
-    pub peer_id: PeerId,
+    pub peer_id: NodeId,
     pub timeout_time: Instant,
     pub request_id: u64,
     pub removed: AtomicBool,
@@ -504,7 +507,7 @@ pub struct TimedSyncRequests {
 
 impl TimedSyncRequests {
     pub fn new(
-        peer_id: PeerId, timeout: Duration, request_id: u64,
+        peer_id: NodeId, timeout: Duration, request_id: u64,
     ) -> TimedSyncRequests {
         TimedSyncRequests {
             peer_id,
@@ -515,7 +518,7 @@ impl TimedSyncRequests {
     }
 
     pub fn from_request(
-        peer_id: PeerId, request_id: u64, msg: &RequestMessage,
+        peer_id: NodeId, request_id: u64, msg: &RequestMessage,
         conf: &ProtocolConfiguration, is_send_error: bool,
     ) -> TimedSyncRequests
     {

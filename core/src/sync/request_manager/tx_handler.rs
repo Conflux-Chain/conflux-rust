@@ -6,7 +6,7 @@ use crate::sync::message::TransactionDigests;
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use network::PeerId;
+use network::node_table::NodeId;
 use primitives::{block::CompactBlock, SignedTransaction, TxPropagateId};
 use std::{
     collections::{HashMap, HashSet},
@@ -314,13 +314,13 @@ pub struct InflightPendingTrasnactionItem {
     pub key1: u64,
     pub key2: u64,
     pub index: usize,
-    pub peer_id: PeerId,
+    pub peer_id: NodeId,
 }
 impl InflightPendingTrasnactionItem {
     pub fn new(
         fixed_byte_part: TxPropagateId, random_byte_part: u8,
         window_index: usize, key1: u64, key2: u64, index: usize,
-        peer_id: PeerId,
+        peer_id: NodeId,
     ) -> Self
     {
         InflightPendingTrasnactionItem {
