@@ -1,5 +1,9 @@
-use crate::statedb::{Result as StateDbResult, StateDb};
-use cfx_types::Address;
+use crate::{
+    executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    state::OverlayAccount,
+    statedb::{Result as StateDbResult, StateDb},
+};
+use cfx_types::{Address, U256};
 use primitives::Account;
 use std::{collections::hash_map::HashMap, sync::Arc};
 
@@ -26,5 +30,21 @@ impl AccountCache {
             }
         }
         Ok(self.accounts.get_mut(&address))
+    }
+
+    pub fn check_commission_privilege(
+        &mut self, contract_address: &Address, user: &Address,
+    ) -> bool {
+        OverlayAccount::new_basic(
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            U256::from(0),
+            U256::from(0),
+        )
+        .check_commission_privilege(
+            self.storage.as_ref(),
+            contract_address,
+            user,
+        )
+        .unwrap_or(false)
     }
 }

@@ -10,7 +10,9 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
-use primitives::{Account, SignedTransaction, TransactionWithSignature};
+use primitives::{
+    Account, Action, SignedTransaction, SponsorInfo, TransactionWithSignature,
+};
 use rlp::*;
 use std::{
     collections::HashMap,
@@ -221,6 +223,7 @@ pub struct TransactionPoolInner {
     ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
     garbage_collector: GarbageCollector,
     txs: HashMap<H256, Arc<SignedTransaction>>,
+    tx_sponsored_gas_map: HashMap<H256, U256>,
 }
 
 impl TransactionPoolInner {
@@ -239,6 +242,7 @@ impl TransactionPoolInner {
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: GarbageCollector::default(),
             txs: HashMap::new(),
+            tx_sponsored_gas_map: HashMap::new(),
         }
     }
 
@@ -365,6 +369,7 @@ impl TransactionPoolInner {
 
             // maintain txs
             self.txs.remove(&removed_tx.hash());
+            self.tx_sponsored_gas_map.remove(&removed_tx.hash());
         }
 
         GC_METER.mark(count_before_gc - self.total_deferred());
@@ -381,6 +386,7 @@ impl TransactionPoolInner {
     fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool, state_nonce_and_balance: Option<(U256, U256)>,
+        sponsored_gas: U256,
     ) -> InsertResult
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER.as_ref());
@@ -400,6 +406,7 @@ impl TransactionPoolInner {
                 TxWithReadyInfo {
                     transaction: transaction.clone(),
                     packed,
+                    sponsored_gas,
                 },
                 force,
             )
@@ -430,6 +437,8 @@ impl TransactionPoolInner {
                     timestamp,
                 );
                 self.txs.insert(transaction.hash(), transaction.clone());
+                self.tx_sponsored_gas_map
+                    .insert(transaction.hash(), sponsored_gas);
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -441,6 +450,9 @@ impl TransactionPoolInner {
                 }
                 self.txs.remove(&replaced_tx.hash());
                 self.txs.insert(transaction.hash(), transaction.clone());
+                self.tx_sponsored_gas_map.remove(&replaced_tx.hash());
+                self.tx_sponsored_gas_map
+                    .insert(transaction.hash(), sponsored_gas);
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -479,6 +491,14 @@ impl TransactionPoolInner {
             }
             None => Ok((0.into(), 0.into())),
         }
+    }
+
+    pub fn get_sponsor_info_from_storage(
+        &self, address: &Address, account_cache: &mut AccountCache,
+    ) -> StateDbResult<Option<SponsorInfo>> {
+        Ok(account_cache
+            .get_account_mut(address)?
+            .map(|x| x.sponsor_info.clone()))
     }
 
     fn get_and_update_nonce_and_balance_from_storage(
@@ -610,6 +630,10 @@ impl TransactionPoolInner {
                 true, /* packed */
                 true, /* force */
                 None, /* state_nonce_and_balance */
+                self.tx_sponsored_gas_map
+                    .get(&tx.hash())
+                    .map(|x| x.clone())
+                    .unwrap_or(U256::from(0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
 
@@ -631,6 +655,10 @@ impl TransactionPoolInner {
                 false, /* packed */
                 true,  /* force */
                 None,  /* state_nonce_and_balance */
+                self.tx_sponsored_gas_map
+                    .get(&tx.hash())
+                    .map(|x| x.clone())
+                    .unwrap_or(U256::from(0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
@@ -687,6 +715,26 @@ impl TransactionPoolInner {
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
+        let mut sponsored_gas = U256::from(0);
+
+        // Compute sponsored_gas for `transaction`
+        if let Action::Call(callee) = transaction.action {
+            if let Ok(Some(sponsor_info)) =
+                self.get_sponsor_info_from_storage(&callee, account_cache)
+            {
+                if account_cache
+                    .check_commission_privilege(&callee, &transaction.sender())
+                {
+                    let estimated_gas = transaction.gas * transaction.gas_price;
+                    if estimated_gas <= sponsor_info.sponsor_gas_bound
+                        && estimated_gas <= sponsor_info.sponsor_balance_for_gas
+                    {
+                        sponsored_gas = transaction.gas;
+                    }
+                }
+            }
+        }
+
         let (state_nonce, state_balance) = self
             .get_nonce_and_balance_from_storage(
                 &transaction.sender,
@@ -730,6 +778,7 @@ impl TransactionPoolInner {
             packed,
             force,
             Some((state_nonce, state_balance)),
+            sponsored_gas,
         );
         if let InsertResult::Failed(info) = result {
             return Err(format!("Failed imported to deferred pool: {}", info));
@@ -783,6 +832,7 @@ mod test_transaction_pool_inner {
         TxWithReadyInfo {
             transaction,
             packed,
+            sponsored_gas: U256::from(0),
         }
     }
 
