@@ -1092,7 +1092,7 @@ impl SynchronizationGraph {
                     'inner: loop {
                         match consensus_receiver.try_recv() {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
-                            Ok((hash, ignore_body)) => if !reverse_map.contains(&hash) {
+                            Ok((hash, ignore_body)) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
                                 let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
                                 let mut cnt: usize = 0;
