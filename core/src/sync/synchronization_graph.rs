@@ -2031,7 +2031,7 @@ impl SynchronizationGraph {
             }
         }
 
-        info!("expire_set: {:?}", expire_set);
+        debug!("expire_set: {:?}", expire_set);
         inner.remove_blocks(&expire_set);
     }
 
