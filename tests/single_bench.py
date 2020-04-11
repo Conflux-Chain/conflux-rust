@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-import datetime
-from http.client import CannotSendRequest
+from eth_utils import decode_hex
+import conflux.config
+conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex("0xf734ca849ef7307458f4a69d2d33e1f0f9b214ae66ca3f754e9376aedaf9a4a0")
 from conflux.utils import convert_to_nodeid, priv_to_addr, parse_as_int, encode_hex
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable
@@ -13,11 +14,14 @@ import pickle
 class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
+        self.rpc_timewait = 600
         self.conf_parameters["tx_pool_size"] = "500000"
         self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
         self.conf_parameters["record_tx_index"] = "false"
+        self.conf_parameters["genesis_secrets"] = '"/Users/lipeilun/conflux/conflux-rust/genesis_secrets.txt.backup"'
 
     def setup_network(self):
+        pass
         # self.setup_nodes(binary=[os.path.join(
         #     os.path.dirname(os.path.realpath(__file__)),
         #     "../target/release/conflux")])
@@ -30,53 +34,65 @@ class SingleBench(ConfluxTestFramework):
 
         block_gen_thread = BlockGenThread([self.node], self.log, num_txs=10000, interval_fixed=0.02)
         block_gen_thread.start()
-        tx_n = 1000000
+        tx_n = 500000
         batch_size = 10
         send_tps = 20000
+        all_txs = []
+        gas_price = 1
 
         generate = False
         if generate:
             f = open("encoded_tx", "wb")
             '''Test Random Transactions'''
-            genesis_key = default_config["GENESIS_PRI_KEY"]
-            balance_map = {genesis_key: default_config["TOTAL_COIN"]}
-            nonce_map = {genesis_key: 0}
-            all_txs = []
-            gas_price = 1
-            account_n = 1000
 
-            # Initialize new accounts
-            new_keys = set()
-            for _ in range(account_n):
-                value = int(balance_map[genesis_key] / (account_n * 2))
-                receiver_sk, _ = ec_random_keys()
-                new_keys.add(receiver_sk)
-                tx = create_transaction(pri_key=genesis_key, receiver=priv_to_addr(receiver_sk), value=value,
-                                        nonce=nonce_map[genesis_key], gas_price=gas_price)
-                all_txs.append(tx)
-                balance_map[receiver_sk] = value
-                nonce_map[genesis_key] += 1
-                balance_map[genesis_key] -= value + gas_price * 21000
-            wait_for_account_stable()
-            for key in new_keys:
-                nonce_map[key] = wait_for_initial_nonce_for_privkey(self.nodes[0], key)
+            self.log.info("Setting up genesis secrets")
+            balance_map = {}
+            nonce_map = {}
+            for prikey_str in open("/Users/lipeilun/conflux/conflux-rust/genesis_secrets.txt", "r").readlines():
+                prikey = decode_hex(prikey_str[:-1])
+                balance_map[prikey] = 10000000000000000000000
+                nonce_map[prikey] = 0
+
+
+            # genesis_key = default_config["GENESIS_PRI_KEY"]
+            # balance_map = {genesis_key: default_config["TOTAL_COIN"]}
+            # nonce_map = {genesis_key: 0}
+            # account_n = 1000
+            # # Initialize new accounts
+            # new_keys = set()
+            # for _ in range(account_n):
+            #     value = int(balance_map[genesis_key] / (account_n * 2))
+            #     receiver_sk, _ = ec_random_keys()
+            #     new_keys.add(receiver_sk)
+            #     tx = create_transaction(pri_key=genesis_key, receiver=priv_to_addr(receiver_sk), value=value,
+            #                             nonce=nonce_map[genesis_key], gas_price=gas_price)
+            #     all_txs.append(tx)
+            #     balance_map[receiver_sk] = value
+            #     nonce_map[genesis_key] += 1
+            #     balance_map[genesis_key] -= value + gas_price * 21000
+            # wait_for_account_stable()
+            # for key in new_keys:
+            #     nonce_map[key] = wait_for_initial_nonce_for_privkey(self.nodes[0], key)
 
             self.log.info("start to generate %d transactions", tx_n)
+            account_list = list(balance_map)
             for i in range(tx_n):
                 if i % 1000 == 0:
                     self.log.info("generated %d tx", i)
-                sender_key = random.choice(list(balance_map))
+                #sender_key = random.choice(account_list)
+                sender_key = account_list[random.randint(0, len(account_list) - 1)]
                 if sender_key not in nonce_map:
                     nonce_map[sender_key] = wait_for_initial_nonce_for_privkey(self.nodes[0], sender_key)
                 nonce = nonce_map[sender_key]
                 value = 1
-                receiver_sk = random.choice(list(balance_map))
+                # receiver_sk = random.choice(account_list)
+                receiver_sk = account_list[random.randint(0, len(account_list) - 1)]
                 balance_map[receiver_sk] += value
                 # not enough transaction fee (gas_price * gas_limit) should not happen for now
                 assert balance_map[sender_key] >= value + gas_price * 21000
                 tx = create_transaction(pri_key=sender_key, receiver=priv_to_addr(receiver_sk), value=value, nonce=nonce,
                                         gas_price=gas_price)
-                self.log.debug("%s send %d to %s nonce=%d balance: sender=%s, receiver=%s", encode_hex(priv_to_addr(sender_key)), value, encode_hex(priv_to_addr(receiver_sk)), nonce, balance_map[sender_key], balance_map[receiver_sk])
+                # self.log.debug("%s send %d to %s nonce=%d balance: sender=%s, receiver=%s", encode_hex(priv_to_addr(sender_key)), value, encode_hex(priv_to_addr(receiver_sk)), nonce, balance_map[sender_key], balance_map[receiver_sk])
                 all_txs.append(tx)
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000

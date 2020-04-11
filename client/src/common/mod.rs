@@ -135,19 +135,20 @@ pub fn initialize_txgens(
             sync.clone(),
             secret_store.clone(),
         ));
-
-        let txgen_clone = multi_genesis_txgen.clone();
-        let join_handle =
-            thread::Builder::new()
-                .name("txgen".into())
-                .spawn(move || {
-                    TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
-                        txgen_clone,
-                        txgen_conf,
-                    );
-                })
-                .expect("should succeed");
-        multi_genesis_txgen.set_join_handle(join_handle);
+        if txgen_conf.generate_tx {
+            let txgen_clone = multi_genesis_txgen.clone();
+            let join_handle =
+                thread::Builder::new()
+                    .name("txgen".into())
+                    .spawn(move || {
+                        TransactionGenerator::generate_transactions_with_multiple_genesis_accounts(
+                            txgen_clone,
+                            txgen_conf,
+                        );
+                    })
+                    .expect("should succeed");
+            multi_genesis_txgen.set_join_handle(join_handle);
+        }
         Some(multi_genesis_txgen)
     } else {
         None
