@@ -20,9 +20,12 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch, executive::Executed,
-    state_exposer::STATE_EXPOSER, test_context::*, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    block_data_manager::BlockExecutionResultWithEpoch,
+    executive::Executed,
+    machine::{new_machine_with_builtin, Machine},
+    state_exposer::STATE_EXPOSER,
+    test_context::*,
+    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use delegate::delegate;
@@ -53,6 +56,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
+    machine: Machine,
 }
 
 impl RpcImpl {
@@ -72,6 +76,7 @@ impl RpcImpl {
             maybe_txgen,
             maybe_direct_txgen,
             config,
+            machine: new_machine_with_builtin(),
         }
     }
 
@@ -299,10 +304,13 @@ impl RpcImpl {
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
-        if let Call(H160(r)) = &tx.transaction.action {
-            let type_bits = r[0] & 0xf0;
+        if let Call(address) = &tx.transaction.action {
+            let type_bits = address.as_fixed_bytes()[0] & 0xf0;
             // FIXME: this check should be a separate call.
-            if !(type_bits == 0x0 || type_bits == 0x10 || type_bits == 0x80) {
+            if (type_bits == 0x0
+                && !self.machine.builtins().contains_key(address))
+                || (type_bits != 0x0 && type_bits != 0x10 && type_bits != 0x80)
+            {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
         }

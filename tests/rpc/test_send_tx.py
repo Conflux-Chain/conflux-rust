@@ -23,6 +23,22 @@ class TestSendTx(RpcClient):
         assert_raises_rpc_error(None, None, self.send_raw_tx, encoded + "12") # 1 more byte
         assert_raises_rpc_error(None, None, self.send_raw_tx, encoded[0:-2])  # 1 less byte
 
+    def test_address_prefix(self):
+        # call builtin address starts with 0x0
+        tx = self.new_tx(receiver="0x0000000000000000000000000000000000000002", data=b'\x00' * 32, gas=21128)
+        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+        # non-builtin address starts with 0x0
+        tx = self.new_tx(receiver="0x00e45681ac6c53d5a40475f7526bac1fe7590fb8")
+        encoded = eth_utils.encode_hex(rlp.encode(tx))
+        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded)
+        # call address starts with 0x30
+        tx = self.new_tx(receiver="0x30e45681ac6c53d5a40475f7526bac1fe7590fb8")
+        encoded = eth_utils.encode_hex(rlp.encode(tx))
+        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded)
+        # call address starts with 0x10
+        tx = self.new_tx(receiver="0x10e45681ac6c53d5a40475f7526bac1fe7590fb8")
+        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+
     def test_signature_empty(self):
         tx = self.new_tx(sign=False)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
