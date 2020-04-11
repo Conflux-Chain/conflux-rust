@@ -173,7 +173,7 @@ class AdminControlTest(ConfluxTestFramework):
             name="set_admin",
             args=[Web3.toChecksumAddress(contract_addr), Web3.toChecksumAddress(addr2)],
             sender_key=priv_key2,
-            contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
+            contract_addr=Web3.toChecksumAddress("0x8060de9e1568e69811c4a398f92c3d10949dc891"),
             wait=True,
             check_status=True)
         assert_equal(client.get_admin(contract_addr), addr)
@@ -184,7 +184,7 @@ class AdminControlTest(ConfluxTestFramework):
             name="set_admin",
             args=[Web3.toChecksumAddress(contract_addr), Web3.toChecksumAddress(addr2)],
             sender_key=priv_key,
-            contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
+            contract_addr=Web3.toChecksumAddress("0x8060de9e1568e69811c4a398f92c3d10949dc891"),
             wait=True,
             check_status=True)
         assert_equal(client.get_admin(contract_addr), addr2)
@@ -195,7 +195,7 @@ class AdminControlTest(ConfluxTestFramework):
             name="destroy",
             args=[Web3.toChecksumAddress(contract_addr)],
             sender_key=priv_key2,
-            contract_addr=Web3.toChecksumAddress("0x6060de9e1568e69811c4a398f92c3d10949dc891"),
+            contract_addr=Web3.toChecksumAddress("0x8060de9e1568e69811c4a398f92c3d10949dc891"),
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 0)
