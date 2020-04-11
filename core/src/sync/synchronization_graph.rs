@@ -1091,7 +1091,8 @@ impl SynchronizationGraph {
                 'outer: loop {
                     'inner: loop {
                         match consensus_receiver.try_recv() {
-                            Ok((hash, ignore_body)) => {
+                            Ok((hash, ignore_body)) => if !reverse_map.contains(&hash) {
+                                debug!("Worker thread receive: block = {}", hash);
                                 let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
                                 let mut cnt: usize = 0;
                                 let parent_hash = header.parent_hash();
@@ -1112,6 +1113,8 @@ impl SynchronizationGraph {
                                 } else {
                                     counter_map.insert(hash, (cnt, ignore_body));
                                 }
+                            } else {
+                                warn!("Duplicate block = {} sent to the consensus worker", hash);
                             },
                             Err(TryRecvError::Empty) => break 'inner,
                             Err(TryRecvError::Closed) => break 'outer,
