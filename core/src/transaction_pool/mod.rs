@@ -65,6 +65,10 @@ lazy_static! {
         Lock::register("txpool_insert_txs_enqueue_lock");
     static ref PACK_TRANSACTION_LOCK: Lock =
         Lock::register("txpool_pack_transactions");
+    static ref NOTIFY_BEST_INFO_LOCK: Lock =
+        Lock::register("txpool_notify_best_info");
+    static ref NOTIFY_MODIFIED_LOCK: Lock =
+        Lock::register("txpool_notify_modified_info");
 }
 
 pub const DEFAULT_MAX_TRANSACTION_GAS_LIMIT: u64 = 100_000_000;
@@ -457,7 +461,7 @@ impl TransactionPool {
     pub fn notify_modified_accounts(
         &self, accounts_from_execution: Vec<Account>,
     ) {
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write_with_metric(&NOTIFY_MODIFIED_LOCK);
         inner.notify_modified_accounts(accounts_from_execution)
     }
 
@@ -514,7 +518,7 @@ impl TransactionPool {
         *consensus_best_info = best_info;
 
         let mut account_cache = self.get_best_state_account_cache();
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
         let inner = inner.deref_mut();
 
         while let Some(tx) = set_tx_buffer.pop() {

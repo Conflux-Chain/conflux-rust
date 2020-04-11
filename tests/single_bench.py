@@ -15,6 +15,7 @@ class SingleBench(ConfluxTestFramework):
         self.num_nodes = 1
         self.conf_parameters["tx_pool_size"] = "500000"
         self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
+        self.conf_parameters["record_tx_index"] = "false"
 
     def setup_network(self):
         # self.setup_nodes(binary=[os.path.join(
@@ -116,6 +117,7 @@ class SingleBench(ConfluxTestFramework):
         block_gen_thread.join()
         self.log.info("Time used: %f seconds", time_used)
         self.log.info("Tx per second: %f", tx_n / time_used)
+        exit()
 
     def check_account(self, k, balance_map):
         addr = eth_utils.encode_hex(priv_to_addr(k))
