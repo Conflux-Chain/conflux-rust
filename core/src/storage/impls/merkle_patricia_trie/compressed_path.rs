@@ -168,11 +168,13 @@ impl CompressedPathRaw {
             path_mask,
             byte_array_memory_manager: Default::default(),
         };
-        // 0xf* -> no second nibble
-        // 0x0* -> has second nibble
-        // 0xf0 -> 0x0f -> &= 0xf0
-        // 0x00 -> 0xff -> &= 0xff
-        *ret.last_byte_mut() &= !Self::first_nibble(path_mask);
+        if path_size > 0 {
+            // 0xf* -> no second nibble
+            // 0x0* -> has second nibble
+            // 0xf0 -> 0x0f -> &= 0xf0
+            // 0x00 -> 0xff -> &= 0xff
+            *ret.last_byte_mut() &= !Self::first_nibble(path_mask);
+        }
 
         ret
     }
