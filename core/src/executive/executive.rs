@@ -1297,25 +1297,26 @@ impl<'a> Executive<'a> {
             *nonce_increased = true;
         }
 
-        // Check if contract will pay transaction fee for the sender.
+        // // Check if contract will pay transaction fee for the sender.
         let mut substate = Substate::new();
         let mut code_address = Address::zero();
         let mut has_privilege = false;
-        let free_of_charge = match tx.action {
-            Action::Call(ref address) => {
-                code_address = *address;
-                has_privilege = self
-                    .state
-                    .check_commission_privilege(&code_address, &sender)?;
-                self.state.is_contract(address)
-                    && has_privilege
-                    && U512::from(self.state.sponsor_balance_for_gas(address)?)
-                        >= gas_cost
-                    && gas_cost
-                        <= U512::from(self.state.sponsor_gas_bound(address)?)
-            }
-            Action::Create => false,
-        };
+        // let free_of_charge = match tx.action {
+        //     Action::Call(ref address) => {
+        //         code_address = *address;
+        //         has_privilege = self
+        //             .state
+        //             .check_commission_privilege(&code_address, &sender)?;
+        //         self.state.is_contract(address)
+        //             && has_privilege
+        //             && U512::from(self.state.sponsor_balance_for_gas(address)?)
+        //                 >= gas_cost
+        //             && gas_cost
+        //                 <= U512::from(self.state.sponsor_gas_bound(address)?)
+        //     }
+        //     Action::Create => false,
+        // };
+        let free_of_charge = false;
 
         // Avoid unaffordable transactions
         let balance512 = U512::from(balance);
