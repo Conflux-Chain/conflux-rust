@@ -302,26 +302,26 @@ impl TransactionPool {
         // Check the epoch height is in bound. Because this is such a loose
         // bound, we can check it here as if it will not change at all
         // during its life time.
-        // let best_height = { self.consensus_best_info.lock().best_epoch_number };
-        // // If it is zero, it might be possible that it is not initialized
-        // if best_height != 0 {
-        //     if (best_height + self.config.transaction_epoch_bound
-        //         < transaction.epoch_height)
-        //         || (transaction.epoch_height
-        //             + self.config.transaction_epoch_bound
-        //             < best_height)
-        //     {
-        //         warn!("Transaction discarded due to epoch height out of the bound: best height {} tx epoch height {}", best_height, transaction.epoch_height);
-        //         return Err(format!("transaction epoch height {} is out side the range of the current pivot height ({}) bound, only {} drift allowed!", transaction.epoch_height, best_height, self.config.transaction_epoch_bound));
-        //     }
-        // }
-        //
-        // // check chain_id
-        // let best_chain_id = { self.consensus_best_info.lock().best_chain_id() };
-        // if best_chain_id != transaction.chain_id {
-        //     warn!("Transaction discarded due to chain_id not match: best chain_id {} tx chain_id {}", best_chain_id, transaction.chain_id);
-        //     return Err(format!("transaction chain_id {} is not match, the current best chain_id {} expected!", transaction.chain_id, best_chain_id));
-        // }
+        let best_height = { self.consensus_best_info.lock().best_epoch_number };
+        // If it is zero, it might be possible that it is not initialized
+        if best_height != 0 {
+            if (best_height + self.config.transaction_epoch_bound
+                < transaction.epoch_height)
+                || (transaction.epoch_height
+                    + self.config.transaction_epoch_bound
+                    < best_height)
+            {
+                warn!("Transaction discarded due to epoch height out of the bound: best height {} tx epoch height {}", best_height, transaction.epoch_height);
+                return Err(format!("transaction epoch height {} is out side the range of the current pivot height ({}) bound, only {} drift allowed!", transaction.epoch_height, best_height, self.config.transaction_epoch_bound));
+            }
+        }
+
+        // check chain_id
+        let best_chain_id = { self.consensus_best_info.lock().best_chain_id() };
+        if best_chain_id != transaction.chain_id {
+            warn!("Transaction discarded due to chain_id not match: best chain_id {} tx chain_id {}", best_chain_id, transaction.chain_id);
+            return Err(format!("transaction chain_id {} is not match, the current best chain_id {} expected!", transaction.chain_id, best_chain_id));
+        }
 
         // check transaction gas limit
         if transaction.gas > DEFAULT_MAX_TRANSACTION_GAS_LIMIT.into() {
