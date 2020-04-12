@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 from eth_utils import decode_hex
 import conflux.config
+
+'''
+This is the state root for pre-generated genesis accounts in `genesis_secrets.txt`.
+'''
 conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex("0xf734ca849ef7307458f4a69d2d33e1f0f9b214ae66ca3f754e9376aedaf9a4a0")
 from conflux.utils import convert_to_nodeid, priv_to_addr, parse_as_int, encode_hex
 from test_framework.block_gen_thread import BlockGenThread
@@ -18,6 +22,7 @@ class SingleBench(ConfluxTestFramework):
         self.conf_parameters["tx_pool_size"] = "500000"
         self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
         self.conf_parameters["record_tx_index"] = "false"
+        # The file can be downloaded from `https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt`
         genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "genesis_secrets.txt")
         self.conf_parameters["genesis_secrets"] = f"\"{genesis_file_path}\""
 
