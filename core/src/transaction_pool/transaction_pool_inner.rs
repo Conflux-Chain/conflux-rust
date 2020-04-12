@@ -35,7 +35,10 @@ lazy_static! {
     static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::get_nonce_and_storage");
     static ref TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER: Arc<dyn Meter> =
-        register_meter_with_group("timer", "tx_pool::inner_without_check_inert");
+        register_meter_with_group(
+            "timer",
+            "tx_pool::inner_without_check_inert"
+        );
     static ref GC_UNEXECUTED_COUNTER: Arc<dyn Counter<usize>> =
         CounterUsize::register_with_group("txpool", "gc_unexecuted");
     static ref GC_READY_COUNTER: Arc<dyn Counter<usize>> =
@@ -389,7 +392,9 @@ impl TransactionPoolInner {
         sponsored_gas: U256,
     ) -> InsertResult
     {
-        let _timer = MeterTimer::time_func(TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER.as_ref());
+        let _timer = MeterTimer::time_func(
+            TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER.as_ref(),
+        );
         if !self.deferred_pool.check_sender_and_nonce_exists(
             &transaction.sender(),
             &transaction.nonce(),
