@@ -23,10 +23,6 @@ class SingleBench(ConfluxTestFramework):
 
 
     def setup_network(self):
-        pass
-        # self.setup_nodes(binary=[os.path.join(
-        #     os.path.dirname(os.path.realpath(__file__)),
-        #     "../target/release/conflux")])
         self.setup_nodes()
 
     def run_test(self):
@@ -128,7 +124,6 @@ class SingleBench(ConfluxTestFramework):
                 TRANSACTIONS))
         self.log.info(f"Time used to send {tx_n} transactions: {time_used}")
 
-        start_time = time.time()
         for k in balance_map:
                 wait_until(lambda: self.check_account(k, balance_map), timeout=600)
         time_used = time.time() - start_time
