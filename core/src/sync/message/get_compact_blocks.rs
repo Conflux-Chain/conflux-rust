@@ -78,7 +78,7 @@ impl Handleable for GetCompactBlocks {
             } else {
                 warn!(
                     "Peer {} requested non-existent compact block {}",
-                    ctx.peer, hash
+                    ctx.node_id, hash
                 );
             }
         }

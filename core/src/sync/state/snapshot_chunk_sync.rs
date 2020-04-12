@@ -29,11 +29,11 @@ use crate::{
     },
 };
 use cfx_types::H256;
-use network::{NetworkContext, PeerId};
+use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use primitives::{
-    BlockHeaderBuilder, EpochId, EpochNumber, Receipt, StateRoot, StorageKey,
-    NULL_EPOCH,
+    BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
+    StorageKey, NULL_EPOCH,
 };
 use rand::{seq::SliceRandom, thread_rng};
 use std::{
@@ -86,7 +86,7 @@ struct Inner {
     sync_candidate_manager: StateSyncCandidateManager,
 
     /// The checkpoint whose state is being synced
-    manifest_request_status: Option<(Instant, PeerId)>,
+    manifest_request_status: Option<(Instant, NodeId)>,
 
     current_sync_candidate: Option<SnapshotSyncCandidate>,
     trusted_blame_block: H256,
@@ -98,7 +98,7 @@ struct Inner {
     blame_vec_offset: usize,
     receipt_blame_vec: Vec<H256>,
     bloom_blame_vec: Vec<H256>,
-    epoch_receipts: Vec<(H256, H256, Arc<Vec<Receipt>>)>,
+    epoch_receipts: Vec<(H256, H256, Arc<BlockReceipts>)>,
     snapshot_info: SnapshotInfo,
 
     pending_chunks: VecDeque<ChunkKey>,
@@ -196,7 +196,7 @@ impl Inner {
     fn request_candidates(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<PeerId>,
+        candidates: Vec<SnapshotSyncCandidate>, peers: Vec<NodeId>,
     )
     {
         let request = StateSyncCandidateRequest {
@@ -435,7 +435,7 @@ impl SnapshotChunkSync {
             .select_n(self.config.max_download_peers, &ctx.manager.syn);
 
         for peer in chosen_peers {
-            if self.request_chunk(ctx, &mut inner, peer).is_none() {
+            if self.request_chunk(ctx, &mut inner, &peer).is_none() {
                 break;
             }
         }
@@ -449,7 +449,7 @@ impl SnapshotChunkSync {
     }
 
     fn request_chunk(
-        &self, ctx: &Context, inner: &mut Inner, peer: PeerId,
+        &self, ctx: &Context, inner: &mut Inner, peer: &NodeId,
     ) -> Option<ChunkKey> {
         let chunk_key = inner.pending_chunks.pop_front()?;
         assert!(inner
@@ -457,7 +457,7 @@ impl SnapshotChunkSync {
             .insert(
                 chunk_key.clone(),
                 DownloadingChunkStatus {
-                    peer,
+                    peer: *peer,
                     start_time: Instant::now(),
                 }
             )
@@ -471,7 +471,7 @@ impl SnapshotChunkSync {
         ctx.manager.request_manager.request_with_delay(
             ctx.io,
             Box::new(request),
-            Some(peer),
+            Some(*peer),
             None,
         );
 
@@ -509,7 +509,7 @@ impl SnapshotChunkSync {
             // FIXME Handle out-of-date chunks
             inner
                 .sync_candidate_manager
-                .note_state_sync_failure(&ctx.peer);
+                .note_state_sync_failure(&ctx.node_id);
             return Ok(());
         }
 
@@ -517,7 +517,7 @@ impl SnapshotChunkSync {
         inner.restorer.append(chunk_key, chunk);
 
         // continue to request remaining chunks
-        self.request_chunk(ctx, &mut inner, ctx.peer);
+        self.request_chunk(ctx, &mut inner, &ctx.node_id);
 
         // begin to restore if all chunks downloaded
         if inner.downloading_chunks.is_empty() {
@@ -784,7 +784,7 @@ impl SnapshotChunkSync {
         ctx: &Context, blame_vec_offset: usize, snapshot_epoch_id: &EpochId,
         receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
         block_receipts: &Vec<BlockExecutionResult>,
-    ) -> Option<Vec<(H256, H256, Arc<Vec<Receipt>>)>>
+    ) -> Option<Vec<(H256, H256, Arc<BlockReceipts>)>>
     {
         let mut epoch_hash = snapshot_epoch_id.clone();
         let checkpoint = ctx
@@ -820,13 +820,7 @@ impl SnapshotChunkSync {
                 if let Some(block_receipt) =
                     block_receipts.get(receipts_vec_offset + i)
                 {
-                    epoch_receipts.push(Arc::new(
-                        block_receipt
-                            .receipts
-                            .iter()
-                            .cloned()
-                            .collect::<Vec<_>>(),
-                    ));
+                    epoch_receipts.push(block_receipt.block_receipts.clone());
                 } else {
                     // Invalid block_receipts vector length.
                     return None;
@@ -876,7 +870,7 @@ impl SnapshotChunkSync {
     /// Return Some if a candidate is ready and we can start requesting
     /// manifests
     pub fn handle_snapshot_candidate_response(
-        &self, peer: &PeerId,
+        &self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
     )
@@ -892,7 +886,7 @@ impl SnapshotChunkSync {
         }
     }
 
-    pub fn on_peer_disconnected(&self, peer: &PeerId) {
+    pub fn on_peer_disconnected(&self, peer: &NodeId) {
         let mut inner = self.inner.write();
         inner.sync_candidate_manager.on_peer_disconnected(peer);
     }
@@ -1014,6 +1008,6 @@ pub struct StateSyncConfiguration {
 }
 
 struct DownloadingChunkStatus {
-    peer: PeerId,
+    peer: NodeId,
     start_time: Instant,
 }

@@ -9,8 +9,8 @@ use crate::{
         Error, ErrorKind,
     },
     message::{MsgId, RequestId},
-    network::PeerId,
 };
+use network::node_table::NodeId;
 use parking_lot::RwLock;
 use std::{
     cmp::Ord,
@@ -88,9 +88,9 @@ where
 
     #[inline]
     fn get_existing_peer_state(
-        &self, peer: PeerId,
+        &self, peer: &NodeId,
     ) -> Result<Arc<RwLock<FullPeerState>>, Error> {
-        match self.peers.get(&peer) {
+        match self.peers.get(peer) {
             Some(state) => Ok(state),
             None => {
                 error!("Received message from unknown peer={:?}", peer);
@@ -101,7 +101,7 @@ where
 
     #[inline]
     pub fn check_if_requested(
-        &self, peer: PeerId, request_id: RequestId, key: &Key,
+        &self, peer: &NodeId, request_id: RequestId, key: &Key,
     ) -> Result<Option<RequestId>, Error> {
         let id = match self.in_flight.read().get(&key).map(|req| req.request_id)
         {
@@ -170,7 +170,7 @@ where
 
     pub fn sync(
         &self, max_in_flight: usize, batch_size: usize,
-        request: impl Fn(PeerId, Vec<Key>) -> Result<Option<RequestId>, Error>,
+        request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     )
     {
         // check if there are any peers available
@@ -205,7 +205,7 @@ where
 
             let keys = batch.iter().map(|h| h.key()).collect();
 
-            match request(peer, keys) {
+            match request(&peer, keys) {
                 Ok(None) => {}
                 Ok(Some(request_id)) => {
                     self.insert_in_flight(
@@ -249,7 +249,7 @@ where
     #[inline]
     pub fn request_now<I>(
         &self, items: I,
-        request: impl Fn(PeerId, Vec<Key>) -> Result<Option<RequestId>, Error>,
+        request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     ) where
         I: Iterator<Item = Item>,
     {
@@ -264,13 +264,13 @@ where
             }
         };
 
-        self.request_now_from_peer(items, peer, request);
+        self.request_now_from_peer(items, &peer, request);
     }
 
     #[inline]
     pub fn request_now_from_peer<I>(
-        &self, items: I, peer: PeerId,
-        request: impl Fn(PeerId, Vec<Key>) -> Result<Option<RequestId>, Error>,
+        &self, items: I, peer: &NodeId,
+        request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
     ) where
         I: Iterator<Item = Item>,
     {

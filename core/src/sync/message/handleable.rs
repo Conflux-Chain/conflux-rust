@@ -8,11 +8,11 @@ use crate::{
         request_manager::RequestMessage, Error, SynchronizationProtocolHandler,
     },
 };
-use network::{node_table::NodeId, NetworkContext, PeerId};
+use network::{node_table::NodeId, NetworkContext};
 
 pub struct Context<'a> {
     pub io: &'a dyn NetworkContext,
-    pub peer: PeerId,
+    pub node_id: NodeId,
     pub manager: &'a SynchronizationProtocolHandler,
 }
 
@@ -22,15 +22,15 @@ impl<'a> Context<'a> {
     ) -> Result<RequestMessage, Error> {
         self.manager
             .request_manager
-            .match_request(self.peer, request_id)
+            .match_request(&self.node_id, request_id)
     }
 
     pub fn send_response(&self, response: &dyn Message) -> Result<(), Error> {
-        response.send(self.io, self.peer)?;
+        response.send(self.io, &self.node_id)?;
         Ok(())
     }
 
-    pub fn node_id(&self) -> NodeId { self.io.get_peer_node_id(self.peer) }
+    pub fn node_id(&self) -> NodeId { self.node_id.clone() }
 }
 
 // todo merge with Request and RequestContext!!!

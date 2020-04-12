@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
-use network::PeerId;
 //use slab::Slab;
 use crate::{
     message::MsgId,
@@ -23,7 +22,6 @@ use std::{
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
 pub struct SynchronizationPeerState {
-    pub id: PeerId,
     pub node_id: NodeId,
     // This field is only used for consortium setup.
     // Whether this node is a validator.
@@ -56,14 +54,14 @@ pub struct SynchronizationPeerState {
 }
 
 pub type SynchronizationPeers =
-    HashMap<PeerId, Arc<RwLock<SynchronizationPeerState>>>;
+    HashMap<NodeId, Arc<RwLock<SynchronizationPeerState>>>;
 
 pub struct SynchronizationState {
     is_consortium: bool,
     is_full_node: bool,
     is_dev_or_test_mode: bool,
     pub peers: RwLock<SynchronizationPeers>,
-    pub handshaking_peers: RwLock<HashMap<PeerId, Instant>>,
+    pub handshaking_peers: RwLock<HashMap<NodeId, Instant>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
 }
 
@@ -83,42 +81,43 @@ impl SynchronizationState {
 
     pub fn is_consortium(&self) -> bool { self.is_consortium }
 
-    pub fn on_status_in_handshaking(&self, peer: PeerId) -> bool {
+    pub fn on_status_in_handshaking(&self, node_id: &NodeId) -> bool {
         let peers = self.peers.read();
         let mut handshaking_peers = self.handshaking_peers.write();
-        handshaking_peers.remove(&peer).is_some() && !peers.contains_key(&peer)
+        handshaking_peers.remove(node_id).is_some()
+            && !peers.contains_key(node_id)
     }
 
     pub fn peer_connected(
-        &self, peer: PeerId, state: SynchronizationPeerState,
+        &self, node_id: NodeId, state: SynchronizationPeerState,
     ) {
         let mut peers = self.peers.write();
         if self.is_consortium() {
             unimplemented!();
         } else {
-            peers.insert(peer, Arc::new(RwLock::new(state)));
+            peers.insert(node_id, Arc::new(RwLock::new(state)));
         }
     }
 
-    pub fn contains_peer(&self, peer: &PeerId) -> bool {
-        self.peers.read().contains_key(peer)
+    pub fn contains_peer(&self, node_id: &NodeId) -> bool {
+        self.peers.read().contains_key(node_id)
     }
 
     pub fn get_peer_info(
-        &self, id: &PeerId,
+        &self, node_id: &NodeId,
     ) -> Result<Arc<RwLock<SynchronizationPeerState>>, Error> {
         Ok(self
             .peers
             .read()
-            .get(&id)
+            .get(node_id)
             .ok_or(ErrorKind::UnknownPeer)?
             .clone())
     }
 
     /// Updates the heartbeat for the specified peer. It takes no effect if the
     /// peer is in handshaking status or not found.
-    pub fn update_heartbeat(&self, peer: &PeerId) {
-        if let Some(state) = self.peers.read().get(peer) {
+    pub fn update_heartbeat(&self, node_id: &NodeId) {
+        if let Some(state) = self.peers.read().get(node_id) {
             state.write().heartbeat = Instant::now();
         }
     }
@@ -127,18 +126,18 @@ impl SynchronizationState {
     /// peers and inactive peers after handshake.
     pub fn get_heartbeat_timeout_peers(
         &self, timeout: Duration,
-    ) -> Vec<PeerId> {
+    ) -> Vec<NodeId> {
         let mut timeout_peers = Vec::new();
 
         for (peer, handshake_time) in self.handshaking_peers.read().iter() {
             if handshake_time.elapsed() > timeout {
-                timeout_peers.push(peer.clone());
+                timeout_peers.push(*peer);
             }
         }
 
         for (peer, state) in self.peers.read().iter() {
             if state.read().heartbeat.elapsed() > timeout {
-                timeout_peers.push(peer.clone());
+                timeout_peers.push(*peer);
             }
         }
 
@@ -186,8 +185,8 @@ impl SynchronizationState {
 /// Filter peers that match ``all'' the provided conditions.
 pub struct PeerFilter<'a> {
     throttle_msg_ids: Option<HashSet<MsgId>>,
-    excludes: Option<HashSet<PeerId>>,
-    choose_from: Option<&'a HashSet<PeerId>>,
+    excludes: Option<HashSet<NodeId>>,
+    choose_from: Option<&'a HashSet<NodeId>>,
     cap: Option<DynamicCapability>,
     min_best_epoch: Option<u64>,
 }
@@ -202,15 +201,15 @@ impl<'a> PeerFilter<'a> {
         self
     }
 
-    pub fn exclude(mut self, peer: PeerId) -> Self {
+    pub fn exclude(mut self, node_id: NodeId) -> Self {
         self.excludes
             .get_or_insert_with(|| HashSet::new())
-            .insert(peer);
+            .insert(node_id);
         self
     }
 
     /// Exclude the peers not in the `peer_set`
-    pub fn choose_from(mut self, peer_set: &'a HashSet<PeerId>) -> Self {
+    pub fn choose_from(mut self, peer_set: &'a HashSet<NodeId>) -> Self {
         self.choose_from = Some(peer_set);
         self
     }
@@ -225,7 +224,7 @@ impl<'a> PeerFilter<'a> {
         self
     }
 
-    pub fn select_all(self, syn: &SynchronizationState) -> Vec<PeerId> {
+    pub fn select_all(self, syn: &SynchronizationState) -> Vec<NodeId> {
         let mut peers = Vec::new();
 
         let check_state = self.throttle_msg_ids.is_some()
@@ -282,11 +281,11 @@ impl<'a> PeerFilter<'a> {
         peers
     }
 
-    pub fn select(self, syn: &SynchronizationState) -> Option<PeerId> {
+    pub fn select(self, syn: &SynchronizationState) -> Option<NodeId> {
         self.select_all(syn).choose(&mut random::new()).cloned()
     }
 
-    pub fn select_n(self, n: usize, syn: &SynchronizationState) -> Vec<PeerId> {
+    pub fn select_n(self, n: usize, syn: &SynchronizationState) -> Vec<NodeId> {
         let mut peers = self.select_all(syn);
         peers.shuffle(&mut random::new());
         peers.truncate(n);

@@ -20,7 +20,7 @@ use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
     receipt::{
-        Receipt, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        BlockReceipts, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block, BlockHeader, EpochId, SignedTransaction, TransactionIndex,
@@ -630,17 +630,24 @@ impl BlockDataManager {
     }
 
     pub fn insert_block_results(
-        &self, hash: H256, epoch: H256, receipts: Arc<Vec<Receipt>>,
+        &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
         persistent: bool,
     )
     {
-        let bloom = receipts.iter().fold(Bloom::zero(), |mut b, r| {
-            b.accrue_bloom(&r.log_bloom);
-            b
-        });
+        let bloom =
+            block_receipts
+                .receipts
+                .iter()
+                .fold(Bloom::zero(), |mut b, r| {
+                    b.accrue_bloom(&r.log_bloom);
+                    b
+                });
         let result = BlockExecutionResultWithEpoch(
             epoch,
-            BlockExecutionResult { receipts, bloom },
+            BlockExecutionResult {
+                block_receipts,
+                bloom,
+            },
         );
 
         if persistent {
@@ -962,7 +969,7 @@ impl BlockDataManager {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
                     h, epoch_hash, true, /* update_cache */
                 ) {
-                    epoch_receipts.push(r.receipts);
+                    epoch_receipts.push(r.block_receipts);
                 } else {
                     return false;
                 }
@@ -975,6 +982,7 @@ impl BlockDataManager {
                     .expect("block exists");
                 for (tx_idx, tx) in block.transactions.iter().enumerate() {
                     match epoch_receipts[block_idx]
+                        .receipts
                         .get(tx_idx)
                         .unwrap()
                         .outcome_status

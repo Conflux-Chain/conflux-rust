@@ -12,13 +12,13 @@ use crate::{
             metrics::BLOCK_HEADER_HANDLE_TIMER, Context, GetBlockHeaders,
             Handleable,
         },
-        msg_sender::NULL,
         synchronization_state::PeerFilter,
         Error,
     },
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
+use network::node_table::NodeId;
 use primitives::BlockHeader;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
@@ -45,7 +45,7 @@ impl Handleable for GetBlockHeadersResponse {
             );
         }
 
-        if ctx.peer == NULL {
+        if ctx.io.is_peer_self(&ctx.node_id) {
             let requested = self.headers.iter().map(|h| h.hash()).collect();
 
             self.handle_block_headers(
@@ -95,10 +95,10 @@ impl Handleable for GetBlockHeadersResponse {
             };
 
         let chosen_peer = if timestamp_validation_result.is_ok() {
-            Some(ctx.peer)
+            Some(ctx.node_id.clone())
         } else {
             PeerFilter::new(self.msg_id())
-                .exclude(ctx.peer)
+                .exclude(ctx.node_id.clone())
                 .select(&ctx.manager.syn)
         };
 
@@ -120,7 +120,7 @@ impl GetBlockHeadersResponse {
     // FIXME Remove recursive call if block headers exist db
     fn handle_block_headers(
         &self, ctx: &Context, block_headers: &Vec<BlockHeader>,
-        requested: HashSet<H256>, chosen_peer: Option<usize>,
+        requested: HashSet<H256>, chosen_peer: Option<NodeId>,
         delay: Option<Duration>,
     )
     {
@@ -236,13 +236,13 @@ impl GetBlockHeadersResponse {
         // the pivot chain after the request_epoch mechanism is applied.
         ctx.manager.request_block_headers(
             ctx.io,
-            chosen_peer,
+            chosen_peer.clone(),
             dependent_hashes_bounded.into_iter().collect(),
             true, /* ignore_db */
         );
         ctx.manager.request_block_headers(
             ctx.io,
-            chosen_peer,
+            chosen_peer.clone(),
             dependent_hashes_unbounded.into_iter().collect(),
             false, /* ignore_db */
         );

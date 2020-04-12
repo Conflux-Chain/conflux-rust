@@ -17,7 +17,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         BLOOM_REQUEST_BATCH_SIZE, BLOOM_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOOMS_IN_FLIGHT,
@@ -29,6 +29,7 @@ use super::{
     common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -100,7 +101,7 @@ impl Blooms {
 
     #[inline]
     pub fn receive(
-        &self, peer: PeerId, id: RequestId,
+        &self, peer: &NodeId, id: RequestId,
         blooms: impl Iterator<Item = BloomWithEpoch>,
     ) -> Result<(), Error>
     {
@@ -147,7 +148,7 @@ impl Blooms {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, epochs: Vec<u64>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} epochs={:?}", peer, epochs);
 

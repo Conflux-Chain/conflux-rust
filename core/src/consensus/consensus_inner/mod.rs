@@ -2197,22 +2197,23 @@ impl ConsensusGraphInner {
             tx_hash, false, /* update_cache */
         )?;
         // receipts should never be None if address is not None because
-        let receipts = self
+        let block_receipts = self
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
                 false, /* update_cache */
             )?
             .1
-            .receipts;
+            .block_receipts;
 
         let prior_gas_used = if tx_index.index == 0 {
             U256::zero()
         } else {
-            receipts[tx_index.index - 1].gas_used
+            block_receipts.receipts[tx_index.index - 1].gas_used
         };
 
         Some((
-            receipts
+            block_receipts
+                .receipts
                 .get(tx_index.index)
                 .expect("Error: can't get receipt by tx_index ")
                 .clone(),

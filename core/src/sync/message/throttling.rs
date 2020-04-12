@@ -27,7 +27,7 @@ pub struct Throttled {
 
 impl Handleable for Throttled {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer = match ctx.manager.syn.peers.read().get(&ctx.peer) {
+        let peer = match ctx.manager.syn.peers.read().get(&ctx.node_id) {
             Some(peer) => peer.clone(),
             None => return Ok(()),
         };
@@ -54,7 +54,7 @@ pub trait Throttle {
 
 impl<T: Message> Throttle for T {
     fn throttle(&self, ctx: &Context) -> Result<(), Error> {
-        let peer = match ctx.manager.syn.peers.read().get(&ctx.peer) {
+        let peer = match ctx.manager.syn.peers.read().get(&ctx.node_id) {
             Some(peer) => peer.clone(),
             None => return Ok(()),
         };

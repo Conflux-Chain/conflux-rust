@@ -4,9 +4,10 @@
 
 use crate::{
     message::{Message, MsgId},
-    network::{self, NetworkContext, PeerId, UpdateNodeOperation},
+    network::{self, NetworkContext, UpdateNodeOperation},
     sync::message::Throttled,
 };
+use network::node_table::NodeId;
 use rlp::DecoderError;
 
 error_chain! {
@@ -141,7 +142,7 @@ error_chain! {
     }
 }
 
-pub fn handle(io: &dyn NetworkContext, peer: PeerId, msg_id: MsgId, e: Error) {
+pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     warn!(
         "Error while handling message, peer={}, msg_id={:?}, error={:?}",
         peer, msg_id, e

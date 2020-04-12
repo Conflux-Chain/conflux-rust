@@ -324,6 +324,7 @@ impl FromStr for Node {
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool { self.id == other.id }
 }
+
 impl Eq for Node {}
 
 impl Hash for Node {

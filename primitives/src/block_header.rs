@@ -5,7 +5,7 @@
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY_LIST_RLP},
-    receipt::Receipt,
+    receipt::BlockReceipts,
     NULL_EPOCH,
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
@@ -423,20 +423,20 @@ impl BlockHeaderBuilder {
     }
 
     pub fn compute_block_receipts_root(
-        receipts: &Vec<Arc<Vec<Receipt>>>,
+        receipts: &Vec<Arc<BlockReceipts>>,
     ) -> H256 {
         let mut rlp_stream = RlpStream::new_list(receipts.len());
         for r in receipts {
-            rlp_stream.append_list(r.as_ref());
+            rlp_stream.append(r.as_ref());
         }
 
         keccak(rlp_stream.out())
     }
 
     pub fn compute_block_logs_bloom_hash(
-        receipts: &Vec<Arc<Vec<Receipt>>>,
+        receipts: &Vec<Arc<BlockReceipts>>,
     ) -> H256 {
-        let bloom = receipts.iter().map(|x| x.as_ref()).flatten().fold(
+        let bloom = receipts.iter().map(|x| &x.receipts).flatten().fold(
             Bloom::zero(),
             |mut b, r| {
                 b.accrue_bloom(&r.log_bloom);
@@ -506,8 +506,11 @@ impl Decodable for BlockHeader {
 #[cfg(test)]
 mod tests {
     use super::BlockHeaderBuilder;
-    use crate::{hash::keccak, receipt::Receipt};
-    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM};
+    use crate::{
+        hash::keccak,
+        receipt::{BlockReceipts, Receipt},
+    };
+    use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM, U256};
     use std::{str::FromStr, sync::Arc};
 
     #[test]
@@ -516,7 +519,14 @@ mod tests {
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
 
-        let receipts = (1..11).map(|_| Arc::new(vec![])).collect(); // Vec<Arc<Vec<_>>>
+        let receipts = (1..11)
+            .map(|_| {
+                Arc::new(BlockReceipts {
+                    receipts: vec![],
+                    secondary_reward: U256::zero(),
+                })
+            })
+            .collect(); // Vec<Arc<Vec<_>>>
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
     }
@@ -533,8 +543,13 @@ mod tests {
         };
 
         // 10 blocks with 10 empty receipts each
-        let receipts: Vec<Arc<Vec<Receipt>>> = (1..11)
-            .map(|_| Arc::new((1..11).map(|_| receipt.clone()).collect()))
+        let receipts = (1..11)
+            .map(|_| {
+                Arc::new(BlockReceipts {
+                    receipts: (1..11).map(|_| receipt.clone()).collect(),
+                    secondary_reward: U256::zero(),
+                })
+            })
             .collect();
         let hash = BlockHeaderBuilder::compute_block_logs_bloom_hash(&receipts);
         assert_eq!(hash, KECCAK_EMPTY_BLOOM);
@@ -542,87 +557,93 @@ mod tests {
 
     #[test]
     fn test_logs_bloom_hash() {
-        let block1 = vec![
-            Receipt {
-                gas_used: 0.into(),
-                logs: vec![],
-                outcome_status: 0,
-                log_bloom: Bloom::from_str(
-                    "11111111111111111111111111111111\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000",
-                )
-                .unwrap(),
-                storage_collateralized: vec![],
-                storage_released: vec![],
-            },
-            Receipt {
-                gas_used: 0.into(),
-                logs: vec![],
-                outcome_status: 0,
-                log_bloom: Bloom::from_str(
-                    "00000000000000000000000000000000\
-                     22222222222222222222222222222222\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000\
-                     00000000000000000000000000000000",
-                )
-                .unwrap(),
-                storage_collateralized: vec![],
-                storage_released: vec![],
-            },
-        ];
+        let block1 = BlockReceipts {
+            receipts: vec![
+                Receipt {
+                    gas_used: 0.into(),
+                    logs: vec![],
+                    outcome_status: 0,
+                    log_bloom: Bloom::from_str(
+                        "11111111111111111111111111111111\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000",
+                    )
+                    .unwrap(),
+                    storage_collateralized: vec![],
+                    storage_released: vec![],
+                },
+                Receipt {
+                    gas_used: 0.into(),
+                    logs: vec![],
+                    outcome_status: 0,
+                    log_bloom: Bloom::from_str(
+                        "00000000000000000000000000000000\
+                         22222222222222222222222222222222\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000\
+                         00000000000000000000000000000000",
+                    )
+                    .unwrap(),
+                    storage_collateralized: vec![],
+                    storage_released: vec![],
+                },
+            ],
+            secondary_reward: U256::zero(),
+        };
 
-        let block2 = vec![Receipt {
-            gas_used: 0.into(),
-            logs: vec![],
-            outcome_status: 0,
-            log_bloom: Bloom::from_str(
-                "44444444444444440000000000000000\
-                 44444444444444440000000000000000\
-                 44444444444444440000000000000000\
-                 44444444444444440000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000\
-                 00000000000000000000000000000000",
-            )
-            .unwrap(),
-            storage_collateralized: vec![],
-            storage_released: vec![],
-        }];
+        let block2 = BlockReceipts {
+            receipts: vec![Receipt {
+                gas_used: 0.into(),
+                logs: vec![],
+                outcome_status: 0,
+                log_bloom: Bloom::from_str(
+                    "44444444444444440000000000000000\
+                     44444444444444440000000000000000\
+                     44444444444444440000000000000000\
+                     44444444444444440000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000\
+                     00000000000000000000000000000000",
+                )
+                .unwrap(),
+                storage_collateralized: vec![],
+                storage_released: vec![],
+            }],
+            secondary_reward: U256::zero(),
+        };
 
         let expected = keccak(
             "55555555555555551111111111111111\

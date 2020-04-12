@@ -3,15 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{Bloom, H256};
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
 use crate::{message::RequestId, storage::StateProof};
 
 use primitives::{
-    BlockHeader as PrimitiveBlockHeader, Receipt as PrimitiveReceipt,
-    SignedTransaction, StateRoot as PrimitiveStateRoot,
+    BlockHeader as PrimitiveBlockHeader, BlockReceipts, SignedTransaction,
+    StateRoot as PrimitiveStateRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -70,36 +69,10 @@ pub struct GetReceipts {
     pub epochs: Vec<u64>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct ReceiptsWithEpoch {
     pub epoch: u64,
-    pub receipts: Vec<Vec<PrimitiveReceipt>>,
-}
-
-impl Encodable for ReceiptsWithEpoch {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(2);
-        stream.append(&self.epoch);
-
-        stream.begin_list(self.receipts.len());
-        for r in &self.receipts {
-            stream.append_list(r);
-        }
-    }
-}
-
-impl Decodable for ReceiptsWithEpoch {
-    fn decode(rlp: &Rlp) -> Result<ReceiptsWithEpoch, DecoderError> {
-        let epoch = rlp.val_at(0)?;
-
-        let receipts = rlp
-            .at(1)?
-            .into_iter()
-            .map(|x| Ok(x.as_list()?))
-            .collect::<Result<_, _>>()?;
-
-        Ok(ReceiptsWithEpoch { epoch, receipts })
-    }
+    pub epoch_receipts: Vec<BlockReceipts>,
 }
 
 #[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
@@ -227,57 +200,14 @@ pub struct GetTxInfos {
     pub hashes: Vec<H256>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct TxInfo {
     pub epoch: u64,
     pub block_hash: H256,
     pub index: usize,
-    pub epoch_receipts: Vec<Vec<PrimitiveReceipt>>,
+    pub epoch_receipts: Vec<BlockReceipts>,
     pub block_txs: Vec<SignedTransaction>,
     pub tx_hash: H256,
-}
-
-impl Encodable for TxInfo {
-    fn rlp_append(&self, stream: &mut RlpStream) {
-        stream.begin_list(6);
-        stream.append(&self.epoch);
-        stream.append(&self.block_hash);
-        stream.append(&self.index);
-
-        stream.begin_list(self.epoch_receipts.len());
-        for r in &self.epoch_receipts {
-            stream.append_list(r);
-        }
-
-        stream.append_list(&self.block_txs);
-        stream.append(&self.tx_hash);
-    }
-}
-
-impl Decodable for TxInfo {
-    fn decode(rlp: &Rlp) -> Result<TxInfo, DecoderError> {
-        let epoch = rlp.val_at(0)?;
-        let block_hash = rlp.val_at(1)?;
-        let index = rlp.val_at(2)?;
-
-        let epoch_receipts = rlp
-            .at(3)?
-            .into_iter()
-            .map(|x| Ok(x.as_list()?))
-            .collect::<Result<_, _>>()?;
-
-        let block_txs = rlp.list_at(4)?;
-        let tx_hash = rlp.val_at(5)?;
-
-        Ok(TxInfo {
-            epoch,
-            block_hash,
-            index,
-            epoch_receipts,
-            block_txs,
-            tx_hash,
-        })
-    }
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]

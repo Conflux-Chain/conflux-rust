@@ -18,7 +18,7 @@ use crate::{
         Error, ErrorKind,
     },
     message::{Message, RequestId},
-    network::{NetworkContext, PeerId},
+    network::NetworkContext,
     parameters::light::{
         CACHE_TIMEOUT, MAX_TX_INFOS_IN_FLIGHT, TX_INFO_REQUEST_BATCH_SIZE,
         TX_INFO_REQUEST_TIMEOUT,
@@ -30,6 +30,7 @@ use super::{
     common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
     BlockTxs, Receipts,
 };
+use network::node_table::NodeId;
 
 #[derive(Debug)]
 struct Statistics {
@@ -112,8 +113,10 @@ impl TxInfos {
 
     #[inline]
     pub fn receive(
-        &self, peer: PeerId, id: RequestId, infos: impl Iterator<Item = TxInfo>,
-    ) -> Result<(), Error> {
+        &self, peer: &NodeId, id: RequestId,
+        infos: impl Iterator<Item = TxInfo>,
+    ) -> Result<(), Error>
+    {
         for info in infos {
             info!("Validating tx_info {:?}", info);
 
@@ -169,8 +172,10 @@ impl TxInfos {
         let block_receipts = epoch_receipts.swap_remove(block_index);
 
         // `block_txs` is valid and `block_hash` exists in epoch
-        assert!(block_txs.len() == block_receipts.len());
-        let items = block_txs.into_iter().zip(block_receipts.into_iter());
+        assert!(block_txs.len() == block_receipts.receipts.len());
+        let items = block_txs
+            .into_iter()
+            .zip(block_receipts.receipts.into_iter());
 
         let mut prior_gas_used = U256::zero();
         for (index, (tx, receipt)) in items.enumerate() {
@@ -199,7 +204,7 @@ impl TxInfos {
 
     #[inline]
     fn send_request(
-        &self, io: &dyn NetworkContext, peer: PeerId, hashes: Vec<H256>,
+        &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
         info!("send_request peer={:?} hashes={:?}", peer, hashes);
 

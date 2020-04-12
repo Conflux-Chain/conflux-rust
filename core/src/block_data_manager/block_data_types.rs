@@ -2,7 +2,7 @@ use crate::storage::StateRootWithAuxInfo;
 use cfx_types::{Bloom, H256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::Receipt;
+use primitives::BlockReceipts;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::sync::Arc;
@@ -32,19 +32,19 @@ impl MallocSizeOf for EpochExecutionCommitment {
 /// block's view.
 #[derive(Clone, Debug)]
 pub struct BlockExecutionResult {
-    pub receipts: Arc<Vec<Receipt>>,
+    pub block_receipts: Arc<BlockReceipts>,
     pub bloom: Bloom,
 }
 impl MallocSizeOf for BlockExecutionResult {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.receipts.size_of(ops)
+        self.block_receipts.size_of(ops)
     }
 }
 
 impl Encodable for BlockExecutionResult {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(2)
-            .append_list(&self.receipts.as_ref())
+            .append(self.block_receipts.as_ref())
             .append(&self.bloom);
     }
 }
@@ -52,7 +52,7 @@ impl Encodable for BlockExecutionResult {
 impl Decodable for BlockExecutionResult {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(BlockExecutionResult {
-            receipts: Arc::new(rlp.list_at(0)?),
+            block_receipts: Arc::new(rlp.val_at(0)?),
             bloom: rlp.val_at(1)?,
         })
     }
