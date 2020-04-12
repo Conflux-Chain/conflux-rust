@@ -17,12 +17,13 @@ FULLNODE1 = 1
 LIGHTNODE = 2
 
 NULL_NODE = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+SNAPSHOT_EPOCH_COUNT = 50
 
 # TODO(thegaram): add light node tests
 class StorageRootTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.conf_parameters["dev_snapshot_epoch_count"] = "50"
+        self.conf_parameters["dev_snapshot_epoch_count"] = str(SNAPSHOT_EPOCH_COUNT)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -65,7 +66,7 @@ class StorageRootTest(ConfluxTestFramework):
         assert(root0["snapshot"]     == NULL_NODE)
 
         # update storage; expect: (D1, I1, S1) == (?, I0, S0)
-        # NOTE: call_contract will generate some blocks but it should be < 50
+        # NOTE: call_contract will generate some blocks but it should be < SNAPSHOT_EPOCH_COUNT
         self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"increment()")))
         root1 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
 
@@ -74,7 +75,7 @@ class StorageRootTest(ConfluxTestFramework):
         assert(root1["snapshot"]     == root0["snapshot"])
 
         # go to next era
-        for _ in range(50): self.rpc[FULLNODE0].generate_block()
+        self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
 
         # get storage root; expect: (D2, I2, S2) == (NULL, D1, ?)
         # (the previous delta trie became the current intermediate trie)
@@ -85,7 +86,7 @@ class StorageRootTest(ConfluxTestFramework):
         assert(root2["intermediate"] == root1["delta"])
 
         # update storage; expect: (D3, I3, S3) == (?, D2, S2)
-        # NOTE: call_contract will generate some blocks but it should be < 50
+        # NOTE: call_contract will generate some blocks but it should be < SNAPSHOT_EPOCH_COUNT
         self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"increment()")))
         root3 = self.rpc[FULLNODE0].get_storage_root(contractAddr)
 
@@ -94,7 +95,7 @@ class StorageRootTest(ConfluxTestFramework):
         assert(root3["snapshot"]     == root2["snapshot"])
 
         # go to next era
-        for _ in range(50): self.rpc[FULLNODE0].generate_block()
+        self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
 
         # get storage root; expect: (D4, I4, S4) == (NULL, D3, ?)
         # (the previous delta trie became the current intermediate trie)
