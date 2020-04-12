@@ -55,10 +55,20 @@ lazy_static! {
         register_meter_with_group("txpool", "insert_txs_failure_tps");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
+    static ref TX_POOL_VERIFY_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::verify");
+    static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::get_state");
     static ref INSERT_TXS_QUOTA_LOCK: Lock =
         Lock::register("txpool_insert_txs_quota_lock");
     static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
         Lock::register("txpool_insert_txs_enqueue_lock");
+    static ref PACK_TRANSACTION_LOCK: Lock =
+        Lock::register("txpool_pack_transactions");
+    static ref NOTIFY_BEST_INFO_LOCK: Lock =
+        Lock::register("txpool_notify_best_info");
+    static ref NOTIFY_MODIFIED_LOCK: Lock =
+        Lock::register("txpool_notify_modified_info");
 }
 
 pub const DEFAULT_MAX_TRANSACTION_GAS_LIMIT: u64 = 100_000_000;
@@ -288,6 +298,7 @@ impl TransactionPool {
     fn verify_transaction(
         &self, transaction: &TransactionWithSignature,
     ) -> Result<(), String> {
+        let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
         // Check the epoch height is in bound. Because this is such a loose
         // bound, we can check it here as if it will not change at all
         // during its life time.
@@ -428,7 +439,7 @@ impl TransactionPool {
         best_epoch_height: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         let height_lower_bound =
             if best_epoch_height > self.config.transaction_epoch_bound {
                 best_epoch_height - self.config.transaction_epoch_bound
@@ -449,7 +460,7 @@ impl TransactionPool {
     pub fn notify_modified_accounts(
         &self, accounts_from_execution: Vec<Account>,
     ) {
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write_with_metric(&NOTIFY_MODIFIED_LOCK);
         inner.notify_modified_accounts(accounts_from_execution)
     }
 
@@ -506,7 +517,7 @@ impl TransactionPool {
         *consensus_best_info = best_info;
 
         let mut account_cache = self.get_best_state_account_cache();
-        let mut inner = self.inner.write();
+        let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
         let inner = inner.deref_mut();
 
         while let Some(tx) = set_tx_buffer.pop() {
@@ -565,18 +576,20 @@ impl TransactionPool {
     pub fn set_best_executed_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StorageResult<()> {
-        *self.best_executed_state.lock() = Arc::new(StateDb::new(
+        let best_executed_state = Arc::new(StateDb::new(
             self.data_man
                 .storage_manager
                 .get_state_no_commit(best_executed_epoch)?
                 // Safe because the state is guaranteed to be available.
                 .unwrap(),
         ));
+        *self.best_executed_state.lock() = best_executed_state;
 
         Ok(())
     }
 
     fn get_best_state_account_cache(&self) -> AccountCache {
+        let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         AccountCache::new((&*self.best_executed_state.lock()).clone())
     }
 }

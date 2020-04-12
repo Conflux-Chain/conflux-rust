@@ -1443,7 +1443,7 @@ impl SynchronizationGraph {
             } else if inner.new_to_be_header_graph_ready(index) {
                 inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
                 inner.arena[index].last_update_timestamp = now;
-                debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
+                debug!("BlockIndex {} parent_index {} hash {:?} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
 
                 let r = inner.verify_header_graph_ready_block(index);
@@ -1518,7 +1518,7 @@ impl SynchronizationGraph {
                 }
             } else {
                 debug!(
-                    "BlockIndex {} parent_index {} hash {} is not ready",
+                    "BlockIndex {} parent_index {} hash {:?} is not ready",
                     index,
                     inner.arena[index].parent,
                     inner.arena[index].block_header.hash()
@@ -1633,7 +1633,7 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
+        debug!("insert_block_header() Block = {:?}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
                header.hash(), me, need_to_verify, bench_mode, insert_to_consensus);
 
         // Start to pass influence to descendants
@@ -1697,11 +1697,11 @@ impl SynchronizationGraph {
         // recovered from db, we can simply ignore body.
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
+            *self.consensus_worker_is_busy.lock() = true;
             assert!(
                 self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
             );
-            *self.consensus_worker_is_busy.lock() = true;
 
             if inner.config.enable_state_expose {
                 STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(

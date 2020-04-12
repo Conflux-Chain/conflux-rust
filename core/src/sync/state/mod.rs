@@ -12,8 +12,6 @@ mod state_sync_candidate_manager;
 mod state_sync_candidate_request;
 mod state_sync_candidate_response;
 mod storage;
-// TODO Remove delta
-pub mod delta;
 
 pub use self::{
     snapshot_chunk_request::SnapshotChunkRequest,

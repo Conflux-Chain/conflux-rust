@@ -91,7 +91,7 @@ impl Handleable for GetCompactBlocksResponse {
                 continue;
             }
 
-            debug!("Cmpct block Processing, hash={}", hash);
+            debug!("Cmpct block Processing, hash={:?}", hash);
 
             let missing = {
                 let _timer =

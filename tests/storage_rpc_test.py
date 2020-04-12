@@ -15,7 +15,7 @@ FULLNODE0 = 0
 FULLNODE1 = 1
 LIGHTNODE = 2
 
-class LogFilteringTest(ConfluxTestFramework):
+class StorageRpcTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
 
@@ -102,4 +102,4 @@ class LogFilteringTest(ConfluxTestFramework):
         return receipt, address
 
 if __name__ == "__main__":
-    LogFilteringTest().main()
+    StorageRpcTest().main()
