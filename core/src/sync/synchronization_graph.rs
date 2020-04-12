@@ -1090,12 +1090,13 @@ impl SynchronizationGraph {
                 let mut counter_map = HashMap::new();
 
                 'outer: loop {
-                    let mut first = true;
+                    // Only block when we have processed all received blocks.
+                    let mut blocking = priority_queue.is_empty();
                     'inner: loop {
                         // Use blocking `recv` for the first element, and then drain the receiver
                         // with non-blocking `try_recv`.
-                        let maybe_item = if first {
-                            first = false;
+                        let maybe_item = if blocking {
+                            blocking = false;
                             match block_on(consensus_receiver.recv()) {
                                 Some(item) => Ok(item),
                                 None => break 'outer,
@@ -1103,6 +1104,7 @@ impl SynchronizationGraph {
                         } else {
                             consensus_receiver.try_recv()
                         };
+
                         match maybe_item {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
                             Ok((hash, ignore_body)) => if !reverse_map.contains_key(&hash) {
