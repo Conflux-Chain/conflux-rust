@@ -75,6 +75,7 @@ fn txexe_benchmark(c: &mut Criterion) {
                                     .consensus
                                     .best_block_hash(),
                             ),
+                            /* try_open = */ false,
                         )
                         .unwrap()
                         .unwrap(),

@@ -290,12 +290,19 @@ impl SnapshotMptTraitRw for Arc<Mutex<FakeSnapshotMptDb>> {
 }
 
 impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
+    type SnapshotDbBorrowAsOwnedType = Arc<Mutex<FakeSnapshotMptDb>>;
     type SnapshotDbBorrowMutType = Arc<Mutex<FakeSnapshotMptDb>>;
     type SnapshotDbBorrowSharedType = Arc<Mutex<FakeSnapshotMptDb>>;
 
     fn open_snapshot_mpt_owned(
         &'db mut self,
     ) -> Result<Self::SnapshotDbBorrowMutType> {
+        Ok(self.lock().mpt_db.clone())
+    }
+
+    fn open_snapshot_mpt_as_owned(
+        &'db self,
+    ) -> Result<Self::SnapshotDbBorrowAsOwnedType> {
         Ok(self.lock().mpt_db.clone())
     }
 

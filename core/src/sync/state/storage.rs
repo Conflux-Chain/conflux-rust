@@ -260,9 +260,10 @@ impl RangedManifest {
         let snapshot_db_manager =
             storage_manager.get_storage_manager().get_snapshot_manager();
 
-        let mut snapshot_db = match snapshot_db_manager
-            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
-        {
+        let snapshot_db = match snapshot_db_manager.get_snapshot_by_epoch_id(
+            snapshot_epoch_id,
+            /* try_open = */ true,
+        )? {
             Some(db) => db,
             None => {
                 debug!(
@@ -272,7 +273,7 @@ impl RangedManifest {
                 return Ok(None);
             }
         };
-        let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_owned()?;
+        let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_shared()?;
         let merkle_root = snapshot_mpt.merkle_root;
         let mut slicer = match start_key {
             Some(ref key) => MptSlicer::new_from_key(&mut snapshot_mpt, key)?,
@@ -383,9 +384,10 @@ impl Chunk {
         let snapshot_db_manager =
             storage_manager.get_storage_manager().get_snapshot_manager();
 
-        let mut snapshot_db = match snapshot_db_manager
-            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
-        {
+        let snapshot_db = match snapshot_db_manager.get_snapshot_by_epoch_id(
+            snapshot_epoch_id,
+            /* try_open = */ true,
+        )? {
             Some(db) => db,
             None => {
                 debug!(
@@ -395,7 +397,7 @@ impl Chunk {
             }
         };
 
-        let mut kv_iterator = snapshot_db.snapshot_kv_iterator();
+        let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?;
         let lower_bound_incl =
             chunk_key.lower_bound_incl.clone().unwrap_or_default();
         let upper_bound_excl =

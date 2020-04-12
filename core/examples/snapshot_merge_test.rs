@@ -392,7 +392,7 @@ where
     Iter: Iterator<Item = (&'a Address, &'a Account)>,
 {
     let state = manager
-        .get_state_for_next_epoch(state_index)
+        .get_state_for_next_epoch(state_index, /* try_clone = */ false)
         .unwrap()
         .unwrap();
     let mut state = StateDb::new(state);

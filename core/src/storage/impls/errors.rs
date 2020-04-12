@@ -94,6 +94,11 @@ error_chain! {
             display("Snapshot file not found."),
         }
 
+        SnapshotAlreadyExists {
+            description("Attempting to create or modify a Snapshot which already exists."),
+            display("Attempting to create or modify a Snapshot which already exists."),
+        }
+
         SnapshotMPTTrieNodeNotFound {
             description("Trie node not found when loading Snapshot MPT."),
             display("Trie node not found when loading Snapshot MPT."),
@@ -146,6 +151,11 @@ error_chain! {
         MpscError {
             description("Error from std::sync::mpsc."),
             display("Error from std::sync::mpsc."),
+        }
+
+        SemaphoreTryAcquireError {
+            description("tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."),
+            display("tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."),
         }
     }
 }

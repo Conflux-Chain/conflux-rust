@@ -22,6 +22,7 @@ fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
             storage_manager
                 .get_state_for_next_epoch(
                     StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                    /* try_open = */ false,
                 )
                 .unwrap()
                 .unwrap(),

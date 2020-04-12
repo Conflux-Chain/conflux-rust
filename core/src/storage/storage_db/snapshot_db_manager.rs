@@ -60,8 +60,8 @@ pub trait SnapshotDbManagerTrait {
         delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
     ) -> Result<SnapshotInfo>;
     fn get_snapshot_by_epoch_id(
-        &self, epoch_id: &EpochId,
-    ) -> Result<Option<Self::SnapshotDb>>;
+        &self, epoch_id: &EpochId, try_open: bool,
+    ) -> Result<Option<Arc<Self::SnapshotDb>>>;
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()>;
 
     fn new_temp_snapshot_for_full_sync(
@@ -78,4 +78,4 @@ use super::{
     snapshot_db::*,
 };
 use primitives::{EpochId, MerkleHash};
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, sync::Arc};
