@@ -155,10 +155,13 @@ impl TransactionPool {
             best_executed_state: Mutex::new(Arc::new(StateDb::new(
                 data_man
                     .storage_manager
-                    .get_state_no_commit(StateIndex::new_for_readonly(
-                        &genesis_hash,
-                        &data_man.true_genesis_state_root(),
-                    ))
+                    .get_state_no_commit(
+                        StateIndex::new_for_readonly(
+                            &genesis_hash,
+                            &data_man.true_genesis_state_root(),
+                        ),
+                        /* try_open = */ false,
+                    )
                     // Safe because we don't expect any error at program start.
                     .expect(&concat!(file!(), ":", line!(), ":", column!()))
                     // Safe because true genesis state is available at program
@@ -579,7 +582,10 @@ impl TransactionPool {
         let best_executed_state = Arc::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_no_commit(best_executed_epoch)?
+                .get_state_no_commit(
+                    best_executed_epoch,
+                    /* try_open = */ false,
+                )?
                 // Safe because the state is guaranteed to be available.
                 .unwrap(),
         ));

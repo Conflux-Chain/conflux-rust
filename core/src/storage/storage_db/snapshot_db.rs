@@ -54,10 +54,15 @@ impl SnapshotInfo {
 pub trait OpenSnapshotMptTrait<'db> {
     type SnapshotDbBorrowSharedType: 'db + SnapshotMptTraitRead;
     type SnapshotDbBorrowMutType: 'db + SnapshotMptTraitRw;
+    type SnapshotDbAsOwnedType: 'db + SnapshotMptTraitRw;
 
     fn open_snapshot_mpt_owned(
         &'db mut self,
     ) -> Result<Self::SnapshotDbBorrowMutType>;
+
+    fn open_snapshot_mpt_as_owned(
+        &'db self,
+    ) -> Result<Self::SnapshotDbAsOwnedType>;
 
     fn open_snapshot_mpt_shared(
         &'db self,
@@ -73,21 +78,27 @@ pub trait SnapshotDbTrait:
 {
     fn get_null_snapshot() -> Self;
 
+    /// Store already_open_snapshots and open_semaphore to update
+    /// SnapshotDbManager on destructor. SnapshotDb itself does not take
+    /// care of the update on these data.
     fn open(
         snapshot_path: &str, readonly: bool,
-        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
-    ) -> Result<Option<Self>>;
+        already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        open_semaphore: &Arc<Semaphore>,
+    ) -> Result<Self>;
 
+    /// Store already_open_snapshots and open_semaphore to update
+    /// SnapshotDbManager on destructor. SnapshotDb itself does not take
+    /// care of the update on these data.
     fn create(
         snapshot_path: &str,
-        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        open_semaphore: &Arc<Semaphore>,
     ) -> Result<Self>;
 
     fn direct_merge(&mut self) -> Result<MerkleHash>;
 
-    fn copy_and_merge(
-        &mut self, old_snapshot_db: &mut Self,
-    ) -> Result<MerkleHash>;
+    fn copy_and_merge(&mut self, old_snapshot_db: &Self) -> Result<MerkleHash>;
 }
 
 impl Encodable for SnapshotInfo {
@@ -119,11 +130,14 @@ use super::{
     super::impls::errors::*,
     key_value_db::{KeyValueDbTraitOwnedRead, KeyValueDbTraitSingleWriter},
 };
-use crate::storage::storage_db::{
-    KeyValueDbTraitRead, SnapshotMptTraitRead, SnapshotMptTraitRw,
+use crate::storage::{
+    impls::storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+    storage_db::{
+        KeyValueDbTraitRead, SnapshotMptTraitRead, SnapshotMptTraitRw,
+    },
 };
 use derivative::Derivative;
-use parking_lot::Mutex;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
+use tokio::sync::Semaphore;

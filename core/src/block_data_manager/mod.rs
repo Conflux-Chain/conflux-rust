@@ -424,10 +424,13 @@ impl BlockDataManager {
     pub fn true_genesis_state_root(&self) -> StateRootWithAuxInfo {
         let true_genesis_hash = self.true_genesis.hash();
         self.storage_manager
-            .get_state_no_commit(StateIndex::new_for_readonly(
-                &true_genesis_hash,
-                &StateRootWithAuxInfo::genesis(&true_genesis_hash),
-            ))
+            .get_state_no_commit(
+                StateIndex::new_for_readonly(
+                    &true_genesis_hash,
+                    &StateRootWithAuxInfo::genesis(&true_genesis_hash),
+                ),
+                /* try_open = */ false,
+            )
             .unwrap()
             .unwrap()
             .get_state_root()
