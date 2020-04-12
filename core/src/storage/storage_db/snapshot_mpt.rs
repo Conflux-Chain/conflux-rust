@@ -122,6 +122,13 @@ impl SnapshotMptNode {
             None
         }
     }
+
+    pub fn get_merkle_hash_wo_compressed_path(&self) -> MerkleHash {
+        compute_node_merkle(
+            self.get_children_merkles().as_ref(),
+            self.0.value_as_slice().into_option(),
+        )
+    }
 }
 
 impl Decodable for SnapshotMptNode {
@@ -172,9 +179,10 @@ impl DefaultChildrenItem<SubtreeMerkleWithSize>
 use super::super::impls::{
     errors::*,
     merkle_patricia_trie::{
-        merkle::MaybeMerkleTable, ChildrenTableItem, CompressedPathRaw,
-        CompressedPathTrait, DefaultChildrenItem, NodeRefTrait, TrieNodeTrait,
-        VanillaTrieNode, CHILDREN_COUNT,
+        merkle::{compute_node_merkle, MaybeMerkleTable},
+        ChildrenTableItem, CompressedPathRaw, CompressedPathTrait,
+        DefaultChildrenItem, NodeRefTrait, TrieNodeTrait, VanillaTrieNode,
+        CHILDREN_COUNT,
     },
 };
 use crate::storage::impls::merkle_patricia_trie::mpt_cursor::rlp_key_value_len;

@@ -239,32 +239,74 @@ impl StateTrait for State {
         self.get_from_all_tries(access_key, true)
     }
 
-    fn get_merkle_hash_wo_compressed_path(
+    fn get_node_merkle_all_versions(
         &self, access_key: StorageKey,
-    ) -> Result<Option<MerkleHash>> {
-        // Get won't create any new nodes so it's fine to pass an empty
-        // owned_node_set.
-        let mut empty_owned_node_set: Option<OwnedNodeSet> =
-            Some(Default::default());
-
-        // TODO(thegaram): get from intermediate or snapshot if necessary
-
-        match self.delta_trie_root.clone() {
-            None => Ok(None),
-            Some(root_node) => {
+    ) -> Result<(Option<MerkleHash>, Option<MerkleHash>, Option<MerkleHash>)>
+    {
+        // ----------- get from delta -----------
+        let maybe_delta = match self.delta_trie_root {
+            Some(ref root_node) => {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
 
-                let maybe_merkle = SubTrieVisitor::new(
+                SubTrieVisitor::new(
                     &self.delta_trie,
                     root_node.clone(),
-                    &mut empty_owned_node_set,
+                    &mut Some(Default::default()), /* won't create any new
+                                                    * nodes */
                 )?
-                .get_merkle_hash_wo_compressed_path(&key)?;
-
-                Ok(maybe_merkle)
+                .get_merkle_hash_wo_compressed_path(&key)?
             }
-        }
+            None => None,
+        };
+
+        // ----------- get from intermediate -----------
+        let maybe_intermediate = match (
+            &self.intermediate_trie_root,
+            &self.maybe_intermediate_trie,
+            &self.maybe_intermediate_trie_key_padding,
+        ) {
+            (
+                Some(ref root_node),
+                Some(ref intermediate_trie),
+                Some(ref intermediate_trie_key_padding),
+            ) => {
+                let key = access_key
+                    .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);
+
+                SubTrieVisitor::new(
+                    &intermediate_trie,
+                    root_node.clone(),
+                    &mut Some(Default::default()), /* won't create any new
+                                                    * nodes */
+                )?
+                .get_merkle_hash_wo_compressed_path(&key)?
+            }
+            _ => None,
+        };
+
+        // ----------- get from snapshot -----------
+        let key = access_key.to_key_bytes();
+
+        let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
+        let mut cursor = MptCursor::<
+            &mut dyn SnapshotMptTraitRead,
+            BasicPathNode<&mut dyn SnapshotMptTraitRead>,
+        >::new(&mut mpt);
+        cursor.load_root()?;
+        let maybe_snapshot =
+            match cursor.open_path_for_key::<access_mode::Read>(&key)? {
+                CursorOpenPathTerminal::Arrived => Some(
+                    cursor
+                        .current_node_mut()
+                        .trie_node
+                        .get_merkle_hash_wo_compressed_path(),
+                ),
+                _ => None,
+            };
+        cursor.finish()?;
+
+        Ok((maybe_delta, maybe_intermediate, maybe_snapshot))
     }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
@@ -779,7 +821,7 @@ use crate::storage::{
         delta_mpt::{node_memory_manager::ActualSlabIndex, *},
         errors::*,
         merkle_patricia_trie::{
-            mpt_cursor::{BasicPathNode, MptCursor},
+            mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
             walk::access_mode,
             KVInserter, MptValue, TrieProof, VanillaChildrenTable,
         },
