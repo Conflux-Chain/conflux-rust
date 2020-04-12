@@ -159,6 +159,14 @@ class ConfluxTestFramework:
             dest="metrics_report_interval_ms",
             default=0,
             type=int)
+
+        parser.add_argument(
+            "--conflux-binary",
+            dest="conflux",
+            default=os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "../../target/release/conflux"),
+            type=str)
         self.add_options(parser)
         self.options = parser.parse_args()
         self.after_options_parsed()
@@ -168,12 +176,6 @@ class ConfluxTestFramework:
         check_json_precision()
 
         self.options.cachedir = os.path.abspath(self.options.cachedir)
-
-        self.options.conflux = os.getenv(
-            "CONFLUX",
-            default=os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "../../target/release/conflux"))
 
         # Set up temp directory and start logging
         if self.options.tmpdir:

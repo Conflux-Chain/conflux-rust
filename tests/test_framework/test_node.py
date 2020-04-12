@@ -140,7 +140,7 @@ class TestNode:
                 self.datadir, self.user, self.ip, ssh_args
             )
             cli_kill = "ssh {}@{} killall conflux;".format(self.user, self.ip)
-            cli_exe = 'ssh {} {}@{} "{} > /dev/null"'.format(
+            cli_exe = 'ssh {} {}@{} "{} > ~/stdout"'.format(
                 ssh_args,
                 self.user,
                 self.ip,

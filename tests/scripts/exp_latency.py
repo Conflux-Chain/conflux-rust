@@ -59,7 +59,7 @@ class LatencyExperiment:
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
         self.exp_latency_options = dict(
             vms = 10,
-            batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000"
+            batch_config = "500:1:150000:1000,500:1:200000:1000,500:1:250000:1000,500:1:300000:1000,500:1:350000:1000",
         )
         OptionHelper.add_options(parser, self.exp_latency_options)
 
@@ -143,6 +143,7 @@ class LatencyExperiment:
             "--txs-per-block", str(config.txs_per_block),
             "--generate-tx-data-len", str(config.tx_size),
             "--tx-pool-size", str(1_000_000),
+            "--conflux-binary", "~/conflux"
         ] + OptionHelper.parsed_options_to_args(
             dict(filter(lambda kv: kv[0] not in self.exp_latency_options, vars(self.options).items()))
         )

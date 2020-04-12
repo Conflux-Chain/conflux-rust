@@ -176,6 +176,7 @@ class RemoteSimulate(ConfluxTestFramework):
     def generate_blocks_async(self):
         num_nodes = len(self.nodes)
 
+        max_retry = 200
         # generate blocks
         threads = {}
         rpc_times = []
@@ -186,7 +187,7 @@ class RemoteSimulate(ConfluxTestFramework):
             # find an idle node to generate block
             p = random.randint(0, num_nodes - 1)
             retry = 0
-            while retry < 20:
+            while retry < max_retry:
                 pre_thread = threads.get(p)
                 if pre_thread is not None and pre_thread.is_alive():
                     p = random.randint(0, num_nodes - 1)
@@ -195,7 +196,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 else:
                     break
 
-            if retry >= 20:
+            if retry >= max_retry:
                 self.log.warn("too many nodes are busy to generate block, stop to analyze logs.")
                 break
 
@@ -225,6 +226,7 @@ class RemoteSimulate(ConfluxTestFramework):
         # setup monitor to report the current block count periodically
         cur_block_count = self.nodes[0].getblockcount()
         # The monitor will check the block_count of nodes[0]
+        self.progress = 0
         monitor_thread = threading.Thread(target=self.monitor, args=(cur_block_count, 100), daemon=True)
         monitor_thread.start()
 
