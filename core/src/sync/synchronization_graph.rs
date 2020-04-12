@@ -1683,11 +1683,11 @@ impl SynchronizationGraph {
         // recovered from db, we can simply ignore body.
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
+            *self.consensus_worker_is_busy.lock() = true;
             assert!(
                 self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
             );
-            *self.consensus_worker_is_busy.lock() = true;
 
             if inner.config.enable_state_expose {
                 STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(

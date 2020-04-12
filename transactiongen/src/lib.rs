@@ -266,7 +266,11 @@ impl TransactionGenerator {
             {
                 thread::sleep(time_left);
             } else {
-                debug!("Elapsed time larger than the time needed for sleep: time_elapsed={:?}", time_elapsed);
+                debug!(
+                    "Elapsed time larger than the time needed for sleep: \
+                     time_elapsed={:?} tx_n={}",
+                    time_elapsed, tx_n
+                );
             }
         }
     }
