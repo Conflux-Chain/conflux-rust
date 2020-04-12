@@ -127,7 +127,7 @@ class SingleBench(ConfluxTestFramework):
                 time.sleep(i*batch_size/send_tps - time_used)
             self.node.p2p.send_protocol_packet(encoded + int_to_bytes(
                 TRANSACTIONS))
-        self.log.info(f"Time used to send {tx_n} transactions: {time_used}")
+        self.log.info(f"Time used to send {tx_n} transactions in {i} iterations: {time_used}")
 
         for k in balance_map:
                 wait_until(lambda: self.check_account(k, balance_map), timeout=600)
