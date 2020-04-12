@@ -5,7 +5,7 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::statedb::Result as StateDbResult;
-use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
+use cfx_types::{Address, AddressUtil, BigEndianHash, H256, H512, U256, U512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -722,17 +722,23 @@ impl TransactionPoolInner {
 
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = transaction.action {
-            if let Ok(Some(sponsor_info)) =
-                self.get_sponsor_info_from_storage(&callee, account_cache)
-            {
-                if account_cache
-                    .check_commission_privilege(&callee, &transaction.sender())
+            // FIXME: This is a quick fix for performance issue.
+            if callee.is_contract() {
+                if let Ok(Some(sponsor_info)) =
+                    self.get_sponsor_info_from_storage(&callee, account_cache)
                 {
-                    let estimated_gas = transaction.gas * transaction.gas_price;
-                    if estimated_gas <= sponsor_info.sponsor_gas_bound
-                        && estimated_gas <= sponsor_info.sponsor_balance_for_gas
-                    {
-                        sponsored_gas = transaction.gas;
+                    if account_cache.check_commission_privilege(
+                        &callee,
+                        &transaction.sender(),
+                    ) {
+                        let estimated_gas =
+                            transaction.gas * transaction.gas_price;
+                        if estimated_gas <= sponsor_info.sponsor_gas_bound
+                            && estimated_gas
+                                <= sponsor_info.sponsor_balance_for_gas
+                        {
+                            sponsored_gas = transaction.gas;
+                        }
                     }
                 }
             }

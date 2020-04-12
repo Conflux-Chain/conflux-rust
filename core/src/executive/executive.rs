@@ -20,7 +20,7 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, H256, U256, U512};
+use cfx_types::{Address, AddressUtil, H256, U256, U512};
 use primitives::{
     receipt::StorageChange, transaction::Action, SignedTransaction,
 };
@@ -51,8 +51,7 @@ pub fn contract_address(
             // the address. For contract address, the bits will be
             // set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
-            h.as_bytes_mut()[0] &= 0x0f;
-            h.as_bytes_mut()[0] |= 0x80;
+            h.converted_to_contract();
             (h, None)
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
@@ -66,8 +65,7 @@ pub fn contract_address(
             // address. For contract address, the bit will be set
             // one.
             let mut h = Address::from(keccak(&buffer[..]));
-            h.as_bytes_mut()[0] &= 0x0f;
-            h.as_bytes_mut()[0] |= 0x80;
+            h.converted_to_contract();
             (h, Some(code_hash))
         }
     }

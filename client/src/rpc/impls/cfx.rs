@@ -19,7 +19,7 @@ use crate::rpc::{
     RpcResult,
 };
 use blockgen::BlockGenerator;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{AddressUtil, H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     executive::Executed,
@@ -306,12 +306,7 @@ impl RpcImpl {
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
         if let Call(address) = &tx.transaction.action {
-            let type_bits = address.as_fixed_bytes()[0] & 0xf0;
-            // FIXME: this check should be a separate call.
-            if (type_bits == 0x0
-                && !self.machine.builtins().contains_key(address))
-                || (type_bits != 0x0 && type_bits != 0x10 && type_bits != 0x80)
-            {
+            if !address.is_valid(self.machine.builtins()) {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
         }
