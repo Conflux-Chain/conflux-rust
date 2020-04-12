@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import os, sys
 
-from conflux.utils import parse_as_int
-
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
+from conflux.utils import parse_as_int
 from eth_utils import decode_hex
 from conflux.messages import NewBlock
 from test_framework.mininode import start_p2p_connection
@@ -41,7 +40,7 @@ class SameHeightTest(ConfluxTestFramework):
         last_block = victim.generate_empty_blocks(initial_chain_length)[-1]
         last_height = parse_as_int(RpcClient(victim).block_by_hash(last_block)["height"])
         victim_handler = Victim("VICTIM", victim, victim_generation_period_ms, self.log, report_progress_blocks,
-                                fixed_period=True)
+                fixed_period=True)
         victim_handler.start()
         self.log.info("Victim started")
         attacker_handler = Attacker("ATTACKER", victim, attacker_generate_period_ms, self.log)
