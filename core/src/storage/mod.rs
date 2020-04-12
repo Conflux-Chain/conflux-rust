@@ -38,6 +38,7 @@ pub struct StorageConfiguration {
     pub delta_mpts_cache_size: u32,
     pub delta_mpts_node_map_vec_size: u32,
     pub delta_mpts_slab_idle_size: u32,
+    pub max_open_snapshots: u16,
     pub path_delta_mpts_dir: String,
     pub path_storage_dir: String,
     pub path_snapshot_dir: String,
@@ -70,6 +71,7 @@ impl StorageConfiguration {
                 defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER,
             delta_mpts_slab_idle_size:
                 defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
+            max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
             path_delta_mpts_dir: conflux_data_dir.clone()
                 + StorageConfiguration::DELTA_MPTS_DIR,
             path_snapshot_dir: conflux_data_dir.clone()

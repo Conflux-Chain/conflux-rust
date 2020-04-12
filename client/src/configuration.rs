@@ -198,6 +198,7 @@ build_config! {
         (storage_delta_mpts_cache_start_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
         (storage_delta_mpts_node_map_vec_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
+        (storage_max_open_snapshots, (u16), storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
 
         // General/Unclassified section.
         (enable_optimistic_execution, (bool), true)
@@ -433,6 +434,7 @@ impl Configuration {
             delta_mpts_slab_idle_size: self
                 .raw_conf
                 .storage_delta_mpts_slab_idle_size,
+            max_open_snapshots: self.raw_conf.storage_max_open_snapshots,
             path_delta_mpts_dir: self.raw_conf.conflux_data_dir.clone()
                 + StorageConfiguration::DELTA_MPTS_DIR,
             path_snapshot_dir: self.raw_conf.conflux_data_dir.clone()
