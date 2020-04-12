@@ -27,8 +27,6 @@ production_conf = default_conflux_conf
 
 small_local_test_conf = dict(
     enable_discovery = "false",
-    # TODO: The default is 900, is it a must to set to 5?
-    expire_block_gc_period_s = 5,
     log_file = "'./conflux.log'",
     log_level = '"debug"',
     metrics_output_file = "'./metrics.log'",
