@@ -648,7 +648,6 @@ impl SynchronizationGraphInner {
         // And thus we also won't propagate graph-ready to already processed
         // blocks.
         if node_me.graph_status >= minimal_status {
-            trace!("new_to_be_graph_ready: {} 1", index);
             return false;
         }
 
@@ -672,7 +671,6 @@ impl SynchronizationGraphInner {
         };
 
         if !parent_graph_ready {
-            trace!("new_to_be_graph_ready: {} 2", index);
             return false;
         } else if parent == NULL {
             self.arena[index].parent_reclaimed = true;
@@ -687,7 +685,6 @@ impl SynchronizationGraphInner {
         let mut referee_hash_in_mem = HashSet::new();
         for referee in self.arena[index].referees.iter() {
             if self.arena[*referee].graph_status < minimal_status {
-                trace!("new_to_be_graph_ready: {} 3", index);
                 return false;
             } else {
                 referee_hash_in_mem
@@ -698,7 +695,6 @@ impl SynchronizationGraphInner {
         for referee_hash in self.arena[index].block_header.referee_hashes() {
             if !referee_hash_in_mem.contains(referee_hash) {
                 if !self.is_graph_ready_in_db(referee_hash, genesis_seq_num) {
-                    trace!("new_to_be_graph_ready: {} 4", index);
                     return false;
                 }
             }

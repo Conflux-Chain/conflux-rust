@@ -597,7 +597,6 @@ impl TransactionPoolInner {
         let mut big_tx_resample_times_limit = 10;
         let mut recycle_txs = Vec::new();
 
-        debug!("pack_transactions: start ready account pool process");
         'out: while let Some(tx) = self.ready_account_pool.pop() {
             let tx_size = tx.rlp_size();
             if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
@@ -648,7 +647,6 @@ impl TransactionPoolInner {
 
         // FIXME: to be optimized by only recalculating readiness once for one
         //  sender
-        debug!("pack_transactions: start packed_transactions process");
         for tx in packed_transactions.iter().rev() {
             self.insert_transaction_without_readiness_check(
                 tx.clone(),

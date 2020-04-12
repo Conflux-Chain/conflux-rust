@@ -48,12 +48,12 @@ run_latency_exp () {
     --max-block-size-in-bytes $max_block_size_in_bytes "
 
     #5) Terminate slave instances
-#    rm -rf tmp_data
-#    mkdir tmp_data
-#    cd tmp_data
-#    ../list-on-demand.sh $slave_role || true
-#    ../terminate-on-demand.sh
-#    cd ..
+    rm -rf tmp_data
+    mkdir tmp_data
+    cd tmp_data
+    ../list-on-demand.sh $slave_role || true
+    ../terminate-on-demand.sh
+    cd ..
 
     # Download results
     archive_file="exp_stat_latency.tgz"
@@ -77,7 +77,7 @@ exp_config="250:1:300000:4000"
 # For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will not take effects.
 # Block size is limited by `max_block_size_in_bytes`.
 
-tps=6000
+tps=4000
 max_block_size_in_bytes=300000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes

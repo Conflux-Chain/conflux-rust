@@ -118,7 +118,6 @@ class RemoteSimulate(ConfluxTestFramework):
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
-        # self.conf_parameters["enable_optimistic_execution"] = "false"
 
     def stop_nodes(self):
         kill_remote_conflux(self.options.ips_file)

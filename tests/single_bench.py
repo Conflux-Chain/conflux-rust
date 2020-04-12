@@ -18,7 +18,7 @@ class SingleBench(ConfluxTestFramework):
         self.conf_parameters["tx_pool_size"] = "500000"
         self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
         self.conf_parameters["record_tx_index"] = "false"
-        self.conf_parameters["genesis_secrets"] = '"/Users/lipeilun/conflux/conflux-rust/genesis_secrets.txt.backup"'
+        self.conf_parameters["genesis_secrets"] = '"/Users/lipeilun/conflux/conflux-rust/genesis_secrets.txt"'
 
     def setup_network(self):
         pass
@@ -39,6 +39,7 @@ class SingleBench(ConfluxTestFramework):
         send_tps = 20000
         all_txs = []
         gas_price = 1
+        account_n = 1000
 
         generate = False
         if generate:
@@ -48,16 +49,18 @@ class SingleBench(ConfluxTestFramework):
             self.log.info("Setting up genesis secrets")
             balance_map = {}
             nonce_map = {}
-            for prikey_str in open("/Users/lipeilun/conflux/conflux-rust/genesis_secrets.txt", "r").readlines():
+            account_i = 0
+            for prikey_str in open(self.conf_parameters["genesis_secrets"][1:-1], "r").readlines():
                 prikey = decode_hex(prikey_str[:-1])
                 balance_map[prikey] = 10000000000000000000000
                 nonce_map[prikey] = 0
-
+                account_i += 1
+                if account_i == account_n:
+                    break
 
             # genesis_key = default_config["GENESIS_PRI_KEY"]
             # balance_map = {genesis_key: default_config["TOTAL_COIN"]}
             # nonce_map = {genesis_key: 0}
-            # account_n = 1000
             # # Initialize new accounts
             # new_keys = set()
             # for _ in range(account_n):
@@ -79,14 +82,12 @@ class SingleBench(ConfluxTestFramework):
             for i in range(tx_n):
                 if i % 1000 == 0:
                     self.log.info("generated %d tx", i)
-                #sender_key = random.choice(account_list)
-                sender_key = account_list[random.randint(0, len(account_list) - 1)]
+                sender_key = random.choice(account_list)
                 if sender_key not in nonce_map:
                     nonce_map[sender_key] = wait_for_initial_nonce_for_privkey(self.nodes[0], sender_key)
                 nonce = nonce_map[sender_key]
                 value = 1
-                # receiver_sk = random.choice(account_list)
-                receiver_sk = account_list[random.randint(0, len(account_list) - 1)]
+                receiver_sk = random.choice(account_list)
                 balance_map[receiver_sk] += value
                 # not enough transaction fee (gas_price * gas_limit) should not happen for now
                 assert balance_map[sender_key] >= value + gas_price * 21000
@@ -133,7 +134,6 @@ class SingleBench(ConfluxTestFramework):
         block_gen_thread.join()
         self.log.info("Time used: %f seconds", time_used)
         self.log.info("Tx per second: %f", tx_n / time_used)
-        exit()
 
     def check_account(self, k, balance_map):
         addr = eth_utils.encode_hex(priv_to_addr(k))

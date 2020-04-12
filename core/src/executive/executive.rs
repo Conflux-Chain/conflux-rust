@@ -1297,7 +1297,7 @@ impl<'a> Executive<'a> {
             *nonce_increased = true;
         }
 
-        // // Check if contract will pay transaction fee for the sender.
+        // Check if contract will pay transaction fee for the sender.
         let mut substate = Substate::new();
         let mut code_address = Address::zero();
         let mut has_privilege = false;
