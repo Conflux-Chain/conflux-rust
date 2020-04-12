@@ -30,4 +30,4 @@ mod tests;
 
 /// Used in Genesis author to indicate testnet version
 /// Increase by one for every test net reset
-const TESTNET_VERSION: &str = "0000000000000000000000000000000000000020";
+const TESTNET_VERSION: &str = "1000000000000000000000000000000000000040";
