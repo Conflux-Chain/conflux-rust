@@ -18,7 +18,9 @@ class SingleBench(ConfluxTestFramework):
         self.conf_parameters["tx_pool_size"] = "500000"
         self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
         self.conf_parameters["record_tx_index"] = "false"
-        self.conf_parameters["genesis_secrets"] = '"/Users/lipeilun/conflux/conflux-rust/genesis_secrets.txt"'
+        genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "genesis_secrets.txt")
+        self.conf_parameters["genesis_secrets"] = f"\"{genesis_file_path}\""
+
 
     def setup_network(self):
         pass

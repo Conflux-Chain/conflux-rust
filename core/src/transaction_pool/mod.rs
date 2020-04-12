@@ -440,7 +440,6 @@ impl TransactionPool {
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
-        debug!("pack_transactions: after inner lock");
         let height_lower_bound =
             if best_epoch_height > self.config.transaction_epoch_bound {
                 best_epoch_height - self.config.transaction_epoch_bound

@@ -34,7 +34,6 @@ fn main() -> Result<(), String> {
         // Create a background thread which checks for deadlocks every 10s
         thread::spawn(move || loop {
             thread::sleep(Duration::from_secs(10));
-            eprintln!("deadlocks detection starts");
             let deadlocks = deadlock::check_deadlock();
             if deadlocks.is_empty() {
                 continue;

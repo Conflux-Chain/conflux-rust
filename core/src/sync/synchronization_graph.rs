@@ -1144,7 +1144,6 @@ impl SynchronizationGraph {
                     } else {
                         *consensus_worker_is_busy.lock() = false;
                         yield_now();
-                        // thread::sleep(Duration::from_millis(2));
                     }
                 }
             })
