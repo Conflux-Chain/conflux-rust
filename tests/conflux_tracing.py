@@ -460,6 +460,7 @@ class ConfluxTracing(ConfluxTestFramework):
             "generate_tx_period_us": "100000",
             "enable_state_expose": "true",
             "era_epoch_count": 100,
+            "expire_block_gc_period_s": 5,  # Set it short so it can be triggered in the test
             "dev_snapshot_epoch_count": 50,
             "adaptive_weight_beta": "1",
             "timer_chain_block_difficulty_ratio": "10",

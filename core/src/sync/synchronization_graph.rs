@@ -1429,7 +1429,7 @@ impl SynchronizationGraph {
             } else if inner.new_to_be_header_graph_ready(index) {
                 inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
                 inner.arena[index].last_update_timestamp = now;
-                debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
+                debug!("BlockIndex {} parent_index {} hash {:?} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
 
                 let r = inner.verify_header_graph_ready_block(index);
@@ -1504,7 +1504,7 @@ impl SynchronizationGraph {
                 }
             } else {
                 debug!(
-                    "BlockIndex {} parent_index {} hash {} is not ready",
+                    "BlockIndex {} parent_index {} hash {:?} is not ready",
                     index,
                     inner.arena[index].parent,
                     inner.arena[index].block_header.hash()
@@ -1619,7 +1619,7 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
+        debug!("insert_block_header() Block = {:?}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
                header.hash(), me, need_to_verify, bench_mode, insert_to_consensus);
 
         // Start to pass influence to descendants
