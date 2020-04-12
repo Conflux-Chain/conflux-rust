@@ -166,7 +166,10 @@ fn main() -> Result<(), Error> {
     );
     storage_manager.register_new_snapshot(snapshot_info2.clone())?;
     let snapshot2 = snapshot_db_manager
-        .get_snapshot_by_epoch_id(&snapshot2_epoch)?
+        .get_snapshot_by_epoch_id(
+            &snapshot2_epoch,
+            /* try_open = */ false,
+        )?
         .expect("exists");
     for (addr, account) in &accounts_map {
         let value: Option<Box<[u8]>> = snapshot2.get(addr.as_bytes())?;
@@ -373,9 +376,10 @@ fn add_accounts(
 
     let root = manager
         // TODO consider snapshot.
-        .get_state_no_commit(StateIndex::new_for_readonly(
-            &epoch_id, state_root,
-        ))?
+        .get_state_no_commit(
+            StateIndex::new_for_readonly(&epoch_id, state_root),
+            /* try_open = */ false,
+        )?
         .unwrap()
         .get_state_root()?
         .state_root

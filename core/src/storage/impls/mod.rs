@@ -27,6 +27,9 @@ pub mod defaults {
         DeltaMptsNodeMemoryManager::START_CAPACITY;
     pub const DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE: u32 =
         DeltaMptsNodeMemoryManager::MAX_DIRTY_AND_TEMPORARY_TRIE_NODES;
+    /// Limit the number of open snapshots to set an upper limit on open files
+    /// in Storage subsystem.
+    pub const DEFAULT_MAX_OPEN_SNAPSHOTS: u16 = 10;
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 =
         DeltaMptsNodeMemoryManager::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER;
 

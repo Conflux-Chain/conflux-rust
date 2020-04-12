@@ -423,7 +423,10 @@ impl ConsensusGraph {
             Some(state_readonly_index) => self
                 .data_man
                 .storage_manager
-                .get_state_no_commit(state_readonly_index)
+                .get_state_no_commit(
+                    state_readonly_index,
+                    /* try_open = */ true,
+                )
                 .map_err(|e| format!("Error to get state, err={:?}", e))?,
             None => None,
         };
@@ -1096,7 +1099,17 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.read_recursive().get_block_epoch_number(hash)
     }
 
-    /// Wait until the best state has been executed, and return the state
+    /// Wait until the best state has been executed, and return the state.
+    ///
+    /// Do not use this function to answer queries from peers. This function is
+    /// mainly used for transaction pool.
+    //
+    // TODO: The drawback of the current implementation is that it waits for
+    // TODO: execution, and the current logic seems pretty complex, but
+    // TODO: since transaction pool is designed to take just a recent state
+    // TODO: from execution, taking a recently executed state which matched
+    // TODO: with pivot chain (a final check in StateAvailabilityBoundry)
+    // TODO: from ConsensusExecutor should be good.
     fn get_best_state(&self) -> State {
         // To handle the extremely rare case that the large chain
         // reorganization/checkpoint happens in this call (because we do
@@ -1116,10 +1129,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
                     .data_man
                     .get_state_readonly_index(&best_state_hash)
                     .into();
-                if let Ok(state) = self
-                    .data_man
-                    .storage_manager
-                    .get_state_no_commit(best_state_index.unwrap())
+                if let Ok(state) =
+                    self.data_man.storage_manager.get_state_no_commit(
+                        best_state_index.unwrap(),
+                        /* try_open = */ false,
+                    )
                 {
                     return state
                         .map(|db| {

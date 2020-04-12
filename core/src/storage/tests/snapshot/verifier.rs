@@ -290,12 +290,19 @@ impl SnapshotMptTraitRw for Arc<Mutex<FakeSnapshotMptDb>> {
 }
 
 impl<'db> OpenSnapshotMptTrait<'db> for Arc<Mutex<FakeSnapshotDb>> {
+    type SnapshotDbAsOwnedType = Arc<Mutex<FakeSnapshotMptDb>>;
     type SnapshotDbBorrowMutType = Arc<Mutex<FakeSnapshotMptDb>>;
     type SnapshotDbBorrowSharedType = Arc<Mutex<FakeSnapshotMptDb>>;
 
     fn open_snapshot_mpt_owned(
         &'db mut self,
     ) -> Result<Self::SnapshotDbBorrowMutType> {
+        Ok(self.lock().mpt_db.clone())
+    }
+
+    fn open_snapshot_mpt_as_owned(
+        &'db self,
+    ) -> Result<Self::SnapshotDbAsOwnedType> {
         Ok(self.lock().mpt_db.clone())
     }
 
@@ -311,15 +318,17 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
 
     fn open(
         _snapshot_path: &str, _readonly: bool,
-        _ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
-    ) -> Result<Option<Self>>
+        _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        _open_semaphore: &Arc<Semaphore>,
+    ) -> Result<Self>
     {
         unreachable!()
     }
 
     fn create(
         _snapshot_path: &str,
-        _ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        _open_semaphore: &Arc<Semaphore>,
     ) -> Result<Self>
     {
         unreachable!()
@@ -328,7 +337,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn direct_merge(&mut self) -> Result<MerkleHash> { unreachable!() }
 
     fn copy_and_merge(
-        &mut self, _old_snapshot_db: &mut Self,
+        &mut self, _old_snapshot_db: &Self,
     ) -> Result<MerkleHash> {
         unreachable!()
     }
@@ -367,8 +376,8 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     }
 
     fn get_snapshot_by_epoch_id(
-        &self, _epoch_id: &EpochId,
-    ) -> Result<Option<Self::SnapshotDb>> {
+        &self, _epoch_id: &EpochId, _try_open: bool,
+    ) -> Result<Option<Arc<Self::SnapshotDb>>> {
         unreachable!()
     }
 
@@ -570,6 +579,7 @@ use crate::storage::{
             full_sync_verifier::FullSyncVerifier,
             mpt_slice_verifier::MptSliceVerifier,
         },
+        storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
     },
     storage_db::{
         DbValueType, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
@@ -592,3 +602,4 @@ use std::{
     collections::HashMap,
     sync::Arc,
 };
+use tokio::sync::Semaphore;

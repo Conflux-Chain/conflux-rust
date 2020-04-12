@@ -653,10 +653,10 @@ impl ConsensusExecutor {
             // The state is computed and is retrievable from storage.
             if let Some(maybe_cached_state_result) =
                 maybe_state_index.map(|state_readonly_index| {
-                    self.handler
-                        .data_man
-                        .storage_manager
-                        .get_state_no_commit(state_readonly_index)
+                    self.handler.data_man.storage_manager.get_state_no_commit(
+                        state_readonly_index,
+                        /* try_open = */ false,
+                    )
                 })
             {
                 if let Ok(Some(_)) = maybe_cached_state_result {
@@ -1557,13 +1557,17 @@ impl ConsensusExecutionHandler {
             StateDb::new(
                 self.data_man
                     .storage_manager
-                    .get_state_no_commit(state_index.unwrap())
+                    .get_state_no_commit(
+                        state_index.unwrap(),
+                        /* try_open = */ true,
+                    )
                     // FIXME: propogate error
                     .expect("No DB Error")
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
             self.vm.clone(),
+            // FIXME: 0 as block number?
             0, /* block_number */
         );
         drop(state_availability_boundary);

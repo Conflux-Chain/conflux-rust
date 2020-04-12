@@ -71,8 +71,11 @@ pub struct StateIndex<'a> {
 pub trait StateManagerTrait {
     /// At the boundary of snapshot, getting a state for new epoch will switch
     /// to new Delta MPT, but it's unnecessary getting a no-commit state.
+    ///
+    /// With try_open == true, the call fails immediately when the max number of
+    /// snapshot open is reached.
     fn get_state_no_commit(
-        &self, epoch_id: StateIndex,
+        &self, epoch_id: StateIndex, try_open: bool,
     ) -> Result<Option<State>>;
     fn get_state_for_next_epoch(
         &self, parent_epoch_id: StateIndex,
