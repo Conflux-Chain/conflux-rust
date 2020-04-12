@@ -16,9 +16,10 @@ fn test_empty_genesis_block() {
     }
 
     state_manager
-        .get_state_trees(&StateIndex::new_for_test_only_delta_mpt(
-            &genesis_epoch_id,
-        ))
+        .get_state_trees(
+            &StateIndex::new_for_test_only_delta_mpt(&genesis_epoch_id),
+            /* try_open = */ false,
+        )
         .unwrap();
 }
 

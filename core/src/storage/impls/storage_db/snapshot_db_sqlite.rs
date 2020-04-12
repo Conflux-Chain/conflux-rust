@@ -5,8 +5,10 @@
 pub struct SnapshotDbSqlite {
     // Option because we need an empty snapshot db for empty snapshot.
     maybe_db_connections: Option<Box<[SqliteConnection]>>,
-    ref_count: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    already_open_snapshots: AlreadyOpenSnapshots<Self>,
+    open_semaphore: Arc<Semaphore>,
     path: String,
+    remove_on_close: AtomicBool,
 }
 
 pub struct SnapshotDbStatements {
@@ -68,9 +70,12 @@ lazy_static! {
 impl Drop for SnapshotDbSqlite {
     fn drop(&mut self) {
         if !self.path.is_empty() {
-            SnapshotDbManagerSqlite::update_ref_count_and_destroy_close(
-                &self.ref_count,
+            self.maybe_db_connections.take();
+            SnapshotDbManagerSqlite::on_close(
+                &self.already_open_snapshots,
+                &self.open_semaphore,
                 &self.path,
+                self.remove_on_close.load(Ordering::Relaxed),
             )
         }
     }
@@ -154,6 +159,14 @@ impl SnapshotMptLoadNode
     }
 }
 
+impl SnapshotMptLoadNode for KvdbSqliteSharded<SnapshotMptDbValue> {
+    fn load_node_rlp(
+        &mut self, key: &[u8],
+    ) -> Result<Option<SnapshotMptDbValue>> {
+        self.get_mut_impl(key)
+    }
+}
+
 impl SnapshotMptLoadNode
     for KvdbSqliteShardedBorrowShared<'static, SnapshotMptDbValue>
 {
@@ -165,6 +178,10 @@ impl SnapshotMptLoadNode
 }
 
 impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
+    type SnapshotDbAsOwnedType = SnapshotMpt<
+        KvdbSqliteSharded<SnapshotMptDbValue>,
+        KvdbSqliteSharded<SnapshotMptDbValue>,
+    >;
     /// The 'static lifetime is for for<'db> KeyValueDbIterableTrait<'db, ...>.
     type SnapshotDbBorrowMutType = SnapshotMpt<
         KvdbSqliteShardedBorrowMut<'static, SnapshotMptDbValue>,
@@ -188,6 +205,17 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
         })?)
     }
 
+    fn open_snapshot_mpt_as_owned(
+        &'db self,
+    ) -> Result<Self::SnapshotDbAsOwnedType> {
+        Ok(SnapshotMpt::new(
+            KvdbSqliteSharded::<SnapshotMptDbValue>::new(
+                self.try_clone_connections()?,
+                SNAPSHOT_DB_STATEMENTS.mpt_statements.clone(),
+            ),
+        )?)
+    }
+
     fn open_snapshot_mpt_shared(
         &'db self,
     ) -> Result<Self::SnapshotDbBorrowSharedType> {
@@ -206,44 +234,42 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn get_null_snapshot() -> Self {
         Self {
             maybe_db_connections: None,
-            ref_count: Default::default(),
+            already_open_snapshots: Default::default(),
+            open_semaphore: Arc::new(Semaphore::new(0)),
             path: Default::default(),
+            remove_on_close: Default::default(),
         }
     }
 
     fn open(
         snapshot_path: &str, readonly: bool,
-        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
-    ) -> Result<Option<SnapshotDbSqlite>>
+        already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        open_semaphore: &Arc<Semaphore>,
+    ) -> Result<SnapshotDbSqlite>
     {
-        let file_exists = Path::new(&snapshot_path).exists();
-        if file_exists {
-            let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
-                Self::DB_SHARDS,
-                snapshot_path,
-                readonly,
-                SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
-            )?;
-            return Ok(Some(SnapshotDbSqlite {
-                maybe_db_connections: kvdb_sqlite_sharded.into_connections(),
-                ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
-                    ref_count,
-                    snapshot_path,
-                ),
-                path: snapshot_path.to_string(),
-            }));
-        } else {
-            return Ok(None);
-        }
+        let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
+            Self::DB_SHARDS,
+            snapshot_path,
+            readonly,
+            SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
+        )?;
+
+        Ok(Self {
+            maybe_db_connections: kvdb_sqlite_sharded.into_connections(),
+            already_open_snapshots: already_open_snapshots.clone(),
+            open_semaphore: open_semaphore.clone(),
+            path: snapshot_path.to_string(),
+            remove_on_close: Default::default(),
+        })
     }
 
     fn create(
         snapshot_path: &str,
-        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>,
+        already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        open_snapshots_semaphore: &Arc<Semaphore>,
     ) -> Result<SnapshotDbSqlite>
     {
         fs::create_dir_all(snapshot_path)?;
-
         let create_result = (|| -> Result<Box<[SqliteConnection]>> {
             let kvdb_sqlite_sharded =
                 KvdbSqliteSharded::<Box<[u8]>>::create_and_open(
@@ -253,7 +279,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                     /* create_table = */ true,
                 )?;
             let mut connections =
-            // Safe to unwrap since the connections are newly created.
+                // Safe to unwrap since the connections are newly created.
                 kvdb_sqlite_sharded.into_connections().unwrap();
             // Create Snapshot MPT table.
             KvdbSqliteSharded::<Self::ValueType>::create_table(
@@ -262,7 +288,6 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             )?;
             Ok(connections)
         })();
-
         match create_result {
             Err(e) => {
                 fs::remove_dir_all(snapshot_path)?;
@@ -270,11 +295,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             }
             Ok(connections) => Ok(SnapshotDbSqlite {
                 maybe_db_connections: Some(connections),
-                ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
-                    ref_count,
-                    &snapshot_path,
-                ),
+                already_open_snapshots: already_open_snapshots.clone(),
+                open_semaphore: open_snapshots_semaphore.clone(),
                 path: snapshot_path.to_string(),
+                remove_on_close: Default::default(),
             }),
         }
     }
@@ -306,10 +330,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     }
 
     fn copy_and_merge(
-        &mut self, old_snapshot_db: &mut SnapshotDbSqlite,
+        &mut self, old_snapshot_db: &SnapshotDbSqlite,
     ) -> Result<MerkleHash> {
         debug!("copy_and_merge begins.");
-        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator();
+        let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?;
         let mut iter = kv_iter.iter_range(&[], None)?;
         while let Ok(kv_item) = iter.next() {
             match kv_item {
@@ -326,7 +350,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             self.dumped_delta_kv_delete_keys_iterator()?;
         self.start_mpt_merge_transaction()?;
         // TODO: what about multi-threading node load?
-        let mut base_mpt = old_snapshot_db.open_snapshot_mpt_owned()?;
+        let mut base_mpt = old_snapshot_db.open_snapshot_mpt_as_owned()?;
         let mut save_as_mpt = self.open_snapshot_mpt_owned()?;
         let mut mpt_merger = MptMerger::new(
             Some(&mut base_mpt as &mut dyn SnapshotMptTraitReadAndIterate),
@@ -343,6 +367,10 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 }
 
 impl SnapshotDbSqlite {
+    // FIXME: Do not clone connections.
+    // FIXME: 1. we shouldn't not clone connections without acquire the
+    // FIXME: semaphore; 2. we should implement the range iter for
+    // FIXME: shared reading connections.
     fn try_clone_connections(&self) -> Result<Option<Box<[SqliteConnection]>>> {
         match &self.maybe_db_connections {
             None => Ok(None),
@@ -357,25 +385,17 @@ impl SnapshotDbSqlite {
         }
     }
 
-    pub fn try_clone(&self) -> Result<Self> {
-        let maybe_db_connections = self.try_clone_connections()?;
-        Ok(Self {
-            maybe_db_connections,
-            ref_count: SnapshotDbManagerSqlite::update_ref_count_open(
-                &self.ref_count,
-                &self.path,
-            ),
-            path: self.path.clone(),
-        })
+    pub fn set_remove_on_last_close(&self) {
+        self.remove_on_close.store(true, Ordering::Relaxed);
     }
 
     pub fn snapshot_kv_iterator(
-        &mut self,
-    ) -> KvdbSqliteShardedBorrowMut<<Self as KeyValueDbTypes>::ValueType> {
-        KvdbSqliteShardedBorrowMut::new(
-            self.maybe_db_connections.as_mut().map(|b| &mut **b),
-            &SNAPSHOT_DB_STATEMENTS.kvdb_statements,
-        )
+        &self,
+    ) -> Result<KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>> {
+        Ok(KvdbSqliteSharded::new(
+            self.try_clone_connections()?,
+            SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
+        ))
     }
 
     pub fn dumped_delta_kv_set_keys_iterator(
@@ -577,6 +597,7 @@ use crate::storage::{
                 KvdbSqliteShardedDestructureTrait,
                 KvdbSqliteShardedRefDestructureTrait,
             },
+            snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
             snapshot_mpt::{SnapshotMpt, SnapshotMptLoadNode},
             sqlite::SQLITE_NO_PARAM,
         },
@@ -591,6 +612,12 @@ use crate::storage::{
     KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
-use parking_lot::Mutex;
 use primitives::{MerkleHash, StorageKey};
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use std::{
+    fs,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+use tokio::sync::Semaphore;
