@@ -16,6 +16,7 @@ use crate::{
     ConsensusGraph, Notifications,
 };
 use cfx_types::{H256, U256};
+use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
@@ -31,7 +32,7 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     mem, panic,
     sync::Arc,
-    thread::{self, yield_now},
+    thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::mpsc::error::TryRecvError;
@@ -1089,8 +1090,22 @@ impl SynchronizationGraph {
                 let mut counter_map = HashMap::new();
 
                 'outer: loop {
+                    // Only block when we have processed all received blocks.
+                    let mut blocking = priority_queue.is_empty();
                     'inner: loop {
-                        match consensus_receiver.try_recv() {
+                        // Use blocking `recv` for the first element, and then drain the receiver
+                        // with non-blocking `try_recv`.
+                        let maybe_item = if blocking {
+                            blocking = false;
+                            match block_on(consensus_receiver.recv()) {
+                                Some(item) => Ok(item),
+                                None => break 'outer,
+                            }
+                        } else {
+                            consensus_receiver.try_recv()
+                        };
+
+                        match maybe_item {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
                             Ok((hash, ignore_body)) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
@@ -1143,7 +1158,6 @@ impl SynchronizationGraph {
                         )
                     } else {
                         *consensus_worker_is_busy.lock() = false;
-                        yield_now();
                     }
                 }
             })
