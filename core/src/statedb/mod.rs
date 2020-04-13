@@ -11,7 +11,10 @@ use crate::{
     },
 };
 use cfx_types::{Address, H256, U256};
-use primitives::{Account, CodeInfo, EpochId, StorageKey};
+use primitives::{
+    Account, CodeInfo, EpochId, StorageKey, StorageLayout, StorageRoot,
+    MERKLE_NULL_NODE,
+};
 
 mod error;
 
@@ -54,16 +57,42 @@ impl StateDb {
         self.get::<CodeInfo>(StorageKey::new_code_key(address, code_hash))
     }
 
+    pub fn get_storage_layout(
+        &self, address: &Address,
+    ) -> Result<Option<StorageLayout>> {
+        match self.get_raw(StorageKey::new_storage_root_key(address))? {
+            None => Ok(None),
+            Some(raw) => Ok(Some(StorageLayout::from_bytes(raw.as_ref())?)),
+        }
+    }
+
+    pub fn set_storage_layout(
+        &mut self, address: &Address, layout: &StorageLayout,
+    ) -> Result<()> {
+        let key = StorageKey::new_storage_root_key(address);
+        self.set_raw(key, layout.to_bytes().into_boxed_slice())
+    }
+
     pub fn get_account(&self, address: &Address) -> Result<Option<Account>> {
         self.get::<Account>(StorageKey::new_account_key(address))
     }
 
-    pub fn get_storage_root(&self, address: &Address) -> Result<Option<H256>> {
+    pub fn get_storage_root(
+        &self, address: &Address,
+    ) -> Result<Option<StorageRoot>> {
         let key = StorageKey::new_storage_root_key(address);
 
-        self.storage
-            .get_merkle_hash_wo_compressed_path(key)
-            .map_err(|e| e.into())
+        match self.storage.get_node_merkle_all_versions(key)? {
+            (None, None, None) => Ok(None),
+            (maybe_delta, maybe_intermediate, maybe_snapshot) => {
+                Ok(Some(StorageRoot {
+                    delta: maybe_delta.unwrap_or(MERKLE_NULL_NODE),
+                    intermediate: maybe_intermediate
+                        .unwrap_or(MERKLE_NULL_NODE),
+                    snapshot: maybe_snapshot.unwrap_or(MERKLE_NULL_NODE),
+                }))
+            }
+        }
     }
 
     pub fn get_raw(&self, key: StorageKey) -> Result<Option<Box<[u8]>>> {

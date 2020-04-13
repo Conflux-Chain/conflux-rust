@@ -16,6 +16,7 @@ use crate::{
     ConsensusGraph, Notifications,
 };
 use cfx_types::{H256, U256};
+use futures::executor::block_on;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
@@ -31,7 +32,7 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     mem, panic,
     sync::Arc,
-    thread::{self, yield_now},
+    thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::mpsc::error::TryRecvError;
@@ -1089,8 +1090,22 @@ impl SynchronizationGraph {
                 let mut counter_map = HashMap::new();
 
                 'outer: loop {
+                    // Only block when we have processed all received blocks.
+                    let mut blocking = priority_queue.is_empty();
                     'inner: loop {
-                        match consensus_receiver.try_recv() {
+                        // Use blocking `recv` for the first element, and then drain the receiver
+                        // with non-blocking `try_recv`.
+                        let maybe_item = if blocking {
+                            blocking = false;
+                            match block_on(consensus_receiver.recv()) {
+                                Some(item) => Ok(item),
+                                None => break 'outer,
+                            }
+                        } else {
+                            consensus_receiver.try_recv()
+                        };
+
+                        match maybe_item {
                             // FIXME: We need to investigate why duplicate hash may send to the consensus worker
                             Ok((hash, ignore_body)) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
@@ -1143,7 +1158,6 @@ impl SynchronizationGraph {
                         )
                     } else {
                         *consensus_worker_is_busy.lock() = false;
-                        yield_now();
                     }
                 }
             })
@@ -1429,7 +1443,7 @@ impl SynchronizationGraph {
             } else if inner.new_to_be_header_graph_ready(index) {
                 inner.arena[index].graph_status = BLOCK_HEADER_GRAPH_READY;
                 inner.arena[index].last_update_timestamp = now;
-                debug!("BlockIndex {} parent_index {} hash {} is header graph ready", index,
+                debug!("BlockIndex {} parent_index {} hash {:?} is header graph ready", index,
                            inner.arena[index].parent, inner.arena[index].block_header.hash());
 
                 let r = inner.verify_header_graph_ready_block(index);
@@ -1504,7 +1518,7 @@ impl SynchronizationGraph {
                 }
             } else {
                 debug!(
-                    "BlockIndex {} parent_index {} hash {} is not ready",
+                    "BlockIndex {} parent_index {} hash {:?} is not ready",
                     index,
                     inner.arena[index].parent,
                     inner.arena[index].block_header.hash()
@@ -1619,7 +1633,7 @@ impl SynchronizationGraph {
             }
         }
 
-        debug!("insert_block_header() Block = {}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
+        debug!("insert_block_header() Block = {:?}, index = {}, need_to_verify = {}, bench_mode = {} insert_to_consensus = {}",
                header.hash(), me, need_to_verify, bench_mode, insert_to_consensus);
 
         // Start to pass influence to descendants
@@ -1683,11 +1697,11 @@ impl SynchronizationGraph {
         // recovered from db, we can simply ignore body.
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
+            *self.consensus_worker_is_busy.lock() = true;
             assert!(
                 self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
             );
-            *self.consensus_worker_is_busy.lock() = true;
 
             if inner.config.enable_state_expose {
                 STATE_EXPOSER.sync_graph.lock().ready_block_vec.push(

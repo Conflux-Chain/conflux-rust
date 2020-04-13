@@ -10,4 +10,8 @@ contract Storage {
         pos0 = 1234;
         pos1[0x391694e7E0B0cCE554cb130d723A9d27458F9298] = 5678;
     }
+
+    function increment() public {
+        pos0 += 1;
+    }
 }

@@ -43,7 +43,7 @@ use primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     receipt::Receipt,
     Account, ChainIdParams, EpochId, EpochNumber, SignedTransaction,
-    SponsorInfo, StorageKey, StorageValue, TransactionIndex,
+    SponsorInfo, StorageKey, StorageRoot, StorageValue, TransactionIndex,
 };
 use rayon::prelude::*;
 use std::{
@@ -515,11 +515,11 @@ impl ConsensusGraph {
     /// Get storage root of a contract
     pub fn get_storage_root(
         &self, address: H160, epoch_number: EpochNumber,
-    ) -> Result<Option<H256>, String> {
+    ) -> Result<Option<StorageRoot>, String> {
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
 
         match state_db.get_storage_root(&address) {
-            Ok(maybe_storage_hash) => Ok(maybe_storage_hash),
+            Ok(maybe_storage_root) => Ok(maybe_storage_root),
             Err(e) => {
                 error!("db error occurred: {:?}", e);
                 Err("db error occurred".into())
