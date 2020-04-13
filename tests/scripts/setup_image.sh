@@ -49,7 +49,7 @@ fi
 git fetch --all
 git checkout $repo/$branch
 cargo update
-cargo build --release --features "deadlock_detection"
+cargo build --release #--features "deadlock_detection"
 ./dev-support/dep_pip3.sh
 cd tests/scripts
 wget https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt

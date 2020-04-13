@@ -8,6 +8,7 @@ pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
+use std::collections::BTreeMap;
 
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([
@@ -25,4 +26,40 @@ pub fn hexstr_to_h256(hex_str: &str) -> H256 {
     }
 
     H256::from(bytes)
+}
+
+pub trait AddressUtil {
+    fn type_bits(&self) -> u8;
+
+    fn is_valid<T>(&self, builtin_map: &BTreeMap<Address, T>) -> bool;
+
+    fn is_contract(&self) -> bool;
+
+    fn is_payment(&self) -> bool;
+
+    fn is_builtin<T>(&self, builtin_map: &BTreeMap<Address, T>) -> bool;
+
+    fn converted_to_contract(&mut self);
+}
+
+impl AddressUtil for Address {
+    fn type_bits(&self) -> u8 { self.as_fixed_bytes()[0] & 0xf0 }
+
+    fn is_valid<T>(&self, builtin_map: &BTreeMap<Address, T>) -> bool {
+        self.is_contract() || self.is_payment() || self.is_builtin(builtin_map)
+    }
+
+    /// Should keep this consistent with `converted_to_contract()`.
+    fn is_contract(&self) -> bool { self.type_bits() == 0x80 }
+
+    fn is_payment(&self) -> bool { self.type_bits() == 0x10 }
+
+    fn is_builtin<T>(&self, builtin_map: &BTreeMap<Address, T>) -> bool {
+        self.type_bits() == 0x0 && builtin_map.contains_key(&self)
+    }
+
+    fn converted_to_contract(&mut self) {
+        self.as_bytes_mut()[0] &= 0x0f;
+        self.as_bytes_mut()[0] |= 0x80;
+    }
 }

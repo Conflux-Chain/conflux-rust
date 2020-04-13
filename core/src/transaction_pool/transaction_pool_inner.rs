@@ -5,7 +5,7 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::statedb::Result as StateDbResult;
-use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
+use cfx_types::{Address, AddressUtil, BigEndianHash, H256, H512, U256, U512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -32,6 +32,13 @@ lazy_static! {
         register_meter_with_group("timer", "tx_pool::inner_insert");
     static ref DEFERRED_POOL_INNER_INSERT: Arc<dyn Meter> =
         register_meter_with_group("timer", "deferred_pool::inner_insert");
+    static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "tx_pool::get_nonce_and_storage");
+    static ref TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER: Arc<dyn Meter> =
+        register_meter_with_group(
+            "timer",
+            "tx_pool::inner_without_check_inert"
+        );
     static ref GC_UNEXECUTED_COUNTER: Arc<dyn Counter<usize>> =
         CounterUsize::register_with_group("txpool", "gc_unexecuted");
     static ref GC_READY_COUNTER: Arc<dyn Counter<usize>> =
@@ -385,6 +392,9 @@ impl TransactionPoolInner {
         sponsored_gas: U256,
     ) -> InsertResult
     {
+        let _timer = MeterTimer::time_func(
+            TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER.as_ref(),
+        );
         if !self.deferred_pool.check_sender_and_nonce_exists(
             &transaction.sender(),
             &transaction.nonce(),
@@ -479,6 +489,7 @@ impl TransactionPoolInner {
     pub fn get_nonce_and_balance_from_storage(
         &self, address: &Address, account_cache: &mut AccountCache,
     ) -> StateDbResult<(U256, U256)> {
+        let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         match account_cache.get_account_mut(address)? {
             Some(account) => {
                 Ok((account.nonce.clone(), account.balance.clone()))
@@ -550,12 +561,12 @@ impl TransactionPoolInner {
     fn recalculate_readiness_with_state(
         &mut self, addr: &Address, account_cache: &mut AccountCache,
     ) -> StateDbResult<()> {
+        let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let (nonce, balance) = self
             .get_and_update_nonce_and_balance_from_storage(
                 addr,
                 account_cache,
             )?;
-        let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
@@ -706,21 +717,28 @@ impl TransactionPoolInner {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
+        let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let mut sponsored_gas = U256::from(0);
 
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = transaction.action {
-            if let Ok(Some(sponsor_info)) =
-                self.get_sponsor_info_from_storage(&callee, account_cache)
-            {
-                if account_cache
-                    .check_commission_privilege(&callee, &transaction.sender())
+            // FIXME: This is a quick fix for performance issue.
+            if callee.is_contract() {
+                if let Ok(Some(sponsor_info)) =
+                    self.get_sponsor_info_from_storage(&callee, account_cache)
                 {
-                    let estimated_gas = transaction.gas * transaction.gas_price;
-                    if estimated_gas <= sponsor_info.sponsor_gas_bound
-                        && estimated_gas <= sponsor_info.sponsor_balance_for_gas
-                    {
-                        sponsored_gas = transaction.gas;
+                    if account_cache.check_commission_privilege(
+                        &callee,
+                        &transaction.sender(),
+                    ) {
+                        let estimated_gas =
+                            transaction.gas * transaction.gas_price;
+                        if estimated_gas <= sponsor_info.sponsor_gas_bound
+                            && estimated_gas
+                                <= sponsor_info.sponsor_balance_for_gas
+                        {
+                            sponsored_gas = transaction.gas;
+                        }
                     }
                 }
             }
@@ -764,7 +782,6 @@ impl TransactionPoolInner {
             ));
         }
 
-        let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let result = self.insert_transaction_without_readiness_check(
             transaction.clone(),
             packed,

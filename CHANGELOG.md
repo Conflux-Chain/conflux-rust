@@ -1,3 +1,23 @@
+# 0.4.0
+
+## Bug Fixes
+
+- Fix a potential crash bug in the transaction pool compoenent
+
+- Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
+
+## Improvements
+
+- Improve the transaction address check at RPC
+
+# 0.3.2
+
+## Bug Fixes
+
+- Fix an issue that GetBlockHashesByEpoch containing blocks before checkpoint may cause the node to crash.
+
+- Quick fix for possible duplicate block inserted into the consensus worker thread.
+
 # 0.3.0
 
 ## Blockchain Core Updates (Not Backward Compatible)
@@ -54,9 +74,6 @@ functionality remains the same.
 - Fix an issue that failing to send a pending request can make a block not received.
 
 - Fix an issue that not-graph-ready compact blocks are not fully received.
-
-- Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
-
 
 ## Improvements
 

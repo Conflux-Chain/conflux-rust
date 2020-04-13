@@ -133,6 +133,16 @@ class RpcClient:
 
         return res
 
+    def get_storage_root(self, addr: str, epoch: str = None) -> str:
+        assert_is_hash_string(addr, length=40)
+
+        if epoch is None:
+            res = self.node.cfx_getStorageRoot(addr)
+        else:
+            res = self.node.cfx_getStorageRoot(addr, epoch)
+
+        return res
+
     def get_code(self, address: str, epoch: str = None) -> str:
         if epoch is None:
             code = self.node.cfx_getCode(address)
