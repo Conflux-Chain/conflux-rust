@@ -268,7 +268,11 @@ class BlockHeader(rlp.Serializable):
         return sha3(rlp.encode(self.without_nonce()))
 
     def pow_decimal(self):
-        return bytes_to_int(sha3(rlp.encode([self.problem_hash(), self.nonce])))
+        tmp = sha3(rlp.encode([self.problem_hash(), self.nonce]))
+        buf = []
+        for i in range(0, 32):
+            buf.append(tmp[i] ^ self.problem_hash()[i])
+        return bytes_to_int(sha3(bytes(buf)))
 
     def without_nonce(self):
         fields = {field: getattr(self, field) for field in BlockHeaderWithoutNonce._meta.field_names}
