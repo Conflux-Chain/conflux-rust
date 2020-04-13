@@ -7,13 +7,25 @@ pub struct SnapshotDbManagerSqlite {
     // FIXME: add an command line option to assert that this method made
     // successfully cow_copy and print error messages if it fails.
     force_cow: bool,
-    open_ref_count_and_to_destroy: Arc<Mutex<HashMap<String, (u32, bool)>>>,
+    already_open_snapshots: AlreadyOpenSnapshots<SnapshotDbSqlite>,
+    /// Set a limit on the number of open snapshots. When the limit is reached,
+    /// consensus initiated open should wait, other non-critical opens such as
+    /// rpc initiated opens should simply abort when the limit is reached.
+    open_snapshot_semaphore: Arc<Semaphore>,
+    open_create_delete_lock: Mutex<()>,
 }
+
+// The map from path to the already open snapshots.
+// when the mapped snapshot is None, the snapshot is open exclusively for write,
+// when the mapped snapshot is Some(), the snapshot can be shared by other
+// readers.
+pub type AlreadyOpenSnapshots<T> =
+    Arc<RwLock<HashMap<String, Option<Weak<T>>>>>;
 
 impl SnapshotDbManagerSqlite {
     const SNAPSHOT_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
 
-    pub fn new(snapshot_path: String) -> Result<Self> {
+    pub fn new(snapshot_path: String, max_open_snapshots: u16) -> Result<Self> {
         let snapshot_dir = Path::new(snapshot_path.as_str());
         if !snapshot_dir.exists() {
             fs::create_dir_all(snapshot_dir)?;
@@ -22,34 +34,161 @@ impl SnapshotDbManagerSqlite {
         Ok(Self {
             snapshot_path,
             force_cow: false,
-            open_ref_count_and_to_destroy: Default::default(),
+            already_open_snapshots: Default::default(),
+            open_snapshot_semaphore: Arc::new(Semaphore::new(
+                max_open_snapshots as usize,
+            )),
+            open_create_delete_lock: Default::default(),
         })
     }
 
-    pub fn update_ref_count_open(
-        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>, path: &str,
-    ) -> Arc<Mutex<HashMap<String, (u32, bool)>>> {
-        ref_count
-            .lock()
-            .entry(path.to_string())
-            .or_insert((0, false))
-            .0 += 1;
-        ref_count.clone()
-    }
-
-    pub fn update_ref_count_and_destroy_close(
-        ref_count: &Arc<Mutex<HashMap<String, (u32, bool)>>>, path: &str,
-    ) {
-        let ref_count_locked = &mut *ref_count.lock();
-        // Unwrap is safe because it's guaranteed to exist.
-        let entry = ref_count_locked.get_mut(path).unwrap();
-        entry.0 -= 1;
-        if entry.0 == 0 {
-            // Destroy at close.
-            if ref_count_locked.remove(path).unwrap().1 {
-                Self::fs_remove_snapshot(path).ok();
+    fn open_snapshot_readonly(
+        &self, snapshot_path: &str, try_open: bool,
+    ) -> Result<Option<Arc<SnapshotDbSqlite>>> {
+        if let Some(already_open) =
+            self.already_open_snapshots.read().get(snapshot_path)
+        {
+            match already_open {
+                None => {
+                    // Already open for exclusive write
+                    return Ok(None);
+                }
+                Some(open_shared_weak) => {
+                    match Weak::upgrade(open_shared_weak) {
+                        None => {}
+                        Some(already_open) => {
+                            return Ok(Some(already_open));
+                        }
+                    }
+                }
             }
         }
+        let file_exists = Path::new(&snapshot_path).exists();
+        if file_exists {
+            let semaphore_permit = if try_open {
+                self.open_snapshot_semaphore
+                    .try_acquire()
+                    // Unfortunately we have to use map_error because the
+                    // TryAcquireError isn't public.
+                    .map_err(|_err| ErrorKind::SemaphoreTryAcquireError)?
+            } else {
+                executor::block_on(self.open_snapshot_semaphore.acquire())
+            };
+
+            // To serialize simultaneous opens.
+            let _open_lock = self.open_create_delete_lock.lock();
+            if let Some(already_open) =
+                self.already_open_snapshots.read().get(snapshot_path)
+            {
+                match already_open {
+                    None => {
+                        // Already open for exclusive write
+                        return Ok(None);
+                    }
+                    Some(open_shared_weak) => {
+                        match Weak::upgrade(open_shared_weak) {
+                            None => {}
+                            Some(already_open) => {
+                                return Ok(Some(already_open));
+                            }
+                        }
+                    }
+                }
+            }
+
+            let snapshot_db = Arc::new(SnapshotDbSqlite::open(
+                snapshot_path,
+                /* readonly = */ true,
+                &self.already_open_snapshots,
+                &self.open_snapshot_semaphore,
+            )?);
+
+            semaphore_permit.forget();
+            self.already_open_snapshots.write().insert(
+                snapshot_path.into(),
+                Some(Arc::downgrade(&snapshot_db)),
+            );
+
+            return Ok(Some(snapshot_db));
+        } else {
+            return Ok(None);
+        }
+    }
+
+    fn open_snapshot_write(
+        &self, snapshot_path: &str, create: bool,
+    ) -> Result<SnapshotDbSqlite> {
+        if self
+            .already_open_snapshots
+            .read()
+            .get(snapshot_path)
+            .is_some()
+        {
+            bail!(ErrorKind::SnapshotAlreadyExists)
+        }
+
+        let semaphore_permit =
+            executor::block_on(self.open_snapshot_semaphore.acquire());
+        // When an open happens around the same time, we should make sure that
+        // the open returns None.
+        let mut _open_lock = self.open_create_delete_lock.lock();
+
+        // Simultaneous creation fails here.
+        if self
+            .already_open_snapshots
+            .read()
+            .get(snapshot_path)
+            .is_some()
+        {
+            bail!(ErrorKind::SnapshotAlreadyExists)
+        }
+
+        let snapshot_db = if create {
+            SnapshotDbSqlite::create(
+                snapshot_path,
+                &self.already_open_snapshots,
+                &self.open_snapshot_semaphore,
+            )
+        } else {
+            let file_exists = Path::new(&snapshot_path).exists();
+            if file_exists {
+                SnapshotDbSqlite::open(
+                    snapshot_path,
+                    /* readonly = */ false,
+                    &self.already_open_snapshots,
+                    &self.open_snapshot_semaphore,
+                )
+            } else {
+                bail!(ErrorKind::SnapshotNotFound);
+            }
+        }?;
+
+        semaphore_permit.forget();
+        self.already_open_snapshots
+            .write()
+            .insert(snapshot_path.to_string(), None);
+        Ok(snapshot_db)
+    }
+
+    pub fn on_close(
+        already_open_snapshots: &AlreadyOpenSnapshots<SnapshotDbSqlite>,
+        open_semaphore: &Arc<Semaphore>, path: &str, remove_on_close: bool,
+    )
+    {
+        // Destroy at close.
+        if remove_on_close {
+            // When removal fails, we can not raise the error because this
+            // function is called within a destructor.
+            //
+            // It's fine to just ignore the error because Conflux doesn't remove
+            // then immediate create a snapshot, or open the snapshot for
+            // modification.
+            //
+            // Conflux will remove orphan storage upon restart.
+            Self::fs_remove_snapshot(path).ok();
+        }
+        already_open_snapshots.write().remove(path);
+        open_semaphore.add_permits(1);
     }
 
     fn fs_remove_snapshot(path: &str) -> Result<()> {
@@ -185,14 +324,14 @@ impl SnapshotDbManagerSqlite {
     ) -> Result<MerkleHash>
     {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
-        let maybe_old_snapshot_db = SnapshotDbSqlite::open(
+        let maybe_old_snapshot_db = Self::open_snapshot_readonly(
+            self,
             &snapshot_path,
-            /* readonly = */ true,
-            &self.open_ref_count_and_to_destroy,
+            /* try_open = */ false,
         )?;
-        let mut old_snapshot_db = maybe_old_snapshot_db
+        let old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-        temp_snapshot_db.copy_and_merge(&mut old_snapshot_db)
+        temp_snapshot_db.copy_and_merge(&old_snapshot_db)
     }
 
     fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
@@ -255,7 +394,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     // direct merge the first snapshot
                     snapshot_db = Self::SnapshotDb::create(
                         &temp_db_path,
-                        &self.open_ref_count_and_to_destroy,
+                        &self.already_open_snapshots,
+                        &self.open_snapshot_semaphore,
                     )?;
                     snapshot_db.dump_delta_mpt(&delta_mpt)?;
                     snapshot_db.direct_merge()?
@@ -268,12 +408,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         .is_ok()
                     {
                         // Open the copied database.
-                        snapshot_db = Self::SnapshotDb::open(
+                        snapshot_db = self.open_snapshot_write(
                             &temp_db_path,
-                            /* readonly = */ false,
-                            &self.open_ref_count_and_to_destroy,
-                        )?
-                        .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
+                            /* create = */ false,
+                        )?;
 
                         // Drop copied old snapshot delta mpt dump
                         snapshot_db.drop_delta_mpt_dump()?;
@@ -282,9 +420,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         snapshot_db.direct_merge()?
                     } else {
-                        snapshot_db = Self::SnapshotDb::create(
+                        snapshot_db = self.open_snapshot_write(
                             &temp_db_path,
-                            &self.open_ref_count_and_to_destroy,
+                            /* create = */ true,
                         )?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
                         self.copy_and_merge(
@@ -307,35 +445,46 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 
     fn get_snapshot_by_epoch_id(
-        &self, snapshot_epoch_id: &EpochId,
-    ) -> Result<Option<Self::SnapshotDb>> {
+        &self, snapshot_epoch_id: &EpochId, try_open: bool,
+    ) -> Result<Option<Arc<Self::SnapshotDb>>> {
         if snapshot_epoch_id.eq(&NULL_EPOCH) {
-            return Ok(Some(Self::SnapshotDb::get_null_snapshot()));
+            return Ok(Some(Arc::new(Self::SnapshotDb::get_null_snapshot())));
         } else {
             let path = self.get_snapshot_db_path(snapshot_epoch_id);
-            Self::SnapshotDb::open(
-                &path,
-                /* readonly = */ true,
-                &self.open_ref_count_and_to_destroy,
-            )
+            self.open_snapshot_readonly(&path, try_open)
         }
     }
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
         let path = self.get_snapshot_db_path(snapshot_epoch_id);
-        match self.open_ref_count_and_to_destroy.lock().get_mut(&path) {
-            Some(ref_count_and_to_destroy) => {
-                ref_count_and_to_destroy.1 = true;
-                Ok(())
-            }
-            None => {
-                if snapshot_epoch_id.ne(&NULL_EPOCH) {
-                    Self::fs_remove_snapshot(&path)
+        let maybe_snapshot = match self.already_open_snapshots.read().get(&path)
+        {
+            Some(Some(snapshot)) => Weak::upgrade(snapshot),
+            Some(None) => {
+                // This should not happen because Conflux always write on a
+                // snapshot db under a temporary name. All completed snapshots
+                // are readonly.
+                if cfg!(debug_assertions) {
+                    unreachable!("Try to destroy a snapshot being open exclusively for write.")
                 } else {
-                    Ok(())
+                    unsafe { unreachable_unchecked() }
                 }
             }
-        }
+            None => None,
+        };
+
+        match maybe_snapshot {
+            None => {
+                if snapshot_epoch_id.ne(&NULL_EPOCH) {
+                    Self::fs_remove_snapshot(&path)?;
+                }
+            }
+            Some(snapshot) => {
+                snapshot.set_remove_on_last_close();
+            }
+        };
+
+        Ok(())
     }
 
     fn new_temp_snapshot_for_full_sync(
@@ -345,10 +494,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             snapshot_epoch_id,
             merkle_root,
         );
-        Self::SnapshotDb::create(
-            &temp_db_path,
-            &self.open_ref_count_and_to_destroy,
-        )
+        self.open_snapshot_write(&temp_db_path, /* create = */ true)
     }
 
     fn finalize_full_sync_snapshot(
@@ -371,7 +517,16 @@ use crate::storage::{
     storage_db::{SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo},
 };
 use fs_extra::dir::CopyOptions;
+use futures::executor;
 use parity_bytes::ToPretty;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
-use std::{collections::HashMap, fs, path::Path, process::Command, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    hint::unreachable_unchecked,
+    path::Path,
+    process::Command,
+    sync::{Arc, Weak},
+};
+use tokio::sync::Semaphore;

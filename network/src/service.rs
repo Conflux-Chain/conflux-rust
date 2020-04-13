@@ -1096,7 +1096,7 @@ impl NetworkServiceInner {
             }
 
             for (protocol, data) in messages {
-                io.handle(
+                if let Err(e) = io.handle(
                     stream,
                     0, /* We only have one handler for the execution
                         * event_loop,
@@ -1107,8 +1107,9 @@ impl NetworkServiceInner {
                         node_id: session_node_id.as_ref().unwrap().clone(),
                         data,
                     },
-                )
-                .expect("Fail to send NetworkIoMessage::HandleNetworkWork");
+                ) {
+                    warn!("Error occurs, discard protocol message: err={}", e);
+                }
             }
         }
     }
