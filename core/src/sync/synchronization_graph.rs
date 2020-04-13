@@ -1052,7 +1052,9 @@ impl SynchronizationGraph {
             .block_header_by_hash(&genesis_hash)
             .expect("genesis block header should exist here");
 
-        let consensus_worker_is_busy = Arc::new(Mutex::new(true));
+        // It should not be initialized to `true` now, otherwise consensus worker will be
+        // blocked on waiting the first block forever.
+        let consensus_worker_is_busy = Arc::new(Mutex::new(false));
         let mut consensus_receiver = notifications.new_block_hashes.subscribe();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
@@ -1480,6 +1482,7 @@ impl SynchronizationGraph {
                 if insert_to_consensus {
                     CONSENSUS_WORKER_QUEUE.enqueue(1);
 
+                    *self.consensus_worker_is_busy.lock() = true;
                     assert!(
                         self.new_block_hashes.send((
                             inner.arena[index].block_header.hash(),
@@ -1487,7 +1490,6 @@ impl SynchronizationGraph {
                         )),
                         "consensus receiver dropped"
                     );
-                    *self.consensus_worker_is_busy.lock() = true;
 
                     // maintain not_ready_blocks_frontier
                     inner.not_ready_blocks_count -= 1;
@@ -1697,6 +1699,7 @@ impl SynchronizationGraph {
         // recovered from db, we can simply ignore body.
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
+
             *self.consensus_worker_is_busy.lock() = true;
             assert!(
                 self.new_block_hashes.send((h, false /* ignore_body */)),
