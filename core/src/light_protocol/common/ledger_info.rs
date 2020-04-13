@@ -42,6 +42,7 @@ impl LedgerInfo {
             .get_data_manager()
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
+            // FIXME: what's this internal error?
             .ok_or(ErrorKind::InternalError.into())
     }
 

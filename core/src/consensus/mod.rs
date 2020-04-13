@@ -891,6 +891,8 @@ impl Drop for ConsensusGraph {
 impl ConsensusGraphTrait for ConsensusGraph {
     fn as_any(&self) -> &dyn Any { self }
 
+    fn consensus_config(&self) -> &ConsensusConfig { &self.config }
+
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
     fn on_new_block(
