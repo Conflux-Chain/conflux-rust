@@ -52,6 +52,12 @@ pub struct InternalContractMap {
     builtin: Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>,
 }
 
+impl std::ops::Deref for InternalContractMap {
+    type Target = Arc<BTreeMap<Address, Box<dyn InternalContractTrait>>>;
+
+    fn deref(&self) -> &Self::Target { &self.builtin }
+}
+
 impl InternalContractMap {
     pub fn new() -> Self {
         let mut builtin = BTreeMap::new();

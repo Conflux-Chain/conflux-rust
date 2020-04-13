@@ -4,13 +4,15 @@
 
 use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
+    helpers::errors,
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
-        SponsorInfo as RpcSponsorInfo, Status as RpcStatus, SyncGraphStates,
+        SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
@@ -97,7 +99,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcH160, num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcH160> {
+    ) -> BoxFuture<Option<RpcH160>> {
         let address: H160 = address.into();
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -115,9 +117,7 @@ impl RpcImpl {
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            Ok(account
-                .map(|account| account.admin.into())
-                .unwrap_or_default())
+            Ok(account.map(|account| account.admin.into()))
         };
 
         Box::new(fut.boxed().compat())
@@ -211,8 +211,8 @@ impl RpcImpl {
     fn call(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
-        // TODO
-        unimplemented!()
+        // TODO(thegaram)
+        Err(errors::unimplemented(None))
     }
 
     fn code(
@@ -245,8 +245,8 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
-        // TODO
-        unimplemented!()
+        // TODO(thegaram)
+        Err(errors::unimplemented(None))
     }
 
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
@@ -347,9 +347,9 @@ impl RpcImpl {
     #[allow(unused_variables)]
     fn storage_root(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<RpcH256>> {
+    ) -> RpcResult<Option<RpcStorageRoot>> {
         // TODO(thegaram)
-        unimplemented!();
+        Err(errors::unimplemented(None))
     }
 
     fn storage_at(
@@ -451,6 +451,8 @@ impl CfxHandler {
     }
 }
 
+// To convert from RpcResult to BoxFuture by delegate! macro automatically.
+use crate::common::delegate_convert;
 impl Cfx for CfxHandler {
     delegate! {
         to self.common {
@@ -459,33 +461,34 @@ impl Cfx for CfxHandler {
             fn block_by_hash_with_pivot_assumption(&self, block_hash: RpcH256, pivot_hash: RpcH256, epoch_number: RpcU64) -> RpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: RpcH256, include_txs: bool) -> RpcResult<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
-            fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> RpcResult<RpcU256>;
             fn gas_price(&self) -> RpcResult<RpcU256>;
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
+            fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
         }
 
         to self.rpc_impl {
             fn account(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
+            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<Option<RpcH160>>;
             fn balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
-            fn admin(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcH160>;
-            fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> RpcResult<Bytes>;
             fn code(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
+            fn collateral_for_storage(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> RpcResult<EstimateGasAndCollateralResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<RpcH256>;
+            fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
+            fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Option<RpcStorageRoot>>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }
     }
 
     not_supported! {
-        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
     }
 }
 
@@ -526,7 +529,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_block_with_fake_txs(&self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>) -> RpcResult<H256>;
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
-        fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<()>;
+        fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<H256>;
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
@@ -568,7 +571,6 @@ impl LocalRpc for DebugRpcImpl {
 
         to self.rpc_impl {
             fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
-            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
         }
     }
 

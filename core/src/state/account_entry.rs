@@ -804,6 +804,21 @@ impl OverlayAccount {
             self.reset_storage = false;
         }
 
+        // reinsert storage_layout to delta trie if storage is updated
+        // FIXME: load storage layout on first storage access instead
+        if !self.storage_changes.is_empty()
+            && self.storage_layout_change.is_none()
+        {
+            // try to get from delta tries or snapshot
+            let layout = db
+                .get_storage_layout(&self.address)?
+                // layout must exist for existing accounts
+                // storage_layout_change cannot be None for new accounts
+                .expect("storage layout should exist");
+
+            db.set_storage_layout(&self.address, &layout)?;
+        }
+
         assert!(self.ownership_changes.is_empty());
         let ownership_cache = self.ownership_cache.borrow();
         for (k, v) in self.storage_changes.drain() {
@@ -843,8 +858,7 @@ impl OverlayAccount {
         }
 
         if let Some(ref layout) = self.storage_layout_change {
-            let key = StorageKey::new_storage_root_key(&self.address);
-            db.set_raw(key, layout.to_bytes().into_boxed_slice())?;
+            db.set_storage_layout(&self.address, layout)?;
         }
 
         Ok(())

@@ -772,7 +772,7 @@ impl SynchronizationProtocolHandler {
             block_headers_resp.headers = headers;
 
             let ctx = Context {
-                node_id: NodeId::default(),
+                node_id: io.self_node_id(),
                 io,
                 manager: self,
             };
