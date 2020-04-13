@@ -38,6 +38,14 @@ impl Handleable for GetBlocksResponse {
                 .collect::<Vec<H256>>()
         );
 
+        // TODO Check block size in advance to avoid attacks trying to cause
+        // OOM. TODO Add throttling on the requesting side to avoid
+        // wasting bandwidth.
+        if ctx.manager.is_block_queue_full() {
+            warn!("recover_public_queue is full, discard GetBlocksResponse");
+            return Ok(());
+        }
+
         for block in &self.blocks {
             debug!("transaction received by block: ratio=1");
             debug!(
