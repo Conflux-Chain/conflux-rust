@@ -644,7 +644,8 @@ impl State {
             if self.exists(address)? {
                 set.insert(*address);
 
-                // I don't know why sub_balance and add_balance have different behaviors here in Parity.
+                // I don't know why sub_balance and add_balance have different
+                // behaviors here in Parity.
                 // self.exists(address) has loaded address to self.cache.
 
                 // Stop marking address as dirty here.
@@ -707,7 +708,7 @@ impl State {
     pub fn lock(
         &mut self, address: &Address, amount: &U256, duration_in_day: u64,
     ) -> DbResult<()> {
-        if !amount.is_zero(){
+        if !amount.is_zero() {
             self.require(address, false)?.lock(
                 *amount,
                 self.block_number + duration_in_day * BLOCKS_PER_DAY,
