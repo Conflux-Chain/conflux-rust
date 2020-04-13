@@ -23,6 +23,8 @@ pub mod consensus {
     pub const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 
     pub const TRANSACTION_DEFAULT_EPOCH_BOUND: u64 = 100000;
+
+    pub const GENESIS_GAS_LIMIT: u64 = 30_000 * 100_000;
 }
 
 pub mod consensus_internal {

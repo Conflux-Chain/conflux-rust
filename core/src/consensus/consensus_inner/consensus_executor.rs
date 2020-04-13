@@ -1094,7 +1094,9 @@ impl ConsensusExecutionHandler {
                             )
                             .transact(transaction, &mut nonce_increased)
                         };
-                        // TODO Store fine-grained output status in receipts.
+                        // FIXME: this match section must exhaust all possible
+                        // ExecutionErrors. TODO Store
+                        // fine-grained output status in receipts.
                         // Note now NotEnoughCash has
                         // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
                         // but its nonce is increased, which might need fixing.
