@@ -732,7 +732,6 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
-        let caller = request.from.unwrap_or_default();
         // FIXME: what's the definition of "exception" for the execution of this
         // transaction? FIXME: How can a transaction fail to execute? Is
         // it possible that a transaction FIXME: execution fail but
@@ -742,9 +741,7 @@ impl RpcImpl {
         let success_executed = self.exec_transaction(request, epoch)?;
         let mut storage_collateralized = 0;
         for storage_change in &success_executed.storage_collateralized {
-            if storage_change.address == caller {
-                storage_collateralized = storage_change.amount;
-            }
+            storage_collateralized += storage_change.amount;
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: success_executed.gas_used.into(),

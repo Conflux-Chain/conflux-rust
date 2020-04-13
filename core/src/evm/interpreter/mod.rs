@@ -122,7 +122,7 @@ struct InterpreterParams {
     pub original_sender: Address,
     /// This is the address of original receiver of the transaction.
     /// If it is a contract call, it is the address of the contract.
-    pub original_receiver: Address,
+    pub storage_owner: Address,
     /// Gas paid up front for transaction execution
     pub gas: U256,
     /// Gas price.
@@ -145,7 +145,7 @@ impl From<ActionParams> for InterpreterParams {
             address: params.address,
             sender: params.sender,
             original_sender: params.original_sender,
-            original_receiver: params.original_receiver,
+            storage_owner: params.storage_owner,
             gas: params.gas,
             gas_price: params.gas_price,
             value: params.value,
