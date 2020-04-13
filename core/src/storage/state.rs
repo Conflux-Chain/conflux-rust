@@ -42,9 +42,12 @@ pub trait StateTrait {
     fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
     fn revert(&mut self);
 
-    fn get_merkle_hash_wo_compressed_path(
+    /// Compute the merkle of the node under `access_key` in all tries.
+    /// Node merkle is computed on the value and children hashes, ignoring the
+    /// compressed path.
+    fn get_node_merkle_all_versions(
         &self, access_key: StorageKey,
-    ) -> Result<Option<MerkleHash>>;
+    ) -> Result<(Option<MerkleHash>, Option<MerkleHash>, Option<MerkleHash>)>;
 }
 
 use super::{

@@ -5,8 +5,9 @@
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, SponsorInfo as RpcSponsorInfo, Transaction,
-    H160 as RpcH160, H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
+    Receipt as RpcReceipt, SponsorInfo as RpcSponsorInfo,
+    StorageRoot as RpcStorageRoot, Transaction, H160 as RpcH160,
+    H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
 use crate::rpc::types::BlockHashOrEpochNumber;
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -82,6 +83,11 @@ pub trait Cfx {
     fn storage_at(
         &self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Option<RpcH256>>;
+
+    #[rpc(name = "cfx_getStorageRoot")]
+    fn storage_root(
+        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
+    ) -> JsonRpcResult<Option<RpcStorageRoot>>;
 
     /// Returns block with given hash.
     #[rpc(name = "cfx_getBlockByHash")]

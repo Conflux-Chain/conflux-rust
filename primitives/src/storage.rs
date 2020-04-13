@@ -25,6 +25,12 @@ impl StorageLayout {
     }
 }
 
+pub struct StorageRoot {
+    pub delta: H256,
+    pub intermediate: H256,
+    pub snapshot: H256,
+}
+
 #[derive(Default, Clone, Debug, RlpDecodable, RlpEncodable)]
 pub struct StorageValue {
     pub value: H256,

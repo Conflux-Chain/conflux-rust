@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Bytes as RpcBytes, ConsensusGraphStates, EpochNumber, SyncGraphStates,
+    Bytes as RpcBytes, ConsensusGraphStates, SyncGraphStates,
     Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
     H520 as RpcH520, U128 as RpcU128,
 };
@@ -100,9 +100,4 @@ pub trait LocalRpc {
     fn sign(
         &self, data: RpcBytes, address: RpcH160, password: Option<String>,
     ) -> JsonRpcResult<RpcH520>;
-
-    #[rpc(name = "get_storage_root")]
-    fn storage_root(
-        &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<RpcH256>>;
 }

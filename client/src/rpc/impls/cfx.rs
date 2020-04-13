@@ -11,14 +11,15 @@ use crate::rpc::{
         BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
-        SponsorInfo as RpcSponsorInfo, Status as RpcStatus, SyncGraphStates,
+        SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
     },
     RpcResult,
 };
 use blockgen::BlockGenerator;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{AddressUtil, H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
     executive::Executed,
@@ -305,12 +306,7 @@ impl RpcImpl {
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<RpcH256> {
         if let Call(address) = &tx.transaction.action {
-            let type_bits = address.as_fixed_bytes()[0] & 0xf0;
-            // FIXME: this check should be a separate call.
-            if (type_bits == 0x0
-                && !self.machine.builtins().contains_key(address))
-                || (type_bits != 0x0 && type_bits != 0x10 && type_bits != 0x80)
-            {
+            if !address.is_valid(self.machine.builtins()) {
                 bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
             }
         }
@@ -391,7 +387,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcH256>> {
+    ) -> RpcResult<Option<RpcStorageRoot>> {
         let address: H160 = address.into();
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -408,7 +404,7 @@ impl RpcImpl {
 
         Ok(consensus_graph
             .get_storage_root(address, epoch_num.into())?
-            .map(Into::into))
+            .map(RpcStorageRoot::from_primitive))
     }
 
     fn send_usable_genesis_accounts(
@@ -898,6 +894,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<RpcH256>>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> JsonRpcResult<Option<RpcStorageRoot>>;
         }
     }
 }
@@ -1001,8 +998,6 @@ impl LocalRpc for LocalRpcImpl {
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<RpcH256>;
-            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>)
-                -> BoxFuture<Option<RpcH256>>;
         }
     }
 }

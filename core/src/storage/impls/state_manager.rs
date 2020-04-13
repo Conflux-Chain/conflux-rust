@@ -75,6 +75,14 @@ impl StateManager {
                 .unwrap();
         }
 
+        // initialize storage layout for internal contracts to make sure that
+        // _all_ Conflux contracts have a storage root in our state trie
+        for address in InternalContractMap::new().keys() {
+            state
+                .set_storage_layout(address, &StorageLayout::Regular(0))
+                .expect("set internal contract storage layout should succeed");
+        }
+
         let state_root = state.compute_state_root().unwrap();
         let mut genesis = Block::new(
             BlockHeaderBuilder::new()
@@ -592,6 +600,7 @@ impl StateManagerTrait for StateManager {
 }
 
 use crate::{
+    executive::InternalContractMap,
     statedb::StateDb,
     storage::{
         impls::{
@@ -613,8 +622,8 @@ use crate::{
 use cfx_types::{Address, U256};
 use primitives::{
     Account, Block, BlockHeaderBuilder, DeltaMptKeyPadding, EpochId,
-    MerkleHash, StorageKey, GENESIS_DELTA_MPT_KEY_PADDING, MERKLE_NULL_NODE,
-    NULL_EPOCH,
+    MerkleHash, StorageKey, StorageLayout, GENESIS_DELTA_MPT_KEY_PADDING,
+    MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
     collections::HashMap,
