@@ -1052,8 +1052,8 @@ impl SynchronizationGraph {
             .block_header_by_hash(&genesis_hash)
             .expect("genesis block header should exist here");
 
-        // It should not be initialized to `true` now, otherwise consensus worker will be
-        // blocked on waiting the first block forever.
+        // It should not be initialized to `true` now, otherwise consensus
+        // worker will be blocked on waiting the first block forever.
         let consensus_worker_is_busy = Arc::new(Mutex::new(false));
         let mut consensus_receiver = notifications.new_block_hashes.subscribe();
         let inner = Arc::new(RwLock::new(
