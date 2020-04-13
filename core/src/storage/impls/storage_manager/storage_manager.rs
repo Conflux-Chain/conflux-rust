@@ -117,6 +117,7 @@ impl StorageManager {
             snapshot_manager: Box::new(SnapshotManager::<SnapshotDbManager> {
                 snapshot_db_manager: SnapshotDbManager::new(
                     storage_conf.path_snapshot_dir.clone(),
+                    storage_conf.max_open_snapshots,
                 )?,
             }),
             delta_mpts_id_gen: Default::default(),
@@ -182,9 +183,11 @@ impl StorageManager {
     }
 
     pub fn wait_for_snapshot(
-        &self, snapshot_epoch_id: &EpochId,
+        &self, snapshot_epoch_id: &EpochId, try_open: bool,
     ) -> Result<
-        Option<GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, SnapshotDb>>,
+        Option<
+            GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, Arc<SnapshotDb>>,
+        >,
     > {
         // After a snapshot is returned from this function, it can be deleted,
         // then getting intermediate mpt for the snapshot can fail,
@@ -195,7 +198,7 @@ impl StorageManager {
         let guard = self.current_snapshots.read();
         match self
             .snapshot_manager
-            .get_snapshot_by_epoch_id(snapshot_epoch_id)?
+            .get_snapshot_by_epoch_id(snapshot_epoch_id, try_open)?
         {
             Some(snapshot_db) => {
                 Ok(Some(GuardedValue::new(guard, snapshot_db)))
@@ -219,7 +222,7 @@ impl StorageManager {
                     let guard = self.current_snapshots.read();
                     match self
                         .snapshot_manager
-                        .get_snapshot_by_epoch_id(snapshot_epoch_id)
+                        .get_snapshot_by_epoch_id(snapshot_epoch_id, try_open)
                     {
                         Err(e) => Err(e),
                         Ok(None) => Ok(None),
@@ -438,7 +441,10 @@ impl StorageManager {
                         delta_db.mpt.get_parent_epoch(&epoch_id)?.unwrap();
                     delta_height -= 1;
                     pivot_chain_parts[delta_height] = epoch_id.clone();
-                    trace!("check_make_register_snapshot_background: parent epoch_id={:?}", epoch_id);
+                    trace!(
+                        "check_make_register_snapshot_background: parent epoch_id={:?}",
+                        epoch_id
+                    );
                 }
                 if height
                     == this.storage_conf.consensus_param.snapshot_epoch_count
@@ -498,34 +504,54 @@ impl StorageManager {
                         bail!(e);
                     }
 
-                    task_finished_sender_cloned.lock().send(Some(snapshot_epoch_id)).or(Err(Error::from(ErrorKind::MpscError)))?;
+                    task_finished_sender_cloned.lock().send(Some(snapshot_epoch_id))
+                        .or(Err(Error::from(ErrorKind::MpscError)))?;
 
-                    let debug_snapshot_checkers = this.storage_conf.debug_snapshot_checker_threads;
+                    let debug_snapshot_checkers =
+                        this.storage_conf.debug_snapshot_checker_threads;
                     for snapshot_checker in 0..debug_snapshot_checkers {
-                        let begin_range = (256 / debug_snapshot_checkers * snapshot_checker) as u8;
-                        let end_range = 256 / debug_snapshot_checkers * (snapshot_checker + 1);
+                        let begin_range =
+                            (256 / debug_snapshot_checkers * snapshot_checker) as u8;
+                        let end_range =
+                            256 / debug_snapshot_checkers * (snapshot_checker + 1);
                         let end_range_excl = if end_range != 256 {
                             Some(vec![end_range as u8])
                         } else {
                             None
                         };
                         let this = this.clone();
-                        thread::Builder::new().name(format!("snapshot checker {} - {}", begin_range, end_range)).spawn(
+                        thread::Builder::new().name(
+                            format!("snapshot checker {} - {}", begin_range, end_range)).spawn(
                             move || -> Result<()> {
-                                debug!("Start snapshot checker {} of {}", snapshot_checker, debug_snapshot_checkers);
-                                let snapshot_db = this.snapshot_manager.get_snapshot_by_epoch_id(&snapshot_epoch_id)?.unwrap();
+                                debug!(
+                                    "Start snapshot checker {} of {}",
+                                    snapshot_checker, debug_snapshot_checkers);
+                                let snapshot_db = this.snapshot_manager
+                                    .get_snapshot_by_epoch_id(
+                                        &snapshot_epoch_id,
+                                        /* try_open = */ false,
+                                    )?.unwrap();
                                 let mut mpt = snapshot_db.open_snapshot_mpt_shared()?;
-                                let mut set_keys_iter = snapshot_db.dumped_delta_kv_set_keys_iterator()?;
+                                let mut set_keys_iter =
+                                    snapshot_db.dumped_delta_kv_set_keys_iterator()?;
                                 let mut delete_keys_iter =
                                     snapshot_db.dumped_delta_kv_delete_keys_iterator()?;
-                                let previous_snapshot_db = this.snapshot_manager.get_snapshot_by_epoch_id(&parent_snapshot_epoch_id_cloned)?.unwrap();
-                                let mut previous_set_keys_iter = previous_snapshot_db.dumped_delta_kv_set_keys_iterator()?;
+                                let previous_snapshot_db = this.snapshot_manager
+                                    .get_snapshot_by_epoch_id(
+                                        &parent_snapshot_epoch_id_cloned,
+                                        /* try_open = */ false,
+                                    )?.unwrap();
+                                let mut previous_set_keys_iter = previous_snapshot_db
+                                    .dumped_delta_kv_set_keys_iterator()?;
                                 let mut previous_delete_keys_iter =
-                                    previous_snapshot_db.dumped_delta_kv_delete_keys_iterator()?;
+                                    previous_snapshot_db
+                                        .dumped_delta_kv_delete_keys_iterator()?;
 
                                 let mut checker_count = 0;
 
-                                let mut set_iter = set_keys_iter.iter_range(&[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                let mut set_iter = set_keys_iter.iter_range(
+                                    &[begin_range],
+                                    end_range_excl.as_ref().map(|v| &**v))?;
                                 let mut cursor = MptCursor::<
                                     &mut dyn SnapshotMptTraitRead,
                                     BasicPathNode<&mut dyn SnapshotMptTraitRead>,
@@ -539,7 +565,8 @@ impl StorageManager {
                                 cursor.finish()?;
                                 drop(cursor);
 
-                                let mut set_iter = previous_set_keys_iter.iter_range(&[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                let mut set_iter = previous_set_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
                                 let mut cursor = MptCursor::<
                                     &mut dyn SnapshotMptTraitRead,
                                     BasicPathNode<&mut dyn SnapshotMptTraitRead>,
@@ -552,7 +579,8 @@ impl StorageManager {
                                 cursor.finish()?;
                                 drop(cursor);
 
-                                let mut delete_iter = delete_keys_iter.iter_range(&[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                let mut delete_iter = delete_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
                                 let mut cursor = MptCursor::<
                                     &mut dyn SnapshotMptTraitRead,
                                     BasicPathNode<&mut dyn SnapshotMptTraitRead>,
@@ -565,7 +593,8 @@ impl StorageManager {
                                 cursor.finish()?;
                                 drop(cursor);
 
-                                let mut delete_iter = previous_delete_keys_iter.iter_range(&[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
+                                let mut delete_iter = previous_delete_keys_iter.iter_range(
+                                    &[begin_range], end_range_excl.as_ref().map(|v| &**v))?;
                                 let mut cursor = MptCursor::<
                                     &mut dyn SnapshotMptTraitRead,
                                     BasicPathNode<&mut dyn SnapshotMptTraitRead>,

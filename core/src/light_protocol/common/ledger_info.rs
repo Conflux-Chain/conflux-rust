@@ -134,7 +134,7 @@ impl LedgerInfo {
             self.consensus
                 .get_data_manager()
                 .storage_manager
-                .get_state_no_commit(state_index)
+                .get_state_no_commit(state_index, /* try_open = */ true)
         });
 
         match state {
