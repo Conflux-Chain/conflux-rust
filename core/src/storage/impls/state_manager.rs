@@ -54,53 +54,6 @@ impl StateManager {
         })
     }
 
-    /// ` test_net_version` is used to update the genesis author so that after
-    /// resetting, the chain of the older version will be discarded
-    pub fn initialize(
-        &self, genesis_accounts: HashMap<Address, U256>,
-        genesis_gas_limit: U256, test_net_version: Address,
-        initial_difficulty: U256,
-    ) -> Block
-    {
-        let mut state = StateDb::new(self.get_state_for_genesis_write());
-
-        for (addr, balance) in genesis_accounts {
-            let account = Account::new_empty_with_balance(
-                &addr,
-                &balance,
-                &0.into(), /* nonce */
-            );
-            state
-                .set(StorageKey::new_account_key(&addr), &account)
-                .unwrap();
-        }
-
-        // initialize storage layout for internal contracts to make sure that
-        // _all_ Conflux contracts have a storage root in our state trie
-        for address in InternalContractMap::new().keys() {
-            state
-                .set_storage_layout(address, &StorageLayout::Regular(0))
-                .expect("set internal contract storage layout should succeed");
-        }
-
-        let state_root = state.compute_state_root().unwrap();
-        let mut genesis = Block::new(
-            BlockHeaderBuilder::new()
-                .with_deferred_state_root(
-                    state_root.state_root.compute_state_root_hash(),
-                )
-                .with_gas_limit(genesis_gas_limit)
-                .with_author(test_net_version)
-                .with_difficulty(initial_difficulty)
-                .build(),
-            Vec::new(),
-        );
-        genesis.block_header.compute_hash();
-        debug!("Genesis Block:{:?} hash={:?}", genesis, genesis.hash());
-        state.commit(genesis.block_header.hash()).unwrap();
-        genesis
-    }
-
     pub fn log_usage(&self) {
         self.storage_manager.log_usage();
         debug!(
@@ -609,36 +562,27 @@ impl StateManagerTrait for StateManager {
     }
 }
 
-use crate::{
-    executive::InternalContractMap,
-    statedb::StateDb,
-    storage::{
-        impls::{
-            delta_mpt::*,
-            errors::*,
-            storage_db::{
-                delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
-                snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
-            },
-            storage_manager::storage_manager::StorageManager,
+use crate::storage::{
+    impls::{
+        delta_mpt::*,
+        errors::*,
+        storage_db::{
+            delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
+            snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
         },
-        state::*,
-        state_manager::*,
-        storage_db::*,
-        utils::arc_ext::shared_from_this,
-        StorageConfiguration,
+        storage_manager::storage_manager::StorageManager,
     },
+    state::*,
+    state_manager::*,
+    storage_db::*,
+    utils::arc_ext::shared_from_this,
+    StorageConfiguration,
 };
-use cfx_types::{Address, U256};
 use primitives::{
-    Account, Block, BlockHeaderBuilder, DeltaMptKeyPadding, EpochId,
-    MerkleHash, StorageKey, StorageLayout, GENESIS_DELTA_MPT_KEY_PADDING,
-    MERKLE_NULL_NODE, NULL_EPOCH,
+    DeltaMptKeyPadding, EpochId, MerkleHash, StorageKey,
+    GENESIS_DELTA_MPT_KEY_PADDING, MERKLE_NULL_NODE, NULL_EPOCH,
 };
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
 };

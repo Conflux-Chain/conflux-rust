@@ -62,8 +62,7 @@ pub fn contract_address(
             &mut buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
             &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
-            // address. For contract address, the bit will be set
-            // one.
+            // address. For contract address, the bits will be set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
             h.converted_to_contract();
             (h, Some(code_hash))
@@ -354,7 +353,10 @@ impl<'a> CallCreateExecutive<'a> {
                 state.revert_to_checkpoint();
                 CollateralCheckResult::Valid
             }
-            Ok(_) | Err(vm::Error::Internal(_)) => {
+            Err(vm::Error::StateDbError(_)) => {
+                panic!("db error occurred during execution");
+            }
+            Ok(_) => {
                 let check_result = if is_bottom_ex {
                     state.check_collateral_for_storage_finally(
                         sender,
@@ -1254,34 +1256,9 @@ impl<'a> Executive<'a> {
         &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
     ) -> ExecutionResult<Executed> {
         *nonce_increased = false;
+        let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
-
-        let spec = self.spec;
-        let base_gas_required = U256::from(Self::gas_required_for(
-            match tx.action {
-                Action::Create => true,
-                Action::Call(_) => false,
-            },
-            &tx.data,
-            spec,
-        ));
-
-        if tx.gas < base_gas_required {
-            return Err(ExecutionError::NotEnoughBaseGas {
-                required: base_gas_required,
-                got: tx.gas,
-            });
-        }
-
-        if !tx.is_unsigned()
-            && spec.kill_dust != CleanDustMode::Off
-            && !self.state.exists(&sender)?
-        {
-            return Err(ExecutionError::SenderMustExist);
-        }
-
-        let init_gas = tx.gas - base_gas_required;
 
         // Validate transaction nonce
         if tx.nonce != nonce {
@@ -1291,19 +1268,26 @@ impl<'a> Executive<'a> {
             });
         }
 
-        // This should never happen because we have checked block gas limit
-        // before SyncGraph Validate if transaction fits into give block
-        if self.env.gas_used + tx.gas > self.env.gas_limit {
-            return Err(ExecutionError::BlockGasLimitReached {
-                gas_limit: self.env.gas_limit,
-                gas_used: self.env.gas_used,
-                gas: tx.gas,
-            });
+        // FIXME: check rpc spec on call virtual.
+        // FIXME: Remove this error because of sponsored payment.
+        if !tx.is_unsigned()
+            && spec.kill_dust != CleanDustMode::Off
+            && !self.state.exists(&sender)?
+        {
+            return Err(ExecutionError::SenderMustExist);
         }
+
+        let base_gas_required = Executive::gas_required_for(
+            tx.action == Action::Create,
+            &tx.data,
+            spec,
+        );
+        let init_gas = tx.gas - base_gas_required;
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
 
+        // FIXME: check for NotEnoughBalance before increasing the nonce.
         // Increase nonce even sender does not have enough balance
         if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
             self.state.inc_nonce(&sender)?;
@@ -1349,6 +1333,7 @@ impl<'a> Executive<'a> {
                 }
                 .try_into()
                 .unwrap();
+                // FIXME: errors like this is beyond consensus as well.
                 self.state.sub_balance(
                     &sender,
                     &actual_gas_cost,
@@ -1362,6 +1347,8 @@ impl<'a> Executive<'a> {
                     &actual_gas_cost,
                 )?;
             }
+            // FIXME: if the balance is zero, do not increase Nonce, the tx
+            // should be recycled.
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
@@ -1562,7 +1549,6 @@ impl<'a> Executive<'a> {
         //        )?;
 
         match result {
-            Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
             Err(exception) => Ok(Executed {
                 exception: Some(exception),
                 gas: tx.gas,

@@ -9,8 +9,8 @@ use cfxcore::{
         stratum::{Options as StratumOption, Stratum},
         work_notify::NotifyWork,
     },
+    parameters::consensus::GENESIS_GAS_LIMIT,
     pow::*,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
@@ -249,7 +249,7 @@ impl BlockGenerator {
     /// only
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64, adaptive: bool,
+        difficulty: u64, adaptive: bool, block_gas_limit: u64,
     ) -> Result<Block, String>
     {
         let consensus_graph = self
@@ -264,7 +264,7 @@ impl BlockGenerator {
                     &parent_hash,
                 )?;
 
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
+        let block_gas_limit = block_gas_limit.into();
         let block_size_limit =
             self.graph.verification_config.max_block_size_in_bytes;
 
@@ -301,13 +301,11 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
 
-        let (best_info, transactions) =
+        let (best_info, block_gas_limit, transactions) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
                 block_size_limit,
-                block_gas_limit,
                 additional_transactions,
             );
 
@@ -367,13 +365,11 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
 
-        let (best_info, transactions) =
+        let (best_info, block_gas_limit, transactions) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
                 block_size_limit,
-                block_gas_limit,
                 additional_transactions,
             );
 
@@ -440,6 +436,7 @@ impl BlockGenerator {
         false
     }
 
+    // This function is used in test only to simulate attacker behavior.
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool,
@@ -451,6 +448,7 @@ impl BlockGenerator {
             num_txs,
             difficulty,
             adaptive,
+            GENESIS_GAS_LIMIT,
         )?;
         Ok(self.generate_block_impl(block))
     }
@@ -501,15 +499,10 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let block_gas_limit = DEFAULT_MAX_BLOCK_GAS_LIMIT.into();
         // get the best block
-        let (best_info, _) =
-            self.txpool.get_best_info_with_packed_transactions(
-                0,
-                0,
-                block_gas_limit,
-                Vec::new(),
-            );
+        let (best_info, block_gas_limit, _) = self
+            .txpool
+            .get_best_info_with_packed_transactions(0, 0, Vec::new());
         let (
             blame,
             deferred_state_root,
@@ -565,7 +558,7 @@ impl BlockGenerator {
             state_root,
             receipts_root,
             logs_bloom_hash,
-            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            GENESIS_GAS_LIMIT.into(),
             transactions,
             0,
             Some(adaptive),
@@ -599,7 +592,7 @@ impl BlockGenerator {
             state_root,
             receipts_root,
             logs_bloom_hash,
-            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
+            GENESIS_GAS_LIMIT.into(),
             transactions,
             0,
             Some(adaptive),

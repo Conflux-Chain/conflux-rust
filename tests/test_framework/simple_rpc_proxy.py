@@ -1,9 +1,10 @@
 import time
 
 import jsonrpcclient.client
+from jsonrpcclient.exceptions import ReceivedErrorResponseError
+
 jsonrpcclient.client.request_log.propagate = False
 jsonrpcclient.client.response_log.propagate = False
-
 
 class SimpleRpcProxy:
     def __init__(self, url, timeout, node):
@@ -59,4 +60,6 @@ class RpcCaller:
                     print(node.index, "exit with code", return_code, "during calling", self.method, "exception is", e)
                     raise e
             else:
+                if isinstance(e, ReceivedErrorResponseError):
+                    print(f"rpc exception code {e.response.code}, message: {e.response.message}, data: {e.response.data}")
                 raise e

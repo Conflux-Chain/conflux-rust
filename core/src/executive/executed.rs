@@ -51,26 +51,6 @@ pub struct Executed {
 #[derive(PartialEq, Debug, Clone)]
 #[allow(dead_code)]
 pub enum ExecutionError {
-    /// Returned when there gas paid for transaction execution is
-    /// lower than base gas required.
-    NotEnoughBaseGas {
-        /// Absolute minimum gas required.
-        required: U256,
-        /// Gas provided.
-        got: U256,
-    },
-    /// Returned when block (gas_used + gas) > gas_limit.
-    ///
-    /// If gas =< gas_limit, upstream may try to execute the transaction
-    /// in next block.
-    BlockGasLimitReached {
-        /// Gas limit of block for transaction.
-        gas_limit: U256,
-        /// Gas used in block prior to transaction.
-        gas_used: U256,
-        /// Amount of gas in block.
-        gas: U256,
-    },
     /// Returned when transaction nonce does not match state nonce.
     InvalidNonce {
         /// Nonce expected.
@@ -91,23 +71,22 @@ pub enum ExecutionError {
     /// Returned when balance is not enough for `storage_limit *
     /// COLLATERAL_PER_BYTE`.
     NotEnoughBalanceForStorage { required: U256, got: U256 },
-    /// When execution tries to modify the state in static context
-    MutableCallInStaticContext,
     /// Returned when transacting from a non-existing account with dust
     /// protection enabled.
     SenderMustExist,
     /// Returned when internal evm error occurs.
-    Internal(String),
-    /// Returned when generic transaction occurs
-    TransactionMalformed(String),
+    StateDbError(String),
     /// Contract already exists in the specified address.
     ContractAddressConflict,
 }
 
 impl From<DbError> for ExecutionError {
     fn from(err: DbError) -> Self {
-        ExecutionError::Internal(format!("{:?}", err))
+        ExecutionError::StateDbError(format!("{:?}", err))
     }
 }
 
+// FIXME: check this.
+/// When the result is an error, the transaction is either not executed or
+/// reverted.
 pub type ExecutionResult<T> = Result<T, ExecutionError>;
