@@ -19,7 +19,8 @@ pub struct SnapshotDbManagerSqlite {
 // when the mapped snapshot is None, the snapshot is open exclusively for write,
 // when the mapped snapshot is Some(), the snapshot can be shared by other
 // readers.
-pub type AlreadyOpenSnapshots<T> = Arc<RwLock<HashMap<String, Option<Arc<T>>>>>;
+pub type AlreadyOpenSnapshots<T> =
+    Arc<RwLock<HashMap<String, Option<Weak<T>>>>>;
 
 impl SnapshotDbManagerSqlite {
     const SNAPSHOT_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
@@ -47,7 +48,20 @@ impl SnapshotDbManagerSqlite {
         if let Some(already_open) =
             self.already_open_snapshots.read().get(snapshot_path)
         {
-            return Ok(already_open.clone());
+            match already_open {
+                None => {
+                    // Already open for exclusive write
+                    return Ok(None);
+                }
+                Some(open_shared_weak) => {
+                    match Weak::upgrade(open_shared_weak) {
+                        None => {}
+                        Some(already_open) => {
+                            return Ok(Some(already_open));
+                        }
+                    }
+                }
+            }
         }
         let file_exists = Path::new(&snapshot_path).exists();
         if file_exists {
@@ -66,7 +80,20 @@ impl SnapshotDbManagerSqlite {
             if let Some(already_open) =
                 self.already_open_snapshots.read().get(snapshot_path)
             {
-                return Ok(already_open.clone());
+                match already_open {
+                    None => {
+                        // Already open for exclusive write
+                        return Ok(None);
+                    }
+                    Some(open_shared_weak) => {
+                        match Weak::upgrade(open_shared_weak) {
+                            None => {}
+                            Some(already_open) => {
+                                return Ok(Some(already_open));
+                            }
+                        }
+                    }
+                }
             }
 
             let snapshot_db = Arc::new(SnapshotDbSqlite::open(
@@ -77,9 +104,10 @@ impl SnapshotDbManagerSqlite {
             )?);
 
             semaphore_permit.forget();
-            self.already_open_snapshots
-                .write()
-                .insert(snapshot_path.into(), Some(snapshot_db.clone()));
+            self.already_open_snapshots.write().insert(
+                snapshot_path.into(),
+                Some(Arc::downgrade(&snapshot_db)),
+            );
 
             return Ok(Some(snapshot_db));
         } else {
@@ -429,29 +457,34 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
         let path = self.get_snapshot_db_path(snapshot_epoch_id);
-        match self.already_open_snapshots.read().get(&path) {
-            Some(Some(snapshot)) => {
-                snapshot.set_remove_on_last_close();
-                Ok(())
-            }
+        let maybe_snapshot = match self.already_open_snapshots.read().get(&path)
+        {
+            Some(Some(snapshot)) => Weak::upgrade(snapshot),
             Some(None) => {
                 // This should not happen because Conflux always write on a
                 // snapshot db under a temporary name. All completed snapshots
                 // are readonly.
                 if cfg!(debug_assertions) {
-                    unreachable!("Try to destroy a snapshot being open exclusively for write.");
+                    unreachable!("Try to destroy a snapshot being open exclusively for write.")
                 } else {
-                    unsafe { unreachable_unchecked() };
+                    unsafe { unreachable_unchecked() }
                 }
             }
+            None => None,
+        };
+
+        match maybe_snapshot {
             None => {
                 if snapshot_epoch_id.ne(&NULL_EPOCH) {
-                    Self::fs_remove_snapshot(&path)
-                } else {
-                    Ok(())
+                    Self::fs_remove_snapshot(&path)?;
                 }
             }
-        }
+            Some(snapshot) => {
+                snapshot.set_remove_on_last_close();
+            }
+        };
+
+        Ok(())
     }
 
     fn new_temp_snapshot_for_full_sync(
@@ -489,7 +522,11 @@ use parity_bytes::ToPretty;
 use parking_lot::{Mutex, RwLock};
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use std::{
-    collections::HashMap, fs, hint::unreachable_unchecked, path::Path,
-    process::Command, sync::Arc,
+    collections::HashMap,
+    fs,
+    hint::unreachable_unchecked,
+    path::Path,
+    process::Command,
+    sync::{Arc, Weak},
 };
 use tokio::sync::Semaphore;
