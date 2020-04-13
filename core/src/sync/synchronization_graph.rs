@@ -31,7 +31,10 @@ use std::{
     cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     mem, panic,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -1003,7 +1006,7 @@ pub struct SynchronizationGraph {
     /// This is the boolean state shared with the underlying consensus worker
     /// to indicate whether the worker is now finished all pending blocks.
     /// Since the critical section is very short, a `Mutex` is enough.
-    consensus_worker_is_busy: Arc<Mutex<bool>>,
+    consensus_unprocessed_count: Arc<AtomicUsize>,
 
     /// Channel used to send block hashes to `ConsensusGraph` and PubSub.
     /// Each element is <block_hash, ignore_body>
@@ -1052,7 +1055,9 @@ impl SynchronizationGraph {
             .block_header_by_hash(&genesis_hash)
             .expect("genesis block header should exist here");
 
-        let consensus_worker_is_busy = Arc::new(Mutex::new(true));
+        // It should not be initialized to `true` now, otherwise consensus
+        // worker will be blocked on waiting the first block forever.
+        let consensus_unprocessed_count = Arc::new(AtomicUsize::new(0));
         let mut consensus_receiver = notifications.new_block_hashes.subscribe();
         let inner = Arc::new(RwLock::new(
             SynchronizationGraphInner::with_genesis_block(
@@ -1070,7 +1075,7 @@ impl SynchronizationGraph {
             sync_config,
             consensus: consensus.clone(),
             statistics: consensus.get_statistics().clone(),
-            consensus_worker_is_busy: consensus_worker_is_busy.clone(),
+            consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             is_full_node,
         };
@@ -1155,9 +1160,8 @@ impl SynchronizationGraph {
                             &hash,
                             ignore_body,
                             true, /* update_best_info */
-                        )
-                    } else {
-                        *consensus_worker_is_busy.lock() = false;
+                        );
+                        consensus_unprocessed_count.fetch_sub(1, Ordering::SeqCst);
                     }
                 }
             })
@@ -1480,6 +1484,8 @@ impl SynchronizationGraph {
                 if insert_to_consensus {
                     CONSENSUS_WORKER_QUEUE.enqueue(1);
 
+                    self.consensus_unprocessed_count
+                        .fetch_add(1, Ordering::SeqCst);
                     assert!(
                         self.new_block_hashes.send((
                             inner.arena[index].block_header.hash(),
@@ -1487,7 +1493,6 @@ impl SynchronizationGraph {
                         )),
                         "consensus receiver dropped"
                     );
-                    *self.consensus_worker_is_busy.lock() = true;
 
                     // maintain not_ready_blocks_frontier
                     inner.not_ready_blocks_count -= 1;
@@ -1697,7 +1702,9 @@ impl SynchronizationGraph {
         // recovered from db, we can simply ignore body.
         if !recover_from_db {
             CONSENSUS_WORKER_QUEUE.enqueue(1);
-            *self.consensus_worker_is_busy.lock() = true;
+
+            self.consensus_unprocessed_count
+                .fetch_add(1, Ordering::SeqCst);
             assert!(
                 self.new_block_hashes.send((h, false /* ignore_body */)),
                 "consensus receiver dropped"
@@ -2050,7 +2057,7 @@ impl SynchronizationGraph {
     }
 
     pub fn is_consensus_worker_busy(&self) -> bool {
-        *self.consensus_worker_is_busy.lock()
+        self.consensus_unprocessed_count.load(Ordering::SeqCst) != 0
     }
 }
 
