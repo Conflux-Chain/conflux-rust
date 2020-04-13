@@ -581,7 +581,10 @@ where Message: Send + Sync + 'static
     /// Send low level io message
     pub fn send_io(&self, message: IoMessage<Message>) -> Result<(), IoError> {
         if let Some(ref channel) = self.channel {
-            channel.send(message)?
+            if let Err(e) = channel.send(message) {
+                warn!("Error sending message to eventloop channel, err={}", e);
+                return Err(e.into());
+            }
         }
         Ok(())
     }
@@ -638,6 +641,7 @@ where Message: Send + Sync + 'static
         debug!("start IoService");
         let mut config = EventLoopBuilder::new();
         config.messages_per_tick(1024);
+        config.notify_capacity(20960);
         let mut event_loop = config.build().expect("Error creating event loop");
         let channel = event_loop.channel();
         let handlers = Arc::new(RwLock::new(Slab::with_capacity(MAX_HANDLERS)));

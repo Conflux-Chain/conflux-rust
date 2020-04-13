@@ -151,6 +151,7 @@ build_config! {
         (max_outgoing_peers, (usize), 16)
         (max_outgoing_peers_archive, (usize), 0)
         (max_peers_tx_propagation, (usize), 128)
+        (max_unprocessed_block_count, (usize), (512))
         (min_peers_tx_propagation, (usize), 8)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
@@ -518,6 +519,9 @@ impl Configuration {
             heartbeat_timeout: Duration::from_millis(
                 self.raw_conf.heartbeat_timeout_ms,
             ),
+            max_unprocessed_block_count: self
+                .raw_conf
+                .max_unprocessed_block_count,
         }
     }
 
