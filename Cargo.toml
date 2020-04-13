@@ -90,3 +90,7 @@ debug-assertions = true
 
 [profile.bench]
 debug-assertions = true
+
+# Temporarily run with debug assertion before main-net release.
+[profile.release]
+debug-assertions = true
