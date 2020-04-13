@@ -63,11 +63,14 @@ fn main() -> Result<(), String> {
     // If log_conf is provided, use it for log configuration and ignore
     // log_file and log_level. Otherwise, set stdout to INFO and set
     // all our crate log to log_level.
-    let log_config = match conf.raw_conf.log_conf {
+    match conf.raw_conf.log_conf {
         Some(ref log_conf) => {
-            log4rs::load_config_file(log_conf, Default::default()).map_err(
-                |e| format!("failed to load log configuration file: {:?}", e),
-            )?
+            log4rs::init_file(log_conf, Default::default()).map_err(|e| {
+                format!(
+                    "failed to initialize log with log config file: {:?}",
+                    e
+                )
+            })?;
         }
         None => {
             let mut conf_builder =
@@ -112,15 +115,14 @@ fn main() -> Result<(), String> {
                         .build(*crate_name, conf.raw_conf.log_level),
                 );
             }
-            conf_builder
+            let log_config = conf_builder
                 .build(root_builder.build(LevelFilter::Info))
-                .map_err(|e| format!("failed to build log config: {:?}", e))?
+                .map_err(|e| format!("failed to build log config: {:?}", e))?;
+            log4rs::init_config(log_config).map_err(|e| {
+                format!("failed to initialize log with config: {:?}", e)
+            })?;
         }
     };
-
-    log4rs::init_config(log_config).map_err(|e| {
-        format!("failed to initialize log with config: {:?}", e)
-    })?;
 
     THROTTLING_SERVICE.write().initialize(
         conf.raw_conf.egress_queue_capacity,
