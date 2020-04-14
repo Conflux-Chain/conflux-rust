@@ -10,6 +10,8 @@
 
 - Fill in correct block gas limit value for mining.
 
+- Set block gas limit for Genesis block to 30_000_000.
+
 ## Improvements
 
 - Improve the transaction address check at RPC
