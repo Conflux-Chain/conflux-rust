@@ -689,10 +689,6 @@ impl State {
             if self.exists(address)? {
                 set.insert(*address);
 
-                // I don't know why sub_balance and add_balance have different
-                // behaviors here in Parity.
-                // self.exists(address) has loaded address to self.cache.
-
                 // Stop marking address as dirty here.
                 // self.touch(address)?;
             }
