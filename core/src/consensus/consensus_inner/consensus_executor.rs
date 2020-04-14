@@ -1523,13 +1523,14 @@ impl ConsensusExecutionHandler {
             bail!("invalid epoch id");
         }
         let best_block_header = best_block_header.unwrap();
+        let block_height = best_block_header.height() + 1;
 
         invalid_params_check(
             "tx",
-            self.verification_config.verify_transaction(
+            self.verification_config.verify_transaction_in_block(
                 tx,
                 tx.chain_id,
-                best_block_header.height(),
+                block_height,
             ),
         )?;
 

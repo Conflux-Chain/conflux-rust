@@ -29,7 +29,7 @@ use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
     RwLockExtensions,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
@@ -215,7 +215,11 @@ impl TransactionPool {
         // filter out invalid transactions.
         let mut index = 0;
         while let Some(tx) = transactions.get(index) {
-            match self.verify_transaction(tx) {
+            match self.verify_transaction_tx_pool(
+                tx,
+                /* basic_check = */ true,
+                &self.consensus_best_info.lock(),
+            ) {
                 Ok(_) => index += 1,
                 Err(e) => {
                     let removed = transactions.swap_remove(index);
@@ -294,20 +298,53 @@ impl TransactionPool {
 
     /// verify transactions based on the rules that have nothing to do with
     /// readiness
-    fn verify_transaction(
-        &self, transaction: &TransactionWithSignature,
-    ) -> Result<(), String> {
+    fn verify_transaction_tx_pool(
+        &self, transaction: &TransactionWithSignature, basic_check: bool,
+        current_best_info: &MutexGuard<Arc<BestInformation>>,
+    ) -> Result<(), String>
+    {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
         let (chain_id, best_height) = {
-            let best_info = &mut *self.consensus_best_info.lock();
-            (best_info.best_chain_id(), best_info.best_epoch_number)
+            (
+                current_best_info.best_chain_id(),
+                current_best_info.best_epoch_number,
+            )
         };
+
+        if basic_check {
+            if let Err(e) = self
+                .verification_config
+                .verify_transaction_common(transaction, chain_id)
+            {
+                warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
+                return Err(format!("{:?}", e));
+            }
+        }
 
         // If it is zero, it might be possible that it is not initialized
         // TODO: figure out when we should active txpool.
         // TODO: Ideally txpool should only be initialized after Normal phase.
         if best_height == 0 {
             warn!("verify transaction while best info isn't initialized");
+        } else {
+            if self
+                .verification_config
+                .check_transaction_epoch_bound(transaction, best_height)
+                < 0
+            {
+                // Check the epoch height is in bound. Because this is such a
+                // loose bound, we can check it here as if it
+                // will not change at all during its life time.
+                warn!(
+                    "Transaction discarded due to epoch height out of the bound: \
+                    best height {} tx epoch height {}",
+                    best_height, transaction.epoch_height);
+                return Err(format!(
+                    "transaction epoch height {} is out side the range of the current \
+                    pivot height ({}) bound, only {} drift allowed!",
+                    transaction.epoch_height, best_height,
+                    self.verification_config.transaction_epoch_bound));
+            }
         }
 
         // check transaction gas limit
@@ -320,18 +357,6 @@ impl TransactionPool {
                 "transaction gas {} exceeds the maximum value {}",
                 transaction.gas, self.config.max_tx_gas
             ));
-        }
-
-        // Check the epoch height is in bound. Because this is such a loose
-        // bound, we can check it here as if it will not change at all
-        // during its life time.
-        if let Err(e) = self.verification_config.verify_transaction(
-            transaction,
-            chain_id,
-            best_height,
-        ) {
-            warn!("Transaction {:?} discarded due to not pass basic verification.", transaction.hash());
-            return Err(format!("{:?}", e));
         }
 
         // check transaction gas price
@@ -515,7 +540,18 @@ impl TransactionPool {
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce, &tx.sender,
-                &account_cache.get_account_mut(&tx.sender)?.map_or(0.into(), |x| x.nonce), tx.hash);
+                &account_cache.get_account_mut(&tx.sender)?
+                    .map_or(0.into(), |x| x.nonce), tx.hash);
+            if let Err(e) = self.verify_transaction_tx_pool(
+                &tx,
+                /* basic_check = */ false,
+                &consensus_best_info,
+            ) {
+                warn!(
+                    "Recycled transaction {:?} discarded due to not passing verification {}.",
+                    tx.hash(), e
+                );
+            }
             self.add_transaction_with_readiness_check(
                 inner,
                 &mut account_cache,
