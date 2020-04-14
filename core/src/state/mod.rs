@@ -1108,9 +1108,6 @@ impl State {
     pub fn set_storage_layout(
         &mut self, address: &Address, layout: StorageLayout,
     ) -> DbResult<()> {
-        // It should check whether the content is updated before calling require
-        // function. It doesn't matter here because only set storage
-        // layout on contract creation
         self.require_or_from(
             address,
             false,
