@@ -8,7 +8,6 @@ use crate::{
     transaction_pool::SharedTransactionPool,
 };
 
-use crate::consensus::ConsensusConfig;
 use cfx_types::{H256, U256};
 use primitives::{
     receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
@@ -30,8 +29,6 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn retrieve_old_era_blocks(&self) -> Option<H256>;
 
     fn construct_pivot_state(&self);
-
-    fn consensus_config(&self) -> &ConsensusConfig;
 
     fn best_info(&self) -> Arc<BestInformation>;
 
