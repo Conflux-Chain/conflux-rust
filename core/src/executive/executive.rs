@@ -1549,6 +1549,7 @@ impl<'a> Executive<'a> {
         //        )?;
 
         match result {
+            Err(vm::Error::StateDbError(e)) => bail!(e),
             Err(exception) => Ok(Executed {
                 exception: Some(exception),
                 gas: tx.gas,
