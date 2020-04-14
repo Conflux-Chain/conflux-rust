@@ -152,6 +152,7 @@ impl LightClient {
             pow_config.clone(),
             notifications.clone(),
             conf.execution_config(),
+            conf.verification_config(),
         ));
 
         let _protocol_config = conf.protocol_config();

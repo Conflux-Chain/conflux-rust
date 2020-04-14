@@ -196,8 +196,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: tcr - 1,
             base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
-            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         },
+        verification_config.clone(),
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
