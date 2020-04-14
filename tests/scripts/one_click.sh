@@ -77,7 +77,7 @@ exp_config="250:1:300000:4000"
 # For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will not take effects.
 # Block size is limited by `max_block_size_in_bytes`.
 
-tps=4000
+tps=6000
 max_block_size_in_bytes=300000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
