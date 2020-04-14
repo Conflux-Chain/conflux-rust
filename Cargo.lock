@@ -475,6 +475,7 @@ dependencies = [
  "heapsize",
  "hibitset",
  "io",
+ "jsonrpc-core",
  "keccak-hash",
  "kvdb",
  "kvdb-rocksdb",

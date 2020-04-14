@@ -115,16 +115,6 @@ impl error::Error for BlockError {
     fn description(&self) -> &str { "Block error" }
 }
 
-impl From<keylib::Error> for Error {
-    fn from(e: keylib::Error) -> Self {
-        ErrorKind::Transaction(TransactionError::InvalidSignature(format!(
-            "{}",
-            e
-        )))
-        .into()
-    }
-}
-
 error_chain! {
     types {
         Error, ErrorKind, ErrorResultExt, CoreResult;

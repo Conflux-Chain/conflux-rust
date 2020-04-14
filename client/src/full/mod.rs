@@ -153,6 +153,7 @@ impl FullClient {
             pow_config.clone(),
             notifications.clone(),
             conf.execution_config(),
+            conf.verification_config(),
         ));
 
         let protocol_config = conf.protocol_config();
