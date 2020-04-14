@@ -7,6 +7,7 @@ use cfx_types::U256;
 use cfxcore::{
     executive::{Executive, InternalContractMap},
     machine::new_machine_with_builtin,
+    parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     state::State,
     statedb::StateDb,
     storage::{state_manager::StateIndex, StorageManagerTrait},
@@ -55,6 +56,8 @@ fn txexe_benchmark(c: &mut Criterion) {
         gas_used: U256::zero(),
         gas_limit: tx.gas.clone(),
         last_hashes: Arc::new(vec![]),
+        epoch_height: 0,
+        transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };
     let spec = Spec::new_spec();
     c.bench(
@@ -89,10 +92,8 @@ fn txexe_benchmark(c: &mut Criterion) {
                 &spec,
                 &internal_contract_map,
             );
-            let mut nonce_increased = false;
             b.iter(|| {
-                //ex.transact(&tx, &mut nonce_increased);
-                ex.transact(&tx, &mut nonce_increased).unwrap();
+                ex.transact(&tx).unwrap();
                 ex.state.clear();
             })
         })
