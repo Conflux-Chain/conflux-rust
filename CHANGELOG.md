@@ -10,6 +10,12 @@
 
 - Improve the transaction address check at RPC
 
+## EVM Updates
+
+- Decide the storage owner (who is responsible for storage collateral) at the beginning of the transaction. 
+
+- Only check the storage limit and balance for storage collateral at the end of EVM execution. 
+
 # 0.3.2
 
 ## Bug Fixes
