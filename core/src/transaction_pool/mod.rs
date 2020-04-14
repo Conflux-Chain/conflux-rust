@@ -413,10 +413,11 @@ impl TransactionPool {
 
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        best_epoch_height: u64,
+        mut best_epoch_height: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
+        best_epoch_height += 1;
         let transaction_epoch_bound =
             self.verification_config.transaction_epoch_bound;
         let height_lower_bound = if best_epoch_height > transaction_epoch_bound
