@@ -763,14 +763,21 @@ impl RpcImpl {
         let chain_id = consensus_graph.best_chain_id();
         let signed_tx = sign_call(best_epoch_height, chain_id, request);
         trace!("call tx {:?}", signed_tx);
-        let executed =
-            consensus_graph.call_virtual(&signed_tx, epoch.into())?;
-        match executed.exception {
-            None => Ok(executed),
-            Some(exception) => bail!(call_execution_error(
-                exception.to_string(),
-                executed.output
-            )),
+        match consensus_graph.call_virtual(&signed_tx, epoch.into())? {
+            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
+                bail!(call_execution_error(
+                    "Transaction can not be executed".into(),
+                    format! {"{:?}", e}.into_bytes()
+                ))
+            }
+
+            ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
+                bail!(call_execution_error(
+                    "Transaction execution failed".into(),
+                    format! {"{:?}", e}.into_bytes()
+                ))
+            }
+            ExecutionOutcome::Finished(executed) => Ok(executed),
         }
     }
 
@@ -846,6 +853,8 @@ impl CfxHandler {
 
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
+use cfxcore::executive::ExecutionOutcome;
+
 impl Cfx for CfxHandler {
     delegate! {
         to self.common {

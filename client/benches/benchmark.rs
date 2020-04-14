@@ -89,10 +89,8 @@ fn txexe_benchmark(c: &mut Criterion) {
                 &spec,
                 &internal_contract_map,
             );
-            let mut nonce_increased = false;
             b.iter(|| {
-                //ex.transact(&tx, &mut nonce_increased);
-                ex.transact(&tx, &mut nonce_increased).unwrap();
+                ex.transact(&tx).unwrap();
                 ex.state.clear();
             })
         })

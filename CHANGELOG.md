@@ -10,6 +10,8 @@
 
 - Fill in correct block gas limit value for mining.
 
+- Fix definitions and logics in transaction early execution error checking.
+
 ## Improvements
 
 - Improve the transaction address check at RPC

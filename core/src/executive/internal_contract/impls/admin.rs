@@ -59,9 +59,9 @@ pub fn suicide(
         .storage_collateralized
         .entry(code_owner)
         .or_insert(0) += code_size as u64;
-    if !sponsor_for_gas.is_zero() {
+    if sponsor_for_gas.is_some() {
         state.add_balance(
-            &sponsor_for_gas,
+            sponsor_for_gas.as_ref().unwrap(),
             &sponsor_balance_for_gas,
             substate.to_cleanup_mode(spec),
         )?;
@@ -70,9 +70,9 @@ pub fn suicide(
             &sponsor_balance_for_gas,
         )?;
     }
-    if !sponsor_for_collateral.is_zero() {
+    if sponsor_for_collateral.is_some() {
         state.add_balance(
-            &sponsor_for_collateral,
+            sponsor_for_collateral.as_ref().unwrap(),
             &sponsor_balance_for_collateral,
             substate.to_cleanup_mode(spec),
         )?;

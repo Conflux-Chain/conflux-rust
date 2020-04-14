@@ -411,6 +411,7 @@ impl State {
         })
     }
 
+    // TODO: first check the type bits of the address.
     pub fn is_contract(&self, address: &Address) -> bool {
         self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| acc.is_contract())
@@ -418,20 +419,30 @@ impl State {
         .unwrap_or(false)
     }
 
-    pub fn sponsor_for_gas(&self, address: &Address) -> DbResult<Address> {
+    fn maybe_address(address: &Address) -> Option<Address> {
+        if address.is_zero() {
+            None
+        } else {
+            Some(*address)
+        }
+    }
+
+    pub fn sponsor_for_gas(
+        &self, address: &Address,
+    ) -> DbResult<Option<Address>> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(Address::zero(), |acc| {
-                acc.sponsor_info().sponsor_for_gas
+            acc.map_or(None, |acc| {
+                Self::maybe_address(&acc.sponsor_info().sponsor_for_gas)
             })
         })
     }
 
     pub fn sponsor_for_collateral(
         &self, address: &Address,
-    ) -> DbResult<Address> {
+    ) -> DbResult<Option<Address>> {
         self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(Address::zero(), |acc| {
-                acc.sponsor_info().sponsor_for_collateral
+            acc.map_or(None, |acc| {
+                Self::maybe_address(&acc.sponsor_info().sponsor_for_collateral)
             })
         })
     }
@@ -441,7 +452,7 @@ impl State {
         upper_bound: &U256,
     ) -> DbResult<()>
     {
-        if *sponsor != self.sponsor_for_gas(address)?
+        if *sponsor != self.sponsor_for_gas(address)?.unwrap_or_default()
             || *sponsor_balance != self.sponsor_balance_for_gas(address)?
         {
             self.require(address, false).map(|mut x| {
@@ -455,7 +466,7 @@ impl State {
     pub fn set_sponsor_for_collateral(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
     ) -> DbResult<()> {
-        if *sponsor != self.sponsor_for_collateral(address)?
+        if *sponsor != self.sponsor_for_collateral(address)?.unwrap_or_default()
             || *sponsor_balance
                 != self.sponsor_balance_for_collateral(address)?
         {
@@ -668,7 +679,7 @@ impl State {
     pub fn sub_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()> {
-        if !by.is_zero() || !self.exists(address)? {
+        if !by.is_zero() {
             self.require(address, false)?.sub_balance(by);
         }
         if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {

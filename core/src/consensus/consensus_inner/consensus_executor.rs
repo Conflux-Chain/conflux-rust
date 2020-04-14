@@ -11,12 +11,12 @@ use crate::{
         consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
         ConsensusGraphInner,
     },
-    executive::{Executed, ExecutionError, Executive, InternalContractMap},
+    executive::{ExecutionOutcome, Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::{CleanupMode, State},
-    statedb::StateDb,
+    statedb::{Result as DbResult, StateDb},
     storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
     verification::VerificationConfig,
     vm::{Env, Spec},
@@ -578,7 +578,7 @@ impl ConsensusExecutor {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
-    ) -> RpcResult<Executed> {
+    ) -> RpcResult<ExecutionOutcome> {
         self.handler.call_virtual(tx, epoch_id)
     }
 
@@ -950,12 +950,16 @@ impl ConsensusExecutionHandler {
             self.vm.clone(),
             start_block_number - 1, /* block_number */
         );
-        let epoch_receipts = self.process_epoch_transactions(
-            &mut state,
-            &epoch_blocks,
-            start_block_number,
-            on_local_pivot,
-        );
+        let epoch_receipts = self
+            .process_epoch_transactions(
+                &mut state,
+                &epoch_blocks,
+                start_block_number,
+                on_local_pivot,
+            )
+            // TODO: maybe propagate the error all the way up so that the
+            // program may restart by itself.
+            .expect("Can not handle db error in consensus, crashing.");
 
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
@@ -1012,7 +1016,7 @@ impl ConsensusExecutionHandler {
     fn process_epoch_transactions(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64, on_local_pivot: bool,
-    ) -> Vec<Arc<BlockReceipts>>
+    ) -> DbResult<Vec<Arc<BlockReceipts>>>
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
@@ -1036,116 +1040,77 @@ impl ConsensusExecutionHandler {
                 gas_used: U256::zero(),
                 last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
+                epoch_height: pivot_block.block_header.height(),
+                transaction_epoch_bound: self
+                    .verification_config
+                    .transaction_epoch_bound,
             };
             let secondary_reward = state.increase_block_number();
             assert_eq!(state.block_number(), env.number);
 
             block_number += 1;
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                let mut tx_outcome_status =
-                    TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                let tx_outcome_status;
                 let mut transaction_logs = Vec::new();
-                let mut nonce_increased = false;
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
-                let pivot_height = pivot_block.block_header.height();
 
-                // If the transaction is outside the epoch range
-                // [tx.epoch_height - tx_epoch_bound, tx.epoch_height +
-                // tx_epoch_bound], we are going to skip the
-                // execution of the transaction.
-                let epoch_height_in_bound = match self
-                    .verification_config
-                    .verify_transaction_epoch_height(transaction, pivot_height)
-                {
-                    Ok(()) => true,
-                    Err(e) => {
-                        info!("Ignored transaction with epoch height out of bound: {}", e);
-                        trace!(
-                            "Add back ({:?}) to the pending pool!",
-                            transaction.clone()
-                        );
-                        to_pending.push(transaction.clone());
-                        false
-                    }
+                let r = {
+                    Executive::new(
+                        state,
+                        &env,
+                        &machine,
+                        &spec,
+                        &internal_contract_map,
+                    )
+                    .transact(transaction)?
                 };
 
-                if epoch_height_in_bound {
-                    let r = {
-                        Executive::new(
-                            state,
-                            &env,
-                            &machine,
-                            &spec,
-                            &internal_contract_map,
-                        )
-                        .transact(transaction, &mut nonce_increased)
-                    };
-                    // FIXME: this match section must exhaust all possible
-                    // ExecutionErrors. TODO Store
-                    // fine-grained output status in receipts.
-                    // Note now NotEnoughCash has
-                    // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
-                    // but its nonce is increased, which might need fixing.
-                    match r {
-                        Err(ExecutionError::InvalidNonce { expected, got }) => {
-                            // not inc nonce
-                            trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
-                            // Add future transactions back to pool if we
-                            // are
-                            // not verifying forking chain
-                            if on_local_pivot && got > expected {
-                                trace!(
-                                    "To re-add transaction ({:?}) to pending pool",
-                                    transaction.clone()
-                                );
-                                to_pending.push(transaction.clone());
-                            }
-                        }
-                        Err(ExecutionError::NotEnoughCash {
-                            required: _,
-                            got: _,
-                            actual_gas_cost,
-                        }) => {
-                            /* We charge `actual_gas_cost`, so increase
-                             * `env.gas_used` to make
-                             * this charged balance distributed to
-                             * miners.
-                             * Note for the case that `balance < tx_fee`,
-                             * the amount
-                             * of remainder is lost forever. */
-                            env.gas_used +=
-                                actual_gas_cost / transaction.gas_price;
-                        }
-                        Ok(ref executed) => {
-                            env.gas_used = executed.cumulative_gas_used;
-                            transaction_logs = executed.logs.clone();
-                            storage_collateralized =
-                                executed.storage_collateralized.clone();
-                            storage_released =
-                                executed.storage_released.clone();
-                            if executed.exception.is_some() {
-                                warn!(
-                                    "tx execution error: transaction={:?}, err={:?}",
-                                    transaction, r
-                                );
-                            } else {
-                                GOOD_TPS_METER.mark(1);
-                                tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
-                                trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                            }
-                        }
-                        Err(e) => {
-                            info!("tx execution error: transaction={:?}, err={:?}, in block {:?}", transaction, e, block.hash());
+                // TODO Store fine-grained output status in receipts.
+                match r {
+                    ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
+                        tx_outcome_status =
+                            TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        trace!(
+                            "tx not executed, to reconsider packing: \
+                             transaction={:?}, err={:?}",
+                            transaction,
+                            e
+                        );
+                        if on_local_pivot {
+                            trace!(
+                                "To re-add transaction to transaction pool. \
+                                 transaction={:?}",
+                                transaction
+                            );
+                            to_pending.push(transaction.clone())
                         }
                     }
-                }
+                    ExecutionOutcome::ExecutionErrorBumpNonce(
+                        error,
+                        executed,
+                    ) => {
+                        tx_outcome_status =
+                            TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
 
-                if nonce_increased
-                    && tx_outcome_status != TRANSACTION_OUTCOME_SUCCESS
-                {
-                    tx_outcome_status =
-                        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                        env.gas_used = executed.cumulative_gas_used;
+                        warn!(
+                            "tx execution error: transaction={:?}, err={:?}",
+                            transaction, error
+                        );
+                    }
+                    ExecutionOutcome::Finished(executed) => {
+                        tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        GOOD_TPS_METER.mark(1);
+
+                        env.gas_used = executed.cumulative_gas_used;
+                        transaction_logs = executed.logs.clone();
+                        storage_collateralized =
+                            executed.storage_collateralized.clone();
+                        storage_released = executed.storage_released.clone();
+
+                        trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
+                    }
                 }
 
                 let receipt = Receipt::new(
@@ -1191,7 +1156,7 @@ impl ConsensusExecutionHandler {
         }
 
         debug!("Finish processing tx for epoch");
-        epoch_receipts
+        Ok(epoch_receipts)
     }
 
     fn compute_block_base_reward(&self, past_block_count: u64) -> U512 {
@@ -1349,7 +1314,10 @@ impl ConsensusExecutionHandler {
                             &reward_epoch_hash,
                             &epoch_blocks,
                             ctx.start_block_number,
-                        ));
+                        )
+                            // TODO: maybe propagate the error all the way up so that the
+                            // program may restart by itself.
+                            .expect("Can not handle db error in consensus, crashing."));
                     }
                     epoch_receipts.as_ref().unwrap()[enum_idx].clone()
                 }
@@ -1472,7 +1440,7 @@ impl ConsensusExecutionHandler {
     fn recompute_states(
         &self, pivot_hash: &H256, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64,
-    ) -> Vec<Arc<BlockReceipts>>
+    ) -> DbResult<Vec<Arc<BlockReceipts>>>
     {
         debug!(
             "Recompute receipts epoch_id={}, block_count={}",
@@ -1514,7 +1482,7 @@ impl ConsensusExecutionHandler {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
-    ) -> RpcResult<Executed> {
+    ) -> RpcResult<ExecutionOutcome> {
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
         let internal_contract_map = InternalContractMap::new();
@@ -1554,9 +1522,7 @@ impl ConsensusExecutionHandler {
                     .get_state_no_commit(
                         state_index.unwrap(),
                         /* try_open = */ true,
-                    )
-                    // FIXME: propogate error
-                    .expect("No DB Error")
+                    )?
                     // Safe because the state exists.
                     .expect("State Exists"),
             ),
@@ -1574,6 +1540,10 @@ impl ConsensusExecutionHandler {
             gas_used: U256::zero(),
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
+            epoch_height: block_height,
+            transaction_epoch_bound: self
+                .verification_config
+                .transaction_epoch_bound,
         };
         assert_eq!(state.block_number(), env.number);
         let mut ex = Executive::new(
@@ -1585,7 +1555,7 @@ impl ConsensusExecutionHandler {
         );
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
-        Ok(r.map_err(|e| format!("execution error: {:?}", e))?)
+        Ok(r?)
     }
 }
 

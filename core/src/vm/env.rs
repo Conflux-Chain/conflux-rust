@@ -46,6 +46,11 @@ pub struct Env {
     pub last_hashes: Arc<LastHashes>,
     /// The gas used.
     pub gas_used: U256,
+    /// The epoch height.
+    pub epoch_height: u64,
+    /// The transaction_epoch_bound used to verify if a transaction has
+    /// expired.
+    pub transaction_epoch_bound: u64,
 }
 
 #[cfg(test)]

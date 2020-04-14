@@ -188,7 +188,13 @@ fn checkpoint_from_empty_get_storage_at() {
             &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
         )
         .unwrap();
-    assert_eq!(state.sponsor_for_collateral(&a).unwrap(), sponsor);
+    assert_eq!(
+        state
+            .sponsor_for_collateral(&a)
+            .unwrap()
+            .unwrap_or_default(),
+        sponsor
+    );
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&a).unwrap(),
@@ -434,7 +440,13 @@ fn checkpoint_get_storage_at() {
             &(*COLLATERAL_PER_STORAGE_KEY * U256::from(2)),
         )
         .unwrap();
-    assert_eq!(state.sponsor_for_collateral(&a).unwrap(), sponsor);
+    assert_eq!(
+        state
+            .sponsor_for_collateral(&a)
+            .unwrap()
+            .unwrap_or_default(),
+        sponsor
+    );
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     assert_eq!(
         state.sponsor_balance_for_collateral(&a).unwrap(),
@@ -1078,7 +1090,10 @@ fn test_automatic_collateral_contract_account() {
         )
         .unwrap();
     assert_eq!(
-        state.sponsor_for_collateral(&contract_account).unwrap(),
+        state
+            .sponsor_for_collateral(&contract_account)
+            .unwrap()
+            .unwrap_or_default(),
         sponsor
     );
     assert_eq!(*state.total_storage_tokens(), U256::from(0));

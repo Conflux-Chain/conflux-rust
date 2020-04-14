@@ -192,6 +192,7 @@ impl<'a> ContextTrait for Context<'a> {
             params_type: vm::ParamsType::Embedded,
         };
 
+        // TODO: futher examine.
         if !self.static_flag {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
@@ -442,6 +443,7 @@ mod tests {
     use super::*;
     use crate::{
         machine::{new_machine_with_builtin, Machine},
+        parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
         state::{State, Substate},
         storage::{
             new_storage_manager_for_testing, tests::FakeStateManager,
@@ -467,7 +469,6 @@ mod tests {
         }
     }
 
-    #[allow(dead_code)]
     fn get_test_env() -> Env {
         Env {
             number: 100,
@@ -477,6 +478,8 @@ mod tests {
             last_hashes: Arc::new(vec![]),
             gas_used: 0.into(),
             gas_limit: 0.into(),
+            epoch_height: 0,
+            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         }
     }
 
