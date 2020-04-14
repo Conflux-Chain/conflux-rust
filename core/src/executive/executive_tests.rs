@@ -436,7 +436,7 @@ fn test_not_enough_cash() {
         data: "3331600055".from_hex().unwrap(),
         gas: U256::from(100_000),
         gas_price: U256::one(),
-        storage_limit: U256::MAX,
+        storage_limit: U256::zero(),
         epoch_height: 0,
         chain_id: 0,
         nonce: U256::zero(),

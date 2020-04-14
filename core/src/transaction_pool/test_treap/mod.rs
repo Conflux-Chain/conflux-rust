@@ -106,7 +106,7 @@ fn next_signed_transaction(rng: &mut ChaChaRng) -> SignedTransaction {
             gas: next_u256(rng),
             value: next_u256(rng),
             action: Action::Call(Address::from_low_u64_be(0)),
-            storage_limit: U256::MAX,
+            storage_limit: U256::zero(),
             epoch_height: 0,
             chain_id: 0,
             data: vec![],

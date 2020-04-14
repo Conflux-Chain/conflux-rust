@@ -74,7 +74,8 @@ class ReentrancyTest(ConfluxTestFramework):
 
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
-                               check_status=False):
+                               check_status=False,
+                               storage_limit=0):
         if contract_addr:
             func = getattr(contract.functions, name)
         else:
@@ -92,6 +93,7 @@ class ReentrancyTest(ConfluxTestFramework):
         tx_data['data'] = decode_hex(tx_data['data'])
         tx_data['pri_key'] = sender_key
         tx_data['gas_price'] = tx_data['gasPrice']
+        tx_data['storage_limit'] = storage_limit
         if value:
             tx_data['value'] = value
         tx_data.pop('gasPrice', None)
@@ -147,16 +149,16 @@ class ReentrancyTest(ConfluxTestFramework):
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
         assert_equal(balance, value)
 
-        transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.genesis_priv_key)
+        transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.genesis_priv_key, storage_limit=20000)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
 
-        transaction = self.call_contract_function(self.exploit_contract, "constructor", [], user2)
+        transaction = self.call_contract_function(self.exploit_contract, "constructor", [], user2, storage_limit=200000)
         exploit_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
 
         transaction = self.call_contract_function(self.buggy_contract, "addBalance", [], user1, 100000000000000000000000000000000,
-                                                  contract_addr, True, True)
+                                                  contract_addr, True, True, storage_limit=128)
         transaction = self.call_contract_function(self.exploit_contract, "deposit", [Web3.toChecksumAddress(contract_addr)], user2, 100000000000000000000000000000000,
-                                                  exploit_addr, True, True)
+                                                  exploit_addr, True, True, storage_limit=128)
 
         addr = eth_utils.encode_hex(user1_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
@@ -168,9 +170,9 @@ class ReentrancyTest(ConfluxTestFramework):
         assert_equal(balance, 200000000000000000000000000000000)
 
         transaction = self.call_contract_function(self.exploit_contract, "launch_attack", [], user2, 0,
-                                                  exploit_addr, True, True)
+                                                  exploit_addr, True, True, storage_limit=128)
         transaction = self.call_contract_function(self.exploit_contract, "get_money", [], user2, 0,
-                                                  exploit_addr, True, True)
+                                                  exploit_addr, True, True, storage_limit=128)
 
         addr = eth_utils.encode_hex(user1_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
