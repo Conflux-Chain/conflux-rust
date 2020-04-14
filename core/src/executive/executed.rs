@@ -88,6 +88,9 @@ pub enum ExecutionError {
         /// Actual cost. This should be min(tx_fee, balance).
         actual_gas_cost: U256,
     },
+    /// Returned when balance is not enough for `storage_limit *
+    /// COLLATERAL_PER_BYTE`.
+    NotEnoughBalanceForStorage { required: U256, got: U256 },
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Returned when transacting from a non-existing account with dust

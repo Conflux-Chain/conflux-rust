@@ -53,7 +53,7 @@ class LogFilteringTest(ConfluxTestFramework):
         assert_equal(logs0[0]["data"], self.address_to_topic(sender))
 
         # call method
-        receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+        receipt = self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")), storage_limit=64)
 
         # apply filter, we expect two logs with 2 and 3 topics respectively
         filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
@@ -78,7 +78,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # call many times
         for ii in range(0, NUM_CALLS - 2):
-            self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")))
+            self.call_contract(sender, priv_key, contractAddr, encode_hex_0x(keccak(b"foo()")), storage_limit=0)
 
         # apply filter, we expect NUM_CALLS log entries with inreasing uint32 fields
         filter = Filter(from_epoch="earliest", to_epoch="latest_mined")
@@ -149,17 +149,23 @@ class LogFilteringTest(ConfluxTestFramework):
         return "0x" + ("%x" % number).zfill(64)
 
     def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+        c0 = self.rpc.get_collateral_for_storage(sender)
+        tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=253)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
+        c1 = self.rpc.get_collateral_for_storage(sender)
+        assert_equal(c1 - c0, 253 * 10 ** 18 // 1024)
         assert_is_hex_string(address)
         return receipt, address
 
-    def call_contract(self, sender, priv_key, contract, data_hex):
-        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key)
+    def call_contract(self, sender, priv_key, contract, data_hex, storage_limit):
+        c0 = self.rpc.get_collateral_for_storage(sender)
+        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=storage_limit)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
+        c1 = self.rpc.get_collateral_for_storage(sender)
+        assert_equal(c1 - c0, storage_limit * 10 ** 18 // 1024)
         return receipt
 
     def assert_response_format_correct(self, response):

@@ -732,19 +732,15 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
-        let caller = request.from.unwrap_or_default();
         // FIXME: what's the definition of "exception" for the execution of this
-        // transaction? FIXME: How can a transaction fail to execute? Is
-        // it possible that a transaction FIXME: execution fail but
-        // still legit? We can not refuse to estimate gas for a legit
-        // transaction. FIXME: The transaction must have no side effect
-        // in order to be illegal.
+        // FIXME: transaction? How can a transaction fail to execute? Is it
+        // FIXME: possible that a transaction execution fail but still legal? We
+        // FIXME: can not refuse to estimate gas for a legal transaction. The
+        // FIXME: transaction must have no side effect in order to be illegal.
         let success_executed = self.exec_transaction(request, epoch)?;
         let mut storage_collateralized = 0;
         for storage_change in &success_executed.storage_collateralized {
-            if storage_change.address == caller {
-                storage_collateralized = storage_change.amount;
-            }
+            storage_collateralized += storage_change.amount;
         }
         let response = EstimateGasAndCollateralResponse {
             gas_used: success_executed.gas_used.into(),

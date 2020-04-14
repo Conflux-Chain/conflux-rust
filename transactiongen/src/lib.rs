@@ -219,7 +219,7 @@ impl TransactionGenerator {
                 gas: U256::from(21000u64),
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
-                storage_limit: U256::MAX,
+                storage_limit: U256::zero(),
                 chain_id: 0,
                 epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
@@ -407,7 +407,7 @@ impl DirectTransactionGenerator {
                 gas,
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
-                storage_limit: U256::MAX,
+                storage_limit: U256::zero(),
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
@@ -498,7 +498,7 @@ impl DirectTransactionGenerator {
                 gas,
                 value: 0.into(),
                 action: Action::Call(self.erc20_address.clone()),
-                storage_limit: U256::MAX,
+                storage_limit: U256::zero(),
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.

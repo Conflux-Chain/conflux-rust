@@ -62,12 +62,14 @@ class TransactionTest(DefaultConfluxTestFramework):
             data = b''
             rand_n = random.random()
             gas = 21000
+            storage_limit = 0
             if rand_n > 0.9 and balance_map[sender_key] > 21000 * 4 * tx_n:
                 value = 0
                 receiver = b''
                 data = bytes([96, 128, 96, 64, 82, 52, 128, 21, 97, 0, 16, 87, 96, 0, 128, 253, 91, 80, 96, 5, 96, 0, 129, 144, 85, 80, 96, 230, 128, 97, 0, 39, 96, 0, 57, 96, 0, 243, 254, 96, 128, 96, 64, 82, 96, 4, 54, 16, 96, 67, 87, 96, 0, 53, 124, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 144, 4, 128, 99, 96, 254, 71, 177, 20, 96, 72, 87, 128, 99, 109, 76, 230, 60, 20, 96, 127, 87, 91, 96, 0, 128, 253, 91, 52, 128, 21, 96, 83, 87, 96, 0, 128, 253, 91, 80, 96, 125, 96, 4, 128, 54, 3, 96, 32, 129, 16, 21, 96, 104, 87, 96, 0, 128, 253, 91, 129, 1, 144, 128, 128, 53, 144, 96, 32, 1, 144, 146, 145, 144, 80, 80, 80, 96, 167, 86, 91, 0, 91, 52, 128, 21, 96, 138, 87, 96, 0, 128, 253, 91, 80, 96, 145, 96, 177, 86, 91, 96, 64, 81, 128, 130, 129, 82, 96, 32, 1, 145, 80, 80, 96, 64, 81, 128, 145, 3, 144, 243, 91, 128, 96, 0, 129, 144, 85, 80, 80, 86, 91, 96, 0, 128, 84, 144, 80, 144, 86, 254, 161, 101, 98, 122, 122, 114, 48, 88, 32, 181, 24, 13, 149, 253, 195, 129, 48, 40, 237, 71, 246, 44, 124, 223, 112, 139, 118, 192, 219, 9, 64, 67, 245, 51, 180, 42, 67, 13, 49, 62, 21, 0, 41])
                 gas = 10000000
                 is_payment = False
+                storage_limit = 200000
             else:
                 value = 1
                 receiver_sk = random.choice(list(balance_map))
@@ -77,7 +79,7 @@ class TransactionTest(DefaultConfluxTestFramework):
             # not enough transaction fee (gas_price * gas_limit) should not happen for now
             assert balance_map[sender_key] >= value + gas_price * 21000
             tx = create_transaction(pri_key=sender_key, receiver=receiver, value=value, nonce=nonce,
-                                    gas_price=gas_price, data=data, gas=gas)
+                                    gas_price=gas_price, data=data, gas=gas, storage_limit=storage_limit)
             r = random.randint(0, self.num_nodes - 1)
             r = 0
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))

@@ -65,7 +65,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         return self.nonce_map[sender]
 
     def call_contract_function(self, contract, name, args, sender_key, contract_addr=None, wait=False,
-                               check_status=False):
+                               check_status=False, storage_limit=0):
         # If contract address is empty, call the constructor.
         if contract_addr:
             func = getattr(contract.functions, name)
@@ -84,6 +84,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
         tx_data['data'] = decode_hex(tx_data['data'])
         tx_data['pri_key'] = sender_key
         tx_data['gas_price'] = tx_data['gasPrice']
+        tx_data['storage_limit'] = storage_limit
         tx_data.pop('gasPrice', None)
         tx_data.pop('chainId', None)
         tx_data.pop('to', None)
