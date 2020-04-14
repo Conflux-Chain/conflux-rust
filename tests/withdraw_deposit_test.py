@@ -2,6 +2,7 @@
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x
@@ -47,7 +48,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         genesis_addr = priv_to_addr(genesis_key)
         nonce = 0
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
@@ -66,7 +67,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         tx = client.new_tx(value=5 * 10 ** 18, receiver=addr)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(client.get_balance(addr), 5000000000000000000)
+        assert_equal(client.get_balance(addr), 5 * 10 ** 18)
         assert_equal(client.get_staking_balance(addr), 0)
 
         self.tx_conf["to"] = Web3.toChecksumAddress("843c409373ffd5c0bec1dddb7bec830856757b65")
@@ -77,7 +78,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         self.wait_for_tx([tx])
         deposit_time = self.get_block_number(client, tx.hash_hex())
         assert_equal(client.get_staking_balance(addr), 10 ** 18)
-        assert_equal(client.get_balance(addr), 4 * 10 ** 18 - gas + 12500000)
+        assert_equal(client.get_balance(addr), 4 * 10 ** 18 - charged_of_huge_gas(gas))
 
         # withdraw 5 * 10**17
         balance = client.get_balance(addr)
@@ -89,7 +90,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         withdraw_time = self.get_block_number(client, tx.hash_hex())
         interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
         assert_equal(client.get_staking_balance(addr), 10 ** 18 - capital)
-        assert_equal(client.get_balance(addr), balance + capital + interest - gas + 12500000)
+        assert_equal(client.get_balance(addr), balance + capital + interest - charged_of_huge_gas(gas))
 
         # lock 4 * 10 ** 17 for 1 day
         balance = client.get_balance(addr)
@@ -97,7 +98,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
-        assert_equal(client.get_balance(addr), balance - gas + 12500000)
+        assert_equal(client.get_balance(addr), balance - charged_of_huge_gas(gas))
         assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17)
 
         # withdraw 5 * 10**17 and it should fail
@@ -128,7 +129,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         self.wait_for_tx([tx])
         withdraw_time = self.get_block_number(client, tx.hash_hex())
         interest = capital * accumulate_interest_rate[withdraw_time] // accumulate_interest_rate[deposit_time] - capital
-        assert_equal(client.get_balance(addr), balance + capital + interest - gas + 12500000)
+        assert_equal(client.get_balance(addr), balance + capital + interest - charged_of_huge_gas(gas))
         assert_equal(client.get_staking_balance(addr), 5 * 10 ** 17 - capital)
 
         block_gen_thread.stop()
