@@ -3,6 +3,7 @@ from http.client import CannotSendRequest
 from eth_utils import decode_hex
 
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
@@ -13,7 +14,7 @@ from web3 import Web3
 
 class CommissionPrivilegeTest(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
@@ -136,7 +137,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.log.info("genesis_addr={}".format(genesis_addr))
         nonce = 0
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {

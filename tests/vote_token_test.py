@@ -3,6 +3,7 @@
 from conflux.utils import priv_to_addr
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS
 from test_framework.blocktools import create_transaction, encode_hex_0x
 from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from test_framework.mininode import *
@@ -24,7 +25,7 @@ class VoteTokenTest(SmartContractBenchBase):
         self.accounts = []
         self.num_of_options = 5
         self.gas_price = 1
-        self.gas = 50000000
+        self.gas = CONTRACT_DEFAULT_GAS
         self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price), "chainId":0}
 
     def setup_contract(self):

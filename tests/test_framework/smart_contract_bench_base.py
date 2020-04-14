@@ -8,13 +8,14 @@ from test_framework.util import *
 from test_framework.mininode import *
 from test_framework.test_framework import ConfluxTestFramework
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS
 from conflux.utils import ec_random_keys, priv_to_addr, encode_hex_0x
 from http.client import CannotSendRequest
 
 
 class SmartContractBenchBase(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }

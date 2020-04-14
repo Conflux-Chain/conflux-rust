@@ -16,6 +16,7 @@ from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS
 from conflux.utils import sha3 as keccak
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 
@@ -519,7 +520,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.pub = []
         self.pri = []
         self.rpc = RpcClient(self.nodes[0])
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         gas_price = 10
 
         # lock token for genesis account

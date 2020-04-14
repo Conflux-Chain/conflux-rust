@@ -3,6 +3,7 @@ from http.client import CannotSendRequest
 
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
@@ -19,7 +20,7 @@ def signed_bytes_to_int256(input):
 
 class Issue988Test(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
@@ -113,7 +114,7 @@ class Issue988Test(ConfluxTestFramework):
         func = getattr(contract.functions, name)
         attrs = {}
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         attrs["gas"] = int_to_hex(gas)
         attrs["gasPrice"] = int_to_hex(gas_price)
         attrs["chainId"] = 0
@@ -140,7 +141,7 @@ class Issue988Test(ConfluxTestFramework):
         self.log.info("genesis_addr={}".format(encode_hex_0x(genesis_addr)))
         nonce = 0
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}

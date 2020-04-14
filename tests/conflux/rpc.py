@@ -3,7 +3,7 @@ import eth_utils
 import rlp
 
 from .config import default_config
-from .transactions import Transaction, UnsignedTransaction
+from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
 from .utils import priv_to_addr, sha3_256
 
@@ -279,7 +279,7 @@ class RpcClient:
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=0, epoch_height=0, chain_id=0):
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=CONTRACT_DEFAULT_GAS, value=0, storage_limit=0, epoch_height=0, chain_id=0):
         if sender is None:
             sender = self.GENESIS_ADDR
 
@@ -344,7 +344,7 @@ class RpcClient:
             "to": contract_addr,
             "value": hex(0),
             "gasPrice": hex(1),
-            "gas": hex(1000000),
+            "gas": hex(CONTRACT_DEFAULT_GAS),
             "data": data_hex,
             "v": hex(0),
             "r": hex(0),
