@@ -165,11 +165,58 @@ impl State {
         index
     }
 
-    pub fn check_collateral_for_storage(
-        &mut self, storage_owner: &Address, storage_limit: &U256,
-        substate: &mut Substate,
-    ) -> DbResult<CollateralCheckResult>
-    {
+    pub fn checkout_collateral_for_storage(
+        &mut self, addr: &Address,
+    ) -> DbResult<CollateralCheckResult> {
+        let (inc, sub) =
+            self.ensure_cached(addr, RequireCache::None, |acc| {
+                acc.map_or((0, 0), |account| {
+                    (
+                        account.get_unpaid_storage_entries(),
+                        account.get_unrefunded_storage_entries(),
+                    )
+                })
+            })?;
+
+        if sub > 0 {
+            let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
+            assert!(self.exists(addr)?);
+            self.sub_collateral_for_storage(addr, &delta)?;
+            self.require(addr, false)?
+                .reset_unrefunded_storage_entries();
+        }
+        if inc > 0 {
+            let delta = U256::from(inc) * *COLLATERAL_PER_STORAGE_KEY;
+            if self.is_contract(addr) {
+                let sponsor_balance =
+                    self.sponsor_balance_for_collateral(addr)?;
+                // sponsor_balance is not enough to cover storage incremental.
+                if delta > sponsor_balance {
+                    return Ok(CollateralCheckResult::NotEnoughBalance {
+                        required: delta,
+                        got: sponsor_balance,
+                    });
+                }
+            } else {
+                let balance = self.balance(addr).expect("no db error");
+                // balance is not enough to cover storage incremental.
+                if delta > balance {
+                    return Ok(CollateralCheckResult::NotEnoughBalance {
+                        required: delta,
+                        got: balance,
+                    });
+                }
+            }
+            self.add_collateral_for_storage(addr, &delta)?;
+            self.require(addr, false)?.reset_unpaid_storage_entries();
+        }
+        Ok(CollateralCheckResult::Valid)
+    }
+
+    // This function only returns valid or db error
+    pub fn checkout_ownership_changed(
+        &mut self, substate: &mut Substate,
+    ) -> DbResult<CollateralCheckResult> {
         let mut collateral_for_storage_sub = HashMap::new();
         let mut collateral_for_storage_inc = HashMap::new();
         if let Some(checkpoint) = self.checkpoints.borrow().last() {
@@ -200,50 +247,47 @@ impl State {
             }
         }
         for (addr, sub) in &collateral_for_storage_sub {
-            let delta = U256::from(*sub) * *COLLATERAL_PER_STORAGE_KEY;
-            assert!(self.exists(addr)?);
-            self.sub_collateral_for_storage(addr, &delta)?;
+            self.require(&addr, false)?
+                .add_unrefunded_storage_entries(*sub);
+            *substate.storage_released.entry(*addr).or_insert(0) += sub * 64;
         }
         for (addr, inc) in &collateral_for_storage_inc {
-            let delta = U256::from(*inc) * *COLLATERAL_PER_STORAGE_KEY;
-            if self.is_contract(addr) {
-                let sponsor_balance =
-                    self.sponsor_balance_for_collateral(addr)?;
-                // sponsor_balance is not enough to cover storage incremental.
-                if delta > sponsor_balance {
-                    return Ok(CollateralCheckResult::NotEnoughBalance {
-                        required: delta,
-                        got: sponsor_balance,
-                    });
-                }
+            self.require(&addr, false)?.add_unpaid_storage_entries(*inc);
+            *substate.storage_collateralized.entry(*addr).or_insert(0) +=
+                inc * 64;
+        }
+        Ok(CollateralCheckResult::Valid)
+    }
+
+    pub fn check_collateral_for_storage_finally(
+        &mut self, storage_owner: &Address, storage_limit: &U256,
+        substate: &mut Substate,
+    ) -> DbResult<CollateralCheckResult>
+    {
+        self.checkout_ownership_changed(substate)?;
+
+        let touched_addresses =
+            if let Some(checkpoint) = self.checkpoints.borrow().last() {
+                checkpoint.keys().cloned().collect()
             } else {
-                let balance = self.balance(addr).expect("no db error");
-                // balance is not enough to cover storage incremental.
-                if delta > balance {
-                    return Ok(CollateralCheckResult::NotEnoughBalance {
-                        required: delta,
-                        got: balance,
-                    });
-                }
+                HashSet::new()
+            };
+        // No new addresses added to checkpoint in this for-loop.
+        for address in touched_addresses.iter() {
+            match self.checkout_collateral_for_storage(address)? {
+                CollateralCheckResult::Valid => {}
+                res => return Ok(res),
             }
-            self.add_collateral_for_storage(addr, &delta)?
         }
 
         let collateral_for_storage =
             self.collateral_for_storage(storage_owner)?;
         if collateral_for_storage > *storage_limit {
-            return Ok(CollateralCheckResult::ExceedStorageLimit {
+            Ok(CollateralCheckResult::ExceedStorageLimit {
                 limit: *storage_limit,
                 required: collateral_for_storage,
-            });
+            })
         } else {
-            for (addr, sub) in collateral_for_storage_sub {
-                *substate.storage_released.entry(addr).or_insert(0) += sub * 64;
-            }
-            for (addr, inc) in collateral_for_storage_inc {
-                *substate.storage_collateralized.entry(addr).or_insert(0) +=
-                    inc * 64;
-            }
             Ok(CollateralCheckResult::Valid)
         }
     }
@@ -644,10 +688,6 @@ impl State {
         } else if let CleanupMode::TrackTouched(set) = cleanup_mode {
             if self.exists(address)? {
                 set.insert(*address);
-
-                // I don't know why sub_balance and add_balance have different
-                // behaviors here in Parity.
-                // self.exists(address) has loaded address to self.cache.
 
                 // Stop marking address as dirty here.
                 // self.touch(address)?;
