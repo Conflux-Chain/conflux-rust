@@ -188,7 +188,7 @@ impl VerificationConfig {
 
         let block_height = block.block_header.height();
         for t in &block.transactions {
-            self.verify_transaction(t, chain_id, block_height)?;
+            self.verify_transaction_in_block(t, chain_id, block_height)?;
             block_size += t.rlp_size();
             block_total_gas += *t.gas_limit();
         }
@@ -216,25 +216,42 @@ impl VerificationConfig {
         Ok(())
     }
 
-    pub fn verify_transaction_epoch_height(
+    pub fn check_transaction_epoch_bound(
         &self, tx: &TransactionWithSignature, block_height: u64,
-    ) -> Result<(), TransactionError> {
+    ) -> i8 {
         let transaction_epoch_bound = self.transaction_epoch_bound;
-        if tx.epoch_height + transaction_epoch_bound < block_height
-            || tx.epoch_height > block_height + transaction_epoch_bound
-        {
-            bail!(TransactionError::EpochHeightOutOfBound {
-                set: tx.epoch_height,
-                block_height,
-                transaction_epoch_bound,
-            });
+        if tx.epoch_height + transaction_epoch_bound < block_height {
+            -1
+        } else if tx.epoch_height > block_height + transaction_epoch_bound {
+            1
         } else {
-            Ok(())
+            0
         }
     }
 
-    pub fn verify_transaction(
+    pub fn verify_transaction_epoch_height(
+        &self, tx: &TransactionWithSignature, block_height: u64,
+    ) -> Result<(), TransactionError> {
+        if self.check_transaction_epoch_bound(tx, block_height) == 0 {
+            Ok(())
+        } else {
+            bail!(TransactionError::EpochHeightOutOfBound {
+                set: tx.epoch_height,
+                block_height,
+                transaction_epoch_bound: self.transaction_epoch_bound,
+            });
+        }
+    }
+
+    pub fn verify_transaction_in_block(
         &self, tx: &TransactionWithSignature, chain_id: u64, block_height: u64,
+    ) -> Result<(), TransactionError> {
+        self.verify_transaction_common(tx, chain_id)?;
+        self.verify_transaction_epoch_height(tx, block_height)
+    }
+
+    pub fn verify_transaction_common(
+        &self, tx: &TransactionWithSignature, chain_id: u64,
     ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
 
@@ -252,8 +269,6 @@ impl VerificationConfig {
             });
         }
 
-        self.verify_transaction_epoch_height(tx, block_height)?;
-
         // check transaction intrinsic gas
         let tx_intrinsic_gas = Executive::gas_required_for(
             tx.action == Action::Create,
@@ -266,8 +281,6 @@ impl VerificationConfig {
                 got: tx.gas
             });
         }
-
-        // FIXME: move verification here.
 
         Ok(())
     }
