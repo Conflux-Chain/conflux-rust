@@ -19,12 +19,17 @@ class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.rpc_timewait = 600
-        self.conf_parameters["tx_pool_size"] = "500000"
-        self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
-        self.conf_parameters["record_tx_index"] = "false"
         # The file can be downloaded from `https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt`
         genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "genesis_secrets.txt")
-        self.conf_parameters["genesis_secrets"] = f"\"{genesis_file_path}\""
+        self.conf_parameters = dict(
+            tx_pool_size= 500000,
+            heartbeat_timeout_ms=10000000000,
+            record_tx_index="false",
+            genesis_secrets=f"\"{genesis_file_path}\"",
+            storage_delta_mpts_cache_size = 20_000_000,
+            storage_delta_mpts_cache_start_size = 2_000_000,
+            storage_delta_mpts_slab_idle_size = 2_000_000,
+        )
 
 
     def setup_network(self):
@@ -136,6 +141,7 @@ class SingleBench(ConfluxTestFramework):
         block_gen_thread.join()
         self.log.info("Time used: %f seconds", time_used)
         self.log.info("Tx per second: %f", tx_n / time_used)
+        exit()
 
     def check_account(self, k, balance_map):
         addr = eth_utils.encode_hex(priv_to_addr(k))

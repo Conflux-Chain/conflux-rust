@@ -158,8 +158,12 @@ impl<
         if add_size >= max_add_size {
             add_size = max_add_size;
         }
+        let start = Instant::now();
         let mut allocator_mut =
             RwLockUpgradableReadGuard::upgrade(allocator_upgradable_read);
+        info!("enlarge time: {:?} old_cap={} old_len={} add_size={}", start.elapsed(),
+              allocator_mut.capacity(), allocator_mut.len() ,add_size);
+        info!("enlarge: {} {}", self.idle_size, self.size_limit);
         allocator_mut.reserve_exact(add_size)?;
         Ok(())
     }
@@ -796,3 +800,4 @@ use std::{
     hint::unreachable_unchecked,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use std::time::Instant;
