@@ -17,7 +17,7 @@ HASH_MAX = 1 << 256
 
 
 def create_block(parent_hash=default_config["GENESIS_PREVHASH"], height=0, timestamp=None, difficulty=TEST_DIFFICULTY, transactions=[],
-                 gas_limit=3000000000, referee_hashes=[], author=default_config["GENESIS_COINBASE"],
+                 gas_limit=default_config["GENESIS_GAS_LIMIT"], referee_hashes=[], author=default_config["GENESIS_COINBASE"],
                  deferred_state_root=default_config["GENESIS_STATE_ROOT"], deferred_receipts_root=default_config["GENESIS_RECEIPTS_ROOT"],
                  deferred_logs_bloom_hash=default_config["GENESIS_LOGS_BLOOM_HASH"], adaptive=0):
     if timestamp is None:
@@ -42,7 +42,7 @@ def create_block_with_nonce(
         timestamp=None,
         difficulty=TEST_DIFFICULTY,
         transactions=[],
-        gas_limit=3000000000,
+        gas_limit=default_config["GENESIS_GAS_LIMIT"],
         referee_hashes=[],
         author=default_config["GENESIS_COINBASE"],
         deferred_state_root=default_config["GENESIS_STATE_ROOT"],
