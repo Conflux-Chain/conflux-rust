@@ -14,9 +14,11 @@ use crate::{
     executive::{Executed, ExecutionError, Executive, InternalContractMap},
     machine::new_machine_with_builtin,
     parameters::{consensus::*, consensus_internal::*},
+    rpc_errors::{invalid_params_check, Result as RpcResult},
     state::{CleanupMode, State},
     statedb::StateDb,
     storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
+    verification::VerificationConfig,
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
@@ -34,8 +36,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, ChainIdParams, SignedTransaction,
-    TransactionIndex, MERKLE_NULL_NODE,
+    Block, BlockHeaderBuilder, SignedTransaction, TransactionIndex,
+    MERKLE_NULL_NODE,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -166,7 +168,8 @@ impl ConsensusExecutor {
     pub fn start(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
-        config: ConsensusExecutionConfiguration, bench_mode: bool,
+        config: ConsensusExecutionConfiguration,
+        verification_config: VerificationConfig, bench_mode: bool,
     ) -> Arc<Self>
     {
         let handler = Arc::new(ConsensusExecutionHandler::new(
@@ -174,6 +177,7 @@ impl ConsensusExecutor {
             data_man.clone(),
             vm,
             config,
+            verification_config,
         ));
         let (sender, receiver) = channel();
 
@@ -574,7 +578,7 @@ impl ConsensusExecutor {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
-    ) -> Result<Executed, String> {
+    ) -> RpcResult<Executed> {
         self.handler.call_virtual(tx, epoch_id)
     }
 
@@ -753,12 +757,14 @@ pub struct ConsensusExecutionHandler {
     data_man: Arc<BlockDataManager>,
     pub vm: VmFactory,
     config: ConsensusExecutionConfiguration,
+    verification_config: VerificationConfig,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, config: ConsensusExecutionConfiguration,
+        verification_config: VerificationConfig,
     ) -> Self
     {
         ConsensusExecutionHandler {
@@ -766,6 +772,7 @@ impl ConsensusExecutionHandler {
             data_man,
             vm,
             config,
+            verification_config,
         }
     }
 
@@ -1043,116 +1050,93 @@ impl ConsensusExecutionHandler {
                 let mut storage_collateralized = Vec::new();
                 let pivot_height = pivot_block.block_header.height();
 
-                // If the transaction's chain_id is not match the best chain id
-                // we re going to skip the execution of the transaction.
-                let best_chain_id = ChainIdParams {
-                    epoch_number: pivot_height,
-                }
-                .get_chain_id();
-                let chain_id_matched = if transaction.chain_id != best_chain_id
+                // If the transaction is outside the epoch range
+                // [tx.epoch_height - tx_epoch_bound, tx.epoch_height +
+                // tx_epoch_bound], we are going to skip the
+                // execution of the transaction.
+                let epoch_height_in_bound = match self
+                    .verification_config
+                    .verify_transaction_epoch_height(transaction, pivot_height)
                 {
-                    info!("tx execution error: the transaction's chain_id is {} expected {}", transaction.chain_id, best_chain_id);
-                    false
-                } else {
-                    true
-                };
-
-                if chain_id_matched {
-                    // If the transaction is outside the epoch range
-                    // [tx.epoch_height - tx_epoch_bound, tx.epoch_height +
-                    // tx_epoch_bound], we are going to skip the
-                    // execution of the transaction.
-                    let epoch_height_in_bound = if pivot_height
-                        + self.config.transaction_epoch_bound
-                        < transaction.epoch_height
-                    {
-                        info!("tx execution error: the transaction epoch height is too far ahead! pivot height {} transaction epoch height {}", pivot_height, transaction.epoch_height);
+                    Ok(()) => true,
+                    Err(e) => {
+                        info!("Ignored transaction with epoch height out of bound: {}", e);
                         trace!(
                             "Add back ({:?}) to the pending pool!",
                             transaction.clone()
                         );
                         to_pending.push(transaction.clone());
                         false
-                    } else if pivot_height
-                        > transaction.epoch_height
-                            + self.config.transaction_epoch_bound
-                    {
-                        info!("tx execution error: the transaction epoch height is too old! pivot height {} transaction epoch height {}", pivot_height, transaction.epoch_height);
-                        false
-                    } else {
-                        true
-                    };
+                    }
+                };
 
-                    if epoch_height_in_bound {
-                        let r = {
-                            Executive::new(
-                                state,
-                                &env,
-                                &machine,
-                                &spec,
-                                &internal_contract_map,
-                            )
-                            .transact(transaction, &mut nonce_increased)
-                        };
-                        // TODO Store fine-grained output status in receipts.
-                        // Note now NotEnoughCash has
-                        // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
-                        // but its nonce is increased, which might need fixing.
-                        match r {
-                            Err(ExecutionError::InvalidNonce {
-                                expected,
-                                got,
-                            }) => {
-                                // not inc nonce
-                                trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
-                                // Add future transactions back to pool if we
-                                // are
-                                // not verifying forking chain
-                                if on_local_pivot && got > expected {
-                                    trace!(
-                                        "To re-add transaction ({:?}) to pending pool",
-                                        transaction.clone()
-                                    );
-                                    to_pending.push(transaction.clone());
-                                }
+                if epoch_height_in_bound {
+                    let r = {
+                        Executive::new(
+                            state,
+                            &env,
+                            &machine,
+                            &spec,
+                            &internal_contract_map,
+                        )
+                        .transact(transaction, &mut nonce_increased)
+                    };
+                    // FIXME: this match section must exhaust all possible
+                    // ExecutionErrors. TODO Store
+                    // fine-grained output status in receipts.
+                    // Note now NotEnoughCash has
+                    // outcome_status=TRANSACTION_OUTCOME_EXCEPTION,
+                    // but its nonce is increased, which might need fixing.
+                    match r {
+                        Err(ExecutionError::InvalidNonce { expected, got }) => {
+                            // not inc nonce
+                            trace!("tx execution InvalidNonce without inc_nonce: transaction={:?}, err={:?}", transaction.clone(), r);
+                            // Add future transactions back to pool if we
+                            // are
+                            // not verifying forking chain
+                            if on_local_pivot && got > expected {
+                                trace!(
+                                    "To re-add transaction ({:?}) to pending pool",
+                                    transaction.clone()
+                                );
+                                to_pending.push(transaction.clone());
                             }
-                            Err(ExecutionError::NotEnoughCash {
-                                required: _,
-                                got: _,
-                                actual_gas_cost,
-                            }) => {
-                                /* We charge `actual_gas_cost`, so increase
-                                 * `env.gas_used` to make
-                                 * this charged balance distributed to
-                                 * miners.
-                                 * Note for the case that `balance < tx_fee`,
-                                 * the amount
-                                 * of remainder is lost forever. */
-                                env.gas_used +=
-                                    actual_gas_cost / transaction.gas_price;
+                        }
+                        Err(ExecutionError::NotEnoughCash {
+                            required: _,
+                            got: _,
+                            actual_gas_cost,
+                        }) => {
+                            /* We charge `actual_gas_cost`, so increase
+                             * `env.gas_used` to make
+                             * this charged balance distributed to
+                             * miners.
+                             * Note for the case that `balance < tx_fee`,
+                             * the amount
+                             * of remainder is lost forever. */
+                            env.gas_used +=
+                                actual_gas_cost / transaction.gas_price;
+                        }
+                        Ok(ref executed) => {
+                            env.gas_used = executed.cumulative_gas_used;
+                            transaction_logs = executed.logs.clone();
+                            storage_collateralized =
+                                executed.storage_collateralized.clone();
+                            storage_released =
+                                executed.storage_released.clone();
+                            if executed.exception.is_some() {
+                                warn!(
+                                    "tx execution error: transaction={:?}, err={:?}",
+                                    transaction, r
+                                );
+                            } else {
+                                GOOD_TPS_METER.mark(1);
+                                tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                                trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                             }
-                            Ok(ref executed) => {
-                                env.gas_used = executed.cumulative_gas_used;
-                                transaction_logs = executed.logs.clone();
-                                storage_collateralized =
-                                    executed.storage_collateralized.clone();
-                                storage_released =
-                                    executed.storage_released.clone();
-                                if executed.exception.is_some() {
-                                    warn!(
-                                        "tx execution error: transaction={:?}, err={:?}",
-                                        transaction, r
-                                    );
-                                } else {
-                                    GOOD_TPS_METER.mark(1);
-                                    tx_outcome_status =
-                                        TRANSACTION_OUTCOME_SUCCESS;
-                                    trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
-                                }
-                            }
-                            Err(e) => {
-                                info!("tx execution error: transaction={:?}, err={:?}, in block {:?}", transaction, e, block.hash());
-                            }
+                        }
+                        Err(e) => {
+                            info!("tx execution error: transaction={:?}, err={:?}, in block {:?}", transaction, e, block.hash());
                         }
                     }
                 }
@@ -1530,15 +1514,25 @@ impl ConsensusExecutionHandler {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256,
-    ) -> Result<Executed, String> {
+    ) -> RpcResult<Executed> {
         let spec = Spec::new_spec();
         let machine = new_machine_with_builtin();
         let internal_contract_map = InternalContractMap::new();
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
-            return Err("invalid epoch id".to_string());
+            bail!("invalid epoch id");
         }
         let best_block_header = best_block_header.unwrap();
+        let block_height = best_block_header.height() + 1;
+
+        invalid_params_check(
+            "tx",
+            self.verification_config.verify_transaction_in_block(
+                tx,
+                tx.chain_id,
+                block_height,
+            ),
+        )?;
 
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
@@ -1547,7 +1541,7 @@ impl ConsensusExecutionHandler {
         if !state_availability_boundary
             .check_availability(best_block_header.height(), epoch_id)
         {
-            return Err("state is not ready".to_string());
+            bail!("state is not ready");
         }
         let (_state_index_guard, state_index) =
             self.data_man.get_state_readonly_index(epoch_id).into();
@@ -1591,7 +1585,7 @@ impl ConsensusExecutionHandler {
         );
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
-        r.map_err(|e| format!("execution error: {:?}", e))
+        Ok(r.map_err(|e| format!("execution error: {:?}", e))?)
     }
 }
 
@@ -1600,5 +1594,4 @@ pub struct ConsensusExecutionConfiguration {
     /// It should be less than `timer_chain_beta`.
     pub anticone_penalty_ratio: u64,
     pub base_reward_table_in_ucfx: Vec<u64>,
-    pub transaction_epoch_bound: u64,
 }

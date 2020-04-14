@@ -88,8 +88,8 @@ pub enum Error {
     InternalContract(&'static str),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
-    /// Likely to cause consensus issues.
-    Internal(String),
+    /// Error from storage.
+    StateDbError(String),
     /// Wasm runtime error
     Wasm(String),
     /// Out of bounds access in RETURNDATACOPY.
@@ -100,7 +100,7 @@ pub enum Error {
 
 impl From<DbError> for Error {
     fn from(err: DbError) -> Self {
-        Error::Internal(format!("Internal error: {}", err))
+        Error::StateDbError(format!("Internal error: {}", err))
     }
 }
 
@@ -137,7 +137,7 @@ impl fmt::Display for Error {
             InternalContract(name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
-            Internal(ref msg) => write!(f, "Internal error: {}", msg),
+            StateDbError(ref msg) => write!(f, "Internal error: {}", msg),
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
             }

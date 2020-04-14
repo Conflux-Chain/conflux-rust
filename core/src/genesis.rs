@@ -2,8 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::{
+    executive::InternalContractMap,
+    parameters::consensus::GENESIS_GAS_LIMIT,
+    statedb::StateDb,
+    storage::{StorageManager, StorageManagerTrait},
+};
 use cfx_types::{Address, U256};
 use keylib::KeyPair;
+use primitives::{
+    Account, Block, BlockHeaderBuilder, StorageKey, StorageLayout,
+};
 use secret_store::SecretStore;
 use std::{
     collections::HashMap,
@@ -57,6 +66,56 @@ pub fn load_secrets_file(
         secret_store.insert(keypair);
     }
     Ok(accounts)
+}
+
+/// ` test_net_version` is used to update the genesis author so that after
+/// resetting, the chain of the older version will be discarded
+pub fn genesis_block(
+    storage_manager: &StorageManager, genesis_accounts: HashMap<Address, U256>,
+    test_net_version: Address, initial_difficulty: U256,
+) -> Block
+{
+    let mut state = StateDb::new(storage_manager.get_state_for_genesis_write());
+
+    for (addr, balance) in genesis_accounts {
+        let account = Account::new_empty_with_balance(
+            &addr,
+            &balance,
+            &0.into(), /* nonce */
+        );
+        state
+            .set(StorageKey::new_account_key(&addr), &account)
+            .unwrap();
+    }
+
+    // initialize storage layout for internal contracts to make sure that
+    // _all_ Conflux contracts have a storage root in our state trie
+    for address in InternalContractMap::new().keys() {
+        state
+            .set_storage_layout(address, &StorageLayout::Regular(0))
+            .expect("set internal contract storage layout should succeed");
+    }
+
+    let state_root = state.compute_state_root().unwrap();
+    let mut genesis = Block::new(
+        BlockHeaderBuilder::new()
+            .with_deferred_state_root(
+                state_root.state_root.compute_state_root_hash(),
+            )
+            .with_gas_limit(GENESIS_GAS_LIMIT.into())
+            .with_author(test_net_version)
+            .with_difficulty(initial_difficulty)
+            .build(),
+        Vec::new(),
+    );
+    genesis.block_header.compute_hash();
+    debug!(
+        "Initialize genesis_block={:?} hash={:?}",
+        genesis,
+        genesis.hash()
+    );
+    state.commit(genesis.block_header.hash()).unwrap();
+    genesis
 }
 
 pub fn load_file(path: &String) -> Result<HashMap<Address, U256>, String> {

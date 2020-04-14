@@ -18,11 +18,9 @@ pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
-    executive,
-    parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     statedb::{Result as StateDbResult, StateDb},
     storage::{Result as StorageResult, StateIndex, StorageManagerTrait},
-    vm,
+    verification::VerificationConfig,
 };
 use account_cache::AccountCache;
 use cfx_types::{Address, H256, U256};
@@ -31,10 +29,8 @@ use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
     RwLockExtensions,
 };
-use parking_lot::{Mutex, RwLock};
-use primitives::{
-    Account, Action, SignedTransaction, TransactionWithSignature,
-};
+use parking_lot::{Mutex, MutexGuard, RwLock};
+use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
 use transaction_pool_inner::TransactionPoolInner;
 
@@ -71,18 +67,17 @@ lazy_static! {
         Lock::register("txpool_notify_modified_info");
 }
 
+// FIXME: obviously the max tx gas limit follows the max block gas limit.
+// FIXME: and we can scale it by some factor which matches the expiry condition
+// FIXME: (according to the formular).
 pub const DEFAULT_MAX_TRANSACTION_GAS_LIMIT: u64 = 100_000_000;
-pub const DEFAULT_MAX_BLOCK_GAS_LIMIT: u64 = 30_000 * 100_000;
 
 pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_tx_price: u64,
     pub max_tx_gas: u64,
-    pub max_block_gas: u64,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
-
-    pub transaction_epoch_bound: u64,
 }
 
 impl MallocSizeOf for TxPoolConfig {
@@ -95,21 +90,18 @@ impl Default for TxPoolConfig {
             capacity: 500_000,
             min_tx_price: 1,
             max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
-            max_block_gas: DEFAULT_MAX_BLOCK_GAS_LIMIT,
             tx_weight_scaling: 1,
             tx_weight_exp: 1,
-
-            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         }
     }
 }
 
 pub struct TransactionPool {
     config: TxPoolConfig,
+    verification_config: VerificationConfig,
     inner: RwLock<TransactionPoolInner>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
     pub data_man: Arc<BlockDataManager>,
-    spec: vm::Spec,
     best_executed_state: Mutex<Arc<StateDb>>,
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
@@ -139,7 +131,11 @@ impl MallocSizeOf for TransactionPool {
 pub type SharedTransactionPool = Arc<TransactionPool>;
 
 impl TransactionPool {
-    pub fn new(config: TxPoolConfig, data_man: Arc<BlockDataManager>) -> Self {
+    pub fn new(
+        config: TxPoolConfig, verification_config: VerificationConfig,
+        data_man: Arc<BlockDataManager>,
+    ) -> Self
+    {
         let genesis_hash = data_man.true_genesis.hash();
         let inner = TransactionPoolInner::new(
             config.capacity,
@@ -148,10 +144,10 @@ impl TransactionPool {
         );
         TransactionPool {
             config,
+            verification_config,
             inner: RwLock::new(inner),
             to_propagate_trans: Arc::new(RwLock::new(HashMap::new())),
             data_man: data_man.clone(),
-            spec: vm::Spec::new_spec(),
             best_executed_state: Mutex::new(Arc::new(StateDb::new(
                 data_man
                     .storage_manager
@@ -219,7 +215,11 @@ impl TransactionPool {
         // filter out invalid transactions.
         let mut index = 0;
         while let Some(tx) = transactions.get(index) {
-            match self.verify_transaction(tx) {
+            match self.verify_transaction_tx_pool(
+                tx,
+                /* basic_check = */ true,
+                &self.consensus_best_info.lock(),
+            ) {
                 Ok(_) => index += 1,
                 Err(e) => {
                     let removed = transactions.swap_remove(index);
@@ -298,60 +298,64 @@ impl TransactionPool {
 
     /// verify transactions based on the rules that have nothing to do with
     /// readiness
-    fn verify_transaction(
-        &self, transaction: &TransactionWithSignature,
-    ) -> Result<(), String> {
+    fn verify_transaction_tx_pool(
+        &self, transaction: &TransactionWithSignature, basic_check: bool,
+        current_best_info: &MutexGuard<Arc<BestInformation>>,
+    ) -> Result<(), String>
+    {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
-        // Check the epoch height is in bound. Because this is such a loose
-        // bound, we can check it here as if it will not change at all
-        // during its life time.
-        let best_height = { self.consensus_best_info.lock().best_epoch_number };
-        // If it is zero, it might be possible that it is not initialized
-        if best_height != 0 {
-            if (best_height + self.config.transaction_epoch_bound
-                < transaction.epoch_height)
-                || (transaction.epoch_height
-                    + self.config.transaction_epoch_bound
-                    < best_height)
+        let (chain_id, best_height) = {
+            (
+                current_best_info.best_chain_id(),
+                current_best_info.best_epoch_number,
+            )
+        };
+
+        if basic_check {
+            if let Err(e) = self
+                .verification_config
+                .verify_transaction_common(transaction, chain_id)
             {
-                warn!("Transaction discarded due to epoch height out of the bound: best height {} tx epoch height {}", best_height, transaction.epoch_height);
-                return Err(format!("transaction epoch height {} is out side the range of the current pivot height ({}) bound, only {} drift allowed!", transaction.epoch_height, best_height, self.config.transaction_epoch_bound));
+                warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
+                return Err(format!("{:?}", e));
             }
         }
 
-        // check chain_id
-        let best_chain_id = { self.consensus_best_info.lock().best_chain_id() };
-        if best_chain_id != transaction.chain_id {
-            warn!("Transaction discarded due to chain_id not match: best chain_id {} tx chain_id {}", best_chain_id, transaction.chain_id);
-            return Err(format!("transaction chain_id {} is not match, the current best chain_id {} expected!", transaction.chain_id, best_chain_id));
+        // If it is zero, it might be possible that it is not initialized
+        // TODO: figure out when we should active txpool.
+        // TODO: Ideally txpool should only be initialized after Normal phase.
+        if best_height == 0 {
+            warn!("verify transaction while best info isn't initialized");
+        } else {
+            if self
+                .verification_config
+                .check_transaction_epoch_bound(transaction, best_height)
+                < 0
+            {
+                // Check the epoch height is in bound. Because this is such a
+                // loose bound, we can check it here as if it
+                // will not change at all during its life time.
+                warn!(
+                    "Transaction discarded due to epoch height out of the bound: \
+                    best height {} tx epoch height {}",
+                    best_height, transaction.epoch_height);
+                return Err(format!(
+                    "transaction epoch height {} is out side the range of the current \
+                    pivot height ({}) bound, only {} drift allowed!",
+                    transaction.epoch_height, best_height,
+                    self.verification_config.transaction_epoch_bound));
+            }
         }
 
         // check transaction gas limit
-        if transaction.gas > DEFAULT_MAX_TRANSACTION_GAS_LIMIT.into() {
+        if transaction.gas > self.config.max_tx_gas.into() {
             warn!(
                 "Transaction discarded due to above gas limit: {} > {}",
-                transaction.gas, DEFAULT_MAX_TRANSACTION_GAS_LIMIT
+                transaction.gas, self.config.max_tx_gas
             );
             return Err(format!(
                 "transaction gas {} exceeds the maximum value {}",
-                transaction.gas, DEFAULT_MAX_TRANSACTION_GAS_LIMIT
-            ));
-        }
-
-        // check transaction intrinsic gas
-        let tx_intrinsic_gas = executive::Executive::gas_required_for(
-            transaction.action == Action::Create,
-            &transaction.data,
-            &self.spec,
-        );
-        if transaction.gas < (tx_intrinsic_gas as usize).into() {
-            debug!(
-                "Transaction discarded due to gas less than required: {} < {}",
-                transaction.gas, tx_intrinsic_gas
-            );
-            return Err(format!(
-                "transaction gas {} less than intrinsic gas {}",
-                transaction.gas, tx_intrinsic_gas
+                transaction.gas, self.config.max_tx_gas
             ));
         }
 
@@ -362,11 +366,6 @@ impl TransactionPool {
                 "transaction gas price {} less than the minimum value {}",
                 transaction.gas_price, self.config.min_tx_price
             ));
-        }
-
-        if let Err(e) = transaction.verify_basic() {
-            warn!("Transaction {:?} discarded due to not pass basic verification.", transaction.hash());
-            return Err(format!("{:?}", e));
         }
 
         Ok(())
@@ -439,18 +438,20 @@ impl TransactionPool {
 
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        best_epoch_height: u64,
+        mut best_epoch_height: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
-        let height_lower_bound =
-            if best_epoch_height > self.config.transaction_epoch_bound {
-                best_epoch_height - self.config.transaction_epoch_bound
-            } else {
-                0
-            };
-        let height_upper_bound =
-            best_epoch_height + self.config.transaction_epoch_bound;
+        best_epoch_height += 1;
+        let transaction_epoch_bound =
+            self.verification_config.transaction_epoch_bound;
+        let height_lower_bound = if best_epoch_height > transaction_epoch_bound
+        {
+            best_epoch_height - transaction_epoch_bound
+        } else {
+            0
+        };
+        let height_upper_bound = best_epoch_height + transaction_epoch_bound;
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
@@ -539,7 +540,18 @@ impl TransactionPool {
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce, &tx.sender,
-                &account_cache.get_account_mut(&tx.sender)?.map_or(0.into(), |x| x.nonce), tx.hash);
+                &account_cache.get_account_mut(&tx.sender)?
+                    .map_or(0.into(), |x| x.nonce), tx.hash);
+            if let Err(e) = self.verify_transaction_tx_pool(
+                &tx,
+                /* basic_check = */ false,
+                &consensus_best_info,
+            ) {
+                warn!(
+                    "Recycled transaction {:?} discarded due to not passing verification {}.",
+                    tx.hash(), e
+                );
+            }
             self.add_transaction_with_readiness_check(
                 inner,
                 &mut account_cache,
@@ -554,15 +566,26 @@ impl TransactionPool {
     }
 
     pub fn get_best_info_with_packed_transactions(
-        &self, num_txs: usize, block_size_limit: usize, block_gas_limit: U256,
+        &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (Arc<BestInformation>, Vec<Arc<SignedTransaction>>)
+    ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>)
     {
         let consensus_best_info = self.consensus_best_info.lock();
 
+        let block_gas_limit = self
+            .data_man
+            .block_by_hash(
+                &consensus_best_info.best_block_hash,
+                /* update_cache = */ true,
+            )
+            // The parent block must exists.
+            .expect(&concat!(file!(), ":", line!(), ":", column!()))
+            .block_header
+            .gas_limit()
+            .clone();
         let transactions_from_pool = self.pack_transactions(
             num_txs,
-            block_gas_limit,
+            block_gas_limit.clone(),
             block_size_limit,
             consensus_best_info.best_epoch_number,
         );
@@ -573,7 +596,7 @@ impl TransactionPool {
         ]
         .concat();
 
-        (consensus_best_info.clone(), transactions)
+        (consensus_best_info.clone(), block_gas_limit, transactions)
     }
 
     pub fn set_best_executed_epoch(

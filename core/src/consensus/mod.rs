@@ -24,11 +24,13 @@ use crate::{
     executive::Executed,
     parameters::{consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
+    rpc_errors::Result as RpcResult,
     state::State,
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
     transaction_pool::SharedTransactionPool,
+    verification::VerificationConfig,
     vm_factory::VmFactory,
     Notifications,
 };
@@ -183,6 +185,7 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
         era_stable_block_hash: &H256, notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
+        verification_config: VerificationConfig,
     ) -> Self
     {
         let inner =
@@ -199,6 +202,7 @@ impl ConsensusGraph {
             vm,
             inner.clone(),
             execution_conf,
+            verification_config,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
@@ -240,6 +244,7 @@ impl ConsensusGraph {
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
+        verification_conf: VerificationConfig,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -255,6 +260,7 @@ impl ConsensusGraph {
             &stable_hash,
             notifications,
             execution_conf,
+            verification_conf,
         )
     }
 
@@ -870,7 +876,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<Executed, String> {
+    ) -> RpcResult<Executed> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
@@ -890,6 +896,8 @@ impl Drop for ConsensusGraph {
 
 impl ConsensusGraphTrait for ConsensusGraph {
     fn as_any(&self) -> &dyn Any { self }
+
+    fn consensus_config(&self) -> &ConsensusConfig { &self.config }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.

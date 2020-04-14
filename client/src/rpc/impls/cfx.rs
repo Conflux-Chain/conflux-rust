@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    helpers::errors::{call_execution_error, invalid_params},
+    error_codes::{call_execution_error, invalid_params},
     impls::common::RpcImpl as CommonImpl,
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{

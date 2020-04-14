@@ -20,7 +20,7 @@ use cfxcore::{
     },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
-    transaction_pool::TxPoolConfig,
+    transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
 };
 use metrics::MetricsConfiguration;
 use std::convert::TryInto;
@@ -110,6 +110,7 @@ build_config! {
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        // FIXME: this is part of spec.
         (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
 
         // Mining section.
@@ -393,6 +394,7 @@ impl Configuration {
             self.is_test_mode(),
             self.raw_conf.referee_bound,
             self.raw_conf.max_block_size_in_bytes,
+            self.raw_conf.transaction_epoch_bound,
         )
     }
 
@@ -583,15 +585,13 @@ impl Configuration {
     }
 
     pub fn txpool_config(&self) -> TxPoolConfig {
-        let mut config = TxPoolConfig::default();
-
-        config.capacity = self.raw_conf.tx_pool_size;
-        config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
-        config.tx_weight_scaling = self.raw_conf.tx_weight_scaling;
-        config.tx_weight_exp = self.raw_conf.tx_weight_exp;
-        config.transaction_epoch_bound = self.raw_conf.transaction_epoch_bound;
-
-        config
+        TxPoolConfig {
+            capacity: self.raw_conf.tx_pool_size,
+            min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
+            max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
+            tx_weight_scaling: self.raw_conf.tx_weight_scaling,
+            tx_weight_exp: self.raw_conf.tx_weight_exp,
+        }
     }
 
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {
@@ -604,7 +604,6 @@ impl Configuration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
             base_reward_table_in_ucfx: build_base_reward_table(),
-            transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
         }
     }
 

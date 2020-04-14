@@ -4,7 +4,7 @@
 
 use super::common::RpcImpl as CommonImpl;
 use crate::rpc::{
-    helpers::errors,
+    error_codes,
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
@@ -212,7 +212,7 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         // TODO(thegaram)
-        Err(errors::unimplemented(None))
+        Err(error_codes::unimplemented(None))
     }
 
     fn code(
@@ -246,7 +246,7 @@ impl RpcImpl {
         &self, request: CallRequest, epoch_number: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         // TODO(thegaram)
-        Err(errors::unimplemented(None))
+        Err(error_codes::unimplemented(None))
     }
 
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
@@ -349,7 +349,7 @@ impl RpcImpl {
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<RpcStorageRoot>> {
         // TODO(thegaram)
-        Err(errors::unimplemented(None))
+        Err(error_codes::unimplemented(None))
     }
 
     fn storage_at(

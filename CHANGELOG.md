@@ -6,6 +6,10 @@
 
 - Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
 
+- Add missing transaction verifications for invalid block.
+
+- Fill in correct block gas limit value for mining.
+
 ## Improvements
 
 - Improve the transaction address check at RPC
