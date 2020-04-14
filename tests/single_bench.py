@@ -5,7 +5,7 @@ import conflux.config
 '''
 This is the state root for pre-generated genesis accounts in `genesis_secrets.txt`.
 '''
-conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex("0xf734ca849ef7307458f4a69d2d33e1f0f9b214ae66ca3f754e9376aedaf9a4a0")
+conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex("0x8c1cb35e2433b6bef2ca32b6b8ef6e293170c9ba22ef6dbf05f68a4bd54cda86")
 from conflux.utils import convert_to_nodeid, priv_to_addr, parse_as_int, encode_hex
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable
