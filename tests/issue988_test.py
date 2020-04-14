@@ -80,7 +80,8 @@ class Issue988Test(ConfluxTestFramework):
 
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
-                               check_status=False):
+                               check_status=False,
+                               storage_limit=0):
         if contract_addr:
             func = getattr(contract.functions, name)
         else:
@@ -98,6 +99,7 @@ class Issue988Test(ConfluxTestFramework):
         tx_data['data'] = decode_hex(tx_data['data'])
         tx_data['pri_key'] = sender_key
         tx_data['gas_price'] = tx_data['gasPrice']
+        tx_data['storage_limit'] = storage_limit
         if value:
             tx_data['value'] = value
         tx_data.pop('gasPrice', None)
@@ -153,12 +155,16 @@ class Issue988Test(ConfluxTestFramework):
         assert_equal(node.cfx_getBalance(addr), hex(20000000000000000000))
 
         # deploy test contract
+        c0 = client.get_collateral_for_storage(addr)
         tx = self.call_contract_function(
             contract=test_contract,
             name="constructor",
             args=[],
-            sender_key=priv_key)
+            sender_key=priv_key,
+            storage_limit=10604)
         contract_addr = self.wait_for_tx([tx], True)[0]['contractCreated']
+        c1 = client.get_collateral_for_storage(addr)
+        assert_equal(c1 - c0, 10604 * 10 ** 18 // 1024)
         self.log.info("contract_addr={}".format(contract_addr))
         assert_equal(node.cfx_getBalance(contract_addr), hex(0))
 

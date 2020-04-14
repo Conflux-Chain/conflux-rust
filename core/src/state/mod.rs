@@ -267,7 +267,7 @@ impl State {
     }
 
     pub fn check_collateral_for_storage_finally(
-        &mut self, sender: &Address, storage_limit: &U256,
+        &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate,
     ) -> DbResult<CollateralCheckResult>
     {
@@ -287,7 +287,8 @@ impl State {
             }
         }
 
-        let collateral_for_storage = self.collateral_for_storage(sender)?;
+        let collateral_for_storage =
+            self.collateral_for_storage(storage_owner)?;
         if collateral_for_storage > *storage_limit {
             Ok(CollateralCheckResult::ExceedStorageLimit {
                 limit: *storage_limit,
@@ -842,8 +843,8 @@ impl State {
         Ok(())
     }
 
-    /// Assume that only contract with zero `balance` or zero `staking_balance`
-    /// will be killed.
+    /// Assume that only contract with zero `collateral_for_storage` will be
+    /// killed.
     fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
     ) -> DbResult<()> {

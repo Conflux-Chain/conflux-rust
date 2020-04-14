@@ -75,7 +75,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
                                check_status=False,
-                               storage_limit=None,
+                               storage_limit=0,
                                gas=None):
         if contract_addr:
             func = getattr(contract.functions, name)
@@ -99,8 +99,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         tx_data.pop('gasPrice', None)
         tx_data.pop('chainId', None)
         tx_data.pop('to', None)
-        if storage_limit is not None:
-            tx_data['storage_limit'] = storage_limit
+        tx_data['storage_limit'] = storage_limit
         if gas is not None:
             tx_data['gas'] = gas
         transaction = create_transaction(**tx_data)
@@ -110,6 +109,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
     def run_test(self):
         sponsor_whitelist_contract_addr = Web3.toChecksumAddress("8ad036480160591706c831f0da19d1a424e39469")
         bytes_per_key = 64
+        collateral_per_byte = 10 ** 18 // 1024
         collateral_per_storage_key = 10 ** 18 // 16
         upper_bound = 5 * 10 ** 7
 
@@ -183,10 +183,12 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract=test_contract,
             name="constructor",
             args=[],
-            sender_key=self.genesis_priv_key)
+            sender_key=self.genesis_priv_key,
+            storage_limit=1272)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
         assert_equal(client.get_balance(contract_addr), 0)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), 1272 * collateral_per_byte)
 
         # sponsor the contract failed due to sponsor_balance < 1000 * upper_bound
         b0 = client.get_balance(genesis_addr)
@@ -228,7 +230,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=genesis_key,
             contract_addr=contract_addr,
             wait=True,
-            check_status=True)
+            check_status=True,
+            storage_limit=64)
         assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 
@@ -285,7 +288,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             sender_key=genesis_key,
             contract_addr=contract_addr,
             wait=True,
-            check_status=True)
+            check_status=True,
+            storage_limit=64)
         assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 

@@ -74,7 +74,8 @@ class AdminControlTest(ConfluxTestFramework):
 
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
-                               check_status=False):
+                               check_status=False,
+                               storage_limit=0):
         if contract_addr:
             func = getattr(contract.functions, name)
         else:
@@ -97,6 +98,7 @@ class AdminControlTest(ConfluxTestFramework):
         tx_data.pop('gasPrice', None)
         tx_data.pop('chainId', None)
         tx_data.pop('to', None)
+        tx_data['storage_limit'] = storage_limit
         transaction = create_transaction(**tx_data)
         self.send_transaction(transaction, wait, check_status)
         return transaction
@@ -147,9 +149,11 @@ class AdminControlTest(ConfluxTestFramework):
             contract=pay_contract,
             name="constructor",
             args=[],
-            sender_key=priv_key)
+            sender_key=priv_key,
+            storage_limit=517)
         contract_addr = self.wait_for_tx([tx], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
+        assert_equal(client.get_collateral_for_storage(addr), 517 * 976562500000000)
         assert_equal(client.get_balance(contract_addr), 0)
 
         # deposit 10**18
@@ -190,6 +194,7 @@ class AdminControlTest(ConfluxTestFramework):
         assert_equal(client.get_admin(contract_addr), addr2)
 
         # destroy
+        b0 = client.get_balance(addr)
         tx = self.call_contract_function(
             contract=admin_control_contract,
             name="destroy",
@@ -200,6 +205,8 @@ class AdminControlTest(ConfluxTestFramework):
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 0)
         assert_equal(client.get_balance(addr2), 5999999999912500000 + gas // 4)
+        assert_equal(client.get_collateral_for_storage(addr), 0)
+        assert_equal(client.get_balance(addr), b0 + 517 * 976562500000000)
 
         self.log.info("Pass")
 

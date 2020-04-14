@@ -113,7 +113,7 @@ class StorageRootTest(ConfluxTestFramework):
         self.log.info("Pass")
 
     def deploy_contract(self, sender, priv_key, data_hex):
-        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key)
+        tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=20000)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc[FULLNODE0].get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]
