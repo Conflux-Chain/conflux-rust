@@ -34,9 +34,9 @@ pub struct OriginInfo {
     address: Address,
     /// This is the address of original sender of the transaction.
     original_sender: Address,
-    /// This is the address of original receiver of the transaction.
-    /// If it is a contract call, it is the address of the contract.
-    original_receiver: Address,
+    /// This is the address of account who will pay collateral for storage in
+    /// the whole execution.
+    storage_owner: Address,
     /// The upper bound of `collateral_for_storage` for `original_sender`
     storage_limit: U256,
     gas_price: U256,
@@ -49,7 +49,7 @@ impl OriginInfo {
         OriginInfo {
             address: params.address,
             original_sender: params.original_sender,
-            original_receiver: params.original_receiver,
+            storage_owner: params.storage_owner,
             storage_limit: params.storage_limit,
             gas_price: params.gas_price,
             value: match params.value {
@@ -115,30 +115,13 @@ impl<'a> ContextTrait for Context<'a> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
-            // If the `original_sender` is not in the whitelist or the
-            // sponsor_balance is not enough for one single key, the owner
-            // should be the `original_sender`.
-            let owner = if self
-                .state
-                .check_commission_privilege(
-                    &self.origin.original_receiver,
-                    &self.origin.original_sender,
-                )
-                .expect("no db error")
-                && self
-                    .state
-                    .sponsor_balance_for_collateral(
-                        &self.origin.original_receiver,
-                    )
-                    .expect("no db error")
-                    >= *COLLATERAL_PER_STORAGE_KEY
-            {
-                self.origin.original_receiver
-            } else {
-                self.origin.original_sender
-            };
             self.state
-                .set_storage(&self.origin.address, key, value, owner)
+                .set_storage(
+                    &self.origin.address,
+                    key,
+                    value,
+                    self.origin.storage_owner,
+                )
                 .map_err(Into::into)
         }
     }
@@ -197,7 +180,7 @@ impl<'a> ContextTrait for Context<'a> {
             address: address.clone(),
             sender: self.origin.address.clone(),
             original_sender: self.origin.original_sender,
-            original_receiver: self.origin.original_receiver,
+            storage_owner: self.origin.storage_owner,
             storage_limit: self.origin.storage_limit,
             gas: *gas,
             gas_price: self.origin.gas_price,
@@ -272,7 +255,7 @@ impl<'a> ContextTrait for Context<'a> {
             value: ActionValue::Apparent(self.origin.value),
             code_address: *code_address,
             original_sender: self.origin.original_sender,
-            original_receiver: self.origin.original_receiver,
+            storage_owner: self.origin.storage_owner,
             storage_limit: self.origin.storage_limit,
             gas: *gas,
             gas_price: self.origin.gas_price,
@@ -333,11 +316,21 @@ impl<'a> ContextTrait for Context<'a> {
                 }
                 let collateral_for_code =
                     U256::from(data.len()) * *COLLATERAL_PER_BYTE;
-                let balance =
-                    self.state.balance(&self.origin.original_sender)?;
                 let collateral_for_storage = self
                     .state
-                    .collateral_for_storage(&self.origin.original_sender)?;
+                    .collateral_for_storage(&self.origin.storage_owner)?;
+                let balance =
+                    if self.state.is_contract(&self.origin.storage_owner) {
+                        self.state.sponsor_balance_for_collateral(
+                            &self.origin.storage_owner,
+                        )?
+                    } else {
+                        self.state.balance(&self.origin.storage_owner)?
+                    };
+                println!(
+                    "ret() balance={:?} collateral_for_code={:?}",
+                    balance, collateral_for_code
+                );
                 if balance < collateral_for_code {
                     return Err(vm::Error::NotEnoughBalanceForStorage {
                         required: collateral_for_code,
@@ -352,17 +345,17 @@ impl<'a> ContextTrait for Context<'a> {
                 *self
                     .substate
                     .storage_collateralized
-                    .entry(self.origin.original_sender)
+                    .entry(self.origin.storage_owner)
                     .or_insert(0) += data.len() as u64;
                 self.state.add_collateral_for_storage(
-                    &self.origin.original_sender,
+                    &self.origin.storage_owner,
                     &collateral_for_code,
                 )?;
 
                 self.state.init_code(
                     &self.origin.address,
                     data.to_vec(),
-                    self.origin.original_sender,
+                    self.origin.storage_owner,
                 )?;
 
                 self.state.set_storage_layout(
@@ -467,7 +460,7 @@ mod tests {
         OriginInfo {
             address: Address::zero(),
             original_sender: Address::zero(),
-            original_receiver: Address::zero(),
+            storage_owner: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
             storage_limit: U256::MAX,

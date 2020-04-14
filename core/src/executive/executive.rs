@@ -1368,35 +1368,40 @@ impl<'a> Executive<'a> {
             )?;
         }
 
-        // Find the storage upper bound in this execution for the sender.
-        let storage_limit = {
-            let collateral_for_storage =
-                self.state.collateral_for_storage(&sender)?;
-            // The balance which the sponsor will sponsor sender.
-            let sponsored_balance = if has_privilege {
-                self.state.sponsor_balance_for_collateral(&code_address)?
-            } else {
-                U256::zero()
-            };
-            let storage_limit_in_drip =
-                if tx.storage_limit >= U256::MAX / *COLLATERAL_PER_BYTE {
-                    U256::MAX
+        // Find the  upper bound of `collateral_for_storage` and `storage_owner`
+        // in this execution.
+        let (storage_limit, storage_owner) = {
+            let tx_storage_limit_in_drip =
+                if tx.storage_limit >= U256::from(std::u64::MAX) {
+                    U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
                 } else {
                     tx.storage_limit * *COLLATERAL_PER_BYTE
                 };
-            if storage_limit_in_drip >= sponsored_balance {
-                if storage_limit_in_drip - sponsored_balance
-                    <= U256::MAX - collateral_for_storage
-                {
-                    // The incremental storage cost will be payed by the sender.
-                    storage_limit_in_drip - sponsored_balance
-                        + collateral_for_storage
-                } else {
-                    U256::MAX
-                }
+            if has_privilege
+                && tx_storage_limit_in_drip
+                    <= self
+                        .state
+                        .sponsor_balance_for_collateral(&code_address)?
+            {
+                // sponsor will pay for collateral for storage
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&code_address)?;
+                (
+                    tx_storage_limit_in_drip + collateral_for_storage,
+                    code_address,
+                )
             } else {
-                // All incremental storage cost will be payed by the sponsor.
-                collateral_for_storage
+                // sender will pay for collateral for storage
+                let balance = self.state.balance(&sender)?;
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&sender)?;
+                if tx_storage_limit_in_drip > balance {
+                    return Err(ExecutionError::NotEnoughBalanceForStorage {
+                        required: tx_storage_limit_in_drip,
+                        got: balance,
+                    });
+                }
+                (tx_storage_limit_in_drip + collateral_for_storage, sender)
             }
         };
 
@@ -1419,7 +1424,7 @@ impl<'a> Executive<'a> {
                     address: new_address,
                     sender,
                     original_sender: sender,
-                    original_receiver: new_address,
+                    storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
@@ -1442,7 +1447,7 @@ impl<'a> Executive<'a> {
                     address: *address,
                     sender,
                     original_sender: sender,
-                    original_receiver: *address,
+                    storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
@@ -1508,11 +1513,10 @@ impl<'a> Executive<'a> {
         if let Some(r) = refund_receiver {
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
-            let spec = self.spec;
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
-                substate.to_cleanup_mode(&spec),
+                substate.to_cleanup_mode(self.spec),
             )?;
         };
 

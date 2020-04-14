@@ -21,21 +21,21 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
                                                    contract_name="FixedSupplyToken")
         self.log.info("Initializing contract")
 
-        transaction = self.call_contract_function(self.contract, "constructor", [], self.default_account_key)
+        transaction = self.call_contract_function(self.contract, "constructor", [], self.default_account_key, storage_limit=20000)
         self.contract_address = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.accounts = [a[0] for a in self.new_address_and_transfer(2)]
 
     def generate_transactions(self, _):
         self.call_contract_function(self.contract, "transfer",
                                     [Web3.toChecksumAddress(priv_to_addr(self.accounts[0])), 1000],
-                                    self.default_account_key, self.contract_address, True, True)
+                                    self.default_account_key, self.contract_address, True, True, storage_limit=64)
         self.call_contract_function(self.contract, "approve",
                                     [Web3.toChecksumAddress(priv_to_addr(self.accounts[1])), 500],
-                                    self.accounts[0], self.contract_address, True, True)
+                                    self.accounts[0], self.contract_address, True, True, storage_limit=128)
         self.call_contract_function(self.contract, "transferFrom",
                                     [Web3.toChecksumAddress(priv_to_addr(self.accounts[0])),
                                      Web3.toChecksumAddress(priv_to_addr(self.default_account_key)), 300],
-                                    self.accounts[1], self.contract_address, True, True)
+                                    self.accounts[1], self.contract_address, True, True, storage_limit=64)
 
 
 if __name__ == "__main__":

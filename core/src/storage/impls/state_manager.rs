@@ -7,7 +7,7 @@ pub type SnapshotDbManager = SnapshotDbManagerSqlite;
 pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
 
 pub struct StateTrees {
-    pub snapshot_db: SnapshotDb,
+    pub snapshot_db: Arc<SnapshotDb>,
     pub snapshot_epoch_id: EpochId,
     pub snapshot_merkle_root: MerkleHash,
     /// None means that the intermediate_trie is empty, or in a special
@@ -117,7 +117,7 @@ impl StateManager {
     /// it's calculated for the state_trees.
     #[inline]
     pub fn get_state_trees_internal(
-        snapshot_db: SnapshotDb, snapshot_epoch_id: &EpochId,
+        snapshot_db: Arc<SnapshotDb>, snapshot_epoch_id: &EpochId,
         snapshot_merkle_root: MerkleHash,
         maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         maybe_intermediate_trie_key_padding: Option<&DeltaMptKeyPadding>,
@@ -177,7 +177,7 @@ impl StateManager {
     }
 
     pub fn get_state_trees(
-        &self, state_index: &StateIndex,
+        &self, state_index: &StateIndex, try_open: bool,
     ) -> Result<Option<StateTrees>> {
         let maybe_intermediate_mpt;
         let maybe_intermediate_mpt_key_padding;
@@ -186,14 +186,16 @@ impl StateManager {
 
         match self
             .storage_manager
-            .wait_for_snapshot(&state_index.snapshot_epoch_id)?
+            .wait_for_snapshot(&state_index.snapshot_epoch_id, try_open)?
         {
             None => {
                 // This is the special scenario when the snapshot isn't
                 // available but the snapshot at the intermediate epoch exists.
-                if let Some(guarded_snapshot) = self
-                    .storage_manager
-                    .wait_for_snapshot(&state_index.intermediate_epoch_id)?
+                if let Some(guarded_snapshot) =
+                    self.storage_manager.wait_for_snapshot(
+                        &state_index.intermediate_epoch_id,
+                        try_open,
+                    )?
                 {
                     snapshot = guarded_snapshot;
                     maybe_intermediate_mpt = None;
@@ -273,7 +275,7 @@ impl StateManager {
     }
 
     pub fn get_state_trees_for_next_epoch(
-        &self, parent_state_index: &StateIndex,
+        &self, parent_state_index: &StateIndex, try_open: bool,
     ) -> Result<Option<StateTrees>> {
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
@@ -301,7 +303,10 @@ impl StateManager {
 
             snapshot_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_epoch_id = parent_state_index.epoch_id;
-            match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
+            match self
+                .storage_manager
+                .wait_for_snapshot(snapshot_epoch_id, try_open)?
+            {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
@@ -315,10 +320,10 @@ impl StateManager {
                     // See validate_blame_states().
                     snapshot_merkle_root =
                         *parent_state_index.snapshot_epoch_id;
-                    match self
-                        .storage_manager
-                        .wait_for_snapshot(parent_state_index.epoch_id)?
-                    {
+                    match self.storage_manager.wait_for_snapshot(
+                        parent_state_index.epoch_id,
+                        try_open,
+                    )? {
                         None => {
                             warn!(
                                 "get_state_trees_for_next_epoch, shift snapshot, special case, \
@@ -406,14 +411,17 @@ impl StateManager {
             intermediate_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_trie_root_merkle =
                 *parent_state_index.intermediate_trie_root_merkle;
-            match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
+            match self
+                .storage_manager
+                .wait_for_snapshot(snapshot_epoch_id, try_open)?
+            {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
                     // exists.
                     if let Some(guarded_snapshot) = self
                         .storage_manager
-                        .wait_for_snapshot(&intermediate_epoch_id)?
+                        .wait_for_snapshot(&intermediate_epoch_id, try_open)?
                     {
                         snapshot = guarded_snapshot;
                         maybe_intermediate_mpt = None;
@@ -524,9 +532,9 @@ impl StateManager {
 
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
-        &self, state_index: StateIndex,
+        &self, state_index: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
-        let maybe_state_trees = self.get_state_trees(&state_index)?;
+        let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => Ok(Some(State::new(
@@ -544,7 +552,7 @@ impl StateManagerTrait for StateManager {
             StateTrees {
                 snapshot_db: self
                     .storage_manager
-                    .wait_for_snapshot(&NULL_EPOCH)
+                    .wait_for_snapshot(&NULL_EPOCH, /* try_open = */ false)
                     .unwrap()
                     .unwrap()
                     .into()
@@ -586,8 +594,10 @@ impl StateManagerTrait for StateManager {
     fn get_state_for_next_epoch(
         &self, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
-        let maybe_state_trees =
-            self.get_state_trees_for_next_epoch(&parent_epoch_id)?;
+        let maybe_state_trees = self.get_state_trees_for_next_epoch(
+            &parent_epoch_id,
+            /* try_open = */ false,
+        )?;
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => Ok(Some(State::new(
