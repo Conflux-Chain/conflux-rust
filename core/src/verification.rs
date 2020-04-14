@@ -216,10 +216,26 @@ impl VerificationConfig {
         Ok(())
     }
 
-    // FIXME: use result.
+    pub fn verify_transaction_epoch_height(
+        &self, tx: &TransactionWithSignature, block_height: u64,
+    ) -> Result<(), TransactionError> {
+        let transaction_epoch_bound = self.transaction_epoch_bound;
+        if tx.epoch_height + transaction_epoch_bound < block_height
+            || tx.epoch_height > block_height + transaction_epoch_bound
+        {
+            bail!(TransactionError::EpochHeightOutOfBound {
+                set: tx.epoch_height,
+                block_height,
+                transaction_epoch_bound,
+            });
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn verify_transaction(
         &self, tx: &TransactionWithSignature, chain_id: u64, block_height: u64,
-    ) -> Result<(), Error> {
+    ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -236,16 +252,7 @@ impl VerificationConfig {
             });
         }
 
-        let transaction_epoch_bound = self.transaction_epoch_bound;
-        if tx.epoch_height + transaction_epoch_bound < block_height
-            || tx.epoch_height > block_height + transaction_epoch_bound
-        {
-            bail!(TransactionError::EpochHeightOutOfBound {
-                set: tx.epoch_height,
-                block_height,
-                transaction_epoch_bound,
-            });
-        }
+        self.verify_transaction_epoch_height(tx, block_height)?;
 
         // check transaction intrinsic gas
         let tx_intrinsic_gas = Executive::gas_required_for(

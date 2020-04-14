@@ -604,7 +604,6 @@ impl Configuration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
             base_reward_table_in_ucfx: build_base_reward_table(),
-            transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
         }
     }
 

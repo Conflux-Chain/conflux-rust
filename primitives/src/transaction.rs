@@ -93,13 +93,11 @@ pub enum TransactionError {
     InvalidRlp(String),
 }
 
-/*
 impl From<keylib::Error> for TransactionError {
     fn from(err: keylib::Error) -> Self {
         TransactionError::InvalidSignature(format!("{}", err))
     }
 }
-*/
 
 impl From<rlp::DecoderError> for TransactionError {
     fn from(err: rlp::DecoderError) -> Self {
