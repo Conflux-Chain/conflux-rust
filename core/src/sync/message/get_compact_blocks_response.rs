@@ -44,6 +44,11 @@ impl Handleable for GetCompactBlocksResponse {
             self.blocks.len()
         );
 
+        if ctx.manager.is_block_queue_full() {
+            warn!("recover_public_queue is full, discard GetCompactBlocksResponse");
+            return Ok(());
+        }
+
         let req = ctx.match_request(self.request_id)?;
         let delay = req.delay;
         let mut to_relay_blocks = Vec::new();

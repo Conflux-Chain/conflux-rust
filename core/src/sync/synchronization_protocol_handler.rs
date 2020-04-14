@@ -100,6 +100,8 @@ impl<T> AsyncTaskQueue<T> {
     }
 
     fn pop(&self) -> Option<T> { self.tasks.lock().pop_front() }
+
+    fn len(&self) -> usize { self.tasks.lock().len() }
 }
 
 pub struct RecoverPublicTask {
@@ -282,6 +284,7 @@ pub struct ProtocolConfiguration {
     pub timeout_observing_period_s: u64,
     pub max_allowed_timeout_in_observing_period: u64,
     pub demote_peer_for_timeout: bool,
+    pub max_unprocessed_block_count: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -1447,6 +1450,11 @@ impl SynchronizationProtocolHandler {
         );
         self.graph.remove_expire_blocks(timeout);
         self.relay_blocks(io, need_to_relay)
+    }
+
+    pub fn is_block_queue_full(&self) -> bool {
+        self.recover_public_queue.len()
+            >= self.protocol_config.max_unprocessed_block_count
     }
 }
 

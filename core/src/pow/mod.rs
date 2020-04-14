@@ -172,7 +172,12 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
 pub fn compute(nonce: u64, block_hash: &H256) -> H256 {
     let mut rlp = RlpStream::new_list(2);
     rlp.append(block_hash).append(&nonce);
-    keccak(rlp.out())
+    let buf = keccak(rlp.out());
+    let mut tmp = [0u8; 32];
+    for i in 0..32 {
+        tmp[i] = buf[i] ^ block_hash[i];
+    }
+    keccak(tmp)
 }
 
 pub fn validate(
