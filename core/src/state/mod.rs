@@ -190,7 +190,6 @@ impl State {
             if self.is_contract(addr) {
                 let sponsor_balance =
                     self.sponsor_balance_for_collateral(addr)?;
-                println!("Contract Address {} charge fee, entry {}, need {}, have {}", addr,inc,delta,sponsor_balance);
                 // sponsor_balance is not enough to cover storage incremental.
                 if delta > sponsor_balance {
                     return Ok(CollateralCheckResult::NotEnoughBalance {
@@ -200,10 +199,6 @@ impl State {
                 }
             } else {
                 let balance = self.balance(addr).expect("no db error");
-                println!(
-                    "Normal Address {} charge fee, entry {}, need {}, have {}",
-                    addr, inc, delta, balance
-                );
                 // balance is not enough to cover storage incremental.
                 if delta > balance {
                     return Ok(CollateralCheckResult::NotEnoughBalance {
@@ -255,13 +250,11 @@ impl State {
             self.require(&addr, false)?
                 .add_unrefunded_storage_entries(*sub);
             *substate.storage_released.entry(*addr).or_insert(0) += sub * 64;
-            println!("Address {} release {}", addr, sub)
         }
         for (addr, inc) in &collateral_for_storage_inc {
             self.require(&addr, false)?.add_unpaid_storage_entries(*inc);
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
                 inc * 64;
-            println!("Address {} occupy {}", addr, inc)
         }
         Ok(CollateralCheckResult::Valid)
     }
