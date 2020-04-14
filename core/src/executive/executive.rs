@@ -331,7 +331,7 @@ impl<'a> CallCreateExecutive<'a> {
     fn enact_result(
         result: &vm::Result<FinalizationResult>, state: &mut State,
         substate: &mut Substate, mut unconfirmed_substate: Substate,
-        sender: &Address, storage_limit: &U256,
+        sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
     ) -> CollateralCheckResult
     {
         match *result {
@@ -355,11 +355,15 @@ impl<'a> CallCreateExecutive<'a> {
                 CollateralCheckResult::Valid
             }
             Ok(_) | Err(vm::Error::Internal(_)) => {
-                let check_result = state.check_collateral_for_storage(
-                    sender,
-                    storage_limit,
-                    &mut unconfirmed_substate,
-                );
+                let check_result = if is_bottom_ex {
+                    state.check_collateral_for_storage_finally(
+                        sender,
+                        storage_limit,
+                        &mut unconfirmed_substate,
+                    )
+                } else {
+                    state.checkout_ownership_changed(&mut unconfirmed_substate)
+                };
                 match check_result {
                     Ok(CollateralCheckResult::ExceedStorageLimit {
                         ..
@@ -504,7 +508,7 @@ impl<'a> CallCreateExecutive<'a> {
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
-                let inner = || {
+                let inner = |depth| {
                     if params.call_type != CallType::Call {
                         return Err(vm::Error::InternalContract(
                             "Incorrect call type.",
@@ -539,11 +543,18 @@ impl<'a> CallCreateExecutive<'a> {
                         state.revert_to_checkpoint();
                         Err(e.into())
                     } else {
-                        match state.check_collateral_for_storage(
-                            &params.original_sender,
-                            &params.storage_limit,
-                            &mut unconfirmed_substate,
-                        ) {
+                        let cres = if depth == 0 {
+                            state.check_collateral_for_storage_finally(
+                                &params.original_sender,
+                                &params.storage_limit,
+                                &mut unconfirmed_substate,
+                            )
+                        } else {
+                            state.checkout_ownership_changed(
+                                &mut unconfirmed_substate,
+                            )
+                        };
+                        match cres {
                             Ok(CollateralCheckResult::ExceedStorageLimit {
                                 ..
                             }) => {
@@ -583,7 +594,7 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Ok(inner())
+                Ok(inner(self.depth))
             }
 
             CallCreateExecutiveKind::ExecCall(
@@ -670,6 +681,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -769,6 +781,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -861,6 +874,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -958,6 +972,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {

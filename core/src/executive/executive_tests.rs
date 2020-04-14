@@ -1393,7 +1393,7 @@ fn test_storage_commission_privilege() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate

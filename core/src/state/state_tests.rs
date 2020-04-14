@@ -6,6 +6,7 @@ use super::{CleanupMode, CollateralCheckResult, State, Substate};
 
 use crate::{
     parameters::staking::*,
+    state::RequireCache,
     statedb::StateDb,
     storage::{
         tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
@@ -239,7 +240,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -294,7 +295,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -334,7 +335,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -389,7 +390,7 @@ fn checkpoint_get_storage_at() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -491,7 +492,7 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -559,7 +560,7 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -618,7 +619,7 @@ fn checkpoint_get_storage_at() {
 
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -688,7 +689,7 @@ fn create_contract_fail() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -728,7 +729,7 @@ fn create_contract_fail_previous_storage() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(&a, &U256::MAX, &mut substate)
+            .check_collateral_for_storage_finally(&a, &U256::MAX, &mut substate)
             .unwrap(),
         CollateralCheckResult::Valid
     );
@@ -845,7 +846,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -885,7 +886,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -928,7 +929,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_ne!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -963,7 +964,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -998,7 +999,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -1032,7 +1033,7 @@ fn test_automatic_collateral_normal_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &normal_account,
                 &U256::MAX,
                 &mut substate
@@ -1106,7 +1107,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1140,7 +1141,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1182,7 +1183,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1193,7 +1194,41 @@ fn test_automatic_collateral_contract_account() {
             got: *COLLATERAL_PER_STORAGE_KEY,
         }
     );
+
+    println!(
+        "1:{}",
+        state
+            .ensure_cached(&contract_account, RequireCache::None, |acc| acc
+                .map_or(String::from("None"), |account| account
+                    .get_unpaid_storage_entries()
+                    .to_string()))
+            .expect("db error")
+    );
+    if let Some(h) = state.checkpoints.get_mut().last() {
+        if let Some(Some(a)) = h.get(&contract_account) {
+            if let Some(acc) = a.account.as_ref() {
+                println!("checkpoint {}", acc.get_unpaid_storage_entries())
+            }
+        }
+    }
+
     state.revert_to_checkpoint();
+    if let Some(a) = state.cache.get_mut().get(&contract_account) {
+        if let Some(acc) = a.account.as_ref() {
+            println!("cache {}", acc.get_unpaid_storage_entries())
+        }
+    }
+
+    println!(
+        "2:{}",
+        state
+            .ensure_cached(&contract_account, RequireCache::None, |acc| acc
+                .map_or(String::from("None"), |account| account
+                    .get_unpaid_storage_entries()
+                    .to_string()))
+            .expect("db error")
+    );
+
     assert_eq!(state.balance(&contract_account).unwrap(), U256::from(0));
     assert_eq!(
         state
@@ -1209,6 +1244,15 @@ fn test_automatic_collateral_contract_account() {
 
     // use all balance
     state.checkpoint();
+    println!(
+        "3:{}",
+        state
+            .ensure_cached(&contract_account, RequireCache::None, |acc| acc
+                .map_or(String::from("None"), |account| account
+                    .get_unpaid_storage_entries()
+                    .to_string()))
+            .expect("db error")
+    );
     state
         .set_storage(
             &contract_account,
@@ -1217,9 +1261,19 @@ fn test_automatic_collateral_contract_account() {
             contract_account,
         )
         .unwrap();
+    println!(
+        "4:{}",
+        state
+            .ensure_cached(&contract_account, RequireCache::None, |acc| acc
+                .map_or(String::from("None"), |account| account
+                    .get_unpaid_storage_entries()
+                    .to_string()))
+            .expect("db error")
+    );
+
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1256,7 +1310,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &contract_account,
                 &U256::MAX,
                 &mut substate
@@ -1291,7 +1345,7 @@ fn test_automatic_collateral_contract_account() {
         .unwrap();
     assert_eq!(
         state
-            .check_collateral_for_storage(
+            .check_collateral_for_storage_finally(
                 &contract_account,
                 &U256::MAX,
                 &mut substate

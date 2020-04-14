@@ -52,6 +52,9 @@ pub struct OverlayAccount {
     ownership_cache: RefCell<HashMap<H256, Option<Address>>>,
     ownership_changes: HashMap<H256, Address>,
 
+    unpaid_storage_entries: u64,
+    unrefunded_storage_entries: u64,
+
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
 
@@ -97,6 +100,8 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: account.staking_balance,
             withdrawable_staking_balance: 0.into(),
@@ -148,6 +153,8 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             withdrawable_staking_balance: 0.into(),
@@ -177,6 +184,8 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             withdrawable_staking_balance: 0.into(),
@@ -208,6 +217,8 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
             withdrawable_staking_balance: 0.into(),
@@ -542,6 +553,30 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
+    pub fn add_unpaid_storage_entries(&mut self, by: u64) {
+        self.unpaid_storage_entries += by;
+    }
+
+    pub fn get_unpaid_storage_entries(&self) -> u64 {
+        return self.unpaid_storage_entries;
+    }
+
+    pub fn reset_unpaid_storage_entries(&mut self) {
+        self.unpaid_storage_entries = 0;
+    }
+
+    pub fn add_unrefunded_storage_entries(&mut self, by: u64) {
+        self.unrefunded_storage_entries += by;
+    }
+
+    pub fn get_unrefunded_storage_entries(&self) -> u64 {
+        return self.unrefunded_storage_entries;
+    }
+
+    pub fn reset_unrefunded_storage_entries(&mut self) {
+        self.unrefunded_storage_entries = 0;
+    }
+
     pub fn cache_code(&mut self, db: &StateDb) -> Option<Arc<Bytes>> {
         trace!("OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 
@@ -574,6 +609,8 @@ impl OverlayAccount {
             storage_changes: HashMap::new(),
             ownership_cache: RefCell::new(HashMap::new()),
             ownership_changes: HashMap::new(),
+            unpaid_storage_entries: 0,
+            unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: self.staking_balance,
             withdrawable_staking_balance: self.withdrawable_staking_balance,
@@ -596,6 +633,8 @@ impl OverlayAccount {
         account.storage_cache = self.storage_cache.clone();
         account.ownership_cache = self.ownership_cache.clone();
         account.ownership_changes = self.ownership_changes.clone();
+        account.unrefunded_storage_entries = self.unrefunded_storage_entries;
+        account.unpaid_storage_entries = self.unpaid_storage_entries;
         account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
@@ -703,6 +742,8 @@ impl OverlayAccount {
         self.storage_changes = other.storage_changes;
         self.ownership_cache = other.ownership_cache;
         self.ownership_changes = other.ownership_changes;
+        self.unpaid_storage_entries = other.unpaid_storage_entries;
+        self.unrefunded_storage_entries = other.unrefunded_storage_entries;
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.withdrawable_staking_balance = other.withdrawable_staking_balance;
@@ -820,6 +861,8 @@ impl OverlayAccount {
         }
 
         assert!(self.ownership_changes.is_empty());
+        assert_eq!(self.unpaid_storage_entries, 0);
+        assert_eq!(self.unrefunded_storage_entries, 0);
         let ownership_cache = self.ownership_cache.borrow();
         for (k, v) in self.storage_changes.drain() {
             let address_key =
