@@ -1527,6 +1527,10 @@ impl<'a> Executive<'a> {
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
+        //
+        // When enabling this feature, remember to check touched set in
+        // functions like "add_collateral_for_storage()" in "State"
+        // struct.
 
         //        // perform garbage-collection
         //        let min_balance = if spec.kill_dust != CleanDustMode::Off {

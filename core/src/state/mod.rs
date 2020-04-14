@@ -644,7 +644,13 @@ impl State {
         } else if let CleanupMode::TrackTouched(set) = cleanup_mode {
             if self.exists(address)? {
                 set.insert(*address);
-                self.touch(address)?;
+
+                // I don't know why sub_balance and add_balance have different
+                // behaviors here in Parity.
+                // self.exists(address) has loaded address to self.cache.
+
+                // Stop marking address as dirty here.
+                // self.touch(address)?;
             }
         }
         Ok(())
@@ -703,10 +709,12 @@ impl State {
     pub fn lock(
         &mut self, address: &Address, amount: &U256, duration_in_day: u64,
     ) -> DbResult<()> {
-        self.require(address, false)?.lock(
-            *amount,
-            self.block_number + duration_in_day * BLOCKS_PER_DAY,
-        );
+        if !amount.is_zero() {
+            self.require(address, false)?.lock(
+                *amount,
+                self.block_number + duration_in_day * BLOCKS_PER_DAY,
+            );
+        }
         Ok(())
     }
 
@@ -737,6 +745,7 @@ impl State {
         &self.staking_state.total_storage_tokens
     }
 
+    #[allow(dead_code)]
     fn touch(&mut self, address: &Address) -> DbResult<()> {
         self.require(address, false)?;
         Ok(())

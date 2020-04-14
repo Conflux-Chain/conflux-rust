@@ -75,6 +75,9 @@ functionality remains the same.
 
 - Fix an issue that not-graph-ready compact blocks are not fully received.
 
+- Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
+
+
 ## Improvements
 
 - Make the consensus layer to prioritize meaningful blocks first. It will
