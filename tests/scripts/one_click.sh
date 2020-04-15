@@ -63,10 +63,6 @@ run_latency_exp () {
     cat $log
     mv $archive_file ${archive_file}.`date +%s`
     mv $log ${log}.`date +%s`
-
-    # Terminate master instance and delete slave images
-    # Comment this line if the data on the master instances are needed for further analysis
-    # ./terminate-on-demand.sh
 }
 
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
@@ -82,5 +78,6 @@ max_block_size_in_bytes=300000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
 
+# Terminate master instance and delete slave images
 # Comment this line if the data on the master instances are needed for further analysis
  ./terminate-on-demand.sh
