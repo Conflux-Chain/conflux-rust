@@ -12,6 +12,8 @@
 
 - Fill in correct block gas limit value for mining.
 
+- Set block gas limit for Genesis block to 30_000_000.
+
 - Fix definitions and logics in transaction early execution error checking.
 
 ## Improvements

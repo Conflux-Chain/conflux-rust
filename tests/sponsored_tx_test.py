@@ -3,6 +3,7 @@ from http.client import CannotSendRequest
 from eth_utils import decode_hex
 
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
@@ -13,7 +14,7 @@ from web3 import Web3
 
 class SponsoredTxTest(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
@@ -134,7 +135,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         self.log.info("genesis_addr={}".format(genesis_addr))
         nonce = 0
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {
@@ -183,7 +184,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
         assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
         assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound)
-        assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - gas + 12500000)
+        assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
         # set privilege for addr1
         b0 = client.get_balance(genesis_addr)
@@ -197,7 +198,7 @@ class SponsoredTxTest(ConfluxTestFramework):
             wait=True,
             check_status=True,
             storage_limit=64)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - collateral_per_storage_key)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 
         # addr1 call contract with privilege without enough cfx for gas fee
@@ -212,7 +213,7 @@ class SponsoredTxTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(addr1), 10 ** 6)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
 
         self.log.info("Pass")
 

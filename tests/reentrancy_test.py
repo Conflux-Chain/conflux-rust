@@ -2,6 +2,7 @@
 
 from conflux.utils import priv_to_addr, parse_as_int
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS
 from http.client import CannotSendRequest
 from test_framework.util import *
 from test_framework.mininode import *
@@ -13,7 +14,7 @@ from web3 import Web3
 
 class ReentrancyTest(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
