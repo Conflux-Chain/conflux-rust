@@ -93,13 +93,14 @@ impl ProofOfWorkConfig {
     pub fn target_difficulty(
         &self, block_count: u64, timespan: u64, cur_difficulty: &U256,
     ) -> U256 {
-        if timespan == 0 || block_count == 0 || self.test_mode {
+        if timespan == 0 || block_count <= 1 || self.test_mode {
             return self.initial_difficulty.into();
         }
 
         let target = (U512::from(*cur_difficulty)
             * U512::from(self.block_generation_period)
-            * U512::from(block_count))
+            // - 1 for unbiased estimation, like stdvar
+            * U512::from(block_count - 1))
             / (U512::from(timespan) * U512::from(1000000));
         if target.is_zero() {
             return 1.into();
