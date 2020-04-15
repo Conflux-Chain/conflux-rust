@@ -973,20 +973,22 @@ impl State {
     pub fn init_code(
         &mut self, address: &Address, code: Bytes, owner: Address,
     ) -> DbResult<()> {
-        self.require_or_from(
-            address,
-            true,
-            || {
-                OverlayAccount::new_contract(
-                    address,
-                    0.into(),
-                    self.account_start_nonce,
-                    false,
-                )
-            },
-            |_| {},
-        )?
-        .init_code(code, owner);
+        if code.len() > 0 {
+            self.require_or_from(
+                address,
+                true,
+                || {
+                    OverlayAccount::new_contract(
+                        address,
+                        0.into(),
+                        self.account_start_nonce,
+                        false,
+                    )
+                },
+                |_| {},
+            )?
+            .init_code(code, owner);
+        }
         Ok(())
     }
 
@@ -995,9 +997,20 @@ impl State {
         mut cleanup_mode: CleanupMode,
     ) -> DbResult<()>
     {
-        self.sub_balance(from, by, &mut cleanup_mode)?;
-        self.add_balance(to, by, cleanup_mode)?;
-        Ok(())
+        // It is forbidden to transfer value into an empty contract: code is
+        // empty string, or the contract doesn't exist.
+        if to.is_contract_address()
+            && self
+                .code_hash(to)?
+                .map_or_else(|| true, |hash| hash == KECCAK_EMPTY)
+        {
+            Ok(())
+        } else {
+            self.sub_balance(from, by, &mut cleanup_mode)?;
+            self.add_balance(to, by, cleanup_mode)?;
+
+            Ok(())
+        }
     }
 
     pub fn kill_account(&mut self, address: &Address) {

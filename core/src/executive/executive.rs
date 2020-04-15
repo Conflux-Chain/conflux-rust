@@ -1508,6 +1508,15 @@ impl<'a> Executive<'a> {
                 (res, out)
             }
             Action::Call(ref address) => {
+                if !address.is_valid_address(self.machine.builtins()) {
+                    return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::InvalidRecipient,
+                        Executed::execution_error_fully_charged(
+                            tx,
+                            &self.env.gas_used,
+                        ),
+                    ));
+                }
                 let params = ActionParams {
                     code_address: *address,
                     address: *address,

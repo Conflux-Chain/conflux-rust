@@ -96,6 +96,8 @@ pub enum ExecutionError {
     },
     /// Contract already exists in the specified address.
     ContractAddressConflict,
+    /// The recipient of the transaction is not permitted.
+    InvalidRecipient,
     VmError(vm::Error),
 }
 
