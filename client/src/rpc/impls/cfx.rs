@@ -26,7 +26,7 @@ use cfxcore::{
     machine::{new_machine_with_builtin, Machine},
     state_exposer::STATE_EXPOSER,
     test_context::*,
-    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use delegate::delegate;
@@ -770,7 +770,13 @@ impl RpcImpl {
                     format! {"{:?}", e}.into_bytes()
                 ))
             }
-
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(vm::Error::Reverted),
+                executed,
+            ) => bail!(call_execution_error(
+                "Transaction reverted".into(),
+                executed.output
+            )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     "Transaction execution failed".into(),
@@ -853,7 +859,7 @@ impl CfxHandler {
 
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::common::delegate_convert;
-use cfxcore::executive::ExecutionOutcome;
+use cfxcore::executive::{ExecutionError, ExecutionOutcome};
 
 impl Cfx for CfxHandler {
     delegate! {
