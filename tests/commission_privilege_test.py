@@ -595,7 +595,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract_addr=sponsor_whitelist_contract_addr,
             wait=True)
         assert_equal(client.get_collateral_for_storage(contract_addr), cfs)
-        assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sb + cfs + 1)
+        assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sb + 1)
         assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
         assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - sb - cfs - 1)
         assert_equal(client.get_balance(addr3), b3 + sb + cfs)

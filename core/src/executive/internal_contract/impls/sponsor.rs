@@ -197,7 +197,7 @@ impl SponsorWhitelistControl {
             state.set_sponsor_for_collateral(
                 &contract_address,
                 sponsor,
-                &sponsor_balance,
+                &(sponsor_balance - collateral_for_storage),
             )?;
         } else {
             state.sub_balance(
