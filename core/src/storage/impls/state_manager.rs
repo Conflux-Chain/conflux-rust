@@ -7,7 +7,7 @@ pub type SnapshotDbManager = SnapshotDbManagerSqlite;
 pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
 
 pub struct StateTrees {
-    pub snapshot_db: SnapshotDb,
+    pub snapshot_db: Arc<SnapshotDb>,
     pub snapshot_epoch_id: EpochId,
     pub snapshot_merkle_root: MerkleHash,
     /// None means that the intermediate_trie is empty, or in a special
@@ -54,53 +54,6 @@ impl StateManager {
         })
     }
 
-    /// ` test_net_version` is used to update the genesis author so that after
-    /// resetting, the chain of the older version will be discarded
-    pub fn initialize(
-        &self, genesis_accounts: HashMap<Address, U256>,
-        genesis_gas_limit: U256, test_net_version: Address,
-        initial_difficulty: U256,
-    ) -> Block
-    {
-        let mut state = StateDb::new(self.get_state_for_genesis_write());
-
-        for (addr, balance) in genesis_accounts {
-            let account = Account::new_empty_with_balance(
-                &addr,
-                &balance,
-                &0.into(), /* nonce */
-            );
-            state
-                .set(StorageKey::new_account_key(&addr), &account)
-                .unwrap();
-        }
-
-        // initialize storage layout for internal contracts to make sure that
-        // _all_ Conflux contracts have a storage root in our state trie
-        for address in InternalContractMap::new().keys() {
-            state
-                .set_storage_layout(address, &StorageLayout::Regular(0))
-                .expect("set internal contract storage layout should succeed");
-        }
-
-        let state_root = state.compute_state_root().unwrap();
-        let mut genesis = Block::new(
-            BlockHeaderBuilder::new()
-                .with_deferred_state_root(
-                    state_root.state_root.compute_state_root_hash(),
-                )
-                .with_gas_limit(genesis_gas_limit)
-                .with_author(test_net_version)
-                .with_difficulty(initial_difficulty)
-                .build(),
-            Vec::new(),
-        );
-        genesis.block_header.compute_hash();
-        debug!("Genesis Block:{:?} hash={:?}", genesis, genesis.hash());
-        state.commit(genesis.block_header.hash()).unwrap();
-        genesis
-    }
-
     pub fn log_usage(&self) {
         self.storage_manager.log_usage();
         debug!(
@@ -117,7 +70,7 @@ impl StateManager {
     /// it's calculated for the state_trees.
     #[inline]
     pub fn get_state_trees_internal(
-        snapshot_db: SnapshotDb, snapshot_epoch_id: &EpochId,
+        snapshot_db: Arc<SnapshotDb>, snapshot_epoch_id: &EpochId,
         snapshot_merkle_root: MerkleHash,
         maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         maybe_intermediate_trie_key_padding: Option<&DeltaMptKeyPadding>,
@@ -177,7 +130,7 @@ impl StateManager {
     }
 
     pub fn get_state_trees(
-        &self, state_index: &StateIndex,
+        &self, state_index: &StateIndex, try_open: bool,
     ) -> Result<Option<StateTrees>> {
         let maybe_intermediate_mpt;
         let maybe_intermediate_mpt_key_padding;
@@ -186,14 +139,16 @@ impl StateManager {
 
         match self
             .storage_manager
-            .wait_for_snapshot(&state_index.snapshot_epoch_id)?
+            .wait_for_snapshot(&state_index.snapshot_epoch_id, try_open)?
         {
             None => {
                 // This is the special scenario when the snapshot isn't
                 // available but the snapshot at the intermediate epoch exists.
-                if let Some(guarded_snapshot) = self
-                    .storage_manager
-                    .wait_for_snapshot(&state_index.intermediate_epoch_id)?
+                if let Some(guarded_snapshot) =
+                    self.storage_manager.wait_for_snapshot(
+                        &state_index.intermediate_epoch_id,
+                        try_open,
+                    )?
                 {
                     snapshot = guarded_snapshot;
                     maybe_intermediate_mpt = None;
@@ -273,7 +228,7 @@ impl StateManager {
     }
 
     pub fn get_state_trees_for_next_epoch(
-        &self, parent_state_index: &StateIndex,
+        &self, parent_state_index: &StateIndex, try_open: bool,
     ) -> Result<Option<StateTrees>> {
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
@@ -301,7 +256,10 @@ impl StateManager {
 
             snapshot_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_epoch_id = parent_state_index.epoch_id;
-            match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
+            match self
+                .storage_manager
+                .wait_for_snapshot(snapshot_epoch_id, try_open)?
+            {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
@@ -315,10 +273,10 @@ impl StateManager {
                     // See validate_blame_states().
                     snapshot_merkle_root =
                         *parent_state_index.snapshot_epoch_id;
-                    match self
-                        .storage_manager
-                        .wait_for_snapshot(parent_state_index.epoch_id)?
-                    {
+                    match self.storage_manager.wait_for_snapshot(
+                        parent_state_index.epoch_id,
+                        try_open,
+                    )? {
                         None => {
                             warn!(
                                 "get_state_trees_for_next_epoch, shift snapshot, special case, \
@@ -406,14 +364,17 @@ impl StateManager {
             intermediate_epoch_id = parent_state_index.intermediate_epoch_id;
             intermediate_trie_root_merkle =
                 *parent_state_index.intermediate_trie_root_merkle;
-            match self.storage_manager.wait_for_snapshot(snapshot_epoch_id)? {
+            match self
+                .storage_manager
+                .wait_for_snapshot(snapshot_epoch_id, try_open)?
+            {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
                     // exists.
                     if let Some(guarded_snapshot) = self
                         .storage_manager
-                        .wait_for_snapshot(&intermediate_epoch_id)?
+                        .wait_for_snapshot(&intermediate_epoch_id, try_open)?
                     {
                         snapshot = guarded_snapshot;
                         maybe_intermediate_mpt = None;
@@ -524,9 +485,9 @@ impl StateManager {
 
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
-        &self, state_index: StateIndex,
+        &self, state_index: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
-        let maybe_state_trees = self.get_state_trees(&state_index)?;
+        let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => Ok(Some(State::new(
@@ -544,7 +505,7 @@ impl StateManagerTrait for StateManager {
             StateTrees {
                 snapshot_db: self
                     .storage_manager
-                    .wait_for_snapshot(&NULL_EPOCH)
+                    .wait_for_snapshot(&NULL_EPOCH, /* try_open = */ false)
                     .unwrap()
                     .unwrap()
                     .into()
@@ -586,8 +547,10 @@ impl StateManagerTrait for StateManager {
     fn get_state_for_next_epoch(
         &self, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
-        let maybe_state_trees =
-            self.get_state_trees_for_next_epoch(&parent_epoch_id)?;
+        let maybe_state_trees = self.get_state_trees_for_next_epoch(
+            &parent_epoch_id,
+            /* try_open = */ false,
+        )?;
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => Ok(Some(State::new(
@@ -599,36 +562,27 @@ impl StateManagerTrait for StateManager {
     }
 }
 
-use crate::{
-    executive::InternalContractMap,
-    statedb::StateDb,
-    storage::{
-        impls::{
-            delta_mpt::*,
-            errors::*,
-            storage_db::{
-                delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
-                snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
-            },
-            storage_manager::storage_manager::StorageManager,
+use crate::storage::{
+    impls::{
+        delta_mpt::*,
+        errors::*,
+        storage_db::{
+            delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
+            snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
         },
-        state::*,
-        state_manager::*,
-        storage_db::*,
-        utils::arc_ext::shared_from_this,
-        StorageConfiguration,
+        storage_manager::storage_manager::StorageManager,
     },
+    state::*,
+    state_manager::*,
+    storage_db::*,
+    utils::arc_ext::shared_from_this,
+    StorageConfiguration,
 };
-use cfx_types::{Address, U256};
 use primitives::{
-    Account, Block, BlockHeaderBuilder, DeltaMptKeyPadding, EpochId,
-    MerkleHash, StorageKey, StorageLayout, GENESIS_DELTA_MPT_KEY_PADDING,
-    MERKLE_NULL_NODE, NULL_EPOCH,
+    DeltaMptKeyPadding, EpochId, MerkleHash, StorageKey,
+    GENESIS_DELTA_MPT_KEY_PADDING, MERKLE_NULL_NODE, NULL_EPOCH,
 };
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
 };

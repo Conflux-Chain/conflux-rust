@@ -6,7 +6,7 @@ use super::super::InternalContractTrait;
 use crate::{
     bytes::Bytes,
     parameters::staking::*,
-    state::{State, Substate},
+    state::{CollateralCheckResult, State, Substate},
     vm::{self, ActionParams, Spec},
 };
 use cfx_types::{Address, U256};
@@ -22,6 +22,18 @@ pub fn suicide(
     spec: &Spec, substate: &mut Substate,
 ) -> vm::Result<()>
 {
+    state.checkout_ownership_changed(substate)?;
+    match state.checkout_collateral_for_storage(contract_address)? {
+        CollateralCheckResult::Valid => {}
+        CollateralCheckResult::ExceedStorageLimit { .. } => unreachable!(),
+        CollateralCheckResult::NotEnoughBalance { required, got } => {
+            return Err(vm::Error::NotEnoughBalanceForStorage {
+                required,
+                got,
+            });
+        }
+    }
+
     if !state.collateral_for_storage(contract_address)?.is_zero() {
         return Err(vm::Error::InternalContract(
             "contract has nonzero collateral_for_storage",

@@ -23,6 +23,8 @@ pub mod consensus {
     pub const MAX_BLAME_RATIO_FOR_TRUST: f64 = 0.4;
 
     pub const TRANSACTION_DEFAULT_EPOCH_BOUND: u64 = 100000;
+
+    pub const GENESIS_GAS_LIMIT: u64 = 30_000 * 100_000;
 }
 
 pub mod consensus_internal {
@@ -189,12 +191,16 @@ pub mod staking {
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
 
+    /// This is the storage cost for one key/value pair.
+    /// 64 = mem::size_of::<H256>() + mem::size_of::<H256>()
+    pub const BYTES_PER_STORAGE_KEY: u64 = 64;
+
     lazy_static! {
         /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes.
         pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(CONFLUX_TOKEN / NUM_BYTES_PER_CONFLUX_TOKEN);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
-        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(64);
+        pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(BYTES_PER_STORAGE_KEY);
         /// This is the scale factor for accumulated interest rate: `BLOCKS_PER_YEAR * 2 ^ 80`.
         /// The actual accumulate interest rate stored will be `accumulate_interest_rate / INTEREST_RATE_SCALE`.
         pub static ref ACCUMULATED_INTEREST_RATE_SCALE: U256 = U256::from(BLOCKS_PER_YEAR) << 80;

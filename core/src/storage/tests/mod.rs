@@ -86,6 +86,7 @@ impl FakeStateManager {
                     delta_mpts_cache_start_size: 1_000_000,
                     delta_mpts_node_map_vec_size: 20_000_000,
                     delta_mpts_slab_idle_size: 200_000,
+                    max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
                     path_delta_mpts_dir: unit_test_data_dir.clone()
                         + StorageConfiguration::DELTA_MPTS_DIR,
                     path_snapshot_dir: unit_test_data_dir.clone()
@@ -206,7 +207,8 @@ pub fn print_mpt_key(key: &[u8]) {
 
 #[cfg(test)]
 use crate::storage::{
-    impls::state_manager::StateManager, ConsensusParam, StorageConfiguration,
+    defaults, impls::state_manager::StateManager, ConsensusParam,
+    StorageConfiguration,
 };
 use crate::storage::{
     impls::{errors::*, merkle_patricia_trie::CompressedPathRaw},

@@ -20,9 +20,12 @@ use crate::{
 };
 use cfx_types::{Address, U256};
 use cfxcore::{
-    block_data_manager::BlockDataManager, genesis, statistics::Statistics,
-    storage::StorageManager, sync::SyncPhaseType,
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT, vm_factory::VmFactory,
+    block_data_manager::BlockDataManager,
+    genesis::{self, genesis_block},
+    statistics::Statistics,
+    storage::StorageManager,
+    sync::SyncPhaseType,
+    vm_factory::VmFactory,
     ConsensusGraph, LightProvider, Notifications, SynchronizationGraph,
     SynchronizationService, TransactionPool, WORKER_COMPUTATION_PARALLELISM,
 };
@@ -112,11 +115,9 @@ impl FullClient {
             }
         };
 
-        // FIXME: move genesis block to a dedicated directory near all conflux
-        // FIXME: parameters.
-        let genesis_block = storage_manager.initialize(
+        let genesis_block = genesis_block(
+            &storage_manager,
             genesis_accounts,
-            DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
             Address::from_str(TESTNET_VERSION).unwrap(),
             U256::zero(),
         );
@@ -133,6 +134,7 @@ impl FullClient {
 
         let txpool = Arc::new(TransactionPool::new(
             conf.txpool_config(),
+            conf.verification_config(),
             data_man.clone(),
         ));
 
@@ -151,6 +153,7 @@ impl FullClient {
             pow_config.clone(),
             notifications.clone(),
             conf.execution_config(),
+            conf.verification_config(),
         ));
 
         let protocol_config = conf.protocol_config();

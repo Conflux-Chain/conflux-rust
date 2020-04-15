@@ -158,10 +158,13 @@ pub fn initialize_txgens(
 }
 
 pub mod delegate_convert {
-    use crate::rpc::{into_jsonrpc_result, RpcResult};
+    use crate::rpc::{
+        error_codes::{codes::EXCEPTION_ERROR, invalid_params},
+        JsonRpcErrorKind, RpcError, RpcErrorKind, RpcResult,
+    };
     use jsonrpc_core::{
         futures::{future::IntoFuture, Future},
-        BoxFuture, Result as JsonRpcResult,
+        BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
 
     pub trait Into<T> {
@@ -174,6 +177,35 @@ pub mod delegate_convert {
 
     impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for BoxFuture<T> {
         fn into(x: Self) -> BoxFuture<T> { x }
+    }
+
+    impl Into<JsonRpcError> for RpcError {
+        fn into(e: Self) -> JsonRpcError {
+            match e.0 {
+                JsonRpcErrorKind(j) => j,
+                RpcErrorKind::InvalidParam(param, details) => {
+                    invalid_params(&param, details)
+                }
+                RpcErrorKind::Msg(_)
+                | RpcErrorKind::Decoder(_)
+                | RpcErrorKind::FilterError(_)
+                | RpcErrorKind::Storage(_) => JsonRpcError {
+                    code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
+                    message: format!("Error processing request: {}", e),
+                    data: None,
+                },
+                // We exhausted all possible ErrorKinds here, however
+                // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    pub fn into_jsonrpc_result<T>(r: RpcResult<T>) -> JsonRpcResult<T> {
+        match r {
+            Ok(t) => Ok(t),
+            Err(e) => Err(Into::into(e)),
+        }
     }
 
     impl<T> Into<JsonRpcResult<T>> for RpcResult<T> {

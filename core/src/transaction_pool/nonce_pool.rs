@@ -414,7 +414,7 @@ mod nonce_pool_test {
                 gas: U256::from(50000),
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
-                storage_limit: U256::MAX,
+                storage_limit: U256::zero(),
                 epoch_height: 0,
                 chain_id: 0,
                 data: Vec::new(),

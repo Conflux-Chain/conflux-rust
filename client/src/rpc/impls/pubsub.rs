@@ -6,7 +6,8 @@ use jsonrpc_pubsub::{
 };
 
 use crate::rpc::{
-    helpers::{errors, SubscriberId, Subscribers},
+    error_codes,
+    helpers::{SubscriberId, Subscribers},
     metadata::Metadata,
     traits::PubSub,
     types::{pubsub, Header as RpcHeader, Log as RpcLog, H256 as RpcH256},
@@ -407,9 +408,10 @@ impl PubSub for PubSubClient {
                 self.heads_subscribers.write().push(subscriber);
                 return;
             }
-            (pubsub::Kind::NewHeads, _) => {
-                errors::invalid_params("newHeads", "Expected no parameters.")
-            }
+            (pubsub::Kind::NewHeads, _) => error_codes::invalid_params(
+                "newHeads",
+                "Expected no parameters.",
+            ),
             // --------- epochs ---------
             (pubsub::Kind::Epochs, None) => {
                 let id = self.epochs_subscribers.write().push(subscriber);
@@ -417,7 +419,7 @@ impl PubSub for PubSubClient {
                 return;
             }
             (pubsub::Kind::Epochs, _) => {
-                errors::invalid_params("epochs", "Expected no parameters.")
+                error_codes::invalid_params("epochs", "Expected no parameters.")
             }
             // --------- logs ---------
             (pubsub::Kind::Logs, None) => {
@@ -438,10 +440,11 @@ impl PubSub for PubSubClient {
                 self.start_logs_loop(id);
                 return;
             }
-            (pubsub::Kind::Logs, _) => {
-                errors::invalid_params("logs", "Expected filter parameter.")
-            }
-            _ => errors::unimplemented(None),
+            (pubsub::Kind::Logs, _) => error_codes::invalid_params(
+                "logs",
+                "Expected filter parameter.",
+            ),
+            _ => error_codes::unimplemented(None),
         };
 
         let _ = subscriber.reject(error);

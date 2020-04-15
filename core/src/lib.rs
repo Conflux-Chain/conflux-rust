@@ -40,25 +40,27 @@ extern crate serde;
 extern crate serde_derive;
 extern crate unexpected;
 
+#[macro_use]
+pub mod message;
+
 pub mod block_data_manager;
 mod builtin;
 pub mod cache_config;
 pub mod cache_manager;
+pub mod channel;
+pub mod client;
 pub mod consensus;
 pub mod db;
 pub mod error;
 mod evm;
 pub mod executive;
 pub mod genesis;
-pub mod parameters;
-#[macro_use]
-pub mod message;
-pub mod channel;
-pub mod client;
 pub mod light_protocol;
 pub mod machine;
 pub mod miner;
+pub mod parameters;
 pub mod pow;
+pub mod rpc_errors;
 pub mod state;
 pub mod state_exposer;
 pub mod statedb;

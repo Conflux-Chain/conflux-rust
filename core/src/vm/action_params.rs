@@ -78,9 +78,9 @@ pub struct ActionParams {
     pub sender: Address,
     /// This is the address of original sender of the transaction.
     pub original_sender: Address,
-    /// This is the address of original receiver of the transaction.
-    /// If it is a contract call, it is the address of the contract.
-    pub original_receiver: Address,
+    /// This is the address of account who will pay collateral for storage in
+    /// the whole execution.
+    pub storage_owner: Address,
     /// Gas paid up front for transaction execution
     pub gas: U256,
     /// Gas price.
@@ -108,7 +108,7 @@ impl Default for ActionParams {
             address: Address::default(),
             sender: Address::default(),
             original_sender: Address::default(),
-            original_receiver: Address::default(),
+            storage_owner: Address::default(),
             gas: U256::zero(),
             gas_price: U256::zero(),
             value: ActionValue::Transfer(U256::zero()),

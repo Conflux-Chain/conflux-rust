@@ -2,14 +2,14 @@
 set -euxo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Parameters required: <key_pair> <instance_count> [<enable_flamegraph>] [<branch_name>] [<repository_url>]"
+    echo "Parameters required: <key_pair> <instance_count> [<branch_name>] [<repository_url>] [<enable_flamegraph>] "
     exit 1
 fi
 key_pair="$1"
 slave_count=$2
-enable_flamegraph=${3:-false}
-branch="${4:-master}"
-repo="${5:-https://github.com/Conflux-Chain/conflux-rust}"
+branch="${3:-master}"
+repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
+enable_flamegraph=${5:-false}
 slave_role=${key_pair}_exp_slave
 
 run_latency_exp () {
@@ -63,10 +63,6 @@ run_latency_exp () {
     cat $log
     mv $archive_file ${archive_file}.`date +%s`
     mv $log ${log}.`date +%s`
-
-    # Terminate master instance and delete slave images
-    # Comment this line if the data on the master instances are needed for further analysis
-    # ./terminate-on-demand.sh
 }
 
 # Parameter for one experiment is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>
@@ -77,10 +73,11 @@ exp_config="250:1:300000:4000"
 # For experiments with --enable-tx-propagation , <txs_per_block> and <tx_size> will not take effects.
 # Block size is limited by `max_block_size_in_bytes`.
 
-tps=4000
+tps=6000
 max_block_size_in_bytes=300000
 echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
 
+# Terminate master instance and delete slave images
 # Comment this line if the data on the master instances are needed for further analysis
-# ./terminate-on-demand.sh
+ ./terminate-on-demand.sh

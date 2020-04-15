@@ -26,7 +26,6 @@ use cfxcore::{
         },
         SynchronizationGraph,
     },
-    transaction_pool::DEFAULT_MAX_BLOCK_GAS_LIMIT,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     TransactionPool, WORKER_COMPUTATION_PARALLELISM,
