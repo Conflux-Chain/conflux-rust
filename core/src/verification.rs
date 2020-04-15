@@ -4,37 +4,50 @@
 
 use crate::{
     error::{BlockError, Error},
+    executive::Executive,
     parameters::block::*,
     pow::{self, ProofOfWorkProblem},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
+    vm,
 };
 use cfx_types::{BigEndianHash, H256, U256};
-use primitives::{Block, BlockHeader};
+use primitives::{
+    transaction::TransactionError, Action, Block, BlockHeader,
+    TransactionWithSignature,
+};
 use std::collections::HashSet;
 use unexpected::{Mismatch, OutOfBounds};
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct VerificationConfig {
     pub verify_timestamp: bool,
     pub referee_bound: usize,
     pub max_block_size_in_bytes: usize,
+    pub transaction_epoch_bound: u64,
+    vm_spec: vm::Spec,
 }
 
 impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
-    ) -> Self {
+        transaction_epoch_bound: u64,
+    ) -> Self
+    {
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
                 referee_bound,
                 max_block_size_in_bytes,
+                transaction_epoch_bound,
+                vm_spec: vm::Spec::new_spec(),
             }
         } else {
             VerificationConfig {
                 verify_timestamp: true,
                 referee_bound,
                 max_block_size_in_bytes,
+                transaction_epoch_bound,
+                vm_spec: vm::Spec::new_spec(),
             }
         }
     }
@@ -165,16 +178,19 @@ impl VerificationConfig {
     /// the body is incorrect, this means the block is invalid, and we
     /// should discard this block and all its descendants.
     #[inline]
-    pub fn verify_block_basic(&self, block: &Block) -> Result<(), Error> {
+    pub fn verify_block_basic(
+        &self, block: &Block, chain_id: u64,
+    ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
         let mut block_size = 0;
-        let mut block_gas_limit = U256::zero();
+        let mut block_total_gas = U256::zero();
 
+        let block_height = block.block_header.height();
         for t in &block.transactions {
-            t.transaction.verify_basic()?;
+            self.verify_transaction_in_block(t, chain_id, block_height)?;
             block_size += t.rlp_size();
-            block_gas_limit += *t.gas_limit();
+            block_total_gas += *t.gas_limit();
         }
 
         if block_size > self.max_block_size_in_bytes {
@@ -187,14 +203,83 @@ impl VerificationConfig {
             )));
         }
 
-        if block_gas_limit > *block.block_header.gas_limit() {
+        if block_total_gas > *block.block_header.gas_limit() {
             return Err(From::from(BlockError::InvalidBlockGasLimit(
                 OutOfBounds {
                     min: Some(*block.block_header.gas_limit()),
                     max: Some(*block.block_header.gas_limit()),
-                    found: block_gas_limit,
+                    found: block_total_gas,
                 },
             )));
+        }
+
+        Ok(())
+    }
+
+    pub fn check_transaction_epoch_bound(
+        &self, tx: &TransactionWithSignature, block_height: u64,
+    ) -> i8 {
+        let transaction_epoch_bound = self.transaction_epoch_bound;
+        if tx.epoch_height + transaction_epoch_bound < block_height {
+            -1
+        } else if tx.epoch_height > block_height + transaction_epoch_bound {
+            1
+        } else {
+            0
+        }
+    }
+
+    pub fn verify_transaction_epoch_height(
+        &self, tx: &TransactionWithSignature, block_height: u64,
+    ) -> Result<(), TransactionError> {
+        if self.check_transaction_epoch_bound(tx, block_height) == 0 {
+            Ok(())
+        } else {
+            bail!(TransactionError::EpochHeightOutOfBound {
+                set: tx.epoch_height,
+                block_height,
+                transaction_epoch_bound: self.transaction_epoch_bound,
+            });
+        }
+    }
+
+    pub fn verify_transaction_in_block(
+        &self, tx: &TransactionWithSignature, chain_id: u64, block_height: u64,
+    ) -> Result<(), TransactionError> {
+        self.verify_transaction_common(tx, chain_id)?;
+        self.verify_transaction_epoch_height(tx, block_height)
+    }
+
+    pub fn verify_transaction_common(
+        &self, tx: &TransactionWithSignature, chain_id: u64,
+    ) -> Result<(), TransactionError> {
+        tx.check_low_s()?;
+
+        // Disallow unsigned transactions
+        if tx.is_unsigned() {
+            bail!(TransactionError::InvalidSignature(
+                "Transaction is unsigned".into()
+            ));
+        }
+
+        if tx.chain_id != chain_id {
+            bail!(TransactionError::ChainIdMismatch {
+                expected: chain_id,
+                got: tx.chain_id,
+            });
+        }
+
+        // check transaction intrinsic gas
+        let tx_intrinsic_gas = Executive::gas_required_for(
+            tx.action == Action::Create,
+            &tx.data,
+            &self.vm_spec,
+        );
+        if tx.gas < (tx_intrinsic_gas as usize).into() {
+            bail!(TransactionError::NotEnoughBaseGas {
+                required: tx_intrinsic_gas.into(),
+                got: tx.gas
+            });
         }
 
         Ok(())

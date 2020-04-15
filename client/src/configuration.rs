@@ -20,7 +20,7 @@ use cfxcore::{
     },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
-    transaction_pool::TxPoolConfig,
+    transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
 };
 use metrics::MetricsConfiguration;
 use std::convert::TryInto;
@@ -110,6 +110,7 @@ build_config! {
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        // FIXME: this is part of spec.
         (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
 
         // Mining section.
@@ -151,6 +152,7 @@ build_config! {
         (max_outgoing_peers, (usize), 16)
         (max_outgoing_peers_archive, (usize), 0)
         (max_peers_tx_propagation, (usize), 128)
+        (max_unprocessed_block_count, (usize), (128))
         (min_peers_tx_propagation, (usize), 8)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
@@ -198,6 +200,7 @@ build_config! {
         (storage_delta_mpts_cache_start_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
         (storage_delta_mpts_node_map_vec_size, (u32), storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
+        (storage_max_open_snapshots, (u16), storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
 
         // General/Unclassified section.
         (enable_optimistic_execution, (bool), true)
@@ -391,6 +394,7 @@ impl Configuration {
             self.is_test_mode(),
             self.raw_conf.referee_bound,
             self.raw_conf.max_block_size_in_bytes,
+            self.raw_conf.transaction_epoch_bound,
         )
     }
 
@@ -433,6 +437,7 @@ impl Configuration {
             delta_mpts_slab_idle_size: self
                 .raw_conf
                 .storage_delta_mpts_slab_idle_size,
+            max_open_snapshots: self.raw_conf.storage_max_open_snapshots,
             path_delta_mpts_dir: self.raw_conf.conflux_data_dir.clone()
                 + StorageConfiguration::DELTA_MPTS_DIR,
             path_snapshot_dir: self.raw_conf.conflux_data_dir.clone()
@@ -516,6 +521,9 @@ impl Configuration {
             heartbeat_timeout: Duration::from_millis(
                 self.raw_conf.heartbeat_timeout_ms,
             ),
+            max_unprocessed_block_count: self
+                .raw_conf
+                .max_unprocessed_block_count,
         }
     }
 
@@ -577,15 +585,13 @@ impl Configuration {
     }
 
     pub fn txpool_config(&self) -> TxPoolConfig {
-        let mut config = TxPoolConfig::default();
-
-        config.capacity = self.raw_conf.tx_pool_size;
-        config.min_tx_price = self.raw_conf.tx_pool_min_tx_gas_price;
-        config.tx_weight_scaling = self.raw_conf.tx_weight_scaling;
-        config.tx_weight_exp = self.raw_conf.tx_weight_exp;
-        config.transaction_epoch_bound = self.raw_conf.transaction_epoch_bound;
-
-        config
+        TxPoolConfig {
+            capacity: self.raw_conf.tx_pool_size,
+            min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
+            max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
+            tx_weight_scaling: self.raw_conf.tx_weight_scaling,
+            tx_weight_exp: self.raw_conf.tx_weight_exp,
+        }
     }
 
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {
@@ -598,7 +604,6 @@ impl Configuration {
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: self.raw_conf.anticone_penalty_ratio,
             base_reward_table_in_ucfx: build_base_reward_table(),
-            transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
         }
     }
 

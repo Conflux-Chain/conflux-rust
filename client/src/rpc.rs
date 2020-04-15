@@ -16,6 +16,7 @@ use std::{
 };
 
 mod authcodes;
+pub mod error_codes;
 pub mod extractor;
 mod helpers;
 mod http_common;
@@ -26,58 +27,8 @@ pub mod metadata;
 mod traits;
 mod types;
 
-mod error {
-    use crate::rpc::helpers::errors::codes::EXCEPTION_ERROR;
-    use cfxcore::storage::Error as StorageError;
-    use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
-    use primitives::filter::FilterError;
-    use rlp::DecoderError;
-
-    error_chain! {
-        links {
-        }
-
-        foreign_links {
-            FilterError(FilterError);
-            Storage(StorageError);
-            Decoder(DecoderError);
-        }
-
-        errors {
-            JsonRpcError(e: JsonRpcError) {
-                description("JsonRpcError directly constructed to return to Rpc peer.")
-                display("JsonRpcError directly constructed to return to Rpc peer. Error: {}", e)
-            }
-        }
-    }
-
-    impl From<JsonRpcError> for Error {
-        fn from(j: JsonRpcError) -> Self { ErrorKind::JsonRpcError(j).into() }
-    }
-
-    impl From<Error> for JsonRpcError {
-        fn from(e: Error) -> Self {
-            match e.0 {
-                ErrorKind::JsonRpcError(j) => j,
-                _ => JsonRpcError {
-                    code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
-                    message: format!("Error processing request: {}", e),
-                    data: None,
-                },
-            }
-        }
-    }
-
-    pub fn into_jsonrpc_result<T>(r: Result<T>) -> JsonRpcResult<T> {
-        match r {
-            Ok(t) => Ok(t),
-            Err(e) => Err(e.into()),
-        }
-    }
-}
-
-pub use error::{
-    into_jsonrpc_result, Error as RpcError,
+pub use cfxcore::rpc_errors::{
+    Error as RpcError, ErrorKind as RpcErrorKind,
     ErrorKind::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
 };
 
@@ -98,7 +49,7 @@ pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
     rpc::{
-        helpers::errors::request_rejected_too_many_request_error,
+        error_codes::request_rejected_too_many_request_error,
         interceptor::{RpcInterceptor, RpcProxy},
     },
 };

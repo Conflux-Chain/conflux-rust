@@ -269,7 +269,7 @@ class RpcClient:
             nonce = self.get_nonce(sender)
 
         if storage_limit is None:
-            storage_limit = 2 ** 256 - 1
+            storage_limit = 0
 
         action = eth_utils.decode_hex(receiver)
         tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
@@ -279,7 +279,7 @@ class RpcClient:
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=None, epoch_height=0, chain_id=0):
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=10000000, value=0, storage_limit=0, epoch_height=0, chain_id=0):
         if sender is None:
             sender = self.GENESIS_ADDR
 
@@ -288,9 +288,6 @@ class RpcClient:
 
         if nonce is None:
             nonce = self.get_nonce(sender)
-
-        if storage_limit is None:
-            storage_limit = 2 ** 256 - 1
 
         action = eth_utils.decode_hex(receiver)
         data = eth_utils.decode_hex(data_hex)

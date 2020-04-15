@@ -34,17 +34,20 @@ class P2PTest(ConfluxTestFramework):
 
         self.log.info("Initializing contract")
         genesis_key = default_config["GENESIS_PRI_KEY"]
-        genesis_addr = priv_to_addr(genesis_key)
+        genesis_addr = encode_hex_0x(priv_to_addr(genesis_key))
         nonce = 0
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
-        self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        self.tx_conf = {"from":Web3.toChecksumAddress(genesis_addr), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
         raw_create = erc20_contract.constructor().buildTransaction(self.tx_conf)
         tx_data = decode_hex(raw_create["data"])
-        tx_create = create_transaction(pri_key=genesis_key, receiver=b'', nonce=nonce, gas_price=gas_price, data=tx_data, gas=gas, value=0)
+        tx_create = create_transaction(pri_key=genesis_key, receiver=b'', nonce=nonce, gas_price=gas_price, data=tx_data, gas=gas, value=0, storage_limit=3382)
         client = RpcClient(self.nodes[0])
+        c0 = client.get_collateral_for_storage(genesis_addr)
         client.send_tx(tx_create, True)
         receipt = client.get_transaction_receipt(tx_create.hash_hex())
+        c1 = client.get_collateral_for_storage(genesis_addr)
+        assert_equal(c1 - c0, 3382 * 10 ** 18 / 1024)
         contract_addr = receipt['contractCreated']
         self.log.info("Contract " + str(contract_addr) + " created, start transferring tokens")
 
@@ -60,7 +63,7 @@ class P2PTest(ConfluxTestFramework):
             balance_map[receiver_sk] = value
             tx_data = decode_hex(erc20_contract.functions.transfer(Web3.toChecksumAddress(encode_hex(priv_to_addr(receiver_sk))), value).buildTransaction(self.tx_conf)["data"])
             tx = create_transaction(pri_key=sender_key, receiver=decode_hex(self.tx_conf["to"]), value=0, nonce=nonce, gas=gas,
-                                    gas_price=gas_price, data=tx_data)
+                                    gas_price=gas_price, data=tx_data, storage_limit=64)
             r = random.randint(0, self.num_nodes - 1)
             self.nodes[r].p2p.send_protocol_msg(Transactions(transactions=[tx]))
             nonce += 1
@@ -72,6 +75,8 @@ class P2PTest(ConfluxTestFramework):
         for sk in balance_map:
             addr = priv_to_addr(sk)
             assert_equal(self.get_balance(erc20_contract, addr, nonce), balance_map[sk])
+        c2 = client.get_collateral_for_storage(genesis_addr)
+        assert_equal(c2 - c1, 64 * tx_n * 10 ** 18 / 1024)
         block_gen_thread.stop()
         block_gen_thread.join()
         sync_blocks(self.nodes)

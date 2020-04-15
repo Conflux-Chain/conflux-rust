@@ -23,11 +23,29 @@ pub type TxShortId = u64;
 
 pub type TxPropagateId = u32;
 
+// FIXME: Most errors here are bounded for TransactionPool and intended for rpc,
+// FIXME: however these are unused, they are not errors for transaction itself.
+// FIXME: Transaction verification and consensus related error can be separated.
 #[derive(Debug, PartialEq, Clone)]
 /// Errors concerning transaction processing.
 pub enum TransactionError {
     /// Transaction is already imported to the queue
     AlreadyImported,
+    /// Chain id in the transaction doesn't match the chain id of the network.
+    ChainIdMismatch { expected: u64, got: u64 },
+    /// Epoch height out of bound.
+    EpochHeightOutOfBound {
+        block_height: u64,
+        set: u64,
+        transaction_epoch_bound: u64,
+    },
+    /// The gas paid for transaction is lower than base gas.
+    NotEnoughBaseGas {
+        /// Absolute minimum gas required.
+        required: U256,
+        /// Gas provided.
+        got: U256,
+    },
     /// Transaction is not valid anymore (state already has higher nonce)
     Stale,
     /// Transaction has too low fee
@@ -92,6 +110,22 @@ impl fmt::Display for TransactionError {
         use self::TransactionError::*;
         let msg = match *self {
             AlreadyImported => "Already imported".into(),
+            ChainIdMismatch { expected, got } => {
+                format!("Chain id mismatch, expected {}, got {}", expected, got)
+            }
+            EpochHeightOutOfBound {
+                block_height,
+                set,
+                transaction_epoch_bound,
+            } => format!(
+                "EpochHeight out of bound:\
+                 block_height {}, transaction epoch_height {}, transaction_epoch_bound {}",
+                block_height, set, transaction_epoch_bound
+            ),
+            NotEnoughBaseGas { got, required } => format!(
+                "Transaction gas {} less than intrinsic gas {}",
+                got, required
+            ),
             Stale => "No longer valid".into(),
             TooCheapToReplace => "Gas price too low to replace".into(),
             LimitReached => "Transaction limit reached".into(),
@@ -167,7 +201,7 @@ pub struct ChainIdParams {
 
 impl ChainIdParams {
     /// The function return the chain_id with given parameters
-    pub fn get_chain_id(&self) -> u64 { 0 }
+    pub const fn get_chain_id(&self) -> u64 { 0 }
 }
 
 #[derive(
@@ -377,18 +411,6 @@ impl TransactionWithSignature {
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
         Ok(recover(&self.signature(), &self.unsigned.hash())?)
-    }
-
-    /// Verify basic signature params. Does not attempt sender recovery.
-    pub fn verify_basic(&self) -> Result<(), TransactionError> {
-        self.check_low_s()?;
-
-        // Disallow unsigned transactions
-        if self.is_unsigned() {
-            return Err(keylib::Error::InvalidSignature.into());
-        }
-
-        Ok(())
     }
 
     pub fn rlp_size(&self) -> usize {

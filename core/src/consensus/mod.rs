@@ -24,11 +24,13 @@ use crate::{
     executive::Executed,
     parameters::{consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
+    rpc_errors::Result as RpcResult,
     state::State,
     statedb::StateDb,
     statistics::SharedStatistics,
     storage::state_manager::StateManagerTrait,
     transaction_pool::SharedTransactionPool,
+    verification::VerificationConfig,
     vm_factory::VmFactory,
     Notifications,
 };
@@ -183,6 +185,7 @@ impl ConsensusGraph {
         pow_config: ProofOfWorkConfig, era_genesis_block_hash: &H256,
         era_stable_block_hash: &H256, notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
+        verification_config: VerificationConfig,
     ) -> Self
     {
         let inner =
@@ -199,6 +202,7 @@ impl ConsensusGraph {
             vm,
             inner.clone(),
             execution_conf,
+            verification_config,
             conf.bench_mode,
         );
         let confirmation_meter = ConfirmationMeter::new();
@@ -240,6 +244,7 @@ impl ConsensusGraph {
         statistics: SharedStatistics, data_man: Arc<BlockDataManager>,
         pow_config: ProofOfWorkConfig, notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
+        verification_conf: VerificationConfig,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -255,6 +260,7 @@ impl ConsensusGraph {
             &stable_hash,
             notifications,
             execution_conf,
+            verification_conf,
         )
     }
 
@@ -423,7 +429,10 @@ impl ConsensusGraph {
             Some(state_readonly_index) => self
                 .data_man
                 .storage_manager
-                .get_state_no_commit(state_readonly_index)
+                .get_state_no_commit(
+                    state_readonly_index,
+                    /* try_open = */ true,
+                )
                 .map_err(|e| format!("Error to get state, err={:?}", e))?,
             None => None,
         };
@@ -867,7 +876,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> Result<Executed, String> {
+    ) -> RpcResult<Executed> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
@@ -887,6 +896,8 @@ impl Drop for ConsensusGraph {
 
 impl ConsensusGraphTrait for ConsensusGraph {
     fn as_any(&self) -> &dyn Any { self }
+
+    fn consensus_config(&self) -> &ConsensusConfig { &self.config }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
@@ -1096,7 +1107,17 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.read_recursive().get_block_epoch_number(hash)
     }
 
-    /// Wait until the best state has been executed, and return the state
+    /// Wait until the best state has been executed, and return the state.
+    ///
+    /// Do not use this function to answer queries from peers. This function is
+    /// mainly used for transaction pool.
+    //
+    // TODO: The drawback of the current implementation is that it waits for
+    // TODO: execution, and the current logic seems pretty complex, but
+    // TODO: since transaction pool is designed to take just a recent state
+    // TODO: from execution, taking a recently executed state which matched
+    // TODO: with pivot chain (a final check in StateAvailabilityBoundry)
+    // TODO: from ConsensusExecutor should be good.
     fn get_best_state(&self) -> State {
         // To handle the extremely rare case that the large chain
         // reorganization/checkpoint happens in this call (because we do
@@ -1116,10 +1137,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
                     .data_man
                     .get_state_readonly_index(&best_state_hash)
                     .into();
-                if let Ok(state) = self
-                    .data_man
-                    .storage_manager
-                    .get_state_no_commit(best_state_index.unwrap())
+                if let Ok(state) =
+                    self.data_man.storage_manager.get_state_no_commit(
+                        best_state_index.unwrap(),
+                        /* try_open = */ false,
+                    )
                 {
                     return state
                         .map(|db| {

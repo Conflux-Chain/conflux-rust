@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -514,6 +514,7 @@ dependencies = [
  "heapsize",
  "hibitset",
  "io",
+ "jsonrpc-core",
  "keccak-hash",
  "kvdb",
  "kvdb-rocksdb",
@@ -665,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "app_dirs",
  "blockgen",
@@ -736,7 +737,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "app_dirs",
  "blockgen",

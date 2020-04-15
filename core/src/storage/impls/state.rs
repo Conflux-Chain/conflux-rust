@@ -7,7 +7,7 @@ pub type ChildrenMerkleMap =
 
 pub struct State {
     manager: Arc<StateManager>,
-    snapshot_db: SnapshotDb,
+    snapshot_db: Arc<SnapshotDb>,
     snapshot_epoch_id: EpochId,
     snapshot_merkle_root: MerkleHash,
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
@@ -419,7 +419,7 @@ impl StateTrait for State {
         };
 
         // Retrieve key/value pairs from snapshot
-        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator();
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?;
         let lower_bound_incl = access_key_prefix.to_key_bytes();
         let mut upper_bound_excl_value = lower_bound_incl.clone();
         let upper_bound_excl = if lower_bound_incl.len() == 0 {
