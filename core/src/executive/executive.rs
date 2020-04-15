@@ -1295,14 +1295,10 @@ impl<'a> Executive<'a> {
             &tx.data,
             spec,
         );
-        if tx.gas < base_gas_required.into() {
-            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                ToRepackError::NotEnoughBaseGas {
-                    required: base_gas_required.into(),
-                    got: tx.gas,
-                },
-            ));
-        }
+        assert!(
+            tx.gas >= base_gas_required.into(),
+            "We have already checked the base gas requirement when we received the block."
+        );
         let init_gas = tx.gas - base_gas_required;
 
         let balance = self.state.balance(&sender)?;

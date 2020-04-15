@@ -63,16 +63,6 @@ pub enum ToRepackError {
         transaction_epoch_bound: u64,
     },
 
-    /// The gas paid for transaction is lower than base gas.
-    /// The transaction was correct in the block where it's packed, but
-    /// falls into the error when in the epoch to execute.
-    NotEnoughBaseGas {
-        /// Absolute minimum gas required.
-        required: U256,
-        /// Gas provided.
-        got: U256,
-    },
-
     /// Returned when cost of transaction (value + gas_price * gas) exceeds
     /// current sponsor balance.
     NotEnoughCashFromSponsor {
