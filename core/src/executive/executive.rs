@@ -1406,7 +1406,7 @@ impl<'a> Executive<'a> {
 
         let mut substate = Substate::new();
         // Sender is responsible for the insufficient balance.
-        if balance512 < total_cost {
+        if balance512 < sender_intended_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
             let actual_gas_cost: U256;
@@ -1446,6 +1446,8 @@ impl<'a> Executive<'a> {
                 ),
             ));
         } else {
+            // From now on sender balance >= total_cost, transaction execution
+            // is guaranteed.
             self.state.inc_nonce(&sender)?;
         }
 
