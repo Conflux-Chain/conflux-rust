@@ -18,6 +18,8 @@
 
 - Use block_count - 1 in target difficulty calculation because the timespan is calculated after the max - min timestamp of blocks.
 
+- Forbidden CALLCODE and DELEGATECALL to internal contracts.
+
 ## Improvements
 
 - Improve the transaction address check at RPC
