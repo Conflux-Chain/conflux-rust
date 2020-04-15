@@ -83,4 +83,4 @@ echo "start run $branch"
 run_latency_exp $branch $exp_config $tps $max_block_size_in_bytes
 
 # Comment this line if the data on the master instances are needed for further analysis
-# ./terminate-on-demand.sh
+ ./terminate-on-demand.sh
