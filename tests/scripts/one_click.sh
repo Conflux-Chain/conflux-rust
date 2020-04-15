@@ -2,14 +2,14 @@
 set -euxo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Parameters required: <key_pair> <instance_count> [<enable_flamegraph>] [<branch_name>] [<repository_url>]"
+    echo "Parameters required: <key_pair> <instance_count> [<branch_name>] [<repository_url>] [<enable_flamegraph>] "
     exit 1
 fi
 key_pair="$1"
 slave_count=$2
-enable_flamegraph=${3:-false}
-branch="${4:-master}"
-repo="${5:-https://github.com/Conflux-Chain/conflux-rust}"
+branch="${3:-master}"
+repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
+enable_flamegraph=${5:-false}
 slave_role=${key_pair}_exp_slave
 
 run_latency_exp () {
