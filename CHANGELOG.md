@@ -6,9 +6,19 @@
 
 - Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
 
+- Add missing transaction verifications for invalid block.
+
+- Fill in correct block gas limit value for mining.
+
 ## Improvements
 
 - Improve the transaction address check at RPC
+
+## EVM Updates
+
+- Decide the storage owner (who is responsible for storage collateral) at the beginning of the transaction. 
+
+- Only check the storage limit and balance for storage collateral at the end of EVM execution. 
 
 # 0.3.2
 
@@ -74,6 +84,7 @@ functionality remains the same.
 - Fix an issue that failing to send a pending request can make a block not received.
 
 - Fix an issue that not-graph-ready compact blocks are not fully received.
+
 
 ## Improvements
 

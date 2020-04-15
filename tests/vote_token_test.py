@@ -35,9 +35,9 @@ class VoteTokenTest(SmartContractBenchBase):
         self.vote_contract = get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
                                                         contract_name="AdvancedTokenVote1202")
         self.log.info("Initializing contract")
-        transaction = self.call_contract_function(self.token_contract, "constructor", [], self.default_account_key)
+        transaction = self.call_contract_function(self.token_contract, "constructor", [], self.default_account_key, storage_limit=20000)
         self.token_address = self.wait_for_tx([transaction], True)[0]['contractCreated']
-        transaction = self.call_contract_function(self.vote_contract, "constructor", [], self.default_account_key)
+        transaction = self.call_contract_function(self.vote_contract, "constructor", [], self.default_account_key, storage_limit=20000)
         self.vote_address = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.accounts = [a[0] for a in self.new_address_and_transfer(5)]
 
@@ -45,10 +45,10 @@ class VoteTokenTest(SmartContractBenchBase):
         self.call_contract_function(self.vote_contract, "createIssue",
                                     [i, Web3.toChecksumAddress(self.token_address), [j for j in range(self.num_of_options)],
                                      [Web3.toChecksumAddress(priv_to_addr(acc)) for acc in self.accounts], "v"],
-                                    self.default_account_key, self.vote_address, True, True)
+                                    self.default_account_key, self.vote_address, True, True, storage_limit=64)
         for i in range(self.num_of_options):
             self.call_contract_function(self.vote_contract, "vote", [i, random.randint(0, self.num_of_options-1)],
-                                        self.default_account_key, self.vote_address, True, True)
+                                        self.default_account_key, self.vote_address, True, True, storage_limit=64)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@
 //! Cost spec and other parameterisations for the EVM.
 
 /// Definition of the cost spec and other parameterisations for the VM.
+#[derive(Debug, Clone)]
 pub struct Spec {
     /// Does it support exceptional failed code deposit
     pub exceptional_failed_code_deposit: bool,
@@ -136,6 +137,7 @@ pub struct Spec {
 }
 
 /// Wasm cost table
+#[derive(Debug, Clone)]
 pub struct WasmCosts {
     /// Default opcode cost
     pub regular: u32,
@@ -192,7 +194,7 @@ impl Default for WasmCosts {
 }
 
 /// Dust accounts cleanup mode.
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CleanDustMode {
     /// Dust cleanup is disabled.
     Off,

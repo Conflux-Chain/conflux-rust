@@ -62,8 +62,7 @@ pub fn contract_address(
             &mut buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
             &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
-            // address. For contract address, the bit will be set
-            // one.
+            // address. For contract address, the bits will be set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
             h.converted_to_contract();
             (h, Some(code_hash))
@@ -331,7 +330,7 @@ impl<'a> CallCreateExecutive<'a> {
     fn enact_result(
         result: &vm::Result<FinalizationResult>, state: &mut State,
         substate: &mut Substate, mut unconfirmed_substate: Substate,
-        sender: &Address, storage_limit: &U256,
+        sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
     ) -> CollateralCheckResult
     {
         match *result {
@@ -354,12 +353,19 @@ impl<'a> CallCreateExecutive<'a> {
                 state.revert_to_checkpoint();
                 CollateralCheckResult::Valid
             }
-            Ok(_) | Err(vm::Error::Internal(_)) => {
-                let check_result = state.check_collateral_for_storage(
-                    sender,
-                    storage_limit,
-                    &mut unconfirmed_substate,
-                );
+            Err(vm::Error::StateDbError(_)) => {
+                panic!("db error occurred during execution");
+            }
+            Ok(_) => {
+                let check_result = if is_bottom_ex {
+                    state.check_collateral_for_storage_finally(
+                        sender,
+                        storage_limit,
+                        &mut unconfirmed_substate,
+                    )
+                } else {
+                    state.checkout_ownership_changed(&mut unconfirmed_substate)
+                };
                 match check_result {
                     Ok(CollateralCheckResult::ExceedStorageLimit {
                         ..
@@ -504,7 +510,7 @@ impl<'a> CallCreateExecutive<'a> {
                 let spec = self.spec;
                 let internal_contract_map = self.internal_contract_map;
 
-                let inner = || {
+                let inner = |depth| {
                     if params.call_type != CallType::Call {
                         return Err(vm::Error::InternalContract(
                             "Incorrect call type.",
@@ -539,11 +545,18 @@ impl<'a> CallCreateExecutive<'a> {
                         state.revert_to_checkpoint();
                         Err(e.into())
                     } else {
-                        match state.check_collateral_for_storage(
-                            &params.original_sender,
-                            &params.storage_limit,
-                            &mut unconfirmed_substate,
-                        ) {
+                        let cres = if depth == 0 {
+                            state.check_collateral_for_storage_finally(
+                                &params.original_sender,
+                                &params.storage_limit,
+                                &mut unconfirmed_substate,
+                            )
+                        } else {
+                            state.checkout_ownership_changed(
+                                &mut unconfirmed_substate,
+                            )
+                        };
+                        match cres {
                             Ok(CollateralCheckResult::ExceedStorageLimit {
                                 ..
                             }) => {
@@ -583,7 +596,7 @@ impl<'a> CallCreateExecutive<'a> {
                     }
                 };
 
-                Ok(inner())
+                Ok(inner(self.depth))
             }
 
             CallCreateExecutiveKind::ExecCall(
@@ -670,6 +683,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -769,6 +783,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -861,6 +876,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -958,6 +974,7 @@ impl<'a> CallCreateExecutive<'a> {
                     unconfirmed_substate,
                     &sender,
                     &storage_limit,
+                    self.depth == 0,
                 ) {
                     CollateralCheckResult::Valid => Ok(res),
                     CollateralCheckResult::ExceedStorageLimit { .. } => {
@@ -1239,34 +1256,9 @@ impl<'a> Executive<'a> {
         &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
     ) -> ExecutionResult<Executed> {
         *nonce_increased = false;
+        let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
-
-        let spec = self.spec;
-        let base_gas_required = U256::from(Self::gas_required_for(
-            match tx.action {
-                Action::Create => true,
-                Action::Call(_) => false,
-            },
-            &tx.data,
-            spec,
-        ));
-
-        if tx.gas < base_gas_required {
-            return Err(ExecutionError::NotEnoughBaseGas {
-                required: base_gas_required,
-                got: tx.gas,
-            });
-        }
-
-        if !tx.is_unsigned()
-            && spec.kill_dust != CleanDustMode::Off
-            && !self.state.exists(&sender)?
-        {
-            return Err(ExecutionError::SenderMustExist);
-        }
-
-        let init_gas = tx.gas - base_gas_required;
 
         // Validate transaction nonce
         if tx.nonce != nonce {
@@ -1276,19 +1268,26 @@ impl<'a> Executive<'a> {
             });
         }
 
-        // This should never happen because we have checked block gas limit
-        // before SyncGraph Validate if transaction fits into give block
-        if self.env.gas_used + tx.gas > self.env.gas_limit {
-            return Err(ExecutionError::BlockGasLimitReached {
-                gas_limit: self.env.gas_limit,
-                gas_used: self.env.gas_used,
-                gas: tx.gas,
-            });
+        // FIXME: check rpc spec on call virtual.
+        // FIXME: Remove this error because of sponsored payment.
+        if !tx.is_unsigned()
+            && spec.kill_dust != CleanDustMode::Off
+            && !self.state.exists(&sender)?
+        {
+            return Err(ExecutionError::SenderMustExist);
         }
+
+        let base_gas_required = Executive::gas_required_for(
+            tx.action == Action::Create,
+            &tx.data,
+            spec,
+        );
+        let init_gas = tx.gas - base_gas_required;
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
 
+        // FIXME: check for NotEnoughBalance before increasing the nonce.
         // Increase nonce even sender does not have enough balance
         if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
             self.state.inc_nonce(&sender)?;
@@ -1334,6 +1333,7 @@ impl<'a> Executive<'a> {
                 }
                 .try_into()
                 .unwrap();
+                // FIXME: errors like this is beyond consensus as well.
                 self.state.sub_balance(
                     &sender,
                     &actual_gas_cost,
@@ -1347,6 +1347,8 @@ impl<'a> Executive<'a> {
                     &actual_gas_cost,
                 )?;
             }
+            // FIXME: if the balance is zero, do not increase Nonce, the tx
+            // should be recycled.
             return Err(ExecutionError::NotEnoughCash {
                 required: total_cost,
                 got: balance512,
@@ -1368,35 +1370,40 @@ impl<'a> Executive<'a> {
             )?;
         }
 
-        // Find the storage upper bound in this execution for the sender.
-        let storage_limit = {
-            let collateral_for_storage =
-                self.state.collateral_for_storage(&sender)?;
-            // The balance which the sponsor will sponsor sender.
-            let sponsored_balance = if has_privilege {
-                self.state.sponsor_balance_for_collateral(&code_address)?
-            } else {
-                U256::zero()
-            };
-            let storage_limit_in_drip =
-                if tx.storage_limit >= U256::MAX / *COLLATERAL_PER_BYTE {
-                    U256::MAX
+        // Find the  upper bound of `collateral_for_storage` and `storage_owner`
+        // in this execution.
+        let (storage_limit, storage_owner) = {
+            let tx_storage_limit_in_drip =
+                if tx.storage_limit >= U256::from(std::u64::MAX) {
+                    U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
                 } else {
                     tx.storage_limit * *COLLATERAL_PER_BYTE
                 };
-            if storage_limit_in_drip >= sponsored_balance {
-                if storage_limit_in_drip - sponsored_balance
-                    <= U256::MAX - collateral_for_storage
-                {
-                    // The incremental storage cost will be payed by the sender.
-                    storage_limit_in_drip - sponsored_balance
-                        + collateral_for_storage
-                } else {
-                    U256::MAX
-                }
+            if has_privilege
+                && tx_storage_limit_in_drip
+                    <= self
+                        .state
+                        .sponsor_balance_for_collateral(&code_address)?
+            {
+                // sponsor will pay for collateral for storage
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&code_address)?;
+                (
+                    tx_storage_limit_in_drip + collateral_for_storage,
+                    code_address,
+                )
             } else {
-                // All incremental storage cost will be payed by the sponsor.
-                collateral_for_storage
+                // sender will pay for collateral for storage
+                let balance = self.state.balance(&sender)?;
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&sender)?;
+                if tx_storage_limit_in_drip > balance {
+                    return Err(ExecutionError::NotEnoughBalanceForStorage {
+                        required: tx_storage_limit_in_drip,
+                        got: balance,
+                    });
+                }
+                (tx_storage_limit_in_drip + collateral_for_storage, sender)
             }
         };
 
@@ -1419,7 +1426,7 @@ impl<'a> Executive<'a> {
                     address: new_address,
                     sender,
                     original_sender: sender,
-                    original_receiver: new_address,
+                    storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
@@ -1442,7 +1449,7 @@ impl<'a> Executive<'a> {
                     address: *address,
                     sender,
                     original_sender: sender,
-                    original_receiver: *address,
+                    storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
@@ -1508,11 +1515,10 @@ impl<'a> Executive<'a> {
         if let Some(r) = refund_receiver {
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
-            let spec = self.spec;
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
-                substate.to_cleanup_mode(&spec),
+                substate.to_cleanup_mode(self.spec),
             )?;
         };
 
@@ -1523,6 +1529,10 @@ impl<'a> Executive<'a> {
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
+        //
+        // When enabling this feature, remember to check touched set in
+        // functions like "add_collateral_for_storage()" in "State"
+        // struct.
 
         //        // perform garbage-collection
         //        let min_balance = if spec.kill_dust != CleanDustMode::Off {
@@ -1539,7 +1549,6 @@ impl<'a> Executive<'a> {
         //        )?;
 
         match result {
-            Err(vm::Error::Internal(msg)) => Err(ExecutionError::Internal(msg)),
             Err(exception) => Ok(Executed {
                 exception: Some(exception),
                 gas: tx.gas,

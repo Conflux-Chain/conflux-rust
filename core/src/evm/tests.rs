@@ -120,7 +120,7 @@ fn test_origin(factory: super::Factory) {
     let mut params = ActionParams::default();
     params.address = address;
     params.original_sender = origin;
-    params.original_receiver = address;
+    params.storage_owner = address;
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut context = MockContext::new();

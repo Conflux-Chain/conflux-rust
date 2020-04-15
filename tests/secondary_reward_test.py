@@ -84,7 +84,8 @@ class StorageMaintenanceTest(ConfluxTestFramework):
 
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc.new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, nonce=None,
-                                      gas_price=self.gasPrice)
+                                      gas_price=self.gasPrice,
+                                      storage_limit=20000)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         address = receipt["contractCreated"]

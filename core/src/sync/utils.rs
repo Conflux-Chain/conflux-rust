@@ -6,6 +6,7 @@ use crate::{
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
+    genesis::genesis_block,
     parameters::{
         block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
         consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -16,7 +17,7 @@ use crate::{
     statistics::Statistics,
     storage::{StorageConfiguration, StorageManager},
     sync::{SyncGraphConfig, SynchronizationGraph},
-    transaction_pool::{TxPoolConfig, DEFAULT_MAX_BLOCK_GAS_LIMIT},
+    transaction_pool::TxPoolConfig,
     verification::VerificationConfig,
     vm_factory::VmFactory,
     ConsensusGraph, Notifications, TransactionPool,
@@ -113,9 +114,9 @@ pub fn initialize_data_manager(
         U256::from(0),
     );
 
-    let genesis_block = Arc::new(storage_manager.initialize(
+    let genesis_block = Arc::new(genesis_block(
+        &storage_manager,
         genesis_accounts,
-        DEFAULT_MAX_BLOCK_GAS_LIMIT.into(),
         Address::from_str("0000000000000000000000000000000000000008").unwrap(),
         U256::from(10),
     ));
@@ -141,8 +142,15 @@ pub fn initialize_synchronization_graph_with_data_manager(
     era_epoch_count: u64,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
+    let verification_config = VerificationConfig::new(
+        true,
+        REFEREE_DEFAULT_BOUND,
+        MAX_BLOCK_SIZE_IN_BYTES,
+        TRANSACTION_DEFAULT_EPOCH_BOUND,
+    );
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),
+        verification_config.clone(),
         data_man.clone(),
     ));
     let statistics = Arc::new(Statistics::new());
@@ -188,15 +196,10 @@ pub fn initialize_synchronization_graph_with_data_manager(
         ConsensusExecutionConfiguration {
             anticone_penalty_ratio: tcr - 1,
             base_reward_table_in_ucfx: vec![INITIAL_BASE_MINING_REWARD_IN_UCFX],
-            transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         },
+        verification_config.clone(),
     ));
 
-    let verification_config = VerificationConfig::new(
-        true,
-        REFEREE_DEFAULT_BOUND,
-        MAX_BLOCK_SIZE_IN_BYTES,
-    );
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
         verification_config,

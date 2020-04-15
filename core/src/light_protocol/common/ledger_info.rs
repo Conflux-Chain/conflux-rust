@@ -42,6 +42,7 @@ impl LedgerInfo {
             .get_data_manager()
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
+            // FIXME: what's this internal error?
             .ok_or(ErrorKind::InternalError.into())
     }
 
@@ -134,7 +135,7 @@ impl LedgerInfo {
             self.consensus
                 .get_data_manager()
                 .storage_manager
-                .get_state_no_commit(state_index)
+                .get_state_no_commit(state_index, /* try_open = */ true)
         });
 
         match state {
