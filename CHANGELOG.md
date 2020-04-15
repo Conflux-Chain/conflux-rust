@@ -6,11 +6,15 @@
 
 - Stop marking OverlayAccount dirty on read access. This will influnce the state root. 
 
+- Do not mark OverlayAccount dirty in sub_balance 0 for non-existence account.
+
 - Add missing transaction verifications for invalid block.
 
 - Fill in correct block gas limit value for mining.
 
 - Set block gas limit for Genesis block to 30_000_000.
+
+- Fix definitions and logics in transaction early execution error checking.
 
 ## Improvements
 

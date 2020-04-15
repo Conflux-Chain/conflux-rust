@@ -48,7 +48,6 @@ fi
 
 git fetch --all
 git checkout $repo/$branch
-cargo update
 cargo build --release #--features "deadlock_detection"
 ./dev-support/dep_pip3.sh
 cd tests/scripts

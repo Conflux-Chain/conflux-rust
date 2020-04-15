@@ -1150,8 +1150,8 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
         let extractor_arc = result.as_ref().unwrap().clone();
         // FIXME: remove unsafes.
         unsafe {
-            (&mut *(extractor_arc.as_ref() as *const EthTxExtractor<EthTxT>
-                as *mut EthTxExtractor<EthTxT>))
+            &mut *(extractor_arc.as_ref() as *const EthTxExtractor<EthTxT>
+                as *mut EthTxExtractor<EthTxT>)
         }
         .shared_self = Some(extractor_arc.clone());
 

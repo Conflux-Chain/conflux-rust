@@ -4,19 +4,21 @@
 
 use super::{
     context::{Context, OriginInfo, OutputPolicy},
-    Executed, ExecutionError, ExecutionResult, InternalContractMap,
+    Executed, ExecutionError, InternalContractMap,
 };
 use crate::{
     bytes::{Bytes, BytesRef},
     evm::{FinalizationResult, Finalize},
+    executive::executed::{ExecutionOutcome, ToRepackError},
     hash::keccak,
     machine::Machine,
     parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
+    statedb::Result as DbResult,
+    verification::VerificationConfig,
     vm::{
-        self, ActionParams, ActionValue, CallType, CleanDustMode,
-        CreateContractAddress, Env, ResumeCall, ResumeCreate, ReturnData, Spec,
-        TrapError,
+        self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
+        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
     },
     vm_factory::VmFactory,
 };
@@ -1236,7 +1238,7 @@ impl<'a> Executive<'a> {
 
     pub fn transact_virtual(
         &mut self, tx: &SignedTransaction,
-    ) -> ExecutionResult<Executed> {
+    ) -> DbResult<ExecutionOutcome> {
         let sender = tx.sender();
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
@@ -1248,33 +1250,44 @@ impl<'a> Executive<'a> {
                 CleanupMode::NoEmpty,
             )?;
         }
-        let mut nonce_increased = false;
-        self.transact(tx, &mut nonce_increased)
+        self.transact(tx)
     }
 
     pub fn transact(
-        &mut self, tx: &SignedTransaction, nonce_increased: &mut bool,
-    ) -> ExecutionResult<Executed> {
-        *nonce_increased = false;
+        &mut self, tx: &SignedTransaction,
+    ) -> DbResult<ExecutionOutcome> {
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
 
         // Validate transaction nonce
         if tx.nonce != nonce {
-            return Err(ExecutionError::InvalidNonce {
-                expected: nonce,
-                got: tx.nonce,
-            });
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::InvalidNonce {
+                    expected: nonce,
+                    got: tx.nonce,
+                },
+            ));
         }
 
-        // FIXME: check rpc spec on call virtual.
-        // FIXME: Remove this error because of sponsored payment.
-        if !tx.is_unsigned()
-            && spec.kill_dust != CleanDustMode::Off
-            && !self.state.exists(&sender)?
-        {
-            return Err(ExecutionError::SenderMustExist);
+        // Validate transaction epoch height.
+        match VerificationConfig::verify_transaction_epoch_height(
+            tx,
+            self.env.epoch_height,
+            self.env.transaction_epoch_bound,
+        ) {
+            Err(_) => {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::EpochHeightOutOfBound {
+                        block_height: self.env.epoch_height,
+                        set: tx.epoch_height,
+                        transaction_epoch_bound: self
+                            .env
+                            .transaction_epoch_bound,
+                    },
+                ))
+            }
+            Ok(()) => {}
         }
 
         let base_gas_required = Executive::gas_required_for(
@@ -1282,82 +1295,162 @@ impl<'a> Executive<'a> {
             &tx.data,
             spec,
         );
+        assert!(
+            tx.gas >= base_gas_required.into(),
+            "We have already checked the base gas requirement when we received the block."
+        );
         let init_gas = tx.gas - base_gas_required;
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
 
-        // FIXME: check for NotEnoughBalance before increasing the nonce.
-        // Increase nonce even sender does not have enough balance
-        if !spec.keep_unsigned_nonce || !tx.is_unsigned() {
-            self.state.inc_nonce(&sender)?;
-            *nonce_increased = true;
+        // Check if contract will pay transaction fee for the sender.
+        let mut code_address = Address::zero();
+        let mut gas_sponsored = false;
+        let mut storage_sponsored = false;
+        match tx.action {
+            Action::Call(ref address) => {
+                if self.state.is_contract(address) {
+                    code_address = *address;
+                    if self
+                        .state
+                        .check_commission_privilege(&code_address, &sender)?
+                    {
+                        // No need to check for gas sponsor account existence.
+                        gas_sponsored = gas_cost
+                            <= U512::from(
+                                self.state.sponsor_gas_bound(&code_address)?,
+                            );
+                        storage_sponsored = self
+                            .state
+                            .sponsor_for_collateral(&code_address)?
+                            .is_some();
+                    }
+                }
+            }
+            Action::Create => {}
+        };
+
+        let mut total_cost = U512::from(tx.value);
+
+        // Sender pays for gas when sponsor runs out of balance.
+        let gas_sponsor_balance = if gas_sponsored {
+            U512::from(self.state.sponsor_balance_for_gas(&code_address)?)
+        } else {
+            0.into()
+        };
+        let gas_free_of_charge =
+            gas_sponsored && gas_sponsor_balance >= gas_cost;
+
+        if !gas_free_of_charge {
+            total_cost += gas_cost
         }
 
-        // Check if contract will pay transaction fee for the sender.
-        let mut substate = Substate::new();
-        let mut code_address = Address::zero();
-        let mut has_privilege = false;
-        let free_of_charge = match tx.action {
-            Action::Call(ref address) => {
-                code_address = *address;
-                has_privilege = self
-                    .state
-                    .check_commission_privilege(&code_address, &sender)?;
-                self.state.is_contract(address)
-                    && has_privilege
-                    && U512::from(self.state.sponsor_balance_for_gas(address)?)
-                        >= gas_cost
-                    && gas_cost
-                        <= U512::from(self.state.sponsor_gas_bound(address)?)
+        let tx_storage_limit_in_drip =
+            if tx.storage_limit >= U256::from(std::u64::MAX) {
+                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
+            } else {
+                tx.storage_limit * *COLLATERAL_PER_BYTE
+            };
+        let storage_sponsor_balance = if storage_sponsored {
+            self.state.sponsor_balance_for_collateral(&code_address)?
+        } else {
+            0.into()
+        };
+        // Find the upper bound of `collateral_for_storage` and `storage_owner`
+        // in this execution.
+        let (total_storage_limit, storage_owner) = {
+            if storage_sponsored
+                && tx_storage_limit_in_drip <= storage_sponsor_balance
+            {
+                // sponsor will pay for collateral for storage
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&code_address)?;
+                (
+                    tx_storage_limit_in_drip + collateral_for_storage,
+                    code_address,
+                )
+            } else {
+                // sender will pay for collateral for storage
+                total_cost += tx_storage_limit_in_drip.into();
+                let collateral_for_storage =
+                    self.state.collateral_for_storage(&sender)?;
+                (tx_storage_limit_in_drip + collateral_for_storage, sender)
             }
-            Action::Create => false,
         };
 
-        // Avoid unaffordable transactions
         let balance512 = U512::from(balance);
-        let total_cost = if free_of_charge {
-            U512::from(tx.value)
-        } else {
-            U512::from(tx.value) + gas_cost
+        let mut sender_intended_cost = U512::from(tx.value);
+        if !gas_sponsored {
+            sender_intended_cost += gas_cost
+        }
+        if !storage_sponsored {
+            sender_intended_cost += tx_storage_limit_in_drip.into()
         };
+        // Sponsor is allowed however sender do not have enough balance to pay
+        // for the extra gas because sponsor has run out of balance in
+        // the mean time.
+        //
+        // Sender is not responsible for the incident, therefore we don't fail
+        // the transaction.
+        if balance512 >= sender_intended_cost && balance512 < total_cost {
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughCashFromSponsor {
+                    required_gas_cost: gas_cost,
+                    gas_sponsor_balance,
+                    required_storage_cost: tx_storage_limit_in_drip,
+                    storage_sponsor_balance,
+                },
+            ));
+        }
+
+        let mut substate = Substate::new();
+        // Sender is responsible for the insufficient balance.
         if balance512 < total_cost {
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
             let actual_gas_cost: U256;
-            if !free_of_charge {
-                actual_gas_cost = if gas_cost > balance512 {
-                    balance512
-                } else {
-                    gas_cost
-                }
-                .try_into()
-                .unwrap();
-                // FIXME: errors like this is beyond consensus as well.
-                self.state.sub_balance(
-                    &sender,
-                    &actual_gas_cost,
-                    &mut substate.to_cleanup_mode(&spec),
-                )?;
+
+            actual_gas_cost = if gas_cost > balance512 {
+                balance512
             } else {
-                // We have checked that the sponsor has enough balance.
-                actual_gas_cost = gas_cost.try_into().unwrap();
-                self.state.sub_sponsor_balance_for_gas(
-                    &code_address,
-                    &actual_gas_cost,
-                )?;
+                gas_cost
             }
-            // FIXME: if the balance is zero, do not increase Nonce, the tx
-            // should be recycled.
-            return Err(ExecutionError::NotEnoughCash {
-                required: total_cost,
-                got: balance512,
-                actual_gas_cost,
-            });
+            .try_into()
+            .unwrap();
+            // We don't want to bump nonce for non-existent account when we
+            // can't charge gas fee.
+            if !self.state.exists(&sender)? {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::SenderDoesNotExist,
+                ));
+            }
+            self.state.inc_nonce(&sender)?;
+            self.state.sub_balance(
+                &sender,
+                &actual_gas_cost,
+                &mut substate.to_cleanup_mode(&spec),
+            )?;
+
+            return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::NotEnoughCash {
+                    required: total_cost,
+                    got: balance512,
+                    actual_gas_cost: actual_gas_cost.clone(),
+                    max_storage_limit_cost: tx_storage_limit_in_drip,
+                },
+                Executed::not_enough_balance_fee_charged(
+                    tx,
+                    &actual_gas_cost,
+                    &self.env.gas_used,
+                ),
+            ));
+        } else {
+            self.state.inc_nonce(&sender)?;
         }
 
         // Subtract the transaction fee from sender or contract.
-        if !free_of_charge {
+        if !gas_free_of_charge {
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
@@ -1370,43 +1463,6 @@ impl<'a> Executive<'a> {
             )?;
         }
 
-        // Find the  upper bound of `collateral_for_storage` and `storage_owner`
-        // in this execution.
-        let (storage_limit, storage_owner) = {
-            let tx_storage_limit_in_drip =
-                if tx.storage_limit >= U256::from(std::u64::MAX) {
-                    U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
-                } else {
-                    tx.storage_limit * *COLLATERAL_PER_BYTE
-                };
-            if has_privilege
-                && tx_storage_limit_in_drip
-                    <= self
-                        .state
-                        .sponsor_balance_for_collateral(&code_address)?
-            {
-                // sponsor will pay for collateral for storage
-                let collateral_for_storage =
-                    self.state.collateral_for_storage(&code_address)?;
-                (
-                    tx_storage_limit_in_drip + collateral_for_storage,
-                    code_address,
-                )
-            } else {
-                // sender will pay for collateral for storage
-                let balance = self.state.balance(&sender)?;
-                let collateral_for_storage =
-                    self.state.collateral_for_storage(&sender)?;
-                if tx_storage_limit_in_drip > balance {
-                    return Err(ExecutionError::NotEnoughBalanceForStorage {
-                        required: tx_storage_limit_in_drip,
-                        got: balance,
-                    });
-                }
-                (tx_storage_limit_in_drip + collateral_for_storage, sender)
-            }
-        };
-
         let (result, output) = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
@@ -1417,7 +1473,13 @@ impl<'a> Executive<'a> {
                 );
 
                 if self.state.is_contract(&new_address) {
-                    return Err(ExecutionError::ContractAddressConflict);
+                    return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::ContractAddressConflict,
+                        Executed::execution_error_fully_charged(
+                            tx,
+                            &self.env.gas_used,
+                        ),
+                    ));
                 }
 
                 let params = ActionParams {
@@ -1434,7 +1496,7 @@ impl<'a> Executive<'a> {
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
-                    storage_limit,
+                    storage_limit: total_storage_limit,
                 };
                 let res = self.create(params, &mut substate);
                 let out = match &res {
@@ -1458,7 +1520,7 @@ impl<'a> Executive<'a> {
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
-                    storage_limit,
+                    storage_limit: total_storage_limit,
                 };
 
                 let res = self.call(params, &mut substate);
@@ -1470,7 +1532,7 @@ impl<'a> Executive<'a> {
             }
         };
 
-        let refund_receiver = if free_of_charge {
+        let refund_receiver = if gas_free_of_charge {
             Some(code_address)
         } else {
             None
@@ -1484,7 +1546,7 @@ impl<'a> Executive<'a> {
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>,
-    ) -> ExecutionResult<Executed>
+    ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
             Ok(FinalizationResult { gas_left, .. }) => gas_left,
@@ -1549,21 +1611,15 @@ impl<'a> Executive<'a> {
         //        )?;
 
         match result {
-            Err(exception) => Ok(Executed {
-                exception: Some(exception),
-                gas: tx.gas,
-                gas_used: tx.gas,
-                fee: tx.gas * tx.gas_price,
-                cumulative_gas_used: self.env.gas_used + tx.gas,
-                logs: vec![],
-                contracts_created: vec![],
-                storage_collateralized: Vec::new(),
-                storage_released: Vec::new(),
-                output,
-            }),
+            Err(vm::Error::StateDbError(e)) => bail!(e),
+            Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(exception),
+                Executed::execution_error_fully_charged(tx, &self.env.gas_used),
+            )),
             Ok(r) => {
                 let mut storage_collateralized = Vec::new();
                 let mut storage_released = Vec::new();
+
                 if r.apply_state {
                     let affected_address1: HashSet<_> = substate
                         .storage_collateralized
@@ -1600,12 +1656,7 @@ impl<'a> Executive<'a> {
                     }
                 }
 
-                Ok(Executed {
-                    exception: if r.apply_state {
-                        None
-                    } else {
-                        Some(vm::Error::Reverted)
-                    },
+                let executed = Executed {
                     gas: tx.gas,
                     gas_used,
                     fee: fees_value,
@@ -1615,7 +1666,17 @@ impl<'a> Executive<'a> {
                     storage_collateralized,
                     storage_released,
                     output,
-                })
+                };
+
+                if r.apply_state {
+                    Ok(ExecutionOutcome::Finished(executed))
+                } else {
+                    // Transaction reverted for unspecified reason.
+                    Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::VmError(vm::Error::Reverted),
+                        executed,
+                    ))
+                }
             }
         }
     }
