@@ -1673,7 +1673,7 @@ impl<'a> Executive<'a> {
                 if r.apply_state {
                     Ok(ExecutionOutcome::Finished(executed))
                 } else {
-                    // Transaction reverted for unspecified reason.
+                    // Transaction reverted by vm instruction.
                     Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::VmError(vm::Error::Reverted),
                         executed,

@@ -45,6 +45,7 @@ pub fn sign_call(
 ) -> SignedTransaction {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
+    // FIXME: the from address must be a simple account.
     let from = request.from.unwrap_or_else(|| H160::random());
 
     PrimitiveTransaction {

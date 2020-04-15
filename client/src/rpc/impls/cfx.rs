@@ -22,7 +22,6 @@ use blockgen::BlockGenerator;
 use cfx_types::{AddressUtil, H160, H256, U256};
 use cfxcore::{
     block_data_manager::BlockExecutionResultWithEpoch,
-    executive::Executed,
     machine::{new_machine_with_builtin, Machine},
     state_exposer::STATE_EXPOSER,
     test_context::*,
@@ -725,45 +724,7 @@ impl RpcImpl {
     fn call(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
-        let success_executed = self.exec_transaction(request, epoch)?;
-        Ok(Bytes::new(success_executed.output))
-    }
-
-    fn estimate_gas_and_collateral(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<EstimateGasAndCollateralResponse> {
-        // FIXME: what's the definition of "exception" for the execution of this
-        // FIXME: transaction? How can a transaction fail to execute? Is it
-        // FIXME: possible that a transaction execution fail but still legal? We
-        // FIXME: can not refuse to estimate gas for a legal transaction. The
-        // FIXME: transaction must have no side effect in order to be illegal.
-        let success_executed = self.exec_transaction(request, epoch)?;
-        let mut storage_collateralized = 0;
-        for storage_change in &success_executed.storage_collateralized {
-            storage_collateralized += storage_change.amount;
-        }
-        let response = EstimateGasAndCollateralResponse {
-            gas_used: success_executed.gas_used.into(),
-            storage_collateralized: storage_collateralized.into(),
-        };
-        Ok(response)
-    }
-
-    fn exec_transaction(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<Executed> {
-        let consensus_graph = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed");
-        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
-
-        let best_epoch_height = consensus_graph.best_epoch_number();
-        let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = sign_call(best_epoch_height, chain_id, request);
-        trace!("call tx {:?}", signed_tx);
-        match consensus_graph.call_virtual(&signed_tx, epoch.into())? {
+        match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -783,8 +744,60 @@ impl RpcImpl {
                     format! {"{:?}", e}.into_bytes()
                 ))
             }
-            ExecutionOutcome::Finished(executed) => Ok(executed),
+            ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
         }
+    }
+
+    fn estimate_gas_and_collateral(
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
+    ) -> RpcResult<EstimateGasAndCollateralResponse> {
+        let executed = match self.exec_transaction(request, epoch)? {
+            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
+                bail!(call_execution_error(
+                    "Can not estimate: transaction can not be executed".into(),
+                    format! {"{:?}", e}.into_bytes()
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(vm::Error::Reverted),
+                executed,
+            ) => executed,
+            ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
+                bail!(call_execution_error(
+                    "Can not estimate: transaction execution failed, \
+                     all gas will be charged"
+                        .into(),
+                    format! {"{:?}", e}.into_bytes()
+                ))
+            }
+            ExecutionOutcome::Finished(executed) => executed,
+        };
+        let mut storage_collateralized = 0;
+        for storage_change in &executed.storage_collateralized {
+            storage_collateralized += storage_change.amount;
+        }
+        let response = EstimateGasAndCollateralResponse {
+            gas_used: executed.gas_used.into(),
+            storage_collateralized: storage_collateralized.into(),
+        };
+        Ok(response)
+    }
+
+    fn exec_transaction(
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
+    ) -> RpcResult<ExecutionOutcome> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+
+        let best_epoch_height = consensus_graph.best_epoch_number();
+        let chain_id = consensus_graph.best_chain_id();
+        let signed_tx = sign_call(best_epoch_height, chain_id, request);
+        trace!("call tx {:?}", signed_tx);
+        consensus_graph.call_virtual(&signed_tx, epoch.into())
     }
 
     fn current_sync_phase(&self) -> RpcResult<String> {
