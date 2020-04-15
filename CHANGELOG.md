@@ -16,6 +16,8 @@
 
 - Fix definitions and logics in transaction early execution error checking.
 
+- Use block_count - 1 in target difficulty calculation because the timespan is calculated after the max - min timestamp of blocks.
+
 ## Improvements
 
 - Improve the transaction address check at RPC
