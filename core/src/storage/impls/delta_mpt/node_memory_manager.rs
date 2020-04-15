@@ -795,5 +795,4 @@ use std::{
     cell::UnsafeCell,
     hint::unreachable_unchecked,
     sync::atomic::{AtomicUsize, Ordering},
-    time::Instant,
 };
