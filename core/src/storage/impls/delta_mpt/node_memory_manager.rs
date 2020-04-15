@@ -142,20 +142,24 @@ impl<
 
     /// Method that requires mut borrow of allocator.
     pub fn enlarge(&self) -> Result<()> {
-        let mut allocator_mut = self.allocator.write();
-        let idle = allocator_mut.capacity() - allocator_mut.len();
+        let allocator_upgradable_read = self.allocator.upgradable_read();
+        let idle = allocator_upgradable_read.capacity()
+            - allocator_upgradable_read.len();
         let should_idle = self.idle_size as usize;
         if idle >= should_idle {
             return Ok(());
         }
         let mut add_size = should_idle - idle;
-        if add_size < allocator_mut.capacity() {
-            add_size = allocator_mut.capacity();
+        if add_size < allocator_upgradable_read.capacity() {
+            add_size = allocator_upgradable_read.capacity();
         }
-        let max_add_size = self.size_limit as usize - allocator_mut.len();
+        let max_add_size =
+            self.size_limit as usize - allocator_upgradable_read.len();
         if add_size >= max_add_size {
             add_size = max_add_size;
         }
+        let mut allocator_mut =
+            RwLockUpgradableReadGuard::upgrade(allocator_upgradable_read);
         allocator_mut.reserve_exact(add_size)?;
         Ok(())
     }
@@ -782,7 +786,9 @@ use super::{
     slab::Slab,
     NodeRefDeltaMpt,
 };
-use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
+use parking_lot::{
+    Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard,
+};
 use primitives::MerkleHash;
 use rlp::*;
 use std::{

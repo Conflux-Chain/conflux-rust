@@ -5,7 +5,7 @@ import conflux.config
 '''
 This is the state root for pre-generated genesis accounts in `genesis_secrets.txt`.
 '''
-conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex("0xf734ca849ef7307458f4a69d2d33e1f0f9b214ae66ca3f754e9376aedaf9a4a0")
+conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex("0x8c1cb35e2433b6bef2ca32b6b8ef6e293170c9ba22ef6dbf05f68a4bd54cda86")
 from conflux.utils import convert_to_nodeid, priv_to_addr, parse_as_int, encode_hex
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_privkey, wait_for_account_stable
@@ -19,12 +19,17 @@ class SingleBench(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.rpc_timewait = 600
-        self.conf_parameters["tx_pool_size"] = "500000"
-        self.conf_parameters["heartbeat_timeout_ms"] = "10000000000"
-        self.conf_parameters["record_tx_index"] = "false"
         # The file can be downloaded from `https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt`
         genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "genesis_secrets.txt")
-        self.conf_parameters["genesis_secrets"] = f"\"{genesis_file_path}\""
+        self.conf_parameters = dict(
+            tx_pool_size=500000,
+            heartbeat_timeout_ms=10000000000,
+            record_tx_index="false",
+            genesis_secrets=f"\"{genesis_file_path}\"",
+            storage_delta_mpts_cache_size = 20_000_000,
+            storage_delta_mpts_cache_start_size = 2_000_000,
+            storage_delta_mpts_slab_idle_size = 2_000_000,
+        )
 
 
     def setup_network(self):
