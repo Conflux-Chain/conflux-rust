@@ -21,7 +21,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-    executive::Executed,
+    executive::ExecutionOutcome,
     parameters::{consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
     rpc_errors::Result as RpcResult,
@@ -876,7 +876,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> RpcResult<Executed> {
+    ) -> RpcResult<ExecutionOutcome> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
@@ -896,8 +896,6 @@ impl Drop for ConsensusGraph {
 
 impl ConsensusGraphTrait for ConsensusGraph {
     fn as_any(&self) -> &dyn Any { self }
-
-    fn consensus_config(&self) -> &ConsensusConfig { &self.config }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.

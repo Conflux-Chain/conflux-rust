@@ -2,15 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{bytes::Bytes, statedb::Error as DbError, vm};
+use crate::{bytes::Bytes, vm};
 use cfx_types::{Address, U256, U512};
-use primitives::{receipt::StorageChange, LogEntry};
+use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Executed {
-    /// True if the outer call/create resulted in an exceptional exit.
-    pub exception: Option<vm::Error>,
-
     /// Gas paid up front for execution of transaction.
     pub gas: U256,
 
@@ -47,10 +44,8 @@ pub struct Executed {
     pub output: Bytes,
 }
 
-/// Result of executing the transaction.
-#[derive(PartialEq, Debug, Clone)]
-#[allow(dead_code)]
-pub enum ExecutionError {
+#[derive(Debug)]
+pub enum ToRepackError {
     /// Returned when transaction nonce does not match state nonce.
     InvalidNonce {
         /// Nonce expected.
@@ -58,6 +53,35 @@ pub enum ExecutionError {
         /// Nonce found.
         got: U256,
     },
+
+    /// Epoch height out of bound.
+    /// The transaction was correct in the block where it's packed, but
+    /// falls into the error when in the epoch to execute.
+    EpochHeightOutOfBound {
+        block_height: u64,
+        set: u64,
+        transaction_epoch_bound: u64,
+    },
+
+    /// Returned when cost of transaction (value + gas_price * gas) exceeds
+    /// current sponsor balance.
+    NotEnoughCashFromSponsor {
+        /// Minimum required gas cost.
+        required_gas_cost: U512,
+        /// Actual balance of gas sponsor.
+        gas_sponsor_balance: U512,
+        /// Minimum required storage collateral cost.
+        required_storage_cost: U256,
+        /// Actual balance of storage sponsor.
+        storage_sponsor_balance: U256,
+    },
+
+    /// Returned when a non-sponsored transaction's sender does not exist yet.
+    SenderDoesNotExist,
+}
+
+#[derive(Debug)]
+pub enum ExecutionError {
     /// Returned when cost of transaction (value + gas_price * gas) exceeds
     /// current sender balance.
     NotEnoughCash {
@@ -65,28 +89,63 @@ pub enum ExecutionError {
         required: U512,
         /// Actual balance.
         got: U512,
-        /// Actual cost. This should be min(tx_fee, balance).
+        /// Actual gas cost. This should be min(gas_fee, balance).
         actual_gas_cost: U256,
+        /// Maximum storage limit cost.
+        max_storage_limit_cost: U256,
     },
-    /// Returned when balance is not enough for `storage_limit *
-    /// COLLATERAL_PER_BYTE`.
-    NotEnoughBalanceForStorage { required: U256, got: U256 },
-    /// Returned when transacting from a non-existing account with dust
-    /// protection enabled.
-    SenderMustExist,
-    /// Returned when internal evm error occurs.
-    StateDbError(String),
     /// Contract already exists in the specified address.
     ContractAddressConflict,
+    VmError(vm::Error),
 }
 
-impl From<DbError> for ExecutionError {
-    fn from(err: DbError) -> Self {
-        ExecutionError::StateDbError(format!("{:?}", err))
+#[derive(Debug)]
+pub enum ExecutionOutcome {
+    NotExecutedToReconsiderPacking(ToRepackError),
+    ExecutionErrorBumpNonce(ExecutionError, Executed),
+    Finished(Executed),
+}
+
+impl ExecutionOutcome {
+    pub fn successfully_executed(self) -> Option<Executed> {
+        match self {
+            ExecutionOutcome::Finished(executed) => Some(executed),
+            _ => None,
+        }
     }
 }
 
-// FIXME: check this.
-/// When the result is an error, the transaction is either not executed or
-/// reverted.
-pub type ExecutionResult<T> = Result<T, ExecutionError>;
+impl Executed {
+    pub fn not_enough_balance_fee_charged(
+        tx: &TransactionWithSignature, fee: &U256, accumulated_gas: &U256,
+    ) -> Self {
+        let gas_used = fee / tx.gas_price;
+        Self {
+            gas: tx.gas,
+            gas_used: gas_used.clone(),
+            fee: fee.clone(),
+            cumulative_gas_used: accumulated_gas + gas_used,
+            logs: vec![],
+            contracts_created: vec![],
+            storage_collateralized: Vec::new(),
+            storage_released: Vec::new(),
+            output: Default::default(),
+        }
+    }
+
+    pub fn execution_error_fully_charged(
+        tx: &TransactionWithSignature, accumulated_gas: &U256,
+    ) -> Self {
+        Self {
+            gas: tx.gas,
+            gas_used: tx.gas,
+            fee: tx.gas * tx.gas_price,
+            cumulative_gas_used: accumulated_gas + tx.gas,
+            logs: vec![],
+            contracts_created: vec![],
+            storage_collateralized: Vec::new(),
+            storage_released: Vec::new(),
+            output: Default::default(),
+        }
+    }
+}

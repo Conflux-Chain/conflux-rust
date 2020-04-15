@@ -166,6 +166,7 @@ pub mod delegate_convert {
         futures::{future::IntoFuture, Future},
         BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
+    use std::hint::unreachable_unchecked;
 
     pub trait Into<T> {
         fn into(x: Self) -> T;
@@ -189,6 +190,7 @@ pub mod delegate_convert {
                 RpcErrorKind::Msg(_)
                 | RpcErrorKind::Decoder(_)
                 | RpcErrorKind::FilterError(_)
+                | RpcErrorKind::StateDb(_)
                 | RpcErrorKind::Storage(_) => JsonRpcError {
                     code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
                     message: format!("Error processing request: {}", e),
@@ -196,7 +198,9 @@ pub mod delegate_convert {
                 },
                 // We exhausted all possible ErrorKinds here, however
                 // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
-                _ => unreachable!(),
+                RpcErrorKind::__Nonexhaustive {} => unsafe {
+                    unreachable_unchecked()
+                },
             }
         }
     }

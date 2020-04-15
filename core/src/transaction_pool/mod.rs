@@ -327,10 +327,11 @@ impl TransactionPool {
         if best_height == 0 {
             warn!("verify transaction while best info isn't initialized");
         } else {
-            if self
-                .verification_config
-                .check_transaction_epoch_bound(transaction, best_height)
-                < 0
+            if VerificationConfig::check_transaction_epoch_bound(
+                transaction,
+                best_height,
+                self.verification_config.transaction_epoch_bound,
+            ) < 0
             {
                 // Check the epoch height is in bound. Because this is such a
                 // loose bound, we can check it here as if it
