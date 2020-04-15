@@ -249,12 +249,13 @@ impl State {
         for (addr, sub) in &collateral_for_storage_sub {
             self.require(&addr, false)?
                 .add_unrefunded_storage_entries(*sub);
-            *substate.storage_released.entry(*addr).or_insert(0) += sub * 64;
+            *substate.storage_released.entry(*addr).or_insert(0) +=
+                sub * BYTES_PER_STORAGE_KEY;
         }
         for (addr, inc) in &collateral_for_storage_inc {
             self.require(&addr, false)?.add_unpaid_storage_entries(*inc);
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
-                inc * 64;
+                inc * BYTES_PER_STORAGE_KEY;
         }
         Ok(CollateralCheckResult::Valid)
     }

@@ -1322,7 +1322,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: *COLLATERAL_PER_STORAGE_KEY,
         action: Action::Call(address),
-        storage_limit: U256::from(64),
+        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1345,7 +1345,7 @@ fn test_storage_commission_privilege() {
     .unwrap();
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, sender.address());
-    assert_eq!(storage_collateralized[0].amount, 64);
+    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(storage_released.len(), 0);
 
     state
@@ -1417,7 +1417,10 @@ fn test_storage_commission_privilege() {
     );
     state.discard_checkpoint();
     assert_eq!(substate.storage_collateralized.len(), 1);
-    assert_eq!(substate.storage_collateralized[&sender.address()], 2 * 64);
+    assert_eq!(
+        substate.storage_collateralized[&sender.address()],
+        2 * BYTES_PER_STORAGE_KEY
+    );
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(3)
@@ -1455,7 +1458,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(64),
+        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1479,10 +1482,10 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller3.address());
-    assert_eq!(storage_collateralized[0].amount, 64);
+    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, sender.address());
-    assert_eq!(storage_released[0].amount, 64);
+    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.sponsor_balance_for_collateral(&address).unwrap(),
@@ -1528,7 +1531,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(64),
+        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1552,10 +1555,10 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, address);
-    assert_eq!(storage_collateralized[0].amount, 64);
+    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, caller3.address());
-    assert_eq!(storage_released[0].amount, 64);
+    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
@@ -1619,7 +1622,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(64),
+        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1643,10 +1646,10 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller2.address());
-    assert_eq!(storage_collateralized[0].amount, 64);
+    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, address);
-    assert_eq!(storage_released[0].amount, 64);
+    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&caller2.address()).unwrap(),
@@ -1716,7 +1719,10 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_PER_STORAGE_KEY * U256::from(1),
     );
     assert_eq!(substate.storage_released.len(), 1);
-    assert_eq!(substate.storage_released[&sender.address()], 64);
+    assert_eq!(
+        substate.storage_released[&sender.address()],
+        BYTES_PER_STORAGE_KEY
+    );
     assert_eq!(
         *state.total_storage_tokens(),
         *COLLATERAL_PER_STORAGE_KEY * U256::from(2)
@@ -1740,7 +1746,7 @@ fn test_storage_commission_privilege() {
         gas: U256::from(100_000),
         value: U256::from(0),
         action: Action::Call(address),
-        storage_limit: U256::from(64),
+        storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
         epoch_height: 0,
         chain_id: 0,
         data: vec![],
@@ -1764,10 +1770,10 @@ fn test_storage_commission_privilege() {
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller1.address());
-    assert_eq!(storage_collateralized[0].amount, 64);
+    assert_eq!(storage_collateralized[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(storage_released.len(), 1);
     assert_eq!(storage_released[0].address, caller2.address());
-    assert_eq!(storage_released[0].amount, 64);
+    assert_eq!(storage_released[0].amount, BYTES_PER_STORAGE_KEY);
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
         state.balance(&caller1.address()).unwrap(),
