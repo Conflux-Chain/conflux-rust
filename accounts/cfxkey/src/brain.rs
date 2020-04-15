@@ -15,6 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Generator, KeyPair, Secret};
+use cfx_types::address_util::AddressUtil;
 use keccak::Keccak256;
 use parity_wordlist;
 
@@ -48,7 +49,7 @@ impl Generator for Brain {
                     if let Ok(pair) = Secret::from_unsafe_slice(&secret)
                         .and_then(KeyPair::from_secret)
                     {
-                        if pair.address()[0] == 0x10 {
+                        if pair.address().is_user_account_address() {
                             trace!(
                                 "Testing: {}, got: {:?}",
                                 self.0,

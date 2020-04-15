@@ -548,6 +548,7 @@ dependencies = [
 name = "cfxkey"
 version = "0.3.0"
 dependencies = [
+ "cfx-types",
  "edit-distance",
  "ethereum-types",
  "lazy_static",
@@ -568,6 +569,7 @@ dependencies = [
 name = "cfxstore"
 version = "0.2.1"
 dependencies = [
+ "cfx-types",
  "cfxkey",
  "dir",
  "ethereum-types",
