@@ -28,6 +28,8 @@
 
 - Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
 
+- Forbidden CALLCODE and DELEGATECALL to internal contracts.
+
 ## Improvements
 
 - Improve the transaction address check at RPC

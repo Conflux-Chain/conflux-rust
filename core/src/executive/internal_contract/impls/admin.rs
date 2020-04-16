@@ -169,6 +169,12 @@ impl InternalContractTrait for AdminControl {
             return Err(vm::Error::InternalContract("invalid data"));
         }
 
+        if &params.address != self.address() {
+            return Err(vm::Error::InternalContract(
+                "can not delegatecall or callcode internal contract",
+            ));
+        }
+
         debug!(
             "exec_admin_contrl_contract params={:?} |data|={:?}",
             params,
