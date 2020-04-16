@@ -1017,7 +1017,7 @@ pub struct SynchronizationGraph {
 
     /// whether it is a archive node or full node
     is_full_node: bool,
-    pub machine: Arc<Machine>,
+    machine: Arc<Machine>,
 }
 
 impl MallocSizeOf for SynchronizationGraph {
@@ -1177,6 +1177,8 @@ impl SynchronizationGraph {
     }
 
     pub fn is_consortium(&self) -> bool { self.sync_config.is_consortium }
+
+    pub fn machine(&self) -> Arc<Machine> { self.machine.clone() }
 
     pub fn get_genesis_hash_and_height_in_current_era(&self) -> (H256, u64) {
         self.inner
