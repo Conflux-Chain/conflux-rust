@@ -37,8 +37,10 @@ class Sender:
 
     def new_sender(self, amount: int, rpc_url: str=None):
         (addr, priv_key) = self.client.rand_account()
+        epoch_height = self.best_epoch_height()
         tx = self.client.new_tx(sender=self.addr, receiver=addr,
-                                nonce=self.nonce, value=amount, priv_key=self.priv_key)
+                                nonce=self.nonce, value=amount,
+                                priv_key=self.priv_key, epoch_height=epoch_height)
         assert_equal(self.client.send_tx(tx), tx.hash_hex())
 
         self.balance -= self.client.DEFAULT_TX_FEE + amount
@@ -162,13 +164,16 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls: list, num_threads: int, num
             all_senders.append(sender)
     senders = []
     for sender in all_senders:
-        try:
-            print("Check {} with addr {}".format(sender.client.node.url, sender.addr))
-            sender.wait_for_balance()
-            senders.append(sender)
-        except Exception as e:
-            print(sender.client.node.url, "is not available for Exception", e)
-            break
+        while True:
+            try:
+                print("Check {} with addr {}".format(sender.client.node.url, sender.addr))
+                sender.wait_for_balance()
+                senders.append(sender)
+                break
+            except Exception as e:
+                print(sender.client.node.url, "is not available for Exception", e)
+                time.sleep(1)
+                continue
 
     # start threads to send txs to different nodes
     print("begin to send txs ...")
