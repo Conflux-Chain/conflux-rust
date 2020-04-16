@@ -15,12 +15,13 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::Error;
+use cfx_types::address_util::AddressUtil;
 use rustc_hex::{FromHex, ToHex};
 use serde::{
     de::{Error as SerdeError, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{fmt, ops, str};
+use std::{cmp::Ordering, fmt, ops, str};
 
 macro_rules! impl_hash {
     ($name:ident, $size:expr) => {
@@ -132,3 +133,24 @@ macro_rules! impl_hash {
 impl_hash!(H128, 16);
 impl_hash!(H160, 20);
 impl_hash!(H256, 32);
+
+// FIXME: find a better hash type.
+impl PartialOrd for H160 {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl Eq for H160 {}
+
+impl Ord for H160 {
+    fn cmp(&self, other: &Self) -> Ordering { self.0.cmp(&other.0) }
+}
+
+impl AddressUtil for H160 {
+    #[inline]
+    fn type_byte(&self) -> &u8 { &self.0[0] }
+
+    #[inline]
+    fn type_byte_mut(&mut self) -> &mut u8 { &mut self.0[0] }
+}

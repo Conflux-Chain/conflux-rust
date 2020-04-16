@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -548,6 +548,7 @@ dependencies = [
 name = "cfxkey"
 version = "0.3.0"
 dependencies = [
+ "cfx-types",
  "edit-distance",
  "ethereum-types",
  "lazy_static",
@@ -568,6 +569,7 @@ dependencies = [
 name = "cfxstore"
 version = "0.2.1"
 dependencies = [
+ "cfx-types",
  "cfxkey",
  "dir",
  "ethereum-types",
@@ -617,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "app_dirs",
  "blockgen",
@@ -697,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "app_dirs",
  "blockgen",

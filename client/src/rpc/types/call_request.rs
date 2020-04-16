@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::Bytes;
-use cfx_types::{H160, U256};
+use cfx_types::{address_util::AddressUtil, Address, H160, U256};
 use primitives::{
     transaction::Action, SignedTransaction, Transaction as PrimitiveTransaction,
 };
@@ -35,7 +35,6 @@ pub struct CallRequest {
 pub struct EstimateGasAndCollateralResponse {
     /// The amount of gas used in the execution.
     pub gas_used: U256,
-    // TODO: U64
     /// The number of bytes collateralized in the execution.
     pub storage_collateralized: U256,
 }
@@ -45,7 +44,11 @@ pub fn sign_call(
 ) -> SignedTransaction {
     let max_gas = U256::from(500_000_000);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_else(|| H160::random());
+    let from = request.from.unwrap_or_else(|| {
+        let mut address = Address::random();
+        address.set_user_account_type_bits();
+        address
+    });
 
     PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),

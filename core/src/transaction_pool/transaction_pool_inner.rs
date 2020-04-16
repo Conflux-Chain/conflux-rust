@@ -5,7 +5,9 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::statedb::Result as StateDbResult;
-use cfx_types::{Address, AddressUtil, BigEndianHash, H256, H512, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, H512, U256, U512,
+};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -723,7 +725,7 @@ impl TransactionPoolInner {
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = transaction.action {
             // FIXME: This is a quick fix for performance issue.
-            if callee.is_contract() {
+            if callee.is_contract_address() {
                 if let Ok(Some(sponsor_info)) =
                     self.get_sponsor_info_from_storage(&callee, account_cache)
                 {

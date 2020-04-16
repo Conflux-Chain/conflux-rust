@@ -110,6 +110,12 @@ impl InternalContractTrait for Staking {
             return Err(vm::Error::InternalContract("invalid data"));
         }
 
+        if &params.address != self.address() {
+            return Err(vm::Error::InternalContract(
+                "can not delegatecall or callcode internal contract",
+            ));
+        }
+
         if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
             // The first 4 bytes of
             // keccak('deposit(uint256)') is
