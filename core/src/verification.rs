@@ -217,9 +217,10 @@ impl VerificationConfig {
     }
 
     pub fn check_transaction_epoch_bound(
-        &self, tx: &TransactionWithSignature, block_height: u64,
-    ) -> i8 {
-        let transaction_epoch_bound = self.transaction_epoch_bound;
+        tx: &TransactionWithSignature, block_height: u64,
+        transaction_epoch_bound: u64,
+    ) -> i8
+    {
         if tx.epoch_height + transaction_epoch_bound < block_height {
             -1
         } else if tx.epoch_height > block_height + transaction_epoch_bound {
@@ -230,15 +231,22 @@ impl VerificationConfig {
     }
 
     pub fn verify_transaction_epoch_height(
-        &self, tx: &TransactionWithSignature, block_height: u64,
-    ) -> Result<(), TransactionError> {
-        if self.check_transaction_epoch_bound(tx, block_height) == 0 {
+        tx: &TransactionWithSignature, block_height: u64,
+        transaction_epoch_bound: u64,
+    ) -> Result<(), TransactionError>
+    {
+        if Self::check_transaction_epoch_bound(
+            tx,
+            block_height,
+            transaction_epoch_bound,
+        ) == 0
+        {
             Ok(())
         } else {
             bail!(TransactionError::EpochHeightOutOfBound {
                 set: tx.epoch_height,
                 block_height,
-                transaction_epoch_bound: self.transaction_epoch_bound,
+                transaction_epoch_bound,
             });
         }
     }
@@ -247,7 +255,11 @@ impl VerificationConfig {
         &self, tx: &TransactionWithSignature, chain_id: u64, block_height: u64,
     ) -> Result<(), TransactionError> {
         self.verify_transaction_common(tx, chain_id)?;
-        self.verify_transaction_epoch_height(tx, block_height)
+        Self::verify_transaction_epoch_height(
+            tx,
+            block_height,
+            self.transaction_epoch_bound,
+        )
     }
 
     pub fn verify_transaction_common(

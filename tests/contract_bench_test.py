@@ -16,6 +16,7 @@ from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from conflux.config import default_config
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import sha3 as keccak
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 
@@ -148,17 +149,17 @@ class ContractBenchTest(SmartContractBenchBase):
 
         b0 = self.rpc.get_balance(self.sender)
         c0 = self.rpc.get_collateral_for_storage(self.sender)
-        fee = 10000000
+        gas = CONTRACT_DEFAULT_GAS
         # interact with newContract(), sender send conflux to himself
         time_lock = int(time.time()) + 7200
         data = contract.functions.newContract(self.sender_checksum, self.problem, time_lock).buildTransaction(self.tx_conf)["data"];
         cost = 5000000000000000000
-        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost, storage_limit=320)
+        result = self.call_contract(self.sender, self.priv_key, contractAddr, data, cost, storage_limit=320, gas=gas)
         logs = self.rpc.get_logs(self.filter)
         c1 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(len(logs), l + 2)
         assert_equal(self.rpc.get_balance(contractAddr), cost)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - (fee - 2500000) - (c1 - c0))
+        assert_equal(self.rpc.get_balance(self.sender), b0 - cost - charged_of_huge_gas(gas) - (c1 - c0))
         contract_id = logs[-1]["topics"][1]
 
         # call getContract
@@ -182,7 +183,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_equal(self.rpc.get_balance(contractAddr), 0)
         c2 = self.rpc.get_collateral_for_storage(self.sender)
         assert_equal(c2 - c1, 125000000000000000)
-        assert_equal(self.rpc.get_balance(self.sender), b0 - (fee - 2500000) * 2 - (c2 - c0))
+        assert_equal(self.rpc.get_balance(self.sender), b0 - charged_of_huge_gas(gas) * 2 - (c2 - c0))
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 3)
 
@@ -519,7 +520,7 @@ class ContractBenchTest(SmartContractBenchBase):
         self.pub = []
         self.pri = []
         self.rpc = RpcClient(self.nodes[0])
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         gas_price = 10
 
         # lock token for genesis account
@@ -574,9 +575,9 @@ class ContractBenchTest(SmartContractBenchBase):
         assert_is_hex_string(address)
         return receipt, address
 
-    def call_contract(self, sender, priv_key, contract, data_hex, value=0, storage_limit=0):
+    def call_contract(self, sender, priv_key, contract, data_hex, value=0, storage_limit=0, gas=CONTRACT_DEFAULT_GAS):
         c0 = self.rpc.get_collateral_for_storage(sender)
-        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, value=value, storage_limit=storage_limit)
+        tx = self.rpc.new_contract_tx(receiver=contract, data_hex=data_hex, sender=sender, priv_key=priv_key, value=value, storage_limit=storage_limit, gas=gas)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         self.log.info("call_contract storage_limit={}".format((self.rpc.get_collateral_for_storage(sender) - c0) // self.collateral_per_byte))

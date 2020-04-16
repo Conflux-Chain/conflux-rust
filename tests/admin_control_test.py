@@ -3,6 +3,7 @@ from http.client import CannotSendRequest
 
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
@@ -13,7 +14,7 @@ from web3 import Web3
 
 class AdminControlTest(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
@@ -124,7 +125,7 @@ class AdminControlTest(ConfluxTestFramework):
         self.log.info("genesis_addr={}".format(encode_hex_0x(genesis_addr)))
         nonce = 0
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
@@ -168,7 +169,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 10 ** 18)
-        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - gas + gas // 4)
+        assert_equal(client.get_balance(addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
         assert_equal(client.get_admin(contract_addr), addr)
 
         # transfer admin (fail)
@@ -181,6 +182,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_admin(contract_addr), addr)
+        assert_equal(client.get_balance(addr2), 5 * 10 ** 18 - charged_of_huge_gas(gas))
 
         # transfer admin (success)
         tx = self.call_contract_function(
@@ -204,7 +206,7 @@ class AdminControlTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(contract_addr), 0)
-        assert_equal(client.get_balance(addr2), 5999999999912500000 + gas // 4)
+        assert_equal(client.get_balance(addr2), 6 * 10 ** 18 - charged_of_huge_gas(gas) * 2)
         assert_equal(client.get_collateral_for_storage(addr), 0)
         assert_equal(client.get_balance(addr), b0 + 517 * 976562500000000)
 

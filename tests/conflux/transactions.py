@@ -11,6 +11,10 @@ from .utils import TT256, mk_contract_address, zpad, int_to_32bytearray, \
     big_endian_to_int, ecsign, ecrecover_to_pub, normalize_key, str_to_bytes, \
     encode_hex, address
 
+CONTRACT_DEFAULT_GAS = 3_000_000
+
+def charged_of_huge_gas(gas):
+    return gas - gas // 4
 
 class UnsignedTransaction(rlp.Serializable):
     fields = [

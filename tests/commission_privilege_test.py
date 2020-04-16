@@ -2,7 +2,9 @@
 from http.client import CannotSendRequest
 from eth_utils import decode_hex
 
+from conflux.config import default_config
 from conflux.rpc import RpcClient
+from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
@@ -13,7 +15,7 @@ from web3 import Web3
 
 class CommissionPrivilegeTest(ConfluxTestFramework):
     REQUEST_BASE = {
-        'gas': 50000000,
+        'gas': CONTRACT_DEFAULT_GAS,
         'gasPrice': 1,
         'chainId': 1,
     }
@@ -111,7 +113,8 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         bytes_per_key = 64
         collateral_per_byte = 10 ** 18 // 1024
         collateral_per_storage_key = 10 ** 18 // 16
-        upper_bound = 5 * 10 ** 7
+        # block gas limit (GENESIS_GAS_LIMIT); -1 because below gas is set to upper_bound + 1
+        upper_bound = default_config["GENESIS_GAS_LIMIT"] - 1
 
         file_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -136,7 +139,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         self.log.info("genesis_addr={}".format(genesis_addr))
         nonce = 0
         gas_price = 1
-        gas = 50000000
+        gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
         self.tx_conf = {
@@ -218,7 +221,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
         assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
         assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound)
-        assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - gas + 12500000)
+        assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
         # set privilege for addr1
         b0 = client.get_balance(genesis_addr)
@@ -232,7 +235,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True,
             check_status=True,
             storage_limit=64)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - collateral_per_storage_key)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 
         # addr1 call contract with privilege
@@ -247,7 +250,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_balance(addr1), b1)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
 
         # addr1 call contract with privilege and large tx fee
         b1 = client.get_balance(addr1)
@@ -260,9 +263,9 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract_addr=contract_addr,
             wait=True,
             check_status=True,
-            gas=upper_bound+ 1)
+            gas=upper_bound + 1)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb)
-        assert_equal(client.get_balance(addr1), b1 - upper_bound + upper_bound // 4 - 1)
+        assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(upper_bound + 1))
 
         # addr2 call contract without privilege
         b2 = client.get_balance(addr2)
@@ -276,7 +279,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb)
-        assert_equal(client.get_balance(addr2), b2 - gas + 12500000)
+        assert_equal(client.get_balance(addr2), b2 - charged_of_huge_gas(gas))
 
         # set privilege for addr2
         b0 = client.get_balance(genesis_addr)
@@ -290,7 +293,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True,
             check_status=True,
             storage_limit=64)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - collateral_per_storage_key)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
 
         # now, addr2 call contract with privilege
@@ -304,7 +307,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             contract_addr=contract_addr,
             wait=True,
             check_status=True)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
         assert_equal(client.get_balance(addr2), b2)
 
         # remove privilege for addr1
@@ -319,7 +322,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 - collateral_per_storage_key)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 + collateral_per_storage_key)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) + collateral_per_storage_key)
 
         # addr1 call contract without privilege
         sb = client.get_sponsor_balance_for_gas(contract_addr)
@@ -333,7 +336,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True,
             check_status=True)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb)
-        assert_equal(client.get_balance(addr1), b1 - gas + 12500000)
+        assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(gas))
 
         # new sponsor failed due to small sponsor_balance
         b3 = client.get_balance(addr3)
@@ -380,7 +383,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
         assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound + 1)
         assert_equal(client.get_sponsor_for_gas(contract_addr), addr3)
-        assert_equal(client.get_balance(addr3), b3 - 10 ** 18 - gas + 12500000)
+        assert_equal(client.get_balance(addr3), b3 - 10 ** 18 - charged_of_huge_gas(gas))
         assert_equal(client.get_balance(genesis_addr), b0 + sb)
 
         # sponsor the contract for collateral failed due to zero sponsor balance
@@ -409,7 +412,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), 10 ** 18 - 1)
         assert_equal(client.get_sponsor_for_collateral(contract_addr), addr3)
-        assert_equal(client.get_balance(addr3), b3 - gas + 12500000 - 10 ** 18 + 1)
+        assert_equal(client.get_balance(addr3), b3 - charged_of_huge_gas(gas) - 10 ** 18 + 1)
 
         # addr1 create 2 keys without privilege, and storage limit is 1, should failed
         b1 = client.get_balance(addr1)
@@ -439,7 +442,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             storage_limit=bytes_per_key * 2)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key * 2)
-        assert_equal(client.get_balance(addr1), b1 - gas + 12500000 - collateral_per_storage_key * 2)
+        assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(gas) - collateral_per_storage_key * 2)
 
         # remove 1 key create by addr1
         b1 = client.get_balance(addr1)
@@ -453,7 +456,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             storage_limit=bytes_per_key * 2)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key)
-        assert_equal(client.get_balance(addr1), b1 - gas + 12500000 + collateral_per_storage_key)
+        assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(gas) + collateral_per_storage_key)
 
         # addr2 create 2 keys with privilege, and storage limit is 1, should succeed
         sbc = client.get_sponsor_balance_for_collateral(contract_addr)
@@ -469,7 +472,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             storage_limit=bytes_per_key)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 2)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc - collateral_per_storage_key * 2)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - charged_of_huge_gas(gas))
         assert_equal(client.get_collateral_for_storage(addr2), 0)
         assert_equal(client.get_balance(addr2), b2)
 
@@ -487,7 +490,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             storage_limit=0)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 15)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc - collateral_per_storage_key * 13)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - charged_of_huge_gas(gas))
         assert_equal(client.get_collateral_for_storage(addr2), 0)
         assert_equal(client.get_balance(addr2), b2)
 
@@ -529,7 +532,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             storage_limit=bytes_per_key * 2)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 15)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - charged_of_huge_gas(gas))
         assert_equal(client.get_collateral_for_storage(addr2), collateral_per_storage_key)
         assert_equal(client.get_balance(addr2), b2 - collateral_per_storage_key)
 
@@ -547,7 +550,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             storage_limit=bytes_per_key)
         assert_equal(client.get_collateral_for_storage(contract_addr), collateral_per_storage_key * 5)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sbc + collateral_per_storage_key * 10)
-        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - gas + 12500000)
+        assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sbg - charged_of_huge_gas(gas))
         assert_equal(client.get_collateral_for_storage(addr2), collateral_per_storage_key)
         assert_equal(client.get_balance(addr2), b2)
 
@@ -564,7 +567,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             wait=True)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sb * 2)
         assert_equal(client.get_sponsor_for_collateral(contract_addr), addr3)
-        assert_equal(client.get_balance(addr3), b3 - gas + 12500000 - sb)
+        assert_equal(client.get_balance(addr3), b3 - charged_of_huge_gas(gas) - sb)
 
         # genesis sponsor with sponsor balance, should failed
         b0 = client.get_balance(genesis_addr)
@@ -597,7 +600,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_collateral_for_storage(contract_addr), cfs)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sb + 1)
         assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
-        assert_equal(client.get_balance(genesis_addr), b0 - gas + 12500000 - sb - cfs - 1)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - sb - cfs - 1)
         assert_equal(client.get_balance(addr3), b3 + sb + cfs)
 
         self.log.info("Pass")

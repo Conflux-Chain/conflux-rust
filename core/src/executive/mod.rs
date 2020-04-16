@@ -11,7 +11,7 @@ mod internal_contract;
 mod executive_tests;
 
 pub use self::{
-    executed::{Executed, ExecutionError, ExecutionResult},
+    executed::*,
     executive::{contract_address, Executive},
     internal_contract::{
         suicide, InternalContractMap, InternalContractTrait,

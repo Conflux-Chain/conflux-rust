@@ -9,6 +9,7 @@ error_chain! {
     foreign_links {
         FilterError(FilterError);
         Storage(StorageError);
+        StateDb(StateDbError);
         Decoder(DecoderError);
     }
 
@@ -40,7 +41,7 @@ pub fn invalid_params_check<T, E: Display>(
     }
 }
 
-use crate::storage::Error as StorageError;
+use crate::{statedb::Error as StateDbError, storage::Error as StorageError};
 use jsonrpc_core::Error as JsonRpcError;
 use primitives::filter::FilterError;
 use rlp::DecoderError;

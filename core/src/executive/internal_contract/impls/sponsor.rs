@@ -64,7 +64,10 @@ impl SponsorWhitelistControl {
         // If previous sponsor is not the same as current sponsor, we should try
         // to replace the sponsor. Otherwise, we should try to charge
         // `sponsor_balance`.
-        if prev_sponsor != *sponsor {
+        if prev_sponsor.as_ref().map_or_else(
+            || !sponsor.is_zero(),
+            |prev_sponsor| prev_sponsor != sponsor,
+        ) {
             // `sponsor_balance` should exceed previous sponsor's
             // `sponsor_balance`.
             if sponsor_balance <= prev_sponsor_balance {
@@ -83,9 +86,9 @@ impl SponsorWhitelistControl {
                 ));
             }
             // refund to previous sponsor
-            if !prev_sponsor.is_zero() {
+            if prev_sponsor.is_some() {
                 state.add_balance(
-                    &prev_sponsor,
+                    prev_sponsor.as_ref().unwrap(),
                     &prev_sponsor_balance,
                     substate.to_cleanup_mode(&spec),
                 )?;
@@ -172,7 +175,10 @@ impl SponsorWhitelistControl {
         // If previous sponsor is not the same as current sponsor, we should try
         // to replace the sponsor. Otherwise, we should try to charge
         // `sponsor_balance`.
-        if prev_sponsor != *sponsor {
+        if prev_sponsor.as_ref().map_or_else(
+            || !sponsor.is_zero(),
+            |prev_sponsor| prev_sponsor != sponsor,
+        ) {
             // `sponsor_balance` should exceed previous sponsor's
             // `sponsor_balance` + `collateral_for_storage`.
             if sponsor_balance <= prev_sponsor_balance + collateral_for_storage
@@ -182,9 +188,9 @@ impl SponsorWhitelistControl {
                 ));
             }
             // refund to previous sponsor
-            if !prev_sponsor.is_zero() {
+            if prev_sponsor.is_some() {
                 state.add_balance(
-                    &prev_sponsor,
+                    prev_sponsor.as_ref().unwrap(),
                     &(prev_sponsor_balance + collateral_for_storage),
                     substate.to_cleanup_mode(&spec),
                 )?;

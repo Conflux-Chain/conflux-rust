@@ -5,6 +5,7 @@
 use super::{executive::*, internal_contract::*, Executed, ExecutionError};
 use crate::{
     evm::{Factory, FinalizationResult, VMType},
+    executive::ExecutionOutcome,
     machine::Machine,
     parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, Substate},
@@ -465,18 +466,22 @@ fn test_not_enough_cash() {
             &spec,
             &internal_contract_map,
         );
-        let mut nonce_increased = false;
-        ex.transact(&t, &mut nonce_increased)
+        ex.transact(&t).unwrap()
     };
 
     match res {
-        Err(ExecutionError::NotEnoughCash {
-            required,
-            got,
-            actual_gas_cost,
-        }) if required == U512::from(100_018)
+        ExecutionOutcome::ExecutionErrorBumpNonce(
+            ExecutionError::NotEnoughCash {
+                required,
+                got,
+                actual_gas_cost,
+                max_storage_limit_cost,
+            },
+            _executed,
+        ) if required == U512::from(100_018)
             && got == U512::from(100_017)
-            && correct_cost == actual_gas_cost =>
+            && correct_cost == actual_gas_cost
+            && max_storage_limit_cost.is_zero() =>
         {
             ()
         }
@@ -965,7 +970,6 @@ fn test_commission_privilege() {
         )
         .unwrap();
 
-    let mut nonce_increased: bool = false;
     let tx = Transaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
@@ -986,7 +990,9 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(gas_used, U256::from(58_024));
@@ -1076,7 +1082,9 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(gas_used, U256::from(58_024));
@@ -1115,7 +1123,9 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(gas_used, U256::from(58_024));
@@ -1154,7 +1164,9 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(gas_used, U256::from(58_024));
@@ -1207,7 +1219,9 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(gas_used, U256::from(58_024));
@@ -1253,7 +1267,9 @@ fn test_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(gas_used, U256::from(58_024));
@@ -1315,7 +1331,6 @@ fn test_storage_commission_privilege() {
         .unwrap();
 
     // simple call to create a storage entry
-    let mut nonce_increased: bool = false;
     let tx = Transaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
@@ -1341,7 +1356,9 @@ fn test_storage_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, sender.address());
@@ -1477,7 +1494,9 @@ fn test_storage_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -1550,7 +1569,9 @@ fn test_storage_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -1641,7 +1662,9 @@ fn test_storage_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -1765,7 +1788,9 @@ fn test_storage_commission_privilege() {
         &spec,
         &internal_contract_map,
     )
-    .transact(&tx, &mut nonce_increased)
+    .transact(&tx)
+    .unwrap()
+    .successfully_executed()
     .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
