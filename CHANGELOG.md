@@ -8,6 +8,10 @@
 
 ## Bug Fixes
 
+- Fix UnexpectedResponse from honest peers that causes peer demotion.
+
+- Remove some untrue debug assert.
+
 # 0.4.0
 
 ## Bug Fixes
