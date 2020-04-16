@@ -15,6 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Address, Error, Public, Secret, SECP256K1};
+use cfx_types::address_util::AddressUtil;
 use parity_crypto::Keccak256 as _;
 use secp256k1::key;
 use std::fmt;
@@ -25,8 +26,7 @@ pub fn public_to_address(public: &Public) -> Address {
     result.as_bytes_mut().copy_from_slice(&hash[12..]);
     // In Conflux, we reserve the first four bits to indicate the type of the
     // address. For user address, the first four bits will be 0x1.
-    result.as_bytes_mut()[0] &= 0x0f;
-    result.as_bytes_mut()[0] |= 0x10;
+    result.set_user_account_type_bits();
     result
 }
 

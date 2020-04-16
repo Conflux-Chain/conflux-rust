@@ -43,6 +43,7 @@ extern crate serde_derive;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
+extern crate cfx_types;
 
 pub mod accounts_dir;
 pub mod cfxkey;
