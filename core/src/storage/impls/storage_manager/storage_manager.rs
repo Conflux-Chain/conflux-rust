@@ -96,6 +96,10 @@ impl StorageManager {
     ) -> Result<Arc<Self>>
     {
         let storage_dir = Path::new(storage_conf.path_storage_dir.as_str());
+        println!(
+            "new StorageManager within storage_dir {}",
+            storage_dir.display()
+        );
         if !storage_dir.exists() {
             fs::create_dir_all(storage_dir)?;
         }

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{Log, H256, U256};
-use cfx_types::{Address, Bloom, U256 as CfxU256};
+use cfx_types::{Address, Bloom, H256 as CfxH256, U256 as CfxU256};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::Receipt as PrimitiveReceipt, transaction::Action,
@@ -29,6 +29,8 @@ pub struct Receipt {
     pub to: Option<Address>,
     /// The gas used in the execution of the transaction.
     pub gas_used: U256,
+    /// The gas fee charged in the execution of the transaction.
+    pub gas_fee: U256,
     /// Address of contracts created during execution of transaction.
     pub contract_created: Option<Address>,
     /// Array of log objects, which this transaction generated.
@@ -45,6 +47,7 @@ impl Receipt {
     pub fn new(
         transaction: PrimitiveTransaction, receipt: PrimitiveReceipt,
         transaction_index: TransactionIndex, prior_gas_used: CfxU256,
+        epoch_number: Option<u64>, maybe_state_root: Option<CfxH256>,
     ) -> Receipt
     {
         let mut address = None;
@@ -61,7 +64,8 @@ impl Receipt {
             transaction_hash: transaction.hash.into(),
             index: transaction_index.index,
             block_hash: transaction_index.block_hash.into(),
-            gas_used: (receipt.gas_used - prior_gas_used).into(),
+            gas_used: (receipt.accumulated_gas_used - prior_gas_used).into(),
+            gas_fee: receipt.gas_fee.into(),
             from: transaction.sender,
             to: match transaction.action {
                 Action::Create => None,
@@ -71,16 +75,9 @@ impl Receipt {
             contract_created: address,
             logs: receipt.logs.into_iter().map(Log::from).collect(),
             logs_bloom: receipt.log_bloom,
-            state_root: Default::default(),
-            epoch_number: None,
+            state_root: maybe_state_root
+                .map_or_else(Default::default, Into::into),
+            epoch_number,
         }
-    }
-
-    pub fn set_state_root(&mut self, state_root: H256) {
-        self.state_root = state_root;
-    }
-
-    pub fn set_epoch_number(&mut self, epoch_number: Option<u64>) {
-        self.epoch_number = epoch_number;
     }
 }

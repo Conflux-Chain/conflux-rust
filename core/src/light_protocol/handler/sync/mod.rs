@@ -10,7 +10,7 @@ mod headers;
 mod receipts;
 mod state_entries;
 mod state_roots;
-mod tx_infos;
+pub mod tx_infos;
 mod txs;
 mod witnesses;
 

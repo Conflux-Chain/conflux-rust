@@ -51,7 +51,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         self.rpc.generate_blocks(1)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(self.mining_author))
         count = self.nodes[0].getblockcount()
-        transaction_fee = parse_as_int(receipt['gasUsed']) * self.gasPrice
+        transaction_fee = parse_as_int(receipt['gasFee'])
         expected += block_reward + transaction_fee
         self.log.info("block count: %d, balance: %d, expected: %d, transaction_fee: %d", count, balance, expected,
                       transaction_fee)

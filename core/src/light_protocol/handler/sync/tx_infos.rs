@@ -10,6 +10,10 @@ use parking_lot::RwLock;
 use primitives::{Receipt, SignedTransaction, TransactionIndex};
 use std::{future::Future, sync::Arc};
 
+use super::{
+    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
+    BlockTxs, Receipts,
+};
 use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
@@ -25,11 +29,6 @@ use crate::{
     },
     UniqueId,
 };
-
-use super::{
-    common::{FutureItem, PendingItem, SyncManager, TimeOrdered},
-    BlockTxs, Receipts,
-};
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -42,7 +41,8 @@ struct Statistics {
 // prioritize earlier requests
 type MissingTxInfo = TimeOrdered<H256>;
 
-type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
+// FIXME: struct
+pub type TxInfoValidated = (SignedTransaction, Receipt, TransactionIndex, U256);
 
 pub struct TxInfos {
     // block tx sync manager
@@ -181,13 +181,13 @@ impl TxInfos {
         for (index, (tx, receipt)) in items.enumerate() {
             let hash = tx.hash();
             let address = TransactionIndex { block_hash, index };
-            let receipt_gas_used = receipt.gas_used;
+            let prior_accumulated_gas_used = receipt.accumulated_gas_used;
             self.verified
                 .write()
                 .entry(hash)
                 .or_insert(PendingItem::pending())
                 .set((tx, receipt, address, prior_gas_used));
-            prior_gas_used = receipt_gas_used;
+            prior_gas_used = prior_accumulated_gas_used;
 
             self.sync_manager.remove_in_flight(&hash);
         }

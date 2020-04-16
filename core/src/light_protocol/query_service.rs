@@ -6,6 +6,7 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerFilter, LedgerInfo},
+        handler::sync::tx_infos::TxInfoValidated,
         message::msgid,
         Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
@@ -29,13 +30,14 @@ use primitives::{
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
+// FIXME: struct
 type TxInfo = (
     SignedTransaction,
     Receipt,
     TransactionIndex,
     Option<u64>,  /* maybe_epoch */
     Option<H256>, /* maybe_state_root */
-    U256,
+    U256,         /* prior_gas_used */
 );
 
 // As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
@@ -203,8 +205,7 @@ impl QueryService {
 
     async fn retrieve_tx_info(
         &self, hash: H256,
-    ) -> Result<(SignedTransaction, Receipt, TransactionIndex, U256), String>
-    {
+    ) -> Result<TxInfoValidated, String> {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         with_timeout(
