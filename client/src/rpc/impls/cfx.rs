@@ -21,12 +21,9 @@ use crate::rpc::{
 use blockgen::BlockGenerator;
 use cfx_types::{AddressUtil, H160, H256, U256};
 use cfxcore::{
-    block_data_manager::BlockExecutionResultWithEpoch,
-    executive::Executed,
-    machine::{new_machine_with_builtin, Machine},
-    state_exposer::STATE_EXPOSER,
-    test_context::*,
-    vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    block_data_manager::BlockExecutionResultWithEpoch, executive::Executed,
+    machine::Machine, state_exposer::STATE_EXPOSER, test_context::*, vm,
+    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use delegate::delegate;
@@ -57,7 +54,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-    machine: Machine,
+    machine: Arc<Machine>,
 }
 
 impl RpcImpl {
@@ -66,7 +63,7 @@ impl RpcImpl {
         block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
-        config: RpcImplConfiguration,
+        config: RpcImplConfiguration, machine: Arc<Machine>,
     ) -> Self
     {
         RpcImpl {
@@ -77,7 +74,7 @@ impl RpcImpl {
             maybe_txgen,
             maybe_direct_txgen,
             config,
-            machine: new_machine_with_builtin(),
+            machine,
         }
     }
 

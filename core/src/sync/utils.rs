@@ -7,6 +7,7 @@ use crate::{
     },
     db::NUM_COLUMNS,
     genesis::genesis_block,
+    machine::new_machine_with_builtin,
     parameters::{
         block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
         consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -148,10 +149,14 @@ pub fn initialize_synchronization_graph_with_data_manager(
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
     );
+
+    let machine = Arc::new(new_machine_with_builtin());
+
     let txpool = Arc::new(TransactionPool::new(
         TxPoolConfig::default(),
         verification_config.clone(),
         data_man.clone(),
+        machine.clone(),
     ));
     let statistics = Arc::new(Statistics::new());
 
@@ -207,6 +212,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         sync_config,
         notifications,
         false,
+        machine,
     ));
 
     (sync, consensus)

@@ -7,7 +7,7 @@ use crate::{
     channel::Channel,
     consensus::SharedConsensusGraph,
     error::{BlockError, Error, ErrorKind},
-    machine::new_machine_with_builtin,
+    machine::Machine,
     parameters::sync::OLD_ERA_BLOCK_GC_BATCH_SIZE,
     pow::ProofOfWorkConfig,
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
@@ -156,6 +156,7 @@ pub struct SynchronizationGraphInner {
     pub not_ready_blocks_count: usize,
     pub old_era_blocks_frontier: VecDeque<usize>,
     pub old_era_blocks_frontier_set: HashSet<usize>,
+    machine: Arc<Machine>,
 }
 
 impl MallocSizeOf for SynchronizationGraphInner {
@@ -169,6 +170,7 @@ impl MallocSizeOf for SynchronizationGraphInner {
             + self.not_ready_blocks_frontier.size_of(ops)
             + self.old_era_blocks_frontier.size_of(ops)
             + self.old_era_blocks_frontier_set.size_of(ops)
+        // Does not count size_of machine.
     }
 }
 
@@ -176,6 +178,7 @@ impl SynchronizationGraphInner {
     pub fn with_genesis_block(
         genesis_header: Arc<BlockHeader>, pow_config: ProofOfWorkConfig,
         config: SyncGraphConfig, data_man: Arc<BlockDataManager>,
+        machine: Arc<Machine>,
     ) -> Self
     {
         let mut inner = SynchronizationGraphInner {
@@ -190,6 +193,7 @@ impl SynchronizationGraphInner {
             not_ready_blocks_count: 0,
             old_era_blocks_frontier: Default::default(),
             old_era_blocks_frontier_set: Default::default(),
+            machine,
         };
         let genesis_hash = genesis_header.hash();
         let genesis_block_index = inner.insert(genesis_header);
@@ -813,9 +817,8 @@ impl SynchronizationGraphInner {
         }
 
         // Verify the gas limit is respected
-        let machine = new_machine_with_builtin();
-        let gas_limit_divisor = machine.params().gas_limit_bound_divisor;
-        let min_gas_limit = machine.params().min_gas_limit;
+        let gas_limit_divisor = self.machine.params().gas_limit_bound_divisor;
+        let min_gas_limit = self.machine.params().min_gas_limit;
         let gas_lower = max(
             parent_gas_limit - parent_gas_limit / gas_limit_divisor,
             min_gas_limit,
@@ -1014,6 +1017,7 @@ pub struct SynchronizationGraph {
 
     /// whether it is a archive node or full node
     is_full_node: bool,
+    pub machine: Arc<Machine>,
 }
 
 impl MallocSizeOf for SynchronizationGraph {
@@ -1034,6 +1038,7 @@ impl MallocSizeOf for SynchronizationGraph {
                 .expect("downcast should succeed");
             malloc_size += consensus_graph.size_of(ops);
         }
+        // Does not count size_of machine.
 
         malloc_size
     }
@@ -1046,7 +1051,7 @@ impl SynchronizationGraph {
         consensus: SharedConsensusGraph,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         sync_config: SyncGraphConfig, notifications: Arc<Notifications>,
-        is_full_node: bool,
+        is_full_node: bool, machine: Arc<Machine>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -1065,6 +1070,7 @@ impl SynchronizationGraph {
                 pow_config,
                 sync_config,
                 data_man.clone(),
+                machine.clone(),
             ),
         ));
         let sync_graph = SynchronizationGraph {
@@ -1078,6 +1084,7 @@ impl SynchronizationGraph {
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             is_full_node,
+            machine,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in

@@ -208,6 +208,7 @@ build_config! {
         (get_logs_filter_max_limit, (Option<usize>), None)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (record_tx_index, (bool), true)
+        (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
 
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
@@ -591,6 +592,7 @@ impl Configuration {
             max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
+            target_block_gas_limit: self.raw_conf.target_block_gas_limit,
         }
     }
 
