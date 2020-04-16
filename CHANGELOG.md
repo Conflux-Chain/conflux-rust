@@ -26,7 +26,7 @@
 
 - Fix definitions and logics in transaction early execution error checking.
 
-- Use block_count - 1 in target difficulty calculation because the timespan is calculated after the max - min timestamp of blocks.
+- Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
 
 ## Improvements
 
