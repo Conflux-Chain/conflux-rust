@@ -22,7 +22,7 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, AddressUtil, H256, U256, U512};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
 use primitives::{
     receipt::StorageChange, transaction::Action, SignedTransaction,
 };
@@ -53,8 +53,8 @@ pub fn contract_address(
             // the address. For contract address, the bits will be
             // set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
-            h.converted_to_contract();
-            (h, None)
+            h.set_contract_type_bits();
+            (h, Some(code_hash))
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let code_hash = keccak(code);
@@ -66,7 +66,7 @@ pub fn contract_address(
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bits will be set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
-            h.converted_to_contract();
+            h.set_contract_type_bits();
             (h, Some(code_hash))
         }
     }
@@ -1673,7 +1673,7 @@ impl<'a> Executive<'a> {
                 if r.apply_state {
                     Ok(ExecutionOutcome::Finished(executed))
                 } else {
-                    // Transaction reverted for unspecified reason.
+                    // Transaction reverted by vm instruction.
                     Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::VmError(vm::Error::Reverted),
                         executed,

@@ -1,3 +1,13 @@
+# 0.5.0
+
+## Bug Fixes
+
+## Improvements
+
+# 0.4.1
+
+## Bug Fixes
+
 # 0.4.0
 
 ## Bug Fixes
@@ -16,7 +26,9 @@
 
 - Fix definitions and logics in transaction early execution error checking.
 
-- Use block_count - 1 in target difficulty calculation because the timespan is calculated after the max - min timestamp of blocks.
+- Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
+
+- Forbidden CALLCODE and DELEGATECALL to internal contracts.
 
 ## Improvements
 

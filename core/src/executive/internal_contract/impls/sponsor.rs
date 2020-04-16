@@ -320,6 +320,12 @@ impl InternalContractTrait for SponsorWhitelistControl {
             return Err(vm::Error::InternalContract("invalid data"));
         }
 
+        if &params.address != self.address() {
+            return Err(vm::Error::InternalContract(
+                "can not delegatecall or callcode internal contract",
+            ));
+        }
+
         if data[0..4] == [0xe9, 0xac, 0x3d, 0x4a] {
             // The first 4 bytes of
             // keccak('set_sponsor_for_gas(address,uint256)')
