@@ -4,6 +4,8 @@
 #include <set>
 #include <fstream>
 #include <cstring>
+#include <cassert>
+#include <algorithm>
 #include <unistd.h>
 
 const int MAXN = 100000;
@@ -354,7 +356,7 @@ back_track:
             int x = -1;
             for (int j = 0; j < refs[i].size(); j++)
                 if ((refs[i][j] != parent[i]) &&
-                    (height[parent[i]] % ERA_BLOCK_COUNT != 0) && (height[refs[i][j]] % ERA_BLOCK_COUNT != 0)) {
+                        (height[parent[i]] % ERA_BLOCK_COUNT != 0) && (height[refs[i][j]] % ERA_BLOCK_COUNT != 0)) {
                     x = refs[i][j];
                     break;
                 }
@@ -384,9 +386,9 @@ back_track:
             local_clock[i][j] = current_clock[j];
 
         /*fprintf(stderr, "i = %d\n", i);
-        fprintf(stderr, "g %d\n", g);
-        for (int j = 0; j < M; j++)
-            fprintf(stderr, "%d %lu %d\n", j, groups[j].size(), current_clock[j]);*/
+          fprintf(stderr, "g %d\n", g);
+          for (int j = 0; j < M; j++)
+          fprintf(stderr, "%d %lu %d\n", j, groups[j].size(), current_clock[j]);*/
 
         groups[g].push_back(i);
         children[parent[i]].push_back(i);
@@ -406,8 +408,8 @@ back_track:
         if (weight[i] > 1 && HEAVY_BLOCK_RATIO > diff)
             diff = HEAVY_BLOCK_RATIO;
         fout << is_valid[i] << " " << is_timer[i] << " " << is_adaptive[i] << " "
-             << diff
-             << " " << parent[i];
+            << diff
+            << " " << parent[i];
         for (int j = 0; j < refs[i].size(); j++)
             if (refs[i][j] != parent[i])
                 fout << " " << refs[i][j];
