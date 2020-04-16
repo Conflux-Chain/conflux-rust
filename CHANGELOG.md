@@ -18,6 +18,10 @@
 
 - Use block_count - 1 in target difficulty calculation because the timespan is calculated after the max - min timestamp of blocks.
 
+- Add fields in Receipt: gas_fee, gas_sponsored, storage_sponsored. Accumulate gas_used in Receipt, not gas_charged.
+
+- Define gas_used to be transaction gas limit for NotEnoughCash, the same as all other exceptions.
+
 ## Improvements
 
 - Improve the transaction address check at RPC
