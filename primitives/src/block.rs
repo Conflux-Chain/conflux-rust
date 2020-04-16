@@ -89,13 +89,9 @@ impl Block {
         sum
     }
 
-    pub fn size(&self) -> usize {
-        let mut ret = self.block_header.size();
-        for t in &self.transactions {
-            ret += t.size();
-        }
-        ret
-    }
+    /// The size filled in the RPC response. It returns the approximate rlp size
+    /// of the block.
+    pub fn size(&self) -> usize { self.approximated_rlp_size() }
 
     pub fn transaction_hashes(&self) -> Vec<H256> {
         self.transactions
