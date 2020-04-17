@@ -178,6 +178,12 @@ impl State {
                 })
             })?;
 
+        let (inc, sub) = if inc > sub {
+            (inc - sub, 0)
+        } else {
+            (0, sub - inc)
+        };
+
         if sub > 0 {
             let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
             assert!(self.exists(addr)?);
