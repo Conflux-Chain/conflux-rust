@@ -187,11 +187,11 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             name="constructor",
             args=[],
             sender_key=self.genesis_priv_key,
-            storage_limit=1272)
+            storage_limit=1820)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
         assert_equal(client.get_balance(contract_addr), 0)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), 1272 * collateral_per_byte)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), 1820 * collateral_per_byte)
 
         # sponsor the contract failed due to sponsor_balance < 1000 * upper_bound
         b0 = client.get_balance(genesis_addr)
@@ -602,6 +602,15 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
         assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - sb - cfs - 1)
         assert_equal(client.get_balance(addr3), b3 + sb + cfs)
+
+        self.call_contract_function(
+            contract=test_contract,
+            name="par",
+            args=[100, 200],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 300)
 
         self.log.info("Pass")
 
