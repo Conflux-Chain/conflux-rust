@@ -172,7 +172,7 @@ impl ConsensusExecutor {
         verification_config: VerificationConfig, bench_mode: bool,
     ) -> Arc<Self>
     {
-        let machine = tx_pool.machine.clone();
+        let machine = tx_pool.machine();
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),

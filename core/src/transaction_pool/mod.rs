@@ -116,7 +116,7 @@ pub struct TransactionPool {
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
-    pub machine: Arc<Machine>,
+    machine: Arc<Machine>,
 }
 
 impl MallocSizeOf for TransactionPool {
@@ -182,6 +182,8 @@ impl TransactionPool {
             machine,
         }
     }
+
+    pub fn machine(&self) -> Arc<Machine> { self.machine.clone() }
 
     pub fn get_transaction(
         &self, tx_hash: &H256,
