@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- Add support for WebSockets in RPC.
+
 # 0.4.1
 
 ## Bug Fixes

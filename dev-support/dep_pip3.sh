@@ -17,6 +17,8 @@ install trie
 install web3
 install py-solc-x
 install jsonrpcclient
+install asyncio
+install websockets
 
 python3 -m solcx.install v0.5.17
 

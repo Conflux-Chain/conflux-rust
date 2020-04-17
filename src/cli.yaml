@@ -20,6 +20,11 @@ args:
         long: udp-port
         value_name: PORT
         takes_value: true
+    - jsonrpc-ws-port:
+        help: Specify the port for the WebSocket JSON-RPC API server.
+        long: jsonrpc-ws-port
+        value_name: PORT
+        takes_value: true
     - jsonrpc-tcp-port:
         help: Specify the port for the TCP JSON-RPC API server.
         long: jsonrpc-tcp-port

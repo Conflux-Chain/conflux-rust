@@ -55,6 +55,7 @@ class TestNode:
         else:
             self.ip = "127.0.0.1"
             self.rpcport = rpc_port(self.index)
+            self.pubsubport = pubsub_port(self.index)
         self.port = str(p2p_port(index))
         if self.rpchost is None:
             self.rpchost = ip  # + ":" + str(rpc_port(index))

@@ -16,11 +16,12 @@
 
 //! Parity-specific metadata extractors.
 
-use std::sync::Arc;
-
 use crate::rpc::{http_common::HttpMetaExtractor, Metadata, Origin};
+use cfx_types::H256;
 use jsonrpc_pubsub::Session;
 use jsonrpc_tcp_server as tcp;
+use jsonrpc_ws_server as ws;
+use std::sync::Arc;
 //use ws;
 
 /// Common HTTP & IPC metadata extractor.
@@ -48,6 +49,17 @@ impl tcp::MetaExtractor<Metadata> for RpcExtractor {
         Metadata {
             origin: Origin::Tcp(req.peer_addr),
             session: Some(Arc::new(Session::new(req.sender.clone()))),
+        }
+    }
+}
+
+impl ws::MetaExtractor<Metadata> for RpcExtractor {
+    fn extract(&self, req: &ws::RequestContext) -> Metadata {
+        Metadata {
+            origin: Origin::Ws {
+                session: H256::from_low_u64_be(req.session_id),
+            },
+            session: Some(Arc::new(Session::new(req.sender()))),
         }
     }
 }
