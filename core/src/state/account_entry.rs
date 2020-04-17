@@ -433,6 +433,8 @@ impl OverlayAccount {
 
     pub fn is_basic(&self) -> bool { self.code_hash == KECCAK_EMPTY }
 
+    pub fn set_nonce(&mut self, nonce: &U256) { self.nonce = *nonce; }
+
     pub fn inc_nonce(&mut self) { self.nonce = self.nonce + U256::from(1u8); }
 
     pub fn add_balance(&mut self, by: &U256) {
