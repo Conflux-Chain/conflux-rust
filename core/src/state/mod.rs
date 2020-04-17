@@ -677,6 +677,12 @@ impl State {
         self.require(address, false).map(|mut x| x.inc_nonce())
     }
 
+    pub fn set_nonce(
+        &mut self, address: &Address, nonce: &U256,
+    ) -> DbResult<()> {
+        self.require(address, false).map(|mut x| x.set_nonce(nonce))
+    }
+
     pub fn sub_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()> {
