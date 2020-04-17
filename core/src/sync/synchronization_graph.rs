@@ -2009,12 +2009,6 @@ impl SynchronizationGraph {
     /// blocks which can be reached by `not_ready_blocks_frontier`.
     pub fn remove_expire_blocks(&self, expire_time: u64) {
         let inner = &mut *self.inner.write();
-        // Only remove expire blocks when there are more than 10% expired
-        // blocks.
-        if inner.not_ready_blocks_count * 10 <= inner.arena.len() {
-            return;
-        }
-
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
