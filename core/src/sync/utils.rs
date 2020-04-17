@@ -10,7 +10,7 @@ use crate::{
     machine::new_machine_with_builtin,
     parameters::{
         block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
-        consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
+        consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
         consensus_internal::INITIAL_BASE_MINING_REWARD_IN_UCFX,
         WORKER_COMPUTATION_PARALLELISM,
     },
@@ -40,6 +40,7 @@ pub fn create_simple_block_impl(
         .with_parent_hash(parent_hash)
         .with_height(height)
         .with_referee_hashes(ref_hashes)
+        .with_gas_limit(GENESIS_GAS_LIMIT.into())
         .with_nonce(nonce)
         .with_difficulty(diff)
         .with_adaptive(adaptive)
