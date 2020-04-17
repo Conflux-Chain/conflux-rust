@@ -6,9 +6,8 @@ extern crate tempdir;
 
 use self::tempdir::TempDir;
 use crate::{
-    archive::{ArchiveClient, Configuration},
-    common::client_methods,
-    rpc::RpcBlock,
+    archive::ArchiveClient, common::client_methods,
+    configuration::Configuration, rpc::RpcBlock,
 };
 use cfx_types::H256;
 use cfxcore::ConsensusGraphTrait;
