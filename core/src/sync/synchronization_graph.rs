@@ -817,16 +817,17 @@ impl SynchronizationGraphInner {
         }
 
         // Verify the gas limit is respected
+        let self_gas_limit = *self.arena[index].block_header.gas_limit();
         let gas_limit_divisor = self.machine.params().gas_limit_bound_divisor;
         let min_gas_limit = self.machine.params().min_gas_limit;
+        let gas_upper =
+            parent_gas_limit + parent_gas_limit / gas_limit_divisor - 1;
         let gas_lower = max(
-            parent_gas_limit - parent_gas_limit / gas_limit_divisor,
+            parent_gas_limit - parent_gas_limit / gas_limit_divisor + 1,
             min_gas_limit,
         );
-        let gas_upper = parent_gas_limit + parent_gas_limit / gas_limit_divisor;
-        let self_gas_limit = *self.arena[index].block_header.gas_limit();
 
-        if self_gas_limit <= gas_lower || self_gas_limit >= gas_upper {
+        if self_gas_limit < gas_lower || self_gas_limit > gas_upper {
             return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
                 min: Some(gas_lower),
                 max: Some(gas_upper),
