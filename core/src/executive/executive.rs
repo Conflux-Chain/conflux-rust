@@ -1243,6 +1243,7 @@ impl<'a> Executive<'a> {
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
         let needed_balance = U256::MAX / U256::from(2);
+        self.state.set_nonce(&sender, &tx.nonce)?;
         if balance < needed_balance {
             self.state.add_balance(
                 &sender,
