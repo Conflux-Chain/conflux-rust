@@ -12,7 +12,7 @@ use crate::{
         ConsensusGraphInner,
     },
     executive::{ExecutionOutcome, Executive, InternalContractMap},
-    machine::new_machine_with_builtin,
+    machine::Machine,
     parameters::{consensus::*, consensus_internal::*},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::{CleanupMode, State},
@@ -172,12 +172,14 @@ impl ConsensusExecutor {
         verification_config: VerificationConfig, bench_mode: bool,
     ) -> Arc<Self>
     {
+        let machine = tx_pool.machine();
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
             data_man.clone(),
             vm,
             config,
             verification_config,
+            machine,
         ));
         let (sender, receiver) = channel();
 
@@ -758,13 +760,14 @@ pub struct ConsensusExecutionHandler {
     pub vm: VmFactory,
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
+    machine: Arc<Machine>,
 }
 
 impl ConsensusExecutionHandler {
     pub fn new(
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         vm: VmFactory, config: ConsensusExecutionConfiguration,
-        verification_config: VerificationConfig,
+        verification_config: VerificationConfig, machine: Arc<Machine>,
     ) -> Self
     {
         ConsensusExecutionHandler {
@@ -773,6 +776,7 @@ impl ConsensusExecutionHandler {
             vm,
             config,
             verification_config,
+            machine,
         }
     }
 
@@ -1020,7 +1024,6 @@ impl ConsensusExecutionHandler {
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let spec = Spec::new_spec();
-        let machine = new_machine_with_builtin();
         let internal_contract_map = InternalContractMap::new();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
@@ -1059,7 +1062,7 @@ impl ConsensusExecutionHandler {
                     Executive::new(
                         state,
                         &env,
-                        &machine,
+                        self.machine.as_ref(),
                         &spec,
                         &internal_contract_map,
                     )
@@ -1484,7 +1487,6 @@ impl ConsensusExecutionHandler {
         &self, tx: &SignedTransaction, epoch_id: &H256,
     ) -> RpcResult<ExecutionOutcome> {
         let spec = Spec::new_spec();
-        let machine = new_machine_with_builtin();
         let internal_contract_map = InternalContractMap::new();
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
@@ -1549,7 +1551,7 @@ impl ConsensusExecutionHandler {
         let mut ex = Executive::new(
             &mut state,
             &env,
-            &machine,
+            self.machine.as_ref(),
             &spec,
             &internal_contract_map,
         );

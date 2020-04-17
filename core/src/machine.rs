@@ -47,7 +47,7 @@ impl CommonParams {
             network_id: 0x1,
             chain_id: 0x1,
             subprotocol_name: "cfx".into(),
-            min_gas_limit: 0x1387.into(),
+            min_gas_limit: 10_000_000.into(),
             gas_limit_bound_divisor: 0x0400.into(),
             registrar: Address::from_str(
                 "c6d9d2cd449a754c494264e1809c50e34d64562b",

@@ -18,6 +18,8 @@ pub use self::impls::TreapMap;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
+    machine::Machine,
+    parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT,
     statedb::{Result as StateDbResult, StateDb},
     storage::{Result as StorageResult, StateIndex, StorageManagerTrait},
     verification::VerificationConfig,
@@ -31,7 +33,13 @@ use metrics::{
 };
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
-use std::{collections::hash_map::HashMap, mem, ops::DerefMut, sync::Arc};
+use std::{
+    cmp::{max, min},
+    collections::hash_map::HashMap,
+    mem,
+    ops::DerefMut,
+    sync::Arc,
+};
 use transaction_pool_inner::TransactionPoolInner;
 
 lazy_static! {
@@ -78,6 +86,7 @@ pub struct TxPoolConfig {
     pub max_tx_gas: u64,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
+    pub target_block_gas_limit: u64,
 }
 
 impl MallocSizeOf for TxPoolConfig {
@@ -92,6 +101,7 @@ impl Default for TxPoolConfig {
             max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
             tx_weight_scaling: 1,
             tx_weight_exp: 1,
+            target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
         }
     }
 }
@@ -106,6 +116,7 @@ pub struct TransactionPool {
     consensus_best_info: Mutex<Arc<BestInformation>>,
     set_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
     recycle_tx_requests: Mutex<Vec<Arc<SignedTransaction>>>,
+    machine: Arc<Machine>,
 }
 
 impl MallocSizeOf for TransactionPool {
@@ -125,6 +136,7 @@ impl MallocSizeOf for TransactionPool {
             + consensus_best_info_size
             + set_tx_requests_size
             + recycle_tx_requests_size
+        // Does not count size_of machine
     }
 }
 
@@ -133,7 +145,7 @@ pub type SharedTransactionPool = Arc<TransactionPool>;
 impl TransactionPool {
     pub fn new(
         config: TxPoolConfig, verification_config: VerificationConfig,
-        data_man: Arc<BlockDataManager>,
+        data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
     ) -> Self
     {
         let genesis_hash = data_man.true_genesis.hash();
@@ -167,8 +179,11 @@ impl TransactionPool {
             consensus_best_info: Mutex::new(Arc::new(Default::default())),
             set_tx_requests: Mutex::new(Default::default()),
             recycle_tx_requests: Mutex::new(Default::default()),
+            machine,
         }
     }
+
+    pub fn machine(&self) -> Arc<Machine> { self.machine.clone() }
 
     pub fn get_transaction(
         &self, tx_hash: &H256,
@@ -573,7 +588,7 @@ impl TransactionPool {
     {
         let consensus_best_info = self.consensus_best_info.lock();
 
-        let block_gas_limit = self
+        let parent_block_gas_limit = self
             .data_man
             .block_by_hash(
                 &consensus_best_info.best_block_hash,
@@ -584,9 +599,25 @@ impl TransactionPool {
             .block_header
             .gas_limit()
             .clone();
+
+        let gas_limit_divisor = self.machine.params().gas_limit_bound_divisor;
+        let min_gas_limit = self.machine.params().min_gas_limit;
+        assert!(parent_block_gas_limit >= min_gas_limit);
+        let gas_lower = max(
+            parent_block_gas_limit - parent_block_gas_limit / gas_limit_divisor
+                + 1,
+            min_gas_limit,
+        );
+        let gas_upper = parent_block_gas_limit
+            + parent_block_gas_limit / gas_limit_divisor
+            - 1;
+
+        let target_gas_limit = self.config.target_block_gas_limit.into();
+        let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
+
         let transactions_from_pool = self.pack_transactions(
             num_txs,
-            block_gas_limit.clone(),
+            self_gas_limit.clone(),
             block_size_limit,
             consensus_best_info.best_epoch_number,
         );
@@ -597,7 +628,7 @@ impl TransactionPool {
         ]
         .concat();
 
-        (consensus_best_info.clone(), block_gas_limit, transactions)
+        (consensus_best_info.clone(), self_gas_limit, transactions)
     }
 
     pub fn set_best_executed_epoch(
