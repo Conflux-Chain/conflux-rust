@@ -149,6 +149,8 @@ pub mod pow {
 }
 
 pub mod block {
+    use crate::parameters::consensus::GENESIS_GAS_LIMIT;
+
     // The maximum block size limit in bytes
     // Consider that the simple payment transaction consumes only 100 bytes per
     // second. This would allow us to have 2000 simple payment transactions
@@ -171,6 +173,7 @@ pub mod block {
     pub const ACCEPTABLE_TIME_DRIFT: u64 = 5 * 60;
     // FIXME: a block generator parameter only. We should remove this later
     pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
+    pub const DEFAULT_TARGET_BLOCK_GAS_LIMIT: u64 = GENESIS_GAS_LIMIT;
 }
 
 pub mod staking {
