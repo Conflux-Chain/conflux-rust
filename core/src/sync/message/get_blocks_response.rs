@@ -38,9 +38,7 @@ impl Handleable for GetBlocksResponse {
                 .collect::<Vec<H256>>()
         );
 
-        // TODO Check block size in advance to avoid attacks trying to cause
-        // OOM. TODO Add throttling on the requesting side to avoid
-        // wasting bandwidth.
+        // TODO Check block size in advance to avoid attacks causing OOM.
         if ctx.manager.is_block_queue_full() {
             warn!("recover_public_queue is full, discard GetBlocksResponse");
             return Ok(());

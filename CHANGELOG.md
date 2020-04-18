@@ -16,6 +16,8 @@
 
 - RPC now returns the correct rlp size of the block
 
+- Delay block requests when we cannot process them to avoid wasting network bandwidth.
+
 # 0.4.0
 
 ## Bug Fixes
