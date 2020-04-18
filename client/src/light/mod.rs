@@ -34,7 +34,7 @@ use super::{
 };
 use crate::common::ClientComponents;
 use blockgen::BlockGenerator;
-use cfxcore::genesis::genesis_block;
+use cfxcore::{genesis::genesis_block, machine::new_machine_with_builtin};
 
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -131,10 +131,13 @@ impl LightClient {
             conf.data_mananger_config(),
         ));
 
+        let machine = Arc::new(new_machine_with_builtin());
+
         let txpool = Arc::new(TransactionPool::new(
             conf.txpool_config(),
             conf.verification_config(),
             data_man.clone(),
+            machine.clone(),
         ));
 
         let statistics = Arc::new(Statistics::new());
@@ -166,6 +169,7 @@ impl LightClient {
             sync_config,
             notifications.clone(),
             false,
+            machine.clone(),
         ));
 
         let network = {

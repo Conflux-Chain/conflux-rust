@@ -16,6 +16,7 @@
 
 // #![warn(missing_docs)]
 
+extern crate cfx_types;
 extern crate edit_distance;
 extern crate ethereum_types;
 extern crate parity_crypto;

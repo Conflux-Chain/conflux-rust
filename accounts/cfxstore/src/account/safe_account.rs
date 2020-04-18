@@ -20,6 +20,7 @@
 
 use super::crypto::Crypto;
 use account::Version;
+use cfx_types::address_util::AddressUtil;
 use cfxkey::{
     self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
     Public, Secret, Signature,
@@ -140,8 +141,7 @@ impl SafeAccount {
         let meta_plain = json::VaultKeyMeta::load(&meta_plain)
             .map_err(|e| Error::Custom(format!("{:?}", e)))?;
 
-        let type_bits = meta_plain.address.at(0) & 0xf0;
-        if type_bits != 0x10 {
+        if !meta_plain.address.is_user_account_address() {
             warn!("Trying to import a non-user type account address. Are you trying to import an Ethkey for Conflux? Note that the address scheme between Ethereum and Conflux are different.");
             return Err(Error::Custom(format!(
                 "Import non-user type address. Address: {:?}",

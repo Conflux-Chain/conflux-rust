@@ -1,16 +1,20 @@
-# 0.5.0
+# 0.6.0
 
 ## Bug Fixes
 
 ## Improvements
 
-# 0.4.1
+# 0.5.0
 
 ## Bug Fixes
 
 - Fix UnexpectedResponse from honest peers that causes peer demotion.
 
 - Remove some untrue debug assert.
+
+- Forbidden CALLCODE and DELEGATECALL to internal contracts.
+
+- RPC now returns the correct rlp size of the block
 
 # 0.4.0
 
@@ -32,11 +36,11 @@
 
 - Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
 
-- Forbidden CALLCODE and DELEGATECALL to internal contracts.
-
 ## Improvements
 
 - Improve the transaction address check at RPC
+
+- Chagne the test net PoW to use double keccak
 
 ## EVM Updates
 

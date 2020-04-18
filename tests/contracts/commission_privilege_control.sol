@@ -32,4 +32,10 @@ contract CommissionPrivilegeTest {
             ss[i] = 0;
         }
     }
+    function par(uint start, uint end) public payable {
+        this.par_add(start, end);
+        this.par_del(start, end);
+        this.par_del(start, end);
+        this.par_add(start, end);
+    }
 }

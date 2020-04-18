@@ -549,6 +549,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockFromDbPhase {
                 old_sync_inner.pow_config.clone(),
                 old_sync_inner.config.clone(),
                 old_sync_inner.data_man.clone(),
+                self.graph.machine(),
             );
             *old_sync_inner = new_sync_inner;
 
