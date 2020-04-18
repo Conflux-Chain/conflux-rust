@@ -2196,7 +2196,7 @@ impl ConsensusGraphInner {
         let tx_index = self.data_man.transaction_index_by_hash(
             tx_hash, false, /* update_cache */
         )?;
-        // receipts should never be None if address is not None because
+        // receipts should never be None if transaction index isn't none.
         let block_receipts = self
             .block_execution_results_by_hash(
                 &tx_index.block_hash,
@@ -2208,7 +2208,7 @@ impl ConsensusGraphInner {
         let prior_gas_used = if tx_index.index == 0 {
             U256::zero()
         } else {
-            block_receipts.receipts[tx_index.index - 1].gas_used
+            block_receipts.receipts[tx_index.index - 1].accumulated_gas_used
         };
 
         Some((

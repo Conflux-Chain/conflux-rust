@@ -1040,7 +1040,7 @@ impl ConsensusExecutionHandler {
                 author: block.block_header.author().clone(),
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
-                gas_used: U256::zero(),
+                accumulated_gas_used: U256::zero(),
                 last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
@@ -1069,7 +1069,9 @@ impl ConsensusExecutionHandler {
                     .transact(transaction)?
                 };
 
-                // TODO Store fine-grained output status in receipts.
+                let gas_fee;
+                let mut gas_sponsor_paid = false;
+                let mut storage_sponsor_paid = false;
                 match r {
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
@@ -1088,6 +1090,7 @@ impl ConsensusExecutionHandler {
                             );
                             to_pending.push(transaction.clone())
                         }
+                        gas_fee = U256::zero();
                     }
                     ExecutionOutcome::ExecutionErrorBumpNonce(
                         error,
@@ -1096,7 +1099,8 @@ impl ConsensusExecutionHandler {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
 
-                        env.gas_used = executed.cumulative_gas_used;
+                        env.accumulated_gas_used += executed.gas_used;
+                        gas_fee = executed.fee;
                         warn!(
                             "tx execution error: transaction={:?}, err={:?}",
                             transaction, error
@@ -1106,11 +1110,15 @@ impl ConsensusExecutionHandler {
                         tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
                         GOOD_TPS_METER.mark(1);
 
-                        env.gas_used = executed.cumulative_gas_used;
+                        env.accumulated_gas_used += executed.gas_used;
+                        gas_fee = executed.fee;
                         transaction_logs = executed.logs.clone();
                         storage_collateralized =
                             executed.storage_collateralized.clone();
                         storage_released = executed.storage_released.clone();
+
+                        gas_sponsor_paid = executed.gas_sponsor_paid;
+                        storage_sponsor_paid = executed.storage_sponsor_paid;
 
                         trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                     }
@@ -1118,8 +1126,11 @@ impl ConsensusExecutionHandler {
 
                 let receipt = Receipt::new(
                     tx_outcome_status,
-                    env.gas_used,
+                    env.accumulated_gas_used,
+                    gas_fee,
+                    gas_sponsor_paid,
                     transaction_logs,
+                    storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,
                 );
@@ -1327,14 +1338,11 @@ impl ConsensusExecutionHandler {
             };
 
             secondary_reward += block_receipts.secondary_reward;
-            let mut last_gas_used = U256::zero();
             debug_assert!(
                 block_receipts.receipts.len() == block.transactions.len()
             );
             for (idx, tx) in block.transactions.iter().enumerate() {
-                let gas_used =
-                    block_receipts.receipts[idx].gas_used - last_gas_used;
-                let fee = tx.gas_price * gas_used;
+                let fee = block_receipts.receipts[idx].gas_fee;
                 let info = tx_fee
                     .entry(tx.hash())
                     .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
@@ -1350,7 +1358,6 @@ impl ConsensusExecutionHandler {
                 if !fee.is_zero() && info.0.is_zero() {
                     info.0 = fee;
                 }
-                last_gas_used = block_receipts.receipts[idx].gas_used;
             }
         }
 
@@ -1539,7 +1546,7 @@ impl ConsensusExecutionHandler {
             author: Default::default(),
             timestamp: time_stamp,
             difficulty: Default::default(),
-            gas_used: U256::zero(),
+            accumulated_gas_used: U256::zero(),
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
             epoch_height: block_height,

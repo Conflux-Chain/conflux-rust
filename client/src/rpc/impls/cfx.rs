@@ -433,8 +433,16 @@ impl RpcImpl {
 
         if let Some(info) = self.consensus.get_transaction_info_by_hash(&hash) {
             let (tx, receipt, tx_index, prior_gas_used) = info;
-            let rpc_receipt =
-                RpcReceipt::new(tx.clone(), receipt, tx_index, prior_gas_used);
+            let rpc_receipt = RpcReceipt::new(
+                tx.clone(),
+                receipt,
+                tx_index,
+                prior_gas_used,
+                // TODO: set these fields below.
+                /* maybe_epoch_number = */
+                None,
+                /* maybe_state_root = */ None,
+            );
             let rpc_tx = RpcTransaction::from_signed(&tx, Some(rpc_receipt));
             return Ok(Some(rpc_tx));
         }
@@ -509,12 +517,16 @@ impl RpcImpl {
                 // FIXME: server error, client should request another server.
                 .ok_or("Inconsistent state")?
                 .clone();
-            prior_receipt.gas_used
+            prior_receipt.accumulated_gas_used
         };
-        let mut rpc_receipt =
-            RpcReceipt::new(transaction, receipt, address, prior_gas_used);
-        rpc_receipt.set_epoch_number(Some(epoch_number));
-        rpc_receipt.set_state_root(state_root.into());
+        let rpc_receipt = RpcReceipt::new(
+            transaction,
+            receipt,
+            address,
+            prior_gas_used,
+            Some(epoch_number),
+            Some(state_root),
+        );
         Ok(Some(rpc_receipt))
     }
 
