@@ -11,7 +11,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
-use std::{error, fmt, mem, ops::Deref};
+use std::{error, fmt, ops::Deref};
 use unexpected::OutOfBounds;
 
 /// Fake address for unsigned transactions.
@@ -508,12 +508,6 @@ impl SignedTransaction {
     pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price }
 
     pub fn gas_limit(&self) -> &U256 { &self.transaction.gas }
-
-    pub fn size(&self) -> usize {
-        // FIXME: We should revisit the size of transaction after we finished
-        // the persistent storage part
-        mem::size_of::<Self>()
-    }
 
     pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
 
