@@ -71,7 +71,7 @@ class PubSubTest(ConfluxTestFramework):
         sub_light = await self.pubsub[LIGHTNODE].subscribe("epochs")
 
         # genesis hash
-        root_hash = self.nodes[0].best_block_hash()
+        root_hash = self.nodes[FULLNODE0].best_block_hash()
         root_epoch = 0
 
         for ii in range(NUM_FORKS):
