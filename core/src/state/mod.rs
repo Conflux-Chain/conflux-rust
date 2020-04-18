@@ -171,19 +171,17 @@ impl State {
         let (inc, sub) =
             self.ensure_cached(addr, RequireCache::None, |acc| {
                 acc.map_or((0, 0), |account| {
-                    (
-                        account.get_unpaid_storage_entries(),
-                        account.get_unrefunded_storage_entries(),
-                    )
+                    account.get_uncleared_storage_entries()
                 })
             })?;
+        if inc > 0 || sub > 0 {
+            self.require(addr, false)?.reset_uncleared_storage_entries();
+        }
 
         if sub > 0 {
             let delta = U256::from(sub) * *COLLATERAL_PER_STORAGE_KEY;
             assert!(self.exists(addr)?);
             self.sub_collateral_for_storage(addr, &delta)?;
-            self.require(addr, false)?
-                .reset_unrefunded_storage_entries();
         }
         if inc > 0 {
             let delta = U256::from(inc) * *COLLATERAL_PER_STORAGE_KEY;
@@ -208,7 +206,6 @@ impl State {
                 }
             }
             self.add_collateral_for_storage(addr, &delta)?;
-            self.require(addr, false)?.reset_unpaid_storage_entries();
         }
         Ok(CollateralCheckResult::Valid)
     }

@@ -187,11 +187,11 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
             name="constructor",
             args=[],
             sender_key=self.genesis_priv_key,
-            storage_limit=1272)
+            storage_limit=2842)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.log.info("contract_addr={}".format(contract_addr))
         assert_equal(client.get_balance(contract_addr), 0)
-        assert_equal(client.get_collateral_for_storage(genesis_addr), 1272 * collateral_per_byte)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), 2842 * collateral_per_byte)
 
         # sponsor the contract failed due to sponsor_balance < 1000 * upper_bound
         b0 = client.get_balance(genesis_addr)
@@ -602,6 +602,85 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
         assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - sb - cfs - 1)
         assert_equal(client.get_balance(addr3), b3 + sb + cfs)
+
+        # storage change test
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par",
+            args=[10, 20, 30, 41],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 30)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 11 * collateral_per_storage_key)
+
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add_del",
+            args=[110, 120, 110, 120],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 30)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0)
+
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add_del",
+            args=[210, 220, 215, 220],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 30)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 5 * collateral_per_storage_key)
+
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add_del",
+            args=[310, 320, 320, 330],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 30)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 10 * collateral_per_storage_key)
+
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_add_del",
+            args=[410, 420, 409, 430],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 300)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0)
+
+        # test recurrence
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="rec",
+            args=[510, 520, 3],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 30)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + 4 * collateral_per_storage_key)
+
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="par_del",
+            args=[510, 520],
+            sender_key=self.genesis_priv_key,
+            contract_addr=contract_addr,
+            wait=True,
+            storage_limit=bytes_per_key * 30)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 - 4 * collateral_per_storage_key)
 
         self.log.info("Pass")
 

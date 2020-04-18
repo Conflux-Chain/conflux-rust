@@ -22,6 +22,7 @@ use cfx_types::{Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     genesis::{self, genesis_block},
+    machine::new_machine_with_builtin,
     statistics::Statistics,
     storage::StorageManager,
     sync::SyncPhaseType,
@@ -132,10 +133,13 @@ impl FullClient {
             conf.data_mananger_config(),
         ));
 
+        let machine = Arc::new(new_machine_with_builtin());
+
         let txpool = Arc::new(TransactionPool::new(
             conf.txpool_config(),
             conf.verification_config(),
             data_man.clone(),
+            machine.clone(),
         ));
 
         let statistics = Arc::new(Statistics::new());
@@ -167,6 +171,7 @@ impl FullClient {
             sync_config,
             notifications.clone(),
             true,
+            machine.clone(),
         ));
 
         let network = {
@@ -256,6 +261,7 @@ impl FullClient {
             maybe_txgen.clone(),
             maybe_direct_txgen,
             conf.rpc_impl_config(),
+            machine.clone(),
         ));
 
         let common_impl = Arc::new(CommonImpl::new(

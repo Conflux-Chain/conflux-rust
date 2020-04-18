@@ -555,28 +555,25 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
-    pub fn add_unpaid_storage_entries(&mut self, by: u64) {
-        self.unpaid_storage_entries += by;
+    pub fn get_uncleared_storage_entries(&self) -> (u64, u64) {
+        return (self.unpaid_storage_entries, self.unrefunded_storage_entries);
     }
 
-    pub fn get_unpaid_storage_entries(&self) -> u64 {
-        return self.unpaid_storage_entries;
-    }
-
-    pub fn reset_unpaid_storage_entries(&mut self) {
+    pub fn reset_uncleared_storage_entries(&mut self) {
         self.unpaid_storage_entries = 0;
+        self.unrefunded_storage_entries = 0;
     }
 
     pub fn add_unrefunded_storage_entries(&mut self, by: u64) {
-        self.unrefunded_storage_entries += by;
+        let delta = std::cmp::min(self.unpaid_storage_entries, by);
+        self.unpaid_storage_entries -= delta;
+        self.unrefunded_storage_entries += by - delta;
     }
 
-    pub fn get_unrefunded_storage_entries(&self) -> u64 {
-        return self.unrefunded_storage_entries;
-    }
-
-    pub fn reset_unrefunded_storage_entries(&mut self) {
-        self.unrefunded_storage_entries = 0;
+    pub fn add_unpaid_storage_entries(&mut self, by: u64) {
+        let delta = std::cmp::min(self.unrefunded_storage_entries, by);
+        self.unrefunded_storage_entries -= delta;
+        self.unpaid_storage_entries += by - delta;
     }
 
     pub fn cache_code(&mut self, db: &StateDb) -> Option<Arc<Bytes>> {
