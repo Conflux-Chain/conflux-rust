@@ -41,7 +41,7 @@ class SameHeightTest(ConfluxTestFramework):
         block_gen_thread.start()
         start_time = time.time()
         original_cnt = self.nodes[0].getblockcount()
-        for _ in range(300):
+        for _ in range(100):
             time.sleep(1)
             cnt = self.nodes[0].getblockcount()
             try:
