@@ -86,8 +86,6 @@ class PubSubTest(ConfluxTestFramework):
         assert_equal(len(logs1), 2 * NUM_CALLS)
         assert_equal(len(logs2), NUM_CALLS)
 
-        await sub_one.unsubscribe()
-
         # create alternative fork
         old_tip = self.nodes[FULLNODE0].best_block_hash()
         fork_hash = receipts[len(receipts) // 2]["blockHash"]
