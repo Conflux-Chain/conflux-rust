@@ -6,15 +6,17 @@ import threading
 import time
 import random
 import eth_utils
-
 import sys
-sys.path.append("..")
+from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
+sys.path.append("..")
+from test_framework.authproxy import JSONRPCException
 from conflux.rpc import RpcClient
 from conflux.utils import priv_to_addr
 from test_framework.util import assert_equal, get_simple_rpc_proxy
 
 DRIPS_PER_CFX = 10**18
+INFLIGHT_NONCES = 1500
 
 
 class Sender:
@@ -35,8 +37,10 @@ class Sender:
 
     def new_sender(self, amount: int, rpc_url: str=None):
         (addr, priv_key) = self.client.rand_account()
+        epoch_height = self.best_epoch_height()
         tx = self.client.new_tx(sender=self.addr, receiver=addr,
-                                nonce=self.nonce, value=amount, priv_key=self.priv_key)
+                                nonce=self.nonce, value=amount,
+                                priv_key=self.priv_key, epoch_height=epoch_height)
         assert_equal(self.client.send_tx(tx), tx.hash_hex())
 
         self.balance -= self.client.DEFAULT_TX_FEE + amount
@@ -61,24 +65,34 @@ class Sender:
     def account_nonce(self):
         return self.client.get_nonce(self.addr)
 
-    def send(self, to: str, amount: int, retry_interval=5):
-        tx = self.client.new_tx(sender=self.addr, receiver=to,
-                                nonce=self.nonce, value=amount, priv_key=self.priv_key)
+    def best_epoch_height(self):
+        return self.client.epoch_number()
 
+    def send(self, to: str, amount: int, epoch_height: int, retry_interval=5):
+        tx = self.client.new_tx(sender=self.addr, receiver=to,
+                                nonce=self.nonce, value=amount, priv_key=self.priv_key, epoch_height=epoch_height)
         while True:
             try:
-                self.client.send_tx(tx)
+                received_hash = self.client.send_tx(tx)
+                print(f"sender={self.addr} nonce={self.nonce} hash={tx.hash_hex()} received_hash={received_hash}")
+                assert_equal(tx.hash_hex(), received_hash)
                 break
+            except ReceivedErrorResponseError as e:
+                if "tx already exist" in e.response.data or "stale" in e.response.data:
+                    print(f"skip err={e.response} sender={self.addr} nonce={self.nonce}")
+                    break
+                else:
+                    print("unexpected ReceivedErrorResponseError: ", e)
+                    time.sleep(retry_interval)
             except Exception as e:
-                print("failed to send tx:", e)
+                print(f"failed to send tx: tx = {tx.as_dict()} err={e}")
                 time.sleep(retry_interval)
-
         self.balance -= self.client.DEFAULT_TX_FEE + amount
         self.nonce += 1
 
 
-class TpsWorker(threading.Thread):
 
+class TpsWorker(threading.Thread):
     def __init__(self, sender: Sender, num_receivers: int):
         threading.Thread.__init__(self, daemon=False)
         self.sender = sender
@@ -86,16 +100,21 @@ class TpsWorker(threading.Thread):
                           for _ in range(num_receivers)]
 
     def run(self):
-        while self.sender.balance > 30000:
-            account_nonce = self.sender.account_nonce()
-            assert self.sender.nonce >= account_nonce
-            if self.sender.nonce - account_nonce > 2000:
-                time.sleep(3)
-                continue
+        try:
+            while self.sender.balance > 30000:
+                account_nonce = self.sender.account_nonce()
+                epoch_height = self.sender.best_epoch_height()
+                assert self.sender.nonce >= account_nonce
+                print(f"get nonce for {self.sender.addr} {self.sender.client.node.url}: nonce={account_nonce}")
+                if self.sender.nonce - account_nonce > INFLIGHT_NONCES:
+                    time.sleep(3)
+                    continue
 
-            while self.sender.nonce - account_nonce <= 2000:
-                to = self.receivers[random.randint(0, len(self.receivers) - 1)]
-                self.sender.send(to, 9000)
+                while self.sender.nonce - account_nonce <= INFLIGHT_NONCES:
+                    to = self.receivers[random.randint(0, len(self.receivers) - 1)]
+                    self.sender.send(to, 9000, epoch_height)
+        except Exception as e:
+            print(f"Exception during running: f{e}")
 
 
 def load_boot_nodes():
@@ -145,13 +164,16 @@ def work(faucet_addr, faucet_priv_key_hex, rpc_urls: list, num_threads: int, num
             all_senders.append(sender)
     senders = []
     for sender in all_senders:
-        try:
-            print("Check {} with addr {}".format(sender.client.node.url, sender.addr))
-            sender.wait_for_balance()
-            senders.append(sender)
-        except Exception as e:
-            print(sender.client.node.url, "is not available for Exception", e)
-            break
+        while True:
+            try:
+                print("Check {} with addr {}".format(sender.client.node.url, sender.addr))
+                sender.wait_for_balance()
+                senders.append(sender)
+                break
+            except Exception as e:
+                print(sender.client.node.url, "is not available for Exception", e)
+                time.sleep(1)
+                continue
 
     # start threads to send txs to different nodes
     print("begin to send txs ...")
