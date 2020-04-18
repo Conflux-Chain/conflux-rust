@@ -705,11 +705,6 @@ impl SynchronizationProtocolHandler {
                 .request_epoch_hashes(io, peer, epochs, None);
             *latest_requested = until - 1;
         }
-
-        debug_assert!(
-            self.request_manager.num_epochs_in_flight()
-                <= EPOCH_SYNC_MAX_INFLIGHT
-        );
     }
 
     pub fn request_block_headers(
