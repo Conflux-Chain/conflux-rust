@@ -16,6 +16,8 @@
 
 - RPC now returns the correct rlp size of the block
 
+- Fix a race condition that may cause optimistic execution to panic.
+
 # 0.4.0
 
 ## Bug Fixes
