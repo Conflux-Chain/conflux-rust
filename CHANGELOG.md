@@ -8,6 +8,10 @@
 
 ## Bug Fixes
 
+- Fix UnexpectedResponse from honest peers that causes peer demotion.
+
+- Remove some untrue debug assert.
+
 - Forbidden CALLCODE and DELEGATECALL to internal contracts.
 
 - RPC now returns the correct rlp size of the block

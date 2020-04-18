@@ -51,7 +51,10 @@ impl RequestHandler {
             RequestContainer {
                 peer_id,
                 inflight_requests: HashMap::new(),
-                next_request_id: 0,
+                // Initialize request_id randomly to prevent responses from a
+                // peer to interfere with requests of the same
+                // peer after reconnection.
+                next_request_id: rand::random(),
                 max_inflight_request_count: self
                     .protocol_config
                     .max_inflight_request_count,
