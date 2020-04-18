@@ -1459,7 +1459,7 @@ impl ConsensusNewBlockHandler {
         let capped_fork_at = max(inner.cur_era_stable_height + 1, fork_at);
 
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-        if me % CONFIRMATION_METER_UPDATE_FREQUENCY == 0 {
+        if me % CONFIRMATION_METER_UPDATE_FREQUENCY == 0 || pivot_changed {
             meter.update_confirmation_risks(inner);
         }
 
