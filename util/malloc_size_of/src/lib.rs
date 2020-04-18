@@ -13,6 +13,7 @@
 
 use cfg_if::cfg_if;
 use cfx_types::{H160, H256, H512, U256, U512};
+use hashbrown::HashMap as FastHashMap;
 use slab::Slab;
 use std::{
     collections::{BinaryHeap, HashSet, VecDeque},
@@ -381,6 +382,7 @@ macro_rules! malloc_size_of_hash_map {
 }
 
 malloc_size_of_hash_map!(std::collections::HashMap<K, V, S>);
+malloc_size_of_hash_map!(FastHashMap<K, V, S>);
 
 // PhantomData is always 0.
 impl<T> MallocSizeOf for std::marker::PhantomData<T> {

@@ -1382,6 +1382,8 @@ impl ConsensusNewBlockHandler {
             let mut last_pivot_to_update = HashSet::new();
             last_pivot_to_update.insert(me);
             if pivot_changed {
+                inner.best_terminals_reorg_height =
+                    min(inner.best_terminals_reorg_height, update_at);
                 let update_pivot_index = inner.height_to_pivot_index(update_at);
                 for pivot_index in update_pivot_index..old_pivot_chain_len {
                     for x in &inner.pivot_chain_metadata[pivot_index]
@@ -1457,7 +1459,9 @@ impl ConsensusNewBlockHandler {
         let capped_fork_at = max(inner.cur_era_stable_height + 1, fork_at);
 
         inner.adjust_difficulty(*inner.pivot_chain.last().expect("not empty"));
-        meter.update_confirmation_risks(inner);
+        if me % CONFIRMATION_METER_UPDATE_FREQUENCY == 0 {
+            meter.update_confirmation_risks(inner);
+        }
 
         if pivot_changed {
             if inner.pivot_chain.len() > EPOCH_SET_PERSISTENCE_DELAY as usize {
