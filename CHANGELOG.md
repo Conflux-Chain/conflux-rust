@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
+
 # 0.5.0
 
 ## Bug Fixes
