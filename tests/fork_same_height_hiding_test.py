@@ -38,11 +38,13 @@ class SameHeightTest(ConfluxTestFramework):
         connect_nodes(self.nodes, 0, 1)
         self.log.info("Nodes connected")
         pass_test = False
+        target = 4001
         for _ in range(200):
             self.nodes[1].generate_empty_blocks(1)
+            target += 1
             cnt = self.nodes[1].getblockcount()
             self.log.info("Honest block count: " + str(cnt))
-            if cnt >= 4001:
+            if cnt == target:
                 pass_test = True
                 break
             time.sleep(1)
