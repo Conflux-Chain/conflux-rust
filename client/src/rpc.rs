@@ -2,14 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    http::{
-        AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
-        ServerBuilder as HttpServerBuilder,
-    },
-    tcp::{self, Server as TcpServer, ServerBuilder as TcpServerBuilder},
-};
 use jsonrpc_core::{MetaIoHandler, Result as JsonRpcResult};
+use jsonrpc_http_server::{
+    AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
+    ServerBuilder as HttpServerBuilder,
+};
+use jsonrpc_tcp_server::{
+    MetaExtractor as TpcMetaExtractor, Server as TcpServer,
+    ServerBuilder as TcpServerBuilder,
+};
+use jsonrpc_ws_server::{
+    MetaExtractor as WsMetaExtractor, Server as WsServer,
+    ServerBuilder as WsServerBuilder,
+};
 use std::{
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::Arc,
@@ -113,6 +118,25 @@ impl HttpConfiguration {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct WsConfiguration {
+    pub enabled: bool,
+    pub address: SocketAddr,
+}
+
+impl WsConfiguration {
+    pub fn new(ip: Option<(u8, u8, u8, u8)>, port: Option<u16>) -> Self {
+        let ipv4 = match ip {
+            Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
+            None => Ipv4Addr::new(0, 0, 0, 0),
+        };
+        WsConfiguration {
+            enabled: port.is_some(),
+            address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
+        }
+    }
+}
+
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: Option<PubSubClient>,
     conf: &Configuration,
@@ -194,7 +218,7 @@ pub fn start_tcp<H, T>(
 ) -> Result<Option<TcpServer>, String>
 where
     H: Into<MetaIoHandler<Metadata>>,
-    T: tcp::MetaExtractor<Metadata> + 'static,
+    T: TpcMetaExtractor<Metadata> + 'static,
 {
     if !conf.enabled {
         return Ok(None);
@@ -227,6 +251,27 @@ pub fn start_http(
             "HTTP error: {} (addr = {})",
             io_error, conf.address
         )),
+    }
+}
+
+pub fn start_ws<H, T>(
+    conf: WsConfiguration, handler: H, extractor: T,
+) -> Result<Option<WsServer>, String>
+where
+    H: Into<MetaIoHandler<Metadata>>,
+    T: WsMetaExtractor<Metadata> + 'static,
+{
+    if !conf.enabled {
+        return Ok(None);
+    }
+
+    match WsServerBuilder::with_meta_extractor(handler, extractor)
+        .start(&conf.address)
+    {
+        Ok(server) => Ok(Some(server)),
+        Err(io_error) => {
+            Err(format!("WS error: {} (addr = {})", io_error, conf.address))
+        }
     }
 }
 

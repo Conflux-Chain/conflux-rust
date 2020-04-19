@@ -22,6 +22,7 @@ bootnodes="cfxnode://7ffff7f14f8f73fa93a95309803bbc93c762c48bc873a823ac40500471c
 #
 # `dev` mode is for users to run a single node that automatically
 #     generates blocks with fixed intervals
+#     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
 #     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
 #     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
 #     * generate blocks automatically without PoW if `start_mining` is false
@@ -117,6 +118,7 @@ log_conf="log.yaml"
 # so as to support the Conflux CLI subcommands. What's provided here is the recommended
 # value if you want to start rpc services for other front-end applications.
 #
+# jsonrpc_ws_port=12535
 # jsonrpc_tcp_port=12536
 # jsonrpc_http_port=12537
 # jsonrpc_local_tcp_port=12538

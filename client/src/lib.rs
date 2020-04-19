@@ -5,9 +5,6 @@
 #![recursion_limit = "512"]
 #![allow(deprecated)]
 
-use jsonrpc_http_server as http;
-use jsonrpc_tcp_server as tcp;
-
 #[macro_use]
 extern crate error_chain;
 #[macro_use]

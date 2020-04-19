@@ -2,14 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    http::Server as HttpServer, tcp::Server as TcpServer, TESTNET_VERSION,
-};
-pub use crate::configuration::Configuration;
-use blockgen::BlockGenerator;
+use jsonrpc_http_server::Server as HttpServer;
+use jsonrpc_tcp_server::Server as TcpServer;
+use jsonrpc_ws_server::Server as WsServer;
 
+use super::TESTNET_VERSION;
 use crate::{
     common::{initialize_txgens, ClientComponents},
+    configuration::Configuration,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -18,6 +18,7 @@ use crate::{
         setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
+use blockgen::BlockGenerator;
 use cfx_types::{Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -39,14 +40,15 @@ use threadpool::ThreadPool;
 use txgen::propagate::DataPropagation;
 
 pub struct FullClientExtraComponents {
-    pub debug_rpc_http_server: Option<HttpServer>,
-    pub rpc_tcp_server: Option<TcpServer>,
-    pub rpc_http_server: Option<HttpServer>,
     pub consensus: Arc<ConsensusGraph>,
-    pub txpool: Arc<TransactionPool>,
-    pub sync: Arc<SynchronizationService>,
-    pub secret_store: Arc<SecretStore>,
+    pub debug_rpc_http_server: Option<HttpServer>,
+    pub rpc_http_server: Option<HttpServer>,
+    pub rpc_tcp_server: Option<TcpServer>,
+    pub rpc_ws_server: Option<WsServer>,
     pub runtime: Runtime,
+    pub secret_store: Arc<SecretStore>,
+    pub sync: Arc<SynchronizationService>,
+    pub txpool: Arc<TransactionPool>,
 }
 
 pub struct FullClient {}
@@ -54,7 +56,7 @@ pub struct FullClient {}
 impl FullClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, FullClientExtraComponents>>,
         String,
@@ -279,12 +281,7 @@ impl FullClient {
         );
 
         let debug_rpc_http_server = super::rpc::start_http(
-            super::rpc::HttpConfiguration::new(
-                Some((127, 0, 0, 1)),
-                conf.raw_conf.jsonrpc_local_http_port,
-                conf.raw_conf.jsonrpc_cors.clone(),
-                conf.raw_conf.jsonrpc_http_keep_alive,
-            ),
+            conf.local_http_config(),
             setup_debug_rpc_apis(
                 common_impl.clone(),
                 rpc_impl.clone(),
@@ -293,31 +290,40 @@ impl FullClient {
             ),
         )?;
 
-        if conf.is_dev_mode() {
-            if conf.raw_conf.jsonrpc_tcp_port.is_none() {
-                conf.raw_conf.jsonrpc_tcp_port = Some(12536);
-            }
-            if conf.raw_conf.jsonrpc_http_port.is_none() {
-                conf.raw_conf.jsonrpc_http_port = Some(12537);
-            }
-        };
         let rpc_tcp_server = super::rpc::start_tcp(
-            super::rpc::TcpConfiguration::new(
-                None,
-                conf.raw_conf.jsonrpc_tcp_port,
-            ),
+            conf.tcp_config(),
             if conf.is_test_or_dev_mode() {
                 setup_debug_rpc_apis(
                     common_impl.clone(),
                     rpc_impl.clone(),
-                    Some(pubsub),
+                    Some(pubsub.clone()),
                     &conf,
                 )
             } else {
                 setup_public_rpc_apis(
                     common_impl.clone(),
                     rpc_impl.clone(),
-                    Some(pubsub),
+                    Some(pubsub.clone()),
+                    &conf,
+                )
+            },
+            RpcExtractor,
+        )?;
+
+        let rpc_ws_server = super::rpc::start_ws(
+            conf.ws_config(),
+            if conf.is_test_or_dev_mode() {
+                setup_debug_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub.clone()),
+                    &conf,
+                )
+            } else {
+                setup_public_rpc_apis(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub.clone()),
                     &conf,
                 )
             },
@@ -325,12 +331,7 @@ impl FullClient {
         )?;
 
         let rpc_http_server = super::rpc::start_http(
-            super::rpc::HttpConfiguration::new(
-                None,
-                conf.raw_conf.jsonrpc_http_port,
-                conf.raw_conf.jsonrpc_cors.clone(),
-                conf.raw_conf.jsonrpc_http_keep_alive,
-            ),
+            conf.http_config(),
             if conf.is_test_or_dev_mode() {
                 setup_debug_rpc_apis(common_impl, rpc_impl, None, &conf)
             } else {
@@ -342,14 +343,15 @@ impl FullClient {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),
             other_components: FullClientExtraComponents {
+                consensus,
                 debug_rpc_http_server,
                 rpc_http_server,
                 rpc_tcp_server,
-                txpool,
-                consensus,
+                rpc_ws_server,
+                runtime,
                 secret_store,
                 sync,
-                runtime,
+                txpool,
             },
         }))
     }
