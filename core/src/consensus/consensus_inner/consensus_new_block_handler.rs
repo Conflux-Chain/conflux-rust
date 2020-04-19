@@ -284,6 +284,9 @@ impl ConsensusNewBlockHandler {
             .anticone_cache
             .intersect_update(&new_era_genesis_subtree);
 
+        // Clear best_terminals_lca_caches
+        inner.best_terminals_lca_height_cache.clear();
+
         // Chop off all link-cut-trees in the inner data structure
         inner.split_root(new_era_block_arena_index);
 
