@@ -206,9 +206,6 @@ impl ConsensusExecutor {
                     // may wait for execution results while holding the
                     // Consensus Inner lock, if we wait on
                     // inner lock here we may get deadlock.
-                    // Make sure that `receiver.try_recv()` is protected by this
-                    // inner lock, otherwise we may get
-                    // optimistic task when the queue is not empty.
                     match receiver.try_recv() {
                         Ok(task) => Some(task),
                         Err(TryRecvError::Empty) => {
