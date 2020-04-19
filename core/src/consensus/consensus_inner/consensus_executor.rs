@@ -209,13 +209,13 @@ impl ConsensusExecutor {
                     // Make sure that `receiver.try_recv()` is protected by this
                     // inner lock, otherwise we may get
                     // optimistic task when the queue is not empty.
-                    let consensus_inner_try_lock = consensus_inner.try_write();
                     match receiver.try_recv() {
                         Ok(task) => Some(task),
                         Err(TryRecvError::Empty) => {
                             // The channel is empty, so we try to optimistically
                             // get later epochs to execute.
-                            consensus_inner_try_lock
+                            consensus_inner
+                                .try_write()
                                 .and_then(|mut inner| {
                                     executor_thread
                                         .get_optimistic_execution_task(
@@ -322,6 +322,12 @@ impl ConsensusExecutor {
                 inner.data_man.state_availability_boundary.write();
             let opt_height =
                 state_availability_boundary.optimistic_executed_height?;
+            if opt_height != state_availability_boundary.upper_bound + 1 {
+                // The `opt_height` parent's state has not been executed.
+                // This may happen when the pivot chain switches between
+                // the checks of the execution queue and the opt task.
+                return None;
+            }
             let next_opt_height = opt_height + 1;
             if next_opt_height
                 >= inner.pivot_index_to_height(inner.pivot_chain.len())
