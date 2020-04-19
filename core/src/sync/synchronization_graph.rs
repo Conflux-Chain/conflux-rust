@@ -53,8 +53,8 @@ lazy_static! {
 const NULL: usize = !0;
 const BLOCK_INVALID: u8 = 0;
 const BLOCK_HEADER_ONLY: u8 = 1;
-const BLOCK_HEADER_GRAPH_READY: u8 = 3;
-const BLOCK_GRAPH_READY: u8 = 4;
+const BLOCK_HEADER_GRAPH_READY: u8 = 2;
+const BLOCK_GRAPH_READY: u8 = 3;
 
 #[derive(Copy, Clone)]
 pub struct SyncGraphConfig {
