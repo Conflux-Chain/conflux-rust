@@ -476,7 +476,7 @@ mod tests {
             timestamp: 0,
             difficulty: 0.into(),
             last_hashes: Arc::new(vec![]),
-            gas_used: 0.into(),
+            accumulated_gas_used: 0.into(),
             gas_limit: 0.into(),
             epoch_height: 0,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,

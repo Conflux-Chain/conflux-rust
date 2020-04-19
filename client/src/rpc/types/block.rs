@@ -151,9 +151,9 @@ impl Block {
                         .map(|(idx, tx)| {
                             let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
                             let prior_gas_used = if idx == 0 {
-                                CfxU256::zero()
+                                 CfxU256::zero()
                             } else {
-                                execution_result.block_receipts.receipts.get(idx - 1).unwrap().gas_used
+                                execution_result.block_receipts.receipts.get(idx - 1).unwrap().accumulated_gas_used
                             };
                             match receipt.outcome_status {
                                 TRANSACTION_OUTCOME_SUCCESS
@@ -168,6 +168,10 @@ impl Block {
                                                 index: idx,
                                             },
                                             prior_gas_used,
+                                            // TODO: set these fields below.
+                                            /* maybe_epoch_number = */
+                                            None,
+                                            /* maybe_state_root = */ None,
                                         )),
                                     )
                                 }
