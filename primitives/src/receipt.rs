@@ -21,33 +21,44 @@ pub struct StorageChange {
 /// Information describing execution of a transaction.
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct Receipt {
-    /// The total gas used in the block following execution of the transaction.
-    pub gas_used: U256,
+    /// The total gas used (not gas charged) in the block following execution
+    /// of the transaction.
+    pub accumulated_gas_used: U256,
+    /// The gas fee charged for transaction execution.
+    pub gas_fee: U256,
+    /// The designated account to bear the gas fee, if any.
+    pub gas_sponsor_paid: bool,
     /// The OR-wide combination of all logs' blooms for this transaction.
     pub log_bloom: Bloom,
     /// The logs stemming from this transaction.
     pub logs: Vec<LogEntry>,
     /// Transaction outcome.
     pub outcome_status: u8,
+    /// The designated account to bear the storage fee, if any.
+    pub storage_sponsor_paid: bool,
     pub storage_collateralized: Vec<StorageChange>,
     pub storage_released: Vec<StorageChange>,
 }
 
 impl Receipt {
     pub fn new(
-        outcome: u8, gas_used: U256, logs: Vec<LogEntry>,
-        storage_collateralized: Vec<StorageChange>,
+        outcome: u8, accumulated_gas_used: U256, gas_fee: U256,
+        gas_sponsor_paid: bool, logs: Vec<LogEntry>,
+        storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
     ) -> Self
     {
         Self {
-            gas_used,
+            accumulated_gas_used,
+            gas_fee,
+            gas_sponsor_paid,
             log_bloom: logs.iter().fold(Bloom::default(), |mut b, l| {
                 b.accrue_bloom(&l.bloom());
                 b
             }),
             logs,
             outcome_status: outcome,
+            storage_sponsor_paid,
             storage_collateralized,
             storage_released,
         }

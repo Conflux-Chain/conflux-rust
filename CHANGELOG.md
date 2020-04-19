@@ -8,6 +8,10 @@
 
 ## Bug Fixes
 
+- Fix UnexpectedResponse from honest peers that causes peer demotion.
+
+- Remove some untrue debug assert.
+
 - Forbidden CALLCODE and DELEGATECALL to internal contracts.
 
 - RPC now returns the correct rlp size of the block
@@ -31,6 +35,10 @@
 - Fix definitions and logics in transaction early execution error checking.
 
 - Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
+
+- Add fields in Receipt: gas_fee, gas_sponsored, storage_sponsored. Accumulate gas_used in Receipt, not gas_charged.
+
+- Define gas_used to be transaction gas limit for NotEnoughCash, the same as all other exceptions.
 
 ## Improvements
 

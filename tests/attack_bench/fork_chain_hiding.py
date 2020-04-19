@@ -21,14 +21,23 @@ class ForkChainTest(ConfluxTestFramework):
         n_attack_blocks = 15000
         self.log.info(f"Attacker start to prepare {n_attack_blocks} blocks")
         for _ in range(int(n_attack_blocks/n_generate_batch)):
-            batch_generate(self.nodes[0], n_generate_batch, self.log)
+            batch_generate(self.nodes[1], n_generate_batch, self.log)
         self.log.info("Honest node generate")
         for _ in range(int(20000/n_generate_batch)):
-            batch_generate(self.nodes[1], n_generate_batch, self.log)
+            batch_generate(self.nodes[0], n_generate_batch, self.log)
         connect_nodes(self.nodes, 0, 1)
         self.log.info("Nodes connected")
+        cnt = self.nodes[0].getblockcount()
+        self.log.info("Honest node block count: " + str(cnt))
+        honest_cnt = 20000 + 1
         for _ in range(1000):
             batch_generate(self.nodes[0], n_generate_batch, self.log)
+            honest_cnt += n_generate_batch
+            cnt = self.nodes[0].getblockcount()
+            self.log.info("Honest node block count: " + str(cnt) + " " + str(honest_cnt))
+            if honest_cnt + n_attack_blocks == cnt:
+                self.log.info("All attack blocks are processed!")
+                break;
 
 
 def batch_generate(node, n_blocks, log):
