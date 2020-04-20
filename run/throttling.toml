@@ -43,3 +43,7 @@ cfx_getTransactionByHash="50,50,10,1,5"
 cfx_estimateGas="10,10,2,1,1"
 cfx_getBlocksByEpoch="20,20,5,1,5"
 cfx_getTransactionReceipt="50,50,10,1,5"
+
+[rpc_local]
+
+[light_protocol]
