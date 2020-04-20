@@ -191,6 +191,11 @@ pub trait Cfx {
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<RpcU256>;
 
+    #[rpc(name = "cfx_getConfirmationRiskByHash")]
+    fn confirmation_risk_by_hash(
+        &self, block_hash: RpcH256,
+    ) -> JsonRpcResult<Option<RpcU256>>;
+
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
     //        fn transaction_by_block_hash_and_index(&self, RpcH256, Index) ->

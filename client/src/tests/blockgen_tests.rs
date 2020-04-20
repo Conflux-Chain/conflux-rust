@@ -6,8 +6,9 @@ extern crate tempdir;
 
 use self::tempdir::TempDir;
 use crate::{
-    archive::{ArchiveClient, ArchiveClientExtraComponents, Configuration},
+    archive::{ArchiveClient, ArchiveClientExtraComponents},
     common::{client_methods, ClientComponents},
+    configuration::Configuration,
 };
 use blockgen::BlockGenerator;
 use parking_lot::{Condvar, Mutex};

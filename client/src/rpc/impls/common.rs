@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use bigdecimal::BigDecimal;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult, Value as RpcValue};
+use num_bigint::{BigInt, ToBigInt};
 use parking_lot::{Condvar, Mutex};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -11,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-use cfx_types::{Address, H256, U128};
+use cfx_types::{Address, H256, U128, U256};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
     SharedConsensusGraph, SharedTransactionPool,
@@ -151,6 +153,36 @@ impl RpcImpl {
             Ok(RpcBlock::new(&*block, inner, &self.data_man, include_txs))
         } else {
             Err(RpcError::internal_error())
+        }
+    }
+
+    pub fn confirmation_risk_by_hash(
+        &self, block_hash: RpcH256,
+    ) -> RpcResult<Option<RpcU256>> {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let inner = &*consensus_graph.inner.read();
+        let result = consensus_graph
+            .confirmation_meter
+            .confirmation_risk_by_hash(inner, block_hash.into());
+        if result.is_none() {
+            Ok(None)
+        } else {
+            let risk: BigDecimal = result.unwrap().into();
+            let scale = BigInt::parse_bytes(b"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF", 16).expect("failed to unwrap U256::max into bigInt");
+
+            //TODO: there's a precision problem here, it should be fine under a
+            // (2^256 - 1) scale
+            let scaled_risk: BigInt = (risk * scale)
+                .to_bigint()
+                .expect("failed to convert scaled risk to bigInt");
+            let (sign, big_endian_bytes) = scaled_risk.to_bytes_be();
+            assert_ne!(sign, num_bigint::Sign::Minus);
+            let rpc_result = U256::from(big_endian_bytes.as_slice());
+            Ok(Some(rpc_result.into()))
         }
     }
 
@@ -525,6 +557,19 @@ impl RpcImpl {
             ret.insert("exist".into(), "false".into());
         }
         Ok(ret)
+    }
+
+    pub fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>> {
+        let (ready_txs, deferred_txs) = self.tx_pool.content();
+        let converter = |tx: &Arc<SignedTransaction>| -> RpcTransaction {
+            RpcTransaction::from_signed(&tx, None)
+        };
+        let result = ready_txs
+            .iter()
+            .map(converter)
+            .chain(deferred_txs.iter().map(converter))
+            .collect();
+        return Ok(result);
     }
 
     pub fn txpool_content(

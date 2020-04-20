@@ -301,6 +301,7 @@ def initialize_datadir(dirname, n, conf_parameters):
         local_conf = {
             "port": str(p2p_port(n)),
             "jsonrpc_local_http_port": str(rpc_port(n)),
+            "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
         }
@@ -526,11 +527,14 @@ def p2p_port(n):
 
 
 def rpc_port(n):
-    return PORT_MIN + PORT_RANGE + n*2 + (MAX_NODES * PortSeed.n) % (
+    return PORT_MIN + PORT_RANGE + n*3 + (MAX_NODES * PortSeed.n) % (
         PORT_RANGE - 1 - MAX_NODES)
 
 def remote_rpc_port(n):
     return rpc_port(n) + 1
+
+def pubsub_port(n):
+    return rpc_port(n) + 2
 
 
 def rpc_url(i, rpchost=None, rpcport=None):
@@ -541,6 +545,16 @@ def rpc_url(i, rpchost=None, rpcport=None):
     if rpcport is None:
         rpcport = rpc_port(i)
     return "http://%s:%d" % (rpchost, int(rpcport))
+
+
+def pubsub_url(i, pubsubhost=None, pubsubport=None):
+    if pubsubhost is None:
+        # Do not use localhost because our test environment doesn't support
+        # IPv6 however the python http library assumes that.
+        pubsubhost = "127.0.0.1"
+    if pubsubport is None:
+        pubsubport = pubsub_port(i)
+    return "ws://%s:%d" % (pubsubhost, int(pubsubport))
 
 
 def get_ip_address():

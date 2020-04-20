@@ -6,6 +6,8 @@
 
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
 
+- Add support for WebSockets in RPC.
+
 # 0.5.0
 
 ## Bug Fixes
@@ -17,6 +19,16 @@
 - Forbidden CALLCODE and DELEGATECALL to internal contracts.
 
 - RPC now returns the correct rlp size of the block
+
+- Fix a race condition that may cause optimistic execution to panic.
+
+- Delay block requests when we cannot process them to avoid wasting network bandwidth.
+
+## Improvements
+
+- Add cfx_getConfirmationRiskByHash RPC to get confirmation risk by block hash.
+
+- Add getTransactionsFromPool debug RPC to collect transactions in pool.
 
 # 0.4.0
 
@@ -46,7 +58,7 @@
 
 - Improve the transaction address check at RPC
 
-- Chagne the test net PoW to use double keccak
+- Change the test net PoW to use double keccak
 
 ## EVM Updates
 
