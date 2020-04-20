@@ -48,6 +48,7 @@ use tokio_timer::sleep;
 type Client = Sink<pubsub::Result>;
 
 /// Cfx PubSub implementation.
+#[derive(Clone)]
 pub struct PubSubClient {
     handler: Arc<ChainNotificationHandler>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,

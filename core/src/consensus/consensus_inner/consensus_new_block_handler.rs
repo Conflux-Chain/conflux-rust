@@ -1629,6 +1629,16 @@ impl ConsensusNewBlockHandler {
         };
         let era_block = inner.get_era_genesis_block_with_parent(parent);
 
+        // send updated pivot chain to pubsub
+        let from = capped_fork_at;
+        let to = inner.pivot_index_to_height(inner.pivot_chain.len());
+
+        for epoch_number in from..to {
+            let arena_index = inner.get_pivot_block_arena_index(epoch_number);
+            let epoch_hashes = inner.get_epoch_block_hashes(arena_index);
+            self.epochs_sender.send((epoch_number, epoch_hashes));
+        }
+
         // If we are inserting header only, we will skip execution and
         // tx_pool-related operations
         if has_body {
@@ -1742,13 +1752,6 @@ impl ConsensusNewBlockHandler {
                     true,  /* on_local_pivot */
                     false, /* debug_record */
                     false, /* force_recompute */
-                ));
-
-                // send to PubSub
-                self.epochs_sender.send((
-                    /* epoch number: */ state_at,
-                    /* epoch hashes: */
-                    inner.get_epoch_block_hashes(epoch_arena_index),
                 ));
 
                 state_at += 1;

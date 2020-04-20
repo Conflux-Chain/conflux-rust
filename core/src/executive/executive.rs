@@ -1440,11 +1440,7 @@ impl<'a> Executive<'a> {
                     actual_gas_cost: actual_gas_cost.clone(),
                     max_storage_limit_cost: tx_storage_limit_in_drip,
                 },
-                Executed::not_enough_balance_fee_charged(
-                    tx,
-                    &actual_gas_cost,
-                    &self.env.gas_used,
-                ),
+                Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
             ));
         } else {
             // From now on sender balance >= total_cost, transaction execution
@@ -1478,10 +1474,7 @@ impl<'a> Executive<'a> {
                 if self.state.is_contract(&new_address) {
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::ContractAddressConflict,
-                        Executed::execution_error_fully_charged(
-                            tx,
-                            &self.env.gas_used,
-                        ),
+                        Executed::execution_error_fully_charged(tx),
                     ));
                 }
 
@@ -1541,14 +1534,21 @@ impl<'a> Executive<'a> {
             None
         };
 
-        Ok(self.finalize(tx, substate, result, output, refund_receiver)?)
+        Ok(self.finalize(
+            tx,
+            substate,
+            result,
+            output,
+            refund_receiver,
+            storage_sponsored,
+        )?)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
-        refund_receiver: Option<Address>,
+        refund_receiver: Option<Address>, storage_sponsor_paid: bool,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1561,20 +1561,16 @@ impl<'a> Executive<'a> {
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
-        let (cumulative_gas_used, fees_value, refund_value) = if charge_all {
+        let (gas_charged, fees_value, refund_value) = if charge_all {
             let gas_refunded = tx.gas >> 2;
             let gas_charged = tx.gas - gas_refunded;
             (
-                self.env.gas_used + gas_charged,
+                gas_charged,
                 gas_charged * tx.gas_price,
                 gas_refunded * tx.gas_price,
             )
         } else {
-            (
-                self.env.gas_used + gas_used,
-                gas_used * tx.gas_price,
-                gas_left * tx.gas_price,
-            )
+            (gas_used, gas_used * tx.gas_price, gas_left * tx.gas_price)
         };
 
         if let Some(r) = refund_receiver {
@@ -1617,7 +1613,7 @@ impl<'a> Executive<'a> {
             Err(vm::Error::StateDbError(e)) => bail!(e),
             Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
-                Executed::execution_error_fully_charged(tx, &self.env.gas_used),
+                Executed::execution_error_fully_charged(tx),
             )),
             Ok(r) => {
                 let mut storage_collateralized = Vec::new();
@@ -1660,12 +1656,13 @@ impl<'a> Executive<'a> {
                 }
 
                 let executed = Executed {
-                    gas: tx.gas,
                     gas_used,
+                    gas_charged,
                     fee: fees_value,
-                    cumulative_gas_used,
+                    gas_sponsor_paid: refund_receiver.is_some(),
                     logs: substate.logs,
                     contracts_created: substate.contracts_created,
+                    storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,
                     output,

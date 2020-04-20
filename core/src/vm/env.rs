@@ -44,8 +44,8 @@ pub struct Env {
     pub gas_limit: U256,
     /// The last 256 block hashes.
     pub last_hashes: Arc<LastHashes>,
-    /// The gas used.
-    pub gas_used: U256,
+    /// The total gas used in the block following execution of the transaction.
+    pub accumulated_gas_used: U256,
     /// The epoch height.
     pub epoch_height: u64,
     /// The transaction_epoch_bound used to verify if a transaction has
@@ -67,6 +67,6 @@ mod tests {
         assert_eq!(default_env.difficulty, 0.into());
         assert_eq!(default_env.gas_limit, 0.into());
         assert!(default_env.last_hashes.is_empty());
-        assert_eq!(default_env.gas_used, 0.into());
+        assert_eq!(default_env.accumulated_gas_used, 0.into());
     }
 }
