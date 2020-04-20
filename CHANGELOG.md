@@ -16,6 +16,12 @@
 
 - RPC now returns the correct rlp size of the block
 
+## Improvements
+
+- Add cfx_getConfirmationRiskByHash RPC to get confirmation risk by block hash.
+
+- Add getTransactionsFromPool debug RPC to collect transactions in pool.
+
 # 0.4.0
 
 ## Bug Fixes
@@ -40,7 +46,7 @@
 
 - Improve the transaction address check at RPC
 
-- Chagne the test net PoW to use double keccak
+- Change the test net PoW to use double keccak
 
 ## EVM Updates
 

@@ -153,12 +153,7 @@ impl ConfirmationMeter {
             }
             Some(max_risk)
         } else {
-            info!(
-                "ohhhhhhhhhhhhhh {:?} {:?}",
-                idx,
-                finality.risks_less_than.len()
-            );
-            None
+            Some(0.9)
         }
     }
 
