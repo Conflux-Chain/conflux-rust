@@ -133,7 +133,7 @@ impl InternalContractTrait for Staking {
             // `duration_in_day`.
             self.lock(&data[4..], params, state)
         } else {
-            Ok(())
+            Err(vm::Error::InternalContract("unsupported function"))
         }
     }
 }

@@ -348,7 +348,7 @@ impl InternalContractTrait for SponsorWhitelistControl {
             // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
             self.remove_privilege(&data[4..], params, state)
         } else {
-            Ok(())
+            Err(vm::Error::InternalContract("unsupported function"))
         }
     }
 }

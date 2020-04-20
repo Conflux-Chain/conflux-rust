@@ -200,7 +200,7 @@ impl InternalContractTrait for AdminControl {
             // 4 bytes 'Method ID` + 20 bytes `contract_address`
             self.destroy(&data[4..], params, state, spec, substate)
         } else {
-            Ok(())
+            Err(vm::Error::InternalContract("unsupported function"))
         }
     }
 }
