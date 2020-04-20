@@ -84,13 +84,19 @@ pub enum SyncHandlerWorkType {
 pub struct AsyncTaskQueue<T> {
     tasks: Mutex<VecDeque<T>>,
     work_type: HandlerWorkType,
+
+    // The maximum number of elements in the queue.
+    // Note we do not drop elements even when the queue is full to
+    // keep the behavior of this queue consistent.
+    max_capacity: usize,
 }
 
 impl<T> AsyncTaskQueue<T> {
-    fn new(work_type: SyncHandlerWorkType) -> Self {
+    fn new(work_type: SyncHandlerWorkType, max_capacity: usize) -> Self {
         AsyncTaskQueue {
             tasks: Mutex::new(VecDeque::new()),
             work_type: work_type as HandlerWorkType,
+            max_capacity,
         }
     }
 
@@ -101,7 +107,9 @@ impl<T> AsyncTaskQueue<T> {
 
     fn pop(&self) -> Option<T> { self.tasks.lock().pop_front() }
 
-    fn len(&self) -> usize { self.tasks.lock().len() }
+    pub fn is_full(&self) -> bool {
+        self.tasks.lock().len() >= self.max_capacity
+    }
 }
 
 pub struct RecoverPublicTask {
@@ -236,7 +244,7 @@ pub struct SynchronizationProtocolHandler {
     pub phase_manager_lock: Mutex<u32>,
 
     // Worker task queue for recover public
-    pub recover_public_queue: AsyncTaskQueue<RecoverPublicTask>,
+    pub recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
 
     // Worker task queue for local message
     local_message: AsyncTaskQueue<LocalMessageTask>,
@@ -301,8 +309,15 @@ impl SynchronizationProtocolHandler {
             is_full_node,
             protocol_config.dev_mode || protocol_config.test_mode,
         ));
-        let request_manager =
-            Arc::new(RequestManager::new(&protocol_config, sync_state.clone()));
+        let recover_public_queue = Arc::new(AsyncTaskQueue::new(
+            SyncHandlerWorkType::RecoverPublic,
+            protocol_config.max_unprocessed_block_count,
+        ));
+        let request_manager = Arc::new(RequestManager::new(
+            &protocol_config,
+            sync_state.clone(),
+            recover_public_queue.clone(),
+        ));
 
         let future_block_buffer_capacity =
             protocol_config.future_block_buffer_capacity;
@@ -325,11 +340,10 @@ impl SynchronizationProtocolHandler {
                 state_sync.clone(),
             ),
             phase_manager_lock: Mutex::new(0),
-            recover_public_queue: AsyncTaskQueue::new(
-                SyncHandlerWorkType::RecoverPublic,
-            ),
+            recover_public_queue,
             local_message: AsyncTaskQueue::new(
                 SyncHandlerWorkType::LocalMessage,
+                10000000000, // TODO: Set a better capacity.
             ),
             state_sync,
             synced_epoch_id: Default::default(),
@@ -1295,8 +1309,6 @@ impl SynchronizationProtocolHandler {
         hashes: Vec<H256>,
     ) -> Result<(), Error>
     {
-        // FIXME: This is a naive strategy. Need to
-        // make it more sophisticated.
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
             self.request_blocks(io, peer_id, hashes);
@@ -1448,8 +1460,7 @@ impl SynchronizationProtocolHandler {
     }
 
     pub fn is_block_queue_full(&self) -> bool {
-        self.recover_public_queue.len()
-            >= self.protocol_config.max_unprocessed_block_count
+        self.recover_public_queue.is_full()
     }
 }
 
