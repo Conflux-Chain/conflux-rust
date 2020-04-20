@@ -24,12 +24,6 @@ impl SponsorWhitelistControl {
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        if state.is_contract(&params.sender) {
-            return Err(vm::Error::InternalContract(
-                "contract account is not allowed to sponsor other contract",
-            ));
-        }
-
         if input.len() != 64 {
             return Err(vm::Error::InternalContract("invalid data"));
         }
@@ -136,12 +130,6 @@ impl SponsorWhitelistControl {
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        if state.is_contract(&params.sender) {
-            return Err(vm::Error::InternalContract(
-                "contract account is not allowed to sponsor other contract",
-            ));
-        }
-
         if input.len() != 32 {
             return Err(vm::Error::InternalContract("invalid data"));
         }
