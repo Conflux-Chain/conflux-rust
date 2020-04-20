@@ -22,6 +22,12 @@
 
 - Delay block requests when we cannot process them to avoid wasting network bandwidth.
 
+## Improvements
+
+- Add cfx_getConfirmationRiskByHash RPC to get confirmation risk by block hash.
+
+- Add getTransactionsFromPool debug RPC to collect transactions in pool.
+
 # 0.4.0
 
 ## Bug Fixes
@@ -50,7 +56,7 @@
 
 - Improve the transaction address check at RPC
 
-- Chagne the test net PoW to use double keccak
+- Change the test net PoW to use double keccak
 
 ## EVM Updates
 
