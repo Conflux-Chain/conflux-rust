@@ -15,16 +15,24 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
-class P2PTest(ConfluxTestFramework):
+
+class P2PThrottlingTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.num_nodes = 8
+        self.num_nodes = 2
         self.conf_parameters["generate_tx"] = "true"
-        # Every node generates 1 tx every second
         self.conf_parameters["generate_tx_period_us"] = "50000"
-        self.conf_parameters["throttling_conf"] = '"throttling.conf"'
-        throttling_setting = "20,10,10,1,10"
+
+        # Token bucket: <max_tokens>,<init_tokens>,<recharge_rate>,<default_cost>,<max_throttled_tolerates>
+        # These parameters are set to ensure that throttling will be triggered,
+        # and will not exceed max_throttled_tolerates.
+        self.throttling_array = [20, 10, 10, 1, 50000]
+        throttling_setting = ",".join([str(i) for i in self.throttling_array])
+        throttling_file = "throttling.toml"
+        self.conf_parameters["throttling_conf"] = f"\"{throttling_file}\""
+        # Use heartbeat to trigger block sync from terminals.
+        self.conf_parameters["heartbeat_period_interval_ms"] = "1000"
         self.extra_conf_files = {
-            "throttling.conf":
+            f"{throttling_file}":
                 f"""\
                 [rpc]
                 [rpc_local]
@@ -47,20 +55,26 @@ class P2PTest(ConfluxTestFramework):
                 [light_protocol]\
                 """
         }
+
     def setup_network(self):
         self.setup_nodes()
         connect_sample_nodes(self.nodes, self.log)
         sync_blocks(self.nodes)
 
     def run_test(self):
-        block_gen_thread = BlockGenThread(self.nodes, self.log, interval_base=0.01)
-        block_gen_thread.start()
-        time.sleep(10)
-        block_gen_thread.stop()
+        n_blocks = 200
+        rate = self.throttling_array[2]
+        start = time.time()
+        # Generate blocks with about twice the throttling rate.
+        for _ in range(int(n_blocks/rate)):
+            self.nodes[0].generate_empty_blocks(rate)
+            time.sleep(0.5)
         self.log.info("Wait for blocks to be synced")
         sync_blocks(self.nodes, timeout=120)
-        self.log.info("Pass")
+        elapsed = time.time() - start
+        assert elapsed > n_blocks/20
+        self.log.info(f"Pass with {elapsed} seconds")
 
 
 if __name__ == "__main__":
-    P2PTest().main()
+    P2PThrottlingTest().main()
