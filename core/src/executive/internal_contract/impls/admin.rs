@@ -7,7 +7,7 @@ use crate::{
     bytes::Bytes,
     parameters::staking::*,
     state::{CollateralCheckResult, State, Substate},
-    vm::{self, ActionParams, Spec},
+    vm::{self, ActionParams, CallType, Spec},
 };
 use cfx_types::{Address, U256};
 use std::str::FromStr;
@@ -159,6 +159,10 @@ impl InternalContractTrait for AdminControl {
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
+        if params.call_type == CallType::StaticCall {
+            return Err(vm::Error::MutableCallInStaticContext);
+        }
+
         let data = if let Some(ref d) = params.data {
             d as &[u8]
         } else {
