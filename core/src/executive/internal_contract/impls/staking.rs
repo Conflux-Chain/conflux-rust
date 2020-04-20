@@ -7,7 +7,7 @@ use crate::{
     bytes::Bytes,
     parameters::staking::*,
     state::{State, Substate},
-    vm::{self, ActionParams, Spec},
+    vm::{self, ActionParams, CallType, Spec},
 };
 use cfx_types::{Address, U256};
 use std::str::FromStr;
@@ -95,11 +95,10 @@ impl InternalContractTrait for Staking {
         _substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        if state.is_contract(&params.sender) {
-            return Err(vm::Error::InternalContract(
-                "contract accounts are not allowed to deposit or withdraw",
-            ));
+        if params.call_type == CallType::StaticCall {
+            return Err(vm::Error::MutableCallInStaticContext);
         }
+
         let data = if let Some(ref d) = params.data {
             d as &[u8]
         } else {
@@ -134,7 +133,7 @@ impl InternalContractTrait for Staking {
             // `duration_in_day`.
             self.lock(&data[4..], params, state)
         } else {
-            Ok(())
+            Err(vm::Error::InternalContract("unsupported function"))
         }
     }
 }

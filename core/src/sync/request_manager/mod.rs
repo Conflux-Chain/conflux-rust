@@ -10,11 +10,13 @@ use crate::{
     parameters::sync::REQUEST_START_WAITING_TIME,
     sync::{
         message::{
-            msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn,
-            GetBlocks, GetCompactBlocks, GetTransactions,
-            GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
+            msgid::{self, GET_BLOCKS},
+            GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
+            GetCompactBlocks, GetTransactions, GetTransactionsFromTxHashes,
+            Key, KeyContainer, TransactionDigests,
         },
         request_manager::request_batcher::RequestBatcher,
+        synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
         synchronization_state::PeerFilter,
         Error,
     },
@@ -122,12 +124,16 @@ pub struct RequestManager {
     request_handler: Arc<RequestHandler>,
 
     syn: Arc<SynchronizationState>,
+    recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
 }
 
 impl RequestManager {
     pub fn new(
-        protocol_config: &ProtocolConfiguration, syn: Arc<SynchronizationState>,
-    ) -> Self {
+        protocol_config: &ProtocolConfiguration,
+        syn: Arc<SynchronizationState>,
+        recover_public_queue: Arc<AsyncTaskQueue<RecoverPublicTask>>,
+    ) -> Self
+    {
         let received_tx_index_maintain_timeout =
             protocol_config.received_tx_index_maintain_timeout;
         let inflight_pending_tx_index_maintain_timeout =
@@ -155,6 +161,7 @@ impl RequestManager {
             waiting_requests: Default::default(),
             request_handler: Arc::new(RequestHandler::new(protocol_config)),
             syn,
+            recover_public_queue,
         }
     }
 
@@ -243,11 +250,18 @@ impl RequestManager {
     }
 
     pub fn request_blocks(
-        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
+        &self, io: &dyn NetworkContext, mut peer_id: Option<NodeId>,
         hashes: Vec<H256>, with_public: bool, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
+        if self.recover_public_queue.is_full() {
+            // Insert the request into waiting queue when the queue is already
+            // full, to avoid requesting more blocks than we can
+            // process. Requests will be inserted to waiting queue
+            // if peer_id is None.
+            peer_id = None;
+        }
         debug!("request_blocks: hashes={:?}", hashes);
 
         let request = GetBlocks {
@@ -481,11 +495,18 @@ impl RequestManager {
     }
 
     pub fn request_compact_blocks(
-        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
+        &self, io: &dyn NetworkContext, mut peer_id: Option<NodeId>,
         hashes: Vec<H256>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
+        if self.recover_public_queue.is_full() {
+            // Insert the request into waiting queue when the queue is already
+            // full, to avoid requesting more blocks than we can
+            // process. Requests will be inserted to waiting queue
+            // if peer_id is None.
+            peer_id = None;
+        }
         debug!("request_compact_blocks: hashes={:?}", hashes);
 
         let request = GetCompactBlocks {
@@ -846,6 +867,21 @@ impl RequestManager {
                 Some(r) => r,
                 None => continue,
             };
+            if request.msg_id() == GET_BLOCKS
+                && self.recover_public_queue.is_full()
+            {
+                // Keep GetBlocks requests in queue
+                // when we do not have the capability to process them.
+                // We resend GetCompactBlocks as GetBlocks, so only check
+                // GET_BLOCKS here.
+                waiting_requests.push(TimedWaitingRequest::new(
+                    now + delay,
+                    // Do not increase delay because this is not a failure.
+                    WaitingRequest(request, delay),
+                    None,
+                ));
+                continue;
+            }
             batcher.insert(delay, request);
         }
 

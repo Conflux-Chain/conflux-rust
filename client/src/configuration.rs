@@ -2,7 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::impls::cfx::RpcImplConfiguration;
+use crate::rpc::{
+    impls::cfx::RpcImplConfiguration, HttpConfiguration, TcpConfiguration,
+    WsConfiguration,
+};
 use cfx_types::H256;
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
@@ -64,6 +67,7 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
+        //     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
         //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
         //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
         //     * generate blocks automatically without PoW if `start_mining` is false
@@ -123,6 +127,7 @@ build_config! {
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
+        (jsonrpc_ws_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
@@ -248,6 +253,19 @@ impl Configuration {
     pub fn parse(matches: &clap::ArgMatches) -> Result<Configuration, String> {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
+
+        if config.is_dev_mode() {
+            if config.raw_conf.jsonrpc_ws_port.is_none() {
+                config.raw_conf.jsonrpc_ws_port = Some(12535);
+            }
+            if config.raw_conf.jsonrpc_tcp_port.is_none() {
+                config.raw_conf.jsonrpc_tcp_port = Some(12536);
+            }
+            if config.raw_conf.jsonrpc_http_port.is_none() {
+                config.raw_conf.jsonrpc_http_port = Some(12537);
+            }
+        };
+
         Ok(config)
     }
 
@@ -600,6 +618,32 @@ impl Configuration {
         RpcImplConfiguration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
         }
+    }
+
+    pub fn local_http_config(&self) -> HttpConfiguration {
+        HttpConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_http_port,
+            self.raw_conf.jsonrpc_cors.clone(),
+            self.raw_conf.jsonrpc_http_keep_alive,
+        )
+    }
+
+    pub fn http_config(&self) -> HttpConfiguration {
+        HttpConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_http_port,
+            self.raw_conf.jsonrpc_cors.clone(),
+            self.raw_conf.jsonrpc_http_keep_alive,
+        )
+    }
+
+    pub fn tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
+    }
+
+    pub fn ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(None, self.raw_conf.jsonrpc_ws_port)
     }
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {

@@ -413,6 +413,7 @@ impl RpcImpl {
         let light = self.light.clone();
 
         let fut = async move {
+            // FIXME: why not return an RpcReceipt directly?
             let (
                 tx,
                 receipt,
@@ -425,13 +426,14 @@ impl RpcImpl {
                 .await
                 .map_err(RpcError::invalid_params)?;
 
-            let mut receipt =
-                RpcReceipt::new(tx, receipt, address, prior_gas_used);
-            receipt.set_epoch_number(maybe_epoch);
-
-            if let Some(state_root) = maybe_state_root {
-                receipt.set_state_root(state_root.into());
-            }
+            let receipt = RpcReceipt::new(
+                tx,
+                receipt,
+                address,
+                prior_gas_used,
+                maybe_epoch,
+                maybe_state_root,
+            );
 
             Ok(Some(receipt))
         };

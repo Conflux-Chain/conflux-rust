@@ -197,51 +197,64 @@ impl ConsensusExecutor {
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
                 if executor_thread.stopped.load(Relaxed) {
-                    // The thread should be stopped. The rest tasks in the queue will be discarded.
+                    // The thread should be stopped. The rest tasks in the queue
+                    // will be discarded.
                     break;
                 }
-                let maybe_task = receiver.try_recv();
-                match maybe_task {
-                    Err(TryRecvError::Empty) => {
-                        // The channel is empty, so we try to optimistically
-                        // get later epochs to execute. Here we use `try_write` because some thread
-                        // may wait for execution results while holding the Consensus Inner lock,
-                        // if we wait on inner lock here we may get deadlock
-                        let maybe_optimistic_task = consensus_inner
-                            .try_write()
-                            .and_then(|mut inner|
-                                executor_thread.get_optimistic_execution_task(&mut *inner)
-                            );
-                        match maybe_optimistic_task {
-                            Some(task) => {
-                                debug!("Get optimistic_execution_task {:?}", task);
-                                handler.handle_epoch_execution(task)
-                            },
-                            None => {
-                                debug!("No optimistic tasks to execute, block for new tasks");
-                                //  Even optimistic tasks are all finished, so we block and wait for
-                                //  new execution tasks.
-                                //  New optimistic tasks will only exist if pivot_chain changes,
-                                //  and new tasks will be sent to `receiver` in this case, so this
-                                // waiting will not prevent new optimistic tasks from being executed
-                                if !handler.handle_recv_result(receiver.recv())
-                                {
-                                    break;
-                                }
-                            }
+                let maybe_task = {
+                    // Here we use `try_write` because some thread
+                    // may wait for execution results while holding the
+                    // Consensus Inner lock, if we wait on
+                    // inner lock here we may get deadlock.
+                    match receiver.try_recv() {
+                        Ok(task) => Some(task),
+                        Err(TryRecvError::Empty) => {
+                            // The channel is empty, so we try to optimistically
+                            // get later epochs to execute.
+                            consensus_inner
+                                .try_write()
+                                .and_then(|mut inner| {
+                                    executor_thread
+                                        .get_optimistic_execution_task(
+                                            &mut *inner,
+                                        )
+                                })
+                                .map(|task| {
+                                    debug!(
+                                        "Get optimistic_execution_task {:?}",
+                                        task
+                                    );
+                                    ExecutionTask::ExecuteEpoch(task)
+                                })
                         }
-                    }
-                    maybe_error => {
-                        // Handle execution task in channel.
-                        // If `maybe_task` is Err, it can only be
-                        // `TryRecvError::Disconnected`, and it has the same
-                        // meaning as `RecvError` for `recv()`
-                        if !handler.handle_recv_result(
-                            maybe_error.map_err(|_| RecvError),
-                        ) {
+                        Err(TryRecvError::Disconnected) => {
+                            info!("Channel disconnected, stop thread");
                             break;
                         }
                     }
+                };
+                let task = match maybe_task {
+                    Some(task) => task,
+                    None => {
+                        //  Even optimistic tasks are all finished, so we block
+                        // and wait for  new execution
+                        // tasks.  New optimistic tasks
+                        // will only exist if pivot_chain changes,
+                        //  and new tasks will be sent to `receiver` in this
+                        // case, so this waiting will
+                        // not prevent new optimistic tasks from being executed.
+                        match receiver.recv() {
+                            Ok(task) => task,
+                            Err(RecvError) => {
+                                info!("Channel receive error, stop thread");
+                                break;
+                            }
+                        }
+                    }
+                };
+                if !handler.handle_execution_work(task) {
+                    // `task` is `Stop`, so just stop.
+                    break;
                 }
             })
             .expect("Cannot fail");
@@ -306,6 +319,12 @@ impl ConsensusExecutor {
                 inner.data_man.state_availability_boundary.write();
             let opt_height =
                 state_availability_boundary.optimistic_executed_height?;
+            if opt_height != state_availability_boundary.upper_bound + 1 {
+                // The `opt_height` parent's state has not been executed.
+                // This may happen when the pivot chain switches between
+                // the checks of the execution queue and the opt task.
+                return None;
+            }
             let next_opt_height = opt_height + 1;
             if next_opt_height
                 >= inner.pivot_index_to_height(inner.pivot_chain.len())
@@ -780,21 +799,6 @@ impl ConsensusExecutionHandler {
         }
     }
 
-    /// Return `false` if someting goes wrong, and we will break the working
-    /// loop. `maybe_task` should match results from `recv()`, so it does not
-    /// contain `Empty` case.
-    fn handle_recv_result(
-        &self, maybe_task: Result<ExecutionTask, RecvError>,
-    ) -> bool {
-        match maybe_task {
-            Ok(task) => self.handle_execution_work(task),
-            Err(e) => {
-                warn!("Consensus Executor stopped by Err={:?}", e);
-                false
-            }
-        }
-    }
-
     /// Always return `true` for now
     fn handle_execution_work(&self, task: ExecutionTask) -> bool {
         debug!("Receive execution task: {:?}", task);
@@ -1040,7 +1044,7 @@ impl ConsensusExecutionHandler {
                 author: block.block_header.author().clone(),
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
-                gas_used: U256::zero(),
+                accumulated_gas_used: U256::zero(),
                 last_hashes: Arc::new(vec![]),
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
@@ -1069,7 +1073,9 @@ impl ConsensusExecutionHandler {
                     .transact(transaction)?
                 };
 
-                // TODO Store fine-grained output status in receipts.
+                let gas_fee;
+                let mut gas_sponsor_paid = false;
+                let mut storage_sponsor_paid = false;
                 match r {
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
@@ -1088,6 +1094,7 @@ impl ConsensusExecutionHandler {
                             );
                             to_pending.push(transaction.clone())
                         }
+                        gas_fee = U256::zero();
                     }
                     ExecutionOutcome::ExecutionErrorBumpNonce(
                         error,
@@ -1096,7 +1103,8 @@ impl ConsensusExecutionHandler {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
 
-                        env.gas_used = executed.cumulative_gas_used;
+                        env.accumulated_gas_used += executed.gas_used;
+                        gas_fee = executed.fee;
                         warn!(
                             "tx execution error: transaction={:?}, err={:?}",
                             transaction, error
@@ -1106,11 +1114,15 @@ impl ConsensusExecutionHandler {
                         tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
                         GOOD_TPS_METER.mark(1);
 
-                        env.gas_used = executed.cumulative_gas_used;
+                        env.accumulated_gas_used += executed.gas_used;
+                        gas_fee = executed.fee;
                         transaction_logs = executed.logs.clone();
                         storage_collateralized =
                             executed.storage_collateralized.clone();
                         storage_released = executed.storage_released.clone();
+
+                        gas_sponsor_paid = executed.gas_sponsor_paid;
+                        storage_sponsor_paid = executed.storage_sponsor_paid;
 
                         trace!("tx executed successfully: transaction={:?}, result={:?}, in block {:?}", transaction, executed, block.hash());
                     }
@@ -1118,8 +1130,11 @@ impl ConsensusExecutionHandler {
 
                 let receipt = Receipt::new(
                     tx_outcome_status,
-                    env.gas_used,
+                    env.accumulated_gas_used,
+                    gas_fee,
+                    gas_sponsor_paid,
                     transaction_logs,
+                    storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,
                 );
@@ -1327,14 +1342,11 @@ impl ConsensusExecutionHandler {
             };
 
             secondary_reward += block_receipts.secondary_reward;
-            let mut last_gas_used = U256::zero();
             debug_assert!(
                 block_receipts.receipts.len() == block.transactions.len()
             );
             for (idx, tx) in block.transactions.iter().enumerate() {
-                let gas_used =
-                    block_receipts.receipts[idx].gas_used - last_gas_used;
-                let fee = tx.gas_price * gas_used;
+                let fee = block_receipts.receipts[idx].gas_fee;
                 let info = tx_fee
                     .entry(tx.hash())
                     .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
@@ -1350,7 +1362,6 @@ impl ConsensusExecutionHandler {
                 if !fee.is_zero() && info.0.is_zero() {
                     info.0 = fee;
                 }
-                last_gas_used = block_receipts.receipts[idx].gas_used;
             }
         }
 
@@ -1539,7 +1550,7 @@ impl ConsensusExecutionHandler {
             author: Default::default(),
             timestamp: time_stamp,
             difficulty: Default::default(),
-            gas_used: U256::zero(),
+            accumulated_gas_used: U256::zero(),
             last_hashes: Arc::new(vec![]),
             gas_limit: tx.gas.clone(),
             epoch_height: block_height,

@@ -534,10 +534,13 @@ mod tests {
     #[test]
     fn test_logs_bloom_hash_empty_receipts() {
         let receipt = Receipt {
-            gas_used: 0.into(),
+            accumulated_gas_used: U256::zero(),
+            gas_fee: U256::zero(),
+            gas_sponsor_paid: false,
             logs: vec![],
             outcome_status: 0,
             log_bloom: Bloom::zero(),
+            storage_sponsor_paid: false,
             storage_collateralized: vec![],
             storage_released: vec![],
         };
@@ -560,7 +563,9 @@ mod tests {
         let block1 = BlockReceipts {
             receipts: vec![
                 Receipt {
-                    gas_used: 0.into(),
+                    accumulated_gas_used: 0.into(),
+                    gas_fee: 0.into(),
+                    gas_sponsor_paid: false,
                     logs: vec![],
                     outcome_status: 0,
                     log_bloom: Bloom::from_str(
@@ -582,11 +587,14 @@ mod tests {
                          00000000000000000000000000000000",
                     )
                     .unwrap(),
+                    storage_sponsor_paid: false,
                     storage_collateralized: vec![],
                     storage_released: vec![],
                 },
                 Receipt {
-                    gas_used: 0.into(),
+                    accumulated_gas_used: U256::zero(),
+                    gas_fee: U256::zero(),
+                    gas_sponsor_paid: false,
                     logs: vec![],
                     outcome_status: 0,
                     log_bloom: Bloom::from_str(
@@ -608,6 +616,7 @@ mod tests {
                          00000000000000000000000000000000",
                     )
                     .unwrap(),
+                    storage_sponsor_paid: false,
                     storage_collateralized: vec![],
                     storage_released: vec![],
                 },
@@ -617,7 +626,9 @@ mod tests {
 
         let block2 = BlockReceipts {
             receipts: vec![Receipt {
-                gas_used: 0.into(),
+                accumulated_gas_used: U256::zero(),
+                gas_fee: U256::zero(),
+                gas_sponsor_paid: false,
                 logs: vec![],
                 outcome_status: 0,
                 log_bloom: Bloom::from_str(
@@ -639,6 +650,7 @@ mod tests {
                      00000000000000000000000000000000",
                 )
                 .unwrap(),
+                storage_sponsor_paid: false,
                 storage_collateralized: vec![],
                 storage_released: vec![],
             }],

@@ -11,6 +11,10 @@ use runtime::Runtime;
 use secret_store::SecretStore;
 use threadpool::ThreadPool;
 
+use jsonrpc_http_server::Server as HttpServer;
+use jsonrpc_tcp_server::Server as TcpServer;
+use jsonrpc_ws_server::Server as WsServer;
+
 use crate::{
     configuration::Configuration,
     rpc::{
@@ -29,9 +33,7 @@ use cfxcore::{
 };
 use std::str::FromStr;
 
-use super::{
-    http::Server as HttpServer, tcp::Server as TcpServer, TESTNET_VERSION,
-};
+use super::TESTNET_VERSION;
 use crate::common::ClientComponents;
 use blockgen::BlockGenerator;
 use cfxcore::{genesis::genesis_block, machine::new_machine_with_builtin};
@@ -42,9 +44,10 @@ pub struct LightClientExtraComponents {
     pub light: Arc<LightQueryService>,
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
+    pub rpc_ws_server: Option<WsServer>,
+    pub runtime: Runtime,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
-    pub runtime: Runtime,
 }
 
 pub struct LightClient {}
@@ -203,12 +206,7 @@ impl LightClient {
         );
 
         let debug_rpc_http_server = super::rpc::start_http(
-            super::rpc::HttpConfiguration::new(
-                Some((127, 0, 0, 1)),
-                conf.raw_conf.jsonrpc_local_http_port,
-                conf.raw_conf.jsonrpc_cors.clone(),
-                conf.raw_conf.jsonrpc_http_keep_alive,
-            ),
+            conf.local_http_config(),
             setup_debug_rpc_apis_light(
                 common_impl.clone(),
                 rpc_impl.clone(),
@@ -217,10 +215,26 @@ impl LightClient {
         )?;
 
         let rpc_tcp_server = super::rpc::start_tcp(
-            super::rpc::TcpConfiguration::new(
-                None,
-                conf.raw_conf.jsonrpc_tcp_port,
-            ),
+            conf.tcp_config(),
+            if conf.is_test_mode() {
+                setup_debug_rpc_apis_light(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub.clone()),
+                )
+            } else {
+                setup_public_rpc_apis_light(
+                    common_impl.clone(),
+                    rpc_impl.clone(),
+                    Some(pubsub.clone()),
+                    &conf,
+                )
+            },
+            RpcExtractor,
+        )?;
+
+        let rpc_ws_server = super::rpc::start_ws(
+            conf.ws_config(),
             if conf.is_test_mode() {
                 setup_debug_rpc_apis_light(
                     common_impl.clone(),
@@ -239,12 +253,7 @@ impl LightClient {
         )?;
 
         let rpc_http_server = super::rpc::start_http(
-            super::rpc::HttpConfiguration::new(
-                None,
-                conf.raw_conf.jsonrpc_http_port,
-                conf.raw_conf.jsonrpc_cors.clone(),
-                conf.raw_conf.jsonrpc_http_keep_alive,
-            ),
+            conf.http_config(),
             if conf.is_test_mode() {
                 setup_debug_rpc_apis_light(common_impl, rpc_impl, None)
             } else {
@@ -261,9 +270,10 @@ impl LightClient {
                 light,
                 rpc_http_server,
                 rpc_tcp_server,
+                rpc_ws_server,
+                runtime,
                 secret_store,
                 txpool,
-                runtime,
             },
         }))
     }

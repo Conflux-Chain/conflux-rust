@@ -53,7 +53,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         author: Default::default(),
         timestamp: Default::default(),
         difficulty: Default::default(),
-        gas_used: U256::zero(),
+        accumulated_gas_used: U256::zero(),
         gas_limit: tx.gas.clone(),
         last_hashes: Arc::new(vec![]),
         epoch_height: 0,
