@@ -25,7 +25,7 @@ class P2PThrottlingTest(ConfluxTestFramework):
         # Token bucket: <max_tokens>,<init_tokens>,<recharge_rate>,<default_cost>,<max_throttled_tolerates>
         # These parameters are set to ensure that throttling will be triggered,
         # and will not exceed max_throttled_tolerates.
-        self.throttling_array = [20, 10, 10, 1, 50000]
+        self.throttling_array = [20, 10, 10, 1, 50]
         throttling_setting = ",".join([str(i) for i in self.throttling_array])
         throttling_file = "throttling.toml"
         self.conf_parameters["throttling_conf"] = f"\"{throttling_file}\""
@@ -64,6 +64,8 @@ class P2PThrottlingTest(ConfluxTestFramework):
     def run_test(self):
         n_blocks = 200
         rate = self.throttling_array[2]
+        init_token = self.throttling_array[0]
+        max_throttled_tolerates = self.throttling_array[4]
         start = time.time()
         # Generate blocks with about twice the throttling rate.
         for _ in range(int(n_blocks/rate)):
@@ -72,7 +74,7 @@ class P2PThrottlingTest(ConfluxTestFramework):
         self.log.info("Wait for blocks to be synced")
         sync_blocks(self.nodes, timeout=120)
         elapsed = time.time() - start
-        assert elapsed > n_blocks/20
+        assert elapsed > (n_blocks - init_token - max_throttled_tolerates) /rate
         self.log.info(f"Pass with {elapsed} seconds")
 
 
