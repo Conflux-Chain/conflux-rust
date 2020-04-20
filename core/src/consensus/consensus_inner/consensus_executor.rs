@@ -197,51 +197,64 @@ impl ConsensusExecutor {
             .name("Consensus Execution Worker".into())
             .spawn(move || loop {
                 if executor_thread.stopped.load(Relaxed) {
-                    // The thread should be stopped. The rest tasks in the queue will be discarded.
+                    // The thread should be stopped. The rest tasks in the queue
+                    // will be discarded.
                     break;
                 }
-                let maybe_task = receiver.try_recv();
-                match maybe_task {
-                    Err(TryRecvError::Empty) => {
-                        // The channel is empty, so we try to optimistically
-                        // get later epochs to execute. Here we use `try_write` because some thread
-                        // may wait for execution results while holding the Consensus Inner lock,
-                        // if we wait on inner lock here we may get deadlock
-                        let maybe_optimistic_task = consensus_inner
-                            .try_write()
-                            .and_then(|mut inner|
-                                executor_thread.get_optimistic_execution_task(&mut *inner)
-                            );
-                        match maybe_optimistic_task {
-                            Some(task) => {
-                                debug!("Get optimistic_execution_task {:?}", task);
-                                handler.handle_epoch_execution(task)
-                            },
-                            None => {
-                                debug!("No optimistic tasks to execute, block for new tasks");
-                                //  Even optimistic tasks are all finished, so we block and wait for
-                                //  new execution tasks.
-                                //  New optimistic tasks will only exist if pivot_chain changes,
-                                //  and new tasks will be sent to `receiver` in this case, so this
-                                // waiting will not prevent new optimistic tasks from being executed
-                                if !handler.handle_recv_result(receiver.recv())
-                                {
-                                    break;
-                                }
-                            }
+                let maybe_task = {
+                    // Here we use `try_write` because some thread
+                    // may wait for execution results while holding the
+                    // Consensus Inner lock, if we wait on
+                    // inner lock here we may get deadlock.
+                    match receiver.try_recv() {
+                        Ok(task) => Some(task),
+                        Err(TryRecvError::Empty) => {
+                            // The channel is empty, so we try to optimistically
+                            // get later epochs to execute.
+                            consensus_inner
+                                .try_write()
+                                .and_then(|mut inner| {
+                                    executor_thread
+                                        .get_optimistic_execution_task(
+                                            &mut *inner,
+                                        )
+                                })
+                                .map(|task| {
+                                    debug!(
+                                        "Get optimistic_execution_task {:?}",
+                                        task
+                                    );
+                                    ExecutionTask::ExecuteEpoch(task)
+                                })
                         }
-                    }
-                    maybe_error => {
-                        // Handle execution task in channel.
-                        // If `maybe_task` is Err, it can only be
-                        // `TryRecvError::Disconnected`, and it has the same
-                        // meaning as `RecvError` for `recv()`
-                        if !handler.handle_recv_result(
-                            maybe_error.map_err(|_| RecvError),
-                        ) {
+                        Err(TryRecvError::Disconnected) => {
+                            info!("Channel disconnected, stop thread");
                             break;
                         }
                     }
+                };
+                let task = match maybe_task {
+                    Some(task) => task,
+                    None => {
+                        //  Even optimistic tasks are all finished, so we block
+                        // and wait for  new execution
+                        // tasks.  New optimistic tasks
+                        // will only exist if pivot_chain changes,
+                        //  and new tasks will be sent to `receiver` in this
+                        // case, so this waiting will
+                        // not prevent new optimistic tasks from being executed.
+                        match receiver.recv() {
+                            Ok(task) => task,
+                            Err(RecvError) => {
+                                info!("Channel receive error, stop thread");
+                                break;
+                            }
+                        }
+                    }
+                };
+                if !handler.handle_execution_work(task) {
+                    // `task` is `Stop`, so just stop.
+                    break;
                 }
             })
             .expect("Cannot fail");
@@ -306,6 +319,12 @@ impl ConsensusExecutor {
                 inner.data_man.state_availability_boundary.write();
             let opt_height =
                 state_availability_boundary.optimistic_executed_height?;
+            if opt_height != state_availability_boundary.upper_bound + 1 {
+                // The `opt_height` parent's state has not been executed.
+                // This may happen when the pivot chain switches between
+                // the checks of the execution queue and the opt task.
+                return None;
+            }
             let next_opt_height = opt_height + 1;
             if next_opt_height
                 >= inner.pivot_index_to_height(inner.pivot_chain.len())
@@ -777,21 +796,6 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
-        }
-    }
-
-    /// Return `false` if someting goes wrong, and we will break the working
-    /// loop. `maybe_task` should match results from `recv()`, so it does not
-    /// contain `Empty` case.
-    fn handle_recv_result(
-        &self, maybe_task: Result<ExecutionTask, RecvError>,
-    ) -> bool {
-        match maybe_task {
-            Ok(task) => self.handle_execution_work(task),
-            Err(e) => {
-                warn!("Consensus Executor stopped by Err={:?}", e);
-                false
-            }
         }
     }
 
