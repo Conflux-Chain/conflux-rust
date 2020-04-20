@@ -467,6 +467,7 @@ impl Cfx for CfxHandler {
             fn gas_price(&self) -> RpcResult<RpcU256>;
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
+            fn confirmation_risk_by_hash(&self, block_hash: RpcH256) -> RpcResult<Option<RpcU256>>;
         }
 
         to self.rpc_impl {
@@ -562,6 +563,7 @@ impl LocalRpc for DebugRpcImpl {
             fn net_throttling(&self) -> RpcResult<throttling::Service>;
             fn tx_inspect(&self, hash: RpcH256) -> RpcResult<BTreeMap<String, String>>;
             fn txpool_content(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txs_from_pool(&self) -> RpcResult<Vec<RpcTransaction>>;
             fn txpool_inspect(&self) -> RpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> RpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> RpcResult<Vec<RpcH160>>;

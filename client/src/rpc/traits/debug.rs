@@ -43,6 +43,9 @@ pub trait LocalRpc {
         >,
     >;
 
+    #[rpc(name = "getTransactionsFromPool")]
+    fn txs_from_pool(&self) -> JsonRpcResult<Vec<RpcTransaction>>;
+
     #[rpc(name = "clear_tx_pool")]
     fn clear_tx_pool(&self) -> JsonRpcResult<()>;
 
