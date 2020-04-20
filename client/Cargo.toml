@@ -4,6 +4,8 @@ version = "0.6.0"
 edition = "2018"
 
 [dependencies]
+bigdecimal = "0.1.0"
+num-bigint = "0.2.6"
 mio = "0.6.8"
 clap = "2"
 term_size = "0.3"
