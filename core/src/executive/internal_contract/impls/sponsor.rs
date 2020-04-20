@@ -6,7 +6,7 @@ use super::super::InternalContractTrait;
 use crate::{
     bytes::Bytes,
     state::{State, Substate},
-    vm::{self, ActionParams, Spec},
+    vm::{self, ActionParams, CallType, Spec},
 };
 use cfx_types::{Address, U256};
 use std::str::FromStr;
@@ -24,12 +24,6 @@ impl SponsorWhitelistControl {
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        if state.is_contract(&params.sender) {
-            return Err(vm::Error::InternalContract(
-                "contract account is not allowed to sponsor other contract",
-            ));
-        }
-
         if input.len() != 64 {
             return Err(vm::Error::InternalContract("invalid data"));
         }
@@ -136,12 +130,6 @@ impl SponsorWhitelistControl {
         state: &mut State, substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        if state.is_contract(&params.sender) {
-            return Err(vm::Error::InternalContract(
-                "contract account is not allowed to sponsor other contract",
-            ));
-        }
-
         if input.len() != 32 {
             return Err(vm::Error::InternalContract("invalid data"));
         }
@@ -310,6 +298,10 @@ impl InternalContractTrait for SponsorWhitelistControl {
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
+        if params.call_type == CallType::StaticCall {
+            return Err(vm::Error::MutableCallInStaticContext);
+        }
+
         let data = if let Some(ref d) = params.data {
             d as &[u8]
         } else {
@@ -356,7 +348,7 @@ impl InternalContractTrait for SponsorWhitelistControl {
             // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
             self.remove_privilege(&data[4..], params, state)
         } else {
-            Ok(())
+            Err(vm::Error::InternalContract("unsupported function"))
         }
     }
 }
