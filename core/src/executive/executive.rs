@@ -313,14 +313,14 @@ impl<'a> CallCreateExecutive<'a> {
             )?;
             state.new_contract_with_admin(
                 &params.address,
-                &params.sender,
+                &params.original_sender,
                 val + balance,
                 nonce_offset,
             )?;
         } else {
             state.new_contract_with_admin(
                 &params.address,
-                &params.sender,
+                &params.original_sender,
                 balance,
                 nonce_offset,
             )?;

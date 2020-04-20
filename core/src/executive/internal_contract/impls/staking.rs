@@ -95,11 +95,6 @@ impl InternalContractTrait for Staking {
         _substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        if state.is_contract(&params.sender) {
-            return Err(vm::Error::InternalContract(
-                "contract accounts are not allowed to deposit or withdraw",
-            ));
-        }
         let data = if let Some(ref d) = params.data {
             d as &[u8]
         } else {
