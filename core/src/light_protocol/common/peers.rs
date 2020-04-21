@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::message::MsgId;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, service::ProtocolVersion};
 use rand::prelude::SliceRandom;
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
@@ -19,7 +19,7 @@ use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 pub struct FullPeerState {
     pub best_epoch: u64,
     pub handshake_completed: bool,
-    pub protocol_version: u8,
+    pub protocol_version: ProtocolVersion,
     pub terminals: HashSet<H256>,
     pub throttled_msgs: ThrottledManager<MsgId>,
     pub unexpected_msgs: TokenBucketManager,
@@ -28,7 +28,7 @@ pub struct FullPeerState {
 #[derive(Default)]
 pub struct LightPeerState {
     pub handshake_completed: bool,
-    pub protocol_version: u8,
+    pub protocol_version: ProtocolVersion,
     pub throttling: TokenBucketManager,
 }
 

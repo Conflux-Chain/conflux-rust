@@ -3,18 +3,23 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
+    message::{
+        GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
+        RequestId, SetRequestId,
+    },
     sync::{
         message::{
             metrics::TX_HANDLE_TIMER, msgid, Context, DynamicCapability,
             Handleable, Key, KeyContainer,
         },
         request_manager::{AsAny, Request},
+        synchronization_protocol_handler::SYNC_PROTO_V1,
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
+use network::service::ProtocolVersion;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -266,18 +271,13 @@ impl AsAny for GetTransactions {
     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
+mark_msg_version_bound!(GetTransactions, SYNC_PROTO_V1, SYNC_PROTO_V1);
 impl Message for GetTransactions {
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS }
 
     fn msg_name(&self) -> &'static str { "GetTransactions" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl Request for GetTransactions {
@@ -420,18 +420,17 @@ impl AsAny for GetTransactionsFromTxHashes {
     fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
+mark_msg_version_bound!(
+    GetTransactionsFromTxHashes,
+    SYNC_PROTO_V1,
+    SYNC_PROTO_V1
+);
 impl Message for GetTransactionsFromTxHashes {
     fn msg_id(&self) -> MsgId { msgid::GET_TRANSACTIONS_FROM_TX_HASHES }
 
     fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashes" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl Request for GetTransactionsFromTxHashes {

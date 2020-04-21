@@ -3,8 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use super::protocol::*;
-use crate::message::{GetMaybeRequestId, Message, MsgId};
-use rlp::Encodable;
+use crate::{
+    light_protocol::LIGHT_PROTO_V1,
+    message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
+};
+use network::service::ProtocolVersion;
 
 // generate `pub mod msgid`
 // TODO(thegaram): reorder message ids
@@ -39,27 +42,27 @@ build_msgid! {
 }
 
 // generate `impl Message for _` for each message type
-build_msg_impl! { StatusPing, msgid::STATUS_PING, "StatusPing" }
-build_msg_impl! { StatusPong, msgid::STATUS_PONG, "StatusPong" }
-build_msg_impl! { GetStateRoots, msgid::GET_STATE_ROOTS, "GetStateRoots" }
-build_msg_impl! { StateRoots, msgid::STATE_ROOTS, "StateRoots" }
-build_msg_impl! { GetStateEntries, msgid::GET_STATE_ENTRIES, "GetStateEntries" }
-build_msg_impl! { StateEntries, msgid::STATE_ENTRIES, "StateEntries" }
-build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
-build_msg_impl! { BlockHashes, msgid::BLOCK_HASHES, "BlockHashes" }
-build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
-build_msg_impl! { BlockHeaders, msgid::BLOCK_HEADERS, "BlockHeaders" }
-build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
-build_msg_impl! { SendRawTx, msgid::SEND_RAW_TX, "SendRawTx" }
-build_msg_impl! { GetReceipts, msgid::GET_RECEIPTS, "GetReceipts" }
-build_msg_impl! { Receipts, msgid::RECEIPTS, "Receipts" }
-build_msg_impl! { GetTxs, msgid::GET_TXS, "GetTxs" }
-build_msg_impl! { Txs, msgid::TXS, "Txs" }
-build_msg_impl! { GetWitnessInfo, msgid::GET_WITNESS_INFO, "GetWitnessInfo" }
-build_msg_impl! { WitnessInfo, msgid::WITNESS_INFO, "WitnessInfo" }
-build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms" }
-build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms" }
-build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs" }
-build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs" }
-build_msg_impl! { GetTxInfos, msgid::GET_TX_INFOS, "GetTxInfos" }
-build_msg_impl! { TxInfos, msgid::TX_INFOS, "TxInfos" }
+build_msg_impl! { StatusPing, msgid::STATUS_PING, "StatusPing", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { StatusPong, msgid::STATUS_PONG, "StatusPong", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetStateRoots, msgid::GET_STATE_ROOTS, "GetStateRoots", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { StateRoots, msgid::STATE_ROOTS, "StateRoots", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetStateEntries, msgid::GET_STATE_ENTRIES, "GetStateEntries", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { StateEntries, msgid::STATE_ENTRIES, "StateEntries", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { BlockHashes, msgid::BLOCK_HASHES, "BlockHashes", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { BlockHeaders, msgid::BLOCK_HEADERS, "BlockHeaders", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { SendRawTx, msgid::SEND_RAW_TX, "SendRawTx", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetReceipts, msgid::GET_RECEIPTS, "GetReceipts", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { Receipts, msgid::RECEIPTS, "Receipts", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetTxs, msgid::GET_TXS, "GetTxs", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { Txs, msgid::TXS, "Txs", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetWitnessInfo, msgid::GET_WITNESS_INFO, "GetWitnessInfo", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { WitnessInfo, msgid::WITNESS_INFO, "WitnessInfo", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetBlooms, msgid::GET_BLOOMS, "GetBlooms", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { Blooms, msgid::BLOOMS, "Blooms", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetBlockTxs, msgid::GET_BLOCK_TXS, "GetBlockTxs", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { BlockTxs, msgid::BLOCK_TXS, "BlockTxs", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { GetTxInfos, msgid::GET_TX_INFOS, "GetTxInfos", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
+build_msg_impl! { TxInfos, msgid::TX_INFOS, "TxInfos", LIGHT_PROTO_V1, LIGHT_PROTO_V1 }
