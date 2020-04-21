@@ -169,7 +169,8 @@ impl NodeIpLimit {
         }
 
         // node exists and ip not changed.
-        if let Some(cur_ip) = self.node_index.get(&id) {
+        let maybe_cur_ip = self.node_index.get(&id);
+        if let Some(cur_ip) = maybe_cur_ip {
             if cur_ip == ip {
                 return ValidateInsertResult::AlreadyExists;
             }
@@ -187,7 +188,7 @@ impl NodeIpLimit {
 
         // Node ip changed, but still in the same subnet.
         // So, just evict the node itself.
-        if let Some(cur_ip) = self.node_index.get(&id) {
+        if let Some(cur_ip) = maybe_cur_ip {
             let cur_subnet = self.subnet_type.subnet(cur_ip);
             let new_subnet = self.subnet_type.subnet(ip);
             if cur_subnet == new_subnet {
