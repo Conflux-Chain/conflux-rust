@@ -4,7 +4,13 @@
 
 ## Improvements
 
-- Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
+- Complete the protocol version mechanism for node communications and bump
+the protocol version to V2. The change is backwards-compatible except for
+msgid::THROTTLE (0xfe).
+
+- Add chain_id field into sync protocol and light protocol handshake message
+so that peers can disconnect peers from another Conflux chain, e.g. testnet,
+another testnet.
 
 # 0.5.0
 

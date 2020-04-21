@@ -19,8 +19,16 @@
 # `docs/build-app/troubleshooting.md`.
 #docs/*	docs@example.com
 
-# In this example, @yangzhe1990 owns any file in the specified
-# directory anywhere in your repository.
-core/benchmark/storage/	@yangzhe1990
+# Updates to Message Id and CUD of Message types can cause
+# backwards compatibility issues.
+#
+# @yangzhe1990 is responsible to review. Should form a team
+# later on.
+# 
+core/src/light_protocol/message/message.rs	@yangzhe1990
+core/src/light_protocol/mod.rs			@yangzhe1990
+core/src/sync/message/message.rs		@yangzhe1990
+core/src/sync/mod.rs			@yangzhe1990
+
 
 CHANGELOG.md	@Conflux-Chain/spec-change-review

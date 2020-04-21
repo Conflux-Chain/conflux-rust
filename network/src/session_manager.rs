@@ -6,7 +6,7 @@ use crate::{
     ip::{new_session_ip_limit, SessionIpLimit, SessionIpLimitConfig},
     node_table::NodeId,
     service::NetworkServiceInner,
-    session::Session,
+    session::{Session, PACKET_HEADER_VERSION},
     NetworkIoMessage,
 };
 use io::IoContext;
@@ -196,7 +196,15 @@ impl SessionManager {
         }
         let entry = sessions.vacant_entry();
         let index = entry.key();
-        match Session::new(io, socket, address, id, index, host) {
+        match Session::new(
+            io,
+            socket,
+            address,
+            id,
+            PACKET_HEADER_VERSION,
+            index,
+            host,
+        ) {
             Err(e) => {
                 debug!(
                     "SessionManager.create: leave on session creation failed"

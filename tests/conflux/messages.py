@@ -126,7 +126,6 @@ class ChainIdParams(rlp.Serializable):
 
 class Status(rlp.Serializable):
     fields = [
-        ("protocol_version", big_endian_int),
         ("chain_id", ChainIdParams),
         ("genesis_hash", hash32),
         ("best_epoch", big_endian_int),
