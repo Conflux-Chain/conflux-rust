@@ -212,6 +212,17 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
 
         // network errors
         ErrorKind::Network(kind) => match kind {
+            network::ErrorKind::SendUnsupportedMessage => {
+                unreachable!("This is a bug in protocol version maintenance. {:?}", kind);
+            }
+
+            network::ErrorKind::MessageDeprecated => {
+                op = Some(UpdateNodeOperation::Failure);
+                error!(
+                    "Peer sent us a deprecated message. Either it's a bug \
+                    in protocol version maintenance or the peer is malicious.");
+            }
+
             network::ErrorKind::AddressParse
             | network::ErrorKind::AddressResolve(_)
             | network::ErrorKind::Auth

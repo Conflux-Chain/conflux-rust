@@ -175,6 +175,18 @@ error_chain! {
             display("Unexpected IO error: {}", err),
         }
 
+        // FIXME: more details
+        MessageDeprecated {
+            description("Received message is deprecated"),
+            display("Received message is deprecated"),
+        }
+
+        // FIXME: details.
+        SendUnsupportedMessage {
+            description("We are trying to send unsupported message to peer"),
+            display("We are trying to send unsupported message to peer"),
+        }
+
         Throttling(reason: ThrottlingReason) {
             description("throttling failure"),
             display("throttling failure: {}", reason),

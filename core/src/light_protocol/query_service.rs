@@ -100,7 +100,7 @@ impl QueryService {
             .register_protocol(
                 self.handler.clone(),
                 LIGHT_PROTOCOL_ID,
-                &[LIGHT_PROTOCOL_VERSION],
+                LIGHT_PROTOCOL_VERSION,
             )
             .map_err(|e| {
                 format!("failed to register protocol QueryService: {:?}", e)
@@ -109,7 +109,7 @@ impl QueryService {
 
     fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
         self.network
-            .with_context(LIGHT_PROTOCOL_ID, |io| f(io))
+            .with_context(self.handler.clone(), LIGHT_PROTOCOL_ID, |io| f(io))
             .expect("Unable to access network service")
     }
 
@@ -341,9 +341,11 @@ impl QueryService {
 
         for peer in peers {
             // relay to peer
-            let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                self.handler.send_raw_tx(io, &peer, raw.clone())
-            });
+            let res = self.network.with_context(
+                self.handler.clone(),
+                LIGHT_PROTOCOL_ID,
+                |io| self.handler.send_raw_tx(io, &peer, raw.clone()),
+            );
 
             // check error
             match res {
