@@ -115,7 +115,7 @@ impl InternalContractTrait for Staking {
             ));
         }
 
-        if params.value.value() > 0 {
+        if !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
                 "should not transfer balance to Staking contract",
             ));
