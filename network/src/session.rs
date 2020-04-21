@@ -6,8 +6,9 @@ use crate::{
     connection::{Connection, ConnectionDetails, SendQueueStatus, WriteStatus},
     handshake::Handshake,
     node_table::{NodeEndpoint, NodeEntry, NodeId},
-    service::NetworkServiceInner,
-    Capability, DisconnectReason, Error, ErrorKind, ProtocolId,
+    parse_msg_id_leb128_2_bytes_at_most,
+    service::{NetworkServiceInner, ProtocolVersion},
+    DisconnectReason, Error, ErrorKind, ProtocolId, ProtocolInfo,
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
@@ -86,13 +87,19 @@ const PACKET_HELLO: u8 = 0x80;
 const PACKET_DISCONNECT: u8 = 0x01;
 // id for protocol packet
 pub const PACKET_USER: u8 = 0x10;
+/// header_version for protocol packet.
+/// Change the version only when there is a major change to the protocol packet.
+pub const PACKET_HEADER_VERSION: u8 = 0;
+/// The header version where extension is introduced.
+const HEADER_VERSION_WITH_EXTENSION: u8 = 0;
 
 impl Session {
     /// Create a new instance of `Session`, which starts to handshake with
     /// remote peer.
     pub fn new<Message: Send + Sync + Clone + 'static>(
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
-        id: Option<&NodeId>, token: StreamToken, host: &NetworkServiceInner,
+        id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
+        host: &NetworkServiceInner,
     ) -> Result<Session, Error>
     {
         let originated = id.is_some();
@@ -103,9 +110,9 @@ impl Session {
         Ok(Session {
             metadata: SessionMetadata {
                 id: id.cloned(),
-                capabilities: Vec::new(),
-                peer_capabilities: Vec::new(),
+                peer_protocols: Vec::new(),
                 originated,
+                peer_header_version,
             },
             address,
             state: State::Handshake(MovableWrapper::new(handshake)),
@@ -119,7 +126,7 @@ impl Session {
 
     pub fn have_capability(&self, protocol: ProtocolId) -> bool {
         self.metadata
-            .capabilities
+            .peer_protocols
             .iter()
             .any(|c| c.protocol == protocol)
     }
@@ -280,6 +287,7 @@ impl Session {
 
         match packet.id {
             PACKET_HELLO => {
+                self.metadata.peer_header_version = packet.header_version;
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
 
@@ -364,46 +372,40 @@ impl Session {
     ) -> Result<(), Error> {
         let remote_network_id: u64 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
-            debug!("failed to read hello, network id mismatch, self = {}, remote = {}", host.metadata.network_id, remote_network_id);
+            debug!(
+                "failed to read hello, network id mismatch, self = {}, remote = {}",
+                host.metadata.network_id, remote_network_id);
             return Err(self.send_disconnect(DisconnectReason::Custom(
                 "network id mismatch".into(),
             )));
         }
 
-        let peer_caps: Vec<Capability> = rlp.list_at(1)?;
-
-        let mut caps: Vec<Capability> = Vec::new();
-        for hc in host.metadata.capabilities.read().iter() {
-            if peer_caps
-                .iter()
-                .any(|c| c.protocol == hc.protocol && c.version == hc.version)
-            {
-                caps.push(hc.clone());
+        let mut peer_caps: Vec<ProtocolInfo> = rlp.list_at(1)?;
+        for i in 1..peer_caps.len() {
+            for j in 0..i {
+                if peer_caps[j].protocol == peer_caps[i].protocol {
+                    debug!(
+                        "Invalid protocol list from hello. Duplication: {:?},\
+                         remote = {}",
+                        peer_caps[i].protocol, remote_network_id
+                    );
+                    bail!(self.send_disconnect(DisconnectReason::Custom(
+                        "Invalid protocol list: duplication.".into()
+                    )))
+                }
             }
         }
 
-        caps.retain(|c| {
+        peer_caps.retain(|c| {
             host.metadata
-                .capabilities
+                .minimum_peer_protocol_version
                 .read()
                 .iter()
-                .any(|hc| hc.protocol == c.protocol && hc.version == c.version)
+                .any(|hc| hc.protocol == c.protocol && hc.version <= c.version)
         });
-        let mut i = 0;
-        while i < caps.len() {
-            if caps.iter().any(|c| {
-                c.protocol == caps[i].protocol && c.version > caps[i].version
-            }) {
-                caps.remove(i);
-            } else {
-                i += 1;
-            }
-        }
-        caps.sort();
 
-        self.metadata.capabilities = caps;
-        self.metadata.peer_capabilities = peer_caps;
-        if self.metadata.capabilities.is_empty() {
+        self.metadata.peer_protocols = peer_caps;
+        if self.metadata.peer_protocols.is_empty() {
             debug!("No common capabilities with remote peer, peer_node_id = {:?}, session = {:?}", self.metadata.id, self);
             return Err(self.send_disconnect(DisconnectReason::UselessPeer));
         }
@@ -455,10 +457,7 @@ impl Session {
     fn prepare_packet(
         &self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
     ) -> Result<Vec<u8>, Error> {
-        if protocol.is_some()
-            && (self.metadata.capabilities.is_empty()
-                || self.had_hello.is_none())
-        {
+        if protocol.is_some() && self.had_hello.is_none() {
             debug!(
                 "Sending to unconfirmed session {}, protocol: {:?}, packet: {}",
                 self.token(),
@@ -474,23 +473,71 @@ impl Session {
             return Err(ErrorKind::Expired.into());
         }
 
-        Ok(SessionPacket::assemble(packet_id, protocol, data))
+        Ok(SessionPacket::assemble(
+            packet_id,
+            self.metadata.peer_header_version,
+            protocol,
+            data,
+        ))
+    }
+
+    #[inline]
+    pub fn check_message_protocol_version(
+        &self, protocol: Option<ProtocolId>,
+        min_protocol_version: ProtocolVersion, mut msg: &[u8],
+    ) -> Result<(), Error>
+    {
+        // min_protocol_version is the version when the Message is introduced.
+        // peer protocol version must be higher.
+        if let Some(protocol) = protocol {
+            for peer_protocol in &self.metadata.peer_protocols {
+                if protocol.eq(&peer_protocol.protocol) {
+                    if min_protocol_version <= peer_protocol.version {
+                        break;
+                    } else {
+                        bail!(ErrorKind::SendUnsupportedMessage {
+                            protocol,
+                            msg_id: parse_msg_id_leb128_2_bytes_at_most(
+                                &mut msg
+                            ),
+                            peer_protocol_version: Some(peer_protocol.version),
+                            min_supported_version: None,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Send a packet to remote peer asynchronously.
     pub fn send_packet<Message: Send + Sync + Clone>(
         &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
-        packet_id: u8, data: Vec<u8>, priority: SendQueuePriority,
+        min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
+        priority: SendQueuePriority,
     ) -> Result<SendQueueStatus, Error>
     {
+        self.check_message_protocol_version(
+            protocol.clone(),
+            min_proto_version,
+            &data,
+        )?;
         let packet = self.prepare_packet(protocol, packet_id, data)?;
         self.connection_mut().send(io, packet, priority)
     }
 
     /// Send a packet to remote peer immediately.
     pub fn send_packet_immediately(
-        &mut self, protocol: Option<ProtocolId>, packet_id: u8, data: Vec<u8>,
-    ) -> Result<usize, Error> {
+        &mut self, protocol: Option<ProtocolId>,
+        min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
+    ) -> Result<usize, Error>
+    {
+        self.check_message_protocol_version(
+            protocol.clone(),
+            min_proto_version,
+            &data,
+        )?;
         let packet = self.prepare_packet(protocol, packet_id, data)?;
         self.connection_mut().write_raw_data(packet)
     }
@@ -498,7 +545,12 @@ impl Session {
     /// Send a Disconnect packet immediately to the remote peer.
     pub fn send_disconnect(&mut self, reason: DisconnectReason) -> Error {
         let packet = rlp::encode(&reason);
-        let _ = self.send_packet_immediately(None, PACKET_DISCONNECT, packet);
+        let _ = self.send_packet_immediately(
+            None,
+            ProtocolVersion::default(),
+            PACKET_DISCONNECT,
+            packet,
+        );
         ErrorKind::Disconnect(reason).into()
     }
 
@@ -509,11 +561,12 @@ impl Session {
         debug!("Sending Hello, session = {:?}", self);
         let mut rlp = RlpStream::new_list(3);
         rlp.append(&host.metadata.network_id);
-        rlp.append_list(&*host.metadata.capabilities.read());
+        rlp.append_list(&*host.metadata.protocols.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
         self.send_packet(
             io,
             None,
+            ProtocolVersion::default(),
             PACKET_HELLO,
             rlp.drain(),
             SendQueuePriority::High,
@@ -634,26 +687,45 @@ impl<T> MovableWrapper<T> {
 /// packet id and protocol id are appended in the end of data.
 ///
 /// The packet format is:
-///     [data || <protocol_id> || protocol_flag (1|0) || packet_id]
+///     [data (0 to more bytes) || header]
+///
+/// The header format is:
+/// [  extensions (0 to more bytes) || protocol (0 or 3 bytes if protocol_flag)
+///   || reserved (3 bit), has_extension (1 bit), header_version (3 bit),
+///      protocol_flag (1 bit)
+///   || packet_id]
+///
+/// The protocol format is:
+///     [ protocol_id (3 bytes)]
+///
+/// The extensions format is:
+/// [ extention data (0 to more bytes)
+///   || extension data length (7 bit) | has_next_extension (1 bit)
+/// ]
 #[derive(Eq, PartialEq)]
 struct SessionPacket {
     pub id: u8,
     pub protocol: Option<ProtocolId>,
     pub data: Bytes,
+    pub header_version: u8,
+    pub extensions: Vec<Vec<u8>>,
 }
 
 impl SessionPacket {
     // data + Option<protocol> + protocol_flag + packet_id
     fn assemble(
-        id: u8, protocol: Option<ProtocolId>, mut data: Vec<u8>,
-    ) -> Vec<u8> {
+        id: u8, header_version: u8, protocol: Option<ProtocolId>,
+        mut data: Vec<u8>,
+    ) -> Vec<u8>
+    {
         let mut protocol_flag = 0;
         if let Some(protocol) = protocol {
             data.extend_from_slice(&protocol);
             protocol_flag = 1;
         }
 
-        data.push(protocol_flag);
+        let header_byte = (header_version << 1) + protocol_flag;
+        data.push(header_byte);
         data.push(id);
 
         data
@@ -674,11 +746,14 @@ impl SessionPacket {
             return Err(ErrorKind::BadProtocol.into());
         }
 
-        let protocol_flag = data.split_off(data.len() - 1)[0];
-        if protocol_flag > 1 {
-            debug!("failed to parse session packet, protocol flag is invalid");
+        let header_byte = data.split_off(data.len() - 1)[0];
+        let protocol_flag = header_byte & 1;
+        let header_version = (header_byte & 0x0f) >> 1;
+        if header_version > HEADER_VERSION_WITH_EXTENSION {
+            debug!("unsupported header_version {}", header_version);
             return Err(ErrorKind::BadProtocol.into());
         }
+        let has_extension = (header_byte & 0x10) >> 4;
 
         // without protocol
         if protocol_flag == 0 {
@@ -687,10 +762,15 @@ impl SessionPacket {
                 return Err(ErrorKind::BadProtocol.into());
             }
 
+            let (data, extensions) =
+                Self::parse_extensions(data, has_extension != 0)?;
+
             return Ok(SessionPacket {
                 id: packet_id,
+                header_version,
                 protocol: None,
                 data,
+                extensions,
             });
         }
 
@@ -709,11 +789,36 @@ impl SessionPacket {
         let mut protocol = ProtocolId::default();
         protocol.copy_from_slice(&protocol_bytes);
 
+        // extensions
+        let (data, extensions) =
+            Self::parse_extensions(data, has_extension != 0)?;
+
         Ok(SessionPacket {
             id: packet_id,
             protocol: Some(protocol),
+            header_version,
             data,
+            extensions,
         })
+    }
+
+    fn parse_extensions(
+        mut data: Bytes, mut has_extension: bool,
+    ) -> Result<(Bytes, Vec<Vec<u8>>), Error> {
+        let mut extensions = Vec::new();
+        while has_extension {
+            let extension_byte = data.split_off(data.len() - 1)[0];
+            let extension_len = (extension_byte >> 1) as usize;
+            has_extension = (extension_byte & 1) != 0;
+            if data.len() < extension_len {
+                debug!("failed to parse session packet, not enough bytes for extension.");
+                bail!(ErrorKind::BadProtocol);
+            }
+            extensions
+                .push(data.split_off(data.len() - extension_len).to_vec());
+        }
+
+        Ok((data, extensions))
     }
 }
 
@@ -735,10 +840,16 @@ mod tests {
 
     #[test]
     fn test_packet_assemble() {
-        let packet = SessionPacket::assemble(5, None, vec![1, 3]);
+        let packet =
+            SessionPacket::assemble(5, PACKET_HEADER_VERSION, None, vec![1, 3]);
         assert_eq!(packet, vec![1, 3, 0, 5]);
 
-        let packet = SessionPacket::assemble(6, Some([8; 3]), vec![2, 4]);
+        let packet = SessionPacket::assemble(
+            6,
+            PACKET_HEADER_VERSION,
+            Some([8; 3]),
+            vec![2, 4],
+        );
         assert_eq!(packet, vec![2, 4, 8, 8, 8, 1, 6]);
     }
 
@@ -762,8 +873,10 @@ mod tests {
             packet,
             SessionPacket {
                 id: 20,
+                header_version: 0,
                 protocol: None,
                 data: vec![1, 2].into(),
+                extensions: vec![],
             }
         );
 
@@ -783,8 +896,10 @@ mod tests {
             packet,
             SessionPacket {
                 id: PACKET_USER,
+                header_version: 0,
                 protocol: Some([3; 3]),
                 data: vec![1, 9].into(),
+                extensions: vec![],
             }
         );
     }

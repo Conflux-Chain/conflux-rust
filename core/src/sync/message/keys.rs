@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::message::msgid;
+use crate::{message::MsgId, sync::message::msgid};
 use cfx_types::H256;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::collections::HashSet;
@@ -40,25 +40,25 @@ impl Default for KeyContainer {
 }
 
 impl KeyContainer {
-    pub fn read(&self, msg_type: u8) -> RwLockReadGuard<HashSet<Key>> {
+    pub fn read(&self, msg_type: MsgId) -> RwLockReadGuard<HashSet<Key>> {
         self.keys[msg_type as usize]
             .as_ref()
             .expect("msg not supported")
             .read()
     }
 
-    pub fn write(&self, msg_type: u8) -> RwLockWriteGuard<HashSet<Key>> {
+    pub fn write(&self, msg_type: MsgId) -> RwLockWriteGuard<HashSet<Key>> {
         self.keys[msg_type as usize]
             .as_ref()
             .expect("msg not supported")
             .write()
     }
 
-    pub fn add(&mut self, msg_type: u8, key: Key) -> bool {
+    pub fn add(&mut self, msg_type: MsgId, key: Key) -> bool {
         self.write(msg_type).insert(key)
     }
 
-    pub fn remove(&mut self, msg_type: u8, key: Key) -> bool {
+    pub fn remove(&mut self, msg_type: MsgId, key: Key) -> bool {
         self.write(msg_type).remove(&key)
     }
 }
