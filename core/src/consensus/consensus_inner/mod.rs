@@ -2013,7 +2013,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// This function differs from `ge_pivot_hash_from_epoch_number` in that it
+    /// This function differs from `get_pivot_hash_from_epoch_number` in that it
     /// only returns the hash if it is in the current consensus graph.
     fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
         let pivot_index = self.height_to_pivot_index(epoch_number);
@@ -2138,12 +2138,7 @@ impl ConsensusGraphInner {
     }
 
     /// Return the block receipts in the current pivot view and the epoch block
-    /// hash.
-    ///
-    /// If `hash` is not maintained in the memory, we just return the receipts
-    /// in the db without checking the pivot assumption.
-    /// TODO Check if its receipts matches our current pivot view for this
-    /// not-in-memory case.
+    /// hash. If `hash` is not executed in the current view, return None.
     pub fn block_execution_results_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<BlockExecutionResultWithEpoch> {
@@ -2160,7 +2155,26 @@ impl ConsensusGraphInner {
             }
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);
-                self.data_man.block_execution_result_by_hash_from_db(hash)
+
+                // result in db might be outdated
+                // (after chain reorg but before re-execution)
+                let res = match self
+                    .data_man
+                    .block_execution_result_by_hash_from_db(hash)
+                {
+                    None => return None,
+                    Some(res) => res,
+                };
+
+                let execution_pivot_hash = res.0;
+
+                match self.get_epoch_hash_for_block(&execution_pivot_hash) {
+                    // pivot chain has not changed, result should be correct
+                    Some(h) if h == execution_pivot_hash => Some(res),
+
+                    // pivot chain has changed, block is not re-executed yet
+                    _ => None,
+                }
             }
         }
     }
