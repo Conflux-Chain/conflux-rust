@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
+    message::{
+        GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
+        RequestId, SetRequestId,
+    },
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
@@ -13,10 +16,11 @@ use crate::{
             snapshot_chunk_response::SnapshotChunkResponse,
             storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
         },
+        synchronization_protocol_handler::SYNC_PROTO_V1,
         Error, ErrorKind, ProtocolConfiguration,
     },
 };
-use rlp::Encodable;
+use network::service::ProtocolVersion;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
@@ -29,7 +33,10 @@ pub struct SnapshotChunkRequest {
     pub chunk_key: ChunkKey,
 }
 
-build_msg_with_request_id_impl! { SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK, "SnapshotChunkRequest" }
+build_msg_with_request_id_impl! {
+    SnapshotChunkRequest, msgid::GET_SNAPSHOT_CHUNK,
+    "SnapshotChunkRequest", SYNC_PROTO_V1, SYNC_PROTO_V1
+}
 
 impl SnapshotChunkRequest {
     pub fn new(

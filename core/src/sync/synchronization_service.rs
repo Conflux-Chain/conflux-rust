@@ -7,7 +7,6 @@ use super::{
 };
 use crate::{
     light_protocol::Provider as LightProvider,
-    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
         request_manager::RequestManager, synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
@@ -79,16 +78,18 @@ impl SynchronizationService {
         self.network.register_protocol(
             self.protocol_handler.clone(),
             self.protocol,
-            &[SYNCHRONIZATION_PROTOCOL_VERSION],
+            self.protocol_handler.protocol_version,
         )?;
         Ok(())
     }
 
     fn relay_blocks(&self, need_to_relay: Vec<H256>) {
         // FIXME: We may need to propagate the error up
-        let _res = self.network.with_context(self.protocol, |io| {
-            self.protocol_handler.relay_blocks(io, need_to_relay)
-        });
+        let _res = self.network.with_context(
+            self.protocol_handler.clone(),
+            self.protocol,
+            |io| self.protocol_handler.relay_blocks(io, need_to_relay),
+        );
     }
 
     pub fn on_mined_block(&self, block: Block) {
@@ -98,9 +99,11 @@ impl SynchronizationService {
     }
 
     pub fn expire_block_gc(&self, timeout: u64) {
-        let _res = self.network.with_context(self.protocol, |io| {
-            self.protocol_handler.expire_block_gc(io, timeout)
-        });
+        let _res = self.network.with_context(
+            self.protocol_handler.clone(),
+            self.protocol,
+            |io| self.protocol_handler.expire_block_gc(io, timeout),
+        );
     }
 }
 
