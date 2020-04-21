@@ -278,6 +278,9 @@ pub fn handle_rlp_message(
         msgid::STATE_SYNC_CANDIDATE_RESPONSE => {
             handle_message::<StateSyncCandidateResponse>(ctx, rlp)?;
         }
+        msgid::THROTTLED => {
+            handle_message::<Throttled>(ctx, rlp)?;
+        }
         _ => return Ok(false),
     }
 
