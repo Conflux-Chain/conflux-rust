@@ -896,6 +896,7 @@ impl Cfx for CfxHandler {
                 -> JsonRpcResult<RpcBlock>;
             fn block_by_hash(&self, hash: RpcH256, include_txs: bool)
                 -> JsonRpcResult<Option<RpcBlock>>;
+            fn confirmation_risk_by_hash(&self, block_hash: RpcH256) -> JsonRpcResult<Option<RpcU256>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcH256>>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcH256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<RpcU256>;
@@ -1014,6 +1015,7 @@ impl LocalRpc for LocalRpcImpl {
             fn tx_inspect(&self, hash: RpcH256) -> JsonRpcResult<BTreeMap<String, String>>;
             fn txpool_content(&self) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txs_from_pool(&self) -> JsonRpcResult<Vec<RpcTransaction>>;
             fn txpool_inspect(&self) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;

@@ -153,7 +153,7 @@ impl ConfirmationMeter {
             }
             Some(max_risk)
         } else {
-            None
+            Some(0.9)
         }
     }
 
