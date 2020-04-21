@@ -7,7 +7,6 @@ use super::{
 };
 use crate::{
     light_protocol::Provider as LightProvider,
-    parameters::sync::SYNCHRONIZATION_PROTOCOL_VERSION,
     sync::{
         request_manager::RequestManager, synchronization_phases::SyncPhaseType,
         synchronization_protocol_handler::ProtocolConfiguration,
@@ -79,7 +78,7 @@ impl SynchronizationService {
         self.network.register_protocol(
             self.protocol_handler.clone(),
             self.protocol,
-            &[SYNCHRONIZATION_PROTOCOL_VERSION],
+            self.protocol_handler.protocol_version,
         )?;
         Ok(())
     }

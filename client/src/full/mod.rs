@@ -37,7 +37,7 @@ use runtime::Runtime;
 use secret_store::SecretStore;
 use std::{str::FromStr, sync::Arc, thread, time::Duration};
 use threadpool::ThreadPool;
-use txgen::propagate::DataPropagation;
+//use txgen::propagate::DataPropagation;
 
 pub struct FullClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -202,14 +202,6 @@ impl FullClient {
             light_provider,
         ));
         sync.register().unwrap();
-
-        if conf.is_test_mode() && conf.raw_conf.data_propagate_enabled {
-            let dp = Arc::new(DataPropagation::new(
-                conf.raw_conf.data_propagate_interval_ms,
-                conf.raw_conf.data_propagate_size,
-            ));
-            DataPropagation::register(dp, network.clone())?;
-        }
 
         let (maybe_txgen, maybe_direct_txgen) = initialize_txgens(
             consensus.clone(),

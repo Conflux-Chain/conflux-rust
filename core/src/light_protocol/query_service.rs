@@ -100,7 +100,7 @@ impl QueryService {
             .register_protocol(
                 self.handler.clone(),
                 LIGHT_PROTOCOL_ID,
-                &[LIGHT_PROTOCOL_VERSION],
+                LIGHT_PROTOCOL_VERSION,
             )
             .map_err(|e| {
                 format!("failed to register protocol QueryService: {:?}", e)

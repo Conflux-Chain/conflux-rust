@@ -96,7 +96,7 @@ where Message: Send + Sync + 'static
     fn timeout(&self, _io: &IoContext<Message>, _timer: TimerToken) {}
     /// Called when a broadcasted message is received. The message can only be
     /// sent from a different IO handler.
-    fn message(&self, _io: &IoContext<Message>, _message: &Message) {}
+    fn message(&self, _io: &IoContext<Message>, _message: &Message);
     /// Called when an IO stream gets closed
     fn stream_hup(&self, _io: &IoContext<Message>, _stream: StreamToken) {}
     /// Called when an IO stream can be read from
