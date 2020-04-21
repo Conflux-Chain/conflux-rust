@@ -292,7 +292,7 @@ def initialize_tg_config(dirname, nodes):
         with open(os.path.join(datadir, 'net_config', 'key'), 'w') as f:
             f.write(private_keys[n])
 
-def initialize_datadir(dirname, n, conf_parameters, extra_files: dict = None):
+def initialize_datadir(dirname, n, conf_parameters, extra_files: dict = {}):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
