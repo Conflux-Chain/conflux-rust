@@ -662,6 +662,12 @@ impl ConsensusGraph {
     pub fn get_transaction_receipt_and_block_info(
         &self, tx_hash: &H256,
     ) -> Option<(BlockExecutionResultWithEpoch, TransactionIndex, H256)> {
+        // Note: `transaction_index_by_hash` might return outdated results if
+        // there was a pivot chain reorg but the tx was not re-executed yet. In
+        // this case, `block_execution_results_by_hash` will detect that the
+        // execution results do not match the current pivot view and return
+        // None. If the tx was re-executed in another block on the new pivot
+        // chain, `transaction_index_by_hash` will return the updated result.
         let (results_with_epoch, address) = {
             let inner = self.inner.read();
             let address = self.data_man.transaction_index_by_hash(
