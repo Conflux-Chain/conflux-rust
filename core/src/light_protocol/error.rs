@@ -8,6 +8,7 @@ use crate::{
     sync::message::Throttled,
 };
 use network::node_table::NodeId;
+use primitives::ChainIdParams;
 use rlp::DecoderError;
 
 error_chain! {
@@ -23,6 +24,11 @@ error_chain! {
         GenesisMismatch {
             description("Genesis mismatch"),
             display("Genesis mismatch"),
+        }
+
+        ChainIdMismatch{ours: ChainIdParams, theirs: ChainIdParams} {
+            description("ChainId mismatch"),
+            display("ChainId mismatch, ours {:?}, theirs {:?}.", ours, theirs),
         }
 
         NoResponse {
@@ -180,6 +186,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         | ErrorKind::UnknownMessage => disconnect = false,
 
         ErrorKind::GenesisMismatch
+        | ErrorKind::ChainIdMismatch{..}
         | ErrorKind::UnexpectedMessage
         | ErrorKind::UnexpectedPeerType
         | ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
@@ -212,6 +219,19 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
 
         // network errors
         ErrorKind::Network(kind) => match kind {
+            network::ErrorKind::SendUnsupportedMessage{..} => {
+                unreachable!("This is a bug in protocol version maintenance. {:?}", kind);
+            }
+
+            network::ErrorKind::MessageDeprecated{..} => {
+                op = Some(UpdateNodeOperation::Failure);
+                error!(
+                    "Peer sent us a deprecated message {:?}. Either it's a bug \
+                    in protocol version maintenance or the peer is malicious.",
+                    kind,
+                );
+            }
+
             network::ErrorKind::AddressParse
             | network::ErrorKind::AddressResolve(_)
             | network::ErrorKind::Auth

@@ -46,7 +46,7 @@ pub use self::{
     message::{handle_rlp_message, msgid},
     new_block::NewBlock,
     new_block_hashes::NewBlockHashes,
-    status::Status,
+    status::{StatusDeprecatedV1, StatusV2},
     throttling::Throttled,
     transactions::{
         GetTransactions, GetTransactionsFromTxHashes,

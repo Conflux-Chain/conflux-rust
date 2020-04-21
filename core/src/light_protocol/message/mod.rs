@@ -14,6 +14,6 @@ pub use protocol::{
     GetReceipts, GetStateEntries, GetStateRoots, GetTxInfos, GetTxs,
     GetWitnessInfo, NewBlockHashes, Receipts, ReceiptsWithEpoch, SendRawTx,
     StateEntries, StateEntryWithKey, StateKey, StateRootWithEpoch, StateRoots,
-    StatusPing, StatusPong, TxInfo, TxInfos, Txs, WitnessInfo,
-    WitnessInfoWithHeight,
+    StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1, StatusPongV2,
+    TxInfo, TxInfos, Txs, WitnessInfo, WitnessInfoWithHeight,
 };

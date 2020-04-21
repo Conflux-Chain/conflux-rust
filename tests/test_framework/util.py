@@ -395,7 +395,7 @@ def check_handshake(from_connection, target_node_id):
     """
     peers = from_connection.getpeerinfo()
     for peer in peers:
-        if peer["nodeid"] == target_node_id and len(peer['caps']) > 0:
+        if peer["nodeid"] == target_node_id and len(peer['protocols']) > 0:
             return True
     return False
 
