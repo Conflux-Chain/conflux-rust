@@ -4,16 +4,16 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
-    message::{GetMaybeRequestId, Message, MsgId},
+    message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
         state::{storage::RangedManifest, SnapshotManifestRequest},
-        Error, ErrorKind,
+        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
 use cfx_types::H256;
+use network::service::ProtocolVersion;
 use primitives::{MerkleHash, StateRoot};
-use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable, Default)]
@@ -42,7 +42,10 @@ pub struct SnapshotManifestResponse {
     pub snapshot_merkle_root: MerkleHash,
 }
 
-build_msg_impl! { SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE, "SnapshotManifestResponse" }
+build_msg_impl! {
+    SnapshotManifestResponse, msgid::GET_SNAPSHOT_MANIFEST_RESPONSE,
+    "SnapshotManifestResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+}
 
 impl Handleable for SnapshotManifestResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

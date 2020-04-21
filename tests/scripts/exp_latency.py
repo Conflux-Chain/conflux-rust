@@ -19,7 +19,6 @@ class RemoteSimulateConfig:
         self.txs_per_block = txs_per_block
         self.tx_size = tx_size
         self.num_blocks = num_blocks
-        self.data_propagate_enabled = False
 
     def __str__(self):
         return str(self.__dict__)
@@ -32,19 +31,14 @@ class RemoteSimulateConfig:
             batch_config = batch_config[:-1]
         for config in batch_config.split(","):
             fields = config.split(":")
-            if len(fields) != 4 and len(fields) != 6:
-                raise AssertionError("invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>:[<data_propagate_interval_ms>:<data_propagate_size>]")
+            if len(fields) != 4:
+                raise AssertionError("invalid config, format is <block_gen_interval_ms>:<txs_per_block>:<tx_size>:<num_blocks>")
             config_groups.append(RemoteSimulateConfig(
                 int(fields[0]),
                 int(fields[1]),
                 int(fields[2]),
                 int(fields[3]),
             ))
-
-            if len(fields) == 6:
-                config_groups[-1].data_propagate_enabled = True
-                config_groups[-1].data_propagate_interval_ms = int(fields[4])
-                config_groups[-1].data_propagate_size = int(fields[5])
 
         return config_groups
 
@@ -148,13 +142,6 @@ class LatencyExperiment:
             dict(filter(lambda kv: kv[0] not in self.exp_latency_options, vars(self.options).items()))
         )
 
-        if config.data_propagate_enabled:
-            cmd.extend([
-                "--data-propagate-enabled",
-                "--data-propagate-interval-ms", str(config.data_propagate_interval_ms),
-                "--data-propagate-size", str(config.data_propagate_size),
-            ])
-
         log_file = open(self.simulate_log_file, "w")
         print("[CMD]: {} > {}".format(cmd, self.simulate_log_file))
         ret = subprocess.run(cmd, stdout = log_file, stderr=log_file).returncode
@@ -173,11 +160,6 @@ class LatencyExperiment:
 
     def stat_latency(self, config:RemoteSimulateConfig):
         os.system("echo ============================================================ >> {}".format(self.stat_log_file))
-
-        if config.data_propagate_enabled:
-            os.system('echo "Data propagation enabled: interval = {}, size = {}" >> {}'.format(
-                config.data_propagate_interval_ms, config.data_propagate_size, self.stat_log_file
-            ))
 
         print("begin to statistic relay latency ...")
         ret = os.system("python3 stat_latency.py {0} logs {0}.csv >> {1}".format(self.tag(config), self.stat_log_file))

@@ -305,7 +305,7 @@ class P2PInterface(P2PConnection):
 
         # Default protocol version
         self.protocol = b'cfx'
-        self.protocol_version = 1
+        self.protocol_version = 2
         self.genesis = make_genesis()
         self.best_block_hash = self.genesis.block_header.hash
         self.blocks = {self.genesis.block_header.hash: self.genesis}
@@ -333,7 +333,7 @@ class P2PInterface(P2PConnection):
 
     def send_status(self):
         status = Status(
-            self.protocol_version, ChainIdParams(self.chain_id),
+            ChainIdParams(self.chain_id),
             self.genesis.block_header.hash, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
@@ -352,10 +352,9 @@ class P2PInterface(P2PConnection):
                 logger.debug("%s %s", packet_type, rlp.decode(payload))
                 if msg_class is not None:
                     msg = rlp.decode(payload, msg_class)
-                if packet_type == STATUS:
-                    self._log_message("receive", "STATUS, protocol_version:{}, terminal_hashes:{}"
-                                      .format(msg.protocol_version,
-                                              [utils.encode_hex(i) for i in msg.terminal_block_hashes]))
+                if packet_type == STATUS_V2:
+                    self._log_message("receive", "STATUS, terminal_hashes:{}"
+                                      .format([utils.encode_hex(i) for i in msg.terminal_block_hashes]))
                     self.had_status = True
                 elif packet_type == GET_BLOCK_HEADERS:
                     self._log_message("receive", "GET_BLOCK_HEADERS of {}".format(msg.hashes))
@@ -477,8 +476,6 @@ mininode_lock = threading.RLock()
 class DefaultNode(P2PInterface):
     def __init__(self, remote = False):
         super().__init__(remote)
-        self.protocol = b'cfx'
-        self.protocol_version = 1
 
 class NetworkThread(threading.Thread):
 
