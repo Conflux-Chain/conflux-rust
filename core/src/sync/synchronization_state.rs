@@ -11,7 +11,7 @@ use crate::{
         random, Error, ErrorKind,
     },
 };
-use network::node_table::NodeId;
+use network::{node_table::NodeId, service::ProtocolVersion};
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use std::{
@@ -26,7 +26,7 @@ pub struct SynchronizationPeerState {
     // This field is only used for consortium setup.
     // Whether this node is a validator.
     pub is_validator: bool,
-    pub protocol_version: u8,
+    pub protocol_version: ProtocolVersion,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub latest_block_hashes: HashSet<H256>,
@@ -61,7 +61,7 @@ pub struct SynchronizationState {
     is_full_node: bool,
     is_dev_or_test_mode: bool,
     pub peers: RwLock<SynchronizationPeers>,
-    pub handshaking_peers: RwLock<HashMap<NodeId, Instant>>,
+    pub handshaking_peers: RwLock<HashMap<NodeId, (ProtocolVersion, Instant)>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
 }
 
@@ -81,11 +81,16 @@ impl SynchronizationState {
 
     pub fn is_consortium(&self) -> bool { self.is_consortium }
 
-    pub fn on_status_in_handshaking(&self, node_id: &NodeId) -> bool {
+    pub fn on_status_in_handshaking(
+        &self, node_id: &NodeId,
+    ) -> Option<ProtocolVersion> {
         let peers = self.peers.read();
         let mut handshaking_peers = self.handshaking_peers.write();
-        handshaking_peers.remove(node_id).is_some()
-            && !peers.contains_key(node_id)
+        if !peers.contains_key(node_id) {
+            handshaking_peers.remove(node_id).map(|(v, _)| v)
+        } else {
+            None
+        }
     }
 
     pub fn peer_connected(
@@ -129,7 +134,8 @@ impl SynchronizationState {
     ) -> Vec<NodeId> {
         let mut timeout_peers = Vec::new();
 
-        for (peer, handshake_time) in self.handshaking_peers.read().iter() {
+        for (peer, (_, handshake_time)) in self.handshaking_peers.read().iter()
+        {
             if handshake_time.elapsed() > timeout {
                 timeout_peers.push(*peer);
             }

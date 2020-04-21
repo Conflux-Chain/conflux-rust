@@ -30,9 +30,9 @@ use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
-    node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
-    HandlerWorkType, NetworkContext, NetworkProtocolHandler,
-    UpdateNodeOperation,
+    node_table::NodeId, service::ProtocolVersion,
+    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
+    NetworkContext, NetworkProtocolHandler, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
@@ -58,6 +58,24 @@ lazy_static! {
     static ref PROPAGATE_TX_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync:propagate_tx_timer");
 }
+
+/// The current version of the synchronization protocol.
+///
+/// Bump the version for incompatible changes. Before the version is too
+/// high, transit to a new protocol name for the next generation of the
+/// protocol.
+///
+/// To update messages within the protocol, we would like to be
+/// backward-compatible as much as possible. DO NOT UPDATE directly on the
+/// message. Instead, create a new message, mark the old one for
+/// deprecation.
+///
+/// Do NOT make this const pub.
+const SYNCHRONIZATION_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion(1);
+/// Support at most this number of old versions.
+const SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT: u8 = 2;
+/// The version to apss to Message for their lifetime declaration.
+pub const SYNC_PROTO_V1: ProtocolVersion = ProtocolVersion(1);
 
 const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;
@@ -308,6 +326,8 @@ impl FutureBlockContainer {
 }
 
 pub struct SynchronizationProtocolHandler {
+    pub protocol_version: ProtocolVersion,
+
     pub protocol_config: ProtocolConfiguration,
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
@@ -400,6 +420,7 @@ impl SynchronizationProtocolHandler {
         let state_sync = Arc::new(SnapshotChunkSync::new(state_sync_config));
 
         Self {
+            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             protocol_config,
             graph: sync_graph.clone(),
             syn: sync_state.clone(),
@@ -575,6 +596,22 @@ impl SynchronizationProtocolHandler {
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             ErrorKind::Io(_) => disconnect = false,
             ErrorKind::Network(kind) => match kind {
+                network::ErrorKind::SendUnsupportedMessage { .. } => {
+                    unreachable!(
+                        "This is a bug in protocol version maintenance. {:?}",
+                        kind
+                    );
+                }
+
+                network::ErrorKind::MessageDeprecated { .. } => {
+                    op = Some(UpdateNodeOperation::Failure);
+                    error!(
+                        "Peer sent us a deprecated message {:?}. Either it's a bug \
+                        in protocol version maintenance or the peer is malicious.",
+                        kind
+                    );
+                }
+
                 network::ErrorKind::AddressParse => disconnect = false,
                 network::ErrorKind::AddressResolve(_) => disconnect = false,
                 network::ErrorKind::Auth => disconnect = false,
@@ -984,14 +1021,14 @@ impl SynchronizationProtocolHandler {
         self.on_message(io, &io.self_node_id(), task.message.as_slice());
     }
 
-    pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
+    pub fn on_mined_block(&self, mut block: Block) {
         let hash = block.block_header.hash();
         info!("Mined block {:?} header={:?}", hash, block.block_header);
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
         assert!(!self.graph.contains_block_header(&hash));
-        let (insert_result, to_relay) = self.graph.insert_block_header(
+        let (insert_result, _to_relay) = self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
@@ -1007,7 +1044,6 @@ impl SynchronizationProtocolHandler {
             true,  /* persistent */
             false, /* recover_from_db */
         );
-        to_relay
     }
 
     fn broadcast_message(
@@ -1045,7 +1081,6 @@ impl SynchronizationProtocolHandler {
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         Status {
-            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             chain_id,
             genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
@@ -1548,6 +1583,17 @@ impl SynchronizationProtocolHandler {
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        let my_version = self.protocol_version.0;
+        if my_version > SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT {
+            ProtocolVersion(
+                my_version - SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+            )
+        } else {
+            SYNC_PROTO_V1
+        }
+    }
+
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(TX_TIMER, self.protocol_config.send_tx_period)
             .expect("Error registering transactions timer");
@@ -1636,7 +1682,11 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         }
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
+    fn on_peer_connected(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    )
+    {
         info!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
@@ -1649,7 +1699,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.syn
                 .handshaking_peers
                 .write()
-                .insert(*peer, Instant::now());
+                .insert(*peer, (peer_protocol_version, Instant::now()));
         }
     }
 
