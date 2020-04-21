@@ -391,6 +391,10 @@ impl NodeDatabase {
                         if let Some(removed_node) =
                             self.untrusted_nodes.remove_with_id(id)
                         {
+                            self.promote_with_untrusted(
+                                id,
+                                removed_node.endpoint.address.ip(),
+                            );
                             // IP address not changed and always allow to add.
                             self.trusted_node_tag_index.add_node(&removed_node);
                             self.trusted_nodes.add_node(
