@@ -508,7 +508,7 @@ impl State {
         if self.ensure_cached(contract_address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| {
                 acc.is_contract()
-                    && (acc.admin().is_zero() || acc.admin() == requester)
+                    && acc.admin() == requester
                     && acc.admin() != admin
             })
         })? {
