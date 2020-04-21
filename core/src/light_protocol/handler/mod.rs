@@ -19,9 +19,10 @@ use crate::{
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse,
         },
-        Error, ErrorKind, LIGHT_PROTOCOL_VERSION,
+        Error, ErrorKind, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
     },
-    message::{decode_msg, Message, MsgId},
+    message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler},
     parameters::light::{
         CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, SYNC_PERIOD,
@@ -31,7 +32,7 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
-use network::node_table::NodeId;
+use network::{node_table::NodeId, service::ProtocolVersion};
 use parking_lot::RwLock;
 use rlp::Rlp;
 use std::{
@@ -56,6 +57,8 @@ struct Statistics {
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
 pub struct Handler {
+    pub protocol_version: ProtocolVersion,
+
     // block tx sync manager
     pub block_txs: Arc<BlockTxs>,
 
@@ -172,6 +175,7 @@ impl Handler {
         );
 
         Handler {
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
             blooms,
             consensus,
@@ -245,23 +249,25 @@ impl Handler {
     ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         self.validate_peer_state(peer, msg_id)?;
+        let min_supported_ver = self.minimum_supported_version();
+        let protocol = io.get_protocol();
 
         match msg_id {
             // general messages
-            msgid::STATUS_PONG => self.on_status(io, peer, &rlp),
+            msgid::STATUS_PONG => self.on_status(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
 
             // sync messages
-            msgid::BLOCK_HASHES => self.on_block_hashes(io, peer, &rlp),
-            msgid::BLOCK_HEADERS => self.on_block_headers(io, peer, &rlp),
-            msgid::BLOCK_TXS => self.on_block_txs(io, peer, &rlp),
-            msgid::BLOOMS => self.on_blooms(io, peer, &rlp),
-            msgid::NEW_BLOCK_HASHES => self.on_new_block_hashes(io, peer, &rlp),
-            msgid::RECEIPTS => self.on_receipts(io, peer, &rlp),
-            msgid::STATE_ENTRIES => self.on_state_entries(io, peer, &rlp),
-            msgid::STATE_ROOTS => self.on_state_roots(io, peer, &rlp),
-            msgid::TXS => self.on_txs(io, peer, &rlp),
-            msgid::TX_INFOS => self.on_tx_infos(io, peer, &rlp),
-            msgid::WITNESS_INFO => self.on_witness_info(io, peer, &rlp),
+            msgid::BLOCK_HASHES => self.on_block_hashes(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::BLOCK_HEADERS => self.on_block_headers(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::BLOCK_TXS => self.on_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::BLOOMS => self.on_blooms(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::NEW_BLOCK_HASHES => self.on_new_block_hashes(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::RECEIPTS => self.on_receipts(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATE_ENTRIES => self.on_state_entries(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::STATE_ROOTS => self.on_state_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::TXS => self.on_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::TX_INFOS => self.on_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::WITNESS_INFO => self.on_witness_info(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
 
             // request was throttled by service provider
             msgid::THROTTLED => self.on_throttled(io, peer, &rlp),
@@ -324,7 +330,6 @@ impl Handler {
         let msg: Box<dyn Message> = Box::new(StatusPing {
             genesis_hash: self.consensus.get_data_manager().true_genesis.hash(),
             node_type: NodeType::Light,
-            protocol_version: LIGHT_PROTOCOL_VERSION,
         });
 
         msg.send(io, peer)?;
@@ -341,9 +346,8 @@ impl Handler {
     }
 
     fn on_status(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, status: StatusPong,
     ) -> Result<(), Error> {
-        let status: StatusPong = rlp.as_val()?;
         info!("on_status peer={:?} status={:?}", peer, status);
 
         self.validate_peer_type(&status.node_type)?;
@@ -354,7 +358,6 @@ impl Handler {
             let mut state = state.write();
             state.best_epoch = status.best_epoch;
             state.handshake_completed = true;
-            state.protocol_version = status.protocol_version;
             state.terminals = status.terminals.into_iter().collect();
         }
 
@@ -365,9 +368,10 @@ impl Handler {
     }
 
     fn on_block_hashes(
-        &self, io: &dyn NetworkContext, _peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetBlockHashesResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, _peer: &NodeId,
+        resp: GetBlockHashesResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_block_hashes resp={:?}", resp);
 
         self.epochs.receive(&resp.request_id);
@@ -380,9 +384,10 @@ impl Handler {
     }
 
     fn on_block_headers(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetBlockHeadersResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetBlockHeadersResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_block_headers resp={:?}", resp);
 
         self.headers.receive(
@@ -396,9 +401,10 @@ impl Handler {
     }
 
     fn on_block_txs(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetBlockTxsResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetBlockTxsResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_block_txs resp={:?}", resp);
 
         self.block_txs.receive(
@@ -412,9 +418,8 @@ impl Handler {
     }
 
     fn on_blooms(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetBloomsResponse,
     ) -> Result<(), Error> {
-        let resp: GetBloomsResponse = rlp.as_val()?;
         info!("on_blooms resp={:?}", resp);
 
         self.blooms
@@ -425,9 +430,8 @@ impl Handler {
     }
 
     fn on_new_block_hashes(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, msg: NewBlockHashes,
     ) -> Result<(), Error> {
-        let msg: NewBlockHashes = rlp.as_val()?;
         info!("on_new_block_hashes msg={:?}", msg);
 
         if self.catch_up_mode() {
@@ -450,9 +454,10 @@ impl Handler {
     }
 
     fn on_receipts(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetReceiptsResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetReceiptsResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_receipts resp={:?}", resp);
 
         self.receipts.receive(
@@ -466,9 +471,10 @@ impl Handler {
     }
 
     fn on_state_entries(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetStateEntriesResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetStateEntriesResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_state_entries resp={:?}", resp);
 
         self.state_entries.receive(
@@ -482,9 +488,10 @@ impl Handler {
     }
 
     fn on_state_roots(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetStateRootsResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetStateRootsResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_state_roots resp={:?}", resp);
 
         self.state_roots.receive(
@@ -498,9 +505,8 @@ impl Handler {
     }
 
     fn on_txs(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxsResponse,
     ) -> Result<(), Error> {
-        let resp: GetTxsResponse = rlp.as_val()?;
         info!("on_txs resp={:?}", resp);
 
         self.txs
@@ -511,9 +517,8 @@ impl Handler {
     }
 
     fn on_tx_infos(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
+        &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxInfosResponse,
     ) -> Result<(), Error> {
-        let resp: GetTxInfosResponse = rlp.as_val()?;
         info!("on_tx_infos resp={:?}", resp);
 
         self.tx_infos
@@ -524,9 +529,10 @@ impl Handler {
     }
 
     fn on_witness_info(
-        &self, io: &dyn NetworkContext, peer: &NodeId, rlp: &Rlp,
-    ) -> Result<(), Error> {
-        let resp: GetWitnessInfoResponse = rlp.as_val()?;
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        resp: GetWitnessInfoResponse,
+    ) -> Result<(), Error>
+    {
         info!("on_witness_info resp={:?}", resp);
 
         self.witnesses.receive(
@@ -604,6 +610,15 @@ impl Handler {
 }
 
 impl NetworkProtocolHandler for Handler {
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        let my_version = self.protocol_version.0;
+        if my_version > LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT {
+            ProtocolVersion(my_version - LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT)
+        } else {
+            LIGHT_PROTO_V1
+        }
+    }
+
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(SYNC_TIMER, *SYNC_PERIOD)
             .expect("Error registering sync timer");
@@ -634,13 +649,19 @@ impl NetworkProtocolHandler for Handler {
         }
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
+    fn on_peer_connected(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    )
+    {
         info!("on_peer_connected: peer={:?}", peer);
 
         match self.send_status(io, peer) {
             Ok(_) => {
                 // insert handshaking peer
                 self.peers.insert(*peer);
+                self.peers.get(peer).unwrap().write().protocol_version =
+                    peer_protocol_version;
 
                 if let Some(ref file) = self.throttling_config_file {
                     let peer = self.peers.get(peer).expect("peer not found");
@@ -676,5 +697,13 @@ impl NetworkProtocolHandler for Handler {
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),
         }
+    }
+
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {
+        unreachable!("Light node handler does not have send_local_message.")
+    }
+
+    fn on_work_dispatch(&self, _io: &dyn NetworkContext, _work_type: u8) {
+        unreachable!("Light node handler does not have on_work_dispatch.")
     }
 }

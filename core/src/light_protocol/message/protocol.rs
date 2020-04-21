@@ -17,7 +17,6 @@ use primitives::{
 pub struct StatusPing {
     pub genesis_hash: H256,
     pub node_type: NodeType,
-    pub protocol_version: u8,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -25,7 +24,6 @@ pub struct StatusPong {
     pub best_epoch: u64,
     pub genesis_hash: H256,
     pub node_type: NodeType,
-    pub protocol_version: u8,
     pub terminals: Vec<H256>,
 }
 

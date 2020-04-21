@@ -10,11 +10,12 @@ use crate::{
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
     node_table::*,
+    parse_msg_id_leb128_2_bytes_at_most,
     session::{self, Session, SessionData, SessionDetails},
     session_manager::SessionManager,
-    Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
-    NetworkConfiguration, NetworkContext as NetworkContextTrait,
-    NetworkIoMessage, NetworkProtocolHandler, PeerInfo, ProtocolId,
+    Error, ErrorKind, HandlerWorkType, IpFilter, NetworkConfiguration,
+    NetworkContext as NetworkContextTrait, NetworkIoMessage,
+    NetworkProtocolHandler, PeerInfo, ProtocolId, ProtocolInfo,
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
@@ -24,6 +25,8 @@ use mio::{tcp::*, udp::*, *};
 use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
 use priority_send_queue::SendQueuePriority;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde::export::Formatter;
 use std::{
     cmp::{min, Ordering},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -74,8 +77,20 @@ pub const DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION: Duration =
     Duration::from_secs(3 * 24 * 3600);
 const DEFAULT_CHECK_SESSIONS_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub const MAX_DATAGRAM_SIZE: usize = 1280;
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    Eq,
+    PartialOrd,
+    PartialEq,
+    Serialize,
+    Deserialize,
+)]
+pub struct ProtocolVersion(pub u8);
 
+pub const MAX_DATAGRAM_SIZE: usize = 1280;
 pub const UDP_PROTOCOL_DISCOVERY: u8 = 1;
 
 pub struct Datagram {
@@ -253,14 +268,14 @@ impl NetworkService {
     /// Register a new protocol handler
     pub fn register_protocol(
         &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
-        protocol: ProtocolId, versions: &[u8],
+        protocol: ProtocolId, version: ProtocolVersion,
     ) -> Result<(), Error>
     {
         self.io_service.as_ref().unwrap().send_message(
             NetworkIoMessage::AddHandler {
                 handler,
                 protocol,
-                versions: versions.to_vec(),
+                version,
             },
         )?;
         Ok(())
@@ -268,12 +283,17 @@ impl NetworkService {
 
     /// Executes action in the network context
     pub fn with_context<F, R>(
-        &self, protocol: ProtocolId, action: F,
+        &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
+        protocol: ProtocolId, action: F,
     ) -> Result<R, String>
-    where F: FnOnce(&NetworkContext) -> R {
+    where
+        F: FnOnce(&NetworkContext) -> R,
+    {
         let io = IoContext::new(self.io_service.as_ref().unwrap().channel(), 0);
         match self.inner {
-            Some(ref inner) => Ok(inner.with_context(protocol, &io, action)),
+            Some(ref inner) => {
+                Ok(inner.with_context(handler, protocol, &io, action))
+            }
             None => Err("Network service not started yet!".to_owned().into()),
         }
     }
@@ -377,7 +397,8 @@ pub struct HostMetadata {
     pub network_id: u64,
     /// Our private and public keys.
     pub keys: KeyPair,
-    pub capabilities: RwLock<Vec<Capability>>,
+    pub protocols: RwLock<Vec<ProtocolInfo>>,
+    pub minimum_peer_protocol_version: RwLock<Vec<ProtocolInfo>>,
     pub local_address: SocketAddr,
     /// Local address + discovery port
     pub local_endpoint: NodeEndpoint,
@@ -439,6 +460,7 @@ impl DelayedQueue {
         let r = context.session.write().send_packet(
             &context.io,
             Some(context.protocol),
+            context.min_protocol_version,
             session::PACKET_USER,
             context.msg,
             context.priority,
@@ -570,7 +592,8 @@ impl NetworkServiceInner {
             metadata: HostMetadata {
                 network_id: config.id,
                 keys,
-                capabilities: RwLock::new(Vec::new()),
+                protocols: RwLock::new(Vec::new()),
+                minimum_peer_protocol_version: Default::default(),
                 local_address: listen_address,
                 local_endpoint,
                 public_endpoint,
@@ -761,9 +784,10 @@ impl NetworkServiceInner {
 
     // Connect to all reserved and trusted peers if not yet
     fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
-        if self.metadata.capabilities.read().is_empty() {
-            return;
-        }
+        assert!(
+                self.metadata.minimum_peer_protocol_version.read().len() > 0,
+                "Protocols should have been registered before the HOUSEKEEPING timeout."
+            );
 
         let self_id = self.metadata.id().clone();
 
@@ -933,7 +957,7 @@ impl NetworkServiceInner {
                     id: sess.token(),
                     nodeid: sess.id().unwrap_or(&NodeId::default()).clone(),
                     addr: sess.address(),
-                    caps: sess.metadata.peer_capabilities.clone(),
+                    protocols: sess.metadata.peer_protocols.clone(),
                 });
             }
         }
@@ -1002,12 +1026,12 @@ impl NetworkServiceInner {
     fn session_readable(
         &self, stream: StreamToken, io: &IoContext<NetworkIoMessage>,
     ) {
-        let mut ready_protocols: Vec<ProtocolId> = Vec::new();
+        let mut handshake_done = false;
+
         let mut messages: Vec<(ProtocolId, Vec<u8>)> = Vec::new();
         let mut kill = false;
         let mut token_to_disconnect = None;
 
-        // if let Some(session) = session.clone()
         if let Some(session) = self.sessions.get(stream) {
             // We check dropped_nodes first to make sure we stop processing
             // communications from any dropped peers
@@ -1028,12 +1052,7 @@ impl NetworkServiceInner {
                         token_to_disconnect = session_data.token_to_disconnect;
                         match session_data.session_data {
                             SessionData::Ready => {
-                                for (protocol, _) in self.handlers.read().iter()
-                                {
-                                    if sess.have_capability(*protocol) {
-                                        ready_protocols.push(*protocol);
-                                    }
-                                }
+                                handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
                             }
                             SessionData::Message { data, protocol } => {
@@ -1080,16 +1099,33 @@ impl NetworkServiceInner {
                 return;
             }
 
-            if !ready_protocols.is_empty() {
+            // Handshake is just finished, first process the outcome from the
+            // handshake.
+            if handshake_done {
                 {
                     let handlers = self.handlers.read();
-                    for protocol in ready_protocols {
-                        if let Some(handler) = handlers.get(&protocol).clone() {
+                    // Clone the data to prevent deadlock, because handler may
+                    // close the connection within the on_peer_connected
+                    // callback.
+                    let session_metadata = session.read().metadata.clone();
+                    for protocol in &session_metadata.peer_protocols {
+                        if let Some(handler) =
+                            handlers.get(&protocol.protocol).cloned()
+                        {
                             debug!("session handshaked, token = {}", stream);
-                            handler.on_peer_connected(
-                                &NetworkContext::new(io, protocol, self),
-                                session_node_id.as_ref().unwrap(),
+                            let network_context = NetworkContext::new(
+                                io,
+                                handler,
+                                protocol.protocol,
+                                self,
                             );
+                            network_context
+                                .protocol_handler()
+                                .on_peer_connected(
+                                    &network_context,
+                                    session_node_id.as_ref().unwrap(),
+                                    protocol.version,
+                                );
                         }
                     }
                 }
@@ -1220,11 +1256,11 @@ impl NetworkServiceInner {
             }
 
             for p in to_disconnect {
-                if let Some(h) = self.handlers.read().get(&p).clone() {
-                    h.on_peer_disconnected(
-                        &NetworkContext::new(io, p, self),
-                        &id,
-                    );
+                if let Some(h) = self.handlers.read().get(&p).cloned() {
+                    let network_context = NetworkContext::new(io, h, p, self);
+                    network_context
+                        .protocol_handler()
+                        .on_peer_disconnected(&network_context, &id);
                 }
             }
         }
@@ -1293,11 +1329,11 @@ impl NetworkServiceInner {
         }
 
         for p in to_disconnect {
-            if let Some(h) = self.handlers.read().get(&p).clone() {
-                h.on_peer_disconnected(
-                    &NetworkContext::new(io, p, self),
-                    node_id,
-                );
+            if let Some(h) = self.handlers.read().get(&p).cloned() {
+                let network_context = NetworkContext::new(io, h, p, self);
+                network_context
+                    .protocol_handler()
+                    .on_peer_disconnected(&network_context, node_id);
             }
         }
 
@@ -1311,14 +1347,13 @@ impl NetworkServiceInner {
     }
 
     pub fn with_context<F, R>(
-        &self, protocol: ProtocolId, io: &IoContext<NetworkIoMessage>,
-        action: F,
+        &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
+        protocol: ProtocolId, io: &IoContext<NetworkIoMessage>, action: F,
     ) -> R
     where
         F: FnOnce(&NetworkContext) -> R,
     {
-        let context = NetworkContext::new(io, protocol, self);
-        action(&context)
+        action(&NetworkContext::new(io, handler, protocol, self))
     }
 
     fn udp_readable(&self, io: &IoContext<NetworkIoMessage>) {
@@ -1445,7 +1480,6 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         io.message(NetworkIoMessage::Start).unwrap_or_else(|e| {
             warn!("Error sending IO notification: {:?}", e)
         });
-        self.on_housekeeping(io);
     }
 
     fn stream_hup(
@@ -1564,10 +1598,15 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                             timer.protocol
                         ),
                         Some(h) => {
-                            h.on_timeout(
-                                &NetworkContext::new(io, timer.protocol, self),
-                                timer.token,
+                            let network_context = NetworkContext::new(
+                                io,
+                                h,
+                                timer.protocol,
+                                self,
                             );
+                            network_context
+                                .protocol_handler()
+                                .on_timeout(&network_context, timer.token);
                         }
                     }
                 }
@@ -1581,25 +1620,43 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     fn message(
         &self, io: &IoContext<NetworkIoMessage>, message: &NetworkIoMessage,
     ) {
-        match *message {
+        match message {
             NetworkIoMessage::Start => self.start(io).unwrap_or_else(|e| {
                 warn!("Error starting network service: {:?}", e)
             }),
             NetworkIoMessage::AddHandler {
-                ref handler,
-                ref protocol,
-                ref versions,
+                handler,
+                protocol,
+                version,
             } => {
                 let h = handler.clone();
-                h.initialize(&NetworkContext::new(io, *protocol, self));
-                self.handlers.write().insert(*protocol, h);
-                let mut caps = self.metadata.capabilities.write();
-                for &version in versions {
-                    caps.push(Capability {
-                        protocol: *protocol,
-                        version,
-                    });
+                let network_context =
+                    NetworkContext::new(io, h, *protocol, self);
+                network_context
+                    .protocol_handler()
+                    .initialize(&network_context);
+                self.handlers.write().insert(*protocol, handler.clone());
+                let protocols = &mut *self.metadata.protocols.write();
+                for protocol_info in protocols.iter() {
+                    assert_ne!(
+                        protocol, &protocol_info.protocol,
+                        "Do not register same protocol twice"
+                    );
                 }
+                protocols.push(ProtocolInfo {
+                    protocol: *protocol,
+                    version: *version,
+                });
+                self.metadata.minimum_peer_protocol_version.write().push(
+                    ProtocolInfo {
+                        protocol: *protocol,
+                        version: handler.minimum_supported_version(),
+                    },
+                );
+                info!(
+                    "Protocol {:?} version {:?} registered.",
+                    protocol, version
+                );
             }
             NetworkIoMessage::AddTimer {
                 ref protocol,
@@ -1629,11 +1686,14 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 ref protocol,
                 ref work_type,
             } => {
-                if let Some(handler) = self.handlers.read().get(protocol) {
-                    handler.on_work_dispatch(
-                        &NetworkContext::new(io, *protocol, self),
-                        *work_type,
-                    );
+                if let Some(handler) =
+                    self.handlers.read().get(protocol).cloned()
+                {
+                    let network_context =
+                        NetworkContext::new(io, handler, *protocol, self);
+                    network_context
+                        .protocol_handler()
+                        .on_work_dispatch(&network_context, *work_type);
                 } else {
                     warn!("Work is dispatched to unknown handler");
                 }
@@ -1644,9 +1704,13 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 ref node_id,
                 ref data,
             } => {
-                if let Some(handler) = self.handlers.read().get(protocol) {
-                    handler.on_message(
-                        &NetworkContext::new(io, *protocol, self),
+                if let Some(handler) =
+                    self.handlers.read().get(protocol).cloned()
+                {
+                    let network_context =
+                        NetworkContext::new(io, handler, *protocol, self);
+                    network_context.protocol_handler().on_message(
+                        &network_context,
                         node_id,
                         data,
                     );
@@ -1766,6 +1830,8 @@ struct DelayMessageContext {
     session: SharedSession,
     peer: NodeId,
     msg: Vec<u8>,
+    /// The minimum peer protocol version since which the message is supported.
+    min_protocol_version: ProtocolVersion,
     priority: SendQueuePriority,
 }
 
@@ -1773,7 +1839,7 @@ impl DelayMessageContext {
     pub fn new(
         ts: Instant, io: IoContext<NetworkIoMessage>, protocol: ProtocolId,
         session: SharedSession, peer: NodeId, msg: Vec<u8>,
-        priority: SendQueuePriority,
+        min_protocol_version: ProtocolVersion, priority: SendQueuePriority,
     ) -> Self
     {
         DelayMessageContext {
@@ -1783,6 +1849,7 @@ impl DelayMessageContext {
             session,
             peer,
             msg,
+            min_protocol_version,
             priority,
         }
     }
@@ -1804,28 +1871,39 @@ impl PartialEq for DelayMessageContext {
     fn eq(&self, other: &Self) -> bool { self.ts == other.ts }
 }
 
+/// Wrapper around network service.
 pub struct NetworkContext<'a> {
     io: &'a IoContext<NetworkIoMessage>,
+    handler: Arc<dyn NetworkProtocolHandler + Sync>,
     protocol: ProtocolId,
+    min_supported_version: ProtocolVersion,
     network_service: &'a NetworkServiceInner,
 }
 
 impl<'a> NetworkContext<'a> {
     pub fn new(
-        io: &'a IoContext<NetworkIoMessage>, protocol: ProtocolId,
+        io: &'a IoContext<NetworkIoMessage>,
+        handler: Arc<dyn NetworkProtocolHandler + Sync>, protocol: ProtocolId,
         network_service: &'a NetworkServiceInner,
     ) -> NetworkContext<'a>
     {
+        let min_supported_version = handler.minimum_supported_version();
         NetworkContext {
             io,
+            handler,
             protocol,
+            min_supported_version,
             network_service,
         }
+    }
+
+    pub fn protocol_handler(&self) -> &dyn NetworkProtocolHandler {
+        &*self.handler
     }
 }
 
 impl<'a> NetworkContextTrait for NetworkContext<'a> {
-    fn get_protocol(&self) -> ProtocolId { self.protocol.clone() }
+    fn get_protocol(&self) -> ProtocolId { self.protocol }
 
     fn get_peer_connection_origin(&self, node_id: &NodeId) -> Option<bool> {
         self.network_service.get_peer_connection_origin(node_id)
@@ -1837,19 +1915,24 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
 
     fn self_node_id(&self) -> NodeId { *self.network_service.metadata.id() }
 
+    /// Message is sent through this method.
     fn send(
-        &self, node_id: &NodeId, msg: Vec<u8>, priority: SendQueuePriority,
-    ) -> Result<(), Error> {
-        if *node_id == *self.network_service.metadata.id() {
-            let protocol_handler = self
-                .network_service
-                .handlers
-                .read()
-                .get(&self.protocol)
-                .unwrap()
-                .clone();
+        &self, node_id: &NodeId, msg: Vec<u8>,
+        min_protocol_version: ProtocolVersion,
+        version_valid_till: ProtocolVersion, priority: SendQueuePriority,
+    ) -> Result<(), Error>
+    {
+        if version_valid_till < self.min_supported_version {
+            bail!(ErrorKind::SendUnsupportedMessage {
+                protocol: self.protocol,
+                msg_id: parse_msg_id_leb128_2_bytes_at_most(&mut &*msg),
+                peer_protocol_version: None,
+                min_supported_version: Some(self.min_supported_version),
+            });
+        }
 
-            protocol_handler.send_local_message(self, msg);
+        if *node_id == *self.network_service.metadata.id() {
+            self.handler.send_local_message(self, msg);
             return Ok(());
         }
 
@@ -1877,6 +1960,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                         session,
                         *node_id,
                         msg,
+                        min_protocol_version,
                         priority,
                     ));
                     self.io.register_timer_once_nocancel(
@@ -1889,6 +1973,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
                     session.write().send_packet(
                         self.io,
                         Some(self.protocol),
+                        min_protocol_version,
                         session::PACKET_USER,
                         msg,
                         priority,
@@ -1979,5 +2064,27 @@ fn load_key(path: &Path) -> Option<Secret> {
             warn!("Error parsing key file: {:?}", e);
             None
         }
+    }
+}
+
+impl std::fmt::Display for ProtocolVersion {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::ops::Deref for ProtocolVersion {
+    type Target = u8;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl Encodable for ProtocolVersion {
+    fn rlp_append(&self, s: &mut RlpStream) { s.append_internal(&self.0); }
+}
+
+impl Decodable for ProtocolVersion {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Self(rlp.as_val()?))
     }
 }

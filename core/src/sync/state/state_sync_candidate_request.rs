@@ -1,5 +1,8 @@
 use crate::{
-    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
+    message::{
+        GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
+        RequestId, SetRequestId,
+    },
     sync::{
         message::{
             msgid, Context, DynamicCapability, Handleable, KeyContainer,
@@ -9,10 +12,11 @@ use crate::{
             state_sync_candidate_response::StateSyncCandidateResponse,
             storage::SnapshotSyncCandidate,
         },
+        synchronization_protocol_handler::SYNC_PROTO_V1,
         Error, ProtocolConfiguration,
     },
 };
-use rlp::Encodable;
+use network::service::ProtocolVersion;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
@@ -22,7 +26,10 @@ pub struct StateSyncCandidateRequest {
     pub candidates: Vec<SnapshotSyncCandidate>,
 }
 
-build_msg_with_request_id_impl! { StateSyncCandidateRequest, msgid::STATE_SYNC_CANDIDATE_REQUEST, "StateSyncCandidateRequest" }
+build_msg_with_request_id_impl! {
+    StateSyncCandidateRequest, msgid::STATE_SYNC_CANDIDATE_REQUEST,
+    "StateSyncCandidateRequest", SYNC_PROTO_V1, SYNC_PROTO_V1
+}
 
 impl Handleable for StateSyncCandidateRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
