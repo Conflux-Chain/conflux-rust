@@ -38,18 +38,26 @@ class SingleBench(ConfluxTestFramework):
     def run_test(self):
         # Start mininode connection
         self.node = self.nodes[0]
-        start_p2p_connection([self.node])
+        n_connections = 4
+        p2p_connections = []
+        for node in range(n_connections):
+            conn = DefaultNode()
+            p2p_connections.append(conn)
+            self.node.add_p2p_connection(conn)
+        network_thread_start()
+        for p2p in p2p_connections:
+            p2p.wait_for_status()
 
         block_gen_thread = BlockGenThread([self.node], self.log, num_txs=10000, interval_fixed=0.02)
         block_gen_thread.start()
         tx_n = 500000
-        batch_size = 10
+        batch_size = 200
         send_tps = 20000
         all_txs = []
         gas_price = 1
         account_n = 1000
 
-        generate = False
+        generate = True
         if generate:
             f = open("encoded_tx", "wb")
             '''Test Random Transactions'''
@@ -130,7 +138,7 @@ class SingleBench(ConfluxTestFramework):
             if i * batch_size % send_tps == 0:
                 time_used = time.time() - start_time
                 time.sleep(i*batch_size/send_tps - time_used)
-            self.node.p2p.send_protocol_packet(encoded + int_to_bytes(
+            self.node.p2ps[i%n_connections].send_protocol_packet(encoded + int_to_bytes(
                 TRANSACTIONS))
         self.log.info(f"Time used to send {tx_n} transactions in {i} iterations: {time_used}")
 
