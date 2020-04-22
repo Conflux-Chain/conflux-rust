@@ -65,7 +65,8 @@ impl<T: Message> Throttle for T {
             None => return Ok(()),
         };
 
-        let result = bucket.lock().throttle();
+        let (cpu_cost, message_size_cost) = self.throttle_token_cost();
+        let result = bucket.lock().throttle(cpu_cost, message_size_cost);
 
         match result {
             ThrottleResult::Success => Ok(()),
