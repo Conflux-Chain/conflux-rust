@@ -193,6 +193,10 @@ impl TaskSize for RecoverPublicTask {
         let mut ops = new_malloc_size_ops();
         self.size_of(&mut ops) + std::mem::size_of::<Self>()
     }
+
+    fn count(&self) -> usize {
+        self.blocks.len()
+    }
 }
 
 pub struct LocalMessageTask {
