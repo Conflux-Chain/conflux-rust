@@ -127,8 +127,10 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
         let mut inner = self.inner.write();
         inner.size += task.size();
         // Compute moving average.
-        inner.moving_average = self.alpha * (task.size() / task.count()) as f64
-            + (1.0 - self.alpha) * inner.moving_average;
+        if task.count() != 0 {
+            inner.moving_average = self.alpha * (task.size() / task.count()) as f64
+                + (1.0 - self.alpha) * inner.moving_average;
+        }
         io.dispatch_work(self.work_type);
         inner.tasks.push_back(task);
         trace!(
