@@ -290,7 +290,41 @@ impl InternalContractTrait for SponsorWhitelistControl {
     }
 
     /// The gas cost of running this internal contract for the given input data.
-    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::zero() }
+    ///
+    /// + set_sponsor: SLOAD (current sponsor, balance, (limit)), SSTORE (new
+    ///                sponsor, balance, (limit))
+    ///   Gas: 10000
+    /// + add privilege: SSTORE * list length
+    ///   Gas: 5000 * [member list length]
+    /// + remove_privilege: SSTORE * list length
+    ///   Gas: 5000 * [member list length]
+    /// + otherwise
+    ///   Gas: 5000
+    fn cost(&self, input: Option<&Bytes>) -> U256 {
+        if let Some(ref data) = input {
+            if data.len() < 4 {
+                return U256::from(5000);
+            }
+            if data[0..4] == [0xe9, 0xac, 0x3d, 0x4a]
+                || data[0..4] == [0x08, 0x62, 0xbf, 0x68]
+            {
+                U256::from(10000)
+            } else if data[0..4] == [0xfe, 0x15, 0x15, 0x6c]
+                || data[0..4] == [0x44, 0xc0, 0xbd, 0x21]
+            {
+                if data.len() < 4 + 32 + 32 {
+                    U256::from(5000)
+                } else {
+                    let length = U256::from(&data[36..68]);
+                    U256::from(5000) * length
+                }
+            } else {
+                U256::from(5000)
+            }
+        } else {
+            U256::from(5000)
+        }
+    }
 
     /// execute this internal contract on the given parameters.
     fn execute(
