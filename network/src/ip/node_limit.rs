@@ -153,8 +153,10 @@ impl NodeIpLimit {
     /// The returned result indicates whether insertion is allowed,
     /// and possible evictee before insertion.
     ///
-    /// When subnet quota is not enough before insertion, someone in the
-    /// same subnet may be evicted.
+    /// When subnet quota is not enough before insertion:
+    /// 1. If node IP changed and still in the same subnet,
+    /// just evict the node itself.
+    /// 2. Otherwise, someone in the subnet of `ip` may be evicted.
     ///
     /// There are 2 cases that insertion is not allowed:
     /// 1. Node already exists and ip not changed;
@@ -167,7 +169,8 @@ impl NodeIpLimit {
         }
 
         // node exists and ip not changed.
-        if let Some(cur_ip) = self.node_index.get(&id) {
+        let maybe_cur_ip = self.node_index.get(&id);
+        if let Some(cur_ip) = maybe_cur_ip {
             if cur_ip == ip {
                 return ValidateInsertResult::AlreadyExists;
             }
@@ -178,10 +181,22 @@ impl NodeIpLimit {
             return ValidateInsertResult::OccupyIp(old_id.clone());
         }
 
+        // quota enough
         if self.is_quota_allowed(ip) {
             return ValidateInsertResult::QuotaEnough;
         }
 
+        // Node ip changed, but still in the same subnet.
+        // So, just evict the node itself.
+        if let Some(cur_ip) = maybe_cur_ip {
+            let cur_subnet = self.subnet_type.subnet(cur_ip);
+            let new_subnet = self.subnet_type.subnet(ip);
+            if cur_subnet == new_subnet {
+                return ValidateInsertResult::Evict(id.clone());
+            }
+        }
+
+        // quota not enough, try to evict one.
         if let Some(evictee) = self.select_evictee(ip, db) {
             return ValidateInsertResult::Evict(evictee);
         }
