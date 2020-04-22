@@ -26,6 +26,8 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
     node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
@@ -80,9 +82,15 @@ pub enum SyncHandlerWorkType {
     LocalMessage = 2,
 }
 
+pub trait TaskSize {
+    fn size(&self) -> usize { 0 }
+
+    fn count(&self) -> usize { 1 }
+}
+
 /// FIFO queue to async execute tasks.
-pub struct AsyncTaskQueue<T> {
-    tasks: Mutex<VecDeque<T>>,
+pub struct AsyncTaskQueue<T: TaskSize> {
+    inner: RwLock<AsyncTaskQueueInner<T>>,
     work_type: HandlerWorkType,
 
     // The maximum number of elements in the queue.
@@ -91,27 +99,61 @@ pub struct AsyncTaskQueue<T> {
     max_capacity: usize,
 }
 
-impl<T> AsyncTaskQueue<T> {
+struct AsyncTaskQueueInner<T: TaskSize> {
+    tasks: VecDeque<T>,
+    size: usize,
+    count: usize,
+}
+
+impl<T: TaskSize> AsyncTaskQueue<T> {
     fn new(work_type: SyncHandlerWorkType, max_capacity: usize) -> Self {
         AsyncTaskQueue {
-            tasks: Mutex::new(VecDeque::new()),
+            inner: RwLock::new(AsyncTaskQueueInner {
+                tasks: VecDeque::new(),
+                size: 0,
+                count: 0,
+            }),
             work_type: work_type as HandlerWorkType,
             max_capacity,
         }
     }
 
     pub fn dispatch(&self, io: &dyn NetworkContext, task: T) {
-        self.tasks.lock().push_back(task);
+        let mut inner = self.inner.write();
+        inner.size += task.size();
+        inner.count += task.count();
         io.dispatch_work(self.work_type);
+        inner.tasks.push_back(task);
     }
 
-    fn pop(&self) -> Option<T> { self.tasks.lock().pop_front() }
+    fn pop(&self) -> Option<T> {
+        let mut inner = self.inner.write();
+        let task = inner.tasks.pop_front();
+        task.as_ref().map(|task| {
+            inner.size -= task.size();
+            inner.count -= task.count();
+        });
+        task
+    }
 
-    pub fn is_full(&self) -> bool {
-        self.tasks.lock().len() >= self.max_capacity
+    fn size(&self) -> usize { self.inner.read().size }
+
+    pub fn is_full(&self) -> bool { self.size() >= self.max_capacity }
+
+    /// Return `true` if inflight insertion is successful.
+    pub fn estimated_available_count(&self) -> usize {
+        let inner = self.inner.read();
+        if inner.count == 0 {
+            // Just return a large number.
+            self.max_capacity
+        } else {
+            let mean_size = inner.size / inner.count;
+            (self.max_capacity - inner.size) / mean_size
+        }
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct RecoverPublicTask {
     blocks: Vec<Block>,
     requested: HashSet<H256>,
@@ -136,9 +178,18 @@ impl RecoverPublicTask {
     }
 }
 
+impl TaskSize for RecoverPublicTask {
+    fn size(&self) -> usize {
+        let mut ops = new_malloc_size_ops();
+        self.size_of(&mut ops) + std::mem::size_of::<Self>()
+    }
+}
+
 pub struct LocalMessageTask {
     message: Vec<u8>,
 }
+
+impl TaskSize for LocalMessageTask {}
 
 struct FutureBlockContainerInner {
     capacity: usize,
@@ -895,6 +946,12 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext,
     ) -> Result<(), Error> {
         let task = self.recover_public_queue.pop().unwrap();
+        let received_blocks: Vec<H256> =
+            task.blocks.iter().map(|block| block.hash()).collect();
+        self.request_manager
+            .remove_net_inflight_blocks(received_blocks.iter());
+        self.request_manager
+            .remove_net_inflight_blocks(task.requested.iter());
         self.on_blocks_inner(io, task)
     }
 
@@ -1251,7 +1308,8 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        self.request_manager.resend_waiting_requests(io);
+        self.request_manager
+            .resend_waiting_requests(io, !self.catch_up_mode());
     }
 
     pub fn send_heartbeat(&self, io: &dyn NetworkContext) {
