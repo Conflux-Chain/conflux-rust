@@ -165,6 +165,7 @@ build_config! {
         (snapshot_candidate_request_timeout_ms, (u64), 10_000)
         (snapshot_chunk_request_timeout_ms, (u64), 30_000)
         (snapshot_manifest_request_timeout_ms, (u64), 30_000)
+        (sync_expire_block_timeout_s, (u64), 7200)
         (throttling_conf, (Option<String>), None)
         (timeout_observing_period_s, (u64), 600)
         (transaction_request_timeout_ms, (u64), 30_000)
@@ -544,6 +545,9 @@ impl Configuration {
                 .raw_conf
                 .max_unprocessed_block_size_mb
                 * 1_000_000,
+            sync_expire_block_timeout: Duration::from_secs(
+                self.raw_conf.sync_expire_block_timeout_s,
+            ),
         }
     }
 

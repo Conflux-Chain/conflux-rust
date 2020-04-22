@@ -97,12 +97,15 @@ pub struct AsyncTaskQueue<T: TaskSize> {
     // Note we do not drop elements even when the queue is full to
     // keep the behavior of this queue consistent.
     max_capacity: usize,
+
+    // Alpha for computing moving average.
+    alpha: f64,
 }
 
 struct AsyncTaskQueueInner<T: TaskSize> {
     tasks: VecDeque<T>,
     size: usize,
-    count: usize,
+    moving_average: f64,
 }
 
 impl<T: TaskSize> AsyncTaskQueue<T> {
@@ -111,22 +114,27 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
             inner: RwLock::new(AsyncTaskQueueInner {
                 tasks: VecDeque::new(),
                 size: 0,
-                count: 0,
+                moving_average: 1000.0, // Set to 1KB as initial size.
             }),
             work_type: work_type as HandlerWorkType,
             max_capacity,
+            // TODO: set a proper value.
+            alpha: 0.001,
         }
     }
 
     pub fn dispatch(&self, io: &dyn NetworkContext, task: T) {
         let mut inner = self.inner.write();
         inner.size += task.size();
-        inner.count += task.count();
+        // Compute moving average.
+        inner.moving_average = self.alpha * (task.size() / task.count()) as f64
+            + (1.0 - self.alpha) * inner.moving_average;
         io.dispatch_work(self.work_type);
         inner.tasks.push_back(task);
         trace!(
-            "AsyncTaskQueue dispatch: size={} count={}",
-            inner.size, inner.count
+            "AsyncTaskQueue dispatch: size={} average={}",
+            inner.size,
+            inner.moving_average,
         );
     }
 
@@ -135,11 +143,11 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
         let task = inner.tasks.pop_front();
         task.as_ref().map(|task| {
             inner.size -= task.size();
-            inner.count -= task.count();
         });
         trace!(
-            "AsyncTaskQueue pop: size={} count={}",
-            inner.size, inner.count
+            "AsyncTaskQueue pop: size={} average={}",
+            inner.size,
+            inner.moving_average,
         );
         task
     }
@@ -151,14 +159,14 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
     /// Return `true` if inflight insertion is successful.
     pub fn estimated_available_count(&self) -> usize {
         let inner = self.inner.read();
-        if inner.count == 0 {
-            // Just return a large number.
-            self.max_capacity
-        } else if self.max_capacity <= inner.size {
+        if inner.size >= self.max_capacity {
             0
+        } else if inner.moving_average != 0.0 {
+            ((self.max_capacity - inner.size) as f64 / inner.moving_average)
+                as usize
         } else {
-            let mean_size = inner.size / inner.count;
-            (self.max_capacity - inner.size) / mean_size
+            // This should never happen.
+            self.max_capacity
         }
     }
 }
@@ -194,9 +202,7 @@ impl TaskSize for RecoverPublicTask {
         self.size_of(&mut ops) + std::mem::size_of::<Self>()
     }
 
-    fn count(&self) -> usize {
-        self.blocks.len()
-    }
+    fn count(&self) -> usize { self.blocks.len() }
 }
 
 pub struct LocalMessageTask {
@@ -334,6 +340,7 @@ pub struct ProtocolConfiguration {
     pub heartbeat_timeout: Duration,
     pub block_cache_gc_period: Duration,
     pub expire_block_gc_period: Duration,
+    pub sync_expire_block_timeout: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
@@ -1697,7 +1704,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 // exist in the frontier across two consecutive GC.
                 self.expire_block_gc(
                     io,
-                    self.protocol_config.expire_block_gc_period.as_secs() * 2,
+                    self.protocol_config.sync_expire_block_timeout.as_secs(),
                 )
                 .ok();
             }
