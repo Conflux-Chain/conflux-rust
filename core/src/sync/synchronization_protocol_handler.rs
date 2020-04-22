@@ -960,11 +960,12 @@ impl SynchronizationProtocolHandler {
 
     fn produce_status_message(&self) -> Status {
         let best_info = self.graph.consensus.best_info();
-
+        let chain_id = self.graph.consensus.get_config().chain_id.clone();
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
         Status {
             protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
+            chain_id,
             genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
             terminal_block_hashes: terminal_hashes,
