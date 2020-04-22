@@ -952,7 +952,8 @@ impl RequestManager {
                 if net_inflight_blocks.len()
                     >= self.recover_public_queue.estimated_available_count()
                 {
-                    trace!("queue is full, send block request later: req={:?}", request);
+                    trace!("queue is full, send block request later: inflight={} req={:?}",
+                           net_inflight_blocks.len(), request);
                     return false;
                 } else {
                     let hashes = if let Some(req) =
@@ -970,9 +971,10 @@ impl RequestManager {
                         );
                     };
                     for hash in hashes {
-                        net_inflight_blocks.remove(&Key::Hash(*hash));
+                        net_inflight_blocks.insert(Key::Hash(*hash));
                     }
-                    trace!("queue is not full, send block request now: req={:?}", request);
+                    trace!("queue is not full, send block request now: inflight={} req={:?}",
+                           net_inflight_blocks.len(), request);
                 }
             }
             _ => {}
