@@ -99,6 +99,8 @@ impl Default for TxPoolConfig {
             capacity: 500_000,
             min_tx_price: 1,
             max_tx_gas: DEFAULT_MAX_TRANSACTION_GAS_LIMIT,
+            // TODO: Set a proper default scaling since tx pool uses u128 as
+            // weight.
             tx_weight_scaling: 1,
             tx_weight_exp: 1,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
