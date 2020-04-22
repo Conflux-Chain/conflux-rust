@@ -1,6 +1,8 @@
 from . import trie
 from eth_utils import decode_hex
 
+DEFAULT_PY_TEST_CHAIN_ID = 10
+
 default_config = dict(
     GENESIS_DIFFICULTY=0,
     GENESIS_PREVHASH=decode_hex("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"), # KECCAK EMPTY, hash of the empty bytes string.
@@ -16,6 +18,7 @@ default_config = dict(
 )
 
 default_conflux_conf = dict(
+    chain_id = DEFAULT_PY_TEST_CHAIN_ID,
     db_cache_size = 128,
     ledger_cache_size = 1024,
     storage_delta_mpts_cache_size = 20_000_000,
@@ -27,6 +30,7 @@ default_conflux_conf = dict(
 production_conf = default_conflux_conf
 
 small_local_test_conf = dict(
+    chain_id = DEFAULT_PY_TEST_CHAIN_ID,
     enable_discovery = "false",
     log_file = "'./conflux.log'",
     log_level = '"debug"',

@@ -193,15 +193,16 @@ impl Encodable for Action {
     }
 }
 
-/// The parameters needed to determine the chain_id
+/// The parameters needed to determine the chain_id based on epoch_number.
+#[derive(Clone)]
 pub struct ChainIdParams {
-    /// Epoch Number
-    pub epoch_number: u64,
+    /// Preconfigured chain_id.
+    pub chain_id: u64,
 }
 
 impl ChainIdParams {
     /// The function return the chain_id with given parameters
-    pub const fn get_chain_id(&self) -> u64 { 0 }
+    pub fn get_chain_id(&self, _epoch_number: u64) -> u64 { self.chain_id }
 }
 
 #[derive(
