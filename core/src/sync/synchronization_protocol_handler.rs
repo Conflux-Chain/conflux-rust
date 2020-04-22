@@ -343,7 +343,7 @@ pub struct ProtocolConfiguration {
     pub timeout_observing_period_s: u64,
     pub max_allowed_timeout_in_observing_period: u64,
     pub demote_peer_for_timeout: bool,
-    pub max_unprocessed_block_count: usize,
+    pub max_unprocessed_block_size_mb: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -362,7 +362,7 @@ impl SynchronizationProtocolHandler {
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,
-            protocol_config.max_unprocessed_block_count,
+            protocol_config.max_unprocessed_block_size_mb,
         ));
         let request_manager = Arc::new(RequestManager::new(
             &protocol_config,
