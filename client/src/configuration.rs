@@ -540,9 +540,10 @@ impl Configuration {
             heartbeat_timeout: Duration::from_millis(
                 self.raw_conf.heartbeat_timeout_ms,
             ),
-            max_unprocessed_block_size_mb: self
+            max_unprocessed_block_size: self
                 .raw_conf
-                .max_unprocessed_block_size_mb,
+                .max_unprocessed_block_size_mb
+                * 1_000_000,
         }
     }
 

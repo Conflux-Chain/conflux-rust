@@ -124,6 +124,10 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
         inner.count += task.count();
         io.dispatch_work(self.work_type);
         inner.tasks.push_back(task);
+        debug!(
+            "AsyncTaskQueue dispatch: size={} count={}",
+            inner.size, inner.count
+        );
     }
 
     fn pop(&self) -> Option<T> {
@@ -133,6 +137,10 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
             inner.size -= task.size();
             inner.count -= task.count();
         });
+        debug!(
+            "AsyncTaskQueue pop: size={} count={}",
+            inner.size, inner.count
+        );
         task
     }
 
@@ -146,6 +154,8 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
         if inner.count == 0 {
             // Just return a large number.
             self.max_capacity
+        } else if self.max_capacity <= inner.size {
+            0
         } else {
             let mean_size = inner.size / inner.count;
             (self.max_capacity - inner.size) / mean_size
@@ -343,7 +353,7 @@ pub struct ProtocolConfiguration {
     pub timeout_observing_period_s: u64,
     pub max_allowed_timeout_in_observing_period: u64,
     pub demote_peer_for_timeout: bool,
-    pub max_unprocessed_block_size_mb: usize,
+    pub max_unprocessed_block_size: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -362,7 +372,7 @@ impl SynchronizationProtocolHandler {
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,
-            protocol_config.max_unprocessed_block_size_mb,
+            protocol_config.max_unprocessed_block_size,
         ));
         let request_manager = Arc::new(RequestManager::new(
             &protocol_config,
