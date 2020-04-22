@@ -26,7 +26,7 @@ use crate::{
 use cfx_types::{Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
-use primitives::{Block, BlockHeaderBuilder};
+use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
 
@@ -177,6 +177,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let notifications = Notifications::init();
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
+            chain_id: ChainIdParams { chain_id: 0 },
             debug_dump_dir_invalid_state_root: "./invalid_state_root/"
                 .to_string(),
             inner_conf: ConsensusInnerConfig {

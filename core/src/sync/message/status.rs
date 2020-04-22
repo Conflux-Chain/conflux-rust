@@ -13,10 +13,14 @@ use cfx_types::H256;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
+// FIXME: Enable it in the following PR.
+//use primitives::ChainIdParams;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Status {
     pub protocol_version: u8,
+    // FIXME: Enable it in the following PR.
+    // pub chain_id: ChainIdParams,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub terminal_block_hashes: Vec<H256>,
@@ -26,6 +30,8 @@ impl Handleable for Status {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
+        // FIXME: should also check chain_id. The change is separated into
+        // another PR to FIXME: help with release cherry-picking.
         let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
         if genesis_hash != self.genesis_hash {
             debug!(

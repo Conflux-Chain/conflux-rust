@@ -128,7 +128,7 @@ class RpcTest(ConfluxTestFramework):
         self.log.info("Test cfx_getStatus")
         res = self.nodes[0].cfx_getStatus()
         block_count = self.nodes[0].getblockcount()
-        assert_equal(block_count, res['blockNumber'])
+        assert_equal(hex(block_count), res['blockNumber'])
 
     def _test_stop(self):
         self.log.info("Test stop")
