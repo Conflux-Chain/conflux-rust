@@ -215,7 +215,7 @@ impl FromStr for TokenBucket {
     fn from_str(s: &str) -> Result<Self, String> {
         let fields: Vec<&str> = s.split(',').collect();
 
-        if fields.len() != 9 {
+        if fields.len() != 5 {
             return Err(format!(
                 "invalid number of fields, expected = 9, actual = {}",
                 fields.len()
