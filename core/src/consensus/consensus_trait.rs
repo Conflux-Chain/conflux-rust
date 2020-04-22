@@ -8,6 +8,7 @@ use crate::{
     transaction_pool::SharedTransactionPool,
 };
 
+use crate::consensus::ConsensusConfig;
 use cfx_types::{H256, U256};
 use primitives::{
     receipt::Receipt, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
@@ -16,7 +17,11 @@ use std::{any::Any, sync::Arc};
 
 /// FIXME: redesign this trait
 pub trait ConsensusGraphTrait: Send + Sync {
+    type ConsensusConfig;
+
     fn as_any(&self) -> &dyn Any;
+
+    fn get_config(&self) -> &Self::ConsensusConfig;
 
     fn on_new_block(
         &self, hash: &H256, ignore_body: bool, update_best_info: bool,
@@ -86,4 +91,5 @@ pub trait ConsensusGraphTrait: Send + Sync {
     fn update_best_info(&self);
 }
 
-pub type SharedConsensusGraph = Arc<dyn ConsensusGraphTrait>;
+pub type SharedConsensusGraph =
+    Arc<dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>>;

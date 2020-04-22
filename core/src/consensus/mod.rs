@@ -64,6 +64,8 @@ lazy_static! {
 
 #[derive(Clone)]
 pub struct ConsensusConfig {
+    /// Chain id configs.
+    pub chain_id: ChainIdParams,
     /// If we hit invalid state root, we will dump the information into a
     /// directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: String,
@@ -108,6 +110,7 @@ impl ConsensusGraphStatistics {
 
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct BestInformation {
+    pub chain_id: u64,
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
@@ -115,12 +118,7 @@ pub struct BestInformation {
 }
 
 impl BestInformation {
-    pub fn best_chain_id(&self) -> u64 {
-        ChainIdParams {
-            epoch_number: self.best_epoch_number,
-        }
-        .get_chain_id()
-    }
+    pub fn best_chain_id(&self) -> u64 { self.chain_id }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -901,7 +899,11 @@ impl Drop for ConsensusGraph {
 }
 
 impl ConsensusGraphTrait for ConsensusGraph {
+    type ConsensusConfig = ConsensusConfig;
+
     fn as_any(&self) -> &dyn Any { self }
+
+    fn get_config(&self) -> &Self::ConsensusConfig { &self.config }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
@@ -1229,9 +1231,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 terminal_hashes
             };
 
+        let best_epoch_number = inner.best_epoch_number();
         *best_info = Arc::new(BestInformation {
+            chain_id: self.config.chain_id.get_chain_id(best_epoch_number),
             best_block_hash: inner.best_block_hash(),
-            best_epoch_number: inner.best_epoch_number(),
+            best_epoch_number,
             current_difficulty: inner.current_difficulty,
             bounded_terminal_block_hashes,
         });

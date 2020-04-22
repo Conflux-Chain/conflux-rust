@@ -2,7 +2,7 @@ import os
 import eth_utils
 import rlp
 
-from .config import default_config
+from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
 from .utils import priv_to_addr, sha3_256
@@ -256,7 +256,7 @@ class RpcClient:
     def get_tx(self, tx_hash: str) -> dict:
         return self.node.cfx_getTransactionByHash(tx_hash)
 
-    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=0):
+    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if sender is None:
             sender = self.GENESIS_ADDR
             if priv_key is None:
@@ -279,7 +279,7 @@ class RpcClient:
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=CONTRACT_DEFAULT_GAS, value=0, storage_limit=0, epoch_height=0, chain_id=0):
+    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=CONTRACT_DEFAULT_GAS, value=0, storage_limit=0, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if sender is None:
             sender = self.GENESIS_ADDR
 
