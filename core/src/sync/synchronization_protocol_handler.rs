@@ -124,7 +124,7 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
         inner.count += task.count();
         io.dispatch_work(self.work_type);
         inner.tasks.push_back(task);
-        debug!(
+        trace!(
             "AsyncTaskQueue dispatch: size={} count={}",
             inner.size, inner.count
         );
@@ -137,7 +137,7 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
             inner.size -= task.size();
             inner.count -= task.count();
         });
-        debug!(
+        trace!(
             "AsyncTaskQueue pop: size={} count={}",
             inner.size, inner.count
         );
