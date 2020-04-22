@@ -345,7 +345,7 @@ mod tests {
             bucket.try_acquire_cost(2, 2).unwrap_err()
                 <= Duration::from_secs(1)
         );
-        assert_eq!(bucket.try_acquire(), Ok(()));
+        assert_eq!(bucket.try_acquire_cost(1, 1), Ok(()));
     }
 
     #[test]
