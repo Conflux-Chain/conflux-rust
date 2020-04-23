@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::{BlameInfo, Block, Bytes, Status as RpcStatus};
+use super::super::types::{BlameInfo, Block, Bytes};
 use cfx_types::H256;
 use cfxcore::PeerInfo;
 use jsonrpc_core::Result as RpcResult;
@@ -48,9 +48,6 @@ pub trait TestRpc {
 
     #[rpc(name = "getnodeid")]
     fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
-
-    #[rpc(name = "getstatus")]
-    fn get_status(&self) -> RpcResult<RpcStatus>;
 
     #[rpc(name = "addlatency")]
     fn add_latency(&self, id: NodeId, latency_ms: f64) -> RpcResult<()>;

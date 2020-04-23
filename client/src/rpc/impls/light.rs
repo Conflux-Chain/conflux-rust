@@ -468,6 +468,7 @@ impl Cfx for CfxHandler {
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>) -> RpcResult<RpcU256>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> RpcResult<Vec<RpcH256>>;
             fn confirmation_risk_by_hash(&self, block_hash: RpcH256) -> RpcResult<Option<RpcU256>>;
+            fn get_status(&self) -> RpcResult<RpcStatus>;
         }
 
         to self.rpc_impl {
@@ -519,7 +520,6 @@ impl TestRpc for TestRpcImpl {
             fn get_goodput(&self) -> RpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> RpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> RpcResult<Vec<PeerInfo>>;
-            fn get_status(&self) -> RpcResult<RpcStatus>;
             fn say_hello(&self) -> RpcResult<String>;
             fn stop(&self) -> RpcResult<()>;
             fn save_node_db(&self) -> RpcResult<()>;
