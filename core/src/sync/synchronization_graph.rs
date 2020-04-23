@@ -1318,14 +1318,14 @@ impl SynchronizationGraph {
             if let Some(mut block) = self.data_man.block_from_db(&hash) {
                 // Only construct synchronization graph if is not header_only.
                 // Construct both sync and consensus graph if is header_only.
-                let (success, _) = self.insert_block_header(
+                let (insert_result, _) = self.insert_block_header(
                     &mut block.block_header,
                     true,        /* need_to_verify */
                     false,       /* bench_mode */
                     header_only, /* insert_to_consensus */
                     false,       /* persistent */
                 );
-                assert!(success);
+                assert!(!insert_result.is_invalid());
 
                 let parent = block.block_header.parent_hash().clone();
                 let referees = block.block_header.referee_hashes().clone();
@@ -1553,7 +1553,7 @@ impl SynchronizationGraph {
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
         bench_mode: bool, insert_to_consensus: bool, persistent: bool,
-    ) -> (bool, Vec<H256>)
+    ) -> (BlockHeaderInsertionResult, Vec<H256>)
     {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         let inner = &mut *self.inner.write();
@@ -1561,7 +1561,7 @@ impl SynchronizationGraph {
 
         let (invalid, local_info_opt) = self.data_man.verified_invalid(&hash);
         if invalid {
-            return (false, Vec::new());
+            return (BlockHeaderInsertionResult::Invalid, Vec::new());
         }
 
         if let Some(info) = local_info_opt {
@@ -1578,7 +1578,10 @@ impl SynchronizationGraph {
                     // as a part of block later
                     VerificationConfig::compute_header_pow_quality(header);
                 }
-                return (true, Vec::new());
+                return (
+                    BlockHeaderInsertionResult::AlreadyProcessed,
+                    Vec::new(),
+                );
             }
         }
 
@@ -1588,7 +1591,7 @@ impl SynchronizationGraph {
                 // a part of block later
                 VerificationConfig::compute_header_pow_quality(header);
             }
-            return (true, Vec::new());
+            return (BlockHeaderInsertionResult::AlreadyProcessed, Vec::new());
         }
 
         // skip check for consortium currently
@@ -1667,12 +1670,12 @@ impl SynchronizationGraph {
         inner.process_invalid_blocks(&invalid_set);
 
         if me_invalid {
-            return (false, need_to_relay);
+            return (BlockHeaderInsertionResult::Invalid, need_to_relay);
         }
 
         inner.try_clear_old_era_blocks();
 
-        (true, need_to_relay)
+        (BlockHeaderInsertionResult::NewValid, need_to_relay)
     }
 
     pub fn contains_block(&self, hash: &H256) -> bool {
@@ -2107,5 +2110,25 @@ impl BlockInsertionResult {
 
     pub fn request_again(&self) -> bool {
         matches!(self, BlockInsertionResult::RequestAgain)
+    }
+}
+
+pub enum BlockHeaderInsertionResult {
+    // The block is valid and already processed before.
+    AlreadyProcessed,
+    // The block is valid and is processed for the first time.
+    NewValid,
+    // The block is definitely invalid. It's not inserted to sync graph
+    // and should not be requested again.
+    Invalid,
+}
+
+impl BlockHeaderInsertionResult {
+    pub fn is_new_valid(&self) -> bool {
+        matches!(self, BlockHeaderInsertionResult::NewValid)
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        matches!(self, BlockHeaderInsertionResult::Invalid)
     }
 }
