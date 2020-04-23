@@ -36,13 +36,13 @@ root:
 # We can set log level for crates individually
 loggers:
     network:
-        level: trace
+        level: info
     cfxcore:
         level: info
     rpc:
         level: info
     discovery:
-        level: trace
+        level: info
     sync:
         level: info
     blockgen:
