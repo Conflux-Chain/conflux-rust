@@ -26,6 +26,8 @@ use cfxcore::{
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
 };
 use metrics::MetricsConfiguration;
+use primitives::ChainIdParams;
+use rand::Rng;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
 
@@ -102,6 +104,7 @@ build_config! {
         // Genesis section.
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
+        (chain_id, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -360,6 +363,12 @@ impl Configuration {
             self.raw_conf.enable_optimistic_execution
         };
         ConsensusConfig {
+            chain_id: ChainIdParams {
+                chain_id: self
+                    .raw_conf
+                    .chain_id
+                    .unwrap_or_else(|| rand::thread_rng().gen()),
+            },
             debug_dump_dir_invalid_state_root: self
                 .raw_conf
                 .debug_dump_dir_invalid_state_root

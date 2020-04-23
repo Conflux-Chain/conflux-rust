@@ -5,9 +5,7 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::statedb::Result as StateDbResult;
-use cfx_types::{
-    address_util::AddressUtil, Address, BigEndianHash, H256, H512, U256, U512,
-};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -21,6 +19,10 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+type WeightType = u128;
+lazy_static! {
+    pub static ref MAX_WEIGHT: U256 = u128::max_value().into();
+}
 
 const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
 // By default, the capacity of tx pool is 500K, so the maximum TPS is
@@ -138,7 +140,7 @@ impl DeferredPool {
 
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
-    treap: TreapMap<Address, Arc<SignedTransaction>, U512>,
+    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
 }
@@ -185,14 +187,18 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        let mut base = U512::from(tx.gas_price) / self.tx_weight_scaling;
-        if base == U512::from(0) {
-            base = U512::from(1);
-        }
+        let scaled_weight = tx.gas_price / self.tx_weight_scaling;
+        let base_weight = if scaled_weight == U256::zero() {
+            0
+        } else if scaled_weight >= *MAX_WEIGHT {
+            u128::max_value()
+        } else {
+            scaled_weight.as_u128()
+        };
 
-        let mut weight: U512 = U512::from(1);
+        let mut weight = 1;
         for _ in 0..self.tx_weight_exp {
-            weight *= base;
+            weight *= base_weight;
         }
 
         self.treap.insert(tx.sender(), tx.clone(), weight)
@@ -204,7 +210,7 @@ impl ReadyAccountPool {
         }
 
         let sum_gas_price = self.treap.sum_weight();
-        let mut rand_value = BigEndianHash::into_uint(&H512::random());
+        let mut rand_value = rand::random();
         rand_value = rand_value % sum_gas_price;
 
         let tx = self

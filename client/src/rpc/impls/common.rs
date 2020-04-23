@@ -449,21 +449,19 @@ impl RpcImpl {
     }
 
     pub fn get_status(&self) -> RpcResult<RpcStatus> {
-        let best_hash = self.consensus.best_block_hash();
+        let best_info = self.consensus.best_info();
+        let best_hash = best_info.best_block_hash;
+        let epoch_number = best_info.best_epoch_number;
         let block_number = self.consensus.block_count();
         let tx_count = self.tx_pool.total_unpacked();
-        if let Some(epoch_number) =
-            self.consensus.get_block_epoch_number(&best_hash)
-        {
-            Ok(RpcStatus {
-                best_hash: RpcH256::from(best_hash),
-                epoch_number,
-                block_number,
-                pending_tx_number: tx_count,
-            })
-        } else {
-            Err(RpcError::internal_error())
-        }
+
+        Ok(RpcStatus {
+            best_hash: RpcH256::from(best_hash),
+            chain_id: best_info.chain_id.into(),
+            epoch_number: epoch_number.into(),
+            block_number: block_number.into(),
+            pending_tx_number: tx_count,
+        })
     }
 
     pub fn say_hello(&self) -> RpcResult<String> { Ok("Hello, world".into()) }
