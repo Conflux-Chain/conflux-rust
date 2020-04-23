@@ -658,7 +658,7 @@ impl Provider {
             None => return Ok(()),
         };
 
-        let result = bucket.lock().throttle();
+        let result = bucket.lock().throttle_default();
 
         match result {
             ThrottleResult::Success => Ok(()),

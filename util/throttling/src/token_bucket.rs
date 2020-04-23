@@ -4,7 +4,7 @@
 
 use parking_lot::Mutex;
 use std::{
-    cmp::min,
+    cmp::{max, min},
     collections::HashMap,
     fs::read_to_string,
     hash::Hash,
@@ -20,13 +20,30 @@ pub enum ThrottleResult {
     AlreadyThrottled,
 }
 
-pub struct TokenBucket {
+pub struct ThrottleTokens {
     max_tokens: u64,    // maximum tokens allowed in bucket
     cur_tokens: u64,    // current tokens in bucket
     recharge_rate: u64, // recharge N tokens per second
     default_cost: u64,  // default tokens to acquire once
-    last_update: Instant,
+}
 
+impl ThrottleTokens {
+    pub fn new(
+        max_tokens: u64, cur_tokens: u64, recharge_rate: u64, default_cost: u64,
+    ) -> Self {
+        ThrottleTokens {
+            max_tokens,
+            cur_tokens,
+            recharge_rate,
+            default_cost,
+        }
+    }
+}
+
+pub struct TokenBucket {
+    cpu_tokens: ThrottleTokens,
+    message_size_tokens: ThrottleTokens,
+    last_update: Instant,
     // once acquire failed, record the next time to acquire tokens
     throttled_until: Option<Instant>,
     // client may send multiple requests in a short time, and the
@@ -38,15 +55,28 @@ pub struct TokenBucket {
 
 impl TokenBucket {
     pub fn new(
-        max_tokens: u64, cur_tokens: u64, recharge_rate: u64, default_cost: u64,
-    ) -> Self {
-        assert!(cur_tokens <= max_tokens);
+        max_cpu_tokens: u64, cur_cpu_tokens: u64, cpu_token_recharge_rate: u64,
+        default_cpu_cost: u64, max_message_tokens: u64,
+        cur_message_tokens: u64, message_token_recharge_rate: u64,
+        default_message_cost: u64,
+    ) -> Self
+    {
+        assert!(cur_cpu_tokens <= max_cpu_tokens);
+        assert!(cur_message_tokens <= max_message_tokens);
 
         TokenBucket {
-            max_tokens,
-            cur_tokens,
-            recharge_rate,
-            default_cost,
+            cpu_tokens: ThrottleTokens::new(
+                max_cpu_tokens,
+                cur_cpu_tokens,
+                cpu_token_recharge_rate,
+                default_cpu_cost,
+            ),
+            message_size_tokens: ThrottleTokens::new(
+                max_message_tokens,
+                cur_message_tokens,
+                message_token_recharge_rate,
+                default_message_cost,
+            ),
             last_update: Instant::now(),
             throttled_until: None,
             throttled_counter: 0,
@@ -55,15 +85,39 @@ impl TokenBucket {
     }
 
     pub fn full(
-        max_tokens: u64, recharge_rate: u64, default_cost: u64,
-    ) -> Self {
-        Self::new(max_tokens, max_tokens, recharge_rate, default_cost)
+        max_cpu_tokens: u64, cpu_token_recharge_rate: u64,
+        default_cpu_cost: u64, max_message_tokens: u64,
+        message_token_recharge_rate: u64, default_message_cost: u64,
+    ) -> Self
+    {
+        Self::new(
+            max_cpu_tokens,
+            max_cpu_tokens,
+            cpu_token_recharge_rate,
+            default_cpu_cost,
+            max_message_tokens,
+            max_message_tokens,
+            message_token_recharge_rate,
+            default_message_cost,
+        )
     }
 
     pub fn empty(
-        max_tokens: u64, recharge_rate: u64, default_cost: u64,
-    ) -> Self {
-        Self::new(max_tokens, 0, recharge_rate, default_cost)
+        max_cpu_tokens: u64, cpu_token_recharge_rate: u64,
+        default_cpu_cost: u64, max_message_tokens: u64,
+        message_token_recharge_rate: u64, default_message_cost: u64,
+    ) -> Self
+    {
+        Self::new(
+            max_cpu_tokens,
+            0, /* cur_cpu_tokens */
+            cpu_token_recharge_rate,
+            default_cpu_cost,
+            max_message_tokens,
+            0, /* cur_message_tokens */
+            message_token_recharge_rate,
+            default_message_cost,
+        )
     }
 
     pub fn set_max_throttled_counter(&mut self, max_throttled_counter: u64) {
@@ -76,34 +130,58 @@ impl TokenBucket {
             return;
         }
 
-        let recharged = self.recharge_rate * elapsed_secs;
-        self.cur_tokens = min(self.max_tokens, self.cur_tokens + recharged);
+        let cpu_recharged = self.cpu_tokens.recharge_rate * elapsed_secs;
+        self.cpu_tokens.cur_tokens = min(
+            self.cpu_tokens.max_tokens,
+            self.cpu_tokens.cur_tokens + cpu_recharged,
+        );
+        let message_recharged =
+            self.message_size_tokens.recharge_rate * elapsed_secs;
+        self.message_size_tokens.cur_tokens = min(
+            self.message_size_tokens.max_tokens,
+            self.message_size_tokens.cur_tokens + message_recharged,
+        );
         self.last_update += Duration::from_secs(elapsed_secs);
     }
 
-    fn try_acquire(&mut self) -> Result<(), Duration> {
-        self.try_acquire_cost(self.default_cost)
-    }
-
-    fn try_acquire_cost(&mut self, cost: u64) -> Result<(), Duration> {
+    fn try_acquire_cost(
+        &mut self, cpu_cost: u64, message_size_cost: u64,
+    ) -> Result<(), Duration> {
         let now = Instant::now();
 
         self.refresh(now);
 
-        // tokens enough
-        if cost <= self.cur_tokens {
-            self.cur_tokens -= cost;
+        if cpu_cost <= self.cpu_tokens.cur_tokens
+            && message_size_cost <= self.message_size_tokens.cur_tokens
+        {
+            // tokens enough
+            self.cpu_tokens.cur_tokens -= cpu_cost;
+            self.message_size_tokens.cur_tokens -= message_size_cost;
             return Ok(());
         }
 
         // tokens not enough and throttled
-        let recharge_secs = ((cost - self.cur_tokens) as f64
-            / self.recharge_rate as f64)
+        let cpu_recharge_secs = ((cpu_cost - self.cpu_tokens.cur_tokens) as f64
+            / self.cpu_tokens.recharge_rate as f64)
             .ceil() as u64;
+        let message_recharge_secs =
+            ((message_size_cost - self.message_size_tokens.cur_tokens) as f64
+                / self.message_size_tokens.recharge_rate as f64)
+                .ceil() as u64;
+        let recharge_secs = max(cpu_recharge_secs, message_recharge_secs);
         Err(self.last_update + Duration::from_secs(recharge_secs) - now)
     }
 
-    pub fn throttle(&mut self) -> ThrottleResult {
+    pub fn throttle_default(&mut self) -> ThrottleResult {
+        self.throttle(
+            self.cpu_tokens.default_cost,
+            self.message_size_tokens.default_cost,
+        )
+    }
+
+    pub fn throttle(
+        &mut self, cpu_cost: u64, message_size_cost: u64,
+    ) -> ThrottleResult {
         let now = Instant::now();
 
         // already throttled
@@ -121,19 +199,13 @@ impl TokenBucket {
             }
         }
 
-        match self.try_acquire() {
+        match self.try_acquire_cost(cpu_cost, message_size_cost) {
             Ok(_) => ThrottleResult::Success,
             Err(wait_time) => {
                 self.throttled_until = Some(now + wait_time);
                 ThrottleResult::Throttled(wait_time)
             }
         }
-    }
-
-    pub fn update_recharge_rate(&mut self, rate: u64) {
-        self.refresh(Instant::now());
-
-        self.recharge_rate = rate;
     }
 }
 
@@ -145,7 +217,7 @@ impl FromStr for TokenBucket {
 
         if fields.len() != 5 {
             return Err(format!(
-                "invalid number of fields, expected = 5, actual = {}",
+                "invalid number of fields, expected = 9, actual = {}",
                 fields.len()
             ));
         }
@@ -158,7 +230,9 @@ impl FromStr for TokenBucket {
             nums.push(num);
         }
 
-        let mut bucket = TokenBucket::new(nums[0], nums[1], nums[2], nums[3]);
+        // TODO: Correctly set the message token information.
+        let mut bucket =
+            TokenBucket::new(nums[0], nums[1], nums[2], nums[3], 1, 1, 1, 0);
         bucket.set_max_throttled_counter(nums[4]);
 
         Ok(bucket)
@@ -259,35 +333,44 @@ mod tests {
     #[test]
     fn test_init_tokens() {
         // empty bucket
-        let mut bucket = TokenBucket::empty(3, 1, 1);
-        assert!(bucket.try_acquire().unwrap_err() <= Duration::from_secs(1));
+        let mut bucket = TokenBucket::empty(3, 1, 1, 3, 1, 1);
+        assert!(
+            bucket.try_acquire_cost(1, 1).unwrap_err()
+                <= Duration::from_secs(1)
+        );
 
         // 1 token
-        let mut bucket = TokenBucket::new(3, 1, 1, 1);
+        let mut bucket = TokenBucket::new(3, 1, 1, 1, 3, 1, 1, 1);
         assert!(
-            bucket.try_acquire_cost(2).unwrap_err() <= Duration::from_secs(1)
+            bucket.try_acquire_cost(2, 2).unwrap_err()
+                <= Duration::from_secs(1)
         );
-        assert_eq!(bucket.try_acquire(), Ok(()));
+        assert_eq!(bucket.try_acquire_cost(1, 1), Ok(()));
     }
 
     #[test]
     fn test_acquire() {
-        let mut bucket = TokenBucket::full(3, 1, 1);
+        let mut bucket = TokenBucket::full(3, 1, 1, 3, 1, 1);
 
         // Token enough
-        assert_eq!(bucket.try_acquire(), Ok(()));
-        assert_eq!(bucket.try_acquire_cost(2), Ok(()));
+        assert_eq!(bucket.try_acquire_cost(1, 1), Ok(()));
+        assert_eq!(bucket.try_acquire_cost(2, 2), Ok(()));
 
         // Token not enough
-        assert!(bucket.try_acquire().unwrap_err() <= Duration::from_secs(1));
         assert!(
-            bucket.try_acquire_cost(2).unwrap_err() <= Duration::from_secs(2)
+            bucket.try_acquire_cost(1, 1).unwrap_err()
+                <= Duration::from_secs(1)
+        );
+        assert!(
+            bucket.try_acquire_cost(2, 2).unwrap_err()
+                <= Duration::from_secs(2)
         );
 
         // Sleep 0.5s, but not recharged
         sleep(Duration::from_millis(500));
         assert!(
-            bucket.try_acquire().unwrap_err() <= Duration::from_millis(500)
+            bucket.try_acquire_cost(1, 1).unwrap_err()
+                <= Duration::from_millis(500)
         );
 
         // Sleep 0.5s, and recharged 1 token
@@ -295,11 +378,12 @@ mod tests {
 
         // cannot acquire 2 tokens since only 1 recharged
         assert!(
-            bucket.try_acquire_cost(2).unwrap_err() <= Duration::from_secs(1)
+            bucket.try_acquire_cost(2, 2).unwrap_err()
+                <= Duration::from_secs(1)
         );
 
         // acquire the recharged 1 token
-        assert_eq!(bucket.try_acquire(), Ok(()));
+        assert_eq!(bucket.try_acquire_cost(1, 1), Ok(()));
     }
 
     fn assert_throttled(result: ThrottleResult, wait_time: Duration) {
@@ -312,17 +396,17 @@ mod tests {
     #[test]
     fn test_throttled() {
         // empty bucket
-        let mut bucket = TokenBucket::empty(3, 1, 1);
+        let mut bucket = TokenBucket::empty(3, 1, 1, 3, 1, 1);
 
         // throttled
-        assert_throttled(bucket.throttle(), Duration::from_secs(1));
+        assert_throttled(bucket.throttle(1, 1), Duration::from_secs(1));
 
         // already throttled
-        assert_eq!(bucket.throttle(), ThrottleResult::AlreadyThrottled);
+        assert_eq!(bucket.throttle(1, 1), ThrottleResult::AlreadyThrottled);
 
         sleep(Duration::from_secs(1));
 
-        assert_eq!(bucket.throttle(), ThrottleResult::Success);
+        assert_eq!(bucket.throttle(1, 1), ThrottleResult::Success);
         assert_eq!(bucket.throttled_until, None);
         assert_eq!(bucket.throttled_counter, 0);
     }
@@ -330,17 +414,17 @@ mod tests {
     #[test]
     fn test_tolerate_throttling() {
         // empty bucket
-        let mut bucket = TokenBucket::empty(3, 1, 1);
+        let mut bucket = TokenBucket::empty(3, 1, 1, 3, 1, 1);
         bucket.set_max_throttled_counter(2);
 
         // throttled
-        assert_throttled(bucket.throttle(), Duration::from_secs(1));
+        assert_throttled(bucket.throttle(1, 1), Duration::from_secs(1));
 
         // tolerate another 2 times
-        assert_throttled(bucket.throttle(), Duration::from_secs(1));
-        assert_throttled(bucket.throttle(), Duration::from_secs(1));
+        assert_throttled(bucket.throttle(1, 1), Duration::from_secs(1));
+        assert_throttled(bucket.throttle(1, 1), Duration::from_secs(1));
 
         // already throttled
-        assert_eq!(bucket.throttle(), ThrottleResult::AlreadyThrottled);
+        assert_eq!(bucket.throttle(1, 1), ThrottleResult::AlreadyThrottled);
     }
 }
