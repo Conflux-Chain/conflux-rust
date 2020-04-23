@@ -174,14 +174,15 @@ impl GetBlockHeadersResponse {
             }
 
             // insert into sync graph
-            let (valid, to_relay) = ctx.manager.graph.insert_block_header(
-                &mut header.clone(),
-                true,  /* need_to_verify */
-                false, /* bench_mode */
-                ctx.manager.insert_header_to_consensus(),
-                true, /* persistent */
-            );
-            if !valid {
+            let (insert_result, to_relay) =
+                ctx.manager.graph.insert_block_header(
+                    &mut header.clone(),
+                    true,  /* need_to_verify */
+                    false, /* bench_mode */
+                    ctx.manager.insert_header_to_consensus(),
+                    true, /* persistent */
+                );
+            if !insert_result.is_new_valid() {
                 continue;
             }
 

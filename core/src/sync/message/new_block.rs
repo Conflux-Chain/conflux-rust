@@ -64,15 +64,16 @@ fn on_new_decoded_block(
     match ctx.manager.graph.block_header_by_hash(&hash) {
         Some(header) => block.block_header = header,
         None => {
-            let res = ctx.manager.graph.insert_block_header(
-                &mut block.block_header,
-                need_to_verify,
-                false,
-                false,
-                true,
-            );
-            if res.0 {
-                need_to_relay.extend(res.1);
+            let (insert_result, to_relay) =
+                ctx.manager.graph.insert_block_header(
+                    &mut block.block_header,
+                    need_to_verify,
+                    false,
+                    false,
+                    true,
+                );
+            if insert_result.is_new_valid() {
+                need_to_relay.extend(to_relay);
             } else {
                 return Err(Error::from_kind(ErrorKind::InvalidBlock));
             }
