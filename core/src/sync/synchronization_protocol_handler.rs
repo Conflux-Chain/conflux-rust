@@ -827,17 +827,17 @@ impl SynchronizationProtocolHandler {
                     // before. We can only enter this case if we are catching
                     // up. We do not need to relay headers
                     // during catch-up.
-                    let (valid, _) = self.graph.insert_block_header(
+                    let (insert_result, _) = self.graph.insert_block_header(
                         &mut block.block_header,
                         true,  // need_to_verify
                         false, // bench_mode
                         false, // insert_into_consensus
                         true,  // persistent
                     );
-                    if !valid {
-                        // If header is invalid, we do not need to request the
-                        // block, so just mark it
-                        // received
+                    if !insert_result.is_new_valid() {
+                        // If header is invalid or already processed, we do not
+                        // need to request the block, so
+                        // just mark it received
                         received_blocks.insert(hash);
                         continue;
                     }
@@ -910,14 +910,14 @@ impl SynchronizationProtocolHandler {
 
         assert!(self.graph.contains_block_header(&parent_hash));
         assert!(!self.graph.contains_block_header(&hash));
-        let (success, to_relay) = self.graph.insert_block_header(
+        let (insert_result, to_relay) = self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
             false,
             true,
         );
-        assert!(success);
+        assert!(insert_result.is_new_valid());
         assert!(!self.graph.contains_block(&hash));
         // Do not need to look at the result since this new block will be
         // broadcast to peers.
@@ -1200,14 +1200,14 @@ impl SynchronizationProtocolHandler {
 
         for mut header in headers {
             let hash = header.hash();
-            let (valid, to_relay) = self.graph.insert_block_header(
+            let (insert_result, to_relay) = self.graph.insert_block_header(
                 &mut header,
                 true,
                 false,
                 self.insert_header_to_consensus(),
                 true,
             );
-            if valid {
+            if insert_result.is_new_valid() {
                 need_to_relay.extend(to_relay);
 
                 // check block body
