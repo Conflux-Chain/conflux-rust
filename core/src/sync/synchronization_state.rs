@@ -154,7 +154,6 @@ impl SynchronizationState {
     pub fn median_epoch_from_normal_peers(&self) -> Option<u64> {
         let mut peer_best_epoches = Vec::new();
         {
-            // let peers = self.peers.read();
             for (_, state_lock) in &*self.peers.read() {
                 let state = state_lock.read();
                 if state
