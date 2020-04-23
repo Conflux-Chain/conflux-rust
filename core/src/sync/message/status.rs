@@ -98,7 +98,7 @@ impl Handleable for Status {
 
             peer_state
                 .capabilities
-                .insert(DynamicCapability::TxRelay(true));
+                .insert(DynamicCapability::NormalPhase(true));
 
             debug!(
                 "New peer (pv={:?}, gh={:?})",
