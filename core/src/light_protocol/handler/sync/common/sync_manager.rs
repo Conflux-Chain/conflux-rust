@@ -117,7 +117,7 @@ where
             None => return Ok(id),
         };
 
-        let result = bucket.lock().throttle();
+        let result = bucket.lock().throttle_default();
 
         match result {
             ThrottleResult::Success => Ok(id),
