@@ -20,6 +20,7 @@ import urllib.parse
 import eth_utils
 
 from conflux.utils import get_nodeid, sha3, encode_int32
+from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from .authproxy import JSONRPCException
 from .util import *
 
@@ -36,7 +37,8 @@ class ErrorMatch(Enum):
 
 class TestNode:
     def __init__(self, index, datadir, rpchost, confluxd, rpc_timeout=None, remote=False, ip=None, user=None,
-                 rpcport=None, auto_recovery=False, recovery_timeout=30):
+                 rpcport=None, auto_recovery=False, recovery_timeout=30, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+        self.chain_id = chain_id
         self.index = index
         self.datadir = datadir
         self.stdout_dir = os.path.join(self.datadir, "stdout")
@@ -353,6 +355,8 @@ class TestNode:
             kwargs['dstport'] = int(self.port)
         if 'dstaddr' not in kwargs:
             kwargs['dstaddr'] = self.ip
+
+        p2p_conn.set_chain_id(self.chain_id)
 
         # if self.ip is not None:
         #     kwargs['dstaddr'] = self.ip

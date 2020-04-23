@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
+
 # 0.5.0
 
 ## Improvements

@@ -10,17 +10,15 @@ use crate::sync::{
     Error, ErrorKind, SynchronizationPeerState,
 };
 use cfx_types::H256;
+use primitives::ChainIdParams;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
-// FIXME: Enable it in the following PR.
-//use primitives::ChainIdParams;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct Status {
     pub protocol_version: u8,
-    // FIXME: Enable it in the following PR.
-    // pub chain_id: ChainIdParams,
+    pub chain_id: ChainIdParams,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub terminal_block_hashes: Vec<H256>,
@@ -30,8 +28,15 @@ impl Handleable for Status {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        // FIXME: should also check chain_id. The change is separated into
-        // another PR to FIXME: help with release cherry-picking.
+        let chain_id = &ctx.manager.graph.consensus.get_config().chain_id;
+        if chain_id.ne(&self.chain_id) {
+            debug!(
+                "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
+                ctx.node_id, chain_id, self.chain_id,
+            );
+            bail!(ErrorKind::InvalidStatus("chain_id mismatches".into()));
+        }
+
         let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
         if genesis_hash != self.genesis_hash {
             debug!(

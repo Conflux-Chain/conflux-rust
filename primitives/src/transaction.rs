@@ -194,7 +194,7 @@ impl Encodable for Action {
 }
 
 /// The parameters needed to determine the chain_id based on epoch_number.
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, RlpEncodable, RlpDecodable, PartialEq)]
 pub struct ChainIdParams {
     /// Preconfigured chain_id.
     pub chain_id: u64,
