@@ -193,7 +193,7 @@ impl Headers {
             }
 
             // insert into graph
-            let (valid, _) = self.graph.insert_block_header(
+            let (insert_result, _) = self.graph.insert_block_header(
                 &mut header.clone(),
                 true,  /* need_to_verify */
                 false, /* bench_mode */
@@ -201,7 +201,7 @@ impl Headers {
                 true,  /* persistent */
             );
 
-            if !valid {
+            if !insert_result.is_new_valid() {
                 continue;
             }
 
