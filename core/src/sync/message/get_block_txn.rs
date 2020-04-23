@@ -36,8 +36,11 @@ impl Request for GetBlockTxn {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut inflight_keys = inflight_keys.write(msgid::GET_BLOCKS);
-        inflight_keys.remove(&Key::Hash(self.block_hash.clone()));
+        let mut inflight_blocks = inflight_keys.write(msgid::GET_BLOCKS);
+        let mut net_inflight_blocks =
+            inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
+        inflight_blocks.remove(&Key::Hash(self.block_hash.clone()));
+        net_inflight_blocks.remove(&Key::Hash(self.block_hash.clone()));
     }
 
     fn with_inflight(&mut self, _inflight_keys: &KeyContainer) {

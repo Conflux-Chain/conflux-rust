@@ -54,6 +54,8 @@ build_msgid! {
     STATE_SYNC_CANDIDATE_REQUEST = 0x20
     STATE_SYNC_CANDIDATE_RESPONSE = 0x21
 
+    // This is only used in inflight_keys.
+    NET_INFLIGHT_BLOCKS = 0xf0
     THROTTLED = 0xfe
 
     INVALID = 0xff

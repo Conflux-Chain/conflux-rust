@@ -351,6 +351,7 @@ impl RequestContainer {
         protocol_config: &ProtocolConfiguration,
     )
     {
+        trace!("send_pending_requests: len={}", self.pending_requests.len());
         while self.has_pending_requests() {
             if let Some(new_request_id) = self.get_next_request_id() {
                 let pending_msg = self.pop_pending_request().unwrap();

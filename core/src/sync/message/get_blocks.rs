@@ -7,7 +7,7 @@ use crate::{
     parameters::sync::MAX_PACKET_SIZE,
     sync::{
         message::{
-            Context, GetBlocksResponse, GetBlocksWithPublicResponse,
+            msgid, Context, GetBlocksResponse, GetBlocksWithPublicResponse,
             Handleable, Key, KeyContainer,
         },
         request_manager::{AsAny, Request},
@@ -38,9 +38,12 @@ impl Request for GetBlocks {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut inflight_keys = inflight_keys.write(self.msg_id());
+        let mut inflight_blocks = inflight_keys.write(self.msg_id());
+        let mut net_inflight_blocks =
+            inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
         for hash in self.hashes.iter() {
-            inflight_keys.remove(&Key::Hash(*hash));
+            inflight_blocks.remove(&Key::Hash(*hash));
+            net_inflight_blocks.remove(&Key::Hash(*hash));
         }
     }
 

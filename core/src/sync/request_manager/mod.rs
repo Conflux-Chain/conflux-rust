@@ -10,10 +10,9 @@ use crate::{
     parameters::sync::REQUEST_START_WAITING_TIME,
     sync::{
         message::{
-            msgid::{self, GET_BLOCKS},
-            GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn, GetBlocks,
-            GetCompactBlocks, GetTransactions, GetTransactionsFromTxHashes,
-            Key, KeyContainer, TransactionDigests,
+            msgid, GetBlockHashesByEpoch, GetBlockHeaders, GetBlockTxn,
+            GetBlocks, GetCompactBlocks, GetTransactions,
+            GetTransactionsFromTxHashes, Key, KeyContainer, TransactionDigests,
         },
         request_manager::request_batcher::RequestBatcher,
         synchronization_protocol_handler::{AsyncTaskQueue, RecoverPublicTask},
@@ -175,7 +174,7 @@ impl RequestManager {
     /// add the request to waiting queue to resend later.
     pub fn request_with_delay(
         &self, io: &dyn NetworkContext, mut request: Box<dyn Request>,
-        peer: Option<NodeId>, delay: Option<Duration>,
+        mut peer: Option<NodeId>, delay: Option<Duration>,
     )
     {
         // retain the request items that not in flight.
@@ -184,6 +183,14 @@ impl RequestManager {
         if request.is_empty() {
             request.notify_empty();
             return;
+        }
+        // Check block-related requests, and put them into waiting_requests
+        // if we cannot process it.
+        if peer.is_some()
+            && delay.is_none()
+            && !self.check_and_update_net_inflight_blocks(&request)
+        {
+            peer = None;
         }
 
         // increase delay for resent request.
@@ -200,7 +207,6 @@ impl RequestManager {
                 WaitingRequest(request, next_delay),
                 peer,
             ));
-
             return;
         }
 
@@ -250,18 +256,11 @@ impl RequestManager {
     }
 
     pub fn request_blocks(
-        &self, io: &dyn NetworkContext, mut peer_id: Option<NodeId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, with_public: bool, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
-        if self.recover_public_queue.is_full() {
-            // Insert the request into waiting queue when the queue is already
-            // full, to avoid requesting more blocks than we can
-            // process. Requests will be inserted to waiting queue
-            // if peer_id is None.
-            peer_id = None;
-        }
         debug!("request_blocks: hashes={:?}", hashes);
 
         let request = GetBlocks {
@@ -495,18 +494,11 @@ impl RequestManager {
     }
 
     pub fn request_compact_blocks(
-        &self, io: &dyn NetworkContext, mut peer_id: Option<NodeId>,
+        &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>, delay: Option<Duration>,
     )
     {
         let _timer = MeterTimer::time_func(REQUEST_MANAGER_TIMER.as_ref());
-        if self.recover_public_queue.is_full() {
-            // Insert the request into waiting queue when the queue is already
-            // full, to avoid requesting more blocks than we can
-            // process. Requests will be inserted to waiting queue
-            // if peer_id is None.
-            peer_id = None;
-        }
         debug!("request_compact_blocks: hashes={:?}", hashes);
 
         let request = GetCompactBlocks {
@@ -670,23 +662,28 @@ impl RequestManager {
             requested_hashes, received_blocks, peer
         );
         let missing_blocks = {
-            let mut inflight_keys = self.inflight_keys.write(msgid::GET_BLOCKS);
+            let mut inflight_blocks =
+                self.inflight_keys.write(msgid::GET_BLOCKS);
+            let mut net_inflight_blocks =
+                self.inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
             let mut missing_blocks = Vec::new();
             for req_hash in &requested_hashes {
+                net_inflight_blocks.remove(&Key::Hash(*req_hash));
                 if !received_blocks.remove(req_hash) {
                     // If `req_hash` is not in `blocks_in_flight`, it may has
                     // been received or requested
                     // again by another thread, so we do not need to request it
                     // in that case
-                    if inflight_keys.remove(&Key::Hash(*req_hash)) {
+                    if inflight_blocks.remove(&Key::Hash(*req_hash)) {
                         missing_blocks.push(*req_hash);
                     }
                 } else {
-                    inflight_keys.remove(&Key::Hash(*req_hash));
+                    inflight_blocks.remove(&Key::Hash(*req_hash));
                 }
             }
             for h in &received_blocks {
-                inflight_keys.remove(&Key::Hash(*h));
+                net_inflight_blocks.remove(&Key::Hash(*h));
+                inflight_blocks.remove(&Key::Hash(*h));
             }
             missing_blocks
         };
@@ -842,7 +839,9 @@ impl RequestManager {
     }
 
     /// Send waiting requests that their backoff delay have passes
-    pub fn resend_waiting_requests(&self, io: &dyn NetworkContext) {
+    pub fn resend_waiting_requests(
+        &self, io: &dyn NetworkContext, remove_timeout_requests: bool,
+    ) {
         debug!("resend_waiting_requests: start");
         let mut waiting_requests = self.waiting_requests.lock();
         let now = Instant::now();
@@ -853,7 +852,9 @@ impl RequestManager {
             if req.time_to_send >= now {
                 waiting_requests.push(req);
                 break;
-            } else if req.request.1 > *DEFAULT_REQUEST_DELAY_UPPER_BOUND {
+            } else if remove_timeout_requests
+                && req.request.1 > *DEFAULT_REQUEST_DELAY_UPPER_BOUND
+            {
                 // Discard stale requests
                 warn!("Request is in-flight for over an hour: {:?}", req);
                 req.request.0.on_removed(&self.inflight_keys);
@@ -867,9 +868,7 @@ impl RequestManager {
                 Some(r) => r,
                 None => continue,
             };
-            if request.msg_id() == GET_BLOCKS
-                && self.recover_public_queue.is_full()
-            {
+            if !self.check_and_update_net_inflight_blocks(&request) {
                 // Keep GetBlocks requests in queue
                 // when we do not have the capability to process them.
                 // We resend GetCompactBlocks as GetBlocks, so only check
@@ -936,6 +935,60 @@ impl RequestManager {
             }
         } else {
             debug!("Peer already removed form request manager when disconnected peer={}", peer);
+        }
+    }
+
+    fn check_and_update_net_inflight_blocks(
+        &self, request: &Box<dyn Request>,
+    ) -> bool {
+        match request.msg_id() {
+            msgid::GET_BLOCKS | msgid::GET_CMPCT_BLOCKS => {
+                // Insert the request into waiting queue when the queue is
+                // already full, to avoid requesting more blocks
+                // than we can process. Requests will be
+                // inserted to waiting queue if peer_id is None.
+                let mut net_inflight_blocks =
+                    self.inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
+                if net_inflight_blocks.len()
+                    >= self.recover_public_queue.estimated_available_count()
+                {
+                    trace!("queue is full, send block request later: inflight={} req={:?}",
+                           net_inflight_blocks.len(), request);
+                    return false;
+                } else {
+                    let hashes = if let Some(req) =
+                        request.as_any().downcast_ref::<GetBlocks>()
+                    {
+                        &req.hashes
+                    } else if let Some(req) =
+                        request.as_any().downcast_ref::<GetCompactBlocks>()
+                    {
+                        &req.hashes
+                    } else {
+                        panic!(
+                            "MessageId and Request not match, request={:?}",
+                            request
+                        );
+                    };
+                    for hash in hashes {
+                        net_inflight_blocks.insert(Key::Hash(*hash));
+                    }
+                    trace!("queue is not full, send block request now: inflight={} req={:?}",
+                           net_inflight_blocks.len(), request);
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    pub fn remove_net_inflight_blocks<'a, I: Iterator<Item = &'a H256>>(
+        &self, blocks: I,
+    ) {
+        let mut net_inflight_blocks =
+            self.inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
+        for block_hash in blocks {
+            net_inflight_blocks.remove(&Key::Hash(*block_hash));
         }
     }
 }

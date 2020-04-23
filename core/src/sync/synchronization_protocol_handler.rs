@@ -26,6 +26,8 @@ use crate::{
 };
 use cfx_types::H256;
 use io::TimerToken;
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
     node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
@@ -80,38 +82,99 @@ pub enum SyncHandlerWorkType {
     LocalMessage = 2,
 }
 
+pub trait TaskSize {
+    fn size(&self) -> usize { 0 }
+
+    fn count(&self) -> usize { 1 }
+}
+
 /// FIFO queue to async execute tasks.
-pub struct AsyncTaskQueue<T> {
-    tasks: Mutex<VecDeque<T>>,
+pub struct AsyncTaskQueue<T: TaskSize> {
+    inner: RwLock<AsyncTaskQueueInner<T>>,
     work_type: HandlerWorkType,
 
     // The maximum number of elements in the queue.
     // Note we do not drop elements even when the queue is full to
     // keep the behavior of this queue consistent.
     max_capacity: usize,
+
+    // Alpha for computing moving average.
+    alpha: f64,
 }
 
-impl<T> AsyncTaskQueue<T> {
+struct AsyncTaskQueueInner<T: TaskSize> {
+    tasks: VecDeque<T>,
+    size: usize,
+    moving_average: f64,
+}
+
+impl<T: TaskSize> AsyncTaskQueue<T> {
     fn new(work_type: SyncHandlerWorkType, max_capacity: usize) -> Self {
         AsyncTaskQueue {
-            tasks: Mutex::new(VecDeque::new()),
+            inner: RwLock::new(AsyncTaskQueueInner {
+                tasks: VecDeque::new(),
+                size: 0,
+                moving_average: 1000.0, // Set to 1KB as initial size.
+            }),
             work_type: work_type as HandlerWorkType,
             max_capacity,
+            // TODO: set a proper value.
+            alpha: 0.001,
         }
     }
 
     pub fn dispatch(&self, io: &dyn NetworkContext, task: T) {
-        self.tasks.lock().push_back(task);
+        let mut inner = self.inner.write();
+        inner.size += task.size();
+        // Compute moving average.
+        if task.count() != 0 {
+            inner.moving_average = self.alpha
+                * (task.size() / task.count()) as f64
+                + (1.0 - self.alpha) * inner.moving_average;
+        }
         io.dispatch_work(self.work_type);
+        inner.tasks.push_back(task);
+        trace!(
+            "AsyncTaskQueue dispatch: size={} average={}",
+            inner.size,
+            inner.moving_average,
+        );
     }
 
-    fn pop(&self) -> Option<T> { self.tasks.lock().pop_front() }
+    fn pop(&self) -> Option<T> {
+        let mut inner = self.inner.write();
+        let task = inner.tasks.pop_front();
+        task.as_ref().map(|task| {
+            inner.size -= task.size();
+        });
+        trace!(
+            "AsyncTaskQueue pop: size={} average={}",
+            inner.size,
+            inner.moving_average,
+        );
+        task
+    }
 
-    pub fn is_full(&self) -> bool {
-        self.tasks.lock().len() >= self.max_capacity
+    fn size(&self) -> usize { self.inner.read().size }
+
+    pub fn is_full(&self) -> bool { self.size() >= self.max_capacity }
+
+    /// Return `true` if inflight insertion is successful.
+    pub fn estimated_available_count(&self) -> usize {
+        let inner = self.inner.read();
+        if inner.size >= self.max_capacity {
+            0
+        } else if inner.moving_average != 0.0 {
+            ((self.max_capacity - inner.size) as f64 / inner.moving_average)
+                as usize
+        } else {
+            // This should never happen.
+            self.max_capacity
+        }
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
 pub struct RecoverPublicTask {
     blocks: Vec<Block>,
     requested: HashSet<H256>,
@@ -136,9 +199,20 @@ impl RecoverPublicTask {
     }
 }
 
+impl TaskSize for RecoverPublicTask {
+    fn size(&self) -> usize {
+        let mut ops = new_malloc_size_ops();
+        self.size_of(&mut ops) + std::mem::size_of::<Self>()
+    }
+
+    fn count(&self) -> usize { self.blocks.len() }
+}
+
 pub struct LocalMessageTask {
     message: Vec<u8>,
 }
+
+impl TaskSize for LocalMessageTask {}
 
 struct FutureBlockContainerInner {
     capacity: usize,
@@ -269,6 +343,7 @@ pub struct ProtocolConfiguration {
     pub heartbeat_timeout: Duration,
     pub block_cache_gc_period: Duration,
     pub expire_block_gc_period: Duration,
+    pub sync_expire_block_timeout: Duration,
     pub headers_request_timeout: Duration,
     pub blocks_request_timeout: Duration,
     pub transaction_request_timeout: Duration,
@@ -292,7 +367,7 @@ pub struct ProtocolConfiguration {
     pub timeout_observing_period_s: u64,
     pub max_allowed_timeout_in_observing_period: u64,
     pub demote_peer_for_timeout: bool,
-    pub max_unprocessed_block_count: usize,
+    pub max_unprocessed_block_size: usize,
 }
 
 impl SynchronizationProtocolHandler {
@@ -311,7 +386,7 @@ impl SynchronizationProtocolHandler {
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,
-            protocol_config.max_unprocessed_block_count,
+            protocol_config.max_unprocessed_block_size,
         ));
         let request_manager = Arc::new(RequestManager::new(
             &protocol_config,
@@ -895,6 +970,12 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext,
     ) -> Result<(), Error> {
         let task = self.recover_public_queue.pop().unwrap();
+        let received_blocks: Vec<H256> =
+            task.blocks.iter().map(|block| block.hash()).collect();
+        self.request_manager
+            .remove_net_inflight_blocks(received_blocks.iter());
+        self.request_manager
+            .remove_net_inflight_blocks(task.requested.iter());
         self.on_blocks_inner(io, task)
     }
 
@@ -1252,7 +1333,8 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        self.request_manager.resend_waiting_requests(io);
+        self.request_manager
+            .resend_waiting_requests(io, !self.catch_up_mode());
     }
 
     pub fn send_heartbeat(&self, io: &dyn NetworkContext) {
@@ -1626,7 +1708,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                 // exist in the frontier across two consecutive GC.
                 self.expire_block_gc(
                     io,
-                    self.protocol_config.expire_block_gc_period.as_secs() * 2,
+                    self.protocol_config.sync_expire_block_timeout.as_secs(),
                 )
                 .ok();
             }
