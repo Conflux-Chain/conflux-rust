@@ -152,6 +152,10 @@ impl SynchronizationState {
     // FIXME: it lead to more questions but these are questions on the
     // FIXME: algorithm side.
     pub fn median_epoch_from_normal_peers(&self) -> Option<u64> {
+        // This flag is set to true if all peers are just starting from a clean
+        // state, so we can just enter the normal phase because there's
+        // nothing to catch up.
+        let mut fresh_start = true;
         let mut peer_best_epoches = Vec::new();
         {
             for (_, state_lock) in &*self.peers.read() {
@@ -161,12 +165,16 @@ impl SynchronizationState {
                     .contains(DynamicCapability::NormalPhase(true))
                 {
                     peer_best_epoches.push(state.best_epoch);
+                } else if state.best_epoch != 0 {
+                    // Note `best_epoch` is initialized according to Status,
+                    // so if it's 0, the peer is just newly started
+                    fresh_start = false;
                 }
             }
         };
 
         if peer_best_epoches.is_empty() {
-            return None;
+            return if fresh_start { Some(0) } else { None };
         }
 
         peer_best_epoches.sort();
