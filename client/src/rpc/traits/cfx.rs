@@ -5,7 +5,7 @@
 use super::super::types::{
     Account as RpcAccount, Block, Bytes, CallRequest, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
-    Receipt as RpcReceipt, SponsorInfo as RpcSponsorInfo,
+    Receipt as RpcReceipt, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
     StorageRoot as RpcStorageRoot, Transaction, H160 as RpcH160,
     H256 as RpcH256, U256 as RpcU256, U64 as RpcU64,
 };
@@ -195,6 +195,9 @@ pub trait Cfx {
     fn confirmation_risk_by_hash(
         &self, block_hash: RpcH256,
     ) -> JsonRpcResult<Option<RpcU256>>;
+
+    #[rpc(name = "cfx_getStatus")]
+    fn get_status(&self) -> JsonRpcResult<RpcStatus>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]

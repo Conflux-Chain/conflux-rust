@@ -22,6 +22,8 @@
 
 - cfx_gasPrice will return a price with at least 1000000000 1GDrip.
 
+- Move getstatus RPC from test to common, and renamed with cfx_getStatus.
+
 ## Bug Fixes
 
 - Fix UnexpectedResponse from honest peers that causes peer demotion.
