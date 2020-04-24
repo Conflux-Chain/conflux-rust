@@ -20,6 +20,8 @@
 
 - Add support for WebSockets in RPC.
 
+- cfx_gasPrice will return a price with at least 1000000000 1GDrip.
+
 ## Bug Fixes
 
 - Fix UnexpectedResponse from honest peers that causes peer demotion.
