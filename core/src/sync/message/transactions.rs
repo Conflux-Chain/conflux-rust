@@ -43,7 +43,7 @@ impl Handleable for Transactions {
             let mut peer_info = peer_info.write();
             if peer_info
                 .notified_capabilities
-                .contains(DynamicCapability::TxRelay(false))
+                .contains(DynamicCapability::NormalPhase(false))
             {
                 peer_info.received_transaction_count += transactions.len();
                 peer_info.received_transaction_count
@@ -96,7 +96,7 @@ impl Handleable for TransactionDigests {
             let mut peer_info = peer_info.write();
             if peer_info
                 .notified_capabilities
-                .contains(DynamicCapability::TxRelay(false))
+                .contains(DynamicCapability::NormalPhase(false))
             {
                 peer_info.received_transaction_count +=
                     self.short_ids.len() + self.tx_hashes.len();

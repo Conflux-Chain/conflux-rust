@@ -1133,7 +1133,7 @@ impl SynchronizationProtocolHandler {
                     if !peer_info
                         .read()
                         .capabilities
-                        .contains(DynamicCapability::TxRelay(true))
+                        .contains(DynamicCapability::NormalPhase(true))
                     {
                         return None;
                     }
@@ -1368,12 +1368,12 @@ impl SynchronizationProtocolHandler {
             let mut state = state.write();
             if !state
                 .notified_capabilities
-                .contains(DynamicCapability::TxRelay(!catch_up_mode))
+                .contains(DynamicCapability::NormalPhase(!catch_up_mode))
             {
                 state.received_transaction_count = 0;
                 state
                     .notified_capabilities
-                    .insert(DynamicCapability::TxRelay(!catch_up_mode));
+                    .insert(DynamicCapability::NormalPhase(!catch_up_mode));
                 need_notify.push(*peer);
             }
         }
@@ -1383,7 +1383,7 @@ impl SynchronizationProtocolHandler {
             self.graph.consensus.best_epoch_number()
         );
 
-        DynamicCapability::TxRelay(!catch_up_mode)
+        DynamicCapability::NormalPhase(!catch_up_mode)
             .broadcast_with_peers(io, need_notify);
     }
 

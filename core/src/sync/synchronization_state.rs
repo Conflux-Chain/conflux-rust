@@ -148,17 +148,21 @@ impl SynchronizationState {
 
     pub fn is_dev_or_test_mode(&self) -> bool { self.is_dev_or_test_mode }
 
-    // FIXME: use median instead, because it's so confusing without context.
     // FIXME: median_chain_height_from_peers.
     // FIXME: it lead to more questions but these are questions on the
     // FIXME: algorithm side.
-    pub fn get_middle_epoch(&self) -> Option<u64> {
-        let mut peer_best_epoches = {
-            let peers = self.peers.read();
-            peers
-                .iter()
-                .map(|(_, state)| state.read().best_epoch)
-                .collect::<Vec<_>>()
+    pub fn median_epoch_from_normal_peers(&self) -> Option<u64> {
+        let mut peer_best_epoches = Vec::new();
+        {
+            for (_, state_lock) in &*self.peers.read() {
+                let state = state_lock.read();
+                if state
+                    .capabilities
+                    .contains(DynamicCapability::NormalPhase(true))
+                {
+                    peer_best_epoches.push(state.best_epoch);
+                }
+            }
         };
 
         if peer_best_epoches.is_empty() {
