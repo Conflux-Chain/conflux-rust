@@ -6,6 +6,9 @@
 
 - Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
 
+- Keep network_id the same as chain_id. Setting network_id is only for local
+experimental purposes.
+
 # 0.5.0
 
 ## Improvements
