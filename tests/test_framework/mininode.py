@@ -7,6 +7,7 @@ P2PInterface: A high-level interface object for communicating to a node over P2P
 from eth_utils import big_endian_to_int, encode_hex
 
 from conflux import utils
+from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import *
 import asyncore
 from collections import defaultdict
@@ -420,7 +421,7 @@ class P2PInterface(P2PConnection):
         if self.remote:
             ip = get_ip_address()
         endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
-        hello = Hello(1, [Capability(self.protocol, self.protocol_version)], endpoint)
+        hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint)
 
         self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True
