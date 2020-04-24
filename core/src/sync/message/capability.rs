@@ -97,6 +97,10 @@ pub struct DynamicCapabilityChange {
 
 impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!(
+            "handle dynamic_capability_change: msg={:?}, peer={}",
+            self, ctx.node_id
+        );
         let peer = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
         peer.write().capabilities.insert(self.changed);
         Ok(())
