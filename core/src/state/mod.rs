@@ -686,8 +686,11 @@ impl State {
         if !by.is_zero() {
             self.require(address, false)?.sub_balance(by);
         }
+
         if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
-            set.insert(*address);
+            if self.exists(address)? {
+                set.insert(*address);
+            }
         }
         Ok(())
     }
@@ -700,12 +703,11 @@ impl State {
                 && !self.exists(address)?)
         {
             self.require(address, false)?.add_balance(by);
-        } else if let CleanupMode::TrackTouched(set) = cleanup_mode {
+        }
+
+        if let CleanupMode::TrackTouched(set) = cleanup_mode {
             if self.exists(address)? {
                 set.insert(*address);
-
-                // Stop marking address as dirty here.
-                // self.touch(address)?;
             }
         }
         Ok(())
