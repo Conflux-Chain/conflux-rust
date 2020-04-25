@@ -20,6 +20,8 @@
 
 - Add support for WebSockets in RPC.
 
+- Move getstatus RPC from test to common, and renamed with cfx_getStatus.
+
 ## Bug Fixes
 
 - Fix UnexpectedResponse from honest peers that causes peer demotion.
