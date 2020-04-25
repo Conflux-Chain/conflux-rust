@@ -150,6 +150,182 @@ fn test_get_set_at_second_commit() {
 }
 
 #[test]
+fn test_snapshot_random_read_performance() {
+    let state_manager = new_state_manager_for_unit_test();
+    let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
+
+    const EPOCHS: u8 = 20;
+    println!(
+        "Build {} epochs for testing, 10 epochs a snapshot.",
+        2 * EPOCHS
+    );
+    let mut rng = get_rng_for_test();
+    let range = Uniform::from(0..keys.len());
+    const TXS: u32 = 20000;
+    let mut epoch_keys = Vec::with_capacity(EPOCHS as usize * 2);
+    for _epoch in 0..EPOCHS * 2 {
+        let mut e_keys = Vec::with_capacity(TXS as usize * 2);
+        for _key_idx in (-(TXS as i32) * 2)..0 {
+            e_keys.push(keys[range.sample(&mut rng)].as_slice());
+        }
+        epoch_keys.push(e_keys);
+    }
+
+    println!("Initializing {} accounts", keys.len());
+    const DEFAULT_BALANCE: u64 = 1_000_000_000;
+    let mut state_0 = state_manager.get_state_for_genesis_write();
+    for key in &keys {
+        let address = &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
+        let account = primitives::Account::new_empty_with_balance(
+            &Address::from_slice(address),
+            &DEFAULT_BALANCE.into(),
+            &0.into(),
+        );
+        let account_key = StorageKey::AccountKey(address);
+        state_0
+            .set(account_key, rlp::encode(&account).into())
+            .expect("Failed to set key");
+    }
+
+    let epoch_id_0 = H256::default();
+    let mut state_root = state_0.compute_state_root().unwrap();
+    state_0.commit(epoch_id_0).unwrap();
+
+    println!("Commiting initial {} epochs.", EPOCHS);
+
+    for epoch in 0..EPOCHS {
+        state_root = simulate_transactions(
+            epoch,
+            &state_root,
+            &epoch_keys[epoch as usize],
+            &state_manager,
+            &mut 0,
+            &mut 0,
+            &mut 0,
+            &mut 0,
+        );
+    }
+
+    println!(
+        "Benchmarking last {} epochs with {} transactions",
+        EPOCHS,
+        EPOCHS as u32 * TXS
+    );
+    let mut load_ms = 0;
+    let mut update_ms = 0;
+    let mut write_ms = 0;
+    let mut commit_ms = 0;
+    for epoch in EPOCHS..EPOCHS * 2 {
+        state_root = simulate_transactions(
+            epoch,
+            &state_root,
+            &epoch_keys[epoch as usize],
+            &state_manager,
+            &mut load_ms,
+            &mut update_ms,
+            &mut write_ms,
+            &mut commit_ms,
+        );
+    }
+    let total_ms = (load_ms + update_ms + write_ms + commit_ms) as f64;
+    println!(
+        "Benchmark finished, TPS = {}, \
+         load_ms = {}%, update_ms = {}%, write_ms = {}%, commit_ms = {:?}%",
+        1000.0 * (TXS as f64) * (EPOCHS as f64) / total_ms,
+        100.0 * (load_ms as f64) / total_ms,
+        100.0 * (update_ms as f64) / total_ms,
+        100.0 * (write_ms as f64) / total_ms,
+        100.0 * (commit_ms as f64) / total_ms,
+    );
+}
+
+fn simulate_transactions(
+    epoch: u8, prev_state_root: &StateRootWithAuxInfo, keys: &[&[u8]],
+    state_manager: &FakeStateManager, read_ms: &mut u32, update_ms: &mut u32,
+    write_ms: &mut u32, commit_ms: &mut u32,
+) -> StateRootWithAuxInfo
+{
+    // Wait for snapshotting to complete. We don't calculate the time spent in
+    // making snapshot.
+    while state_manager
+        .get_storage_manager()
+        .in_progress_snapshotting_tasks
+        .read()
+        .len()
+        != 0
+    {
+        thread::sleep(Duration::from_secs(1));
+    }
+    let mut epoch_id = H256::default();
+    epoch_id.as_bytes_mut()[0] = epoch;
+    let mut state = state_manager
+        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+            &epoch_id,
+            prev_state_root,
+            epoch as u64 + 1,
+            state_manager
+                .get_storage_manager()
+                .get_snapshot_epoch_count(),
+        ))
+        .unwrap()
+        .unwrap();
+    let mut values = Vec::with_capacity(keys.len());
+
+    // Load all values.
+    let now = Instant::now();
+    for key in keys {
+        let address = &[*key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
+        let account_key = StorageKey::AccountKey(address);
+
+        values.push(Some(
+            state
+                .get(account_key)
+                .expect("Failed to get key.")
+                .expect("no such key"),
+        ));
+    }
+    *read_ms += now.elapsed().as_millis() as u32;
+
+    // Update accounts.
+    let now = Instant::now();
+    let len = keys.len();
+    for i in 0..len {
+        let mut account: primitives::Account =
+            rlp::decode(values[i].as_ref().unwrap())
+                .expect("failed to decode rlp");
+        if i % 2 == 0 {
+            account.balance -= U256::one();
+        } else {
+            account.balance += U256::one();
+        }
+        values[i] = Some(rlp::encode(&account).into());
+    }
+    *update_ms += now.elapsed().as_millis() as u32;
+
+    // Write accounts.
+    let now = Instant::now();
+    for i in 0..len {
+        let key = keys[i];
+        let address = &[key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
+        let account_key = StorageKey::AccountKey(address);
+
+        state
+            .set(account_key, values[i].take().unwrap())
+            .expect("Failed to set key");
+    }
+    *write_ms += now.elapsed().as_millis() as u32;
+
+    // Commit.
+    let now = Instant::now();
+    epoch_id.as_bytes_mut()[0] = epoch + 1;
+    let state_root = state.compute_state_root().unwrap();
+    state.commit(epoch_id).unwrap();
+    *commit_ms += now.elapsed().as_millis() as u32;
+
+    state_root
+}
+
+#[test]
 fn test_set_delete() {
     let mut rng = get_rng_for_test();
     let state_manager = new_state_manager_for_unit_test();
@@ -540,8 +716,19 @@ use super::{
     super::{state::*, state_manager::*},
     generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
 };
-use crate::storage::tests::TEST_NUMBER_OF_KEYS;
-use cfx_types::H256;
+use crate::storage::{
+    tests::{FakeStateManager, TEST_NUMBER_OF_KEYS},
+    StateRootWithAuxInfo,
+};
+use cfx_types::{Address, H256, U256};
 use primitives::{StateRoot, StorageKey};
-use rand::{seq::SliceRandom, Rng};
-use std::{sync::Arc, thread};
+use rand::{
+    distributions::{Distribution, Uniform},
+    seq::SliceRandom,
+    Rng,
+};
+use std::{
+    sync::Arc,
+    thread,
+    time::{Duration, Instant},
+};
