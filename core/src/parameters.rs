@@ -75,6 +75,10 @@ pub mod consensus_internal {
     /// meter is going to consider safe to assume no adaptive blocks in the
     /// near future.
     pub const CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK: f64 = 0.0000001;
+    /// This controls how often the confirmation meter updates. The default is
+    /// to update the meter every 20 blocks. Note that confirmation meter
+    /// update is CPU intensive if the tree graph is in a unstable state.
+    pub const CONFIRMATION_METER_UPDATE_FREQUENCY: usize = 20;
 }
 
 pub mod sync {

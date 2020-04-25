@@ -41,12 +41,23 @@ class SameHeightTest(ConfluxTestFramework):
         block_gen_thread.start()
         start_time = time.time()
         original_cnt = self.nodes[0].getblockcount()
-        for _ in range(1000):
+        for _ in range(100):
             time.sleep(1)
             cnt = self.nodes[0].getblockcount()
+            try:
+                cnt1 = self.nodes[1].getblockcount()
+            except Exception as e:
+                self.log.info("Unable to get Node1 block count. Maybe it is busy.")
+                cnt1 = -1
+            try:
+                cnt2 = self.nodes[2].getblockcount()
+            except Exception as e:
+                self.log.info("Unable to get Node2 block count. Maybe it is busy.")
+                cnt2 = -1
             elapsed = time.time() - start_time
             avg_block_processing = (cnt - original_cnt) / elapsed
-            self.log.info(f"Node 0 block count {cnt}, elapsed {elapsed}, {avg_block_processing} blocks/s")
+            self.log.info(f"Nodes block count {cnt};{cnt1};{cnt2}, elapsed {elapsed}, {avg_block_processing} blocks/s")
+        self.log.info(f"Merge bench average block processing speed: {avg_block_processing} blocks/s")
 
 def batch_generate(node, n_blocks, log):
     start = time.time()
