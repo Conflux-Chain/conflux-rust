@@ -4,7 +4,11 @@
 
 ## Improvements
 
+
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
+
+- Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
+
 
 # 0.5.0
 
@@ -19,6 +23,8 @@
 - Define gas_used to be transaction gas limit for NotEnoughCash, the same as all other exceptions.
 
 - Add support for WebSockets in RPC.
+
+- Move getstatus RPC from test to common, and renamed with cfx_getStatus.
 
 ## Bug Fixes
 

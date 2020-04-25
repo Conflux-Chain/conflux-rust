@@ -130,7 +130,7 @@ impl AdminControl {
     ) -> vm::Result<()>
     {
         if input.len() != 32 {
-            return Err(vm::Error::InternalContract("invali ddata"));
+            return Err(vm::Error::InternalContract("invalid data"));
         }
 
         let contract_address = Address::from_slice(&input[12..32]);
@@ -151,7 +151,14 @@ impl InternalContractTrait for AdminControl {
     fn address(&self) -> &Address { &ADMIN_CONTROL_CONTRACT_ADDRESS }
 
     /// The gas cost of running this internal contract for the given input data.
-    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::zero() }
+    ///
+    /// + set_admin: SLOAD (current admin), SSTORE (new admin)
+    ///   Gas: 5000
+    /// + destroy: SLOAD (current admin), SELFDESTRUCT
+    ///   Gas: 5000
+    /// + otherwise
+    ///   Gas: 5000
+    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::from(5000) }
 
     /// execute this internal contract on the given parameters.
     fn execute(

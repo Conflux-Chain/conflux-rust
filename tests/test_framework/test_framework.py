@@ -77,6 +77,8 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
+        # The key is file name, and the value is a string as file content.
+        self.extra_conf_files = {}
         self.set_test_params()
         self.predicates = {}
         self.snapshot = {}
@@ -449,7 +451,7 @@ class ConfluxTestFramework:
 
             # Create cache directories, run bitcoinds:
             for i in range(MAX_NODES):
-                datadir = initialize_datadir(self.options.cachedir, i)
+                datadir = initialize_datadir(self.options.cachedir, i, self.extra_conf_files)
                 args = [self.options.bitcoind, "-datadir=" + datadir]
                 if i > 0:
                     args.append("-connect=127.0.0.1:" + str(p2p_port(0)))
@@ -510,7 +512,7 @@ class ConfluxTestFramework:
             to_dir = get_datadir_path(self.options.tmpdir, i)
             shutil.copytree(from_dir, to_dir)
             initialize_datadir(self.options.tmpdir,
-                               i, self.conf_parameters)  # Overwrite port/rpcport in bitcoin.conf
+                               i, self.conf_parameters, self.extra_conf_files)  # Overwrite port/rpcport in bitcoin.conf
 
     def _initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.
@@ -518,7 +520,7 @@ class ConfluxTestFramework:
         Create an empty blockchain and num_nodes wallets.
         Useful if a test case wants complete control over initialization."""
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i, self.conf_parameters)
+            initialize_datadir(self.options.tmpdir, i, self.conf_parameters, self.extra_conf_files)
 
 
 class SkipTest(Exception):

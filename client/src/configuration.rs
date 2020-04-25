@@ -26,6 +26,8 @@ use cfxcore::{
     transaction_pool::{TxPoolConfig, DEFAULT_MAX_TRANSACTION_GAS_LIMIT},
 };
 use metrics::MetricsConfiguration;
+use primitives::ChainIdParams;
+use rand::Rng;
 use std::convert::TryInto;
 use txgen::TransactionGeneratorConfig;
 
@@ -102,6 +104,7 @@ build_config! {
         // Genesis section.
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
+        (chain_id, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -157,7 +160,7 @@ build_config! {
         (max_outgoing_peers, (usize), 16)
         (max_outgoing_peers_archive, (usize), 0)
         (max_peers_tx_propagation, (usize), 128)
-        (max_unprocessed_block_count, (usize), (128))
+        (max_unprocessed_block_size_mb, (usize), (128))
         (min_peers_tx_propagation, (usize), 8)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
@@ -165,6 +168,7 @@ build_config! {
         (snapshot_candidate_request_timeout_ms, (u64), 10_000)
         (snapshot_chunk_request_timeout_ms, (u64), 30_000)
         (snapshot_manifest_request_timeout_ms, (u64), 30_000)
+        (sync_expire_block_timeout_s, (u64), 7200)
         (throttling_conf, (Option<String>), None)
         (timeout_observing_period_s, (u64), 600)
         (transaction_request_timeout_ms, (u64), 30_000)
@@ -360,6 +364,12 @@ impl Configuration {
             self.raw_conf.enable_optimistic_execution
         };
         ConsensusConfig {
+            chain_id: ChainIdParams {
+                chain_id: self
+                    .raw_conf
+                    .chain_id
+                    .unwrap_or_else(|| rand::thread_rng().gen()),
+            },
             debug_dump_dir_invalid_state_root: self
                 .raw_conf
                 .debug_dump_dir_invalid_state_root
@@ -540,9 +550,13 @@ impl Configuration {
             heartbeat_timeout: Duration::from_millis(
                 self.raw_conf.heartbeat_timeout_ms,
             ),
-            max_unprocessed_block_count: self
+            max_unprocessed_block_size: self
                 .raw_conf
-                .max_unprocessed_block_count,
+                .max_unprocessed_block_size_mb
+                * 1_000_000,
+            sync_expire_block_timeout: Duration::from_secs(
+                self.raw_conf.sync_expire_block_timeout_s,
+            ),
         }
     }
 

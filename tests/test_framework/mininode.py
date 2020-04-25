@@ -42,9 +42,13 @@ class P2PConnection(asyncore.dispatcher):
     sub-classed and the on_message() callback overridden."""
 
     def __init__(self):
+        self.chain_id = None
         assert not network_thread_running()
 
         super().__init__(map=mininode_socket_map)
+
+    def set_chain_id(self, chain_id):
+        self.chain_id = chain_id
 
     def peer_connect(self, dstaddr, dstport):
         self.dstaddr = dstaddr
@@ -327,7 +331,9 @@ class P2PInterface(P2PConnection):
     # Message receiving methods
 
     def send_status(self):
-        status = Status(self.protocol_version, self.genesis.block_header.hash, 0, [self.best_block_hash])
+        status = Status(
+            self.protocol_version, ChainIdParams(self.chain_id),
+            self.genesis.block_header.hash, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
     def on_protocol_packet(self, protocol, payload):

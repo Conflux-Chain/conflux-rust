@@ -903,6 +903,7 @@ impl Cfx for CfxHandler {
             fn gas_price(&self) -> JsonRpcResult<RpcU256>;
             fn next_nonce(&self, address: RpcH160, num: Option<BlockHashOrEpochNumber>)
                 -> JsonRpcResult<RpcU256>;
+            fn get_status(&self) -> JsonRpcResult<RpcStatus>;
         }
 
         to self.rpc_impl {
@@ -958,7 +959,6 @@ impl TestRpc for TestRpcImpl {
             fn get_goodput(&self) -> JsonRpcResult<String>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> JsonRpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> JsonRpcResult<Vec<PeerInfo>>;
-            fn get_status(&self) -> JsonRpcResult<RpcStatus>;
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
             fn save_node_db(&self) -> JsonRpcResult<()>;

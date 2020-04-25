@@ -15,14 +15,14 @@ use rlp_derive::{RlpDecodableWrapper, RlpEncodableWrapper};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum DynamicCapability {
-    TxRelay(bool),      // provide tx relay
+    NormalPhase(bool),  // provide tx relay
     ServeHeaders(bool), // provide block header downloads
 }
 
 impl DynamicCapability {
     fn code(&self) -> u8 {
         match self {
-            DynamicCapability::TxRelay(_) => 0,
+            DynamicCapability::NormalPhase(_) => 0,
             DynamicCapability::ServeHeaders(_) => 1,
         }
     }
@@ -52,7 +52,7 @@ impl Encodable for DynamicCapability {
         s.begin_list(2).append(&self.code());
 
         match self {
-            DynamicCapability::TxRelay(enabled) => s.append(enabled),
+            DynamicCapability::NormalPhase(enabled) => s.append(enabled),
             DynamicCapability::ServeHeaders(enabled) => s.append(enabled),
         };
     }
@@ -65,7 +65,7 @@ impl Decodable for DynamicCapability {
         }
 
         match rlp.val_at::<u8>(0)? {
-            0 => Ok(DynamicCapability::TxRelay(rlp.val_at(1)?)),
+            0 => Ok(DynamicCapability::NormalPhase(rlp.val_at(1)?)),
             1 => Ok(DynamicCapability::ServeHeaders(rlp.val_at(1)?)),
             _ => Err(DecoderError::Custom("invalid capability code")),
         }
@@ -97,6 +97,10 @@ pub struct DynamicCapabilityChange {
 
 impl Handleable for DynamicCapabilityChange {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!(
+            "handle dynamic_capability_change: msg={:?}, peer={}",
+            self, ctx.node_id
+        );
         let peer = ctx.manager.syn.get_peer_info(&ctx.node_id)?;
         peer.write().capabilities.insert(self.changed);
         Ok(())

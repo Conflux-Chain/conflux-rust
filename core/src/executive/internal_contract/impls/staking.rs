@@ -87,7 +87,18 @@ impl InternalContractTrait for Staking {
     fn address(&self) -> &Address { &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS }
 
     /// The gas cost of running this internal contract for the given input data.
-    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::zero() }
+    ///
+    /// + deposit: SSTORE (deposit_balance, deposit_time)
+    ///   Gas: 10000
+    /// + withdraw: SLOAD (withdrawable_balance, deposit_time) SSTORE
+    ///             (deposit_balance, update new deposit_list)
+    ///   Gas: 10000
+    /// + lock: SSTORE (updating new locking entry and remove unnecessary ones),
+    ///         SLOAD (binary search and compare)
+    ///   Gas: 10000
+    /// + otherwise
+    ///   Gas: 10000
+    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::from(10000) }
 
     /// execute this internal contract on the given parameters.
     fn execute(

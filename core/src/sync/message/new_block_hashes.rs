@@ -35,7 +35,13 @@ impl Handleable for NewBlockHashes {
         let headers_to_request = self
             .block_hashes
             .iter()
-            .filter(|hash| !ctx.manager.graph.contains_block_header(&hash))
+            .filter(|hash| {
+                ctx.manager
+                    .graph
+                    .data_man
+                    .block_header_by_hash(&hash)
+                    .is_none()
+            })
             .cloned()
             .collect::<Vec<_>>();
 
@@ -43,6 +49,7 @@ impl Handleable for NewBlockHashes {
             ctx.io,
             Some(ctx.node_id.clone()),
             headers_to_request,
+            // We have already checked db that these headers do not exist.
             true, /* ignore_db */
         );
 
