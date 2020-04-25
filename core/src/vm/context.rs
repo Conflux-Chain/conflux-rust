@@ -100,7 +100,7 @@ pub trait Context {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress, trap: bool,
-    ) -> ::std::result::Result<ContractCreateResult, TrapKind>;
+    ) -> Result<::std::result::Result<ContractCreateResult, TrapKind>>;
 
     /// Message call.
     ///
@@ -111,7 +111,7 @@ pub trait Context {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType, trap: bool,
-    ) -> ::std::result::Result<MessageCallResult, TrapKind>;
+    ) -> Result<::std::result::Result<MessageCallResult, TrapKind>>;
 
     /// Returns code at given address
     fn extcode(&self, address: &Address) -> Result<Option<Arc<Bytes>>>;

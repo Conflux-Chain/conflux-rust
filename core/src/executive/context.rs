@@ -152,26 +152,19 @@ impl<'a> ContextTrait for Context<'a> {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address_scheme: CreateContractAddress, trap: bool,
-    ) -> ::std::result::Result<ContractCreateResult, TrapKind>
+    ) -> vm::Result<::std::result::Result<ContractCreateResult, TrapKind>>
     {
         // create new contract address
-        let (address, code_hash) = match self.state.nonce(&self.origin.address)
-        {
-            Ok(nonce) => self::contract_address(
-                address_scheme,
-                &self.origin.address,
-                &nonce,
-                &code,
-            ),
-            Err(e) => {
-                debug!(target: "context", "Database corruption encountered: {:?}", e);
-                return Ok(ContractCreateResult::Failed);
-            }
-        };
+        let (address, code_hash) = self::contract_address(
+            address_scheme,
+            &self.origin.address,
+            &self.state.nonce(&self.origin.address)?,
+            &code,
+        );
 
         if self.state.is_contract(&address) {
             debug!("Contract address conflict!");
-            return Ok(ContractCreateResult::Failed);
+            return Ok(Ok(ContractCreateResult::Failed));
         }
 
         // prepare the params
@@ -197,15 +190,12 @@ impl<'a> ContextTrait for Context<'a> {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                if let Err(e) = self.state.inc_nonce(&self.origin.address) {
-                    debug!(target: "ext", "Database corruption encountered: {:?}", e);
-                    return Ok(ContractCreateResult::Failed);
-                }
+                self.state.inc_nonce(&self.origin.address)?;
             }
         }
 
         if trap {
-            return Err(TrapKind::Create(params, address));
+            return Ok(Err(TrapKind::Create(params, address)));
         }
 
         let mut ex = Executive::from_parent(
@@ -222,32 +212,32 @@ impl<'a> ContextTrait for Context<'a> {
             self.substate,
             self.stack_depth + 1,
         );
-        Ok(into_contract_create_result(out, &address, self.substate))
+        Ok(Ok(into_contract_create_result(
+            out,
+            &address,
+            self.substate,
+        )))
     }
 
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType, trap: bool,
-    ) -> ::std::result::Result<MessageCallResult, TrapKind>
+    ) -> vm::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
 
         assert!(trap);
 
-        let code_with_hash = if let Some(contract) =
+        let (code, code_hash) = if let Some(contract) =
             self.internal_contract_map.contract(code_address)
         {
-            Ok((Some(contract.code()), Some(contract.code_hash())))
+            (Some(contract.code()), Some(contract.code_hash()))
         } else {
-            self.state.code(code_address).and_then(|code| {
-                self.state.code_hash(code_address).map(|hash| (code, hash))
-            })
-        };
-
-        let (code, code_hash) = match code_with_hash {
-            Ok((code, hash)) => (code, hash),
-            Err(_) => return Ok(MessageCallResult::Failed),
+            (
+                self.state.code(code_address)?,
+                self.state.code_hash(code_address)?,
+            )
         };
 
         let mut params = ActionParams {
@@ -271,7 +261,7 @@ impl<'a> ContextTrait for Context<'a> {
             params.value = ActionValue::Transfer(value);
         }
 
-        return Err(TrapKind::Call(params));
+        return Ok(Err(TrapKind::Call(params)));
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
@@ -663,6 +653,7 @@ mod tests {
         CallType::Call,
         false,
     )
+            .unwrap()
     .ok()
     .unwrap();
     }
@@ -749,13 +740,16 @@ mod tests {
                 false,
                 &setup.internal_contract_map,
             );
-            match ctx.create(
-                &U256::max_value(),
-                &U256::zero(),
-                &[],
-                CreateContractAddress::FromSenderNonceAndCodeHash,
-                false,
-            ) {
+            match ctx
+                .create(
+                    &U256::max_value(),
+                    &U256::zero(),
+                    &[],
+                    CreateContractAddress::FromSenderNonceAndCodeHash,
+                    false,
+                )
+                .expect("no db error")
+            {
                 Ok(ContractCreateResult::Created(address, _)) => address,
                 _ => panic!(
                     "Test create failed; expected Created, got Failed/Reverted"
@@ -793,15 +787,18 @@ mod tests {
                 &setup.internal_contract_map,
             );
 
-            match ctx.create(
-                &U256::max_value(),
-                &U256::zero(),
-                &[],
-                CreateContractAddress::FromSenderSaltAndCodeHash(
-                    H256::default(),
-                ),
-                false,
-            ) {
+            match ctx
+                .create(
+                    &U256::max_value(),
+                    &U256::zero(),
+                    &[],
+                    CreateContractAddress::FromSenderSaltAndCodeHash(
+                        H256::default(),
+                    ),
+                    false,
+                )
+                .expect("no db error")
+            {
                 Ok(ContractCreateResult::Created(address, _)) => address,
                 _ => panic!(
                 "Test create failed; expected Created, got Failed/Reverted."
