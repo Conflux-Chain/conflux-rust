@@ -230,7 +230,7 @@ fn test_snapshot_random_read_performance() {
     let total_ms = (load_ms + update_ms + write_ms + commit_ms) as f64;
     println!(
         "Benchmark finished, TPS = {}, \
-         load_ms = {}%, update_ms = {}%, write_ms = {}%, commit_ms = {:?}%",
+         load = {:.2}%, rlp_and_update = {:.2}%, write = {:.2}%, commit = {:.2}%",
         1000.0 * (TXS as f64) * (EPOCHS as f64) / total_ms,
         100.0 * (load_ms as f64) / total_ms,
         100.0 * (update_ms as f64) / total_ms,
@@ -269,26 +269,74 @@ fn simulate_transactions(
         ))
         .unwrap()
         .unwrap();
-    let mut values = Vec::with_capacity(keys.len());
+    let mut values = vec![None; keys.len()];
+
+    let len = keys.len();
 
     // Load all values.
     let now = Instant::now();
-    for key in keys {
-        let address = &[*key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
-        let account_key = StorageKey::AccountKey(address);
+    const PREFETCH: bool = true;
+    if PREFETCH {
+        const THREADS: usize = 8;
+        let mut join_handles = vec![];
+        for thread in 0..THREADS {
+            let range_start = len * thread / THREADS;
+            let range_end = len * (thread + 1) / THREADS;
+            let key_range = unsafe {
+                std::mem::transmute::<&[&[u8]], &'static [&'static [u8]]>(
+                    &keys[range_start..range_end],
+                )
+            };
+            let value_range = unsafe {
+                std::mem::transmute::<
+                    &mut [Option<Box<[u8]>>],
+                    &'static mut [Option<Box<[u8]>>],
+                >(&mut values[range_start..range_end])
+            };
+            let state_r = unsafe {
+                std::mem::transmute::<&State, &'static State>(&state)
+            };
+            join_handles.push(thread::spawn(move || {
+                let mut i = 0;
+                for key in key_range {
+                    let address =
+                        &[*key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
+                    let account_key = StorageKey::AccountKey(address);
 
-        values.push(Some(
-            state
-                .get(account_key)
-                .expect("Failed to get key.")
-                .expect("no such key"),
-        ));
+                    value_range[i] = Some(
+                        state_r
+                            .get(account_key)
+                            .expect("Failed to get key.")
+                            .expect("no such key"),
+                    );
+
+                    i += 1;
+                }
+            }));
+        }
+        for join_handle in join_handles {
+            join_handle.join().unwrap();
+        }
+    } else {
+        let mut i = 0;
+        for key in keys {
+            let address = &[*key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
+            let account_key = StorageKey::AccountKey(address);
+
+            values[i] = Some(
+                state
+                    .get(account_key)
+                    .expect("Failed to get key.")
+                    .expect("no such key"),
+            );
+
+            i += 1;
+        }
     }
     *read_ms += now.elapsed().as_millis() as u32;
 
     // Update accounts.
     let now = Instant::now();
-    let len = keys.len();
     for i in 0..len {
         let mut account: primitives::Account =
             rlp::decode(values[i].as_ref().unwrap())

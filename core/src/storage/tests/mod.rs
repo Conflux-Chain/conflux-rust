@@ -149,7 +149,7 @@ pub fn new_state_manager_for_unit_test() -> FakeStateManager {
                 )
                 .unwrap(),
         )
-        .unwrap();
+        .ok();
     }
 
     FakeStateManager::new(
