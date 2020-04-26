@@ -171,6 +171,7 @@ impl OverlayAccount {
         }
     }
 
+    #[cfg(test)]
     pub fn new_contract(
         address: &Address, balance: U256, nonce: U256, reset_storage: bool,
     ) -> Self {

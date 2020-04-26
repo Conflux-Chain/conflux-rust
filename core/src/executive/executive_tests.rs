@@ -17,7 +17,9 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
-use cfx_types::{Address, BigEndianHash, H256, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256, U512,
+};
 use keylib::{Generator, Random};
 use primitives::{transaction::Action, Transaction};
 use rustc_hex::FromHex;
@@ -56,7 +58,7 @@ fn test_contract_address() {
 fn test_sender_balance() {
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let sender =
-        Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -148,7 +150,7 @@ fn test_create_contract_out_of_depth() {
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let sender =
-        Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -221,7 +223,7 @@ fn test_call_to_create() {
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let sender =
-        Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -230,7 +232,6 @@ fn test_call_to_create() {
     )
     .0;
     // TODO: add tests for 'callcreate'
-    //let next_address = contract_address(&address, &U256::zero());
     let mut params = ActionParams::default();
     params.address = address;
     params.code_address = address;
@@ -244,6 +245,9 @@ fn test_call_to_create() {
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .new_contract(&address, U256::zero(), U256::one())
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .add_balance(
             &sender,
@@ -300,7 +304,7 @@ fn test_revert() {
     let contract_address =
         Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender =
-        Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
 
     let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
     let returns = "726576657274206d657373616765".from_hex().unwrap();
@@ -317,6 +321,9 @@ fn test_revert() {
             CleanupMode::NoEmpty,
         )
         .unwrap();
+    state
+        .new_contract(&contract_address, U256::zero(), U256::one())
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)))
         .unwrap();
@@ -373,7 +380,7 @@ fn test_keccak() {
     let code = "6064640fffffffff20600055".from_hex().unwrap();
 
     let sender =
-        Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -492,7 +499,8 @@ fn test_not_enough_cash() {
 #[test]
 fn test_deposit_withdraw_lock() {
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-    let sender = Address::zero();
+    let mut sender = Address::zero();
+    sender.set_user_account_type_bits();
     let storage_manager = new_state_manager_for_unit_test();
     let mut state =
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
@@ -961,6 +969,14 @@ fn test_commission_privilege() {
     )
     .0;
 
+    state
+        .new_contract_with_admin(
+            &address,
+            &sender.address(),
+            U256::zero(),
+            U256::one(),
+        )
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
     state
         .add_balance(
@@ -1320,6 +1336,14 @@ fn test_storage_commission_privilege() {
     )
     .0;
 
+    state
+        .new_contract_with_admin(
+            &address,
+            &sender.address(),
+            U256::zero(),
+            U256::one(),
+        )
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
 
     state

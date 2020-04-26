@@ -13,7 +13,7 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
 use std::{
     cell::{RefCell, RefMut},
@@ -175,7 +175,8 @@ impl State {
                 })
             })?;
         if inc > 0 || sub > 0 {
-            self.require(addr, false)?.reset_uncleared_storage_entries();
+            self.require_exists(addr, false)?
+                .reset_uncleared_storage_entries();
         }
 
         if sub > 0 {
@@ -244,13 +245,14 @@ impl State {
             }
         }
         for (addr, sub) in &collateral_for_storage_sub {
-            self.require(&addr, false)?
+            self.require_exists(&addr, false)?
                 .add_unrefunded_storage_entries(*sub);
             *substate.storage_released.entry(*addr).or_insert(0) +=
                 sub * BYTES_PER_STORAGE_KEY;
         }
         for (addr, inc) in &collateral_for_storage_inc {
-            self.require(&addr, false)?.add_unpaid_storage_entries(*inc);
+            self.require_exists(&addr, false)?
+                .add_unpaid_storage_entries(*inc);
             *substate.storage_collateralized.entry(*addr).or_insert(0) +=
                 inc * BYTES_PER_STORAGE_KEY;
         }
@@ -388,6 +390,7 @@ impl State {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn new_contract(
         &mut self, contract: &Address, balance: U256, nonce_offset: U256,
     ) -> DbResult<()> {
@@ -453,7 +456,7 @@ impl State {
         if *sponsor != self.sponsor_for_gas(address)?.unwrap_or_default()
             || *sponsor_balance != self.sponsor_balance_for_gas(address)?
         {
-            self.require(address, false).map(|mut x| {
+            self.require_exists(address, false).map(|mut x| {
                 x.set_sponsor_for_gas(sponsor, sponsor_balance, upper_bound)
             })
         } else {
@@ -468,7 +471,7 @@ impl State {
             || *sponsor_balance
                 != self.sponsor_balance_for_collateral(address)?
         {
-            self.require(address, false).map(|mut x| {
+            self.require_exists(address, false).map(|mut x| {
                 x.set_sponsor_for_collateral(sponsor, sponsor_balance)
             })
         } else {
@@ -512,7 +515,7 @@ impl State {
                     && acc.admin() != admin
             })
         })? {
-            self.require(&contract_address, false)?
+            self.require_exists(&contract_address, false)?
                 .set_admin(requester, admin);
         }
         Ok(())
@@ -522,7 +525,7 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?
+            self.require_exists(address, false)?
                 .sub_sponsor_balance_for_gas(by);
         }
         Ok(())
@@ -532,7 +535,7 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?
+            self.require_exists(address, false)?
                 .add_sponsor_balance_for_gas(by);
         }
         Ok(())
@@ -542,7 +545,7 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?
+            self.require_exists(address, false)?
                 .sub_sponsor_balance_for_collateral(by);
         }
         Ok(())
@@ -552,7 +555,7 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?
+            self.require_exists(address, false)?
                 .add_sponsor_balance_for_collateral(by);
         }
         Ok(())
@@ -587,8 +590,10 @@ impl State {
     {
         info!("add_commission_privilege contract_address: {:?}, contract_owner: {:?}, user: {:?}", contract_address, contract_owner, user);
 
-        let mut account =
-            self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)?;
+        let mut account = self.require_exists(
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            false,
+        )?;
         Ok(account.add_commission_privilege(
             contract_address,
             contract_owner,
@@ -601,8 +606,10 @@ impl State {
         user: Address,
     ) -> DbResult<()>
     {
-        let mut account =
-            self.require(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, false)?;
+        let mut account = self.require_exists(
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            false,
+        )?;
         Ok(account.remove_commission_privilege(
             contract_address,
             contract_owner,
@@ -671,20 +678,22 @@ impl State {
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
-        self.require(address, false).map(|mut x| x.inc_nonce())
+        self.require_or_new_user_account(address)
+            .map(|mut x| x.inc_nonce())
     }
 
     pub fn set_nonce(
         &mut self, address: &Address, nonce: &U256,
     ) -> DbResult<()> {
-        self.require(address, false).map(|mut x| x.set_nonce(nonce))
+        self.require_or_new_user_account(address)
+            .map(|mut x| x.set_nonce(nonce))
     }
 
     pub fn sub_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.sub_balance(by);
+            self.require_exists(address, false)?.sub_balance(by);
         }
         if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
             set.insert(*address);
@@ -695,11 +704,25 @@ impl State {
     pub fn add_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
+        let exists = self.exists(address)?;
+        if !exists && !address.is_user_account_address() {
+            // Sending to non-existent non user account address is
+            // not allowed.
+            //
+            // There are checks to forbid it at transact level.
+            //
+            // The logic here is intended for incorrect miner coin-base. In this
+            // case, the mining reward get lost.
+            warn!(
+                "add_balance: address does not already exist and is not an user account. {:?}",
+                address
+            );
+            return Ok(());
+        }
         if !by.is_zero()
-            || (cleanup_mode == CleanupMode::ForceCreate
-                && !self.exists(address)?)
+            || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require(address, false)?.add_balance(by);
+            self.require_or_new_user_account(address)?.add_balance(by);
         } else if let CleanupMode::TrackTouched(set) = cleanup_mode {
             if self.exists(address)? {
                 set.insert(*address);
@@ -717,7 +740,8 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.add_collateral_for_storage(by);
+            self.require_exists(address, false)?
+                .add_collateral_for_storage(by);
             self.staking_state.total_storage_tokens += *by;
         }
         Ok(())
@@ -727,7 +751,8 @@ impl State {
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require(address, false)?.sub_collateral_for_storage(by);
+            self.require_exists(address, false)?
+                .sub_collateral_for_storage(by);
             self.staking_state.total_storage_tokens -= *by;
         }
         Ok(())
@@ -737,7 +762,7 @@ impl State {
         &mut self, address: &Address, amount: &U256,
     ) -> DbResult<()> {
         if !amount.is_zero() {
-            self.require(address, false)?.deposit(
+            self.require_exists(address, false)?.deposit(
                 *amount,
                 self.staking_state.accumulate_interest_rate,
                 self.block_number,
@@ -752,7 +777,7 @@ impl State {
     ) -> DbResult<()> {
         if !amount.is_zero() {
             let interest = self
-                .require(address, false)?
+                .require_exists(address, false)?
                 .withdraw(*amount, self.staking_state.accumulate_interest_rate);
             // the interest will be put in balance.
             self.staking_state.total_issued_tokens += interest;
@@ -765,7 +790,7 @@ impl State {
         &mut self, address: &Address, amount: &U256, duration_in_day: u64,
     ) -> DbResult<()> {
         if !amount.is_zero() {
-            self.require(address, false)?.lock(
+            self.require_exists(address, false)?.lock(
                 *amount,
                 self.block_number + duration_in_day * BLOCKS_PER_DAY,
             );
@@ -802,7 +827,7 @@ impl State {
 
     #[allow(dead_code)]
     fn touch(&mut self, address: &Address) -> DbResult<()> {
-        self.require(address, false)?;
+        drop(self.require_exists(address, false)?);
         Ok(())
     }
 
@@ -976,20 +1001,7 @@ impl State {
     pub fn init_code(
         &mut self, address: &Address, code: Bytes, owner: Address,
     ) -> DbResult<()> {
-        self.require_or_from(
-            address,
-            true,
-            || {
-                OverlayAccount::new_contract(
-                    address,
-                    0.into(),
-                    self.account_start_nonce,
-                    false,
-                )
-            },
-            |_| {},
-        )?
-        .init_code(code, owner);
+        self.require_exists(address, false)?.init_code(code, owner);
         Ok(())
     }
 
@@ -1155,7 +1167,8 @@ impl State {
         &mut self, address: &Address, key: H256, value: H256, owner: Address,
     ) -> DbResult<()> {
         if self.storage_at(address, &key)? != value {
-            self.require(address, false)?.set_storage(key, value, owner)
+            self.require_exists(address, false)?
+                .set_storage(key, value, owner)
         }
         Ok(())
     }
@@ -1163,20 +1176,8 @@ impl State {
     pub fn set_storage_layout(
         &mut self, address: &Address, layout: StorageLayout,
     ) -> DbResult<()> {
-        self.require_or_from(
-            address,
-            false,
-            || {
-                OverlayAccount::new_contract(
-                    address,
-                    0.into(),
-                    self.account_start_nonce,
-                    false,
-                )
-            },
-            |_| {},
-        )?
-        .set_storage_layout(layout);
+        self.require_exists(address, false)?
+            .set_storage_layout(layout);
         Ok(())
     }
 
@@ -1217,33 +1218,41 @@ impl State {
         Ok(r)
     }
 
-    fn require<'x>(
-        &'x self, address: &Address, require_code: bool,
-    ) -> DbResult<RefMut<'x, OverlayAccount>> {
-        self.require_or_from(
-            address,
-            require_code,
-            || {
-                OverlayAccount::new_basic(
-                    address,
-                    0.into(),
-                    self.account_start_nonce,
-                )
-            },
-            |_| {},
-        )
+    fn require_exists(
+        &self, address: &Address, require_code: bool,
+    ) -> DbResult<RefMut<OverlayAccount>> {
+        fn no_account_is_an_error(
+            address: &Address,
+        ) -> DbResult<OverlayAccount> {
+            bail!(DbErrorKind::IncompleteDatabase(*address));
+        }
+        self.require_or_set(address, require_code, no_account_is_an_error)
     }
 
-    fn require_or_from<'x, F, G>(
-        &'x self, address: &Address, require_code: bool, default: F,
-        not_default: G,
-    ) -> DbResult<RefMut<'x, OverlayAccount>>
-    where
-        F: FnOnce() -> OverlayAccount,
-        G: FnOnce(&mut OverlayAccount),
-    {
-        let contains_key = self.cache.borrow().contains_key(address);
-        if !contains_key {
+    fn require_or_new_user_account(
+        &self, address: &Address,
+    ) -> DbResult<RefMut<OverlayAccount>> {
+        self.require_or_set(address, false, |address| {
+            if address.is_user_account_address() {
+                Ok(OverlayAccount::new_basic(
+                    address,
+                    U256::zero(),
+                    self.account_start_nonce.into(),
+                ))
+            } else {
+                unreachable!(
+                    "address does not already exist and is not an user account. {:?}",
+                    address
+                )
+            }
+        })
+    }
+
+    fn require_or_set<F>(
+        &self, address: &Address, require_code: bool, default: F,
+    ) -> DbResult<RefMut<OverlayAccount>>
+    where F: FnOnce(&Address) -> DbResult<OverlayAccount> {
+        if !self.cache.borrow().contains_key(address) {
             let account = self.db.get_account(address)?.map(|acc| {
                 OverlayAccount::new(address, acc, self.block_number)
             });
@@ -1251,31 +1260,38 @@ impl State {
         }
         self.note_cache(address);
 
-        Ok(RefMut::map(self.cache.borrow_mut(), |c| {
-            let entry = c
-                .get_mut(address)
-                .expect("entry known to exist in the cache; qed");
+        let mut cache = self.cache.borrow_mut();
 
-            match &mut entry.account {
-                &mut Some(ref mut acc) => not_default(acc),
-                slot => *slot = Some(default()),
-            }
+        let entry = (*cache)
+            .get_mut(address)
+            .expect("entry known to exist in the cache; qed");
 
-            // set the dirty flag after changing account data.
-            entry.state = AccountState::Dirty;
-            match entry.account {
-                Some(ref mut account) => {
-                    if require_code {
-                        Self::update_account_cache(
-                            RequireCache::Code,
-                            account,
-                            &self.db,
-                        );
-                    }
-                    account
-                }
-                _ => panic!("Required account must always exist; qed"),
+        // Set the dirty flag.
+        entry.state = AccountState::Dirty;
+
+        if entry.account.is_none() {
+            entry.account = Some(default(address)?);
+        }
+
+        if require_code {
+            if !Self::update_account_cache(
+                RequireCache::Code,
+                entry
+                    .account
+                    .as_mut()
+                    .expect("Required account must exist."),
+                &self.db,
+            ) {
+                bail!(DbErrorKind::IncompleteDatabase(*address));
             }
+        }
+
+        Ok(RefMut::map(cache, |c| {
+            c.get_mut(address)
+                .expect("Entry known to exist in the cache.")
+                .account
+                .as_mut()
+                .expect("Required account must exist.")
         }))
     }
 

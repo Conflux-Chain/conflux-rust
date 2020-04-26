@@ -13,7 +13,9 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, BigEndianHash, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256,
+};
 use primitives::{EpochId, StorageLayout};
 
 fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
@@ -43,7 +45,8 @@ fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
 fn checkpoint_basic() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let address = Address::zero();
+    let mut address = Address::zero();
+    address.set_user_account_type_bits();
     state.checkpoint();
     state
         .add_balance(&address, &U256::from(1069u64), CleanupMode::NoEmpty)
@@ -85,7 +88,8 @@ fn checkpoint_basic() {
 fn checkpoint_nested() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let address = Address::zero();
+    let mut address = Address::zero();
+    address.set_user_account_type_bits();
     assert_eq!(*state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.balance(&address).unwrap(), U256::from(0));
     assert_eq!(
@@ -126,10 +130,14 @@ fn checkpoint_nested() {
 fn checkpoint_revert_to_get_storage_at() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let address = Address::zero();
+    let mut address = Address::zero();
+    address.set_contract_type_bits();
     let key = BigEndianHash::from_uint(&U256::from(0));
     let c0 = state.checkpoint();
     let c1 = state.checkpoint();
+    state
+        .new_contract(&address, U256::zero(), U256::one())
+        .unwrap();
     state
         .set_storage(
             &address,
@@ -168,7 +176,8 @@ fn checkpoint_from_empty_get_storage_at() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let a = Address::zero();
+    let mut a = Address::zero();
+    a.set_user_account_type_bits();
     let sponsor = Address::random();
     let k = BigEndianHash::from_uint(&U256::from(0));
     let k2 = BigEndianHash::from_uint(&U256::from(1));
@@ -366,7 +375,8 @@ fn checkpoint_get_storage_at() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let a = Address::zero();
+    let mut a = Address::zero();
+    a.set_user_account_type_bits();
     let sponsor = Address::random();
     let k = BigEndianHash::from_uint(&U256::from(0));
     let k2 = BigEndianHash::from_uint(&U256::from(1));
@@ -662,9 +672,11 @@ fn checkpoint_get_storage_at() {
 fn kill_account_with_checkpoints() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let a = Address::zero();
+    let mut a = Address::zero();
+    a.set_contract_type_bits();
     let k = BigEndianHash::from_uint(&U256::from(0));
     state.checkpoint();
+    state.new_contract(&a, U256::zero(), U256::one()).unwrap();
     state
         .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
         .unwrap();
@@ -718,7 +730,8 @@ fn create_contract_fail_previous_storage() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let a = Address::from_low_u64_be(1000);
+    let mut a = Address::from_low_u64_be(1000);
+    a.set_user_account_type_bits();
     let k = BigEndianHash::from_uint(&U256::from(0));
 
     state.checkpoint();
@@ -806,8 +819,10 @@ fn test_automatic_collateral_normal_account() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
-    let normal_account = Address::from_low_u64_be(0);
-    let contract_account = Address::from_low_u64_be(1);
+    let mut normal_account = Address::from_low_u64_be(0);
+    normal_account.set_user_account_type_bits();
+    let mut contract_account = Address::from_low_u64_be(1);
+    contract_account.set_contract_type_bits();
     let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
     let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
     let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
