@@ -65,7 +65,7 @@ const MPT_ID_RANGE: usize = std::u16::MAX as usize + 1;
 /// Maintains the cache slot / cache info for multiple Delta MPTs.
 pub struct NodeRefMapDeltaMpts<CacheAlgoDataT: CacheAlgoDataTrait> {
     node_ref_maps:
-        Vec<BTreeMap<DeltaMptDbKey, CacheableNodeRefDeltaMpt<CacheAlgoDataT>>>,
+        Vec<HashMap<DeltaMptDbKey, CacheableNodeRefDeltaMpt<CacheAlgoDataT>>>,
     nodes: usize,
 }
 
@@ -160,4 +160,4 @@ use super::{
     super::errors::*, cache::algorithm::CacheAlgoDataTrait,
     node_memory_manager::ActualSlabIndex, row_number::RowNumberUnderlyingType,
 };
-use std::collections::BTreeMap;
+use hashbrown::HashMap;
