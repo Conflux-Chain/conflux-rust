@@ -138,7 +138,7 @@ impl ConfirmationMeter {
                     // is executed before checkpoint, so
                     // is definitely confirmed.
                     Some(_) => Some(1.0),
-                    // The block has not entered consensus or it's not skipped
+                    // The block has not entered consensus or it's skipped
                     // in execution, either not-in-same-era
                     // or not in the epoch set bound.
                     // FIXME: Skipped blocks' order are actually confirmed.
