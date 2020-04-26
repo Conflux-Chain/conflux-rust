@@ -161,4 +161,3 @@ use super::{
     node_memory_manager::ActualSlabIndex, row_number::RowNumberUnderlyingType,
 };
 use hashbrown::HashMap;
-use std::collections::BTreeMap;
