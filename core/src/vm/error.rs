@@ -37,7 +37,7 @@ pub enum TrapError<Call, Create> {
 }
 
 /// VM errors.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     /// `OutOfGas` is returned when transaction execution runs out of gas.
     /// The state should be reverted to the state from before the
@@ -108,7 +108,7 @@ pub enum Error {
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Error from storage.
-    StateDbError(String),
+    StateDbError(PartialEqWrapper<DbError>),
     /// Wasm runtime error
     Wasm(String),
     /// Out of bounds access in RETURNDATACOPY.
@@ -119,10 +119,17 @@ pub enum Error {
     Reentrancy,
 }
 
-impl From<DbError> for Error {
-    fn from(err: DbError) -> Self {
-        Error::StateDbError(format!("Internal error: {}", err))
+#[derive(Debug)]
+pub struct PartialEqWrapper<T: std::fmt::Debug>(pub T);
+
+impl<T: std::fmt::Debug> PartialEq for PartialEqWrapper<T> {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{:?}", self.0) == format!("{:?}", other.0)
     }
+}
+
+impl From<DbError> for Error {
+    fn from(err: DbError) -> Self { Error::StateDbError(PartialEqWrapper(err)) }
 }
 
 impl fmt::Display for Error {
@@ -167,7 +174,9 @@ impl fmt::Display for Error {
             InternalContract(name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
-            StateDbError(ref msg) => write!(f, "Internal error: {}", msg),
+            StateDbError(ref msg) => {
+                write!(f, "Irrecoverable state db error: {}", msg.0)
+            }
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
             }
