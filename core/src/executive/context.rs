@@ -9,6 +9,7 @@ use crate::{
     machine::Machine,
     parameters::staking::*,
     state::{State, Substate},
+    statedb,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, Env, MessageCallResult,
@@ -157,7 +158,7 @@ impl<'a> ContextTrait for Context<'a> {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address_scheme: CreateContractAddress, trap: bool,
-    ) -> vm::Result<::std::result::Result<ContractCreateResult, TrapKind>>
+    ) -> statedb::Result<::std::result::Result<ContractCreateResult, TrapKind>>
     {
         // create new contract address
         let (address, code_hash) = self::contract_address(
@@ -231,7 +232,7 @@ impl<'a> ContextTrait for Context<'a> {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType, trap: bool,
-    ) -> vm::Result<::std::result::Result<MessageCallResult, TrapKind>>
+    ) -> statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
 
