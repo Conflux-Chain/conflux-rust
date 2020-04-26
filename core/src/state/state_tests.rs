@@ -11,6 +11,7 @@ use crate::{
         tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
         StorageManagerTrait,
     },
+    vm::Spec,
     vm_factory::VmFactory,
 };
 use cfx_types::{
@@ -29,6 +30,7 @@ fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
                 .unwrap(),
         ),
         VmFactory::default(),
+        &Spec::new_spec(),
         0, /* block_number */
     )
 }
@@ -37,6 +39,7 @@ fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
     State::new(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
         VmFactory::default(),
+        &Spec::new_spec(),
         0, /* block_number */
     )
 }
