@@ -257,7 +257,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     ) -> SyncPhaseType
     {
         // FIXME: use target_height instead.
-        let middle_epoch = self.syn.get_middle_epoch();
+        let middle_epoch = self.syn.median_epoch_from_normal_peers();
         if middle_epoch.is_none() {
             return self.phase_type();
         }
@@ -603,7 +603,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     ) -> SyncPhaseType
     {
         // FIXME: use target_height instead.
-        let middle_epoch = self.syn.get_middle_epoch();
+        let middle_epoch = self.syn.median_epoch_from_normal_peers();
         if middle_epoch.is_none() {
             if self.syn.is_dev_or_test_mode() {
                 return SyncPhaseType::Normal;

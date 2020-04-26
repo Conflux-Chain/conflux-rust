@@ -1,4 +1,11 @@
-# Conflux Internal Contract
+---
+id: internal_contract
+title: Internal Contract
+custom_edit_url: https://github.com/Conflux-Chain/conflux-rust/edit/master/internal_contract/README.md
+keywords:
+  - conflux
+  - contract
+---
 
 ## AdminControl
 

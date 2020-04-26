@@ -4,9 +4,27 @@
 
 ## Improvements
 
-- Add support for WebSockets in RPC.
+
+- Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
+
+- Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
+
 
 # 0.5.0
+
+## Improvements
+
+- Add fields in Receipt: gas_fee, gas_sponsored, storage_sponsored. Accumulate gas_used in Receipt, not gas_charged.
+
+- Delay block requests when we cannot process them to avoid wasting network bandwidth.
+
+- Set block gas limit for Genesis block to 30_000_000.
+
+- Define gas_used to be transaction gas limit for NotEnoughCash, the same as all other exceptions.
+
+- Add support for WebSockets in RPC.
+
+- Move getstatus RPC from test to common, and renamed with cfx_getStatus.
 
 ## Bug Fixes
 
@@ -20,7 +38,11 @@
 
 - Fix a race condition that may cause optimistic execution to panic.
 
-- Delay block requests when we cannot process them to avoid wasting network bandwidth.
+- Fill in correct block gas limit value for mining.
+
+- Fix definitions and logics in transaction early execution error checking.
+
+- Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
 
 ## Improvements
 
@@ -39,18 +61,6 @@
 - Do not mark OverlayAccount dirty in sub_balance 0 for non-existence account.
 
 - Add missing transaction verifications for invalid block.
-
-- Fill in correct block gas limit value for mining.
-
-- Set block gas limit for Genesis block to 30_000_000.
-
-- Fix definitions and logics in transaction early execution error checking.
-
-- Use block_count - 1 in target difficulty calculation because it's the unbiased estimation of exponential distribution parameter (past mining power).
-
-- Add fields in Receipt: gas_fee, gas_sponsored, storage_sponsored. Accumulate gas_used in Receipt, not gas_charged.
-
-- Define gas_used to be transaction gas limit for NotEnoughCash, the same as all other exceptions.
 
 ## Improvements
 

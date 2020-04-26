@@ -44,6 +44,7 @@ pub trait Message: Send + Sync + GetMaybeRequestId {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
 
     fn encode(&self) -> Vec<u8>;
+    fn throttle_token_cost(&self) -> (u64, u64) { (1, 0) }
 
     fn send(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
@@ -72,7 +73,7 @@ pub trait Message: Send + Sync + GetMaybeRequestId {
         };
 
         debug!(
-            "Send message({}) to peer {:?}, protocol {:?}",
+            "Send message({}) to peer {}, protocol {:?}",
             self.msg_name(),
             node_id,
             io.get_protocol(),

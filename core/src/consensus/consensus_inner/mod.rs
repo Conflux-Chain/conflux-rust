@@ -17,6 +17,7 @@ use crate::{
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
 };
 use cfx_types::{H256, U256, U512};
+use hashbrown::HashMap as FastHashMap;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -391,7 +392,7 @@ pub struct ConsensusGraphInner {
     /// internal index.
     pub arena: Slab<ConsensusGraphNode>,
     /// indices maps block hash to internal index.
-    pub hash_to_arena_indices: HashMap<H256, usize>,
+    pub hash_to_arena_indices: FastHashMap<H256, usize>,
     /// The current pivot chain indexes.
     pivot_chain: Vec<usize>,
     /// The metadata associated with each pivot chain block
@@ -451,6 +452,15 @@ pub struct ConsensusGraphInner {
     /// `pop_old_era_block_set()`. This is a helper for full nodes to determine
     /// which blocks it can safely remove
     old_era_block_set: Mutex<VecDeque<H256>>,
+
+    /// This is a cache map to speed up the lca computation of terminals in the
+    /// best terminals call. The basic idea is that if no major
+    /// reorganization happens, then it could use the last results
+    /// instead of calling it again.
+    best_terminals_lca_height_cache: FastHashMap<usize, u64>,
+    /// This is to record the pivot chain reorganization height since the last
+    /// invocation of best_terminals()
+    best_terminals_reorg_height: u64,
 }
 
 impl MallocSizeOf for ConsensusGraphInner {
@@ -472,6 +482,8 @@ impl MallocSizeOf for ConsensusGraphInner {
             + self.anticone_cache.size_of(ops)
             + self.pastset_cache.size_of(ops)
             + self.old_era_block_set.lock().size_of(ops)
+            + self.best_terminals_lca_height_cache.size_of(ops)
+            + self.best_terminals_reorg_height.size_of(ops)
     }
 }
 
@@ -531,7 +543,7 @@ impl ConsensusGraphInner {
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
-            hash_to_arena_indices: HashMap::new(),
+            hash_to_arena_indices: FastHashMap::new(),
             pivot_chain: Vec::new(),
             pivot_chain_metadata: Vec::new(),
             timer_chain: Vec::new(),
@@ -559,6 +571,8 @@ impl ConsensusGraphInner {
             pastset_cache: Default::default(),
             sequence_number_of_block_entrance: 0,
             old_era_block_set: Mutex::new(VecDeque::new()),
+            best_terminals_lca_height_cache: Default::default(),
+            best_terminals_reorg_height: NULLU64,
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
@@ -2013,7 +2027,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    /// This function differs from `ge_pivot_hash_from_epoch_number` in that it
+    /// This function differs from `get_pivot_hash_from_epoch_number` in that it
     /// only returns the hash if it is in the current consensus graph.
     fn epoch_hash(&self, epoch_number: u64) -> Option<H256> {
         let pivot_index = self.height_to_pivot_index(epoch_number);
@@ -2138,12 +2152,7 @@ impl ConsensusGraphInner {
     }
 
     /// Return the block receipts in the current pivot view and the epoch block
-    /// hash.
-    ///
-    /// If `hash` is not maintained in the memory, we just return the receipts
-    /// in the db without checking the pivot assumption.
-    /// TODO Check if its receipts matches our current pivot view for this
-    /// not-in-memory case.
+    /// hash. If `hash` is not executed in the current view, return None.
     pub fn block_execution_results_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<BlockExecutionResultWithEpoch> {
@@ -2160,7 +2169,26 @@ impl ConsensusGraphInner {
             }
             None => {
                 debug!("Block {:?} not in mem, try to read from db", hash);
-                self.data_man.block_execution_result_by_hash_from_db(hash)
+
+                // result in db might be outdated
+                // (after chain reorg but before re-execution)
+                let res = match self
+                    .data_man
+                    .block_execution_result_by_hash_from_db(hash)
+                {
+                    None => return None,
+                    Some(res) => res,
+                };
+
+                let execution_pivot_hash = res.0;
+
+                match self.get_epoch_hash_for_block(&execution_pivot_hash) {
+                    // pivot chain has not changed, result should be correct
+                    Some(h) if h == execution_pivot_hash => Some(res),
+
+                    // pivot chain has changed, block is not re-executed yet
+                    _ => None,
+                }
             }
         }
     }
@@ -3291,14 +3319,30 @@ impl ConsensusGraphInner {
             &pastset_tmp
         };
 
+        let lca_height_cache = mem::replace(
+            &mut self.best_terminals_lca_height_cache,
+            Default::default(),
+        );
+
         // We prepare a counter_map to denote the number of erased incoming
         // edges for each block.
-        let mut counter_map = HashMap::new();
+        let mut counter_map = FastHashMap::new();
         let mut queue = BinaryHeap::new();
         for hash in self.terminal_hashes.iter() {
             let a_idx = self.hash_to_arena_indices.get(hash).unwrap();
-            let a_lca = self.lca(*a_idx, best_index);
-            queue.push((-(self.arena[a_lca].height as i128), *a_idx));
+            let mut a_lca_height = NULLU64;
+            if let Some(h) = lca_height_cache.get(a_idx) {
+                if *h < self.best_terminals_reorg_height {
+                    a_lca_height = *h;
+                }
+            }
+            if a_lca_height == NULLU64 {
+                let a_lca = self.lca(*a_idx, best_index);
+                a_lca_height = self.arena[a_lca].height;
+            }
+            self.best_terminals_lca_height_cache
+                .insert(*a_idx, a_lca_height);
+            queue.push((-(a_lca_height as i128), *a_idx));
         }
 
         // The basic idea is to have a loop go over the refs in the priority
@@ -3337,11 +3381,19 @@ impl ConsensusGraphInner {
                         if self.arena[parent].era_block == NULL {
                             queue.push((-(NULLU64 as i128), parent));
                         } else {
-                            let a_lca = self.lca(parent, best_index);
-                            queue.push((
-                                -(self.arena[a_lca].height as i128),
-                                parent,
-                            ));
+                            let mut a_lca_height = NULLU64;
+                            if let Some(h) = lca_height_cache.get(&parent) {
+                                if *h < self.best_terminals_reorg_height {
+                                    a_lca_height = *h;
+                                }
+                            }
+                            if a_lca_height == NULLU64 {
+                                let a_lca = self.lca(parent, best_index);
+                                a_lca_height = self.arena[a_lca].height;
+                            }
+                            self.best_terminals_lca_height_cache
+                                .insert(parent, a_lca_height);
+                            queue.push((-(a_lca_height as i128), parent));
                         }
                     }
                 }
@@ -3364,16 +3416,25 @@ impl ConsensusGraphInner {
                         if self.arena[*referee].era_block == NULL {
                             queue.push((-(NULLU64 as i128), *referee));
                         } else {
-                            let a_lca = self.lca(*referee, best_index);
-                            queue.push((
-                                -(self.arena[a_lca].height as i128),
-                                *referee,
-                            ));
+                            let mut a_lca_height = NULLU64;
+                            if let Some(h) = lca_height_cache.get(referee) {
+                                if *h < self.best_terminals_reorg_height {
+                                    a_lca_height = *h;
+                                }
+                            }
+                            if a_lca_height == NULLU64 {
+                                let a_lca = self.lca(*referee, best_index);
+                                a_lca_height = self.arena[a_lca].height;
+                            }
+                            self.best_terminals_lca_height_cache
+                                .insert(*referee, a_lca_height);
+                            queue.push((-(a_lca_height as i128), *referee));
                         }
                     }
                 }
             }
         }
+        self.best_terminals_reorg_height = NULLU64;
         let bounded_hashes =
             queue.iter().map(|(_, b)| self.arena[*b].hash).collect();
         bounded_hashes

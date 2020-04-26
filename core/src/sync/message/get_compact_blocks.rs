@@ -36,9 +36,12 @@ impl Request for GetCompactBlocks {
     }
 
     fn on_removed(&self, inflight_keys: &KeyContainer) {
-        let mut inflight_keys = inflight_keys.write(msgid::GET_BLOCKS);
+        let mut inflight_blocks = inflight_keys.write(msgid::GET_BLOCKS);
+        let mut net_inflight_blocks =
+            inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
         for hash in self.hashes.iter() {
-            inflight_keys.remove(&Key::Hash(*hash));
+            inflight_blocks.remove(&Key::Hash(*hash));
+            net_inflight_blocks.remove(&Key::Hash(*hash));
         }
     }
 

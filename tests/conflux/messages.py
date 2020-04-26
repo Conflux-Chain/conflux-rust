@@ -119,10 +119,15 @@ class Disconnect(rlp.Serializable):
     def deserialize(cls, serial):
         return cls(int(serial[0]), str(serial[1:]))
 
+class ChainIdParams(rlp.Serializable):
+    fields = [
+        ("chain_id", big_endian_int),
+    ]
 
 class Status(rlp.Serializable):
     fields = [
         ("protocol_version", big_endian_int),
+        ("chain_id", ChainIdParams),
         ("genesis_hash", hash32),
         ("best_epoch", big_endian_int),
         ("terminal_block_hashes", CountableList(hash32)),

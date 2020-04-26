@@ -210,13 +210,9 @@ jsonrpc_local_http_port=12539
 #
 # max_peers_tx_propagation = 128
 
-# Maximum number of cached received blocks waiting to be processed.
-# Note that our block size is limited by its rlp encoded size (200KB), but the memory size of a
-# decoded block is usually about 4x the rlp size, so this default value 128 will take about 1GB memory.
-# On the other hand, the sync module can consume about 5 blocks per second per core, so this value can cache
-# about 10-second work for a quad-core host (assuming 2 cores for sync and 2 core for consensus).
+# Maximum cached received block size waiting to be processed.
 #
-# max_unprocessed_block_count = 128
+# max_unprocessed_block_size_mb = 128
 
 # Minimum number of peers to broadcast transaction digests.
 #

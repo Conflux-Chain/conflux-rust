@@ -658,7 +658,7 @@ impl Provider {
             None => return Ok(()),
         };
 
-        let result = bucket.lock().throttle();
+        let result = bucket.lock().throttle_default();
 
         match result {
             ThrottleResult::Success => Ok(()),
@@ -718,7 +718,7 @@ impl NetworkProtocolHandler for Provider {
     }
 
     fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
-        info!("on_peer_disconnected: peer={:?}", peer);
+        info!("on_peer_disconnected: peer={}", peer);
         self.peers.remove(peer);
     }
 
