@@ -2,6 +2,9 @@
 
 ## Bug Fixes
 
+- Make sure all internal account exists at genesis block, otherwise some
+readonly operation may crash.
+
 ## Improvements
 
 
