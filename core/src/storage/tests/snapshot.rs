@@ -471,7 +471,7 @@ fn test_two_way_merge() {
         kv: [
             keys_unchanged
                 .iter()
-                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::from(&k[..])))
+                .map(|k| (Vec::<u8>::from(&k[..]), Box::<[u8]>::default()))
                 .collect::<Vec<_>>(),
             keys_delete
                 .iter()
@@ -515,8 +515,7 @@ fn test_two_way_merge() {
             .unwrap();
 
     // Two way merge.
-    let mut result_mpt = FakeSnapshotMptDb::default();
-    in_place_mod_mpt.reset(/* in_place_mode */ false);
+    in_place_mod_mpt.reset(/* in_place_mode */ true);
     let mut keys_deletion = Vec::from(keys_delete);
     keys_deletion.sort();
     let deletion = keys_deletion
@@ -530,7 +529,7 @@ fn test_two_way_merge() {
         .map(|k| Ok((Vec::<u8>::from(&k[..]), Box::<[u8]>::from(&k[..]))))
         .collect::<Vec<_>>();
 
-    let new_merkle_root = MptMerger::new(Some(&mut in_place_mod_mpt), &mut result_mpt)
+    let new_merkle_root = MptMerger::new(None, &mut in_place_mod_mpt)
         .merge_insertion_deletion_separated(
             fallible_iterator::convert(deletion.into_iter()),
             fallible_iterator::convert(insertion.into_iter()),
@@ -539,7 +538,7 @@ fn test_two_way_merge() {
 
     // Merge result should be the same.
     assert_eq!(new_merkle_root, supposed_merkle_root);
-    result_mpt.assert_eq(&save_as_mode_mpt);
+    in_place_mod_mpt.assert_eq(&save_as_mode_mpt);
 }
 
 #[allow(unused)]
