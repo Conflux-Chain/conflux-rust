@@ -304,6 +304,7 @@ impl<'a> ContextTrait for Context<'a> {
         match self.output {
             OutputPolicy::Return => Ok(*gas),
             OutputPolicy::InitContract if apply_state => {
+                // FIXME: where is new contract called?
                 let return_cost = U256::from(data.len())
                     * U256::from(self.spec.create_data_gas);
                 if return_cost > *gas
