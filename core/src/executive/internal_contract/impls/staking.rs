@@ -126,6 +126,12 @@ impl InternalContractTrait for Staking {
             ));
         }
 
+        if !params.value.value().is_zero() {
+            return Err(vm::Error::InternalContract(
+                "should not transfer balance to Staking contract",
+            ));
+        }
+
         if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
             // The first 4 bytes of
             // keccak('deposit(uint256)') is
