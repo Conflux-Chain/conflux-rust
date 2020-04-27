@@ -30,6 +30,7 @@ mod account_entry;
 mod substate;
 
 pub use self::{account_entry::OverlayAccount, substate::Substate};
+use crate::evm::Spec;
 //use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
 
 #[derive(Copy, Clone)]
@@ -80,6 +81,7 @@ pub struct State {
     staking_state_checkpoints: RefCell<Vec<StakingState>>,
     checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
     account_start_nonce: U256,
+    contract_start_nonce: U256,
     staking_state: StakingState,
     // This is the total number of blocks executed so far. It is the same as
     // the `number` entry in EVM Environment.
@@ -88,7 +90,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(db: StateDb, vm: VmFactory, block_number: u64) -> Self {
+    pub fn new(
+        db: StateDb, vm: VmFactory, spec: &Spec, block_number: u64,
+    ) -> Self {
         let annual_interest_rate =
             db.get_annual_interest_rate().expect("no db error");
         let accumulate_interest_rate =
@@ -104,13 +108,19 @@ impl State {
             * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64)
             .into();
         */
-        let account_start_nonce = 0.into();
+        let account_start_nonce = U256::zero();
+        let contract_start_nonce = if spec.no_empty {
+            U256::one()
+        } else {
+            U256::zero()
+        };
         State {
             db,
             cache: RefCell::new(HashMap::new()),
             staking_state_checkpoints: RefCell::new(Vec::new()),
             checkpoints: RefCell::new(Vec::new()),
             account_start_nonce,
+            contract_start_nonce,
             staking_state: StakingState {
                 total_issued_tokens,
                 total_staking_tokens,
@@ -123,6 +133,8 @@ impl State {
             vm,
         }
     }
+
+    pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
 
     /// Increase block number and calculate the current secondary reward.
     pub fn increase_block_number(&mut self) -> U256 {
@@ -372,18 +384,14 @@ impl State {
 
     pub fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
-        nonce_offset: U256,
+        nonce: U256,
     ) -> DbResult<()>
     {
         self.insert_cache(
             contract,
             AccountEntry::new_dirty(Some(
                 OverlayAccount::new_contract_with_admin(
-                    contract,
-                    balance,
-                    self.account_start_nonce + nonce_offset,
-                    true,
-                    admin,
+                    contract, balance, nonce, true, admin,
                 ),
             )),
         );
@@ -392,15 +400,12 @@ impl State {
 
     #[cfg(test)]
     pub fn new_contract(
-        &mut self, contract: &Address, balance: U256, nonce_offset: U256,
+        &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
         self.insert_cache(
             contract,
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
-                contract,
-                balance,
-                self.account_start_nonce + nonce_offset,
-                true,
+                contract, balance, nonce, true,
             ))),
         );
         Ok(())

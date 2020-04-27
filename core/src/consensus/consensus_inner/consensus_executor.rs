@@ -912,6 +912,7 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
 
+        let spec = Spec::new_spec();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
@@ -934,10 +935,12 @@ impl ConsensusExecutionHandler {
                     .expect("State exists"),
             ),
             self.vm.clone(),
+            &spec,
             start_block_number - 1, /* block_number */
         );
         let epoch_receipts = self
             .process_epoch_transactions(
+                &spec,
                 &mut state,
                 &epoch_blocks,
                 start_block_number,
@@ -1000,12 +1003,11 @@ impl ConsensusExecutionHandler {
     }
 
     fn process_epoch_transactions(
-        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
+        &self, spec: &Spec, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64, on_local_pivot: bool,
     ) -> DbResult<Vec<Arc<BlockReceipts>>>
     {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
-        let spec = Spec::new_spec();
         let internal_contract_map = InternalContractMap::new();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
@@ -1440,6 +1442,7 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
         let pivot_block = epoch_blocks.last().expect("Not empty");
+        let spec = Spec::new_spec();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
@@ -1462,9 +1465,11 @@ impl ConsensusExecutionHandler {
                     .unwrap(),
             ),
             self.vm.clone(),
+            &spec,
             start_block_number - 1, /* block_number */
         );
         self.process_epoch_transactions(
+            &spec,
             &mut state,
             &epoch_blocks,
             start_block_number,
@@ -1518,6 +1523,7 @@ impl ConsensusExecutionHandler {
                     .expect("State Exists"),
             ),
             self.vm.clone(),
+            &spec,
             // FIXME: 0 as block number?
             0, /* block_number */
         );

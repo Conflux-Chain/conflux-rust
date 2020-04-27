@@ -21,6 +21,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+    evm::Spec,
     executive::ExecutionOutcome,
     parameters::{consensus::*, consensus_internal::*},
     pow::ProofOfWorkConfig,
@@ -717,7 +718,8 @@ impl ConsensusGraph {
         let state = State::new(
             state_db,
             Default::default(), /* vm */
-            0,                  /* block_number */
+            &Spec::new_spec(),
+            0, /* block_number */
         );
         state
             .nonce(&address)
@@ -1154,7 +1156,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
                             State::new(
                                 StateDb::new(db),
                                 Default::default(), /* vm */
-                                past_num_blocks,    /* block_numer */
+                                &Spec::new_spec(),
+                                past_num_blocks, /* block_numer */
                             )
                         })
                         .expect("Best state has been executed");
