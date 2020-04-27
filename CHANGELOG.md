@@ -2,9 +2,24 @@
 
 ## Bug Fixes
 
+
+- Make sure all internal account exists at genesis block, otherwise some
+readonly operation may crash.
+
+- Fix incorrect usages of require() in vm operations. In most cases creation of
+basic account in its absense is undesired, especially when the address is a
+contract. When a user account is to be created, the address space is checked.
+
 ## Improvements
 
-- Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
+
+- Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
+
+- Add chain_id field into p2p Status message so that peers can disconnect peers
+from another Conflux chain, e.g. testnet.
+
+- Keep network_id the same as chain_id. Setting network_id is only for local
+experimental purposes.
 
 # 0.5.0
 
@@ -19,6 +34,8 @@
 - Define gas_used to be transaction gas limit for NotEnoughCash, the same as all other exceptions.
 
 - Add support for WebSockets in RPC.
+
+- cfx_gasPrice will return a price with at least 1000000000, i.e. 1GDrip.
 
 - Move getstatus RPC from test to common, and renamed with cfx_getStatus.
 

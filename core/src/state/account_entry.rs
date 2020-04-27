@@ -171,6 +171,7 @@ impl OverlayAccount {
         }
     }
 
+    #[cfg(test)]
     pub fn new_contract(
         address: &Address, balance: U256, nonce: U256, reset_storage: bool,
     ) -> Self {
@@ -298,7 +299,7 @@ impl OverlayAccount {
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
         if self.is_contract {
-            if self.admin.is_zero() || self.admin == *requester {
+            if self.admin == *requester {
                 self.admin = admin.clone();
             }
         }

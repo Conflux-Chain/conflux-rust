@@ -113,7 +113,6 @@ build_config! {
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
-        (network_id, (u64), 1)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -135,6 +134,11 @@ build_config! {
         (jsonrpc_http_port, (Option<u16>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
+        // The network_id, if unset, defaults to the chain_id.
+        // Only override the network_id for local experiments,
+        // when user would like to keep the existing blockchain data
+        // but disconnect from the public network.
+        (network_id, (Option<u64>), None)
         (port, (Option<u16>), Some(32323))
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
@@ -273,14 +277,24 @@ impl Configuration {
         Ok(config)
     }
 
+    fn network_id(&self) -> u64 {
+        match self.raw_conf.network_id {
+            Some(x) => x,
+            // The default network id is 1 for historic reason. It doesn't
+            // really matter.
+            None => self.raw_conf.chain_id.unwrap_or(1),
+        }
+    }
+
     pub fn net_config(&self) -> Result<NetworkConfiguration, String> {
         let mut network_config = match self.raw_conf.port {
-            Some(port) => NetworkConfiguration::new_with_port(port),
-            None => NetworkConfiguration::default(),
+            Some(port) => {
+                NetworkConfiguration::new_with_port(self.network_id(), port)
+            }
+            None => NetworkConfiguration::new(self.network_id()),
         };
 
         network_config.is_consortium = self.raw_conf.is_consortium;
-        network_config.id = self.raw_conf.network_id;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
         network_config.boot_nodes = to_bootnodes(&self.raw_conf.bootnodes)
             .map_err(|e| format!("failed to parse bootnodes: {}", e))?;

@@ -137,15 +137,11 @@ pub struct NetworkConfiguration {
     pub session_ip_limit_config: SessionIpLimitConfig,
 }
 
-impl Default for NetworkConfiguration {
-    fn default() -> Self { NetworkConfiguration::new() }
-}
-
 impl NetworkConfiguration {
-    pub fn new() -> Self {
+    pub fn new(id: u64) -> Self {
         NetworkConfiguration {
             is_consortium: false,
-            id: 1,
+            id,
             config_path: Some("./net_config".to_string()),
             listen_address: None,
             public_address: None,
@@ -174,8 +170,8 @@ impl NetworkConfiguration {
         }
     }
 
-    pub fn new_with_port(port: u16) -> NetworkConfiguration {
-        let mut config = NetworkConfiguration::new();
+    pub fn new_with_port(id: u64, port: u16) -> NetworkConfiguration {
+        let mut config = NetworkConfiguration::new(id);
         config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(0, 0, 0, 0),
             port,
@@ -183,8 +179,8 @@ impl NetworkConfiguration {
         config
     }
 
-    pub fn new_local() -> NetworkConfiguration {
-        let mut config = NetworkConfiguration::new();
+    pub fn new_local(id: u64) -> NetworkConfiguration {
+        let mut config = NetworkConfiguration::new(id);
         config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(
             Ipv4Addr::new(127, 0, 0, 1),
             0,

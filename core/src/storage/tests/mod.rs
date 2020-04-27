@@ -129,6 +129,29 @@ impl DerefMut for FakeStateManager {
 
 #[cfg(test)]
 pub fn new_state_manager_for_unit_test() -> FakeStateManager {
+    const WITH_LOGGER: bool = false;
+    if WITH_LOGGER {
+        log4rs::init_config(
+            log4rs::config::Config::builder()
+                .appender(
+                    log4rs::config::Appender::builder().build(
+                        "stdout",
+                        Box::new(
+                            log4rs::append::console::ConsoleAppender::builder()
+                                .build(),
+                        ),
+                    ),
+                )
+                .build(
+                    log4rs::config::Root::builder()
+                        .appender("stdout")
+                        .build(log::LevelFilter::Debug),
+                )
+                .unwrap(),
+        )
+        .ok();
+    }
+
     FakeStateManager::new("./conflux_unit_test_data_dir/".to_string()).unwrap()
 }
 
