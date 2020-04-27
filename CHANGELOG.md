@@ -20,7 +20,9 @@
 
 - Add support for WebSockets in RPC.
 
-- cfx_gasPrice will return a price with at least 1000000000 1GDrip.
+- cfx_gasPrice will return a price with at least 1000000000, i.e. 1GDrip.
+
+- Move getstatus RPC from test to common, and renamed with cfx_getStatus.
 
 ## Bug Fixes
 
