@@ -192,7 +192,6 @@ impl<'a> ContextTrait for Context<'a> {
             params_type: vm::ParamsType::Embedded,
         };
 
-        // TODO: futher examine.
         if !self.static_flag {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
@@ -440,7 +439,7 @@ impl<'a> ContextTrait for Context<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Context, InternalContractMap, OriginInfo, OutputPolicy};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
         parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -455,13 +454,15 @@ mod tests {
             CreateContractAddress, Env, Spec,
         },
     };
-    use cfx_types::{Address, H256, U256};
+    use cfx_types::{address_util::AddressUtil, Address, H256, U256};
     use std::{str::FromStr, sync::Arc};
 
     fn get_test_origin() -> OriginInfo {
+        let mut sender = Address::zero();
+        sender.set_user_account_type_bits();
         OriginInfo {
-            address: Address::zero(),
-            original_sender: Address::zero(),
+            address: sender,
+            original_sender: sender,
             storage_owner: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
@@ -701,11 +702,28 @@ mod tests {
 
     #[test]
     fn can_suiside() {
-        let refund_account = &Address::zero();
+        let mut refund_account = Address::zero();
+        refund_account.set_user_account_type_bits();
 
         let mut setup = TestSetup::new();
         let state = &mut setup.state.unwrap();
-        let origin = get_test_origin();
+        let mut origin = get_test_origin();
+
+        let mut contract_address = Address::zero();
+        contract_address.set_contract_type_bits();
+        origin.address = contract_address;
+        state
+            .new_contract(&contract_address, U256::zero(), U256::one())
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        state
+            .init_code(
+                &contract_address,
+                // Use empty code in test because we don't have storage
+                // collateral balance.
+                "".into(),
+                contract_address,
+            )
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
         {
             let mut ctx = Context::new(
@@ -721,7 +739,7 @@ mod tests {
                 false,
                 &setup.internal_contract_map,
             );
-            ctx.suicide(refund_account).unwrap();
+            ctx.suicide(&refund_account).unwrap();
         }
 
         assert_eq!(setup.substate.suicides.len(), 1);
@@ -765,7 +783,7 @@ mod tests {
 
         assert_eq!(
             address,
-            Address::from_str("8a509a60cc33373ed59837b7e2e68f1c94765f8d")
+            Address::from_str("81dc73d9d80f5312901eb62cc4a3ed6ea4ca14e2")
                 .unwrap()
         );
     }
@@ -811,7 +829,7 @@ mod tests {
 
         assert_eq!(
             address,
-            Address::from_str("833c0c7f7df4809055c3eba6c09cfe4baf1bd9e0")
+            Address::from_str("84c100a15081f02b9efae8267a69f73bf15e75fa")
                 .unwrap()
         );
     }

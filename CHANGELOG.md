@@ -2,8 +2,13 @@
 
 ## Bug Fixes
 
+
 - Make sure all internal account exists at genesis block, otherwise some
 readonly operation may crash.
+
+- Fix incorrect usages of require() in vm operations. In most cases creation of
+basic account in its absense is undesired, especially when the address is a
+contract. When a user account is to be created, the address space is checked.
 
 ## Improvements
 
