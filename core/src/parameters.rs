@@ -50,8 +50,6 @@ pub mod consensus_internal {
     pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
-    /// The unit of one Conflux token: 10 ** 18
-    pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
@@ -186,13 +184,12 @@ pub mod block {
 
 pub mod staking {
     use super::{
-        consensus_internal::CONFLUX_TOKEN,
-        pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
+        consensus::ONE_CFX_IN_DRIP, pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
     };
     use cfx_types::U256;
 
     /// This is the exchange unit between storage and CFX.
-    pub const NUM_BYTES_PER_CONFLUX_TOKEN: u64 = 1024;
+    pub const NUM_BYTES_PER_CFX: u64 = 1024;
 
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 =
@@ -208,7 +205,7 @@ pub mod staking {
 
     lazy_static! {
         /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes.
-        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(CONFLUX_TOKEN / NUM_BYTES_PER_CONFLUX_TOKEN);
+        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(ONE_CFX_IN_DRIP / NUM_BYTES_PER_CFX);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
         pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(BYTES_PER_STORAGE_KEY);
