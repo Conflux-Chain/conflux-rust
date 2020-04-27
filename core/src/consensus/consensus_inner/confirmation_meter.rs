@@ -137,7 +137,7 @@ impl ConfirmationMeter {
                     // It's garbage collected because of checkpoint, but it
                     // is executed before checkpoint, so
                     // is definitely confirmed.
-                    Some(_) => Some(1.0),
+                    Some(_) => Some(CONFIRMATION_METER_MIN_MAINTAINED_RISK),
                     // The block has not entered consensus or it's skipped
                     // in execution, either not-in-same-era
                     // or not in the epoch set bound.
