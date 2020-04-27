@@ -8,12 +8,13 @@ use crate::{
     statedb::{Result as DbResult, StateDb},
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
+use parking_lot::RwLock;
 use primitives::{
     Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo, StorageKey,
     StorageLayout, StorageValue,
 };
 use rlp::RlpStream;
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 lazy_static! {
     static ref SPONSOR_ADDRESS_STORAGE_KEY: H256 =
@@ -45,11 +46,11 @@ pub struct OverlayAccount {
     sponsor_info: SponsorInfo,
 
     // This is a cache for storage change.
-    storage_cache: RefCell<HashMap<H256, H256>>,
+    storage_cache: RwLock<HashMap<H256, H256>>,
     storage_changes: HashMap<H256, H256>,
 
     // This is a cache for storage ownership change.
-    ownership_cache: RefCell<HashMap<H256, Option<Address>>>,
+    ownership_cache: RwLock<HashMap<H256, Option<Address>>>,
     ownership_changes: HashMap<H256, Address>,
 
     unpaid_storage_entries: u64,
@@ -96,9 +97,9 @@ impl OverlayAccount {
             nonce: account.nonce,
             admin: account.admin,
             sponsor_info: account.sponsor_info,
-            storage_cache: RefCell::new(HashMap::new()),
+            storage_cache: Default::default(),
             storage_changes: HashMap::new(),
-            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
             unpaid_storage_entries: 0,
             unrefunded_storage_entries: 0,
@@ -149,9 +150,9 @@ impl OverlayAccount {
             nonce,
             admin: Address::zero(),
             sponsor_info: Default::default(),
-            storage_cache: RefCell::new(HashMap::new()),
+            storage_cache: Default::default(),
             storage_changes: HashMap::new(),
-            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
             unpaid_storage_entries: 0,
             unrefunded_storage_entries: 0,
@@ -181,9 +182,9 @@ impl OverlayAccount {
             nonce,
             admin: Address::zero(),
             sponsor_info: Default::default(),
-            storage_cache: RefCell::new(HashMap::new()),
+            storage_cache: Default::default(),
             storage_changes: HashMap::new(),
-            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
             unpaid_storage_entries: 0,
             unrefunded_storage_entries: 0,
@@ -214,9 +215,9 @@ impl OverlayAccount {
             nonce,
             admin: admin.clone(),
             sponsor_info: Default::default(),
-            storage_cache: RefCell::new(HashMap::new()),
+            storage_cache: Default::default(),
             storage_changes: HashMap::new(),
-            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
             unpaid_storage_entries: 0,
             unrefunded_storage_entries: 0,
@@ -605,9 +606,9 @@ impl OverlayAccount {
             nonce: self.nonce,
             admin: self.admin,
             sponsor_info: self.sponsor_info.clone(),
-            storage_cache: RefCell::new(HashMap::new()),
+            storage_cache: Default::default(),
             storage_changes: HashMap::new(),
-            ownership_cache: RefCell::new(HashMap::new()),
+            ownership_cache: Default::default(),
             ownership_changes: HashMap::new(),
             unpaid_storage_entries: 0,
             unrefunded_storage_entries: 0,
@@ -630,8 +631,9 @@ impl OverlayAccount {
     pub fn clone_dirty(&self) -> Self {
         let mut account = self.clone_basic();
         account.storage_changes = self.storage_changes.clone();
-        account.storage_cache = self.storage_cache.clone();
-        account.ownership_cache = self.ownership_cache.clone();
+        account.storage_cache = RwLock::new(self.storage_cache.read().clone());
+        account.ownership_cache =
+            RwLock::new(self.ownership_cache.read().clone());
         account.ownership_changes = self.ownership_changes.clone();
         account.unrefunded_storage_entries = self.unrefunded_storage_entries;
         account.unpaid_storage_entries = self.unpaid_storage_entries;
@@ -652,7 +654,7 @@ impl OverlayAccount {
         if let Some(value) = self.storage_changes.get(key) {
             return Some(value.clone());
         }
-        if let Some(value) = self.storage_cache.borrow().get(key) {
+        if let Some(value) = self.storage_cache.read().get(key) {
             return Some(value.clone());
         }
         None
@@ -666,8 +668,8 @@ impl OverlayAccount {
             Ok(H256::zero())
         } else {
             Self::get_and_cache_storage(
-                &mut self.storage_cache.borrow_mut(),
-                &mut self.ownership_cache.borrow_mut(),
+                &mut self.storage_cache.write(),
+                &mut self.ownership_cache.write(),
                 db,
                 &self.address,
                 key,
@@ -680,12 +682,12 @@ impl OverlayAccount {
     pub fn original_storage_at(
         &self, db: &StateDb, key: &H256,
     ) -> DbResult<H256> {
-        if let Some(value) = self.storage_cache.borrow().get(key) {
+        if let Some(value) = self.storage_cache.read().get(key) {
             return Ok(value.clone());
         }
         Self::get_and_cache_storage(
-            &mut self.storage_cache.borrow_mut(),
-            &mut self.ownership_cache.borrow_mut(),
+            &mut self.storage_cache.write(),
+            &mut self.ownership_cache.write(),
             db,
             &self.address,
             key,
@@ -761,26 +763,23 @@ impl OverlayAccount {
     fn original_ownership_at(
         &self, db: &StateDb, key: &H256,
     ) -> Option<Address> {
-        if let Some(value) = self.ownership_cache.borrow().get(key) {
+        if let Some(value) = self.ownership_cache.read().get(key) {
             return value.clone();
         }
         if self.reset_storage {
             return None;
         }
+        let ownership_cache = &mut *self.ownership_cache.write();
         Self::get_and_cache_storage(
-            &mut self.storage_cache.borrow_mut(),
-            &mut self.ownership_cache.borrow_mut(),
+            &mut self.storage_cache.write(),
+            ownership_cache,
             db,
             &self.address,
             key,
             true, /* cache_ownership */
         )
         .ok();
-        self.ownership_cache
-            .borrow()
-            .get(key)
-            .expect("key exists")
-            .clone()
+        ownership_cache.get(key).expect("key exists").clone()
     }
 
     /// Return the storage change of each related account.
@@ -825,9 +824,9 @@ impl OverlayAccount {
             }
             // Commit ownership change to `ownership_cache`.
             if cur_value_is_zero {
-                self.ownership_cache.borrow_mut().insert(k, None);
+                self.ownership_cache.get_mut().insert(k, None);
             } else if ownership_changed {
-                self.ownership_cache.borrow_mut().insert(k, Some(v));
+                self.ownership_cache.get_mut().insert(k, Some(v));
             }
         }
         assert!(self.ownership_changes.is_empty());
@@ -863,7 +862,7 @@ impl OverlayAccount {
         assert!(self.ownership_changes.is_empty());
         assert_eq!(self.unpaid_storage_entries, 0);
         assert_eq!(self.unrefunded_storage_entries, 0);
-        let ownership_cache = self.ownership_cache.borrow();
+        let ownership_cache = self.ownership_cache.get_mut();
         for (k, v) in self.storage_changes.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address, k.as_ref());
