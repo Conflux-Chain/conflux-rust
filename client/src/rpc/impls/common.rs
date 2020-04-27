@@ -110,7 +110,7 @@ impl RpcImpl {
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
             .gas_price()
-            .unwrap_or(1000000000.into())
+            .unwrap_or(cfxcore::consensus_parameters::ONE_GDRIP_IN_DRIP.into())
             .into())
     }
 
