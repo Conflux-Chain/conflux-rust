@@ -237,7 +237,7 @@ impl SponsorWhitelistControl {
                 Address::from_slice(&input[offset + 12..offset + 32]);
             state.add_commission_privilege(
                 contract_address,
-                params.original_sender,
+                params.storage_owner,
                 user_addr,
             )?;
             offset += 32;
@@ -274,7 +274,7 @@ impl SponsorWhitelistControl {
                 Address::from_slice(&input[offset + 12..offset + 32]);
             state.remove_commission_privilege(
                 contract_address,
-                params.original_sender,
+                params.storage_owner,
                 user_addr,
             )?;
             offset += 32;
