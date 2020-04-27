@@ -2,9 +2,16 @@
 
 ## Bug Fixes
 
+- Make sure all internal account exists at genesis block, otherwise some
+readonly operation may crash.
+
 ## Improvements
 
+
+- Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
+
 - Add chain_id field into p2p Status message so that peers can disconnect peers from another Conflux chain, e.g. testnet.
+
 
 # 0.5.0
 

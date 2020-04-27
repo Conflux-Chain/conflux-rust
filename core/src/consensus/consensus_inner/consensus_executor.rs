@@ -40,7 +40,7 @@ use primitives::{
     MERKLE_NULL_NODE,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     convert::From,
     fmt::{Debug, Formatter},
     sync::{
@@ -427,35 +427,13 @@ impl ConsensusExecutor {
                             ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, *index)
                         };
 
-                        let block_consensus_node_anticone_same_era: HashSet<usize> =
-                            block_consensus_node_anticone
-                                .iter()
-                                .filter(|idx| {
-                                    inner.is_same_era(
-                                        **idx,
-                                        pivot_arena_index,
-                                    )
-                                })
-                                .map(|idx| *idx)
-                                .collect();
-                        let anticone_cutoff_epoch_anticone_set_same_era: HashSet<usize> = anticone_cutoff_epoch_anticone_set
-                            .iter()
-                            .filter(|idx| {
-                                inner.is_same_era(**idx, pivot_arena_index)
-                            })
-                            .map(|idx| *idx)
-                            .collect();
-                        let anticone_set = block_consensus_node_anticone_same_era
-                            .difference(&anticone_cutoff_epoch_anticone_set_same_era)
-                            .cloned()
-                            .collect::<HashSet<_>>();
-                        for a_index in anticone_set {
-                            // TODO: Maybe consider to use base difficulty
-                            // Check with the spec!
-                            anticone_difficulty +=
-                                U512::from(U256::from(inner.block_weight(
-                                    a_index
-                                )));
+                        for idx in block_consensus_node_anticone {
+                            if inner.is_same_era(idx, pivot_arena_index) && !anticone_cutoff_epoch_anticone_set.contains(&idx) {
+                                anticone_difficulty +=
+                                    U512::from(U256::from(inner.block_weight(
+                                        idx
+                                    )));
+                            }
                         }
 
                         // TODO: check the clear definition of anticone penalty,
