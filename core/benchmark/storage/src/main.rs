@@ -1715,6 +1715,7 @@ impl TxReplayer {
         Ok(state_root_with_aux)
     }
 
+    // FIXME: use and test performance with ExecutionStatePrefetcher
     pub fn add_tx(
         &self, tx: RealizedEthTx, latest_state: &mut StateDb,
         last_state_root: &mut StateRootWithAuxInfo,

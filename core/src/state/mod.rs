@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub mod prefetcher;
+
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
     bytes::Bytes,
@@ -1010,7 +1012,6 @@ impl State {
     }
 
     /// Return whether or not the address exists.
-    #[allow(unused)]
     pub fn try_load(&self, address: &Address) -> bool {
         if let Ok(true) =
             self.ensure_cached(address, RequireCache::None, |maybe| {
