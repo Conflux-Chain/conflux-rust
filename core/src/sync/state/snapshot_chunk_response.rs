@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    message::{GetMaybeRequestId, Message, MsgId},
+    message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
     sync::{
         message::{msgid, Context, Handleable},
         state::{storage::Chunk, SnapshotChunkRequest},
-        Error, ErrorKind,
+        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
-use rlp::Encodable;
+use network::service::ProtocolVersion;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable)]
@@ -19,7 +19,10 @@ pub struct SnapshotChunkResponse {
     pub chunk: Chunk,
 }
 
-build_msg_impl! { SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE, "SnapshotChunkResponse" }
+build_msg_impl! {
+    SnapshotChunkResponse, msgid::GET_SNAPSHOT_CHUNK_RESPONSE,
+    "SnapshotChunkResponse", SYNC_PROTO_V1, SYNC_PROTO_V2
+}
 
 impl Handleable for SnapshotChunkResponse {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

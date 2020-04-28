@@ -97,7 +97,6 @@ pub mod sync {
     /// terminals from peers when the node is in catch-up mode.
     pub const REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD: u64 = 8;
 
-    pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
     /// The max number of headers that are to be sent for header
     /// block request.
     pub const MAX_HEADERS_TO_SEND: u64 = 512;

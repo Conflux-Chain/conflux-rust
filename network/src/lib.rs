@@ -62,7 +62,7 @@ pub use io::TimerToken;
 use crate::{
     node_table::NodeId,
     service::{
-        DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
+        ProtocolVersion, DEFAULT_CONNECTION_LIFETIME_FOR_PROMOTION,
         DEFAULT_DISCOVERY_REFRESH_TIMEOUT, DEFAULT_DISCOVERY_ROUND_TIMEOUT,
         DEFAULT_FAST_DISCOVERY_REFRESH_TIMEOUT, DEFAULT_HOUSEKEEPING_TIMEOUT,
         DEFAULT_NODE_TABLE_TIMEOUT,
@@ -195,7 +195,7 @@ pub enum NetworkIoMessage {
     AddHandler {
         handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
-        versions: Vec<u8>,
+        version: ProtocolVersion,
     },
     /// Register a new protocol timer
     AddTimer {
@@ -221,24 +221,28 @@ pub enum NetworkIoMessage {
 }
 
 pub trait NetworkProtocolHandler: Sync + Send {
-    fn initialize(&self, _io: &dyn NetworkContext) {}
+    fn minimum_supported_version(&self) -> ProtocolVersion;
+
+    fn initialize(&self, _io: &dyn NetworkContext);
 
     fn on_message(
         &self, io: &dyn NetworkContext, node_id: &NodeId, data: &[u8],
     );
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, node_id: &NodeId);
+    fn on_peer_connected(
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    );
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, node_id: &NodeId);
 
     fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken);
 
-    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {}
+    fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>);
 
     fn on_work_dispatch(
         &self, _io: &dyn NetworkContext, _work_type: HandlerWorkType,
-    ) {
-    }
+    );
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
@@ -254,7 +258,9 @@ pub trait NetworkContext {
     fn get_peer_connection_origin(&self, node_id: &NodeId) -> Option<bool>;
 
     fn send(
-        &self, node_id: &NodeId, msg: Vec<u8>, priority: SendQueuePriority,
+        &self, node_id: &NodeId, msg: Vec<u8>,
+        min_protocol_version: ProtocolVersion,
+        version_valid_till: ProtocolVersion, priority: SendQueuePriority,
     ) -> Result<(), Error>;
 
     fn disconnect_peer(
@@ -269,7 +275,7 @@ pub trait NetworkContext {
 
     fn dispatch_work(&self, work_type: HandlerWorkType);
 
-    fn is_peer_self(&self, _node_id: &NodeId) -> bool { false }
+    fn is_peer_self(&self, _node_id: &NodeId) -> bool;
 
     fn self_node_id(&self) -> NodeId;
 }
@@ -277,18 +283,20 @@ pub trait NetworkContext {
 #[derive(Debug, Clone)]
 pub struct SessionMetadata {
     pub id: Option<NodeId>,
-    pub capabilities: Vec<Capability>,
-    pub peer_capabilities: Vec<Capability>,
+    /// There won't be many protocols so it's faster to use Vec than Map.
+    pub peer_protocols: Vec<ProtocolInfo>,
     pub originated: bool,
+    /// Packet header version of the peer.
+    pub peer_header_version: u8,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Capability {
+pub struct ProtocolInfo {
     pub protocol: ProtocolId,
-    pub version: u8,
+    pub version: ProtocolVersion,
 }
 
-impl Encodable for Capability {
+impl Encodable for ProtocolInfo {
     fn rlp_append(&self, rlp: &mut RlpStream) {
         rlp.begin_list(2);
         rlp.append(&&self.protocol[..]);
@@ -296,7 +304,7 @@ impl Encodable for Capability {
     }
 }
 
-impl Decodable for Capability {
+impl Decodable for ProtocolInfo {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let p: Vec<u8> = rlp.val_at(0)?;
         if p.len() != 3 {
@@ -306,21 +314,21 @@ impl Decodable for Capability {
         }
         let mut protocol: ProtocolId = [0u8; 3];
         protocol.clone_from_slice(&p);
-        Ok(Capability {
+        Ok(ProtocolInfo {
             protocol,
             version: rlp.val_at(1)?,
         })
     }
 }
 
-impl PartialOrd for Capability {
-    fn partial_cmp(&self, other: &Capability) -> Option<Ordering> {
+impl PartialOrd for ProtocolInfo {
+    fn partial_cmp(&self, other: &ProtocolInfo) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Capability {
-    fn cmp(&self, other: &Capability) -> Ordering {
+impl Ord for ProtocolInfo {
+    fn cmp(&self, other: &ProtocolInfo) -> Ordering {
         self.protocol.cmp(&other.protocol)
     }
 }
@@ -330,7 +338,7 @@ pub struct PeerInfo {
     pub id: PeerId,
     pub addr: SocketAddr,
     pub nodeid: NodeId,
-    pub caps: Vec<Capability>,
+    pub protocols: Vec<ProtocolInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -386,4 +394,23 @@ pub enum AllowIP {
     Public,
     /// Block all addresses
     None,
+}
+
+pub fn parse_msg_id_leb128_2_bytes_at_most(msg: &mut &[u8]) -> u16 {
+    let buf = *msg;
+
+    let mut ret = 0;
+    let mut pos = buf.len() - 1;
+
+    let byte = buf[pos] as u16;
+    ret |= byte & 0x7f;
+    if byte & 0x80 != 0 {
+        pos -= 1;
+        let byte = buf[pos] as u16;
+        ret |= (byte & 0x7f) << 7;
+    }
+
+    *msg = &buf[..pos];
+
+    ret
 }
