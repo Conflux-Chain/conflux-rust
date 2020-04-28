@@ -526,10 +526,11 @@ impl SnapshotChunkSync {
                 download_start_time.elapsed()
             );
 
+            let snapshot_info = inner.snapshot_info.clone();
             // start to restore and update status
             inner.restorer.finalize_restoration(
                 ctx.manager.graph.data_man.storage_manager.clone(),
-                inner.snapshot_info.clone(),
+                snapshot_info,
             )?;
             inner.status = Status::Completed;
         }
