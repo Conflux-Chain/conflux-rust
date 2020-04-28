@@ -2181,10 +2181,14 @@ impl ConsensusGraphInner {
                 };
 
                 let execution_pivot_hash = res.0;
+                let epoch_number = self
+                    .data_man
+                    .block_header_by_hash(&execution_pivot_hash)?
+                    .height();
 
-                match self.get_epoch_hash_for_block(&execution_pivot_hash) {
+                match self.get_pivot_hash_from_epoch_number(epoch_number) {
                     // pivot chain has not changed, result should be correct
-                    Some(h) if h == execution_pivot_hash => Some(res),
+                    Ok(h) if h == execution_pivot_hash => Some(res),
 
                     // pivot chain has changed, block is not re-executed yet
                     _ => None,
