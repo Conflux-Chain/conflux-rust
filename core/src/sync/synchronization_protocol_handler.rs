@@ -543,7 +543,7 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::InvalidStatus(_) => {
-                op = Some(UpdateNodeOperation::Failure)
+                op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::InvalidMessageFormat => {
                 // TODO: Shall we blacklist a node when the message format is
