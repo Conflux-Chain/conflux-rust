@@ -64,8 +64,14 @@ impl Restorer {
 
     /// Start to restore chunks asynchronously.
     pub fn finalize_restoration(
-        &self, state_manager: Arc<StateManager>, snapshot_info: SnapshotInfo,
-    ) -> StorageResult<()> {
+        &mut self, state_manager: Arc<StateManager>,
+        snapshot_info: SnapshotInfo,
+    ) -> StorageResult<()>
+    {
+        // Release temp snapshot db so it can be renamed on Windows.
+        // `self.verifier` is never unwrapped, so it's safe to set it to None,
+        self.verifier = None;
+
         state_manager
             .get_storage_manager()
             .get_snapshot_manager()
