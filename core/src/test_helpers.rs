@@ -1,5 +1,5 @@
 use crate::{
-    evm::Factory,
+    evm::{Factory, Spec},
     genesis::initialize_internal_contract_accounts,
     state::State,
     statedb::StateDb,
@@ -12,6 +12,7 @@ pub fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
     State::new(
         StateDb::new(storage_manager.get_state_for_genesis_write()),
         VmFactory::default(),
+        &Spec::new_spec(),
         0, /* block_number */
     )
 }
@@ -40,6 +41,7 @@ pub fn get_state_for_genesis_write_with_factory(
                 .unwrap(),
         ),
         factory.into(),
+        &Spec::new_spec(),
         0, /* block_number */
     )
 }

@@ -77,9 +77,6 @@ build_config! {
         //
         (mode, (Option<String>), None)
         // Development related section.
-        (data_propagate_enabled, (bool), false)
-        (data_propagate_interval_ms, (u64), 1_000)
-        (data_propagate_size, (usize), 1_000)
         (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
         // Only effective in `dev` mode and `start_mining` is false

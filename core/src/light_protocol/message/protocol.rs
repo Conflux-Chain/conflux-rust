@@ -9,23 +9,39 @@ use super::NodeType;
 use crate::{message::RequestId, storage::StateProof};
 
 use primitives::{
-    BlockHeader as PrimitiveBlockHeader, BlockReceipts, SignedTransaction,
-    StateRoot as PrimitiveStateRoot,
+    BlockHeader as PrimitiveBlockHeader, BlockReceipts, ChainIdParams,
+    SignedTransaction, StateRoot as PrimitiveStateRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StatusPing {
+pub struct StatusPingDeprecatedV1 {
     pub genesis_hash: H256,
     pub node_type: NodeType,
     pub protocol_version: u8,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
-pub struct StatusPong {
+pub struct StatusPongDeprecatedV1 {
     pub best_epoch: u64,
     pub genesis_hash: H256,
     pub node_type: NodeType,
     pub protocol_version: u8,
+    pub terminals: Vec<H256>,
+}
+
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct StatusPingV2 {
+    pub chain_id: ChainIdParams,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
+}
+
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct StatusPongV2 {
+    pub best_epoch: u64,
+    pub chain_id: ChainIdParams,
+    pub genesis_hash: H256,
+    pub node_type: NodeType,
     pub terminals: Vec<H256>,
 }
 

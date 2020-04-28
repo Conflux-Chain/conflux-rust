@@ -303,7 +303,6 @@ impl<'a> CallCreateExecutive<'a> {
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        let nonce_offset = if spec.no_empty { 1 } else { 0 }.into();
         if let ActionValue::Transfer(val) = params.value {
             state.sub_balance(
                 &params.sender,
@@ -314,14 +313,14 @@ impl<'a> CallCreateExecutive<'a> {
                 &params.address,
                 &params.original_sender,
                 val,
-                nonce_offset,
+                state.contract_start_nonce(),
             )?;
         } else {
             state.new_contract_with_admin(
                 &params.address,
                 &params.original_sender,
                 U256::zero(),
-                nonce_offset,
+                state.contract_start_nonce(),
             )?;
         }
 

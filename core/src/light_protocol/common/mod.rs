@@ -8,6 +8,8 @@ mod peers;
 pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
+use super::{Error, ErrorKind};
+use primitives::ChainIdParams;
 use std::cmp;
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
@@ -16,4 +18,19 @@ where I: Iterator<Item = T> {
         None => Some(x),
         Some(max_so_far) => Some(cmp::max(max_so_far, x)),
     })
+}
+
+pub fn validate_chain_id(
+    ours: &ChainIdParams, theirs: &ChainIdParams,
+) -> Result<(), Error> {
+    if ours != theirs {
+        let error_kind = ErrorKind::ChainIdMismatch {
+            ours: ours.clone(),
+            theirs: theirs.clone(),
+        };
+        debug!("{:?}", error_kind);
+        bail!(error_kind);
+    } else {
+        Ok(())
+    }
 }

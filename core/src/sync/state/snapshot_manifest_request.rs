@@ -4,7 +4,10 @@
 
 use crate::{
     block_data_manager::BlockExecutionResult,
-    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
+    message::{
+        GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
+        RequestId, SetRequestId,
+    },
     parameters::{
         consensus::DEFERRED_STATE_EPOCH_COUNT,
         consensus_internal::REWARD_EPOCH_COUNT,
@@ -18,12 +21,12 @@ use crate::{
             snapshot_manifest_response::SnapshotManifestResponse,
             storage::{RangedManifest, SnapshotSyncCandidate},
         },
-        Error, ProtocolConfiguration,
+        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
 use cfx_types::H256;
+use network::service::ProtocolVersion;
 use primitives::{EpochNumber, StateRoot};
-use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
 
@@ -35,7 +38,10 @@ pub struct SnapshotManifestRequest {
     pub trusted_blame_block: Option<H256>,
 }
 
-build_msg_with_request_id_impl! { SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST, "SnapshotManifestRequest" }
+build_msg_with_request_id_impl! {
+    SnapshotManifestRequest, msgid::GET_SNAPSHOT_MANIFEST,
+    "SnapshotManifestRequest", SYNC_PROTO_V1, SYNC_PROTO_V2
+}
 
 impl Handleable for SnapshotManifestRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

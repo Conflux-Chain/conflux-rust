@@ -32,7 +32,7 @@ PACKET_HELLO = 0x80
 PACKET_DISCONNECT = 0x01
 PACKET_PROTOCOL = 0x10
 
-STATUS = 0x00
+STATUS_V2 = 0x22
 NEW_BLOCK_HASHES = 0x01
 TRANSACTIONS = 0x02
 
@@ -126,7 +126,6 @@ class ChainIdParams(rlp.Serializable):
 
 class Status(rlp.Serializable):
     fields = [
-        ("protocol_version", big_endian_int),
         ("chain_id", ChainIdParams),
         ("genesis_hash", hash32),
         ("best_epoch", big_endian_int),
@@ -457,7 +456,7 @@ class Account(rlp.Serializable):
 
 
 msg_id_dict = {
-    Status: STATUS,
+    Status: STATUS_V2,
     NewBlockHashes: NEW_BLOCK_HASHES,
     Transactions: TRANSACTIONS,
     GetBlockHashes: GET_BLOCK_HASHES,

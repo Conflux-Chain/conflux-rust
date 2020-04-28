@@ -22,6 +22,7 @@ use futures::{
     future::{self, Either},
     stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 };
+use network::service::ProtocolVersion;
 use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
@@ -61,6 +62,8 @@ async fn with_timeout<T>(
 }
 
 pub struct QueryService {
+    protocol_version: ProtocolVersion,
+
     // shared consensus graph
     consensus: SharedConsensusGraph,
 
@@ -88,6 +91,7 @@ impl QueryService {
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             consensus,
             handler,
             ledger,
@@ -100,7 +104,7 @@ impl QueryService {
             .register_protocol(
                 self.handler.clone(),
                 LIGHT_PROTOCOL_ID,
-                &[LIGHT_PROTOCOL_VERSION],
+                self.protocol_version,
             )
             .map_err(|e| {
                 format!("failed to register protocol QueryService: {:?}", e)
@@ -109,7 +113,7 @@ impl QueryService {
 
     fn with_io<T>(&self, f: impl FnOnce(&dyn NetworkContext) -> T) -> T {
         self.network
-            .with_context(LIGHT_PROTOCOL_ID, |io| f(io))
+            .with_context(self.handler.clone(), LIGHT_PROTOCOL_ID, |io| f(io))
             .expect("Unable to access network service")
     }
 
@@ -334,28 +338,37 @@ impl QueryService {
     pub fn send_raw_tx(&self, raw: Vec<u8>) -> bool {
         debug!("send_raw_tx raw={:?}", raw);
 
-        let mut success = false;
-
         let peers = FullPeerFilter::new(msgid::SEND_RAW_TX)
             .select_all(self.handler.peers.clone());
 
-        for peer in peers {
-            // relay to peer
-            let res = self.network.with_context(LIGHT_PROTOCOL_ID, |io| {
-                self.handler.send_raw_tx(io, &peer, raw.clone())
-            });
+        match self.network.with_context(
+            self.handler.clone(),
+            LIGHT_PROTOCOL_ID,
+            |io| {
+                let mut success = false;
 
-            // check error
-            match res {
-                Err(e) => warn!("Failed to relay to peer={:?}: {:?}", peer, e),
-                Ok(_) => {
-                    debug!("Tx relay to peer {:?} successful", peer);
-                    success = true;
+                for peer in peers {
+                    // relay to peer
+                    let res = self.handler.send_raw_tx(io, &peer, raw.clone());
+
+                    // check error
+                    match res {
+                        Err(e) => {
+                            warn!("Failed to relay to peer={:?}: {:?}", peer, e)
+                        }
+                        Ok(_) => {
+                            debug!("Tx relay to peer {:?} successful", peer);
+                            success = true;
+                        }
+                    }
                 }
-            }
-        }
 
-        success
+                success
+            },
+        ) {
+            Err(e) => unreachable!(e),
+            Ok(success) => success,
+        }
     }
 
     pub async fn get_tx(
