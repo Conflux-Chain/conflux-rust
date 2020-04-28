@@ -2,6 +2,7 @@
 
 ## Bug Fixes
 
+- Fix inconsistent logics for TrackTouched.
 
 - Make sure all internal account exists at genesis block, otherwise some
 readonly operation may crash.
@@ -24,6 +25,7 @@ another testnet.
 
 - Keep network_id the same as chain_id. Setting network_id is only for local
 experimental purposes.
+
 
 # 0.5.0
 

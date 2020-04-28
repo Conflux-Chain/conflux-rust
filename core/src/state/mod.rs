@@ -700,8 +700,11 @@ impl State {
         if !by.is_zero() {
             self.require_exists(address, false)?.sub_balance(by);
         }
+
         if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
-            set.insert(*address);
+            if self.exists(address)? {
+                set.insert(*address);
+            }
         }
         Ok(())
     }
@@ -728,12 +731,11 @@ impl State {
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
             self.require_or_new_user_account(address)?.add_balance(by);
-        } else if let CleanupMode::TrackTouched(set) = cleanup_mode {
-            if self.exists(address)? {
-                set.insert(*address);
+        }
 
-                // Stop marking address as dirty here.
-                // self.touch(address)?;
+        if let CleanupMode::TrackTouched(set) = cleanup_mode {
+            if exists {
+                set.insert(*address);
             }
         }
         Ok(())
