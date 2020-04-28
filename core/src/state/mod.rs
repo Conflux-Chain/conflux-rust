@@ -16,7 +16,6 @@ use crate::{
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
 use std::{
-    cell::{RefCell, RefMut},
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
 };
@@ -31,7 +30,7 @@ mod substate;
 
 pub use self::{account_entry::OverlayAccount, substate::Substate};
 use crate::evm::Spec;
-//use crate::parameters::block::ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT;
+use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -77,9 +76,9 @@ struct StakingState {
 pub struct State {
     db: StateDb,
 
-    cache: RefCell<HashMap<Address, AccountEntry>>,
-    staking_state_checkpoints: RefCell<Vec<StakingState>>,
-    checkpoints: RefCell<Vec<HashMap<Address, Option<AccountEntry>>>>,
+    cache: RwLock<HashMap<Address, AccountEntry>>,
+    staking_state_checkpoints: RwLock<Vec<StakingState>>,
+    checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
     account_start_nonce: U256,
     contract_start_nonce: U256,
     staking_state: StakingState,
@@ -116,9 +115,9 @@ impl State {
         };
         State {
             db,
-            cache: RefCell::new(HashMap::new()),
-            staking_state_checkpoints: RefCell::new(Vec::new()),
-            checkpoints: RefCell::new(Vec::new()),
+            cache: Default::default(),
+            staking_state_checkpoints: Default::default(),
+            checkpoints: Default::default(),
             account_start_nonce,
             contract_start_nonce,
             staking_state: StakingState {
@@ -138,7 +137,7 @@ impl State {
 
     /// Increase block number and calculate the current secondary reward.
     pub fn increase_block_number(&mut self) -> U256 {
-        assert!(self.staking_state_checkpoints.borrow().is_empty());
+        assert!(self.staking_state_checkpoints.get_mut().is_empty());
         self.block_number += 1;
         //self.account_start_nonce +=
         //    ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT.into();
@@ -158,7 +157,7 @@ impl State {
     /// Maintain `total_issued_tokens`, both secondary reward and primary reward
     /// are included.
     pub fn add_block_rewards(&mut self, rewards: U256) {
-        assert!(self.staking_state_checkpoints.borrow().is_empty());
+        assert!(self.staking_state_checkpoints.get_mut().is_empty());
         self.staking_state.total_issued_tokens += rewards;
     }
 
@@ -169,7 +168,7 @@ impl State {
     /// index.
     pub fn checkpoint(&mut self) -> usize {
         self.staking_state_checkpoints
-            .borrow_mut()
+            .get_mut()
             .push(self.staking_state.clone());
         let checkpoints = self.checkpoints.get_mut();
         let index = checkpoints.len();
@@ -229,11 +228,11 @@ impl State {
     ) -> DbResult<CollateralCheckResult> {
         let mut collateral_for_storage_sub = HashMap::new();
         let mut collateral_for_storage_inc = HashMap::new();
-        if let Some(checkpoint) = self.checkpoints.borrow().last() {
+        if let Some(checkpoint) = self.checkpoints.get_mut().last() {
             for address in checkpoint.keys() {
                 if let Some(ref mut maybe_acc) = self
                     .cache
-                    .borrow_mut()
+                    .get_mut()
                     .get_mut(address)
                     .filter(|x| x.is_dirty())
                 {
@@ -279,7 +278,7 @@ impl State {
         self.checkout_ownership_changed(substate)?;
 
         let touched_addresses =
-            if let Some(checkpoint) = self.checkpoints.borrow().last() {
+            if let Some(checkpoint) = self.checkpoints.get_mut().last() {
                 checkpoint.keys().cloned().collect()
             } else {
                 HashSet::new()
@@ -312,7 +311,7 @@ impl State {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
-            self.staking_state_checkpoints.borrow_mut().pop();
+            self.staking_state_checkpoints.get_mut().pop();
             if let Some(ref mut prev) = self.checkpoints.get_mut().last_mut() {
                 if prev.is_empty() {
                     **prev = checkpoint;
@@ -330,7 +329,7 @@ impl State {
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
             self.staking_state = self
                 .staking_state_checkpoints
-                .borrow_mut()
+                .get_mut()
                 .pop()
                 .expect("staking_state_checkpoint should exist");
             for (k, v) in checkpoint.drain() {
@@ -357,37 +356,14 @@ impl State {
         }
     }
 
-    fn insert_cache(&self, address: &Address, account: AccountEntry) {
-        let is_dirty = account.is_dirty();
-        let old_value = self.cache.borrow_mut().insert(*address, account);
-        if is_dirty {
-            if let Some(ref mut checkpoint) =
-                self.checkpoints.borrow_mut().last_mut()
-            {
-                checkpoint.entry(*address).or_insert(old_value);
-            }
-        }
-    }
-
-    fn note_cache(&self, address: &Address) {
-        if let Some(ref mut checkpoint) =
-            self.checkpoints.borrow_mut().last_mut()
-        {
-            checkpoint.entry(*address).or_insert_with(|| {
-                self.cache
-                    .borrow()
-                    .get(address)
-                    .map(AccountEntry::clone_dirty)
-            });
-        }
-    }
-
     pub fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
         nonce: U256,
     ) -> DbResult<()>
     {
-        self.insert_cache(
+        Self::update_cache(
+            self.cache.get_mut(),
+            self.checkpoints.get_mut(),
             contract,
             AccountEntry::new_dirty(Some(
                 OverlayAccount::new_contract_with_admin(
@@ -402,7 +378,9 @@ impl State {
     pub fn new_contract(
         &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
-        self.insert_cache(
+        Self::update_cache(
+            self.cache.get_mut(),
+            self.checkpoints.get_mut(),
             contract,
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
                 contract, balance, nonce, true,
@@ -838,20 +816,20 @@ impl State {
         Ok(())
     }
 
+    fn needs_update(require: RequireCache, account: &OverlayAccount) -> bool {
+        if let RequireCache::None = require {
+            return false;
+        }
+
+        trace!("update_account_cache account={:?}", account);
+        !account.is_cached()
+    }
+
     /// Load required account data from the databases. Returns whether the
     /// cache succeeds.
     fn update_account_cache(
         require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
     ) -> bool {
-        if let RequireCache::None = require {
-            return true;
-        }
-
-        trace!("update_account_cache account={:?}", account);
-        if account.is_cached() {
-            return true;
-        }
-
         match require {
             RequireCache::None => true,
             RequireCache::Code | RequireCache::CodeSize => {
@@ -916,12 +894,12 @@ impl State {
         &mut self, epoch_id: EpochId,
     ) -> DbResult<StateRootWithAuxInfo> {
         debug!("Commit epoch[{}]", epoch_id);
-        assert!(self.checkpoints.borrow().is_empty());
-        assert!(self.staking_state_checkpoints.borrow().is_empty());
+        assert!(self.checkpoints.get_mut().is_empty());
+        assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
         let mut killed_addresses = Vec::new();
         {
-            let accounts = self.cache.borrow();
+            let accounts = self.cache.get_mut();
             for (address, entry) in accounts.iter() {
                 if entry.is_dirty() && entry.account.is_none() {
                     killed_addresses.push(*address);
@@ -931,7 +909,7 @@ impl State {
         self.recycle_storage(killed_addresses)?;
         self.commit_staking_state()?;
 
-        let mut accounts = self.cache.borrow_mut();
+        let accounts = self.cache.get_mut();
         for (address, ref mut entry) in accounts
             .iter_mut()
             .filter(|&(_, ref entry)| entry.is_dirty())
@@ -951,13 +929,13 @@ impl State {
     pub fn commit_and_notify(
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
     ) -> DbResult<StateRootWithAuxInfo> {
-        assert!(self.checkpoints.borrow().is_empty());
+        assert!(self.checkpoints.get_mut().is_empty());
 
         let mut accounts_for_txpool = vec![];
 
         let mut killed_addresses = Vec::new();
         {
-            let accounts = self.cache.borrow();
+            let accounts = self.cache.get_mut();
             for (address, entry) in accounts.iter() {
                 if entry.is_dirty() && entry.account.is_none() {
                     killed_addresses.push(*address);
@@ -967,7 +945,7 @@ impl State {
         self.recycle_storage(killed_addresses)?;
         self.commit_staking_state()?;
 
-        let mut accounts = self.cache.borrow_mut();
+        let accounts = self.cache.get_mut();
         debug!("Notify epoch[{}]", epoch_id);
         let mut sorted_dirty_addresses = accounts
             .iter()
@@ -1023,7 +1001,28 @@ impl State {
     }
 
     pub fn kill_account(&mut self, address: &Address) {
-        self.insert_cache(address, AccountEntry::new_dirty(None))
+        Self::update_cache(
+            self.cache.get_mut(),
+            self.checkpoints.get_mut(),
+            address,
+            AccountEntry::new_dirty(None),
+        )
+    }
+
+    /// Return whether or not the address exists.
+    #[allow(unused)]
+    pub fn try_load(&self, address: &Address) -> bool {
+        if let Ok(true) =
+            self.ensure_cached(address, RequireCache::None, |maybe| {
+                maybe.is_some()
+            })
+        {
+            // Try to load the code, but don't fail if there is no code.
+            self.ensure_cached(address, RequireCache::Code, |_| ()).ok();
+            true
+        } else {
+            false
+        }
     }
 
     pub fn exists(&self, address: &Address) -> DbResult<bool> {
@@ -1055,7 +1054,7 @@ impl State {
         // TODO: consider both balance and staking_balance
         let to_kill: HashSet<_> = {
             self.cache
-                .borrow()
+                .get_mut()
                 .iter()
                 .filter_map(|(address, ref entry)| {
                     if touched.contains(address)
@@ -1122,7 +1121,7 @@ impl State {
         }
 
         let kind = {
-            let checkpoints = self.checkpoints.borrow();
+            let checkpoints = self.checkpoints.read();
 
             if start_checkpoint_index >= checkpoints.len() {
                 return Ok(None);
@@ -1188,46 +1187,89 @@ impl State {
         Ok(())
     }
 
+    fn update_cache(
+        cache: &mut HashMap<Address, AccountEntry>,
+        checkpoints: &mut Vec<HashMap<Address, Option<AccountEntry>>>,
+        address: &Address, account: AccountEntry,
+    )
+    {
+        let is_dirty = account.is_dirty();
+        let old_value = cache.insert(*address, account);
+        if is_dirty {
+            if let Some(ref mut checkpoint) = checkpoints.last_mut() {
+                checkpoint.entry(*address).or_insert(old_value);
+            }
+        }
+    }
+
+    fn insert_cache_if_fresh_account(
+        cache: &mut HashMap<Address, AccountEntry>, address: &Address,
+        maybe_account: Option<OverlayAccount>,
+    ) -> bool
+    {
+        if !cache.contains_key(address) {
+            cache.insert(*address, AccountEntry::new_clean(maybe_account));
+            true
+        } else {
+            false
+        }
+    }
+
     fn ensure_cached<F, U>(
         &self, address: &Address, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
-        if let Some(ref mut maybe_acc) =
-            self.cache.borrow_mut().get_mut(address)
-        {
-            if let Some(ref mut account) = maybe_acc.account {
-                if Self::update_account_cache(require, account, &self.db) {
-                    return Ok(f(Some(account)));
+        let needs_update =
+            if let Some(maybe_acc) = self.cache.read().get(address) {
+                if let Some(account) = &maybe_acc.account {
+                    Self::needs_update(require, account)
                 } else {
-                    return Err(DbErrorKind::IncompleteDatabase(
-                        account.address().clone(),
-                    )
-                    .into());
+                    false
+                }
+            } else {
+                false
+            };
+
+        if needs_update {
+            if let Some(maybe_acc) = self.cache.write().get_mut(address) {
+                if let Some(account) = &mut maybe_acc.account {
+                    if Self::update_account_cache(require, account, &self.db) {
+                        return Ok(f(Some(account)));
+                    } else {
+                        return Err(DbErrorKind::IncompleteDatabase(
+                            account.address().clone(),
+                        )
+                        .into());
+                    }
                 }
             }
         }
 
-        let mut maybe_acc = self
+        let maybe_acc = self
             .db
             .get_account(address)?
             .map(|acc| OverlayAccount::new(address, acc, self.block_number));
-        if let Some(ref mut account) = maybe_acc.as_mut() {
-            if !Self::update_account_cache(require, account, &self.db) {
+        let cache = &mut *self.cache.write();
+        Self::insert_cache_if_fresh_account(cache, address, maybe_acc);
+
+        let account = cache.get_mut(address).unwrap();
+        if let Some(maybe_acc) = &mut account.account {
+            if !Self::update_account_cache(require, maybe_acc, &self.db) {
                 return Err(DbErrorKind::IncompleteDatabase(
-                    account.address().clone(),
+                    maybe_acc.address().clone(),
                 )
                 .into());
             }
         }
 
-        let r = f(maybe_acc.as_ref());
-        self.insert_cache(address, AccountEntry::new_clean(maybe_acc));
-        Ok(r)
+        Ok(f(cache
+            .get(address)
+            .and_then(|entry| entry.account.as_ref())))
     }
 
     fn require_exists(
         &self, address: &Address, require_code: bool,
-    ) -> DbResult<RefMut<OverlayAccount>> {
+    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         fn no_account_is_an_error(
             address: &Address,
         ) -> DbResult<OverlayAccount> {
@@ -1238,7 +1280,7 @@ impl State {
 
     fn require_or_new_user_account(
         &self, address: &Address,
-    ) -> DbResult<RefMut<OverlayAccount>> {
+    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             if address.is_user_account_address() {
                 Ok(OverlayAccount::new_basic(
@@ -1257,21 +1299,29 @@ impl State {
 
     fn require_or_set<F>(
         &self, address: &Address, require_code: bool, default: F,
-    ) -> DbResult<RefMut<OverlayAccount>>
+    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>>
     where F: FnOnce(&Address) -> DbResult<OverlayAccount> {
-        if !self.cache.borrow().contains_key(address) {
+        let mut cache;
+        if !self.cache.read().contains_key(address) {
             let account = self.db.get_account(address)?.map(|acc| {
                 OverlayAccount::new(address, acc, self.block_number)
             });
-            self.insert_cache(address, AccountEntry::new_clean(account));
-        }
-        self.note_cache(address);
+            cache = self.cache.write();
+            Self::insert_cache_if_fresh_account(&mut *cache, address, account);
+        } else {
+            cache = self.cache.write();
+        };
 
-        let mut cache = self.cache.borrow_mut();
+        // Save the value before modification into the checkpoint.
+        if let Some(ref mut checkpoint) = self.checkpoints.write().last_mut() {
+            checkpoint.entry(*address).or_insert_with(|| {
+                cache.get(address).map(AccountEntry::clone_dirty)
+            });
+        }
 
         let entry = (*cache)
             .get_mut(address)
-            .expect("entry known to exist in the cache; qed");
+            .expect("entry known to exist in the cache");
 
         // Set the dirty flag.
         entry.state = AccountState::Dirty;
@@ -1293,7 +1343,7 @@ impl State {
             }
         }
 
-        Ok(RefMut::map(cache, |c| {
+        Ok(RwLockWriteGuard::map(cache, |c| {
             c.get_mut(address)
                 .expect("Entry known to exist in the cache.")
                 .account
@@ -1303,9 +1353,9 @@ impl State {
     }
 
     pub fn clear(&mut self) {
-        assert!(self.checkpoints.borrow().is_empty());
-        assert!(self.staking_state_checkpoints.borrow().is_empty());
-        self.cache.borrow_mut().clear();
+        assert!(self.checkpoints.get_mut().is_empty());
+        assert!(self.staking_state_checkpoints.get_mut().is_empty());
+        self.cache.get_mut().clear();
         self.staking_state.interest_rate_per_block =
             self.db.get_annual_interest_rate().expect("no db error")
                 / U256::from(BLOCKS_PER_YEAR);
