@@ -28,6 +28,8 @@ pub mod consensus {
 
     pub const ONE_CFX_IN_DRIP: u64 = 1_000_000_000_000_000_000;
 
+    pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_1000;
+
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
 }
 
@@ -183,13 +185,8 @@ pub mod block {
 }
 
 pub mod staking {
-    use super::{
-        consensus::ONE_CFX_IN_DRIP, pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
-    };
+    use super::pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
     use cfx_types::U256;
-
-    /// This is the exchange unit between storage and CFX.
-    pub const NUM_BYTES_PER_CFX: u64 = 1024;
 
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 =
@@ -204,8 +201,8 @@ pub mod staking {
     pub const BYTES_PER_STORAGE_KEY: u64 = 64;
 
     lazy_static! {
-        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes.
-        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(ONE_CFX_IN_DRIP / NUM_BYTES_PER_CFX);
+        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes, which is `10 ^ 18 / 1024` drip for 1 Byte.
+        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(976_562_500_000_000u64);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
         pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(BYTES_PER_STORAGE_KEY);
