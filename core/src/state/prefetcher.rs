@@ -59,7 +59,7 @@ impl PrefetcherThreadWorker {
     }
 
     /// Unsafe because there shouldn't be concurrent calls to this function.
-    /// It also doesn't wait for the task to ffinish.
+    /// It also doesn't wait for the task to finish.
     unsafe fn signal_current_task_cancellation(&self, task_id: u64) {
         self.cancel_task_id.store(task_id, Ordering::Relaxed);
     }
@@ -115,12 +115,12 @@ impl PrefetcherThreadWorker {
             } else {
                 self.prefetch_accounts(task_id, state, accounts);
                 task_finish_signal.send(()).expect(
-                    // sender shouln not return error.
+                    // Should not return error.
                     &concat!(file!(), ":", line!(), ":", column!()),
                 );
             }
         }
-        error!("State prefetcher thread Stopped due to exception.");
+        error!("State prefetcher thread stopped due to exception.");
     }
 }
 
@@ -153,7 +153,7 @@ impl ExecutionStatePrefetcher {
 
         // Start task queue controller.
         let (task_canceled_sender, task_canceled_receiver) = mpsc::channel();
-        let (task_sender, task_receiver) = new_cancelable_task_channel();
+        let (task_sender, task_receiver) = new_cancellable_task_channel();
         let prefetcher = Arc::new(Self {
             task_sender: Mutex::new(task_sender),
             workers,
@@ -201,8 +201,8 @@ impl ExecutionStatePrefetcher {
         if current_task_locked.as_ref().map_or(false, |current| {
             PrefetchTaskKey::key_matches(&current.0, task_epoch_id)
         }) {
-            let current_task_id = current_task_locked.as_ref().unwrap().1;
             // It's the current task.
+            let current_task_id = current_task_locked.as_ref().unwrap().1;
             // Inform the thread about the cancellation.
             if cancel {
                 unsafe {
@@ -212,15 +212,17 @@ impl ExecutionStatePrefetcher {
                     }
                 }
             }
+            // Set the cancellation flag.
             *current_task_locked = None;
-            // Search in pending queue.
+            // Search in pending queue because we allow multiple tasks with same
+            // id.
             self.task_sender
                 .lock()
                 .cancel(task_epoch_id, &current_task_locked);
             drop(current_task_locked);
             // Wait for the cancelled task to finish.
             self.current_task_canceled_receiver.lock().recv().expect(
-                // recv shouldn't return error.
+                // Should not return error.
                 &concat!(file!(), ":", line!(), ":", column!()),
             );
         } else {
@@ -236,7 +238,7 @@ impl ExecutionStatePrefetcher {
     ) {
         for receiver in finish_signal_receivers {
             receiver.recv().expect(
-                // recv shouldn't return error.
+                // Should not return error.
                 &concat!(file!(), ":", line!(), ":", column!()),
             );
         }
@@ -263,7 +265,7 @@ impl ExecutionStatePrefetcher {
                         Some((task_epoch_id, current_task_id));
                     drop(current_task_epoch_id);
 
-                    // Dispatch tasks to threads.
+                    // Dispatch split task to workers.
                     let num_accounts = accounts.len();
                     let num_threads = self.workers.len();
                     for thread_idx in 0..num_threads {
@@ -286,12 +288,12 @@ impl ExecutionStatePrefetcher {
                     // processed.
                     if current_task_id_locked.is_none() {
                         task_canceled_sender.send(()).expect(
-                            // recv shouldn't return error.
+                            // Should not return error.
                             &concat!(file!(), ":", line!(), ":", column!()),
                         );
                     } else {
                         // Clear the current task id so that it can not be
-                        // canceled any more.
+                        // canceled after its finished.
                         *current_task_id_locked = None;
                     }
                 }
@@ -311,16 +313,16 @@ impl ExecutionStatePrefetcher {
 
 impl Drop for ExecutionStatePrefetcher {
     fn drop(&mut self) {
-        // Signal the prefetch thread to exit.
+        // Signal the prefetcher to exit.
         self.stop();
 
-        // Let workers Stop after current task.
+        // Let workers stop after the current task.
         for worker in &self.workers {
             unsafe {
                 worker.stop();
             }
         }
-        // Cancel the current task
+        // Cancel the current task.
         let current_task = self.current_task_id.lock().clone();
         if let Some(task) = &current_task {
             self.cancel_task(&task.0, /* cancel = */ true);
@@ -358,7 +360,7 @@ impl Drop for PrefetchTaskHandle<'_> {
             Some(prefetcher) => prefetcher
                 .cancel_task(&self.task_epoch_id, /* cancel = */ true),
         }
-        // To mute the compiler complain about accounts isn't used.
+        // To mute the compiler's complain over the variable isn't used.
         self.accounts.clear();
     }
 }
@@ -425,7 +427,7 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
     }
 }
 
-pub fn new_cancelable_task_channel<T: CancelByKey>(
+pub fn new_cancellable_task_channel<T: CancelByKey>(
 ) -> (CancelableTaskSender<T>, CancelableTaskReceiver<T>) {
     let (sender, receiver) = mpsc::channel();
     let queue: Arc<Mutex<VecDeque<Option<T>>>> = Default::default();
