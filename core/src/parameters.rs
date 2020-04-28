@@ -28,7 +28,7 @@ pub mod consensus {
 
     pub const ONE_CFX_IN_DRIP: u64 = 1_000_000_000_000_000_000;
 
-    pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_1000;
+    pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_000;
 
     pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
 }
