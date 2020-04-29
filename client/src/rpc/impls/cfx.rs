@@ -8,7 +8,8 @@ use crate::rpc::{
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         sign_call, Account as RpcAccount, BlameInfo, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        BlockHashOrEpochNumber, Bytes, CallRequest,
+        CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
         SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
@@ -793,6 +794,43 @@ impl RpcImpl {
         Ok(response)
     }
 
+    fn check_balance_against_transaction(
+        &self, account_addr: RpcH160, contract_addr: RpcH160,
+        gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256,
+        epoch: Option<EpochNumber>,
+    ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>
+    {
+        let consensus_graph = self
+            .consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed");
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+
+        match consensus_graph.check_balance_against_transaction(
+            account_addr.into(),
+            contract_addr.into(),
+            gas_limit.into(),
+            gas_price.into(),
+            storage_limit.into(),
+            epoch.into(),
+        ) {
+            Ok((will_pay_tx_fee, will_pay_collateral, is_balance_enough)) => {
+                let response = CheckBalanceAgainstTransactionResponse {
+                    will_pay_tx_fee,
+                    will_pay_collateral,
+                    is_balance_enough,
+                };
+                Ok(response)
+            }
+            Err(e) => {
+                let mut rpc_error = JsonRpcError::internal_error();
+                rpc_error.message = format!("{:?}", e).into();
+                bail!(rpc_error)
+            }
+        }
+    }
+
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<ExecutionOutcome> {
@@ -925,6 +963,9 @@ impl Cfx for CfxHandler {
             fn estimate_gas_and_collateral(
                 &self, request: CallRequest, epoch_number: Option<EpochNumber>)
                 -> JsonRpcResult<EstimateGasAndCollateralResponse>;
+            fn check_balance_against_transaction(
+                &self, account_addr: RpcH160, contract_addr: RpcH160, gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256, epoch: Option<EpochNumber>,
+            ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<RpcH256>;
             fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>)

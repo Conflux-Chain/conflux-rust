@@ -8,7 +8,8 @@ use crate::rpc::{
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        BlockHashOrEpochNumber, Bytes, CallRequest,
+        CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
         Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
         SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
@@ -493,6 +494,7 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn check_balance_against_transaction(&self, account_addr: RpcH160, contract_addr: RpcH160, gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
     }
 }
 

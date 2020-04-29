@@ -156,6 +156,7 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         (addr1, priv_key1) = client.rand_account()
         (addr2, priv_key2) = client.rand_account()
         (addr3, priv_key3) = client.rand_account()
+        (addr4, priv_key4) = client.rand_account()
         tx = client.new_tx(
             sender=genesis_addr,
             priv_key=genesis_key,
@@ -222,6 +223,50 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
         assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound)
         assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
+
+        check_info = client.check_balance_against_transaction(addr1, contract_addr, gas, gas_price, storage_limit=0)
+        assert_equal(check_info['willPayTxFee'], True)
+        assert_equal(check_info['willPayCollateral'], True)
+        assert_equal(check_info['isBalanceEnough'], True)
+
+        check_info = client.check_balance_against_transaction(addr4, contract_addr, gas, gas_price, storage_limit=0)
+        assert_equal(check_info['willPayTxFee'], True)
+        assert_equal(check_info['willPayCollateral'], True)
+        assert_equal(check_info['isBalanceEnough'], False)
+
+        # set privilege for addr4
+        b0 = client.get_balance(genesis_addr)
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="add",
+            args=[Web3.toChecksumAddress(addr4)],
+            sender_key=genesis_key,
+            contract_addr=contract_addr,
+            wait=True,
+            check_status=True,
+            storage_limit=64)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - collateral_per_storage_key)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
+
+        check_info = client.check_balance_against_transaction(addr4, contract_addr, gas, gas_price, storage_limit=0)
+        assert_equal(check_info['willPayTxFee'], False)
+        assert_equal(check_info['willPayCollateral'], True)
+        assert_equal(check_info['isBalanceEnough'], True)
+
+        # remove privilege for addr4
+        b0 = client.get_balance(genesis_addr)
+        c0 = client.get_collateral_for_storage(genesis_addr)
+        self.call_contract_function(
+            contract=test_contract,
+            name="remove",
+            args=[Web3.toChecksumAddress(addr4)],
+            sender_key=genesis_key,
+            contract_addr=contract_addr,
+            wait=True,
+            check_status=True)
+        assert_equal(client.get_collateral_for_storage(genesis_addr), c0 - collateral_per_storage_key)
+        assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) + collateral_per_storage_key)
 
         # set privilege for addr1
         b0 = client.get_balance(genesis_addr)
@@ -414,6 +459,11 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_for_collateral(contract_addr), addr3)
         assert_equal(client.get_balance(addr3), b3 - charged_of_huge_gas(gas) - 10 ** 18 + 1)
 
+        check_info = client.check_balance_against_transaction(addr1, contract_addr, gas, gas_price, storage_limit=0)
+        assert_equal(check_info['willPayTxFee'], True)
+        assert_equal(check_info['willPayCollateral'], True)
+        assert_equal(check_info['isBalanceEnough'], True)
+
         # addr1 create 2 keys without privilege, and storage limit is 1, should failed
         b1 = client.get_balance(addr1)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
@@ -457,6 +507,16 @@ class CommissionPrivilegeTest(ConfluxTestFramework):
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), collateral_per_storage_key)
         assert_equal(client.get_balance(addr1), b1 - charged_of_huge_gas(gas) + collateral_per_storage_key)
+
+        check_info = client.check_balance_against_transaction(addr2, contract_addr, gas, gas_price, storage_limit=bytes_per_key)
+        assert_equal(check_info['willPayTxFee'], False)
+        assert_equal(check_info['willPayCollateral'], False)
+        assert_equal(check_info['isBalanceEnough'], True)
+
+        check_info = client.check_balance_against_transaction(addr2, contract_addr, gas, gas_price, storage_limit=10 ** 18)
+        assert_equal(check_info['willPayTxFee'], False)
+        assert_equal(check_info['willPayCollateral'], True)
+        assert_equal(check_info['isBalanceEnough'], True)
 
         # addr2 create 2 keys with privilege, and storage limit is 1, should succeed
         sbc = client.get_sponsor_balance_for_collateral(contract_addr)

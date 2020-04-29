@@ -39,6 +39,17 @@ pub struct EstimateGasAndCollateralResponse {
     pub storage_collateralized: U256,
 }
 
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckBalanceAgainstTransactionResponse {
+    /// Whether the account should pay transaction fee by self.
+    pub will_pay_tx_fee: bool,
+    /// Whether the account should pay collateral by self.
+    pub will_pay_collateral: bool,
+    /// Whether the account balance is enough for this transaction.
+    pub is_balance_enough: bool,
+}
+
 pub fn sign_call(
     epoch_height: u64, chain_id: u64, request: CallRequest,
 ) -> SignedTransaction {
