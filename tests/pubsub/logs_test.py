@@ -86,28 +86,35 @@ class PubSubTest(ConfluxTestFramework):
         assert_equal(len(logs1), 2 * NUM_CALLS)
         assert_equal(len(logs2), NUM_CALLS)
 
+        self.log.info(f"Pass -- retrieved logs with no fork")
+
         # create alternative fork
-        old_tip = self.nodes[FULLNODE0].best_block_hash()
+        old_tip = self.rpc[FULLNODE0].best_block_hash()
+        old_tip_epoch = self.rpc[FULLNODE0].epoch_number()
         fork_hash = receipts[len(receipts) // 2]["blockHash"]
         fork_epoch = receipts[len(receipts) // 2]["epochNumber"]
-        max_epoch = receipts[-1]["epochNumber"]
 
-        new_tip = self.generate_chain(fork_hash, 2 * (max_epoch - fork_epoch))[-1]
+        self.log.info(f"Creating fork at {fork_hash[:20]}... (#{fork_epoch})")
+
+        new_tip = self.generate_chain(fork_hash, 2 * (old_tip_epoch - fork_epoch))[-1]
         new_tip = self.rpc[FULLNODE0].generate_block_with_parent(new_tip, referee = [old_tip])
         new_tip = self.generate_chain(new_tip, 20)[-1]
-        sync_blocks(self.nodes[:])
+        new_tip_epoch = self.rpc[FULLNODE0].epoch_number()
+        sync_blocks(self.nodes)
+
+        self.log.info(f"Tip: {old_tip[:20]}... (#{old_tip_epoch}) --> {new_tip[:20]}... (#{new_tip_epoch})")
 
         # block order changed, some transactions need to be re-executed
         num_to_reexecute = sum(1 for r in receipts if r["epochNumber"] > fork_epoch)
 
-        msg = await sub_all.next()
+        msg = await sub_all.next(timeout=5)
         assert(msg["revertTo"] != None)
         assert_equal(int(msg["revertTo"], 16), fork_epoch)
 
         logs = [l async for l in sub_all.iter()]
         assert_equal(len(logs), num_to_reexecute)
 
-        self.log.info(f"Pass")
+        self.log.info(f"Pass -- retrieved re-executed logs after fork")
 
     def run_test(self):
         asyncio.get_event_loop().run_until_complete(self.run_async())
