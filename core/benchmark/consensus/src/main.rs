@@ -112,11 +112,15 @@ fn check_results(
             pending_cnt += 1;
             continue;
         }
-        let partial_invalid = consensus
-            .inner
-            .read()
-            .is_partial_invalid(&hashes[i])
-            .unwrap();
+        let partial_invalid_opt =
+            consensus.inner.read().is_partial_invalid(&hashes[i]);
+        // This one is outside the era and eliminated. We will skip and count it
+        // as pending as well.
+        if partial_invalid_opt.is_none() {
+            pending_cnt += 1;
+            continue;
+        }
+        let partial_invalid = partial_invalid_opt.unwrap();
         let valid = *valid_indices.get(&i).unwrap();
         let invalid = (valid == 0);
         if valid != -1 {
