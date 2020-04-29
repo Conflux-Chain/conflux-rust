@@ -28,7 +28,10 @@ pub use self::{
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
-    call_request::{sign_call, CallRequest, EstimateGasAndCollateralResponse},
+    call_request::{
+        sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
+        EstimateGasAndCollateralResponse,
+    },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     filter::Filter,

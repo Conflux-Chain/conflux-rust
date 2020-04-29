@@ -365,6 +365,9 @@ class RpcClient:
         response = self.node.cfx_estimateGasAndCollateral(tx)
         return response['storageCollateralized']
 
+    def check_balance_against_transaction(self, account_addr: str, contract_addr: str, gas_limit: int, gas_price: int, storage_limit: int) -> dict:
+       return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price), hex(storage_limit))
+
     def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
         if epoch is None:
