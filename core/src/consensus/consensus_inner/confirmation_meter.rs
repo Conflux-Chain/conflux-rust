@@ -126,9 +126,32 @@ impl ConfirmationMeter {
     pub fn confirmation_risk_by_hash(
         &self, g_inner: &ConsensusGraphInner, hash: H256,
     ) -> Option<f64> {
-        let index = *g_inner.hash_to_arena_indices.get(&hash)?;
+        let index = match g_inner.hash_to_arena_indices.get(&hash) {
+            Some(i) => *i,
+            None => {
+                // The block is not in memory, check if it's confirmed before.
+                return match g_inner
+                    .data_man
+                    .block_execution_result_by_hash_from_db(&hash)
+                {
+                    // It's garbage collected because of checkpoint, but it
+                    // is executed before checkpoint, so
+                    // is definitely confirmed.
+                    Some(_) => Some(CONFIRMATION_METER_MIN_MAINTAINED_RISK),
+                    // The block has not entered consensus or it's skipped
+                    // in execution, either not-in-same-era
+                    // or not in the epoch set bound.
+                    // FIXME: Skipped blocks' order are actually confirmed.
+                    None => None,
+                };
+            }
+        };
         let epoch_num = g_inner.arena[index].data.epoch_number;
         if epoch_num == NULLU64 {
+            // The block is in the anticone of cur era genesis or its not
+            // included in any epoch on the pivot chain yet.
+            // FIXME: Its order is confirmed if it's in cur_era_genesis
+            // anticone.
             return None;
         }
 

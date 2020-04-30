@@ -1168,7 +1168,7 @@ impl ConsensusExecutionHandler {
             ULTIMATE_BASE_MINING_REWARD_IN_UCFX
         };
 
-        U512::from(reward_in_ucfx) * U512::from(CONFLUX_TOKEN / 1_000_000)
+        U512::from(reward_in_ucfx) * U512::from(ONE_UCFX_IN_DRIP)
     }
 
     /// `epoch_block_states` includes if a block is partial invalid and its

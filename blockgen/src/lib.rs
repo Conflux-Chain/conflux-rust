@@ -417,7 +417,8 @@ impl BlockGenerator {
 
     /// Update and sync a new block
     pub fn on_mined_block(&self, block: Block) {
-        self.sync.on_mined_block(block);
+        // FIXME: error handling.
+        self.sync.on_mined_block(block).ok();
     }
 
     /// Check if we need to mine on a new block

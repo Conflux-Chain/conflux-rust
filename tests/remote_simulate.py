@@ -65,9 +65,6 @@ class RemoteSimulate(ConfluxTestFramework):
     )
 
     PASS_TO_CONFLUX_OPTIONS = dict(
-        data_propagate_enabled = False,
-        data_propagate_interval_ms = 1000,
-        data_propagate_size = 1000,
         egress_min_throttle = 512,
         egress_max_throttle = 1024,
         egress_queue_capacity = 2048,

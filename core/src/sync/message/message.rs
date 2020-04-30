@@ -4,7 +4,10 @@
 
 use super::*;
 use crate::{
-    message::{GetMaybeRequestId, Message, MsgId, RequestId, SetRequestId},
+    message::{
+        decode_rlp_and_check_deprecation, GetMaybeRequestId, Message,
+        MessageProtocolVersionBound, MsgId, RequestId, SetRequestId,
+    },
     sync::{
         message::throttling::Throttle,
         state::{
@@ -12,15 +15,16 @@ use crate::{
             SnapshotManifestRequest, SnapshotManifestResponse,
             StateSyncCandidateRequest, StateSyncCandidateResponse,
         },
-        Error,
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
+use network::{service::ProtocolVersion, NetworkProtocolHandler};
 pub use priority_send_queue::SendQueuePriority;
-use rlp::{Decodable, Encodable, Rlp};
+use rlp::{Decodable, Rlp};
 
 // generate `pub mod msgid`
 build_msgid! {
-    STATUS = 0x00
+    STATUS_DEPRECATED = 0x00
     NEW_BLOCK_HASHES = 0x01
     TRANSACTIONS = 0x02
     GET_BLOCK_HASHES = 0x03
@@ -53,94 +57,83 @@ build_msgid! {
     GET_TRANSACTIONS_FROM_TX_HASHES_RESPONSE = 0x1e
     STATE_SYNC_CANDIDATE_REQUEST = 0x20
     STATE_SYNC_CANDIDATE_RESPONSE = 0x21
+    STATUS_V2 = 0x22
 
     // This is only used in inflight_keys.
     NET_INFLIGHT_BLOCKS = 0xf0
     THROTTLED = 0xfe
 
     INVALID = 0xff
+    // This above not the last one because msg_id is u16,
+    // U16_NEXT = 0x100
 }
 
 // generate `impl Message for _` for each message type
 // high priority message types
-build_msg_impl! { Status, msgid::STATUS, "Status" }
-build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes" }
-build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse" }
-build_msg_with_request_id_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders" }
-build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse" }
-build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock" }
-build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse" }
-build_msg_with_request_id_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES, "GetTerminalBlockHashes" }
-build_msg_with_request_id_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks" }
-build_msg_with_request_id_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks" }
-build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse" }
-build_msg_with_request_id_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn" }
-build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange" }
-build_msg_with_request_id_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch" }
-build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled" }
+build_msg_impl! { StatusDeprecatedV1, msgid::STATUS_DEPRECATED, "Status", SYNC_PROTO_V1, SYNC_PROTO_V1 }
+build_msg_impl! { StatusV2, msgid::STATUS_V2, "StatusV2", SYNC_PROTO_V2, SYNC_PROTO_V2 }
+build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetTerminalBlockHashesResponse, msgid::GET_TERMINAL_BLOCK_HASHES_RESPONSE, "GetTerminalBlockHashesResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetTerminalBlockHashes, msgid::GET_TERMINAL_BLOCK_HASHES, "GetTerminalBlockHashes", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlocks, msgid::GET_BLOCKS, "GetBlocks", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetCompactBlocks, msgid::GET_CMPCT_BLOCKS, "GetCompactBlocks", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { GetCompactBlocksResponse, msgid::GET_CMPCT_BLOCKS_RESPONSE, "GetCompactBlocksResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTxn", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_with_request_id_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled", SYNC_PROTO_V1, SYNC_PROTO_V2 }
 
 // normal priority and size-sensitive message types
 impl GetMaybeRequestId for Transactions {}
+mark_msg_version_bound!(Transactions, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for Transactions {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 1 }
 
     fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
 
     fn msg_name(&self) -> &'static str { "Transactions" }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl GetMaybeRequestId for GetBlocksResponse {}
+mark_msg_version_bound!(GetBlocksResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for GetBlocksResponse {
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl GetMaybeRequestId for GetBlocksWithPublicResponse {}
+mark_msg_version_bound!(
+    GetBlocksWithPublicResponse,
+    SYNC_PROTO_V1,
+    SYNC_PROTO_V2
+);
 impl Message for GetBlocksWithPublicResponse {
     fn is_size_sensitive(&self) -> bool { self.blocks.len() > 0 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl GetMaybeRequestId for GetBlockTxnResponse {}
+mark_msg_version_bound!(GetBlockTxnResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for GetBlockTxnResponse {
     fn is_size_sensitive(&self) -> bool { self.block_txn.len() > 1 }
 
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl GetMaybeRequestId for TransactionDigests {}
+mark_msg_version_bound!(TransactionDigests, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for TransactionDigests {
     fn is_size_sensitive(&self) -> bool { self.len() > 1 }
 
@@ -149,15 +142,10 @@ impl Message for TransactionDigests {
     fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 
 impl GetMaybeRequestId for GetTransactionsResponse {}
+mark_msg_version_bound!(GetTransactionsResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
 impl Message for GetTransactionsResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
@@ -166,14 +154,13 @@ impl Message for GetTransactionsResponse {
     fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
+mark_msg_version_bound!(
+    GetTransactionsFromTxHashesResponse,
+    SYNC_PROTO_V1,
+    SYNC_PROTO_V2
+);
 impl Message for GetTransactionsFromTxHashesResponse {
     fn is_size_sensitive(&self) -> bool { self.transactions.len() > 0 }
 
@@ -184,12 +171,6 @@ impl Message for GetTransactionsFromTxHashesResponse {
     fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
-
-    fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes();
-        encoded.push(self.msg_id());
-        encoded
-    }
 }
 /// handle the RLP encoded message with given context `ctx`.
 /// If the message not handled, return `Ok(false)`.
@@ -199,7 +180,10 @@ pub fn handle_rlp_message(
     id: MsgId, ctx: &Context, rlp: &Rlp,
 ) -> Result<bool, Error> {
     match id {
-        msgid::STATUS => handle_message::<Status>(ctx, rlp)?,
+        msgid::STATUS_DEPRECATED => {
+            handle_message::<StatusDeprecatedV1>(ctx, rlp)?
+        }
+        msgid::STATUS_V2 => handle_message::<StatusV2>(ctx, rlp)?,
         msgid::NEW_BLOCK => handle_message::<NewBlock>(ctx, rlp)?,
         msgid::NEW_BLOCK_HASHES => {
             handle_message::<NewBlockHashes>(ctx, rlp)?;
@@ -292,7 +276,11 @@ pub fn handle_rlp_message(
 fn handle_message<T: Decodable + Handleable + Message>(
     ctx: &Context, rlp: &Rlp,
 ) -> Result<(), Error> {
-    let msg: T = rlp.as_val()?;
+    let msg: T = decode_rlp_and_check_deprecation(
+        rlp,
+        ctx.manager.minimum_supported_version(),
+        ctx.io.get_protocol(),
+    )?;
 
     let msg_id = msg.msg_id();
     let msg_name = msg.msg_name();

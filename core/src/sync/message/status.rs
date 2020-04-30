@@ -16,15 +16,14 @@ use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
 
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
-pub struct Status {
-    pub protocol_version: u8,
+pub struct StatusV2 {
     pub chain_id: ChainIdParams,
     pub genesis_hash: H256,
     pub best_epoch: u64,
     pub terminal_block_hashes: Vec<H256>,
 }
 
-impl Handleable for Status {
+impl Handleable for StatusV2 {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
@@ -52,12 +51,6 @@ impl Handleable for Status {
         if let Ok(peer_info) = ctx.manager.syn.get_peer_info(&ctx.node_id) {
             let latest_updated = {
                 let mut peer_info = peer_info.write();
-                if peer_info.protocol_version != self.protocol_version {
-                    warn!("Protocol versions do not match");
-                    bail!(ErrorKind::InvalidStatus(
-                        "protocol version mismatches".into()
-                    ));
-                }
                 peer_info.heartbeat = Instant::now();
 
                 let updated = self.best_epoch != peer_info.best_epoch
@@ -78,10 +71,17 @@ impl Handleable for Status {
                 ctx.manager.start_sync(ctx.io);
             }
         } else {
-            if !ctx.manager.syn.on_status_in_handshaking(&ctx.node_id) {
-                warn!("Unexpected Status message from peer={}", ctx.node_id);
-                return Err(ErrorKind::UnknownPeer.into());
-            }
+            let peer_protocol_version =
+                match ctx.manager.syn.on_status_in_handshaking(&ctx.node_id) {
+                    None => {
+                        warn!(
+                            "Unexpected Status message from peer={}",
+                            ctx.node_id
+                        );
+                        return Err(ErrorKind::UnknownPeer.into());
+                    }
+                    Some(protocol_version) => protocol_version,
+                };
 
             let throttling =
                 match ctx.manager.protocol_config.throttling_config_file {
@@ -95,7 +95,7 @@ impl Handleable for Status {
             let mut peer_state = SynchronizationPeerState {
                 node_id: ctx.node_id(),
                 is_validator: false,
-                protocol_version: self.protocol_version,
+                protocol_version: peer_protocol_version,
                 genesis_hash,
                 best_epoch: self.best_epoch,
                 latest_block_hashes: latest,
@@ -113,7 +113,7 @@ impl Handleable for Status {
 
             debug!(
                 "New peer (pv={:?}, gh={:?})",
-                self.protocol_version, self.genesis_hash
+                peer_protocol_version, self.genesis_hash
             );
 
             debug!("Peer {:?} connected", ctx.node_id);
@@ -126,5 +126,27 @@ impl Handleable for Status {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
+pub struct StatusDeprecatedV1 {
+    pub protocol_version: u8,
+    pub genesis_hash: H256,
+    pub best_epoch: u64,
+    pub terminal_block_hashes: Vec<H256>,
+}
+
+impl Handleable for StatusDeprecatedV1 {
+    fn handle(self, ctx: &Context) -> Result<(), Error> {
+        debug!("on_status, msg=:{:?}", self);
+
+        StatusV2 {
+            chain_id: ctx.manager.graph.consensus.get_config().chain_id.clone(),
+            best_epoch: self.best_epoch,
+            genesis_hash: self.genesis_hash,
+            terminal_block_hashes: self.terminal_block_hashes,
+        }
+        .handle(ctx)
     }
 }

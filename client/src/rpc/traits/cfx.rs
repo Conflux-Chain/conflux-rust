@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{
-    Account as RpcAccount, Block, Bytes, CallRequest, EpochNumber,
+    Account as RpcAccount, Block, Bytes, CallRequest,
+    CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Filter as RpcFilter, Log as RpcLog,
     Receipt as RpcReceipt, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
     StorageRoot as RpcStorageRoot, Transaction, H160 as RpcH160,
@@ -157,6 +158,14 @@ pub trait Cfx {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
+
+    /// Check if user balance is enough for the transaction.
+    #[rpc(name = "cfx_checkBalanceAgainstTransaction")]
+    fn check_balance_against_transaction(
+        &self, account_addr: RpcH160, contract_addr: RpcH160,
+        gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256,
+        epoch: Option<EpochNumber>,
+    ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
     fn blocks_by_epoch(
