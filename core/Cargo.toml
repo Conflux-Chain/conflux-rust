@@ -15,6 +15,7 @@ byteorder = "1.0"
 cfx-stratum = { path = "../blockgen/stratum" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
+cfx-utils = { path = "../cfx_utils" }
 clap = "2"
 derivative = "2.0.2"
 db = { path = "../db" }
