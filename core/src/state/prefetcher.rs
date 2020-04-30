@@ -27,8 +27,6 @@ pub fn prefetch_accounts<'a>(
 
 pub struct ExecutionStatePrefetcher {
     task_sender: Mutex<CancelableTaskSender<PrefetchTaskKey>>,
-    current_task_id: Mutex<Option<(EpochId, u64)>>,
-    current_task_canceled_receiver: Mutex<mpsc::Receiver<()>>,
     workers: Vec<Arc<PrefetcherThreadWorker>>,
     worker_join_handles: Vec<JoinHandle<()>>,
 
@@ -36,16 +34,24 @@ pub struct ExecutionStatePrefetcher {
 }
 
 struct PrefetcherThreadWorker {
-    task_queue_sender:
-        Mutex<mpsc::Sender<(u64, &'static State, &'static [&'static Address])>>,
+    task_queue_sender: Mutex<
+        mpsc::Sender<(
+            EpochId,
+            u64,
+            &'static State,
+            &'static [&'static Address],
+        )>,
+    >,
     /// All threads should be processing the same task.
-    /// Abort the current task when the task id changed.
+    /// Abort the current task when the cancel task id matches.
     cancel_task_id: AtomicU64,
+    current_task_id: RwLock<(EpochId, u64)>,
 }
 
 impl PrefetcherThreadWorker {
     fn new(
         task_queue_sender: mpsc::Sender<(
+            EpochId,
             u64,
             &'static State,
             &'static [&'static Address],
@@ -55,29 +61,36 @@ impl PrefetcherThreadWorker {
         Self {
             task_queue_sender: Mutex::new(task_queue_sender),
             cancel_task_id: Default::default(),
+            current_task_id: Default::default(),
         }
     }
 
     /// Unsafe because there shouldn't be concurrent calls to this function.
     /// It also doesn't wait for the task to finish.
-    unsafe fn signal_current_task_cancellation(&self, task_id: u64) {
-        self.cancel_task_id.store(task_id, Ordering::Relaxed);
+    unsafe fn signal_current_task_cancellation(&self, task_epoch_id: &EpochId) {
+        let current_task = self.current_task_id.read();
+        if PrefetchTaskKey::key_matches(&current_task.0, task_epoch_id) {
+            self.cancel_task_id.store(current_task.1, Ordering::Relaxed);
+        }
     }
 
     fn send_new_task(
-        &self, task_id: u64, state: &'static State,
+        &self, task_epoch_id: EpochId, task_id: u64, state: &'static State,
         addresses: &'static [&'static Address],
     )
     {
         self.task_queue_sender
             .lock()
-            .send((task_id, state, addresses))
+            .send((task_epoch_id, task_id, state, addresses))
             .ok();
     }
 
     /// Unsafe because we only want the Prefetcher to stop the thread.
     unsafe fn stop(&self) {
-        self.task_queue_sender.lock().send((0, &*null(), &[])).ok();
+        self.task_queue_sender
+            .lock()
+            .send((Default::default(), 0, &*null(), &[]))
+            .ok();
     }
 
     fn prefetch_accounts(
@@ -101,6 +114,7 @@ impl PrefetcherThreadWorker {
     fn run(
         &self,
         task_queue: mpsc::Receiver<(
+            EpochId,
             u64,
             &'static State,
             &'static [&'static Address],
@@ -108,11 +122,14 @@ impl PrefetcherThreadWorker {
         task_finish_signal: mpsc::Sender<()>,
     )
     {
-        while let Ok((task_id, state, accounts)) = task_queue.recv() {
+        while let Ok((task_epoch_id, task_id, state, accounts)) =
+            task_queue.recv()
+        {
             if task_id == 0 {
                 // Stopped by the Prefetcher.
                 return;
             } else {
+                *self.current_task_id.write() = (task_epoch_id, task_id);
                 self.prefetch_accounts(task_id, state, accounts);
                 task_finish_signal.send(()).expect(
                     // Should not return error.
@@ -120,7 +137,7 @@ impl PrefetcherThreadWorker {
                 );
             }
         }
-        error!("State prefetcher thread stopped due to exception.");
+        error!("State prefetch worker stopped due to exception.");
     }
 }
 
@@ -135,8 +152,8 @@ impl ExecutionStatePrefetcher {
 
         // Start worker threads.
         for i in 0..num_threads {
-            let (task_finish_sender, task_finish_receiver) = mpsc::channel();
             let (task_queue_sender, task_queue_receiver) = mpsc::channel();
+            let (task_finish_sender, task_finish_receiver) = mpsc::channel();
             let worker =
                 Arc::new(PrefetcherThreadWorker::new(task_queue_sender));
             let worker_to_run = worker.clone();
@@ -152,13 +169,10 @@ impl ExecutionStatePrefetcher {
         }
 
         // Start task queue controller.
-        let (task_canceled_sender, task_canceled_receiver) = mpsc::channel();
         let (task_sender, task_receiver) = new_cancellable_task_channel();
         let prefetcher = Arc::new(Self {
             task_sender: Mutex::new(task_sender),
             workers,
-            current_task_id: Default::default(),
-            current_task_canceled_receiver: Mutex::new(task_canceled_receiver),
             worker_join_handles,
             join_handle: Default::default(),
         });
@@ -167,11 +181,8 @@ impl ExecutionStatePrefetcher {
         let prefetcher_join_handle = thread::Builder::new()
             .name("Execution state prefetcher".into())
             .spawn(move || {
-                prefetcher_to_run.run(
-                    thread_finish_signal_receivers,
-                    task_canceled_sender,
-                    task_receiver,
-                );
+                prefetcher_to_run
+                    .run(thread_finish_signal_receivers, task_receiver);
             })?;
         *prefetcher.join_handle.lock() = Some(prefetcher_join_handle);
 
@@ -190,50 +201,31 @@ impl ExecutionStatePrefetcher {
             .send((task_epoch_id, state, accounts))
     }
 
-    pub fn wait_for_task(&self, task_epoch_id: &EpochId) {
-        self.cancel_task(task_epoch_id, /* cancel = */ false);
-    }
-
-    pub fn cancel_task(&self, task_epoch_id: &EpochId, cancel: bool) {
-        // Hold the current task lock because we don't want a pending task
-        // becomes the current task while we are trying to cancel it.
-        let mut current_task_locked = self.current_task_id.lock();
-        if current_task_locked.as_ref().map_or(false, |current| {
-            PrefetchTaskKey::key_matches(&current.0, task_epoch_id)
-        }) {
-            // It's the current task.
-            let current_task_id = current_task_locked.as_ref().unwrap().1;
-            // Inform the thread about the cancellation.
-            if cancel {
-                unsafe {
-                    for thread in &self.workers {
-                        thread
-                            .signal_current_task_cancellation(current_task_id);
-                    }
-                }
+    // Return false when the task does not exist in the queue. It may already
+    // finished processing.
+    pub fn wait_for_task(&self, task_epoch_id: &EpochId) -> bool {
+        match self.task_sender.lock().wait_for(task_epoch_id) {
+            Some((cond_var, mut mutex)) => {
+                cond_var.wait(&mut mutex);
+                true
             }
-            // Set the cancellation flag.
-            *current_task_locked = None;
-            // Search in pending queue because we allow multiple tasks with same
-            // id.
-            self.task_sender
-                .lock()
-                .cancel(task_epoch_id, &current_task_locked);
-            drop(current_task_locked);
-            // Wait for the cancelled task to finish.
-            self.current_task_canceled_receiver.lock().recv().expect(
-                // Should not return error.
-                &concat!(file!(), ":", line!(), ":", column!()),
-            );
-        } else {
-            // Search in pending queue.
-            self.task_sender
-                .lock()
-                .cancel(task_epoch_id, &current_task_locked);
+            _ => false,
         }
     }
 
-    fn wait_for_previous_task(
+    pub fn cancel_task(&self, task_epoch_id: &EpochId) {
+        if self.task_sender.lock().remove(task_epoch_id) {
+            // Inform workers about the cancellation.
+            unsafe {
+                for worker in &self.workers {
+                    worker.signal_current_task_cancellation(task_epoch_id);
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn wait_for_current_task(
         finish_signal_receivers: &mut [mpsc::Receiver<()>],
     ) {
         for receiver in finish_signal_receivers {
@@ -246,24 +238,18 @@ impl ExecutionStatePrefetcher {
 
     fn run(
         &self, mut finish_signal_receivers: Vec<mpsc::Receiver<()>>,
-        task_canceled_sender: mpsc::Sender<()>,
         task_receiver: CancelableTaskReceiver<PrefetchTaskKey>,
     )
     {
         let mut current_task_id = 0u64;
         loop {
-            let mut current_task_epoch_id = self.current_task_id.lock();
-
-            match task_receiver.recv(&mut current_task_epoch_id) {
+            match task_receiver.recv() {
                 Ok((task_epoch_id, state, accounts)) => {
                     if current_task_id == std::u64::MAX {
                         current_task_id = 1;
                     } else {
                         current_task_id += 1;
                     }
-                    *current_task_epoch_id =
-                        Some((task_epoch_id, current_task_id));
-                    drop(current_task_epoch_id);
 
                     // Dispatch split task to workers.
                     let num_accounts = accounts.len();
@@ -275,27 +261,14 @@ impl ExecutionStatePrefetcher {
                             num_accounts * (thread_idx + 1) / num_threads;
 
                         self.workers[thread_idx].send_new_task(
+                            task_epoch_id,
                             current_task_id,
                             state,
                             &accounts[range_start..range_end],
                         );
                     }
 
-                    Self::wait_for_previous_task(&mut finish_signal_receivers);
-                    let mut current_task_id_locked =
-                        self.current_task_id.lock();
-                    // The current task has been canceled while it was being
-                    // processed.
-                    if current_task_id_locked.is_none() {
-                        task_canceled_sender.send(()).expect(
-                            // Should not return error.
-                            &concat!(file!(), ":", line!(), ":", column!()),
-                        );
-                    } else {
-                        // Clear the current task id so that it can not be
-                        // canceled after its finished.
-                        *current_task_id_locked = None;
-                    }
+                    Self::wait_for_current_task(&mut finish_signal_receivers);
                 }
                 Err(StopOr::Stop) => {
                     // Stop
@@ -307,7 +280,7 @@ impl ExecutionStatePrefetcher {
                 }
             }
         }
-        error!("State prefetcher thread Stopped due to exception.");
+        error!("State prefetcher stopped due to exception.");
     }
 }
 
@@ -323,9 +296,8 @@ impl Drop for ExecutionStatePrefetcher {
             }
         }
         // Cancel the current task.
-        let current_task = self.current_task_id.lock().clone();
-        if let Some(task) = &current_task {
-            self.cancel_task(&task.0, /* cancel = */ true);
+        if let Some(key) = &*self.task_sender.lock().current_task() {
+            self.cancel_task(key);
         }
 
         for join_handle in self.worker_join_handles.split_off(0) {
@@ -345,9 +317,9 @@ pub struct PrefetchTaskHandle<'a> {
 }
 
 impl PrefetchTaskHandle<'_> {
-    pub fn wait_for_task(&self) {
+    pub fn wait_for_task(&self) -> bool {
         match self.prefetcher.as_ref() {
-            None => {}
+            None => false,
             Some(prefetcher) => prefetcher.wait_for_task(&self.task_epoch_id),
         }
     }
@@ -357,8 +329,7 @@ impl Drop for PrefetchTaskHandle<'_> {
     fn drop(&mut self) {
         match self.prefetcher.take() {
             None => {}
-            Some(prefetcher) => prefetcher
-                .cancel_task(&self.task_epoch_id, /* cancel = */ true),
+            Some(prefetcher) => prefetcher.cancel_task(&self.task_epoch_id),
         }
         // To mute the compiler's complain over the variable isn't used.
         self.accounts.clear();
@@ -366,12 +337,12 @@ impl Drop for PrefetchTaskHandle<'_> {
 }
 
 pub trait CancelByKey {
-    type Key: PartialEq;
+    type Key: Clone + std::fmt::Debug + PartialEq;
 
     fn key(&self) -> &Self::Key;
 
     #[inline]
-    fn match_key(&self, key: &Self::Key) -> bool {
+    fn matches_key(&self, key: &Self::Key) -> bool {
         Self::key_matches(self.key(), key)
     }
 
@@ -393,13 +364,60 @@ impl CancelByKey for PrefetchTaskKey {
 #[derive(Clone)]
 pub struct CancelableTaskSender<T: CancelByKey> {
     sender: mpsc::Sender<bool>,
-    queue: Arc<Mutex<VecDeque<Option<T>>>>,
+    // Use std Mutex in combination with CondVar.
+    task_info: Arc<Mutex<TaskInfo<T>>>,
+    queue: Arc<RwLock<VecDeque<Option<T>>>>,
 }
 
-pub struct CancelableTaskReceiver<T> {
-    queue: Arc<Mutex<VecDeque<Option<T>>>>,
+pub struct CancelableTaskReceiver<T: CancelByKey> {
+    queue: Arc<RwLock<VecDeque<Option<T>>>>,
+    task_info: Arc<Mutex<TaskInfo<T>>>,
     receiver: mpsc::Receiver<bool>,
     should_pop_recv: AtomicBool,
+}
+
+#[derive(Default)]
+pub struct TaskInfo<T: CancelByKey> {
+    // It is None at the very beginning of the execution, or when the task
+    // execution is canceled.
+    maybe_current_task_key: Option<T::Key>,
+    // Maintained when a task become the current key. All old waiters are
+    // informed about the finish.
+    current_task_waits: Option<Arc<Condvar>>,
+    pending_tasks_waits: Vec<(T::Key, Arc<Condvar>)>,
+}
+
+impl<T: CancelByKey> TaskInfo<T> {
+    pub fn inform_previous_task_finish(&mut self) {
+        let waits = self.current_task_waits.take();
+        for wait in waits {
+            wait.notify_all();
+        }
+    }
+
+    pub fn set_current_task(&mut self, maybe_key: Option<T::Key>) {
+        if self.current_task_waits.is_some() {
+            self.inform_previous_task_finish();
+        }
+        if let Some(key) = maybe_key.as_ref() {
+            for i in 0..self.pending_tasks_waits.len() {
+                if T::key_matches(&self.pending_tasks_waits[i].0, key) {
+                    self.current_task_waits =
+                        Some(self.pending_tasks_waits.swap_remove(i).1);
+                }
+            }
+        }
+        self.maybe_current_task_key = maybe_key;
+    }
+
+    pub fn clone_existing_wait(&self, key: &T::Key) -> Option<Arc<Condvar>> {
+        for wait in &self.pending_tasks_waits {
+            if T::key_matches(&wait.0, key) {
+                return Some(wait.1.clone());
+            }
+        }
+        None
+    }
 }
 
 impl<T: CancelByKey> CancelableTaskSender<T> {
@@ -408,20 +426,127 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
     }
 
     pub fn send(&self, task: T) -> Result<(), SendError<bool>> {
-        self.queue.lock().push_back(Some(task));
+        self.queue.write().push_back(Some(task));
         self.sender.send(true)
     }
 
-    pub fn cancel<'a, O>(
-        &self, key: &T::Key, _current_task_guard: &MutexGuard<'a, O>,
+    pub fn current_task(&self) -> MappedMutexGuard<Option<T::Key>> {
+        MutexGuard::map(self.task_info.lock(), |info| {
+            &mut info.maybe_current_task_key
+        })
+    }
+
+    fn notify_pending_task_waits(
+        task_info_locked: &mut TaskInfo<T>, key: &T::Key,
     ) {
-        let queue = &mut *self.queue.lock();
+        task_info_locked.pending_tasks_waits.retain(|task| {
+            if T::key_matches(&task.0, key) {
+                task.1.notify_all();
+                false
+            } else {
+                true
+            }
+        })
+    }
+
+    // Return whether a task is removed.
+    fn remove_pending(
+        &self, task_info_locked: &mut TaskInfo<T>, key: &T::Key,
+    ) -> bool {
+        let queue = &mut *self.queue.write();
+        let mut found = false;
+        // Remove tasks from queue.
         for maybe_task in queue.iter_mut() {
             if maybe_task
                 .as_ref()
-                .map_or(false, |task| task.match_key(key))
+                .map_or(false, |task| task.matches_key(key))
             {
+                found = true;
                 *maybe_task = None
+            }
+        }
+        if found {
+            Self::notify_pending_task_waits(task_info_locked, key);
+        }
+        found
+    }
+
+    // Return whether the key to remove is the current task.
+    pub fn remove(&self, key: &T::Key) -> bool {
+        let is_current_task_removed;
+        // Hold the current task lock because we don't want a pending task
+        // becomes the current task while we are trying to cancel it.
+        let mut task_info_locked = self.task_info.lock();
+        if task_info_locked
+            .maybe_current_task_key
+            .as_ref()
+            .map_or(false, |current_task_key| {
+                T::key_matches(current_task_key, key)
+            })
+        {
+            // It's the current task.
+            is_current_task_removed = true;
+
+            // Search in pending queue because we allow multiple tasks with same
+            // id.
+            self.remove_pending(&mut task_info_locked, key);
+            // Set the cancellation flag.
+            task_info_locked.maybe_current_task_key = None;
+        } else {
+            is_current_task_removed = false;
+            // Search in pending queue.
+            self.remove_pending(&mut task_info_locked, key);
+        }
+
+        is_current_task_removed
+    }
+
+    // Return None if the key can not be found.
+    pub fn wait_for(
+        &self, key: &T::Key,
+    ) -> Option<(Arc<Condvar>, MutexGuard<TaskInfo<T>>)> {
+        let mut task_info_locked = self.task_info.lock();
+        if task_info_locked
+            .maybe_current_task_key
+            .as_ref()
+            .map_or(false, |current_key| T::key_matches(current_key, key))
+        {
+            // It's the current task.
+            if task_info_locked.current_task_waits.is_none() {
+                // There are no existing waits.
+                let new_waits = Arc::<Condvar>::default();
+                task_info_locked.current_task_waits = Some(new_waits.clone());
+
+                Some((new_waits, task_info_locked))
+            } else {
+                // There are existing waits.
+                Some((
+                    task_info_locked.current_task_waits.clone().unwrap(),
+                    task_info_locked,
+                ))
+            }
+        } else {
+            // Search in pending waits.
+            let wait = task_info_locked.clone_existing_wait(key);
+            if wait.is_some() {
+                Some((wait.unwrap(), task_info_locked))
+            } else {
+                let queue = &*self.queue.read();
+                for pending_task in queue {
+                    if pending_task
+                        .as_ref()
+                        .map_or(false, |task| task.matches_key(key))
+                    {
+                        let cond_var = Arc::<Condvar>::default();
+                        task_info_locked
+                            .pending_tasks_waits
+                            .push((key.clone(), cond_var.clone()));
+
+                        return Some((cond_var, task_info_locked));
+                    }
+                }
+
+                None
             }
         }
     }
@@ -430,15 +555,22 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
 pub fn new_cancellable_task_channel<T: CancelByKey>(
 ) -> (CancelableTaskSender<T>, CancelableTaskReceiver<T>) {
     let (sender, receiver) = mpsc::channel();
-    let queue: Arc<Mutex<VecDeque<Option<T>>>> = Default::default();
+    let queue = Arc::<RwLock<VecDeque<Option<T>>>>::default();
+    let task_info = Arc::new(Mutex::new(TaskInfo {
+        maybe_current_task_key: None,
+        current_task_waits: None,
+        pending_tasks_waits: vec![],
+    }));
     (
         CancelableTaskSender {
             sender,
+            task_info: task_info.clone(),
             queue: queue.clone(),
         },
         CancelableTaskReceiver {
             queue,
             receiver,
+            task_info,
             should_pop_recv: AtomicBool::new(true),
         },
     )
@@ -449,7 +581,7 @@ pub enum StopOr<RecvError> {
     RecvError(RecvError),
 }
 
-impl<T> CancelableTaskReceiver<T> {
+impl<T: CancelByKey> CancelableTaskReceiver<T> {
     fn pop_recv(&self) {
         if self.should_pop_recv.load(Ordering::Relaxed) {
             // Pop the task from task receiver as well.
@@ -459,12 +591,26 @@ impl<T> CancelableTaskReceiver<T> {
         }
     }
 
-    pub fn recv<'a, O>(
-        &self, current_task_guard: &mut MutexGuard<'a, O>,
-    ) -> Result<T, StopOr<RecvError>> {
+    pub fn try_recv(&self) -> Result<T, StopOr<TryRecvError>> {
+        self.recv_impl(/* try_recv = */ true)
+    }
+
+    pub fn recv(&self) -> Result<T, StopOr<RecvError>> {
+        match self.recv_impl(/* try_recv = */ false) {
+            Ok(t) => Ok(t),
+            Err(StopOr::Stop) => Err(StopOr::Stop),
+            Err(StopOr::RecvError(TryRecvError::Disconnected)) => {
+                Err(StopOr::RecvError(RecvError))
+            }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn recv_impl(&self, try_recv: bool) -> Result<T, StopOr<TryRecvError>> {
+        let mut current_task_guard = self.task_info.lock();
         loop {
             let new_task = {
-                let queue = &mut self.queue.lock();
+                let queue = &mut self.queue.write();
                 loop {
                     match queue.pop_front() {
                         Some(None) => {
@@ -484,10 +630,19 @@ impl<T> CancelableTaskReceiver<T> {
                     if !self.should_pop_recv.load(Ordering::Relaxed) {
                         continue;
                     }
+                    current_task_guard.set_current_task(None);
                     // Should not block cancel_task when we are waiting for
                     // new tasks.
-                    match MutexGuard::unlocked(current_task_guard, || {
-                        self.receiver.recv()
+                    match MutexGuard::unlocked(&mut current_task_guard, || {
+                        match self.receiver.try_recv() {
+                            Err(TryRecvError::Empty) if !try_recv => {
+                                match self.receiver.recv() {
+                                    Ok(t) => Ok(t),
+                                    Err(_) => Err(TryRecvError::Disconnected),
+                                }
+                            }
+                            maybe_task => maybe_task,
+                        }
                     }) {
                         Ok(true) => {
                             self.should_pop_recv
@@ -503,6 +658,10 @@ impl<T> CancelableTaskReceiver<T> {
                 }
                 Some(task) => {
                     self.pop_recv();
+                    // Notify all waits on the previous task, and set current
+                    // key.
+                    current_task_guard
+                        .set_current_task(Some(task.key().clone()));
                     return Ok(task);
                 }
             }
@@ -512,15 +671,16 @@ impl<T> CancelableTaskReceiver<T> {
 
 use crate::state::State;
 use cfx_types::Address;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{Condvar, MappedMutexGuard, Mutex, MutexGuard, RwLock};
 use primitives::EpochId;
 use std::{
     collections::VecDeque,
+    hint::unreachable_unchecked,
     io,
     ptr::null,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc::{self, RecvError, SendError},
+        mpsc::{self, RecvError, SendError, TryRecvError},
         Arc,
     },
     thread::{self, JoinHandle},
