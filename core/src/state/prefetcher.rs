@@ -364,7 +364,7 @@ impl CancelByKey for PrefetchTaskKey {
 #[derive(Clone)]
 pub struct CancelableTaskSender<T: CancelByKey> {
     sender: mpsc::Sender<bool>,
-    // Use std Mutex in combination with CondVar.
+    // Use Mutex in combination with Condvar.
     task_info: Arc<Mutex<TaskInfo<T>>>,
     queue: Arc<RwLock<VecDeque<Option<T>>>>,
 }
@@ -373,7 +373,6 @@ pub struct CancelableTaskReceiver<T: CancelByKey> {
     queue: Arc<RwLock<VecDeque<Option<T>>>>,
     task_info: Arc<Mutex<TaskInfo<T>>>,
     receiver: mpsc::Receiver<bool>,
-    should_pop_recv: AtomicBool,
 }
 
 #[derive(Default)]
@@ -410,7 +409,7 @@ impl<T: CancelByKey> TaskInfo<T> {
         self.maybe_current_task_key = maybe_key;
     }
 
-    pub fn clone_existing_wait(&self, key: &T::Key) -> Option<Arc<Condvar>> {
+    fn clone_pending_task_wait(&self, key: &T::Key) -> Option<Arc<Condvar>> {
         for wait in &self.pending_tasks_waits {
             if T::key_matches(&wait.0, key) {
                 return Some(wait.1.clone());
@@ -452,7 +451,9 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
     // Return whether a task is removed.
     fn remove_pending(
         &self, task_info_locked: &mut TaskInfo<T>, key: &T::Key,
-    ) -> bool {
+        notify_waits: bool,
+    ) -> bool
+    {
         let queue = &mut *self.queue.write();
         let mut found = false;
         // Remove tasks from queue.
@@ -465,7 +466,7 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
                 *maybe_task = None
             }
         }
-        if found {
+        if notify_waits && found {
             Self::notify_pending_task_waits(task_info_locked, key);
         }
         found
@@ -489,13 +490,23 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
 
             // Search in pending queue because we allow multiple tasks with same
             // id.
-            self.remove_pending(&mut task_info_locked, key);
+            self.remove_pending(
+                &mut task_info_locked,
+                key,
+                // There are no waits in pending queue for the current task.
+                /* notify_waits = */
+                false,
+            );
             // Set the cancellation flag.
             task_info_locked.maybe_current_task_key = None;
         } else {
             is_current_task_removed = false;
             // Search in pending queue.
-            self.remove_pending(&mut task_info_locked, key);
+            self.remove_pending(
+                &mut task_info_locked,
+                key,
+                /* notify_waits = */ true,
+            );
         }
 
         is_current_task_removed
@@ -527,7 +538,7 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
             }
         } else {
             // Search in pending waits.
-            let wait = task_info_locked.clone_existing_wait(key);
+            let wait = task_info_locked.clone_pending_task_wait(key);
             if wait.is_some() {
                 Some((wait.unwrap(), task_info_locked))
             } else {
@@ -571,7 +582,6 @@ pub fn new_cancellable_task_channel<T: CancelByKey>(
             queue,
             receiver,
             task_info,
-            should_pop_recv: AtomicBool::new(true),
         },
     )
 }
@@ -582,15 +592,6 @@ pub enum StopOr<RecvError> {
 }
 
 impl<T: CancelByKey> CancelableTaskReceiver<T> {
-    fn pop_recv(&self) {
-        if self.should_pop_recv.load(Ordering::Relaxed) {
-            // Pop the task from task receiver as well.
-            self.receiver.recv().ok();
-        } else {
-            self.should_pop_recv.store(true, Ordering::Relaxed);
-        }
-    }
-
     pub fn try_recv(&self) -> Result<T, StopOr<TryRecvError>> {
         self.recv_impl(/* try_recv = */ true)
     }
@@ -606,63 +607,82 @@ impl<T: CancelByKey> CancelableTaskReceiver<T> {
         }
     }
 
-    fn recv_impl(&self, try_recv: bool) -> Result<T, StopOr<TryRecvError>> {
-        let mut current_task_guard = self.task_info.lock();
-        loop {
-            let new_task = {
-                let queue = &mut self.queue.write();
-                loop {
-                    match queue.pop_front() {
-                        Some(None) => {
-                            self.pop_recv();
-                            continue;
-                        }
-                        None => break None,
-                        Some(Some(task)) => break Some(task),
+    #[inline]
+    fn recv_task_from_receiver(&self) -> Result<bool, StopOr<TryRecvError>> {
+        match self.receiver.recv() {
+            Ok(true) => Ok(true),
+            Ok(false) => Err(StopOr::Stop),
+            Err(_) => Err(StopOr::RecvError(TryRecvError::Disconnected)),
+        }
+    }
+
+    fn pop_task_from_receiver(
+        &self, try_recv: bool, may_block_indefinitely: bool,
+        task_guard: &mut MutexGuard<TaskInfo<T>>,
+        queue_guard: &mut RwLockWriteGuard<VecDeque<Option<T>>>,
+    ) -> Result<bool, StopOr<TryRecvError>>
+    {
+        match self.receiver.try_recv() {
+            Err(TryRecvError::Disconnected) => {
+                Err(StopOr::RecvError(TryRecvError::Disconnected))
+            }
+            Err(TryRecvError::Empty) => {
+                if try_recv {
+                    Err(StopOr::RecvError(TryRecvError::Empty))
+                } else {
+                    if may_block_indefinitely {
+                        // Notify all waits of the previous task.
+                        task_guard.set_current_task(None);
+                        // Unblock all locks when we are waiting.
+                        RwLockWriteGuard::unlocked(queue_guard, || {
+                            MutexGuard::unlocked(task_guard, || {
+                                self.recv_task_from_receiver()
+                            })
+                        })
+                    } else {
+                        self.recv_task_from_receiver()
                     }
                 }
-            };
-            // Wait for new task if task queue is empty.
-            match new_task {
+            }
+            Ok(true) => Ok(true),
+            Ok(false) => Err(StopOr::Stop),
+        }
+    }
+
+    fn recv_impl(&self, try_recv: bool) -> Result<T, StopOr<TryRecvError>> {
+        let mut current_task_guard = self.task_info.lock();
+        let mut queue_locked = self.queue.write();
+        let mut should_pop_recv = true;
+        loop {
+            if should_pop_recv {
+                self.pop_task_from_receiver(
+                    try_recv,
+                    /* may_block_indefinitely = */
+                    queue_locked.is_empty(),
+                    &mut current_task_guard,
+                    &mut queue_locked,
+                )?;
+            }
+            match queue_locked.pop_front() {
                 None => {
                     // Retry when we already received the new task from
                     // task_receiver, but task_queue is still empty.
-                    if !self.should_pop_recv.load(Ordering::Relaxed) {
-                        continue;
-                    }
-                    current_task_guard.set_current_task(None);
-                    // Should not block cancel_task when we are waiting for
-                    // new tasks.
-                    match MutexGuard::unlocked(&mut current_task_guard, || {
-                        match self.receiver.try_recv() {
-                            Err(TryRecvError::Empty) if !try_recv => {
-                                match self.receiver.recv() {
-                                    Ok(t) => Ok(t),
-                                    Err(_) => Err(TryRecvError::Disconnected),
-                                }
-                            }
-                            maybe_task => maybe_task,
-                        }
-                    }) {
-                        Ok(true) => {
-                            self.should_pop_recv
-                                .store(false, Ordering::Relaxed);
-                            continue;
-                        }
-                        Ok(false) => {
-                            // Received stop signal.
-                            return Err(StopOr::Stop);
-                        }
-                        Err(e) => return Err(StopOr::RecvError(e)),
-                    }
+                    should_pop_recv = false;
+                    continue;
                 }
-                Some(task) => {
-                    self.pop_recv();
+                Some(None) => {
+                    // Received a task, however it's already cancelled, retry.
+                    should_pop_recv = true;
+                    continue;
+                }
+                Some(Some(task)) => {
+                    // Task received
+
                     // Notify all waits on the previous task, and set current
                     // key.
                     current_task_guard
                         .set_current_task(Some(task.key().clone()));
-                    return Ok(task);
+                    break Ok(task);
                 }
             }
         }
@@ -671,7 +691,9 @@ impl<T: CancelByKey> CancelableTaskReceiver<T> {
 
 use crate::state::State;
 use cfx_types::Address;
-use parking_lot::{Condvar, MappedMutexGuard, Mutex, MutexGuard, RwLock};
+use parking_lot::{
+    Condvar, MappedMutexGuard, Mutex, MutexGuard, RwLock, RwLockWriteGuard,
+};
 use primitives::EpochId;
 use std::{
     collections::VecDeque,
@@ -679,7 +701,7 @@ use std::{
     io,
     ptr::null,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
         mpsc::{self, RecvError, SendError, TryRecvError},
         Arc,
     },
