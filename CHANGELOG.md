@@ -27,8 +27,8 @@ another testnet.
 experimental purposes.
 
 - Improve the transaction replacement rule in tx-pool: now a transaction can
- replace one with same sender and nonce by higher gas-price or by same gas-price
-  and larger epoch height.
+replace one with same sender and nonce by higher gas-price or by same gas-price
+and larger epoch height.
 
 
 # 0.5.0
