@@ -28,7 +28,9 @@ impl TxWithReadyInfo {
         if self.is_already_packed() {
             return true;
         }
-        self.gas_price >= x.gas_price
+        self.gas_price > x.gas_price
+            || self.gas_price == x.gas_price
+                && self.epoch_height > x.epoch_height
     }
 }
 
