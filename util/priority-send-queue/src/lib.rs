@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 pub enum SendQueuePriority {
     High = 0,
     Normal = 1,
+    Low = 2,
 }
 
 pub struct PrioritySendQueue<T> {
@@ -17,8 +18,9 @@ pub struct PrioritySendQueue<T> {
 impl<T> Default for PrioritySendQueue<T> {
     fn default() -> PrioritySendQueue<T> {
         let mut queues = Vec::new();
-        queues.push(VecDeque::new());
-        queues.push(VecDeque::new());
+        queues.push(VecDeque::new()); // High
+        queues.push(VecDeque::new()); // Normal
+        queues.push(VecDeque::new()); // Low
         PrioritySendQueue { queues }
     }
 }
@@ -44,26 +46,17 @@ impl<T> PrioritySendQueue<T> {
             return Some((data, SendQueuePriority::Normal));
         }
 
+        if let Some(data) = self.queue_mut(SendQueuePriority::Low).pop_front() {
+            return Some((data, SendQueuePriority::Low));
+        }
+
         None
-    }
-
-    pub fn front_mut(&mut self) -> Option<(&mut T, bool)> {
-        let promoted = if self.queue(SendQueuePriority::High).is_empty() {
-            let res = self.queue_mut(SendQueuePriority::Normal).pop_front()?;
-            self.queue_mut(SendQueuePriority::High).push_back(res);
-            true
-        } else {
-            false
-        };
-
-        self.queue_mut(SendQueuePriority::High)
-            .front_mut()
-            .map(|data| (data, promoted))
     }
 
     pub fn is_empty(&self) -> bool {
         self.queue(SendQueuePriority::High).is_empty()
             && self.queue(SendQueuePriority::Normal).is_empty()
+            && self.queue(SendQueuePriority::Low).is_empty()
     }
 
     pub fn is_send_queue_empty(&self, priority: SendQueuePriority) -> bool {
@@ -77,6 +70,7 @@ impl<T> PrioritySendQueue<T> {
     pub fn len(&self) -> usize {
         self.queue(SendQueuePriority::High).len()
             + self.queue(SendQueuePriority::Normal).len()
+            + self.queue(SendQueuePriority::Low).len()
     }
 
     pub fn len_by_priority(&self, priority: SendQueuePriority) -> usize {

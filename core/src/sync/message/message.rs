@@ -73,7 +73,6 @@ build_msgid! {
 build_msg_impl! { StatusDeprecatedV1, msgid::STATUS_DEPRECATED, "Status", SYNC_PROTO_V1, SYNC_PROTO_V1 }
 build_msg_impl! { StatusV2, msgid::STATUS_V2, "StatusV2", SYNC_PROTO_V2, SYNC_PROTO_V2 }
 build_msg_impl! { NewBlockHashes, msgid::NEW_BLOCK_HASHES, "NewBlockHashes", SYNC_PROTO_V1, SYNC_PROTO_V2 }
-build_msg_impl! { GetBlockHashesResponse, msgid::GET_BLOCK_HASHES_RESPONSE, "GetBlockHashesResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
 build_msg_with_request_id_impl! { GetBlockHeaders, msgid::GET_BLOCK_HEADERS, "GetBlockHeaders", SYNC_PROTO_V1, SYNC_PROTO_V2 }
 build_msg_impl! { GetBlockHeadersResponse, msgid::GET_BLOCK_HEADERS_RESPONSE, "GetBlockHeadersResponse", SYNC_PROTO_V1, SYNC_PROTO_V2 }
 build_msg_impl! { NewBlock, msgid::NEW_BLOCK, "NewBlock", SYNC_PROTO_V1, SYNC_PROTO_V2 }
@@ -86,6 +85,16 @@ build_msg_with_request_id_impl! { GetBlockTxn, msgid::GET_BLOCK_TXN, "GetBlockTx
 build_msg_impl! { DynamicCapabilityChange, msgid::DYNAMIC_CAPABILITY_CHANGE, "DynamicCapabilityChange", SYNC_PROTO_V1, SYNC_PROTO_V2 }
 build_msg_with_request_id_impl! { GetBlockHashesByEpoch, msgid::GET_BLOCK_HASHES_BY_EPOCH, "GetBlockHashesByEpoch", SYNC_PROTO_V1, SYNC_PROTO_V2 }
 build_msg_impl! { Throttled, msgid::THROTTLED, "Throttled", SYNC_PROTO_V1, SYNC_PROTO_V2 }
+
+impl GetMaybeRequestId for GetBlockHashesResponse {}
+mark_msg_version_bound!(GetBlockHashesResponse, SYNC_PROTO_V1, SYNC_PROTO_V2);
+impl Message for GetBlockHashesResponse {
+    fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_HASHES_RESPONSE }
+
+    fn msg_name(&self) -> &'static str { "GetBlockHashesResponse" }
+
+    fn priority(&self) -> SendQueuePriority { SendQueuePriority::Low }
+}
 
 // normal priority and size-sensitive message types
 impl GetMaybeRequestId for Transactions {}

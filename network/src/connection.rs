@@ -34,6 +34,8 @@ lazy_static! {
         register_meter_with_group("network_system_data", "send");
     static ref SEND_LOW_PRIORITY_METER: Arc<dyn Meter> =
         register_meter_with_group("network_system_data", "send_low");
+    static ref SEND_NORMAL_PRIORITY_METER: Arc<dyn Meter> =
+        register_meter_with_group("network_system_data", "send_normal");
     static ref SEND_HIGH_PRIORITY_METER: Arc<dyn Meter> =
         register_meter_with_group("network_system_data", "send_high");
     static ref HIGH_PACKET_SEND_TO_WRITE_ELAPSED_TIME: Arc<dyn Histogram> =
@@ -350,6 +352,9 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
                     SEND_HIGH_PRIORITY_METER.mark(size);
                 }
                 SendQueuePriority::Normal => {
+                    SEND_NORMAL_PRIORITY_METER.mark(size);
+                }
+                SendQueuePriority::Low => {
                     SEND_LOW_PRIORITY_METER.mark(size);
                 }
             }
