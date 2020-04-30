@@ -390,7 +390,7 @@ pub struct TaskInfo<T: CancelByKey> {
 impl<T: CancelByKey> TaskInfo<T> {
     pub fn inform_previous_task_finish(&mut self) {
         let waits = self.current_task_waits.take();
-        for wait in waits {
+        if let Some(wait) = waits {
             wait.notify_all();
         }
     }
