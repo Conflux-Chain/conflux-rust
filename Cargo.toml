@@ -2,6 +2,7 @@
 name = "conflux"
 version = "0.6.0"
 edition = "2018"
+build = "build.rs"
 
 [dependencies]
 mio = "0.6.8"
