@@ -80,9 +80,7 @@ impl ConsensusNewBlockHandler {
         let stable_era_genesis =
             inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
 
-        // FIXME: I am not sure whether this code still works in the new timer
-        // chain checkpoint mechanism (`RecoverBlockFromDb` or
-        // `Normal`), ensure all blocks on the pivot chain before
+        // Ensure all blocks on the pivot chain before
         // stable_era_genesis have state_valid computed
         if will_execute
             && new_era_height
