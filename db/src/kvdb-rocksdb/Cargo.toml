@@ -26,5 +26,5 @@ tempdir = "0.3.7"
 ethereum-types = "0.8"
 
 [dependencies.rocksdb]
-git = "https://github.com/pingcap/rust-rocksdb.git"
-rev = "3cd18c44d160a3cdba586d6502d51b7cc67efc59"
+git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
+rev = "95938bfb97fb01e496904c955280525abf23466c"
