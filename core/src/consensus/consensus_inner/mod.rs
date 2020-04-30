@@ -133,8 +133,6 @@ pub struct ConsensusGraphNodeData {
     /// It indicates whether the states stored in header is correct or not.
     /// It's evaluated when needed, i.e., when we need the blame information to
     /// generate a new block or to compute rewards.
-    /// FIXME: only used for pivot chain, maybe we can move it to
-    /// `ConsensusGraphPivotData`
     pub state_valid: Option<bool>,
 }
 
@@ -2420,7 +2418,6 @@ impl ConsensusGraphInner {
         }
     }
 
-    // FIXME: maybe this method can be simplified.
     /// Compute `state_valid` for `me`.
     /// Assumption:
     ///   1. The precedents of `me` have computed state_valid
@@ -2568,7 +2565,6 @@ impl ConsensusGraphInner {
 
     /// Compute the total weight in the epoch represented by the block of
     /// my_hash.
-    /// FIXME: check inclusive parameter and its usage
     fn total_weight_in_own_epoch(
         &self, blockset_in_own_epoch: &Vec<usize>, genesis: usize,
     ) -> i128 {
@@ -3072,8 +3068,6 @@ impl ConsensusGraphInner {
         self.sequence_number_of_block_entrance
     }
 
-    // FIXME: review if the check logics still work when snapshot_epoch_id is
-    // passed in checkpoint_hash.
     pub fn get_trusted_blame_block(
         &self, checkpoint_hash: &H256, plus_depth: usize,
     ) -> Option<H256> {

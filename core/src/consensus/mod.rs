@@ -716,7 +716,8 @@ impl ConsensusGraph {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        // FIXME: check if we should fill the correct `block_number`.
+        // `block_number` is not used in the follow up call. It is fine to pass
+        // 0.
         let state = State::new(
             state_db,
             Default::default(), /* vm */
@@ -898,7 +899,8 @@ impl ConsensusGraph {
     {
         self.validate_stated_epoch(&epoch)?;
         let state_db = self.get_state_db_by_epoch_number(epoch)?;
-        // FIXME: check if we should fill the correct `block_number`.
+        // `block_number` is not used in the follow up calls. It is fine to pass
+        // zero here.
         let state = State::new(
             state_db,
             Default::default(), /* vm */
