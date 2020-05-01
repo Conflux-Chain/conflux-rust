@@ -486,7 +486,7 @@ impl StateTrait for State {
         // No need to check v.len() because there are no tombStone values in
         // snapshot.
         for (k, v) in snapshot_kvs {
-            let storage_key = StorageKey::from_delta_mpt_key(&k);
+            let storage_key = StorageKey::from_key_bytes(&k);
             self.delete(storage_key)?;
             if !deleted_keys.contains(&k) {
                 result.push((k, v));
