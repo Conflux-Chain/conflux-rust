@@ -154,7 +154,7 @@ impl CowNodeRef {
 impl Drop for CowNodeRef {
     /// Assert that the CowNodeRef doesn't own something.
     fn drop(&mut self) {
-        assert_eq!(false, self.owned);
+        debug_assert_eq!(false, self.owned);
     }
 }
 
