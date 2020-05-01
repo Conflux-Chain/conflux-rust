@@ -55,7 +55,7 @@ pub struct MemOptimizedTrieNode<CacheAlgoDataT: CacheAlgoDataTrait> {
     pub(super) children_table: ChildrenTableDeltaMpt,
     // Rust automatically moves the value_size field in order to minimize the
     // total size of the struct.
-    /// We limit the maximum value length by u16. If it proves insufficient,
+    /// We limit the maximum value length by u32. If it proves insufficient,
     /// manage the length and content separately.
     value_size: u32,
     value: MaybeInPlaceByteArray,
