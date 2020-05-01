@@ -29,6 +29,8 @@ impl TxWithReadyInfo {
             return true;
         }
         self.gas_price > x.gas_price
+            || self.gas_price == x.gas_price
+                && self.epoch_height > x.epoch_height
     }
 }
 
@@ -118,7 +120,7 @@ impl NoncePoolNode {
                         tx.clone(),
                     ))
                 } else {
-                    InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
+                    InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &node.as_ref().unwrap().tx.gas_price))
                 }
             };
             node.as_mut().unwrap().update();
@@ -462,7 +464,8 @@ mod nonce_pool_test {
                 nonce_pool.get_tx_by_nonce(U256::from(i)),
                 Some(tx1[i].clone())
             );
-            assert_eq!(nonce_pool.insert(&tx2[i as usize], false /* force */), InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price")));
+            assert_eq!(nonce_pool.insert(&tx2[i as usize], false /* force */),
+                       InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &tx1[i as usize].gas_price)));
             assert_eq!(
                 nonce_pool.insert(&tx2[i as usize], true /* force */),
                 InsertResult::Updated(tx1[i as usize].clone())

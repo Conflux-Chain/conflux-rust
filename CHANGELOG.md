@@ -26,6 +26,10 @@ another testnet.
 - Keep network_id the same as chain_id. Setting network_id is only for local
 experimental purposes.
 
+- Improve the transaction replacement rule in tx-pool: now a transaction can
+replace one with same sender and nonce by higher gas-price or by same gas-price
+and larger epoch height.
+
 
 # 0.5.0
 
