@@ -335,11 +335,7 @@ fn main() {
 
     let n = hashes.len();
     let last_hash = hashes[n - 1];
-    let mut last_checked_count = 0;
-    while consensus.get_processed_block_count() != n - 1
-        && consensus.get_processed_block_count() != last_checked_count
-    {
-        last_checked_count = consensus.get_processed_block_count();
+    while sync.is_consensus_worker_busy() {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;
