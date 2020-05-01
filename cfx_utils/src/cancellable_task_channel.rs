@@ -78,7 +78,6 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
 
     // Return whether the key to remove is the current task.
     pub fn remove(&self, key: &T::Key) -> bool {
-        debug!("remove task {:?}", key);
         let is_current_task_removed;
         // Hold the current task lock because we don't want a pending task
         // becomes the current task while we are trying to cancel it.
@@ -93,7 +92,6 @@ impl<T: CancelByKey> CancelableTaskSender<T> {
             // It's the current task.
             is_current_task_removed = true;
 
-            debug!("issue cancellation of current task",);
             // Search in pending queue because we allow multiple tasks with same
             // id.
             self.remove_pending(
@@ -247,10 +245,8 @@ impl<T: CancelByKey> CancelableTaskReceiver<T> {
             }
             Err(TryRecvError::Empty) => {
                 if try_recv {
-                    debug!("TryRecv: no task available");
                     Err(StopOr::RecvError(TryRecvError::Empty))
                 } else {
-                    debug!("Recv: no task available, wait for new task");
                     if may_block_indefinitely {
                         // Notify all waits of the previous task.
                         task_guard.set_current_task(None);
@@ -284,13 +280,11 @@ impl<T: CancelByKey> CancelableTaskReceiver<T> {
                     &mut queue_locked,
                 )?;
             }
-            debug!("received new task, check the task queue.");
             match queue_locked.pop_front() {
                 None => {
                     // Retry when we already received the new task from
                     // task_receiver, but task_queue is still empty.
                     should_pop_recv = false;
-                    debug!("wait for received task to appear in queue");
                     continue;
                 }
                 Some(None) => {
