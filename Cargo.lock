@@ -473,6 +473,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-utils"
+version = "0.6.0"
+dependencies = [
+ "log 0.4.8",
+ "parking_lot 0.10.0",
+]
+
+[[package]]
 name = "cfxcore"
 version = "0.6.0"
 dependencies = [
@@ -484,6 +492,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-stratum",
  "cfx-types",
+ "cfx-utils",
  "cfxkey",
  "clap",
  "criterion",
