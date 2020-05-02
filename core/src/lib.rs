@@ -7,6 +7,7 @@
 #![allow(deprecated)]
 
 extern crate cfx_bytes as bytes;
+extern crate cfx_utils;
 extern crate cfxkey as keylib;
 extern crate core;
 extern crate io;

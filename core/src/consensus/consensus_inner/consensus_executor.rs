@@ -15,9 +15,17 @@ use crate::{
     machine::Machine,
     parameters::{consensus::*, consensus_internal::*},
     rpc_errors::{invalid_params_check, Result as RpcResult},
-    state::{CleanupMode, State},
+    state::{
+        prefetcher::{
+            prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
+        },
+        CleanupMode, State,
+    },
     statedb::{Result as DbResult, StateDb},
-    storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
+    storage::{
+        defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
+        StateRootWithAuxInfo, StorageManagerTrait,
+    },
     verification::VerificationConfig,
     vm::{Env, Spec},
     vm_factory::VmFactory,
@@ -36,8 +44,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, SignedTransaction, TransactionIndex,
-    MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
+    TransactionIndex, MERKLE_NULL_NODE,
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -758,6 +766,7 @@ pub struct ConsensusExecutionHandler {
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
+    execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
 }
 
 impl ConsensusExecutionHandler {
@@ -774,6 +783,21 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
+            execution_state_prefetcher: if DEFAULT_EXECUTION_PREFETCH_THREADS
+                > 0
+            {
+                Some(
+                    ExecutionStatePrefetcher::new(
+                        DEFAULT_EXECUTION_PREFETCH_THREADS,
+                    )
+                    .expect(
+                        // Do not accept error at starting up.
+                        &concat!(file!(), ":", line!(), ":", column!()),
+                    ),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -941,6 +965,7 @@ impl ConsensusExecutionHandler {
         let epoch_receipts = self
             .process_epoch_transactions(
                 &spec,
+                *epoch_hash,
                 &mut state,
                 &epoch_blocks,
                 start_block_number,
@@ -1003,10 +1028,47 @@ impl ConsensusExecutionHandler {
     }
 
     fn process_epoch_transactions(
-        &self, spec: &Spec, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
-        start_block_number: u64, on_local_pivot: bool,
+        &self, spec: &Spec, epoch_id: EpochId, state: &mut State,
+        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
+        on_local_pivot: bool,
     ) -> DbResult<Vec<Arc<BlockReceipts>>>
     {
+        // Prefetch accounts for transactions.
+        // The return value _prefetch_join_handles is used to join all threads
+        // before the exit of this function.
+        let prefetch_join_handles = match self
+            .execution_state_prefetcher
+            .as_ref()
+        {
+            Some(prefetcher) => {
+                let mut accounts = vec![];
+                for block in epoch_blocks.iter() {
+                    for transaction in block.transactions.iter() {
+                        accounts.push(&transaction.sender);
+                        match transaction.action {
+                            Action::Call(ref address) => accounts.push(address),
+                            _ => {}
+                        }
+                    }
+                }
+
+                prefetch_accounts(prefetcher, epoch_id, state, accounts)
+            }
+            None => PrefetchTaskHandle {
+                task_epoch_id: epoch_id,
+                state,
+                prefetcher: None,
+                accounts: vec![],
+            },
+        };
+        // TODO:
+        //   Make the state shared ref for vm execution, then remove this drop.
+        //   When the state can be made shared, prefetch can happen at the same
+        //   time of the execution, the vm execution do not have to wait
+        //   for prefetching to finish.
+        prefetch_join_handles.wait_for_task();
+        drop(prefetch_join_handles);
+
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
         let internal_contract_map = InternalContractMap::new();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
@@ -1470,6 +1532,7 @@ impl ConsensusExecutionHandler {
         );
         self.process_epoch_transactions(
             &spec,
+            *pivot_hash,
             &mut state,
             &epoch_blocks,
             start_block_number,
