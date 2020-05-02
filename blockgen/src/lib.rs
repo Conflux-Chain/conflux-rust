@@ -1,16 +1,15 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+mod miner;
 
+use crate::miner::{
+    stratum::{Options as StratumOption, Stratum},
+    work_notify::NotifyWork,
+};
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_parameters::*,
-    miner::{
-        stratum::{Options as StratumOption, Stratum},
-        work_notify::NotifyWork,
-    },
-    parameters::consensus::GENESIS_GAS_LIMIT,
-    pow::*,
+    block_parameters::*, parameters::consensus::GENESIS_GAS_LIMIT, pow::*,
     ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
 };

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 clap = "2"
 cfxcore = { path = "../core" }
+cfx-stratum = { path = "stratum" }
 cfx-types = { path = "../cfx_types" }
 keccak-hash = "0.4"
 primitives = { path = "../primitives" }
