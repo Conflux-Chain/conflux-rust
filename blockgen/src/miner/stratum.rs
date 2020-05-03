@@ -20,12 +20,14 @@
 
 //! Client-side stratum job dispatcher and mining notifier handler
 
-use crate::{miner::work_notify::NotifyWork, pow::ProofOfWorkSolution};
+use crate::miner::work_notify::NotifyWork;
 use cfx_stratum::{
     Error as StratumServiceError, JobDispatcher, PushWorkHandler,
     Stratum as StratumService,
 };
 use cfx_types::{H256, U256};
+use cfxcore::pow::ProofOfWorkSolution;
+use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
     fmt,

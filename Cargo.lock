@@ -300,6 +300,7 @@ dependencies = [
 name = "blockgen"
 version = "0.1.0"
 dependencies = [
+ "cfx-stratum",
  "cfx-types",
  "cfxcore",
  "cfxkey",
@@ -490,7 +491,6 @@ dependencies = [
  "bn",
  "byteorder",
  "cfx-bytes",
- "cfx-stratum",
  "cfx-types",
  "cfx-utils",
  "cfxkey",

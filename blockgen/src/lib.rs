@@ -1,16 +1,15 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+mod miner;
 
+use crate::miner::{
+    stratum::{Options as StratumOption, Stratum},
+    work_notify::NotifyWork,
+};
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_parameters::*,
-    miner::{
-        stratum::{Options as StratumOption, Stratum},
-        work_notify::NotifyWork,
-    },
-    parameters::consensus::GENESIS_GAS_LIMIT,
-    pow::*,
+    block_parameters::*, parameters::consensus::GENESIS_GAS_LIMIT, pow::*,
     ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
@@ -703,6 +702,7 @@ impl BlockGenerator {
                 BlockGenerator::start_new_worker(1, bg.clone())
             };
 
+        let mut last_notify = SystemTime::now();
         loop {
             match *bg.state.read() {
                 MiningState::Stop => return,
@@ -737,6 +737,7 @@ impl BlockGenerator {
                     *current_difficulty,
                 );
                 BlockGenerator::send_problem(bg.clone(), problem);
+                last_notify = SystemTime::now();
                 current_problem = Some(problem);
             } else {
                 // check if the problem solved
@@ -770,6 +771,23 @@ impl BlockGenerator {
                     current_mining_block = None;
                     current_problem = None;
                 } else {
+                    // We will send out heartbeat because newcomers or
+                    // disconnected people may lose the previous message
+                    if let Some(problem) = current_problem {
+                        if let Ok(elapsed) = last_notify.elapsed() {
+                            if bg.pow_config.use_stratum
+                                && elapsed > Duration::from_secs(60)
+                            {
+                                BlockGenerator::send_problem(
+                                    bg.clone(),
+                                    problem,
+                                );
+                                last_notify = SystemTime::now();
+                            }
+                        } else {
+                            warn!("Unable to get system time. Stratum heartbeat message canceled!")
+                        }
+                    }
                     // wait a moment and check again
                     thread::sleep(sleep_duration);
                     continue;

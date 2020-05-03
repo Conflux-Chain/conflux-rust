@@ -12,7 +12,6 @@ async-trait = "0.1"
 bit-set = "0.4"
 bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="635c4cdd560bc0c8b262e6bf809dc709da8bcd7e" }
 byteorder = "1.0"
-cfx-stratum = { path = "../blockgen/stratum" }
 cfx-types = { path = "../cfx_types" }
 cfx-bytes = { path = "../cfx_bytes" }
 cfx-utils = { path = "../cfx_utils" }
