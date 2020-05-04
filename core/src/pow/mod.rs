@@ -37,8 +37,6 @@ impl ProofOfWorkProblem {
         let lower_bound = nonce_to_lower_bound(nonce);
         let (against_lower_bound_u256, _) =
             BigEndianHash::into_uint(hash).overflowing_sub(lower_bound);
-        let mut tmp = [0u8; 32];
-        against_lower_bound_u256.to_big_endian(&mut tmp[..]);
         against_lower_bound_u256.lt(boundary)
             || boundary.eq(&ProofOfWorkProblem::NO_BOUNDARY)
     }

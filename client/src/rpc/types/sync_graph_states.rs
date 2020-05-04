@@ -11,7 +11,6 @@ pub struct SyncGraphBlockState {
     pub block_hash: H256,
     pub parent: H256,
     pub referees: Vec<H256>,
-    // TODO(yanpei): change into U64
     pub nonce: U256,
     pub timestamp: u64,
     pub adaptive: bool,
