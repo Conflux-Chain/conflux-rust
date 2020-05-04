@@ -86,7 +86,7 @@ impl VerificationConfig {
             // difficulty is not 1, this should not overflow.
             // We just use overflowing_add() here to be safe.
             let (upper_bound, _) = lower_bound.overflowing_add(boundary);
-            warn!("block {} has invalid proof of work. boundary: [{}, {}], pow_hash: {}",
+            warn!("block {} has invalid proof of work. boundary: [{}, {}), pow_hash: {}",
                   header.hash(), lower_bound.clone(), upper_bound.clone(), pow_hash.clone());
             return Err(From::from(BlockError::InvalidProofOfWork(
                 OutOfBounds {
