@@ -277,8 +277,8 @@ class BlockHeader(rlp.Serializable):
         for i in range(0, 32):
             init_buf[i] = problem_hash[i]
         n = self.nonce
-        for i in range(0, 32):
-            init_buf[32 + i] = n % 256
+        for i in range(32, 64):
+            init_buf[i] = n % 256
             n = int(n / 256)
         tmp = sha3(bytes(init_buf))
         buf = []
