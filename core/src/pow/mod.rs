@@ -32,9 +32,14 @@ impl ProofOfWorkProblem {
 
     #[inline]
     pub fn validate_hash_against_boundary(
-        hash: &H256, boundary: &U256,
+        hash: &H256, nonce: &U256, boundary: &U256,
     ) -> bool {
-        BigEndianHash::into_uint(hash).lt(boundary)
+        let lower_bound = nonce_to_lower_bound(nonce);
+        let (against_lower_bound_u256, _) =
+            BigEndianHash::into_uint(hash).overflowing_sub(lower_bound);
+        let mut tmp = [0u8; 32];
+        against_lower_bound_u256.to_big_endian(&mut tmp[..]);
+        against_lower_bound_u256.lt(boundary)
             || boundary.eq(&ProofOfWorkProblem::NO_BOUNDARY)
     }
 }
@@ -128,12 +133,29 @@ impl ProofOfWorkConfig {
     }
 }
 
-pub fn pow_hash_to_quality(hash: &H256) -> U256 {
+// We will use the top 128 bits (excluding the highest bit) to be the lower
+// bound of our PoW. The rationale is to provide a solution for block
+// withholding attack among mining pools.
+pub fn nonce_to_lower_bound(nonce: &U256) -> U256 {
+    let mut buf = [0u8; 32];
+    nonce.to_big_endian(&mut buf[..]);
+    for i in 16..32 {
+        buf[i] = 0;
+    }
+    buf[0] = buf[0] & 0x7f;
+    // Note that U256::from assumes big_endian of the bytes
+    let lower_bound = U256::from(buf);
+    lower_bound
+}
+
+pub fn pow_hash_to_quality(hash: &H256, nonce: &U256) -> U256 {
     let hash_as_uint = BigEndianHash::into_uint(hash);
-    if hash_as_uint.eq(&U256::MAX) {
+    let lower_bound = nonce_to_lower_bound(nonce);
+    let (against_bound_u256, _) = hash_as_uint.overflowing_sub(lower_bound);
+    if against_bound_u256.eq(&U256::MAX) {
         U256::one()
     } else {
-        boundary_to_difficulty(&(hash_as_uint + U256::one()))
+        boundary_to_difficulty(&(against_bound_u256 + U256::one()))
     }
 }
 
@@ -169,7 +191,7 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
     }
 }
 
-pub fn compute(nonce: U256, block_hash: &H256) -> H256 {
+pub fn compute(nonce: &U256, block_hash: &H256) -> H256 {
     let mut buf = [0u8; 64];
     for i in 0..32 {
         buf[i] = block_hash[i];
@@ -187,8 +209,12 @@ pub fn validate(
     problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
 ) -> bool {
     let nonce = solution.nonce;
-    let hash = compute(nonce, &problem.block_hash);
-    ProofOfWorkProblem::validate_hash_against_boundary(&hash, &problem.boundary)
+    let hash = compute(&nonce, &problem.block_hash);
+    ProofOfWorkProblem::validate_hash_against_boundary(
+        &hash,
+        &nonce,
+        &problem.boundary,
+    )
 }
 
 /// This function computes the target difficulty of the next period

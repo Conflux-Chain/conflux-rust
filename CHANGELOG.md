@@ -30,6 +30,11 @@ experimental purposes.
 replace one with same sender and nonce by higher gas-price or by same gas-price
 and larger epoch height.
 
+- Change the nonce to 256 bits from 64 bits
+
+- Introduce nonce based lower bound in the PoW difficulty calculation. This
+will help to defend against block withholding attack among minging pools in 
+future.
 
 # 0.5.0
 

@@ -88,11 +88,12 @@ impl Worker {
                         //TODO: adjust the number of times
                         let mut nonce: u64 = rand::random();
                         for _i in 0..100_000 {
-                            let hash = compute(U256::from(nonce), &block_hash);
-                            if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &boundary) {
+                            let nonce_u256 = U256::from(nonce);
+                            let hash = compute(&nonce_u256, &block_hash);
+                            if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &nonce_u256, &boundary) {
                                 // problem solved
                                 match solution_sender
-                                    .send(ProofOfWorkSolution { nonce: U256::from(nonce) })
+                                    .send(ProofOfWorkSolution { nonce: nonce_u256 })
                                 {
                                     Ok(_) => {}
                                     Err(e) => {
@@ -629,7 +630,12 @@ impl BlockGenerator {
         );
         let mut nonce: u64 = rand::random();
         loop {
-            if validate(&problem, &ProofOfWorkSolution { nonce: U256::from(nonce) }) {
+            if validate(
+                &problem,
+                &ProofOfWorkSolution {
+                    nonce: U256::from(nonce),
+                },
+            ) {
                 block.block_header.set_nonce(U256::from(nonce));
                 break;
             }
@@ -752,6 +758,10 @@ impl BlockGenerator {
                             &new_solution.unwrap(),
                         )
                     {
+                        warn!(
+                            "Received invalid solution from miner: nonce = {}!",
+                            &new_solution.unwrap().nonce
+                        );
                         new_solution = receiver.try_recv();
                     } else {
                         break;
