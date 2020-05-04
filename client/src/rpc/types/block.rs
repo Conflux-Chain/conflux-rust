@@ -268,7 +268,7 @@ impl Block {
                             .map(|x| x.clone().into())
                             .collect(),
                     )
-                    .with_nonce(self.nonce.as_usize() as u64)
+                    .with_nonce(self.nonce.into())
                     .build(),
                 {
                     let mut transactions = Vec::new();

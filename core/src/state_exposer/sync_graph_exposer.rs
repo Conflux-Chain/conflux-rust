@@ -2,14 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use std::mem;
 
 pub struct SyncGraphBlockState {
     pub block_hash: H256,
     pub parent: H256,
     pub referees: Vec<H256>,
-    pub nonce: u64,
+    pub nonce: U256,
     pub timestamp: u64,
     pub adaptive: bool,
 }

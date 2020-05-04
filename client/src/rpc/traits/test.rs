@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{BlameInfo, Block, Bytes};
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use cfxcore::PeerInfo;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
@@ -81,7 +81,7 @@ pub trait TestRpc {
 
     #[rpc(name = "test_generate_block_with_nonce_and_timestamp")]
     fn generate_block_with_nonce_and_timestamp(
-        &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64,
+        &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256,
         timestamp: u64, adaptive: bool,
     ) -> RpcResult<H256>;
 

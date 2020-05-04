@@ -9,7 +9,6 @@ use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
-use rlp::RlpStream;
 use std::{collections::HashMap, convert::TryFrom};
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
@@ -42,7 +41,7 @@ impl ProofOfWorkProblem {
 
 #[derive(Debug, Copy, Clone)]
 pub struct ProofOfWorkSolution {
-    pub nonce: u64,
+    pub nonce: U256,
 }
 
 #[derive(Debug, Clone, DeriveMallocSizeOf)]
@@ -170,13 +169,16 @@ pub fn compute_inv_x_times_2_pow_256_floor(x: &U256) -> U256 {
     }
 }
 
-pub fn compute(nonce: u64, block_hash: &H256) -> H256 {
-    let mut rlp = RlpStream::new_list(2);
-    rlp.append(block_hash).append(&nonce);
-    let buf = keccak(rlp.out());
+pub fn compute(nonce: U256, block_hash: &H256) -> H256 {
+    let mut buf = [0u8; 64];
+    for i in 0..32 {
+        buf[i] = block_hash[i];
+    }
+    nonce.to_little_endian(&mut buf[32..64]);
+    let intermediate = keccak(&buf[..]);
     let mut tmp = [0u8; 32];
     for i in 0..32 {
-        tmp[i] = buf[i] ^ block_hash[i];
+        tmp[i] = intermediate[i] ^ block_hash[i];
     }
     keccak(tmp)
 }

@@ -156,7 +156,7 @@ impl StratumImpl {
                     return to_value(&false);
                 }
             }
-            trace!(target: "stratum", "New worker #{} registered", worker_id);
+            debug!(target: "stratum", "New worker #{} registered", worker_id);
             self.workers.write().insert(meta.addr().clone(), worker_id);
             to_value(true)
         }).map(|v| v.expect("Only true/false is returned and it's always serializable; qed"))
@@ -206,12 +206,12 @@ impl StratumImpl {
 
             let mut hup_peers = HashSet::with_capacity(0); // most of the cases won't be needed, hence avoid allocation
             let workers_msg = format!("{{ \"id\": {}, \"method\": \"mining.notify\", \"params\": {} }}", next_request_id, payload);
-            trace!(target: "stratum", "pushing work for {} workers (payload: '{}')", workers.len(), &workers_msg);
-            for (ref addr, _) in workers.iter() {
-                trace!(target: "stratum", "pushing work to {}", addr);
+            trace!(target: "stratum", "Pushing work for {} workers (payload: '{}')", workers.len(), &workers_msg);
+            for (ref addr, worker_id) in workers.iter() {
+                trace!(target: "stratum", "Pushing work to {} at addr {}", &worker_id, &addr);
                 match tcp_dispatcher.push_message(addr, workers_msg.clone()) {
                     Err(PushMessageError::NoSuchPeer) => {
-                        trace!(target: "stratum", "Worker no longer connected: {}", &addr);
+                        debug!(target: "stratum", "Worker no longer connected: {} addr {}", &worker_id, &addr);
                         hup_peers.insert(**addr);
                     }
                     Err(e) => {

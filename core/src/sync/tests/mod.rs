@@ -101,7 +101,7 @@ fn test_remove_expire_blocks() {
                     parent_hash,
                     vec![],
                     0,
-                    i as u64,
+                    U256::from(i),
                     U256::from(10),
                     1,
                     false,

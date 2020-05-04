@@ -634,7 +634,7 @@ impl RpcImpl {
     }
 
     fn generate_block_with_nonce_and_timestamp(
-        &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64,
+        &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256,
         timestamp: u64, adaptive: bool,
     ) -> RpcResult<H256>
     {
@@ -1023,7 +1023,7 @@ impl TestRpc for TestRpcImpl {
                 -> JsonRpcResult<H256>;
             fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> JsonRpcResult<H256>;
             fn generate_block_with_nonce_and_timestamp(
-                &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool)
+                &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256, timestamp: u64, adaptive: bool)
                 -> JsonRpcResult<H256>;
             fn generate_empty_blocks(&self, num_blocks: usize) -> JsonRpcResult<Vec<H256>>;
             fn get_block_status(&self, block_hash: H256) -> JsonRpcResult<(u8, bool)>;
