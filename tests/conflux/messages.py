@@ -272,7 +272,15 @@ class BlockHeader(rlp.Serializable):
         return sha3(rlp.encode(self.without_nonce()))
 
     def pow_decimal(self):
-        tmp = sha3(rlp.encode([self.problem_hash(), self.nonce]))
+        init_buf = bytearray(64);
+        problem_hash = self.problem_hash()
+        for i in range(0, 32):
+            init_buf[i] = problem_hash[i]
+        n = self.nonce
+        for i in range(32, 64):
+            init_buf[i] = n % 256
+            n = int(n / 256)
+        tmp = sha3(bytes(init_buf))
         buf = []
         for i in range(0, 32):
             buf.append(tmp[i] ^ self.problem_hash()[i])

@@ -85,14 +85,15 @@ impl Worker {
                         let boundary = problem.as_ref().unwrap().boundary;
                         let block_hash = problem.as_ref().unwrap().block_hash;
 
+                        //TODO: adjust the number of times
+                        let mut nonce: u64 = rand::random();
                         for _i in 0..100_000 {
-                            //TODO: adjust the number of times
-                            let nonce = rand::random();
-                            let hash = compute(nonce, &block_hash);
-                            if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &boundary) {
+                            let nonce_u256 = U256::from(nonce);
+                            let hash = compute(&nonce_u256, &block_hash);
+                            if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &nonce_u256, &boundary) {
                                 // problem solved
                                 match solution_sender
-                                    .send(ProofOfWorkSolution { nonce })
+                                    .send(ProofOfWorkSolution { nonce: nonce_u256 })
                                 {
                                     Ok(_) => {}
                                     Err(e) => {
@@ -106,6 +107,7 @@ impl Worker {
                                 problem = None;
                                 break;
                             }
+                            nonce += 1;
                         }
                     } else {
                         thread::sleep(sleep_duration);
@@ -237,7 +239,7 @@ impl BlockGenerator {
             .with_difficulty(expected_difficulty)
             .with_adaptive(adaptive)
             .with_referee_hashes(referees)
-            .with_nonce(0)
+            .with_nonce(U256::zero())
             .with_gas_limit(block_gas_limit)
             .build();
 
@@ -569,7 +571,7 @@ impl BlockGenerator {
 
     pub fn generate_block_with_nonce_and_timestamp(
         &self, parent_hash: H256, referee: Vec<H256>,
-        transactions: Vec<Arc<SignedTransaction>>, nonce: u64, timestamp: u64,
+        transactions: Vec<Arc<SignedTransaction>>, nonce: U256, timestamp: u64,
         adaptive: bool,
     ) -> Result<H256, String>
     {
@@ -626,12 +628,18 @@ impl BlockGenerator {
             block.block_header.problem_hash(),
             *difficulty,
         );
+        let mut nonce: u64 = rand::random();
         loop {
-            let nonce = rand::random();
-            if validate(&problem, &ProofOfWorkSolution { nonce }) {
-                block.block_header.set_nonce(nonce);
+            if validate(
+                &problem,
+                &ProofOfWorkSolution {
+                    nonce: U256::from(nonce),
+                },
+            ) {
+                block.block_header.set_nonce(U256::from(nonce));
                 break;
             }
+            nonce += 1;
         }
         let hash = block.block_header.compute_hash();
         debug!(
@@ -750,6 +758,10 @@ impl BlockGenerator {
                             &new_solution.unwrap(),
                         )
                     {
+                        warn!(
+                            "Received invalid solution from miner: nonce = {}!",
+                            &new_solution.unwrap().nonce
+                        );
                         new_solution = receiver.try_recv();
                     } else {
                         break;

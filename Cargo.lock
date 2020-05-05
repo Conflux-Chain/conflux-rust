@@ -478,7 +478,7 @@ name = "cfx-utils"
 version = "0.6.0"
 dependencies = [
  "log 0.4.8",
- "parking_lot 0.10.0",
+ "parking_lot 0.10.2",
 ]
 
 [[package]]

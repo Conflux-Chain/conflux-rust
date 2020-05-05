@@ -55,7 +55,7 @@ fn clean_0x(s: &str) -> &str {
 }
 
 struct SubmitPayload {
-    nonce: u64,
+    nonce: U256,
     pow_hash: H256,
 }
 
@@ -65,7 +65,7 @@ impl SubmitPayload {
             return Err(PayloadError::ArgumentsAmountUnexpected(payload.len()));
         }
 
-        let nonce = match clean_0x(&payload[0]).parse::<u64>() {
+        let nonce = match clean_0x(&payload[0]).parse::<U256>() {
             Ok(nonce) => nonce,
             Err(e) => {
                 warn!(target: "stratum", "submit_work ({}): invalid nonce ({:?})", &payload[0], e);

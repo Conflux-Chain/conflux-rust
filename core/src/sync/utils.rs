@@ -31,7 +31,7 @@ use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
-    parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
+    parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
     diff: U256, block_weight: u32, adaptive: bool,
 ) -> (H256, Block)
 {
@@ -70,7 +70,7 @@ pub fn create_simple_block(
     // Note that because we do not fill the timestamp, it should keep at the
     // minimum difficulty of 10.
     let exp_diff = U256::from(10);
-    let nonce = sync.block_count() as u64 + 1;
+    let nonce = U256::from(sync.block_count() as u64 + 1);
     create_simple_block_impl(
         parent_hash,
         ref_hashes,

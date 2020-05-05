@@ -51,7 +51,7 @@ pub struct BlockHeaderRlpPart {
     /// Customized information
     custom: Vec<Bytes>,
     /// Nonce of the block
-    nonce: u64,
+    nonce: U256,
 }
 
 impl PartialEq for BlockHeaderRlpPart {
@@ -156,10 +156,10 @@ impl BlockHeader {
     pub fn custom(&self) -> &Vec<Bytes> { &self.custom }
 
     /// Get the nonce field of the header.
-    pub fn nonce(&self) -> u64 { self.nonce }
+    pub fn nonce(&self) -> U256 { self.nonce }
 
     /// Set the nonce field of the header.
-    pub fn set_nonce(&mut self, nonce: u64) { self.nonce = nonce; }
+    pub fn set_nonce(&mut self, nonce: U256) { self.nonce = nonce; }
 
     /// Set the timestamp filed of the header.
     pub fn set_timestamp(&mut self, timestamp: u64) {
@@ -280,7 +280,7 @@ pub struct BlockHeaderBuilder {
     gas_limit: U256,
     referee_hashes: Vec<H256>,
     custom: Vec<Bytes>,
-    nonce: u64,
+    nonce: U256,
 }
 
 impl BlockHeaderBuilder {
@@ -300,7 +300,7 @@ impl BlockHeaderBuilder {
             gas_limit: U256::zero(),
             referee_hashes: Vec::new(),
             custom: Vec::new(),
-            nonce: 0,
+            nonce: U256::zero(),
         }
     }
 
@@ -384,7 +384,7 @@ impl BlockHeaderBuilder {
         self
     }
 
-    pub fn with_nonce(&mut self, nonce: u64) -> &mut Self {
+    pub fn with_nonce(&mut self, nonce: U256) -> &mut Self {
         self.nonce = nonce;
         self
     }

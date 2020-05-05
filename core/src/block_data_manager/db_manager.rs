@@ -136,7 +136,9 @@ impl DBManager {
     pub fn block_header_from_db(&self, hash: &H256) -> Option<BlockHeader> {
         let mut block_header =
             self.load_decodable_val(DBTable::Blocks, hash.as_bytes())?;
-        VerificationConfig::compute_header_pow_quality(&mut block_header);
+        VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(
+            &mut block_header,
+        );
         Some(block_header)
     }
 

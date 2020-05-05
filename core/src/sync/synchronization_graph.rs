@@ -1576,7 +1576,7 @@ impl SynchronizationGraph {
                 if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
-                    VerificationConfig::compute_header_pow_quality(header);
+                    VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
                 }
                 return (
                     BlockHeaderInsertionResult::AlreadyProcessed,
@@ -1589,7 +1589,7 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                VerificationConfig::compute_header_pow_quality(header);
+                VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
             }
             return (BlockHeaderInsertionResult::AlreadyProcessed, Vec::new());
         }
