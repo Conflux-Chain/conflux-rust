@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -13,10 +17,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
-
-// Copyright 2019 Conflux Foundation. All rights reserved.
-// Conflux is free software and distributed under GNU General Public License.
-// See http://www.gnu.org/licenses/
 
 //! Stratum protocol implementation for Conflux clients
 
@@ -49,6 +49,7 @@ use jsonrpc_tcp_server::{
 };
 use std::sync::Arc;
 
+use crate::traits::Error::InvalidSolution;
 use cfx_types::H256;
 use hash::keccak;
 use parking_lot::RwLock;
@@ -175,6 +176,12 @@ impl StratumImpl {
                     .collect::<Vec<String>>()) {
                         Ok(()) => {
                             to_value(true)
+                        },
+                        Err(InvalidSolution(msg)) => {
+                            // When we have invalid solution, we propagate the reason to the client
+                            warn!("Error because of invalid solution: {:?}", msg);
+                            Ok(Value::Array(vec!{to_value(false).expect("serializable"),
+                                                 to_value(msg).expect("serializable")}))
                         },
                         Err(submit_err) => {
                             warn!("Error while submitting share: {:?}", submit_err);
