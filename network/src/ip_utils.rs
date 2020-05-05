@@ -473,7 +473,7 @@ pub fn map_external_address(
         NatType::NatPMP => search_natpmp(local),
         NatType::UPnP => search_upnp(local),
         _ => {
-            trace!(target: "network", "Can't map external address using NAT");
+            trace!("Can't map external address using NAT");
             None
         }
     }
