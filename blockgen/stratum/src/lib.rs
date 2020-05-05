@@ -165,35 +165,38 @@ impl StratumImpl {
 
     /// rpc method `mining.submit`
     fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
-        Ok(match params {
+        Ok(Value::Array(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
-                match self.dispatcher.submit(vals.iter()
-                    .filter_map(|val| match *val {
-                        Value::String(ref s) => Some(s.to_owned()),
-                        _ => None
-                    })
-                    .collect::<Vec<String>>()) {
-                        Ok(()) => {
-                            to_value(true)
-                        },
-                        Err(InvalidSolution(msg)) => {
-                            // When we have invalid solution, we propagate the reason to the client
-                            warn!("Error because of invalid solution: {:?}", msg);
-                            Ok(Value::Array(vec!{to_value(false).expect("serializable"),
-                                                 to_value(msg).expect("serializable")}))
-                        },
-                        Err(submit_err) => {
-                            warn!("Error while submitting share: {:?}", submit_err);
-                            to_value(false)
-                        }
+                match self.dispatcher.submit(
+                    vals.iter()
+                        .filter_map(|val| match *val {
+                            Value::String(ref s) => Some(s.to_owned()),
+                            _ => None,
+                        })
+                        .collect::<Vec<String>>(),
+                ) {
+                    Ok(()) => vec![to_value(true).expect("serializable")],
+                    Err(InvalidSolution(msg)) => {
+                        // When we have invalid solution, we propagate the
+                        // reason to the client
+                        warn!("Error because of invalid solution: {:?}", msg);
+                        vec![
+                            to_value(false).expect("serializable"),
+                            to_value(msg).expect("serializable"),
+                        ]
                     }
-            },
+                    Err(submit_err) => {
+                        warn!("Error while submitting share: {:?}", submit_err);
+                        vec![to_value(false).expect("serializable")]
+                    }
+                }
+            }
             _ => {
                 trace!(target: "stratum", "Invalid submit work format {:?}", params);
-                to_value(false)
+                vec![to_value(false).expect("serializable")]
             }
-        }.expect("Only true/false is returned and it's always serializable; qed"))
+        }))
     }
 
     fn push_work_all(

@@ -134,19 +134,19 @@ impl JobDispatcher for StratumJobDispatcher {
         {
             let mut current_problem = self.current_problem.lock();
             if let Some(prob) = *current_problem {
-                if !validate(&prob, &sol) {
+                if prob.block_hash != payload.pow_hash {
                     return Err(StratumServiceError::InvalidSolution(
                         format!(
-                            "Incorrect Nonce! worker_id = {}!",
+                            "Solution for a stale job! worker_id = {}",
                             payload.worker_id
                         )
                         .into(),
                     ));
                 }
-                if prob.block_hash != payload.pow_hash {
+                if !validate(&prob, &sol) {
                     return Err(StratumServiceError::InvalidSolution(
                         format!(
-                            "Solution for a stale job! worker_id = {}",
+                            "Incorrect Nonce! worker_id = {}!",
                             payload.worker_id
                         )
                         .into(),
