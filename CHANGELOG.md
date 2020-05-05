@@ -38,6 +38,9 @@ future. With this change and careful PoW design, a mining pool can withhold
 the top 128 bits of the nonce as the server nonce and the participants of 
 the pool will not be able to tell whether they mined a block or not.
 
+- Improve the stratum protocol to make it more consistent with the convention.
+Now the stratum protocol can correctly work with an external miner.
+
 # 0.5.0
 
 ## Improvements
