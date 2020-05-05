@@ -167,7 +167,7 @@ impl StratumImpl {
         Ok(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
-                match self.dispatcher.submit(vals.iter().skip(2)
+                match self.dispatcher.submit(vals.iter()
                     .filter_map(|val| match *val {
                         Value::String(ref s) => Some(s.to_owned()),
                         _ => None

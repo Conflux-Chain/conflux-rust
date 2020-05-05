@@ -26,6 +26,7 @@ use std;
 pub enum Error {
     NoWork,
     NoWorkers,
+    InvalidSolution(String),
     Io(String),
     Tcp(String),
     Dispatch(String),
