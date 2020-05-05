@@ -27,4 +27,4 @@ ethereum-types = "0.8"
 
 [dependencies.rocksdb]
 git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
-rev = "95938bfb97fb01e496904c955280525abf23466c"
+rev = "6d96482ddb51c1779af615767fd1967da9d98377"
