@@ -28,7 +28,7 @@ appenders:
         count: 50
 
 root:
-    level: trace
+    level: info
     appenders:
         - stdout
         - logfile
@@ -36,13 +36,13 @@ root:
 # We can set log level for crates individually
 loggers:
     network:
-        level: trace
+        level: info
     cfxcore:
         level: info
     rpc:
         level: info
-    network::discovery:
-        level: trace
+    discovery:
+        level: info
     sync:
         level: info
     blockgen:
