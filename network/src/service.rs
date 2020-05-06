@@ -12,7 +12,7 @@ use crate::{
     node_table::*,
     session::{self, Session, SessionData, SessionDetails},
     session_manager::SessionManager,
-    Capability, Error, ErrorKind, HandlerWorkType, IpFilter,
+    Capability, Error, ErrorKind, HandlerWorkType, IpFilter, NatType,
     NetworkConfiguration, NetworkContext as NetworkContextTrait,
     NetworkIoMessage, NetworkProtocolHandler, PeerInfo, ProtocolId,
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
@@ -535,7 +535,7 @@ impl NetworkServiceInner {
                     udp_port: local_endpoint.udp_port,
                 };
                 if config.nat_enabled {
-                    match map_external_address(&local_endpoint) {
+                    match map_external_address(&local_endpoint, &NatType::Any) {
                         Some(endpoint) => {
                             info!(
                                 "NAT mapped to external address {}",
