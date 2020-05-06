@@ -163,12 +163,12 @@ impl JobDispatcher for StratumJobDispatcher {
                     .into(),
                 ));
             }
-        }
 
-        match self.solution_sender.lock().send(sol) {
-            Ok(_) => {}
-            Err(e) => {
-                warn!("{}", e);
+            match self.solution_sender.lock().send(sol) {
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("{}", e);
+                }
             }
         }
 
