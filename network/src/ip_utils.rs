@@ -39,7 +39,7 @@ const NAT_PMP_PORT_MAPPING_LIFETIME: u32 = 30;
 // mapping request. 50 milliseconds might be enough for low RTT.
 const NAT_PMP_PORT_MAPPING_WAITING_DURATION: u64 = 50;
 const NAT_PMP_PORT_MAPPING_MAX_RETRY: u64 = 5;
-const NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS: u64 = 10;
+const NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS: u64 = 250;
 
 /// Socket address extension for rustc beta. To be replaces with now unstable
 /// API
