@@ -305,16 +305,14 @@ impl Configuration {
                     .expect("net_key is not a valid secret string")
             });
         if let Some(addr) = self.raw_conf.public_address.clone() {
-            network_config.public_address = match addr
-                .to_socket_addrs()
-                .map(|mut i| i.next())
-            {
-                Ok(sock_addr) => sock_addr,
-                Err(_e) => {
-                    warn!(target: "network", "public_address in config is invalid");
-                    None
-                }
-            };
+            network_config.public_address =
+                match addr.to_socket_addrs().map(|mut i| i.next()) {
+                    Ok(sock_addr) => sock_addr,
+                    Err(_e) => {
+                        warn!("public_address in config is invalid");
+                        None
+                    }
+                };
         }
         network_config.node_table_timeout =
             Duration::from_secs(self.raw_conf.node_table_timeout_s);
