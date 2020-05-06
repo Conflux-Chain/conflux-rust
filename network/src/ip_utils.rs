@@ -34,7 +34,7 @@ use std::{
     time::Duration,
 };
 
-const NAT_PMP_PORT_MAPPING_LIFETIME: u32 = 30;
+const NAT_PMP_PORT_MAPPING_LIFETIME: u32 = 3600 * 24;
 // Waiting duration in milliseconds for response from router after sending port
 // mapping request. 50 milliseconds might be enough for low RTT.
 const NAT_PMP_PORT_MAPPING_WAITING_DURATION: u64 = 50;
@@ -516,9 +516,9 @@ pub fn map_external_address(
     local: &NodeEndpoint, nat_type: &NatType,
 ) -> Option<NodeEndpoint> {
     match *nat_type {
-        NatType::Any => match search_natpmp(local) {
+        NatType::Any => match search_upnp(local) {
             Some(end_point) => Some(end_point),
-            None => search_upnp(local),
+            None => search_natpmp(local),
         },
         NatType::NatPMP => search_natpmp(local),
         NatType::UPnP => search_upnp(local),
