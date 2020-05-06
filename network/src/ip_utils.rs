@@ -20,14 +20,26 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::node_table::NodeEndpoint;
-use igd::{search_gateway_from_timeout, PortMappingProtocol};
+use crate::{node_table::NodeEndpoint, NatType};
+use igd::{search_gateway, PortMappingProtocol, SearchOptions};
 use ipnetwork::IpNetwork;
+use natpmp::{Natpmp, Protocol, Response};
 use std::{
     io,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
+    net::{
+        IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6,
+        TcpStream,
+    },
+    thread,
     time::Duration,
 };
+
+const NAT_PMP_PORT_MAPPING_LIFETIME: u32 = 3600 * 24;
+// Waiting duration in milliseconds for response from router after sending port
+// mapping request. 50 milliseconds might be enough for low RTT.
+const NAT_PMP_PORT_MAPPING_WAITING_DURATION: u64 = 50;
+const NAT_PMP_PORT_MAPPING_MAX_RETRY: u64 = 5;
+const NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS: u64 = 250;
 
 /// Socket address extension for rustc beta. To be replaces with now unstable
 /// API
@@ -311,48 +323,210 @@ pub fn select_public_address(port: u16) -> SocketAddr {
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port))
 }
 
-pub fn map_external_address(local: &NodeEndpoint) -> Option<NodeEndpoint> {
+fn search_upnp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
     if let SocketAddr::V4(ref local_addr) = local.address {
-        match search_gateway_from_timeout(*local_addr.ip(), Duration::new(5, 0))
-        {
-            Err(ref err) => debug!("Gateway search error: {}", err),
-            Ok(gateway) => match gateway.get_external_ip() {
-                Err(ref err) => {
-                    debug!("IP request error: {}", err);
-                }
-                Ok(external_addr) => match gateway.add_any_port(
-                    PortMappingProtocol::TCP,
-                    SocketAddrV4::new(*local_addr.ip(), local_addr.port()),
-                    0,
-                    "Parity Node/TCP",
-                ) {
+        let local_ip = *local_addr.ip();
+        let local_port = local_addr.port();
+        let local_udp_port = local.udp_port;
+
+        let search_options = SearchOptions {
+            timeout: Some(Duration::new(5, 0)),
+            // igd 0.7 used port 0 by default.
+            // Let's not change this behaviour
+            bind_addr: SocketAddr::V4(SocketAddrV4::new(local_ip, 0)),
+            ..Default::default()
+        };
+        let search_gateway_child = ::std::thread::spawn(move || {
+            match search_gateway(search_options) {
+                Err(ref err) => debug!("Gateway search error: {}", err),
+                Ok(gateway) => match gateway.get_external_ip() {
                     Err(ref err) => {
-                        debug!("Port mapping error: {}", err);
+                        debug!("IP request error: {}", err);
                     }
-                    Ok(tcp_port) => match gateway.add_any_port(
-                        PortMappingProtocol::UDP,
-                        SocketAddrV4::new(*local_addr.ip(), local.udp_port),
-                        0,
-                        "Parity Node/UDP",
-                    ) {
-                        Err(ref err) => {
-                            debug!("Port mapping error: {}", err);
+                    Ok(external_addr) => {
+                        debug!("UPnP gets external ip: {}", external_addr);
+                        let client_ip = {
+                            // Connect to the gateway to find our LAN local
+                            // address from the socket, like `miniupnpc`.
+                            // Note that using local_ip (0.0.0.0) will cause
+                            // NOT_AUTHORIZED error.
+                            let client_sock =
+                                TcpStream::connect(&gateway.addr).ok()?;
+                            match client_sock.local_addr() {
+                                Ok(SocketAddr::V4(v4_addr)) => {
+                                    v4_addr.ip().clone()
+                                }
+                                _ => return None,
+                            }
+                        };
+                        match gateway.add_any_port(
+                            PortMappingProtocol::TCP,
+                            SocketAddrV4::new(client_ip, local_port),
+                            0,
+                            "Conflux Node/TCP",
+                        ) {
+                            Err(ref err) => {
+                                debug!("Port mapping error: {}", err);
+                            }
+                            Ok(tcp_port) => {
+                                debug!("UPnP gets tcp port: {}", tcp_port);
+                                match gateway.add_any_port(
+                                    PortMappingProtocol::UDP,
+                                    SocketAddrV4::new(
+                                        client_ip,
+                                        local_udp_port,
+                                    ),
+                                    0,
+                                    "Conflux Node/UDP",
+                                ) {
+                                    Err(ref err) => {
+                                        debug!("Port mapping error: {}", err);
+                                    }
+                                    Ok(udp_port) => {
+                                        debug!(
+                                            "UPnP gets udp port: {}",
+                                            udp_port
+                                        );
+                                        return Some(NodeEndpoint {
+                                            address: SocketAddr::V4(
+                                                SocketAddrV4::new(
+                                                    external_addr,
+                                                    tcp_port,
+                                                ),
+                                            ),
+                                            udp_port,
+                                        });
+                                    }
+                                }
+                            }
                         }
-                        Ok(udp_port) => {
-                            return Some(NodeEndpoint {
-                                address: SocketAddr::V4(SocketAddrV4::new(
-                                    external_addr,
-                                    tcp_port,
-                                )),
-                                udp_port,
-                            });
-                        }
-                    },
+                    }
                 },
-            },
-        }
+            }
+            None
+        });
+        return search_gateway_child.join().ok()?;
     }
     None
+}
+
+fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
+    if let SocketAddr::V4(ref local_addr) = local.address {
+        let local_port = local_addr.port();
+        let local_udp_port = local.udp_port;
+
+        let search_gateway_child = ::std::thread::spawn(move || {
+            let mut n = Natpmp::new()?;
+
+            // this function call want to receive `Response::Gateway` response
+            // from router, if other then it is an Error.
+            n.send_public_address_request()?;
+            ::std::thread::sleep(Duration::from_millis(
+                NAT_PMP_PORT_MAPPING_WAITING_DURATION,
+            ));
+            let mut retry = NAT_PMP_PORT_MAPPING_MAX_RETRY;
+            let gw = loop {
+                break match n.read_response_or_retry() {
+                    Ok(Response::Gateway(gw)) => Ok(gw),
+                    Err(natpmp::Error::NATPMP_TRYAGAIN) => {
+                        if retry == 0 {
+                            debug!("natpmp retry timeout");
+                            return Err(
+                                natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into(),
+                            );
+                        } else {
+                            retry -= 1;
+                            thread::sleep(Duration::from_millis(
+                                NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS,
+                            ));
+                            continue;
+                        }
+                    }
+                    Err(e) => {
+                        debug!("IP request error: {}", e);
+                        Err(e)
+                    }
+                    _ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into()),
+                }?;
+            };
+
+            // this function call want to receive `Response::TCP` response from
+            // router, if other then it is an Error.
+            n.send_port_mapping_request(
+                Protocol::TCP,
+                local_port,
+                local_port,
+                NAT_PMP_PORT_MAPPING_LIFETIME,
+            )?;
+            ::std::thread::sleep(Duration::from_millis(
+                NAT_PMP_PORT_MAPPING_WAITING_DURATION,
+            ));
+            let tcp_r = match n.read_response_or_retry() {
+                Ok(Response::TCP(tcp)) => Ok(tcp),
+                Err(e) => {
+                    debug!("Port mapping for TCP error: {}", e);
+                    Err(e)
+                }
+                _ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into()),
+            }?;
+
+            // this function call want to receive `Response::UDP` response from
+            // router, if other then it is an Error.
+            n.send_port_mapping_request(
+                Protocol::UDP,
+                local_udp_port,
+                local_udp_port,
+                NAT_PMP_PORT_MAPPING_LIFETIME,
+            )?;
+            ::std::thread::sleep(Duration::from_millis(
+                NAT_PMP_PORT_MAPPING_WAITING_DURATION,
+            ));
+            let udp_r = match n.read_response_or_retry() {
+                Ok(Response::UDP(udp)) => Ok(udp),
+                Err(e) => {
+                    debug!("Port mapping for UDP error: {}", e);
+                    Err(e)
+                }
+                _ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into()),
+            }?;
+
+            Ok(NodeEndpoint {
+                address: SocketAddr::V4(SocketAddrV4::new(
+                    *gw.public_address(),
+                    tcp_r.public_port(),
+                )),
+                udp_port: udp_r.public_port(),
+            })
+        });
+
+        return search_gateway_child
+            .join()
+            .ok()?
+            .map_err(|e: natpmp::Error| {
+                debug!("NAT PMP port mapping error: {:?}", e)
+            })
+            .ok();
+    }
+    None
+}
+
+/// Port mapping using ether UPnP or Nat-PMP.
+/// NAT PMP has higher priority than UPnP.
+pub fn map_external_address(
+    local: &NodeEndpoint, nat_type: &NatType,
+) -> Option<NodeEndpoint> {
+    match *nat_type {
+        NatType::Any => match search_upnp(local) {
+            Some(end_point) => Some(end_point),
+            None => search_natpmp(local),
+        },
+        NatType::NatPMP => search_natpmp(local),
+        NatType::UPnP => search_upnp(local),
+        _ => {
+            trace!("Can't map external address using NAT");
+            None
+        }
+    }
 }
 
 #[test]
@@ -365,10 +539,13 @@ fn can_select_public_address() {
 #[test]
 fn can_map_external_address_or_fail() {
     let pub_address = select_public_address(40478);
-    let _ = map_external_address(&NodeEndpoint {
-        address: pub_address,
-        udp_port: 40478,
-    });
+    let _ = map_external_address(
+        &NodeEndpoint {
+            address: pub_address,
+            udp_port: 40478,
+        },
+        &NatType::Any,
+    );
 }
 
 #[test]

@@ -193,6 +193,15 @@ impl NetworkConfiguration {
     }
 }
 
+/// Type of NAT resolving method
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum NatType {
+    Nothing,
+    Any,
+    UPnP,
+    NatPMP,
+}
+
 #[derive(Clone)]
 pub enum NetworkIoMessage {
     Start,
