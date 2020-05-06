@@ -176,7 +176,13 @@ impl SynchronizationState {
         let mut fresh_start = true;
         let mut peer_best_epoches = Vec::new();
         {
-            for (_, state_lock) in &*self.peers.read() {
+            let peers = self.peers.read();
+            if peers.is_empty() {
+                // We do not have peers, so just assume that this is not a fresh
+                // start and do not enter NormalPhase.
+                fresh_start = false;
+            }
+            for (_, state_lock) in &*peers {
                 let state = state_lock.read();
                 if state
                     .capabilities
