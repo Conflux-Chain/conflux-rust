@@ -24,10 +24,15 @@ use crate::{node_table::NodeEndpoint, NatType};
 use igd::{search_gateway, PortMappingProtocol, SearchOptions};
 use ipnetwork::IpNetwork;
 use natpmp::{Natpmp, Protocol, Response};
-use std::{io, net::{
-    IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6,
-    TcpStream,
-}, time::Duration, thread};
+use std::{
+    io,
+    net::{
+        IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6,
+        TcpStream,
+    },
+    thread,
+    time::Duration,
+};
 
 const NAT_PMP_PORT_MAPPING_LIFETIME: u32 = 30;
 // Waiting duration in milliseconds for response from router after sending port
@@ -431,7 +436,9 @@ fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
                             );
                         } else {
                             retry -= 1;
-                            thread::sleep(Duration::from_millis(NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS));
+                            thread::sleep(Duration::from_millis(
+                                NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS,
+                            ));
                             continue;
                         }
                     }
