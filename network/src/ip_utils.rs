@@ -539,10 +539,13 @@ fn can_select_public_address() {
 #[test]
 fn can_map_external_address_or_fail() {
     let pub_address = select_public_address(40478);
-    let _ = map_external_address(&NodeEndpoint {
-        address: pub_address,
-        udp_port: 40478,
-    });
+    let _ = map_external_address(
+        &NodeEndpoint {
+            address: pub_address,
+            udp_port: 40478,
+        },
+        &NatType::Any,
+    );
 }
 
 #[test]
