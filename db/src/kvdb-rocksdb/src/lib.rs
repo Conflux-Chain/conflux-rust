@@ -30,7 +30,12 @@ use fs_swap::{swap, swap_nonatomic};
 use kvdb::{DBKey, DBOp, DBTransaction, DBValue, KeyValueDB};
 use log::{debug, warn};
 
-use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
+use parity_util_mem::{
+    MallocSizeOf as ParityMallocSizeOf,
+    MallocSizeOfOps as ParityMallocSizeOfOps,
+};
 #[cfg(target_os = "linux")]
 use regex::Regex;
 #[cfg(target_os = "linux")]
@@ -51,6 +56,7 @@ const KB: usize = 1024;
 const MB: usize = 1024 * KB;
 const DB_DEFAULT_MEMORY_BUDGET_MB: usize = 128;
 
+#[derive(MallocSizeOfDerive)]
 enum KeyState {
     Insert(DBValue),
     Delete,
@@ -211,6 +217,38 @@ impl DBAndColumns {
             .cf_handle(&self.column_names[i])
             .expect("the specified column name is correct; qed")
     }
+
+    fn static_property_or_warn(&self, col: usize, prop: &str) -> Option<usize> {
+        match self.db.get_property_int_cf(self.get_cf(col), prop) {
+            Some(v) => Some(v as usize),
+            None => {
+                println!("Cannot read expected static property of RocksDb database: {}", prop);
+                None
+            }
+        }
+    }
+}
+
+impl MallocSizeOf for DBAndColumns {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let mut total = MallocSizeOf::size_of(&self.column_names, ops)
+            // we have at least one column always, so we can call property on it
+            + self.static_property_or_warn(0, "rocksdb.block-cache-usage").unwrap_or(0);
+
+        for v in 0..self.column_names.len() {
+            total += self
+                .static_property_or_warn(
+                    v,
+                    "rocksdb.estimate-table-readers-mem",
+                )
+                .unwrap_or(0);
+            total += self
+                .static_property_or_warn(v, "rocksdb.cur-size-all-mem-tables")
+                .unwrap_or(0);
+        }
+
+        total
+    }
 }
 
 // get column family configuration from database config.
@@ -233,12 +271,17 @@ unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
 /// TODO Mutex around Options may not be needed
 /// Key-Value database.
+#[derive(MallocSizeOfDerive)]
 pub struct Database {
     db: RwLock<Option<DBAndColumns>>,
+    #[ignore_malloc_size_of = "insignificant"]
     config: DatabaseConfig,
     path: String,
+    #[ignore_malloc_size_of = "insignificant"]
     write_opts: Mutex<WriteOptions>,
+    #[ignore_malloc_size_of = "insignificant"]
     read_opts: Mutex<ReadOptions>,
+    #[ignore_malloc_size_of = "insignificant"]
     block_opts: Mutex<BlockBasedOptions>,
     // Dirty values added with `write_buffered`. Cleaned on `flush`.
     overlay: RwLock<Vec<HashMap<DBKey, KeyState>>>,
@@ -247,6 +290,11 @@ pub struct Database {
     // Prevents concurrent flushes.
     // Value indicates if a flush is in progress.
     flushing_lock: Mutex<bool>,
+}
+
+// Compatible hack for KeyValueDB
+impl ParityMallocSizeOf for Database {
+    fn size_of(&self, _ops: &mut ParityMallocSizeOfOps) -> usize { 0 }
 }
 
 #[inline]
@@ -652,12 +700,6 @@ impl Database {
     }
 }
 
-// TODO Count db memory size in cache manager
-// Compatible hack for KeyValueDB
-impl MallocSizeOf for Database {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
-}
-
 // duplicate declaration of methods here to avoid trait import in certain
 // existing cases at time of addition.
 impl KeyValueDB for Database {
@@ -879,5 +921,37 @@ mod tests {
         db.write(batch).unwrap();
 
         assert_eq!(db.get(0, b"foo").unwrap().unwrap(), b"baz");
+    }
+
+    #[test]
+    fn test_memory_property() {
+        let tempdir = TempDir::new("").unwrap();
+        let db = Database::open(
+            &DatabaseConfig::default(),
+            tempdir.path().to_str().unwrap(),
+        )
+        .unwrap();
+        let key1 = H256::from_str(
+            "02c69be41d0b7e40352fc85be1cd65eb03d40ef8427a0ca4596b1ead9a00e9fc",
+        )
+        .unwrap();
+        let mut tx = db.transaction();
+        tx.put(0, key1.as_bytes(), b"123");
+        db.write(tx).unwrap();
+        db.flush().unwrap();
+        let db_locked = db.db.read();
+        let db_and_col = db_locked.as_ref().unwrap();
+        assert!(db_and_col
+            .static_property_or_warn(0, "rocksdb.block-cache-usage")
+            .is_some());
+        assert!(db_and_col
+            .static_property_or_warn(0, "rocksdb.estimate-table-readers-mem",)
+            .is_some());
+        assert!(db_and_col
+            .static_property_or_warn(0, "rocksdb.cur-size-all-mem-tables")
+            .is_some());
+        assert!(db_and_col
+            .static_property_or_warn(0, "rocksdb.fake-property")
+            .is_none());
     }
 }

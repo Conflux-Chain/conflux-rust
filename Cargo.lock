@@ -617,7 +617,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "smallvec 0.6.13",
+ "smallvec 1.4.0",
  "tempdir",
  "time",
  "tiny-keccak",
@@ -1988,6 +1988,8 @@ dependencies = [
  "interleaved-ordered",
  "kvdb",
  "log 0.4.8",
+ "malloc_size_of",
+ "malloc_size_of_derive",
  "num_cpus",
  "owning_ref",
  "parity-util-mem",
@@ -2207,7 +2209,9 @@ dependencies = [
  "cfg-if",
  "cfx-types",
  "hashbrown 0.7.2",
+ "parking_lot 0.10.2",
  "slab",
+ "smallvec 1.4.0",
  "winapi 0.3.8",
 ]
 
