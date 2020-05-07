@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -13,10 +17,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
-
-// Copyright 2019 Conflux Foundation. All rights reserved.
-// Conflux is free software and distributed under GNU General Public License.
-// See http://www.gnu.org/licenses/
 
 //! Stratum protocol implementation for Conflux clients
 
@@ -49,6 +49,7 @@ use jsonrpc_tcp_server::{
 };
 use std::sync::Arc;
 
+use crate::traits::Error::InvalidSolution;
 use cfx_types::H256;
 use hash::keccak;
 use parking_lot::RwLock;
@@ -164,29 +165,38 @@ impl StratumImpl {
 
     /// rpc method `mining.submit`
     fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
-        Ok(match params {
+        Ok(Value::Array(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
-                match self.dispatcher.submit(vals.iter().skip(2)
-                    .filter_map(|val| match *val {
-                        Value::String(ref s) => Some(s.to_owned()),
-                        _ => None
-                    })
-                    .collect::<Vec<String>>()) {
-                        Ok(()) => {
-                            to_value(true)
-                        },
-                        Err(submit_err) => {
-                            warn!("Error while submitting share: {:?}", submit_err);
-                            to_value(false)
-                        }
+                match self.dispatcher.submit(
+                    vals.iter()
+                        .filter_map(|val| match *val {
+                            Value::String(ref s) => Some(s.to_owned()),
+                            _ => None,
+                        })
+                        .collect::<Vec<String>>(),
+                ) {
+                    Ok(()) => vec![to_value(true).expect("serializable")],
+                    Err(InvalidSolution(msg)) => {
+                        // When we have invalid solution, we propagate the
+                        // reason to the client
+                        warn!("Error because of invalid solution: {:?}", msg);
+                        vec![
+                            to_value(false).expect("serializable"),
+                            to_value(msg).expect("serializable"),
+                        ]
                     }
-            },
+                    Err(submit_err) => {
+                        warn!("Error while submitting share: {:?}", submit_err);
+                        vec![to_value(false).expect("serializable")]
+                    }
+                }
+            }
             _ => {
                 trace!(target: "stratum", "Invalid submit work format {:?}", params);
-                to_value(false)
+                vec![to_value(false).expect("serializable")]
             }
-        }.expect("Only true/false is returned and it's always serializable; qed"))
+        }))
     }
 
     fn push_work_all(

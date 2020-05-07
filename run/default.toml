@@ -91,7 +91,7 @@ log_conf="log.yaml"
 # If not set, the process will try to find out the public IP with best effort, and use `port` as public port.
 # However, it's HIGHLY RECOMMENDED to set the value manually, especially for machines with IP translated by NAT.
 #
-# public_address="1.1.1.1:32323"
+# public_address="1.1.1.1"
 
 # `port` is the TCP port that the process listens for P2P messages.
 #

@@ -31,6 +31,10 @@ lazy_static! {
         GaugeUsize::register_with_group("txpool", "packed_account_size");
 }
 
+const MINING_ITERATION: u64 = 100_000;
+const BLOCK_FORCE_UPDATE_INTERVAL_IN_SECS: u64 = 10;
+const BLOCKGEN_LOOP_SLEEP_IN_MILISECS: u64 = 30;
+
 enum MiningState {
     Start,
     Stop,
@@ -84,10 +88,8 @@ impl Worker {
                     if problem.is_some() {
                         let boundary = problem.as_ref().unwrap().boundary;
                         let block_hash = problem.as_ref().unwrap().block_hash;
-
-                        //TODO: adjust the number of times
                         let mut nonce: u64 = rand::random();
-                        for _i in 0..100_000 {
+                        for _i in 0..MINING_ITERATION {
                             let nonce_u256 = U256::from(nonce);
                             let hash = compute(&nonce_u256, &block_hash);
                             if ProofOfWorkProblem::validate_hash_against_boundary(&hash, &nonce_u256, &boundary) {
@@ -100,10 +102,7 @@ impl Worker {
                                         warn!("{}", e);
                                     }
                                 }
-                                // TODO Update problem fast. This will cause
-                                // miner to stop mining
-                                // until the previous blocks is processed by
-                                // ConsensusGraph
+
                                 problem = None;
                                 break;
                             }
@@ -155,10 +154,7 @@ impl BlockGenerator {
     pub fn send_problem(bg: Arc<BlockGenerator>, problem: ProofOfWorkProblem) {
         if bg.pow_config.use_stratum {
             let stratum = bg.stratum.read();
-            stratum
-                .as_ref()
-                .unwrap()
-                .notify(problem.block_hash, problem.boundary);
+            stratum.as_ref().unwrap().notify(problem);
         } else {
             for item in bg.workers.lock().iter() {
                 item.1
@@ -423,7 +419,9 @@ impl BlockGenerator {
     }
 
     /// Check if we need to mine on a new block
-    pub fn is_mining_block_outdated(&self, block: Option<&Block>) -> bool {
+    pub fn is_mining_block_outdated(
+        &self, block: Option<&Block>, last_assemble: &SystemTime,
+    ) -> bool {
         if block.is_none() {
             return true;
         }
@@ -433,8 +431,18 @@ impl BlockGenerator {
         if best_block_hash != *block.unwrap().block_header.parent_hash() {
             return true;
         }
-        // TODO: 2nd check: if the referee hashes changed
-        // TODO: 3rd check: if we want to pack a new set of transactions
+
+        // 2nd Check: if the last block is too old, we will generate a new
+        // block. Checking transaction updates and referees might be
+        // costly and the trade-off is unclear here. It is simple to
+        // just enforce a time here.
+        let elapsed = last_assemble.elapsed();
+        if let Ok(d) = elapsed {
+            if d > Duration::from_secs(BLOCK_FORCE_UPDATE_INTERVAL_IN_SECS) {
+                return true;
+            }
+        }
+
         false
     }
 
@@ -700,8 +708,8 @@ impl BlockGenerator {
     pub fn start_mining(bg: Arc<BlockGenerator>, _payload_len: u32) {
         let mut current_mining_block = None;
         let mut current_problem: Option<ProofOfWorkProblem> = None;
-        // FIXME: change to notification.
-        let sleep_duration = time::Duration::from_millis(50);
+        let sleep_duration =
+            time::Duration::from_millis(BLOCKGEN_LOOP_SLEEP_IN_MILISECS);
 
         let receiver: mpsc::Receiver<ProofOfWorkSolution> =
             if bg.pow_config.use_stratum {
@@ -711,13 +719,17 @@ impl BlockGenerator {
             };
 
         let mut last_notify = SystemTime::now();
+        let mut last_assemble = SystemTime::now();
         loop {
             match *bg.state.read() {
                 MiningState::Stop => return,
                 _ => {}
             }
 
-            if bg.is_mining_block_outdated(current_mining_block.as_ref()) {
+            if bg.is_mining_block_outdated(
+                current_mining_block.as_ref(),
+                &last_assemble,
+            ) {
                 // TODO: #transations TBD
                 if !bg.pow_config.test_mode && bg.sync.catch_up_mode() {
                     thread::sleep(sleep_duration);
@@ -744,6 +756,7 @@ impl BlockGenerator {
                         .problem_hash(),
                     *current_difficulty,
                 );
+                last_assemble = SystemTime::now();
                 BlockGenerator::send_problem(bg.clone(), problem);
                 last_notify = SystemTime::now();
                 current_problem = Some(problem);

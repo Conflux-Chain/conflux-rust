@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -26,8 +30,8 @@ use cfx_stratum::{
     Stratum as StratumService,
 };
 use cfx_types::{H256, U256};
-use cfxcore::pow::ProofOfWorkSolution;
-use log::{trace, warn};
+use cfxcore::pow::{validate, ProofOfWorkProblem, ProofOfWorkSolution};
+use log::{info, trace, warn};
 use parking_lot::Mutex;
 use std::{
     fmt,
@@ -55,17 +59,20 @@ fn clean_0x(s: &str) -> &str {
 }
 
 struct SubmitPayload {
+    worker_id: String,
     nonce: U256,
     pow_hash: H256,
 }
 
 impl SubmitPayload {
     fn from_args(payload: Vec<String>) -> Result<Self, PayloadError> {
-        if payload.len() != 2 {
+        if payload.len() != 4 {
             return Err(PayloadError::ArgumentsAmountUnexpected(payload.len()));
         }
 
-        let nonce = match clean_0x(&payload[0]).parse::<U256>() {
+        let worker_id = payload[0].clone();
+
+        let nonce = match clean_0x(&payload[2]).parse::<U256>() {
             Ok(nonce) => nonce,
             Err(e) => {
                 warn!(target: "stratum", "submit_work ({}): invalid nonce ({:?})", &payload[0], e);
@@ -73,7 +80,7 @@ impl SubmitPayload {
             }
         };
 
-        let pow_hash = match clean_0x(&payload[1]).parse::<H256>() {
+        let pow_hash = match clean_0x(&payload[3]).parse::<H256>() {
             Ok(pow_hash) => pow_hash,
             Err(e) => {
                 warn!(target: "stratum", "submit_work ({}): invalid hash ({:?})", &payload[1], e);
@@ -81,7 +88,11 @@ impl SubmitPayload {
             }
         };
 
-        Ok(SubmitPayload { nonce, pow_hash })
+        Ok(SubmitPayload {
+            worker_id,
+            nonce,
+            pow_hash,
+        })
     }
 }
 
@@ -100,6 +111,7 @@ impl fmt::Display for PayloadError {
 
 /// Job dispatcher for stratum service
 pub struct StratumJobDispatcher {
+    current_problem: Mutex<Option<ProofOfWorkProblem>>,
     solution_sender: Mutex<mpsc::Sender<ProofOfWorkSolution>>,
 }
 
@@ -110,17 +122,53 @@ impl JobDispatcher for StratumJobDispatcher {
 
         trace!(
             target: "stratum",
-            "submit_work: Decoded: nonce={}, pow_hash={}",
+            "submit_work: Decoded: nonce={}, pow_hash={}, worker_id={}",
             payload.nonce,
             payload.pow_hash,
+            payload.worker_id,
         );
 
-        match self.solution_sender.lock().send(ProofOfWorkSolution {
+        let sol = ProofOfWorkSolution {
             nonce: payload.nonce,
-        }) {
-            Ok(_) => {}
-            Err(e) => {
-                warn!("{}", e);
+        };
+        {
+            let mut current_problem = self.current_problem.lock();
+            if let Some(prob) = *current_problem {
+                if prob.block_hash != payload.pow_hash {
+                    return Err(StratumServiceError::InvalidSolution(
+                        format!(
+                            "Solution for a stale job! worker_id = {}",
+                            payload.worker_id
+                        )
+                        .into(),
+                    ));
+                }
+                if !validate(&prob, &sol) {
+                    return Err(StratumServiceError::InvalidSolution(
+                        format!(
+                            "Incorrect Nonce! worker_id = {}!",
+                            payload.worker_id
+                        )
+                        .into(),
+                    ));
+                }
+                info!("Stratum worker {} mined a block!", payload.worker_id);
+                *current_problem = None;
+            } else {
+                return Err(StratumServiceError::InvalidSolution(
+                    format!(
+                        "Problem already solved! worker_id = {}",
+                        payload.worker_id
+                    )
+                    .into(),
+                ));
+            }
+
+            match self.solution_sender.lock().send(sol) {
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("{}", e);
+                }
             }
         }
 
@@ -134,13 +182,23 @@ impl StratumJobDispatcher {
         solution_sender: mpsc::Sender<ProofOfWorkSolution>,
     ) -> StratumJobDispatcher {
         StratumJobDispatcher {
+            current_problem: Mutex::new(None),
             solution_sender: Mutex::new(solution_sender),
         }
     }
 
+    fn set_current_problem(&self, current_problem: &ProofOfWorkProblem) {
+        *self.current_problem.lock() = Some(current_problem.clone());
+    }
+
     /// Serializes payload for stratum service
     fn payload(&self, pow_hash: H256, boundary: U256) -> String {
-        format!(r#"["0x", "0x{:x}","0x{:x}"]"#, pow_hash, boundary)
+        // Now we just fill the job_id as pow_hash. This will be more consistent
+        // with the convention.
+        format!(
+            r#"["0x{:x}", "0x{:x}","0x{:x}"]"#,
+            pow_hash, pow_hash, boundary
+        )
     }
 }
 
@@ -170,11 +228,12 @@ impl From<AddrParseError> for Error {
 }
 
 impl NotifyWork for Stratum {
-    fn notify(&self, pow_hash: H256, boundary: U256) {
+    fn notify(&self, prob: ProofOfWorkProblem) {
         trace!(target: "stratum", "Notify work");
 
+        self.dispatcher.set_current_problem(&prob);
         self.service.push_work_all(
-            self.dispatcher.payload(pow_hash, boundary)
+            self.dispatcher.payload(prob.block_hash, prob.boundary)
         ).unwrap_or_else(
             |e| warn!(target: "stratum", "Error while pushing work: {:?}", e)
         );
