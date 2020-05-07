@@ -14,6 +14,7 @@
 use cfg_if::cfg_if;
 use cfx_types::{H160, H256, H512, U256, U512};
 use hashbrown::HashMap as FastHashMap;
+use parking_lot;
 use slab::Slab;
 use std::{
     collections::{BinaryHeap, HashSet, VecDeque},
@@ -388,6 +389,52 @@ malloc_size_of_hash_map!(FastHashMap<K, V, S>);
 impl<T> MallocSizeOf for std::marker::PhantomData<T> {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
+
+impl<T: MallocSizeOf> MallocSizeOf for std::sync::Mutex<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.lock().unwrap().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for parking_lot::Mutex<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.lock().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for std::sync::RwLock<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.read().unwrap().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.read().size_of(ops)
+    }
+}
+
+macro_rules! impl_smallvec {
+    ($size:expr) => {
+        impl<T> MallocSizeOf for smallvec::SmallVec<[T; $size]>
+        where T: MallocSizeOf
+        {
+            fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+                let mut n = if self.spilled() {
+                    self.capacity() * core::mem::size_of::<T>()
+                } else {
+                    0
+                };
+                for elem in self.iter() {
+                    n += elem.size_of(ops);
+                }
+                n
+            }
+        }
+    };
+}
+
+impl_smallvec!(32); // kvdb uses this
 
 /// For use on types where size_of() returns 0.
 #[macro_export]
