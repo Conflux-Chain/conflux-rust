@@ -704,7 +704,7 @@ impl NetworkProtocolHandler for Provider {
     }
 
     fn on_peer_connected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
-        info!("on_peer_connected: peer={:?}", peer);
+        debug!("on_peer_connected: peer={:?}", peer);
 
         // insert handshaking peer, wait for StatusPing
         self.peers.insert(*peer);
@@ -718,7 +718,7 @@ impl NetworkProtocolHandler for Provider {
     }
 
     fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
-        info!("on_peer_disconnected: peer={}", peer);
+        debug!("on_peer_disconnected: peer={}", peer);
         self.peers.remove(peer);
     }
 

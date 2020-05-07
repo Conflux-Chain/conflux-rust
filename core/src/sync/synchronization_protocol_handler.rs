@@ -521,7 +521,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
         warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={:?}",
+            "Error while handling message, peer={}, msgid={:?}, error={}",
             peer, msg_id, e
         );
 
@@ -1636,7 +1636,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
-        info!("Peer connected: peer={:?}", peer);
+        debug!("Peer connected: peer={:?}", peer);
         if let Err(e) = self.send_status(io, peer) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(
@@ -1653,7 +1653,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
-        info!("Peer disconnected: peer={}", peer);
+        debug!("Peer disconnected: peer={}", peer);
         self.syn.peers.write().remove(peer);
         self.syn.handshaking_peers.write().remove(peer);
         self.request_manager.on_peer_disconnected(io, peer);
