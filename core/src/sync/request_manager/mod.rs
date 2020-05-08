@@ -893,6 +893,12 @@ impl RequestManager {
                 Some(p) => p,
                 None => {
                     debug!("No peer to send request, wait for next time");
+                    // These requests are not actually sent,
+                    // and they will not be inserted into requests_queue,
+                    // so remove them from net_inflight_blocks.
+                    if let Some(hashes) = try_get_block_hashes(&request) {
+                        self.remove_net_inflight_blocks(hashes.iter())
+                    }
                     waiting_requests.push(TimedWaitingRequest::new(
                         Instant::now() + next_delay,
                         WaitingRequest(request, next_delay),
@@ -941,43 +947,26 @@ impl RequestManager {
     fn check_and_update_net_inflight_blocks(
         &self, request: &Box<dyn Request>,
     ) -> bool {
-        match request.msg_id() {
-            msgid::GET_BLOCKS | msgid::GET_CMPCT_BLOCKS => {
-                // Insert the request into waiting queue when the queue is
-                // already full, to avoid requesting more blocks
-                // than we can process. Requests will be
-                // inserted to waiting queue if peer_id is None.
-                let mut net_inflight_blocks =
-                    self.inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
-                if net_inflight_blocks.len()
-                    >= self.recover_public_queue.estimated_available_count()
-                {
-                    trace!("queue is full, send block request later: inflight={} req={:?}",
+        if let Some(hashes) = try_get_block_hashes(request) {
+            // Insert the request into waiting queue when the queue is
+            // already full, to avoid requesting more blocks
+            // than we can process. Requests will be
+            // inserted to waiting queue if peer_id is None.
+            let mut net_inflight_blocks =
+                self.inflight_keys.write(msgid::NET_INFLIGHT_BLOCKS);
+            if net_inflight_blocks.len()
+                >= self.recover_public_queue.estimated_available_count()
+            {
+                trace!("queue is full, send block request later: inflight={} req={:?}",
                            net_inflight_blocks.len(), request);
-                    return false;
-                } else {
-                    let hashes = if let Some(req) =
-                        request.as_any().downcast_ref::<GetBlocks>()
-                    {
-                        &req.hashes
-                    } else if let Some(req) =
-                        request.as_any().downcast_ref::<GetCompactBlocks>()
-                    {
-                        &req.hashes
-                    } else {
-                        panic!(
-                            "MessageId and Request not match, request={:?}",
-                            request
-                        );
-                    };
-                    for hash in hashes {
-                        net_inflight_blocks.insert(Key::Hash(*hash));
-                    }
-                    trace!("queue is not full, send block request now: inflight={} req={:?}",
-                           net_inflight_blocks.len(), request);
+                return false;
+            } else {
+                for hash in hashes {
+                    net_inflight_blocks.insert(Key::Hash(*hash));
                 }
+                trace!("queue is not full, send block request now: inflight={} req={:?}",
+                           net_inflight_blocks.len(), request);
             }
-            _ => {}
         }
         true
     }
@@ -990,6 +979,31 @@ impl RequestManager {
         for block_hash in blocks {
             net_inflight_blocks.remove(&Key::Hash(*block_hash));
         }
+    }
+}
+
+/// Return block hashes in `request` if it's requesting blocks.
+/// Return None otherwise.
+fn try_get_block_hashes(request: &Box<dyn Request>) -> Option<&Vec<H256>> {
+    match request.msg_id() {
+        msgid::GET_BLOCKS | msgid::GET_CMPCT_BLOCKS => {
+            let hashes = if let Some(req) =
+                request.as_any().downcast_ref::<GetBlocks>()
+            {
+                &req.hashes
+            } else if let Some(req) =
+                request.as_any().downcast_ref::<GetCompactBlocks>()
+            {
+                &req.hashes
+            } else {
+                panic!(
+                    "MessageId and Request not match, request={:?}",
+                    request
+                );
+            };
+            Some(hashes)
+        }
+        _ => None,
     }
 }
 
