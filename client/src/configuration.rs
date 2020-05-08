@@ -154,7 +154,7 @@ build_config! {
         (heartbeat_timeout_ms, (u64), 180_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
-        (max_download_state_peers, (usize), 8)
+        (max_downloading_chunks, (usize), 8)
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
@@ -535,7 +535,7 @@ impl Configuration {
             future_block_buffer_capacity: self
                 .raw_conf
                 .future_block_buffer_capacity,
-            max_download_state_peers: self.raw_conf.max_download_state_peers,
+            max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
@@ -571,7 +571,7 @@ impl Configuration {
 
     pub fn state_sync_config(&self) -> StateSyncConfiguration {
         StateSyncConfiguration {
-            max_download_peers: self.raw_conf.max_download_state_peers,
+            max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             candidate_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_candidate_request_timeout_ms,
             ),

@@ -430,15 +430,7 @@ impl SnapshotChunkSync {
         inner.bloom_blame_vec = response.bloom_blame_vec;
 
         // request snapshot chunks from peers concurrently
-        let chosen_peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
-            .choose_from(inner.sync_candidate_manager.active_peers())
-            .select_n(self.config.max_download_peers, &ctx.manager.syn);
-
-        for peer in chosen_peers {
-            if self.request_chunk(ctx, &mut inner, &peer).is_none() {
-                break;
-            }
-        }
+        self.request_chunks(ctx, inner);
 
         debug!("sync state progress: {:?}", *inner);
         Ok(())
@@ -448,7 +440,28 @@ impl SnapshotChunkSync {
         inner.request_manifest(ctx.io, ctx.manager);
     }
 
-    fn request_chunk(
+    /// Request multiple chunks from random peers.
+    fn request_chunks(&self, ctx: &Context, inner: &mut Inner) {
+        if inner.downloading_chunks.len() > self.config.max_downloading_chunks {
+            // This should not happen.
+            error!("downloading_chunks > max_downloading_chunks");
+            return;
+        }
+        let chosen_peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
+            .choose_from(inner.sync_candidate_manager.active_peers())
+            .select_n(
+                self.config.max_downloading_chunks
+                    - inner.downloading_chunks.len(),
+                &ctx.manager.syn,
+            );
+        for peer in chosen_peers {
+            if self.request_chunk_from_peer(ctx, inner, &peer).is_none() {
+                break;
+            }
+        }
+    }
+
+    fn request_chunk_from_peer(
         &self, ctx: &Context, inner: &mut Inner, peer: &NodeId,
     ) -> Option<ChunkKey> {
         let chunk_key = inner.pending_chunks.pop_front()?;
@@ -482,12 +495,6 @@ impl SnapshotChunkSync {
         &self, ctx: &Context, chunk_key: ChunkKey, chunk: Chunk,
     ) -> StorageResult<()> {
         let mut inner = self.inner.write();
-        debug!(
-            "handle_snapshot_chunk_response key={:?} chunk_len={}",
-            chunk_key,
-            chunk.keys.len()
-        );
-
         // status mismatch
         let download_start_time = match inner.status {
             Status::DownloadingChunks(t) => {
@@ -503,13 +510,16 @@ impl SnapshotChunkSync {
             }
         };
 
-        // maybe received a out-of-date snapshot chunk, e.g. new era started
+        // There are two possible reasons:
+        // 1. received a out-of-date snapshot chunk, e.g. new era started.
+        // 2. Duplicated chunks received, and it has been processed.
         if inner.downloading_chunks.remove(&chunk_key).is_none() {
             info!("Snapshot chunk received, but not in downloading queue");
             // FIXME Handle out-of-date chunks
             inner
                 .sync_candidate_manager
                 .note_state_sync_failure(&ctx.node_id);
+            self.request_chunks(ctx, &mut inner);
             return Ok(());
         }
 
@@ -517,7 +527,7 @@ impl SnapshotChunkSync {
         inner.restorer.append(chunk_key, chunk);
 
         // continue to request remaining chunks
-        self.request_chunk(ctx, &mut inner, &ctx.node_id);
+        self.request_chunks(ctx, &mut inner);
 
         // begin to restore if all chunks downloaded
         if inner.downloading_chunks.is_empty() {
@@ -900,8 +910,17 @@ impl SnapshotChunkSync {
     )
     {
         let mut inner = self.inner.write();
-        self.check_timeout(&mut *inner);
+        self.check_timeout(
+            &mut *inner,
+            &Context {
+                // node_id is not used here
+                node_id: Default::default(),
+                io,
+                manager: sync_handler,
+            },
+        );
         if inner.sync_candidate_manager.is_inactive() {
+            warn!("current sync candidate becomes inactive: {:?}", inner);
             inner.status = Status::Inactive;
             inner.current_sync_candidate = Default::default();
             inner.trusted_blame_block = Default::default();
@@ -972,7 +991,7 @@ impl SnapshotChunkSync {
         }
     }
 
-    fn check_timeout(&self, inner: &mut Inner) {
+    fn check_timeout(&self, inner: &mut Inner, ctx: &Context) {
         inner
             .sync_candidate_manager
             .check_timeout(&self.config.candidate_request_timeout);
@@ -998,11 +1017,12 @@ impl SnapshotChunkSync {
             inner.downloading_chunks.remove(&timeout_key);
             inner.pending_chunks.push_back(timeout_key);
         }
+        self.request_chunks(ctx, inner);
     }
 }
 
 pub struct StateSyncConfiguration {
-    pub max_download_peers: usize,
+    pub max_downloading_chunks: usize,
     pub candidate_request_timeout: Duration,
     pub chunk_request_timeout: Duration,
     pub manifest_request_timeout: Duration,

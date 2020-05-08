@@ -131,7 +131,7 @@ pub mod sync {
             Duration::from_millis(50);
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
-    pub const DEFAULT_CHUNK_SIZE: u64 = 1 * 1024 * 1024;
+    pub const DEFAULT_CHUNK_SIZE: u64 = 256 * 1024;
 
     /// The batch size of old-era blocks garbage-collected from database for
     /// each BLOCK_CACHE_GC_TIMER timer trigger.
