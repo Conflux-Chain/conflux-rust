@@ -9,7 +9,7 @@ use crate::{
     statedb::{Result as DbResult, StateDb},
     storage::{StorageManager, StorageManagerTrait},
 };
-use cfx_types::{Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
     Account, Block, BlockHeaderBuilder, StorageKey, StorageLayout,
@@ -106,6 +106,8 @@ pub fn genesis_block(
 ) -> Block
 {
     let mut state = StateDb::new(storage_manager.get_state_for_genesis_write());
+    let mut genesis_block_author = test_net_version;
+    genesis_block_author.set_user_account_type_bits();
 
     for (addr, balance) in genesis_accounts {
         let account = Account::new_empty_with_balance(
@@ -126,7 +128,7 @@ pub fn genesis_block(
                 state_root.state_root.compute_state_root_hash(),
             )
             .with_gas_limit(GENESIS_GAS_LIMIT.into())
-            .with_author(test_net_version)
+            .with_author(genesis_block_author)
             .with_difficulty(initial_difficulty)
             .build(),
         Vec::new(),

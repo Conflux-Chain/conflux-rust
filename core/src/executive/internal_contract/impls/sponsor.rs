@@ -4,7 +4,6 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    bytes::Bytes,
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
@@ -300,8 +299,8 @@ impl InternalContractTrait for SponsorWhitelistControl {
     ///   Gas: 5000 * [member list length]
     /// + otherwise
     ///   Gas: 5000
-    fn cost(&self, input: Option<&Bytes>) -> U256 {
-        if let Some(ref data) = input {
+    fn cost(&self, params: &ActionParams, _state: &mut State) -> U256 {
+        if let Some(ref data) = params.data {
             if data.len() < 4 {
                 return U256::from(5000);
             }

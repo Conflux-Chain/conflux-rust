@@ -527,7 +527,7 @@ impl<'a> CallCreateExecutive<'a> {
                     let result = if let Some(contract) =
                         internal_contract_map.contract(&params.code_address)
                     {
-                        gas_cost = contract.cost(params.data.as_ref());
+                        gas_cost = contract.cost(&params, state);
                         if gas_cost > params.gas {
                             Err(vm::Error::OutOfGas)
                         } else {

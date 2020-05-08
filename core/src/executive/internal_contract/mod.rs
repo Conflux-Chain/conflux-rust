@@ -33,7 +33,7 @@ pub trait InternalContractTrait: Send + Sync {
     fn address(&self) -> &Address;
 
     /// The gas cost of running this internal contract for the given input data.
-    fn cost(&self, input: Option<&Bytes>) -> U256;
+    fn cost(&self, params: &ActionParams, state: &mut State) -> U256;
 
     /// execute this internal contract on the given parameters.
     fn execute(

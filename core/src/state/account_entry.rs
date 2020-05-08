@@ -10,8 +10,8 @@ use crate::{
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
-    Account, CodeInfo, DepositInfo, SponsorInfo, StakingVoteInfo, StorageKey,
-    StorageLayout, StorageValue,
+    Account, CodeInfo, DepositInfo, DepositList, SponsorInfo, StakingVoteInfo,
+    StakingVoteList, StorageKey, StorageLayout, StorageValue,
 };
 use rlp::RlpStream;
 use std::{collections::HashMap, sync::Arc};
@@ -61,8 +61,6 @@ pub struct OverlayAccount {
 
     // This is the number of tokens used in staking.
     staking_balance: U256,
-    // This is the number of tokens can be withdrawed.
-    withdrawable_staking_balance: U256,
     // This is the number of tokens used as collateral for storage, which will
     // be returned to balance if the storage is released.
     collateral_for_storage: U256,
@@ -70,11 +68,11 @@ pub struct OverlayAccount {
     accumulated_interest_return: U256,
     // This is the list of deposit info, sorted in increasing order of
     // `deposit_time`.
-    deposit_list: Vec<DepositInfo>,
+    deposit_list: Option<DepositList>,
     // This is the list of vote info. The `unlock_time` sorted in increasing
     // order and the `amount` is sorted in decreasing order. All the
     // `unlock_time` and `amount` is unique in the list.
-    staking_vote_list: Vec<StakingVoteInfo>,
+    staking_vote_list: Option<StakingVoteList>,
 
     // Code hash of the account.
     code_hash: H256,
@@ -90,8 +88,8 @@ pub struct OverlayAccount {
 }
 
 impl OverlayAccount {
-    pub fn new(address: &Address, account: Account, timestamp: u64) -> Self {
-        let mut overlay_account = OverlayAccount {
+    pub fn new(address: &Address, account: Account) -> Self {
+        let overlay_account = OverlayAccount {
             address: address.clone(),
             balance: account.balance,
             nonce: account.nonce,
@@ -105,11 +103,10 @@ impl OverlayAccount {
             unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: account.staking_balance,
-            withdrawable_staking_balance: 0.into(),
             collateral_for_storage: account.collateral_for_storage,
             accumulated_interest_return: account.accumulated_interest_return,
-            deposit_list: account.deposit_list.clone(),
-            staking_vote_list: account.staking_vote_list.clone(),
+            deposit_list: None,
+            staking_vote_list: None,
             code_hash: account.code_hash,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -117,28 +114,6 @@ impl OverlayAccount {
             reset_storage: false,
             is_contract: account.code_hash != KECCAK_EMPTY,
         };
-
-        if !overlay_account.staking_vote_list.is_empty()
-            && overlay_account.staking_vote_list[0].unlock_time <= timestamp
-        {
-            // Find first index whose `unlock_time` is greater than timestamp
-            // and all entries before the index could be removed.
-            let idx = overlay_account
-                .staking_vote_list
-                .binary_search_by(|vote_info| {
-                    vote_info.unlock_time.cmp(&(timestamp + 1))
-                })
-                .unwrap_or_else(|x| x);
-            overlay_account.staking_vote_list =
-                overlay_account.staking_vote_list.split_off(idx);
-        }
-        overlay_account.withdrawable_staking_balance =
-            if overlay_account.staking_vote_list.is_empty() {
-                overlay_account.staking_balance
-            } else {
-                overlay_account.staking_balance
-                    - overlay_account.staking_vote_list[0].amount
-            };
 
         overlay_account
     }
@@ -158,11 +133,10 @@ impl OverlayAccount {
             unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
-            withdrawable_staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
+            deposit_list: None,
+            staking_vote_list: None,
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -190,11 +164,10 @@ impl OverlayAccount {
             unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
-            withdrawable_staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
+            deposit_list: None,
+            staking_vote_list: None,
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(vec![]),
@@ -223,11 +196,10 @@ impl OverlayAccount {
             unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: 0.into(),
-            withdrawable_staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
+            deposit_list: None,
+            staking_vote_list: None,
             code_hash: KECCAK_EMPTY,
             code_size: None,
             code_cache: Arc::new(Default::default()),
@@ -246,8 +218,6 @@ impl OverlayAccount {
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
             accumulated_interest_return: self.accumulated_interest_return,
-            deposit_list: self.deposit_list.clone(),
-            staking_vote_list: self.staking_vote_list.clone(),
             admin: self.admin,
             sponsor_info: self.sponsor_info.clone(),
         }
@@ -299,10 +269,8 @@ impl OverlayAccount {
     }
 
     pub fn set_admin(&mut self, requester: &Address, admin: &Address) {
-        if self.is_contract {
-            if self.admin == *requester {
-                self.admin = admin.clone();
-            }
+        if self.is_contract && self.admin == *requester {
+            self.admin = admin.clone();
         }
     }
 
@@ -373,16 +341,34 @@ impl OverlayAccount {
         &self.accumulated_interest_return
     }
 
-    pub fn withdrawable_staking_balance(&self) -> &U256 {
-        &self.withdrawable_staking_balance
+    pub fn withdrawable_staking_balance(&mut self, timestamp: u64) -> U256 {
+        assert!(self.staking_vote_list.is_some());
+        let staking_vote_list = &mut self.staking_vote_list.as_mut().unwrap().0;
+        if !staking_vote_list.is_empty()
+            && staking_vote_list[0].unlock_time <= timestamp
+        {
+            // Find first index whose `unlock_time` is greater than timestamp
+            // and all entries before the index could be removed.
+            let idx = staking_vote_list
+                .binary_search_by(|vote_info| {
+                    vote_info.unlock_time.cmp(&(timestamp + 1))
+                })
+                .unwrap_or_else(|x| x);
+            *staking_vote_list = staking_vote_list.split_off(idx);
+        }
+        if staking_vote_list.is_empty() {
+            self.staking_balance
+        } else {
+            self.staking_balance - staking_vote_list[0].amount
+        }
     }
 
-    #[cfg(test)]
-    pub fn deposit_list(&self) -> &Vec<DepositInfo> { &self.deposit_list }
+    pub fn deposit_list(&self) -> Option<&DepositList> {
+        self.deposit_list.as_ref()
+    }
 
-    #[cfg(test)]
-    pub fn staking_vote_list(&self) -> &Vec<StakingVoteInfo> {
-        &self.staking_vote_list
+    pub fn staking_vote_list(&self) -> Option<&StakingVoteList> {
+        self.staking_vote_list.as_ref()
     }
 
     #[cfg(test)]
@@ -453,10 +439,10 @@ impl OverlayAccount {
         deposit_time: u64,
     )
     {
+        assert!(self.deposit_list.is_some());
         self.sub_balance(&amount);
         self.staking_balance += amount;
-        self.withdrawable_staking_balance += amount;
-        self.deposit_list.push(DepositInfo {
+        self.deposit_list.as_mut().unwrap().0.push(DepositInfo {
             amount,
             deposit_time,
             accumulated_interest_rate,
@@ -467,26 +453,26 @@ impl OverlayAccount {
     pub fn withdraw(
         &mut self, amount: U256, accumulated_interest_rate: U256,
     ) -> U256 {
-        assert!(self.withdrawable_staking_balance >= amount);
-        self.withdrawable_staking_balance -= amount;
+        assert!(self.deposit_list.is_some());
+        let deposit_list = &mut self.deposit_list.as_mut().unwrap().0;
         self.staking_balance -= amount;
         let mut rest = amount;
         let mut interest = U256::zero();
         let mut index = 0;
         while !rest.is_zero() {
-            let capital = std::cmp::min(self.deposit_list[index].amount, rest);
+            let capital = std::cmp::min(deposit_list[index].amount, rest);
             interest += capital * accumulated_interest_rate
-                / self.deposit_list[index].accumulated_interest_rate
+                / deposit_list[index].accumulated_interest_rate
                 - capital;
 
-            self.deposit_list[index].amount -= capital;
+            deposit_list[index].amount -= capital;
             rest -= capital;
-            if self.deposit_list[index].amount.is_zero() {
+            if deposit_list[index].amount.is_zero() {
                 index += 1;
             }
         }
         if index > 0 {
-            self.deposit_list = self.deposit_list.split_off(index);
+            *deposit_list = deposit_list.split_off(index);
         }
         self.accumulated_interest_return += interest;
         self.add_balance(&(amount + interest));
@@ -494,24 +480,26 @@ impl OverlayAccount {
     }
 
     pub fn lock(&mut self, amount: U256, unlock_time: u64) {
+        assert!(self.staking_vote_list.is_some());
         assert!(amount <= self.staking_balance);
+        let staking_vote_list = &mut self.staking_vote_list.as_mut().unwrap().0;
         let mut updated = false;
         let mut updated_index = 0;
-        match self.staking_vote_list.binary_search_by(|vote_info| {
+        match staking_vote_list.binary_search_by(|vote_info| {
             vote_info.unlock_time.cmp(&unlock_time)
         }) {
             Ok(index) => {
-                if amount > self.staking_vote_list[index].amount {
-                    self.staking_vote_list[index].amount = amount;
+                if amount > staking_vote_list[index].amount {
+                    staking_vote_list[index].amount = amount;
                     updated = true;
                     updated_index = index;
                 }
             }
             Err(index) => {
-                if index >= self.staking_vote_list.len()
-                    || self.staking_vote_list[index].amount < amount
+                if index >= staking_vote_list.len()
+                    || staking_vote_list[index].amount < amount
                 {
-                    self.staking_vote_list.insert(
+                    staking_vote_list.insert(
                         index,
                         StakingVoteInfo {
                             amount,
@@ -524,18 +512,14 @@ impl OverlayAccount {
             }
         }
         if updated {
-            let rest = self.staking_vote_list.split_off(updated_index);
-            while !self.staking_vote_list.is_empty()
-                && self.staking_vote_list.last().unwrap().amount
-                    <= rest[0].amount
+            let rest = staking_vote_list.split_off(updated_index);
+            while !staking_vote_list.is_empty()
+                && staking_vote_list.last().unwrap().amount <= rest[0].amount
             {
-                self.staking_vote_list.pop();
+                staking_vote_list.pop();
             }
-            self.staking_vote_list.extend_from_slice(&rest);
+            staking_vote_list.extend_from_slice(&rest);
         }
-
-        self.withdrawable_staking_balance =
-            self.staking_balance - self.staking_vote_list[0].amount;
     }
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {
@@ -599,6 +583,22 @@ impl OverlayAccount {
         }
     }
 
+    pub fn cache_staking_info(
+        &mut self, cache_deposit_list: bool, cache_vote_list: bool,
+        db: &StateDb,
+    ) -> DbResult<()>
+    {
+        if cache_deposit_list && self.deposit_list.is_none() {
+            let deposit_list_opt = db.get_deposit_list(&self.address)?;
+            self.deposit_list = Some(deposit_list_opt.unwrap_or_default());
+        }
+        if cache_vote_list && self.staking_vote_list.is_none() {
+            let vote_list_opt = db.get_vote_list(&self.address)?;
+            self.staking_vote_list = Some(vote_list_opt.unwrap_or_default());
+        }
+        Ok(())
+    }
+
     pub fn clone_basic(&self) -> Self {
         OverlayAccount {
             address: self.address,
@@ -614,7 +614,6 @@ impl OverlayAccount {
             unrefunded_storage_entries: 0,
             storage_layout_change: None,
             staking_balance: self.staking_balance,
-            withdrawable_staking_balance: self.withdrawable_staking_balance,
             collateral_for_storage: self.collateral_for_storage,
             accumulated_interest_return: self.accumulated_interest_return,
             deposit_list: self.deposit_list.clone(),
@@ -748,7 +747,6 @@ impl OverlayAccount {
         self.unrefunded_storage_entries = other.unrefunded_storage_entries;
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
-        self.withdrawable_staking_balance = other.withdrawable_staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;
         self.accumulated_interest_return = other.accumulated_interest_return;
         self.deposit_list = other.deposit_list;
@@ -895,6 +893,31 @@ impl OverlayAccount {
                             owner: self.code_owner,
                         },
                     )?;
+                }
+            }
+        }
+
+        match self.deposit_list.as_ref() {
+            None => {}
+            Some(deposit_list) => {
+                let storage_key =
+                    StorageKey::new_deposit_list_key(&self.address);
+                if deposit_list.0.is_empty() {
+                    db.delete(storage_key)?;
+                } else {
+                    db.set::<DepositList>(storage_key, deposit_list)?;
+                }
+            }
+        }
+
+        match self.staking_vote_list.as_ref() {
+            None => {}
+            Some(staking_vote_list) => {
+                let storage_key = StorageKey::new_vote_list_key(&self.address);
+                if staking_vote_list.0.is_empty() {
+                    db.delete(storage_key)?;
+                } else {
+                    db.set::<StakingVoteList>(storage_key, staking_vote_list)?;
                 }
             }
         }

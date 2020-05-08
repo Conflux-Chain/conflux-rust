@@ -152,7 +152,10 @@ fn test_get_set_at_second_commit() {
 #[test]
 fn test_snapshot_random_read_performance() {
     let state_manager = new_state_manager_for_unit_test();
-    let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
+    let mut keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
+    for i in 0..keys.len() {
+        keys[i][0] = 0x10;
+    }
 
     const EPOCHS: u8 = 20;
     println!(

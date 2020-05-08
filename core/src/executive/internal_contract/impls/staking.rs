@@ -4,8 +4,7 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    bytes::Bytes,
-    parameters::staking::*,
+    parameters::consensus::ONE_CFX_IN_DRIP,
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
@@ -28,8 +27,7 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
-        // FIXME: we should find a reasonable lowerbound.
-        if amount < U256::one() {
+        if amount < U256::from(ONE_CFX_IN_DRIP) {
             Err(vm::Error::InternalContract("invalid deposit amount"))
         } else if state.balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
@@ -65,18 +63,15 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
-        let duration_in_day = U256::from(&input[32..64]).low_u64();
-        if duration_in_day == 0
-            || duration_in_day
-                > (std::u64::MAX - state.block_number()) / BLOCKS_PER_DAY
-        {
-            Err(vm::Error::InternalContract("invalid lock duration"))
+        let unlock_time = U256::from(&input[32..64]).low_u64();
+        if unlock_time <= state.block_number() {
+            Err(vm::Error::InternalContract("invalid unlock_time"))
         } else if state.staking_balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract(
                 "not enough staking balance to lock",
             ))
         } else {
-            state.lock(&params.sender, &amount, duration_in_day)?;
+            state.lock(&params.sender, &amount, unlock_time)?;
             Ok(())
         }
     }
@@ -98,7 +93,30 @@ impl InternalContractTrait for Staking {
     ///   Gas: 10000
     /// + otherwise
     ///   Gas: 10000
-    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::from(10000) }
+    fn cost(&self, params: &ActionParams, state: &mut State) -> U256 {
+        if let Some(ref data) = params.data {
+            if data.len() < 4 {
+                return U256::from(10000);
+            }
+            if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
+                let length =
+                    state.deposit_list_length(&params.sender).unwrap_or(0);
+                U256::from(10000) * U256::from(length + 1)
+            } else if data[0..4] == [0x2e, 0x1a, 0x7d, 0x4d] {
+                let length =
+                    state.deposit_list_length(&params.sender).unwrap_or(0);
+                U256::from(10000) * U256::from(length)
+            } else if data[0..4] == [0x13, 0x38, 0x73, 0x6f] {
+                let length =
+                    state.staking_vote_list_length(&params.sender).unwrap_or(0);
+                U256::from(10000) * U256::from(length + 1)
+            } else {
+                U256::from(10000)
+            }
+        } else {
+            U256::from(10000)
+        }
+    }
 
     /// execute this internal contract on the given parameters.
     fn execute(
@@ -147,7 +165,7 @@ impl InternalContractTrait for Staking {
             // The first 4 bytes of
             // keccak('lock(uint256,uint256)') is `0x1338736f`.
             // 4 bytes `Method ID` + 32 bytes `amount` + 32 bytes
-            // `duration_in_day`.
+            // `unlock_time`.
             self.lock(&data[4..], params, state)
         } else {
             Err(vm::Error::InternalContract("unsupported function"))

@@ -4,7 +4,6 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    bytes::Bytes,
     parameters::staking::*,
     state::{CollateralCheckResult, State, Substate},
     vm::{self, ActionParams, CallType, Spec},
@@ -158,7 +157,9 @@ impl InternalContractTrait for AdminControl {
     ///   Gas: 5000
     /// + otherwise
     ///   Gas: 5000
-    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::from(5000) }
+    fn cost(&self, _params: &ActionParams, _state: &mut State) -> U256 {
+        U256::from(5000)
+    }
 
     /// execute this internal contract on the given parameters.
     fn execute(
