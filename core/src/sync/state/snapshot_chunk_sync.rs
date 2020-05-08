@@ -442,15 +442,16 @@ impl SnapshotChunkSync {
 
     /// Request multiple chunks from random peers.
     fn request_chunks(&self, ctx: &Context, inner: &mut Inner) {
-        if inner.downloading_chunks.len() > self.config.max_download_peers {
+        if inner.downloading_chunks.len() > self.config.max_downloading_chunks {
             // This should not happen.
-            error!("downloading_chunks > max_download_peers");
+            error!("downloading_chunks > max_downloading_chunks");
             return;
         }
         let chosen_peers = PeerFilter::new(msgid::GET_SNAPSHOT_CHUNK)
             .choose_from(inner.sync_candidate_manager.active_peers())
             .select_n(
-                self.config.max_download_peers - inner.downloading_chunks.len(),
+                self.config.max_downloading_chunks
+                    - inner.downloading_chunks.len(),
                 &ctx.manager.syn,
             );
         for peer in chosen_peers {
@@ -1021,7 +1022,7 @@ impl SnapshotChunkSync {
 }
 
 pub struct StateSyncConfiguration {
-    pub max_download_peers: usize,
+    pub max_downloading_chunks: usize,
     pub candidate_request_timeout: Duration,
     pub chunk_request_timeout: Duration,
     pub manifest_request_timeout: Duration,
