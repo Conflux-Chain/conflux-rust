@@ -330,7 +330,7 @@ jsonrpc_local_http_port=12539
 #
 # tx_cache_index_maintain_timeout_ms = 300_000
 
-# Maximum number of transactions allowed in the ransaction pool.
+# Maximum number of transactions allowed in the transaction pool.
 #
 # tx_pool_size = 500_000
 
