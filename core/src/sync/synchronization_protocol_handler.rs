@@ -527,7 +527,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
         warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={:?}",
+            "Error while handling message, peer={}, msgid={:?}, error={}",
             peer, msg_id, e
         );
 

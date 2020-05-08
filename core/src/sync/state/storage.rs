@@ -182,7 +182,7 @@ impl RangedManifest {
             // chunks in manifest should not be empty
             if self.chunk_boundaries.is_empty() {
                 return Err(ErrorKind::InvalidSnapshotManifest(
-                    "empty chunks".into(),
+                    "empty snapshot manifest".into(),
                 )
                 .into());
             }
@@ -348,6 +348,10 @@ impl Chunk {
     pub fn validate(&self, key: &ChunkKey) -> Result<(), Error> {
         // chunk should not be empty
         if self.keys.is_empty() {
+            // TODO: Now this may happen if the requested peer has opened
+            // maximal number of snapshots and cannot give a
+            // response temporarily, we should differentiate this
+            // from dishonest behaviors.
             return Err(
                 ErrorKind::InvalidSnapshotChunk("empty chunk".into()).into()
             );
@@ -390,9 +394,8 @@ impl Chunk {
         )? {
             Some(db) => db,
             None => {
-                debug!(
-                    "failed to load chunk, cannot find snapshot by checkpoint"
-                );
+                debug!("failed to load chunk, cannot find snapshot by checkpoint {:?}",
+                       snapshot_epoch_id);
                 return Ok(None);
             }
         };
