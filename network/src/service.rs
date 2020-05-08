@@ -1050,7 +1050,7 @@ impl NetworkServiceInner {
                 match data {
                     Ok(session_data) => {
                         if session_data.token_to_disconnect.is_some() {
-                            debug!("session_readable: set token_to_disconnect to {:?}", token_to_disconnect);
+                            debug!("session_readable: set token_to_disconnect to {:?}", session_data.token_to_disconnect);
                             token_to_disconnect =
                                 session_data.token_to_disconnect;
                         }
