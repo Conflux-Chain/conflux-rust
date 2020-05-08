@@ -1049,7 +1049,11 @@ impl NetworkServiceInner {
                 let data = sess.readable(io, self);
                 match data {
                     Ok(session_data) => {
-                        token_to_disconnect = session_data.token_to_disconnect;
+                        if session_data.token_to_disconnect.is_some() {
+                            debug!("session_readable: set token_to_disconnect to {:?}", session_data.token_to_disconnect);
+                            token_to_disconnect =
+                                session_data.token_to_disconnect;
+                        }
                         match session_data.session_data {
                             SessionData::Ready => {
                                 handshake_done = true;
