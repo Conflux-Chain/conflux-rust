@@ -178,13 +178,11 @@ impl InvalidBlockSet {
                 return;
             }
 
-            let mut the_evicted = Default::default();
-            for hash in &self.invalid_block_hashes {
-                the_evicted = hash.clone();
-                break;
+            let mut iter = self.invalid_block_hashes.iter();
+            let the_evicted = iter.next();
+            if let Some(evicted) = the_evicted {
+                self.invalid_block_hashes.remove(evicted);
             }
-
-            self.invalid_block_hashes.remove(&the_evicted);
             self.invalid_block_hashes.insert(value);
         }
     }
