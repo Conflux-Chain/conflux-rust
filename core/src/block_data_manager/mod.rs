@@ -179,9 +179,9 @@ impl InvalidBlockSet {
             }
 
             let mut iter = self.invalid_block_hashes.iter();
-            let the_evicted = iter.next();
+            let the_evicted = iter.next().map(|e| e.clone());
             if let Some(evicted) = the_evicted {
-                self.invalid_block_hashes.remove(evicted);
+                self.invalid_block_hashes.remove(&evicted);
             }
             self.invalid_block_hashes.insert(value);
         }
