@@ -305,8 +305,18 @@ impl Configuration {
                     .expect("net_key is not a valid secret string")
             });
         if let Some(addr) = self.raw_conf.public_address.clone() {
+            let addr_ip = if let Some(idx) = addr.find(":") {
+                warn!("Public address configuration should not contain port! (val = {}). Content after ':' is ignored.", &addr);
+                (&addr[0..idx]).to_string()
+            } else {
+                addr
+            };
+            let addr_with_port = match self.raw_conf.port {
+                Some(port) => addr_ip + ":" + &port.to_string(),
+                None => addr_ip,
+            };
             network_config.public_address =
-                match addr.to_socket_addrs().map(|mut i| i.next()) {
+                match addr_with_port.to_socket_addrs().map(|mut i| i.next()) {
                     Ok(sock_addr) => sock_addr,
                     Err(_e) => {
                         warn!("public_address in config is invalid");
