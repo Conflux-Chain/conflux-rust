@@ -157,6 +157,41 @@ impl StateAvailabilityBoundary {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
+pub struct InvalidBlockSet {
+    capacity: usize,
+    invalid_block_hashes: HashSet<H256>,
+}
+
+impl InvalidBlockSet {
+    pub fn new(capacity: usize) -> Self {
+        InvalidBlockSet {
+            capacity,
+            invalid_block_hashes: HashSet::new(),
+        }
+    }
+
+    pub fn insert(&mut self, value: H256) {
+        if !self.invalid_block_hashes.contains(&value) {
+            if self.invalid_block_hashes.len() < self.capacity {
+                self.invalid_block_hashes.insert(value);
+                return;
+            }
+
+            let mut iter = self.invalid_block_hashes.iter();
+            let the_evicted = iter.next().map(|e| e.clone());
+            if let Some(evicted) = the_evicted {
+                self.invalid_block_hashes.remove(&evicted);
+            }
+            self.invalid_block_hashes.insert(value);
+        }
+    }
+
+    pub fn contains(&self, value: &H256) -> bool {
+        self.invalid_block_hashes.contains(value)
+    }
+}
+
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
@@ -179,7 +214,7 @@ pub struct BlockDataManager {
         RwLock<HashMap<H256, EpochExecutionCommitment>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
 
-    invalid_block_set: RwLock<HashSet<H256>>,
+    invalid_block_set: RwLock<InvalidBlockSet>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
     cur_consensus_era_stable_hash: RwLock<H256>,
     instance_id: Mutex<u64>,
@@ -292,7 +327,9 @@ impl BlockDataManager {
             transaction_indices: Default::default(),
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
-            invalid_block_set: Default::default(),
+            invalid_block_set: RwLock::new(InvalidBlockSet::new(
+                cache_conf.invalid_block_hashes_cache_size_in_count,
+            )),
             true_genesis: true_genesis.clone(),
             storage_manager,
             cache_man,
