@@ -18,6 +18,22 @@ pub mod tests;
 
 mod impls;
 
+pub mod storage_dir {
+    use std::path::PathBuf;
+    lazy_static! {
+        pub static ref DELTA_MPTS_DIR: PathBuf =
+            ["storage_db", "delta_mpts"].iter().collect::<PathBuf>();
+        pub static ref SNAPSHOT_DIR: PathBuf =
+            ["storage_db", "snapshot"].iter().collect::<PathBuf>();
+        pub static ref SNAPSHOT_INFO_DB_NAME: &'static str = "snapshot_info";
+        pub static ref SNAPSHOT_INFO_DB_PATH: PathBuf =
+            ["storage_db", "snapshot_info_db"]
+                .iter()
+                .collect::<PathBuf>();
+        pub static ref STORAGE_DIR: PathBuf = "storage_db".into();
+    }
+}
+
 /// Consensus parameter is only configurable in test mode.
 #[derive(Debug, Clone)]
 pub struct ConsensusParam {
@@ -39,23 +55,15 @@ pub struct StorageConfiguration {
     pub delta_mpts_node_map_vec_size: u32,
     pub delta_mpts_slab_idle_size: u32,
     pub max_open_snapshots: u16,
-    pub path_delta_mpts_dir: String,
-    pub path_storage_dir: String,
-    pub path_snapshot_dir: String,
-    pub path_snapshot_info_db: String,
-}
-
-impl StorageConfiguration {
-    pub const DELTA_MPTS_DIR: &'static str = "storage_db/delta_mpts/";
-    pub const SNAPSHOT_DIR: &'static str = "storage_db/snapshot/";
-    pub const SNAPSHOT_INFO_DB_NAME: &'static str = "snapshot_info";
-    pub const SNAPSHOT_INFO_DB_PATH: &'static str =
-        "storage_db/snapshot_info_db";
-    pub const STORAGE_DIR: &'static str = "storage_db/";
+    pub path_delta_mpts_dir: PathBuf,
+    pub path_storage_dir: PathBuf,
+    pub path_snapshot_dir: PathBuf,
+    pub path_snapshot_info_db: PathBuf,
 }
 
 impl StorageConfiguration {
     pub fn new_default(conflux_data_dir: String) -> Self {
+        let conflux_data_path = Path::new(&conflux_data_dir);
         StorageConfiguration {
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: SNAPSHOT_EPOCHS_CAPACITY,
@@ -72,14 +80,14 @@ impl StorageConfiguration {
             delta_mpts_slab_idle_size:
                 defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
             max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
-            path_delta_mpts_dir: conflux_data_dir.clone()
-                + StorageConfiguration::DELTA_MPTS_DIR,
-            path_snapshot_dir: conflux_data_dir.clone()
-                + StorageConfiguration::SNAPSHOT_DIR,
-            path_snapshot_info_db: conflux_data_dir.clone()
-                + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
-            path_storage_dir: conflux_data_dir.clone()
-                + StorageConfiguration::STORAGE_DIR,
+            path_delta_mpts_dir: conflux_data_path
+                .join(&*storage_dir::DELTA_MPTS_DIR),
+            path_snapshot_dir: conflux_data_path
+                .join(&*storage_dir::SNAPSHOT_DIR),
+            path_snapshot_info_db: conflux_data_path
+                .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
+            path_storage_dir: conflux_data_path
+                .join(&*storage_dir::STORAGE_DIR),
         }
     }
 }
@@ -111,3 +119,4 @@ pub use self::{
 #[cfg(test)]
 pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
 use crate::parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY;
+use std::path::{Path, PathBuf};
