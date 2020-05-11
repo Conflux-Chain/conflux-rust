@@ -186,7 +186,7 @@ impl NodeDatabase {
     /// Add a new trusted node if not exists. Otherwise, update the existing
     /// node with the specified `entry`, and promote the node to trusted if it
     /// is untrusted.
-    pub fn insert_with_promotion(&mut self, entry: NodeEntry) {
+    pub fn insert_with_conditional_promotion(&mut self, entry: NodeEntry) {
         if self.evaluate_blacklisted(&entry.id) {
             return;
         }
@@ -197,6 +197,12 @@ impl NodeDatabase {
         let ip = node.endpoint.address.ip();
 
         if self.untrusted_nodes.contains(&node.id) {
+            if let Some(NodeContact::Demoted(_)) =
+                self.untrusted_nodes.get(&node.id).unwrap().last_contact
+            {
+                return;
+            }
+
             if let Some(old_node) = self.promote_with_untrusted(&node.id, ip) {
                 node.last_connected = old_node.last_connected;
                 node.stream_token = old_node.stream_token;
@@ -273,11 +279,29 @@ impl NodeDatabase {
     pub fn note_failure(
         &mut self, id: &NodeId, by_connection: bool, trusted_only: bool,
     ) {
-        self.trusted_nodes.note_failure(id, by_connection);
+        self.trusted_nodes.note_unsuccess_contact(
+            id,
+            by_connection,
+            Some(NodeContact::failure()),
+        );
 
         if !trusted_only {
-            self.untrusted_nodes.note_failure(id, by_connection);
+            self.untrusted_nodes.note_unsuccess_contact(
+                id,
+                by_connection,
+                Some(NodeContact::failure()),
+            );
         }
+    }
+
+    /// Mark as demoted for the specified node.
+    pub fn note_demoted(&mut self, id: &NodeId, by_connection: bool) {
+        assert!(!self.trusted_nodes.contains(id));
+        self.untrusted_nodes.note_unsuccess_contact(
+            id,
+            by_connection,
+            Some(NodeContact::demoted()),
+        );
     }
 
     /// Mark as success for the specified node.
