@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// FIXME: Reason about their safety.
+// TODO: check them again and reason about the safety of each usage.
 #![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
 #[macro_use]
 pub mod utils;
@@ -97,7 +97,7 @@ pub use self::{
         defaults,
         delta_mpt::*,
         errors::{Error, ErrorKind, Result},
-        merkle_patricia_trie::{KVInserter, TrieProof},
+        merkle_patricia_trie::{simple_mpt::*, KVInserter, TrieProof},
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{
