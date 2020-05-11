@@ -16,9 +16,18 @@ lazy_static! {
         Address::from_str("843c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
 }
 
+/// The first 4 bytes of keccak('deposit(uint256)') is `0xb6b55f25`.
+static DEPOSIT_SIG: &'static [u8] = &[0xb6, 0xb5, 0x5f, 0x25];
+/// The first 4 bytes of keccak('withdraw(uint256)') is `0x2e1a7d4d`.
+static WITHDRAW_SIG: &'static [u8] = &[0x2e, 0x1a, 0x7d, 0x4d];
+/// The first 4 bytes of keccak('lock(uint256,uint256)') is `0x1338736f`.
+static LOCK_SIG: &'static [u8] = &[0x13, 0x38, 0x73, 0x6f];
+
 pub struct Staking;
 
 impl Staking {
+    /// Implementation of `deposit(uint256)`.
+    /// The input should consist of 32 bytes `amount`.
     fn deposit(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -37,6 +46,8 @@ impl Staking {
         }
     }
 
+    /// Implementation of `withdraw(uint256)`.
+    /// The input should consist of 32 bytes `amount`.
     fn withdraw(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -55,6 +66,8 @@ impl Staking {
         }
     }
 
+    /// Implementation of `lock(uint256,uint256)`.
+    /// The input should consist of 32 bytes `amount` + 32 bytes `unlock_time`.
     fn lock(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -84,13 +97,13 @@ impl InternalContractTrait for Staking {
     /// The gas cost of running this internal contract for the given input data.
     ///
     /// + deposit: SSTORE (deposit_balance, deposit_time)
-    ///   Gas: 10000
+    ///   Gas: 10000 * (current length of `deposit_list`) + 10000
     /// + withdraw: SLOAD (withdrawable_balance, deposit_time) SSTORE
     ///             (deposit_balance, update new deposit_list)
-    ///   Gas: 10000
+    ///   Gas: 10000 * (current length of `deposit_list`)
     /// + lock: SSTORE (updating new locking entry and remove unnecessary ones),
     ///         SLOAD (binary search and compare)
-    ///   Gas: 10000
+    ///   Gas: 10000 * (current length of `staking_vote_list`)
     /// + otherwise
     ///   Gas: 10000
     fn cost(&self, params: &ActionParams, state: &mut State) -> U256 {
@@ -98,15 +111,15 @@ impl InternalContractTrait for Staking {
             if data.len() < 4 {
                 return U256::from(10000);
             }
-            if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
+            if data[0..4] == *DEPOSIT_SIG {
                 let length =
                     state.deposit_list_length(&params.sender).unwrap_or(0);
                 U256::from(10000) * U256::from(length + 1)
-            } else if data[0..4] == [0x2e, 0x1a, 0x7d, 0x4d] {
+            } else if data[0..4] == *WITHDRAW_SIG {
                 let length =
                     state.deposit_list_length(&params.sender).unwrap_or(0);
                 U256::from(10000) * U256::from(length)
-            } else if data[0..4] == [0x13, 0x38, 0x73, 0x6f] {
+            } else if data[0..4] == *LOCK_SIG {
                 let length =
                     state.staking_vote_list_length(&params.sender).unwrap_or(0);
                 U256::from(10000) * U256::from(length + 1)
@@ -150,22 +163,11 @@ impl InternalContractTrait for Staking {
             ));
         }
 
-        if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
-            // The first 4 bytes of
-            // keccak('deposit(uint256)') is
-            // `0xb6b55f25`.
-            // 4 bytes `Method ID` + 32 bytes `amount`
+        if data[0..4] == *DEPOSIT_SIG {
             self.deposit(&data[4..], params, state)
-        } else if data[0..4] == [0x2e, 0x1a, 0x7d, 0x4d] {
-            // The first 4 bytes of
-            // keccak('withdraw(uint256)') is `0x2e1a7d4d`.
-            // 4 bytes `Method ID` + 32 bytes `amount`.
+        } else if data[0..4] == *WITHDRAW_SIG {
             self.withdraw(&data[4..], params, state)
-        } else if data[0..4] == [0x13, 0x38, 0x73, 0x6f] {
-            // The first 4 bytes of
-            // keccak('lock(uint256,uint256)') is `0x1338736f`.
-            // 4 bytes `Method ID` + 32 bytes `amount` + 32 bytes
-            // `unlock_time`.
+        } else if data[0..4] == *LOCK_SIG {
             self.lock(&data[4..], params, state)
         } else {
             Err(vm::Error::InternalContract("unsupported function"))

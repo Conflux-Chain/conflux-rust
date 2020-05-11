@@ -16,6 +16,18 @@ lazy_static! {
         Address::from_str("8060de9e1568e69811c4a398f92c3d10949dc891").unwrap();
 }
 
+/// The first 4 bytes of keccak('set_admin(address,address)') is 0x73e80cba.
+static SET_ADMIN_SIG: &'static [u8] = &[0x73, 0xe8, 0x0c, 0xba];
+/// The first 4 bytes of keccak('destroy(address)') is 0x00f55d9d.
+static DESTROY_SIG: &'static [u8] = &[0x00, 0xf5, 0x5d, 0x9d];
+
+/// The Actual Implementation of `suicide`.
+/// The contract which has non zero `collateral_for_storage` cannot suicide,
+/// otherwise it will:
+///   1. refund collateral for code
+///   2. refund sponsor balance
+///   3. refund contract balance
+///   4. kill the contract
 pub fn suicide(
     contract_address: &Address, refund_address: &Address, state: &mut State,
     spec: &Spec, substate: &mut Substate,
@@ -103,6 +115,9 @@ pub fn suicide(
 pub struct AdminControl;
 
 impl AdminControl {
+    /// Implementation of `set_admin(address,address)`.
+    /// The input should consist of 20 bytes `contract_address` + 20 bytes
+    /// `new_admin_address`
     fn set_admin(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -123,6 +138,8 @@ impl AdminControl {
         )?)
     }
 
+    /// Implementation of `destroy(address)`.
+    /// The input should consist of 20 bytes `contract_address`
     fn destroy(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
         spec: &Spec, substate: &mut Substate,
@@ -196,16 +213,9 @@ impl InternalContractTrait for AdminControl {
             "sig: {:?} {:?} {:?} {:?}",
             data[0], data[1], data[2], data[3]
         );
-        if data[0..4] == [0x73, 0xe8, 0x0c, 0xba] {
-            // The first 4 bytes of keccak('set_admin(address,address)') is
-            // 0x73e80cba.
-            // 4 bytes `Method ID` + 20 bytes `contract_address` + 20 bytes
-            // `new_admin_address`
+        if data[0..4] == *SET_ADMIN_SIG {
             self.set_admin(&data[4..], params, state)
-        } else if data[0..4] == [0x00, 0xf5, 0x5d, 0x9d] {
-            // The first 4 bytes of keccak('destroy(address)') is
-            // 0x00f55d9d.
-            // 4 bytes 'Method ID` + 20 bytes `contract_address`
+        } else if data[0..4] == *DESTROY_SIG {
             self.destroy(&data[4..], params, state, spec, substate)
         } else {
             Err(vm::Error::InternalContract("unsupported function"))
