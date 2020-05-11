@@ -442,6 +442,10 @@ impl SnapshotChunkSync {
 
     /// Request multiple chunks from random peers.
     fn request_chunks(&self, ctx: &Context, inner: &mut Inner) {
+        if inner.current_sync_candidate.is_none() {
+            // This may happen if called from `check_timeout`.
+            return;
+        }
         if inner.downloading_chunks.len() > self.config.max_downloading_chunks {
             // This should not happen.
             error!("downloading_chunks > max_downloading_chunks");
@@ -477,7 +481,10 @@ impl SnapshotChunkSync {
             .is_none());
 
         let request = SnapshotChunkRequest::new(
-            inner.current_sync_candidate.clone().unwrap(),
+            inner
+                .current_sync_candidate
+                .clone()
+                .expect("checked in request_chunks"),
             chunk_key.clone(),
         );
 
@@ -922,7 +929,7 @@ impl SnapshotChunkSync {
         if inner.sync_candidate_manager.is_inactive() {
             warn!("current sync candidate becomes inactive: {:?}", inner);
             inner.status = Status::Inactive;
-            inner.current_sync_candidate = Default::default();
+            inner.current_sync_candidate = None;
             inner.trusted_blame_block = Default::default();
         }
 
