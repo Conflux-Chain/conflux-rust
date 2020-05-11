@@ -93,9 +93,14 @@ log_conf="log.yaml"
 #
 # public_address="1.1.1.1"
 
-# `port` is the TCP port that the process listens for P2P messages.
+# `tcp_port` is the TCP port that the process listens for P2P messages. The default is 32323.
 #
-# port=32323
+# tcp_port=32323
+
+# `public_tcp_port` is the public TCP port that other nodes should connect to. It might be different from 
+# the tcp_port in case the machine is behind a NAT. The default is as same as `tcp_port`.
+#
+# public_tcp_port=32323
 
 # `udp_port` is the UDP port used for node discovery.
 # If not set, it will be the same as `port`.

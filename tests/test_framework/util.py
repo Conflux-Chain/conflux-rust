@@ -299,7 +299,7 @@ def initialize_datadir(dirname, n, conf_parameters, extra_files: dict = {}):
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {
-            "port": str(p2p_port(n)),
+            "tcp_port": str(p2p_port(n)),
             "jsonrpc_local_http_port": str(rpc_port(n)),
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),

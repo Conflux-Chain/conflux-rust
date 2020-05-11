@@ -98,7 +98,7 @@ class NodeEndpoint(rlp.Serializable):
     fields = [
         ("address", binary),
         ("udp_port", big_endian_int),
-        ("port", big_endian_int)
+        ("tcp_port", big_endian_int)
     ]
 
 
