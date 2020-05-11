@@ -7,15 +7,17 @@ use crate::{
     executive::Executive,
     parameters::block::*,
     pow::{self, nonce_to_lower_bound, ProofOfWorkProblem},
+    storage::{make_simple_mpt, simple_mpt_merkle_root, TrieProof},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{
-    transaction::TransactionError, Action, Block, BlockHeader,
-    TransactionWithSignature,
+    transaction::TransactionError, Action, Block, BlockHeader, BlockReceipts,
+    MerkleHash, SignedTransaction, TransactionWithSignature,
 };
-use std::collections::HashSet;
+use rlp::Encodable;
+use std::{collections::HashSet, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Debug, Clone)]
@@ -25,6 +27,46 @@ pub struct VerificationConfig {
     pub max_block_size_in_bytes: usize,
     pub transaction_epoch_bound: u64,
     vm_spec: vm::Spec,
+}
+
+pub fn compute_transaction_root(
+    transactions: &Vec<Arc<SignedTransaction>>,
+) -> MerkleHash {
+    simple_mpt_merkle_root(&mut make_simple_mpt(
+        transactions
+            .iter()
+            .map(|tx| tx.hash.as_bytes().into())
+            .collect(),
+    ))
+}
+
+pub fn compute_receipts_root(receipts: &Vec<Arc<BlockReceipts>>) -> MerkleHash {
+    let mut block_receipts_roots = Vec::with_capacity(receipts.len());
+    for block_receipts in receipts {
+        let block_receipts_root = simple_mpt_merkle_root(&mut make_simple_mpt(
+            block_receipts
+                .receipts
+                .iter()
+                .map(|receipt| receipt.rlp_bytes().into_boxed_slice())
+                .collect(),
+        ));
+        block_receipts_roots.push(block_receipts_root.as_bytes().into());
+    }
+    simple_mpt_merkle_root(&mut make_simple_mpt(block_receipts_roots))
+}
+
+// FIXME:
+//   Write a unit test with data from sample chain.
+//   Pay attention to the index matching.
+#[allow(unused)]
+pub fn verify_tx_receipt_inclusion_proof(
+    tx_hash: H256, block_index_in_epoch: usize, tx_index_in_block: usize,
+    verified_transaction_root: MerkleHash, transaction_proof: TrieProof,
+    verified_receipts_root: MerkleHash, block_index_proof: TrieProof,
+    receipts_proof: TrieProof,
+) -> bool
+{
+    unimplemented!()
 }
 
 impl VerificationConfig {
@@ -169,8 +211,7 @@ impl VerificationConfig {
     /// Verify block data against header: transactions root
     #[inline]
     fn verify_block_integrity(&self, block: &Block) -> Result<(), Error> {
-        let expected_root =
-            Block::compute_transaction_root(&block.transactions);
+        let expected_root = compute_transaction_root(&block.transactions);
         if &expected_root != block.block_header.transactions_root() {
             warn!("Invalid transaction root");
             bail!(BlockError::InvalidTransactionsRoot(Mismatch {

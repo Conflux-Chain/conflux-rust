@@ -11,7 +11,6 @@ pub(super) mod state;
 pub(super) mod state_manager;
 pub(super) mod state_proof;
 pub(super) mod storage_db;
-// FIXME: scope
 pub(super) mod storage_manager;
 
 pub mod defaults {

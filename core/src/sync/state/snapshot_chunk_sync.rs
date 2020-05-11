@@ -27,6 +27,7 @@ use crate::{
         synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
     },
+    verification::compute_receipts_root,
 };
 use cfx_types::H256;
 use network::{node_table::NodeId, NetworkContext};
@@ -844,9 +845,7 @@ impl SnapshotChunkSync {
                     return None;
                 }
             }
-            let receipt_root = BlockHeaderBuilder::compute_block_receipts_root(
-                &epoch_receipts,
-            );
+            let receipt_root = compute_receipts_root(&epoch_receipts);
             let logs_bloom_hash =
                 BlockHeaderBuilder::compute_block_logs_bloom_hash(
                     &epoch_receipts,

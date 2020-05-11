@@ -8,17 +8,20 @@ use crate::{
     state::OverlayAccount,
     statedb::{Result as DbResult, StateDb},
     storage::{StorageManager, StorageManagerTrait},
+    verification::compute_receipts_root,
 };
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
-    Account, Block, BlockHeaderBuilder, StorageKey, StorageLayout,
+    Account, Block, BlockHeaderBuilder, BlockReceipts, StorageKey,
+    StorageLayout,
 };
 use secret_store::SecretStore;
 use std::{
     collections::HashMap,
     fs::File,
     io::{BufRead, BufReader, Read},
+    sync::Arc,
 };
 use toml::Value;
 
@@ -122,11 +125,16 @@ pub fn genesis_block(
     initialize_internal_contract_accounts(&mut state);
 
     let state_root = state.compute_state_root().unwrap();
+    let receipt_root = compute_receipts_root(&vec![Arc::new(BlockReceipts {
+        receipts: vec![],
+        secondary_reward: U256::zero(),
+    })]);
     let mut genesis = Block::new(
         BlockHeaderBuilder::new()
             .with_deferred_state_root(
                 state_root.state_root.compute_state_root_hash(),
             )
+            .with_deferred_receipts_root(receipt_root)
             .with_gas_limit(GENESIS_GAS_LIMIT.into())
             .with_author(genesis_block_author)
             .with_difficulty(initial_difficulty)
