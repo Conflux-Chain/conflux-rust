@@ -5,7 +5,9 @@
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp_derive::{
+    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
+};
 
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
@@ -36,20 +38,21 @@ pub struct StakingVoteInfo {
     Clone,
     Debug,
     Default,
-    RlpDecodable,
-    RlpEncodable,
+    RlpDecodableWrapper,
+    RlpEncodableWrapper,
     Ord,
     PartialOrd,
     Eq,
     PartialEq,
 )]
 pub struct DepositList(pub Vec<DepositInfo>);
+
 #[derive(
     Clone,
     Debug,
     Default,
-    RlpDecodable,
-    RlpEncodable,
+    RlpDecodableWrapper,
+    RlpEncodableWrapper,
     Ord,
     PartialOrd,
     Eq,
