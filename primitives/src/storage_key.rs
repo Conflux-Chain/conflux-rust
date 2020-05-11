@@ -344,6 +344,15 @@ mod delta_mpt_storage_key {
         key.extend_from_slice(padded_address.as_ref());
     }
 
+    fn extend_key_with_prefix(
+        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
+        prefix: &[u8],
+    )
+    {
+        extend_address(key, address, padding);
+        key.extend_from_slice(prefix);
+    }
+
     pub fn new_account_key(
         address: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
@@ -351,13 +360,6 @@ mod delta_mpt_storage_key {
         extend_address(&mut key, address, padding);
 
         key
-    }
-
-    fn extend_storage_root(
-        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
-    ) {
-        extend_address(key, address, padding);
-        key.extend_from_slice(StorageKey::STORAGE_PREFIX);
     }
 
     fn extend_storage_key(
@@ -376,7 +378,12 @@ mod delta_mpt_storage_key {
         let mut key = Vec::with_capacity(
             ACCOUNT_KEYPART_BYTES + StorageKey::STORAGE_PREFIX_LEN,
         );
-        extend_storage_root(&mut key, address, padding);
+        extend_key_with_prefix(
+            &mut key,
+            address,
+            padding,
+            StorageKey::STORAGE_PREFIX,
+        );
 
         key
     }
@@ -387,19 +394,15 @@ mod delta_mpt_storage_key {
         let mut key = Vec::with_capacity(
             ACCOUNT_KEYPART_BYTES + KEY_PADDING_BYTES + storage_key.len(),
         );
-        extend_storage_root(&mut key, address, padding);
+        extend_key_with_prefix(
+            &mut key,
+            address,
+            padding,
+            StorageKey::STORAGE_PREFIX,
+        );
         extend_storage_key(&mut key, storage_key, padding);
 
         key
-    }
-
-    fn extend_key_with_prefix(
-        key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
-        prefix: &[u8],
-    )
-    {
-        extend_address(key, address, padding);
-        key.extend_from_slice(prefix);
     }
 
     pub fn new_code_root_key(
