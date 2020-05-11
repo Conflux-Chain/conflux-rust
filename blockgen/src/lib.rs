@@ -10,7 +10,8 @@ use crate::miner::{
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_parameters::*, parameters::consensus::GENESIS_GAS_LIMIT, pow::*,
-    ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
+    verification::compute_transaction_root, ConsensusGraph,
+    ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
 };
 use lazy_static::lazy_static;
@@ -221,9 +222,7 @@ impl BlockGenerator {
         let my_timestamp = max(parent_timestamp, now);
 
         let block_header = BlockHeaderBuilder::new()
-            .with_transactions_root(Block::compute_transaction_root(
-                &transactions,
-            ))
+            .with_transactions_root(compute_transaction_root(&transactions))
             .with_parent_hash(parent_hash)
             .with_height(parent_height + 1)
             .with_timestamp(my_timestamp)

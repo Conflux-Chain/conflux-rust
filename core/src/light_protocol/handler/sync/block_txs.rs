@@ -21,13 +21,14 @@ use crate::{
         BLOCK_TX_REQUEST_BATCH_SIZE, BLOCK_TX_REQUEST_TIMEOUT, CACHE_TIMEOUT,
         MAX_BLOCK_TXS_IN_FLIGHT,
     },
+    verification::compute_transaction_root,
     UniqueId,
 };
 use cfx_types::H256;
 use lru_time_cache::LruCache;
 use network::node_table::NodeId;
 use parking_lot::RwLock;
-use primitives::{Block, SignedTransaction};
+use primitives::SignedTransaction;
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
@@ -190,7 +191,7 @@ impl BlockTxs {
         let local = *self.ledger.header(hash)?.transactions_root();
 
         let txs: Vec<_> = txs.iter().map(|tx| Arc::new(tx.clone())).collect();
-        let received = Block::compute_transaction_root(&txs);
+        let received = compute_transaction_root(&txs);
 
         if received != local {
             warn!(

@@ -247,7 +247,7 @@ class BlockHeader(rlp.Serializable):
                  author=default_config['GENESIS_COINBASE'],
                  transactions_root=trie.BLANK_ROOT,
                  deferred_state_root=sha3(rlp.encode(trie.state_root())),
-                 deferred_receipts_root=trie.BLANK_ROOT,
+                 deferred_receipts_root=trie.EMPTY_EPOCH_RECEIPT_ROOT_BY_NUMBER_OF_BLOCKS[0],
                  deferred_logs_bloom_hash=default_config['GENESIS_LOGS_BLOOM_HASH'],
                  blame=0,
                  difficulty=default_config['GENESIS_DIFFICULTY'],

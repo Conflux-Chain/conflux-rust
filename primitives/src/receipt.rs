@@ -82,6 +82,8 @@ impl MallocSizeOf for Receipt {
 pub struct BlockReceipts {
     /// This is the receipts of transaction execution in this block.
     pub receipts: Vec<Receipt>,
+    // FIXME:
+    //   This field doesn't belong to receipts root calculation.
     /// This is the amount of secondary reward this block.
     pub secondary_reward: U256,
 }
