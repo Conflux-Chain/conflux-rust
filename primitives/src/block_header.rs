@@ -3,9 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    bytes::Bytes,
-    hash::{keccak, KECCAK_EMPTY_LIST_RLP},
-    receipt::BlockReceipts,
+    bytes::Bytes, hash::keccak, receipt::BlockReceipts, MERKLE_NULL_NODE,
     NULL_EPOCH,
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
@@ -290,9 +288,9 @@ impl BlockHeaderBuilder {
             height: 0,
             timestamp: 0,
             author: Address::default(),
-            transactions_root: KECCAK_EMPTY_LIST_RLP,
+            transactions_root: MERKLE_NULL_NODE,
             deferred_state_root: Default::default(),
-            deferred_receipts_root: KECCAK_EMPTY_LIST_RLP,
+            deferred_receipts_root: Default::default(),
             deferred_logs_bloom_hash: KECCAK_EMPTY_BLOOM,
             blame: 0,
             difficulty: U256::default(),
@@ -422,17 +420,6 @@ impl BlockHeaderBuilder {
         block_header
     }
 
-    pub fn compute_block_receipts_root(
-        receipts: &Vec<Arc<BlockReceipts>>,
-    ) -> H256 {
-        let mut rlp_stream = RlpStream::new_list(receipts.len());
-        for r in receipts {
-            rlp_stream.append(r.as_ref());
-        }
-
-        keccak(rlp_stream.out())
-    }
-
     pub fn compute_block_logs_bloom_hash(
         receipts: &Vec<Arc<BlockReceipts>>,
     ) -> H256 {
@@ -455,11 +442,11 @@ impl BlockHeaderBuilder {
     }
 
     pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
-        let mut rlp_stream = RlpStream::new_list(roots.len());
+        let mut buffer = Vec::with_capacity(H256::len_bytes() * roots.len());
         for root in roots {
-            rlp_stream.append_list(root.as_ref());
+            buffer.extend_from_slice(root.as_bytes());
         }
-        keccak(rlp_stream.out())
+        keccak(&buffer)
     }
 }
 

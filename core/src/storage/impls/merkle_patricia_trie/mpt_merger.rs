@@ -40,7 +40,6 @@ impl<'a> MptMerger<'a> {
         }
     }
 
-    #[cfg(test)]
     pub fn merge(
         &mut self, inserter: &DumpedDeltaMptIterator,
     ) -> Result<MerkleHash> {
@@ -178,14 +177,13 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
     fn is_in_place_update(&self) -> bool { self.maybe_readonly_mpt.is_none() }
 }
 
-use super::{
-    super::{super::storage_db::snapshot_mpt::*, errors::*},
-    mpt_cursor::*,
+use crate::storage::{
+    impls::{
+        errors::*,
+        merkle_patricia_trie::{mpt_cursor::*, KVInserter},
+    },
+    storage_db::snapshot_mpt::*,
+    tests::DumpedDeltaMptIterator,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
-
-#[cfg(test)]
-use super::KVInserter;
-#[cfg(test)]
-use crate::storage::tests::DumpedDeltaMptIterator;

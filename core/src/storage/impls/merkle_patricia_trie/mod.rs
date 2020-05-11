@@ -12,6 +12,7 @@ pub mod merkle;
 pub mod mpt_cursor;
 pub mod mpt_merger;
 pub mod mpt_value;
+pub mod simple_mpt;
 pub mod trie_node;
 pub mod trie_proof;
 pub(super) mod walk;

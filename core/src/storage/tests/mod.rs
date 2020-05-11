@@ -2,10 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod snapshot;
+pub use snapshot::FakeSnapshotMptDb;
+
 #[cfg(test)]
 mod sharded_iter_merger;
-#[cfg(test)]
-mod snapshot;
 #[cfg(test)]
 mod state;
 
@@ -158,7 +159,7 @@ pub fn new_state_manager_for_unit_test() -> FakeStateManager {
 
 #[derive(Default)]
 pub struct DumpedDeltaMptIterator {
-    kv: Vec<(Vec<u8>, Box<[u8]>)>,
+    pub kv: Vec<(Vec<u8>, Box<[u8]>)>,
 }
 
 impl DumpedDeltaMptIterator {
