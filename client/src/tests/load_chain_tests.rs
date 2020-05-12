@@ -71,7 +71,7 @@ fn test_load_chain() {
             .into_string()
             .unwrap(),
     );
-    conf.raw_conf.port = Some(13000);
+    conf.raw_conf.tcp_port = 13000;
     conf.raw_conf.jsonrpc_http_port = Some(18000);
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));

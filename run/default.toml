@@ -88,7 +88,7 @@ log_conf="log.yaml"
 # -------------- Network Configuration -------------
 
 # `public_address` is the address of this node used for other nodes to connect to.
-# If not set, the process will try to find out the public IP with best effort, and use `port` as public port.
+# If not set, the process will try to find out the public IP with best effort, and use `tcp_port` as public port.
 # However, it's HIGHLY RECOMMENDED to set the value manually, especially for machines with IP translated by NAT.
 #
 # public_address="1.1.1.1"
