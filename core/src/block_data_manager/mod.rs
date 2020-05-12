@@ -613,26 +613,44 @@ impl BlockDataManager {
     }
 
     /// Return None if receipts for corresponding epoch is not computed before
-    /// or has been overwritten by another new pivot chain in db
+    /// or has been overwritten by another new pivot chain in db.
+    /// If `update_pivot_assumption` is true and we have execution results of
+    /// `assumed_epoch` in memory, we will also ensure `assumed_epoch`
+    /// is persisted as the pivot hash in db.
     ///
-    /// This function will require lock of block_receipts
+    /// This function will require lock of block_receipts.
     pub fn block_execution_result_by_hash_with_epoch(
-        &self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
-    ) -> Option<BlockExecutionResult> {
-        let maybe_receipts =
-            self.block_receipts
-                .read()
-                .get(hash)
-                .and_then(|receipt_info| {
-                    receipt_info.get_receipts_at_epoch(assumed_epoch)
-                });
-        if maybe_receipts.is_some() {
+        &self, hash: &H256, assumed_epoch: &H256,
+        update_pivot_assumption: bool, update_cache: bool,
+    ) -> Option<BlockExecutionResult>
+    {
+        if let Some((receipts, is_on_pivot)) = self
+            .block_receipts
+            .write()
+            .get_mut(hash)
+            .and_then(|receipt_info| {
+                let r = receipt_info.get_receipts_at_epoch(assumed_epoch);
+                if update_pivot_assumption {
+                    receipt_info.set_pivot_hash(*assumed_epoch);
+                }
+                r
+            })
+        {
             if update_cache {
                 self.cache_man
                     .lock()
                     .note_used(CacheId::BlockReceipts(*hash));
             }
-            return maybe_receipts;
+            if update_pivot_assumption && !is_on_pivot {
+                self.db_manager.insert_block_execution_result_to_db(
+                    hash,
+                    &BlockExecutionResultWithEpoch(
+                        *assumed_epoch,
+                        receipts.clone(),
+                    ),
+                )
+            }
+            return Some(receipts);
         }
         let BlockExecutionResultWithEpoch(epoch, receipts) =
             self.db_manager.block_execution_result_from_db(hash)?;
@@ -1007,7 +1025,8 @@ impl BlockDataManager {
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
-                    h, epoch_hash, true, /* update_cache */
+                    h, epoch_hash, true, /* update_pivot_assumption */
+                    true, /* update_cache */
                 ) {
                     epoch_receipts.push(r.block_receipts);
                 } else {

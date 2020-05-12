@@ -125,6 +125,7 @@ impl SnapshotManifestRequest {
                                 .block_execution_result_by_hash_with_epoch(
                                     hash,
                                     &epoch_hash,
+                                    false, /* update_pivot_assumption */
                                     false, /* update_cache */
                                 ) {
                                 Some(block_execution_result) => {
