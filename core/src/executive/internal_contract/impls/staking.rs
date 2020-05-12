@@ -20,8 +20,8 @@ lazy_static! {
 static DEPOSIT_SIG: &'static [u8] = &[0xb6, 0xb5, 0x5f, 0x25];
 /// The first 4 bytes of keccak('withdraw(uint256)') is `0x2e1a7d4d`.
 static WITHDRAW_SIG: &'static [u8] = &[0x2e, 0x1a, 0x7d, 0x4d];
-/// The first 4 bytes of keccak('lock(uint256,uint256)') is `0x1338736f`.
-static LOCK_SIG: &'static [u8] = &[0x13, 0x38, 0x73, 0x6f];
+/// The first 4 bytes of keccak('vote_lock(uint256,uint256)') is `0x5547dedb`.
+static VOTE_LOCK_SIG: &'static [u8] = &[0x55, 0x47, 0xde, 0xdb];
 
 pub struct Staking;
 
@@ -68,7 +68,7 @@ impl Staking {
 
     /// Implementation of `lock(uint256,uint256)`.
     /// The input should consist of 32 bytes `amount` + 32 bytes `unlock_time`.
-    fn lock(
+    fn vote_lock(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
         if input.len() != 64 {
@@ -84,7 +84,7 @@ impl Staking {
                 "not enough staking balance to lock",
             ))
         } else {
-            state.lock(&params.sender, &amount, unlock_time)?;
+            state.vote_lock(&params.sender, &amount, unlock_time)?;
             Ok(())
         }
     }
@@ -103,7 +103,7 @@ impl InternalContractTrait for Staking {
     ///   Gas: 10000 * (current length of `deposit_list`)
     /// + lock: SSTORE (updating new locking entry and remove unnecessary ones),
     ///         SLOAD (binary search and compare)
-    ///   Gas: 10000 * (current length of `staking_vote_list`)
+    ///   Gas: 10000 * (current length of `vote_stake_list`)
     /// + otherwise
     ///   Gas: 10000
     fn cost(&self, params: &ActionParams, state: &mut State) -> U256 {
@@ -119,9 +119,9 @@ impl InternalContractTrait for Staking {
                 let length =
                     state.deposit_list_length(&params.sender).unwrap_or(0);
                 U256::from(10000) * U256::from(length)
-            } else if data[0..4] == *LOCK_SIG {
+            } else if data[0..4] == *VOTE_LOCK_SIG {
                 let length =
-                    state.staking_vote_list_length(&params.sender).unwrap_or(0);
+                    state.vote_stake_list_length(&params.sender).unwrap_or(0);
                 U256::from(10000) * U256::from(length + 1)
             } else {
                 U256::from(10000)
@@ -167,8 +167,8 @@ impl InternalContractTrait for Staking {
             self.deposit(&data[4..], params, state)
         } else if data[0..4] == *WITHDRAW_SIG {
             self.withdraw(&data[4..], params, state)
-        } else if data[0..4] == *LOCK_SIG {
-            self.lock(&data[4..], params, state)
+        } else if data[0..4] == *VOTE_LOCK_SIG {
+            self.vote_lock(&data[4..], params, state)
         } else {
             Err(vm::Error::InternalContract("unsupported function"))
         }

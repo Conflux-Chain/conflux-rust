@@ -9,6 +9,8 @@ use rlp_derive::{
     RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
 };
 
+use std::ops::{Deref, DerefMut};
+
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
@@ -26,7 +28,7 @@ pub struct DepositInfo {
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
-pub struct StakingVoteInfo {
+pub struct VoteStakeInfo {
     /// This is the number of tokens should be locked before `unlock_time`.
     pub amount: U256,
     /// This is the timestamp when the vote right will be invalid, measured in
@@ -47,6 +49,16 @@ pub struct StakingVoteInfo {
 )]
 pub struct DepositList(pub Vec<DepositInfo>);
 
+impl Deref for DepositList {
+    type Target = Vec<DepositInfo>;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for DepositList {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
 #[derive(
     Clone,
     Debug,
@@ -58,7 +70,17 @@ pub struct DepositList(pub Vec<DepositInfo>);
     Eq,
     PartialEq,
 )]
-pub struct StakingVoteList(pub Vec<StakingVoteInfo>);
+pub struct VoteStakeList(pub Vec<VoteStakeInfo>);
+
+impl Deref for VoteStakeList {
+    type Target = Vec<VoteStakeInfo>;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for VoteStakeList {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
 
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,

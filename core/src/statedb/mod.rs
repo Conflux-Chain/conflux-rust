@@ -12,8 +12,8 @@ use crate::{
 };
 use cfx_types::{Address, H256, U256};
 use primitives::{
-    Account, CodeInfo, DepositList, EpochId, StakingVoteList, StorageKey,
-    StorageLayout, StorageRoot, MERKLE_NULL_NODE,
+    Account, CodeInfo, DepositList, EpochId, StorageKey, StorageLayout,
+    StorageRoot, VoteStakeList, MERKLE_NULL_NODE,
 };
 
 mod error;
@@ -65,8 +65,8 @@ impl StateDb {
 
     pub fn get_vote_list(
         &self, address: &Address,
-    ) -> Result<Option<StakingVoteList>> {
-        self.get::<StakingVoteList>(StorageKey::new_vote_list_key(address))
+    ) -> Result<Option<VoteStakeList>> {
+        self.get::<VoteStakeList>(StorageKey::new_vote_list_key(address))
     }
 
     pub fn get_storage_layout(

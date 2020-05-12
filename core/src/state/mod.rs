@@ -39,6 +39,8 @@ enum RequireCache {
     None,
     CodeSize,
     Code,
+    DepositList,
+    VoteStakeList,
 }
 
 /// Mode of dealing with null accounts.
@@ -655,35 +657,23 @@ impl State {
     pub fn withdrawable_staking_balance(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        let mut account = self.require_exists(address, false)?;
-        account.cache_staking_info(
-            false, /* cache_deposit_list */
-            true,  /* cache_vote_list */
-            &self.db,
-        )?;
-        Ok(account.withdrawable_staking_balance(self.block_number))
+        self.ensure_cached(address, RequireCache::VoteStakeList, |acc| {
+            acc.map_or(U256::zero(), |acc| {
+                acc.withdrawable_staking_balance(self.block_number)
+            })
+        })
     }
 
     pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
-        let mut account = self.require_exists(address, false)?;
-        account.cache_staking_info(
-            true,  /* cache_deposit_list */
-            false, /* cache_vote_list */
-            &self.db,
-        )?;
-        Ok(account.deposit_list().map_or(0, |list| list.0.len()))
+        self.ensure_cached(address, RequireCache::DepositList, |acc| {
+            acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
+        })
     }
 
-    pub fn staking_vote_list_length(
-        &self, address: &Address,
-    ) -> DbResult<usize> {
-        let mut account = self.require_exists(address, false)?;
-        account.cache_staking_info(
-            false, /* cache_deposit_list */
-            true,  /* cache_vote_list */
-            &self.db,
-        )?;
-        Ok(account.staking_vote_list().map_or(0, |list| list.0.len()))
+    pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
+        self.ensure_cached(address, RequireCache::VoteStakeList, |acc| {
+            acc.map_or(0, |acc| acc.vote_stake_list().map_or(0, |l| l.len()))
+        })
     }
 
     pub fn inc_nonce(&mut self, address: &Address) -> DbResult<()> {
@@ -815,7 +805,7 @@ impl State {
         Ok(())
     }
 
-    pub fn lock(
+    pub fn vote_lock(
         &mut self, address: &Address, amount: &U256, unlock_time: u64,
     ) -> DbResult<()> {
         if !amount.is_zero() {
@@ -825,7 +815,8 @@ impl State {
                 true,  /* cache_vote_list */
                 &self.db,
             )?;
-            account.lock(*amount, unlock_time);
+            account.remove_expired_vote_stake_info(self.block_number);
+            account.vote_lock(*amount, unlock_time);
         }
         Ok(())
     }
@@ -864,12 +855,13 @@ impl State {
     }
 
     fn needs_update(require: RequireCache, account: &OverlayAccount) -> bool {
-        if let RequireCache::None = require {
-            return false;
-        }
-
         trace!("update_account_cache account={:?}", account);
-        !account.is_cached()
+        match require {
+            RequireCache::None => false,
+            RequireCache::Code | RequireCache::CodeSize => !account.is_cached(),
+            RequireCache::DepositList => account.deposit_list().is_none(),
+            RequireCache::VoteStakeList => account.vote_stake_list().is_none(),
+        }
     }
 
     /// Load required account data from the databases. Returns whether the
@@ -882,6 +874,20 @@ impl State {
             RequireCache::Code | RequireCache::CodeSize => {
                 account.cache_code(db).is_some()
             }
+            RequireCache::DepositList => account
+                .cache_staking_info(
+                    true,  /* cache_deposit_list */
+                    false, /* cache_vote_list */
+                    db,
+                )
+                .is_ok(),
+            RequireCache::VoteStakeList => account
+                .cache_staking_info(
+                    false, /* cache_deposit_list */
+                    true,  /* cache_vote_list */
+                    db,
+                )
+                .is_ok(),
         }
     }
 
