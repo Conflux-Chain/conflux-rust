@@ -231,7 +231,7 @@ pub fn print_mpt_key(key: &[u8]) {
 
 #[cfg(test)]
 use crate::storage::{
-    defaults, impls::state_manager::StateManager, ConsensusParam,
+    defaults, impls::state_manager::StateManager, storage_dir, ConsensusParam,
     StorageConfiguration,
 };
 use crate::storage::{
