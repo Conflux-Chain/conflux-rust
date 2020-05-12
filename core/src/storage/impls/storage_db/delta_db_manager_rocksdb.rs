@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub struct DeltaDbManagerRocksdb {
-    delta_db_path: String,
+    delta_db_path: PathBuf,
     creation_mutex: Mutex<()>,
 }
 
@@ -21,9 +21,8 @@ impl DeltaDbManagerRocksdb {
         disable_wal: false,
     };
 
-    pub fn new(delta_db_path: String) -> Result<DeltaDbManagerRocksdb> {
-        let delta_db_dir = Path::new(delta_db_path.as_str());
-        if !delta_db_dir.exists() {
+    pub fn new(delta_db_path: PathBuf) -> Result<DeltaDbManagerRocksdb> {
+        if !delta_db_path.exists() {
             fs::create_dir_all(delta_db_path.clone())?;
         }
 
@@ -37,28 +36,28 @@ impl DeltaDbManagerRocksdb {
 impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
     type DeltaDb = KvdbRocksdb;
 
-    fn get_delta_db_dir(&self) -> String { self.delta_db_path.clone() }
+    fn get_delta_db_dir(&self) -> &Path { self.delta_db_path.as_path() }
 
     fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::DELTA_DB_ROCKSDB_DIR_PREFIX.to_string()
             + &snapshot_epoch_id.to_hex()
     }
 
-    fn get_delta_db_path(&self, delta_db_name: &str) -> String {
-        self.delta_db_path.clone() + delta_db_name
+    fn get_delta_db_path(&self, delta_db_name: &str) -> PathBuf {
+        self.delta_db_path.join(delta_db_name)
     }
 
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
         let _lock = self.creation_mutex.lock();
 
-        let path_str = self.get_delta_db_path(delta_db_name);
-        if Path::new(&path_str).exists() {
+        let path = self.get_delta_db_path(delta_db_name);
+        if path.exists() {
             Err(ErrorKind::DeltaMPTAlreadyExists.into())
         } else {
             Ok(KvdbRocksdb {
                 kvdb: Arc::new(Database::open(
                     &Self::ROCKSDB_CONFIG,
-                    &path_str,
+                    path.to_str().unwrap(),
                 )?),
                 col: 0,
             })
@@ -68,12 +67,12 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
     fn get_delta_db(
         &self, delta_db_name: &str,
     ) -> Result<Option<Self::DeltaDb>> {
-        let path_str = self.get_delta_db_path(delta_db_name);
-        if Path::new(&path_str).exists() {
+        let path = self.get_delta_db_path(delta_db_name);
+        if path.exists() {
             Ok(Some(KvdbRocksdb {
                 kvdb: Arc::new(Database::open(
                     &Self::ROCKSDB_CONFIG,
-                    &path_str,
+                    path.to_str().unwrap(),
                 )?),
                 col: 0,
             }))
@@ -97,4 +96,8 @@ use kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
 use parity_bytes::ToPretty;
 use parking_lot::Mutex;
 use primitives::EpochId;
-use std::{fs, path::Path, sync::Arc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};

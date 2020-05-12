@@ -82,7 +82,7 @@ pub trait SnapshotDbTrait:
     /// SnapshotDbManager on destructor. SnapshotDb itself does not take
     /// care of the update on these data.
     fn open(
-        snapshot_path: &str, readonly: bool,
+        snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
     ) -> Result<Self>;
@@ -91,7 +91,7 @@ pub trait SnapshotDbTrait:
     /// SnapshotDbManager on destructor. SnapshotDb itself does not take
     /// care of the update on these data.
     fn create(
-        snapshot_path: &str,
+        snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
     ) -> Result<Self>;
@@ -139,5 +139,5 @@ use crate::storage::{
 use derivative::Derivative;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use tokio::sync::Semaphore;

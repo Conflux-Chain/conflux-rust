@@ -6,9 +6,9 @@
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
 
-    fn get_snapshot_dir(&self) -> String;
+    fn get_snapshot_dir(&self) -> &Path;
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String;
-    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> String;
+    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf;
 
     // Scan snapshot dir, remove extra files and return the list of missing
     // snapshots.
@@ -78,4 +78,9 @@ use super::{
     snapshot_db::*,
 };
 use primitives::{EpochId, MerkleHash};
-use std::{collections::HashMap, fs, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
