@@ -1218,7 +1218,7 @@ impl SynchronizationGraph {
                 self.data_man
                     .remove_block_body(&hash, true /* remove_db */);
                 self.data_man
-                    .remove_block_results(&hash, true /* remove_db */);
+                    .remove_block_result(&hash, true /* remove_db */);
             }
             // All nodes will not maintain old era states, so related data can
             // be removed safely. The in-memory data is already

@@ -1,5 +1,5 @@
 use crate::storage::StateRootWithAuxInfo;
-use cfx_types::{Bloom, H256};
+use cfx_types::{Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::BlockReceipts;
@@ -58,6 +58,23 @@ impl Decodable for BlockExecutionResult {
     }
 }
 
+#[derive(RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf)]
+pub struct BlockRewardResult {
+    pub total_reward: U256,
+    pub base_reward: U256,
+    pub tx_fee: U256,
+}
+
+impl Default for BlockRewardResult {
+    fn default() -> Self {
+        BlockRewardResult {
+            total_reward: U256::from(0),
+            base_reward: U256::from(0),
+            tx_fee: U256::from(0),
+        }
+    }
+}
+
 /// The structure to maintain the `BlockExecutedResult` of blocks under
 /// different views.
 ///
@@ -70,9 +87,14 @@ pub struct BlockExecutionResultWithEpoch(
     pub EpochIndex,
     pub BlockExecutionResult,
 );
+
+#[derive(Debug, DeriveMallocSizeOf)]
+pub struct BlockRewardResultWithEpoch(pub EpochIndex, pub BlockRewardResult);
+
 #[derive(Default, Debug)]
 pub struct BlockReceiptsInfo {
-    info_with_epoch: Vec<BlockExecutionResultWithEpoch>,
+    execution_info_with_epoch: Vec<BlockExecutionResultWithEpoch>,
+    reward_info_with_epoch: Vec<BlockRewardResultWithEpoch>,
 }
 
 impl BlockReceiptsInfo {
@@ -81,7 +103,7 @@ impl BlockReceiptsInfo {
         &self, epoch: &EpochIndex,
     ) -> Option<BlockExecutionResult> {
         for BlockExecutionResultWithEpoch(e_id, receipts) in
-            &self.info_with_epoch
+            &self.execution_info_with_epoch
         {
             if *e_id == *epoch {
                 return Some(receipts.clone());
@@ -90,29 +112,58 @@ impl BlockReceiptsInfo {
         None
     }
 
-    /// Insert the tx fee when the block is included in epoch `epoch`
+    /// Insert the receipt when the block is included in epoch `epoch`
     pub fn insert_receipts_at_epoch(
         &mut self, epoch: &EpochIndex, receipts: BlockExecutionResult,
     ) {
-        // If it's inserted before, the fee must be the same, so we do not add
-        // duplicate entry
+        // If it's inserted before, the receipt must be the same, so we do not
+        // add duplicate entry
         if self.get_receipts_at_epoch(epoch).is_none() {
-            self.info_with_epoch
+            self.execution_info_with_epoch
                 .push(BlockExecutionResultWithEpoch(*epoch, receipts));
+        }
+    }
+
+    /// `epoch` is the index of the epoch id in consensus arena
+    pub fn get_reward_info_at_epoch(
+        &self, epoch: &EpochIndex,
+    ) -> Option<BlockRewardResult> {
+        for BlockRewardResultWithEpoch(e_id, reward) in
+            &self.reward_info_with_epoch
+        {
+            if *e_id == *epoch {
+                return Some(reward.clone());
+            }
+        }
+        None
+    }
+
+    /// Insert the reward info when the block is included in epoch `epoch`
+    pub fn insert_reward_info_at_epoch(
+        &mut self, epoch: &EpochIndex, reward: BlockRewardResult,
+    ) {
+        // If it's inserted before, the reward must be the same, so we do not
+        // add duplicate entry
+        if self.get_reward_info_at_epoch(epoch).is_none() {
+            self.reward_info_with_epoch
+                .push(BlockRewardResultWithEpoch(*epoch, reward));
         }
     }
 
     /// Only keep the tx fee in the given `epoch`
     /// Called after we process rewards, and other fees will not be used w.h.p.
     pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
-        self.info_with_epoch
+        self.execution_info_with_epoch
             .retain(|BlockExecutionResultWithEpoch(e_id, _)| *e_id == *epoch);
+        self.reward_info_with_epoch
+            .retain(|BlockRewardResultWithEpoch(e_id, _)| *e_id == *epoch);
     }
 }
 
 impl MallocSizeOf for BlockReceiptsInfo {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.info_with_epoch.size_of(ops)
+        self.execution_info_with_epoch.size_of(ops)
+            + self.reward_info_with_epoch.size_of(ops)
     }
 }
 
@@ -130,6 +181,18 @@ impl Decodable for BlockExecutionResultWithEpoch {
             rlp.val_at(0)?,
             rlp.val_at(1)?,
         ))
+    }
+}
+
+impl Encodable for BlockRewardResultWithEpoch {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        stream.begin_list(2).append(&self.0).append(&self.1);
+    }
+}
+
+impl Decodable for BlockRewardResultWithEpoch {
+    fn decode(rlp: &Rlp) -> Result<BlockRewardResultWithEpoch, DecoderError> {
+        Ok(BlockRewardResultWithEpoch(rlp.val_at(0)?, rlp.val_at(1)?))
     }
 }
 

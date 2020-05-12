@@ -669,7 +669,7 @@ impl BlockDataManager {
             .map(|header| header.height())
     }
 
-    pub fn insert_block_results(
+    pub fn insert_block_execution_result(
         &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
         persistent: bool,
     )
@@ -706,10 +706,34 @@ impl BlockDataManager {
             .note_used(CacheId::BlockReceipts(hash));
     }
 
-    pub fn remove_block_results(&self, hash: &H256, remove_db: bool) {
+    pub fn insert_block_reward_result(
+        &self, hash: H256, epoch: H256, block_reward: BlockRewardResult,
+        persistent: bool,
+    )
+    {
+        let result = BlockRewardResultWithEpoch(epoch, block_reward);
+
+        if persistent {
+            self.db_manager
+                .insert_block_reward_result_to_db(&hash, &result);
+        }
+
+        let mut block_receipts = self.block_receipts.write();
+        let receipt_info = block_receipts
+            .entry(hash)
+            .or_insert(BlockReceiptsInfo::default());
+        receipt_info.insert_reward_info_at_epoch(&epoch, block_reward);
+
+        self.cache_man
+            .lock()
+            .note_used(CacheId::BlockReceipts(hash));
+    }
+
+    pub fn remove_block_result(&self, hash: &H256, remove_db: bool) {
         self.block_receipts.write().remove(hash);
         if remove_db {
             self.db_manager.remove_block_execution_result_from_db(hash);
+            self.db_manager.remove_block_reward_result_from_db(hash);
         }
     }
 
