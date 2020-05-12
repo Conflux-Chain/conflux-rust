@@ -6,7 +6,6 @@ use super::super::debug::*;
 use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
-        BlockRewardResult,
     },
     consensus::{
         consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
@@ -59,6 +58,7 @@ use std::{
     },
     thread::{self, JoinHandle},
 };
+use crate::block_data_manager::BlockRewardResult;
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -1432,21 +1432,12 @@ impl ConsensusExecutionHandler {
         let mut merged_rewards = BTreeMap::new();
 
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let reward_entry = merged_rewards
-                .entry(*block.block_header.author())
-                .or_insert(BlockRewardResult::default());
-            reward_entry.base_reward = epoch_block_total_rewards[enum_idx];
-
-            if reward_entry.base_reward > U256::from(0) {
-                reward_entry.total_reward += reward_entry.base_reward
-                    * secondary_reward
-                    / total_base_reward;
-            }
+            let reward = &mut epoch_block_total_rewards[enum_idx];
 
             let block_hash = block.hash();
             // Add tx fee to reward.
             if let Some(fee) = block_tx_fees.get(&block_hash) {
-                reward_entry.tx_fee = *fee;
+                *reward += *fee;
                 if !debug_record.is_none() {
                     let debug_out = debug_record.as_mut().unwrap();
                     debug_out.tx_fees.push(BlockHashAuthorValue(
@@ -1455,24 +1446,18 @@ impl ConsensusExecutionHandler {
                         *fee,
                     ));
                 }
-            } else {
-                reward_entry.tx_fee = U256::from(0);
             }
 
-            reward_entry.total_reward += reward_entry.tx_fee;
-            self.data_man.insert_block_reward_result(
-                block_hash,
-                reward_epoch_hash,
-                reward_entry.clone(),
-                true,
-            );
+            *merged_rewards
+                .entry(*block.block_header.author())
+                .or_insert(U256::from(0)) += *reward;
 
             if debug_record.is_some() {
                 let debug_out = debug_record.as_mut().unwrap();
                 debug_out.block_final_rewards.push(BlockHashAuthorValue(
                     block_hash,
                     block.block_header.author().clone(),
-                    reward_entry.total_reward,
+                    *reward,
                 ));
             }
             if on_local_pivot {
@@ -1483,26 +1468,25 @@ impl ConsensusExecutionHandler {
 
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
-        for (address, reward) in merged_rewards {
+        for (address, mut reward) in merged_rewards {
+            // Distribute the secondary reward according to primary reward.
+            if let Some(base_reward) = base_reward_count.get(&address) {
+                reward += base_reward * secondary_reward / total_base_reward;
+            }
             state
-                .add_balance(
-                    &address,
-                    &reward.total_reward,
-                    CleanupMode::ForceCreate,
-                )
+                .add_balance(&address, &reward, CleanupMode::ForceCreate)
                 .unwrap();
 
             if debug_record.is_some() {
                 let debug_out = debug_record.as_mut().unwrap();
                 debug_out
                     .merged_rewards_by_author
-                    .push(AuthorValue(address, reward.total_reward));
+                    .push(AuthorValue(address, reward));
                 debug_out.state_ops.push(StateOp::OpNameKeyMaybeValue {
                     op_name: "add_balance".to_string(),
                     key: address.to_hex().as_bytes().to_vec(),
                     maybe_value: Some({
-                        let h: H256 =
-                            BigEndianHash::from_uint(&reward.total_reward);
+                        let h: H256 = BigEndianHash::from_uint(&reward);
                         h.to_hex().as_bytes().to_vec()
                     }),
                 });
