@@ -74,6 +74,7 @@ impl FakeStateManager {
         if unit_test_data_dir == "" {
             Err(ErrorKind::FailedToCreateUnitTestDataDir.into())
         } else {
+            let unit_test_data_path = Path::new(&unit_test_data_dir);
             Ok(FakeStateManager {
                 data_dir: unit_test_data_dir.clone(),
                 state_manager: Some(StateManager::new(StorageConfiguration {
@@ -87,14 +88,14 @@ impl FakeStateManager {
                     delta_mpts_node_map_vec_size: 20_000_000,
                     delta_mpts_slab_idle_size: 200_000,
                     max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
-                    path_delta_mpts_dir: unit_test_data_dir.clone()
-                        + StorageConfiguration::DELTA_MPTS_DIR,
-                    path_snapshot_dir: unit_test_data_dir.clone()
-                        + StorageConfiguration::SNAPSHOT_DIR,
-                    path_snapshot_info_db: unit_test_data_dir.clone()
-                        + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
-                    path_storage_dir: unit_test_data_dir.clone()
-                        + StorageConfiguration::STORAGE_DIR,
+                    path_delta_mpts_dir: unit_test_data_path
+                        .join(&*storage_dir::DELTA_MPTS_DIR),
+                    path_snapshot_dir: unit_test_data_path
+                        .join(&*storage_dir::SNAPSHOT_DIR),
+                    path_snapshot_info_db: unit_test_data_path
+                        .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
+                    path_storage_dir: unit_test_data_path
+                        .join(&*storage_dir::STORAGE_DIR),
                 })?),
             })
         }
@@ -230,7 +231,7 @@ pub fn print_mpt_key(key: &[u8]) {
 
 #[cfg(test)]
 use crate::storage::{
-    defaults, impls::state_manager::StateManager, ConsensusParam,
+    defaults, impls::state_manager::StateManager, storage_dir, ConsensusParam,
     StorageConfiguration,
 };
 use crate::storage::{

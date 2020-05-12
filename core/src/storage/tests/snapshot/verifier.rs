@@ -317,7 +317,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn get_null_snapshot() -> Self { unreachable!() }
 
     fn open(
-        _snapshot_path: &str, _readonly: bool,
+        _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
     ) -> Result<Self>
@@ -326,7 +326,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     }
 
     fn create(
-        _snapshot_path: &str,
+        _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
     ) -> Result<Self>
@@ -351,13 +351,13 @@ struct FakeSnapshotDbManager {
 impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     type SnapshotDb = Arc<Mutex<FakeSnapshotDb>>;
 
-    fn get_snapshot_dir(&self) -> String { unreachable!() }
+    fn get_snapshot_dir(&self) -> &Path { unreachable!() }
 
     fn get_snapshot_db_name(&self, _snapshot_epoch_id: &EpochId) -> String {
         unreachable!()
     }
 
-    fn get_snapshot_db_path(&self, _snapshot_epoch_id: &EpochId) -> String {
+    fn get_snapshot_db_path(&self, _snapshot_epoch_id: &EpochId) -> PathBuf {
         unreachable!()
     }
 
@@ -600,6 +600,7 @@ use rand::Rng;
 use std::{
     cmp::{max, min},
     collections::HashMap,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 use tokio::sync::Semaphore;

@@ -21,8 +21,8 @@ use cfxcore::{
     consensus_internal_parameters::*,
     consensus_parameters::*,
     storage::{
-        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
-        StorageConfiguration,
+        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
+        ConsensusParam, StorageConfiguration,
     },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -467,6 +467,7 @@ impl Configuration {
     }
 
     pub fn storage_config(&self) -> StorageConfiguration {
+        let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: if self.is_test_mode() {
@@ -491,14 +492,14 @@ impl Configuration {
                 .raw_conf
                 .storage_delta_mpts_slab_idle_size,
             max_open_snapshots: self.raw_conf.storage_max_open_snapshots,
-            path_delta_mpts_dir: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::DELTA_MPTS_DIR,
-            path_snapshot_dir: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::SNAPSHOT_DIR,
-            path_snapshot_info_db: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
-            path_storage_dir: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::STORAGE_DIR,
+            path_delta_mpts_dir: conflux_data_path
+                .join(&*storage_dir::DELTA_MPTS_DIR),
+            path_snapshot_dir: conflux_data_path
+                .join(&*storage_dir::SNAPSHOT_DIR),
+            path_snapshot_info_db: conflux_data_path
+                .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
+            path_storage_dir: conflux_data_path
+                .join(&*storage_dir::STORAGE_DIR),
         }
     }
 
