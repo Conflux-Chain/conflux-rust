@@ -68,12 +68,12 @@ pub struct OverlayAccount {
     accumulated_interest_return: U256,
     // This is the list of deposit info, sorted in increasing order of
     // `deposit_time`.
-    // If it is not `None`, which means it is loaded from db.
+    // If it is not `None`, which means it has been loaded from db.
     deposit_list: Option<DepositList>,
     // This is the list of vote info. The `unlock_time` sorted in increasing
     // order and the `amount` is sorted in decreasing order. All the
     // `unlock_time` and `amount` is unique in the list.
-    // If it is not `None`, which means it is loaded from db.
+    // If it is not `None`, which means it has been loaded from db.
     vote_stake_list: Option<VoteStakeList>,
 
     // Code hash of the account.
@@ -460,7 +460,7 @@ impl OverlayAccount {
         assert!(self.deposit_list.is_some());
         self.sub_balance(&amount);
         self.staking_balance += amount;
-        self.deposit_list.as_mut().unwrap().0.push(DepositInfo {
+        self.deposit_list.as_mut().unwrap().push(DepositInfo {
             amount,
             deposit_time,
             accumulated_interest_rate,
@@ -920,7 +920,7 @@ impl OverlayAccount {
             Some(deposit_list) => {
                 let storage_key =
                     StorageKey::new_deposit_list_key(&self.address);
-                if deposit_list.0.is_empty() {
+                if deposit_list.is_empty() {
                     db.delete(storage_key)?;
                 } else {
                     db.set::<DepositList>(storage_key, deposit_list)?;
@@ -932,7 +932,7 @@ impl OverlayAccount {
             None => {}
             Some(vote_stake_list) => {
                 let storage_key = StorageKey::new_vote_list_key(&self.address);
-                if vote_stake_list.0.is_empty() {
+                if vote_stake_list.is_empty() {
                     db.delete(storage_key)?;
                 } else {
                     db.set::<VoteStakeList>(storage_key, vote_stake_list)?;
