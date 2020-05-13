@@ -1,6 +1,6 @@
 use crate::{
     block_data_manager::{
-        BlockExecutionResultWithEpoch, BlockRewardResultWithEpoch,
+        BlockExecutionResultWithEpoch, BlockRewardResult,
         CheckpointHashes, EpochExecutionCommitment, EpochExecutionContext,
         LocalBlockInfo,
     },
@@ -223,7 +223,7 @@ impl DBManager {
     }
 
     pub fn insert_block_reward_result_to_db(
-        &self, hash: &H256, value: &BlockRewardResultWithEpoch,
+        &self, hash: &H256, value: &BlockRewardResult,
     ) {
         self.insert_encodable_val(
             DBTable::Blocks,
@@ -238,6 +238,15 @@ impl DBManager {
         self.load_decodable_val(
             DBTable::Blocks,
             &block_execution_result_key(hash),
+        )
+    }
+
+    pub fn block_reward_result_from_db(
+        &self, hash: &H256,
+    ) -> Option<BlockRewardResult> {
+        self.load_decodable_val(
+            DBTable::Blocks,
+            &block_reward_result_key(hash),
         )
     }
 

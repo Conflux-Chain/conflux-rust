@@ -16,6 +16,7 @@ use crate::rpc::{
         StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
+        RewardInfo as RpcRewardInfo,
     },
 };
 use cfx_types::{H160, H256, U256};
@@ -495,6 +496,7 @@ impl Cfx for CfxHandler {
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn check_balance_against_transaction(&self, account_addr: RpcH160, contract_addr: RpcH160, gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
+        fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
     }
 }
 

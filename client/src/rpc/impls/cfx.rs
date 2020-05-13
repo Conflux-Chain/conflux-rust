@@ -16,6 +16,7 @@ use crate::rpc::{
         StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
+        RewardInfo as RpcRewardInfo,
     },
     RpcResult,
 };
@@ -733,6 +734,11 @@ impl RpcImpl {
             .collect())
     }
 
+    fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>> {
+        info!("RPC Request: cfx_getBlockRewardInfo epoch_number={:?}", num);
+        Ok(vec![])
+    }
+
     fn call(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
@@ -968,6 +974,7 @@ impl Cfx for CfxHandler {
                 &self, account_addr: RpcH160, contract_addr: RpcH160, gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256, epoch: Option<EpochNumber>,
             ) -> JsonRpcResult<CheckBalanceAgainstTransactionResponse>;
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<RpcH256>;
             fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>)
                 -> BoxFuture<Option<RpcH256>>;

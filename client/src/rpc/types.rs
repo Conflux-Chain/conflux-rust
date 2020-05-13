@@ -20,6 +20,7 @@ mod storage_root;
 mod sync_graph_states;
 mod transaction;
 mod uint;
+mod reward_info;
 
 pub mod pubsub;
 
@@ -45,4 +46,5 @@ pub use self::{
     sync_graph_states::SyncGraphStates,
     transaction::{SendTxRequest, Transaction},
     uint::{U128, U256, U64},
+    reward_info::{RewardInfo},
 };

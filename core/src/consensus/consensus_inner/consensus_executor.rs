@@ -1460,16 +1460,6 @@ impl ConsensusExecutionHandler {
             } else {
                 base_reward + tx_fee
             };
-            self.data_man.insert_block_reward_result(
-                block_hash,
-                reward_epoch_hash,
-                BlockRewardResult {
-                    total_reward,
-                    tx_fee,
-                    base_reward,
-                },
-                true,
-            );
 
             *merged_rewards
                 .entry(*block.block_header.author())
@@ -1484,6 +1474,15 @@ impl ConsensusExecutionHandler {
                 ));
             }
             if on_local_pivot {
+                self.data_man.insert_block_reward_result(
+                    block_hash,
+                    BlockRewardResult {
+                        total_reward,
+                        tx_fee,
+                        base_reward,
+                    },
+                    true,
+                );
                 self.data_man
                     .receipts_retain_epoch(&block_hash, &reward_epoch_hash);
             }
