@@ -73,33 +73,41 @@ pub struct BlockExecutionResultWithEpoch(
 #[derive(Default, Debug)]
 pub struct BlockReceiptsInfo {
     info_with_epoch: Vec<BlockExecutionResultWithEpoch>,
+    // The current pivot epoch that this block is executed.
+    // This should be consistent with the epoch hash in database.
+    pivot_epoch: EpochIndex,
 }
 
 impl BlockReceiptsInfo {
-    /// `epoch` is the index of the epoch id in consensus arena
+    /// Return None if we do not have a corresponding ExecutionResult in the
+    /// given `epoch`. Return `(ExecutionResult, is_on_pivot)` otherwise.
     pub fn get_receipts_at_epoch(
         &self, epoch: &EpochIndex,
-    ) -> Option<BlockExecutionResult> {
+    ) -> Option<(BlockExecutionResult, bool)> {
         for BlockExecutionResultWithEpoch(e_id, receipts) in
             &self.info_with_epoch
         {
             if *e_id == *epoch {
-                return Some(receipts.clone());
+                return Some((receipts.clone(), epoch == &self.pivot_epoch));
             }
         }
         None
+    }
+
+    pub fn set_pivot_hash(&mut self, epoch: EpochIndex) {
+        self.pivot_epoch = epoch;
     }
 
     /// Insert the tx fee when the block is included in epoch `epoch`
     pub fn insert_receipts_at_epoch(
         &mut self, epoch: &EpochIndex, receipts: BlockExecutionResult,
     ) {
-        // If it's inserted before, the fee must be the same, so we do not add
-        // duplicate entry
+        // If it's inserted before, we do not need to push a duplicated entry.
         if self.get_receipts_at_epoch(epoch).is_none() {
             self.info_with_epoch
                 .push(BlockExecutionResultWithEpoch(*epoch, receipts));
         }
+        self.pivot_epoch = *epoch;
     }
 
     /// Only keep the tx fee in the given `epoch`
@@ -107,6 +115,7 @@ impl BlockReceiptsInfo {
     pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
         self.info_with_epoch
             .retain(|BlockExecutionResultWithEpoch(e_id, _)| *e_id == *epoch);
+        self.pivot_epoch = *epoch;
     }
 }
 
