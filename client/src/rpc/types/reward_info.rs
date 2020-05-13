@@ -1,5 +1,5 @@
 use crate::rpc::types::{H256, U256};
-use cfx_types::{H256 as CfxH256};
+use cfx_types::H256 as CfxH256;
 use cfxcore::block_data_manager::BlockRewardResult;
 
 #[derive(Debug, Serialize, Clone, Deserialize)]

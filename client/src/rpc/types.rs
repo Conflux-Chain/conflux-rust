@@ -15,12 +15,12 @@ mod index;
 mod log;
 mod provenance;
 mod receipt;
+mod reward_info;
 mod status;
 mod storage_root;
 mod sync_graph_states;
 mod transaction;
 mod uint;
-mod reward_info;
 
 pub mod pubsub;
 
@@ -41,10 +41,10 @@ pub use self::{
     log::Log,
     provenance::Origin,
     receipt::Receipt,
+    reward_info::RewardInfo,
     status::Status,
     storage_root::StorageRoot,
     sync_graph_states::SyncGraphStates,
     transaction::{SendTxRequest, Transaction},
     uint::{U128, U256, U64},
-    reward_info::{RewardInfo},
 };

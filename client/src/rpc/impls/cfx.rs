@@ -11,12 +11,11 @@ use crate::rpc::{
         BlockHashOrEpochNumber, Bytes, CallRequest,
         CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-        Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
-        SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
         StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
-        RewardInfo as RpcRewardInfo,
     },
     RpcResult,
 };
@@ -734,9 +733,27 @@ impl RpcImpl {
             .collect())
     }
 
-    fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>> {
-        info!("RPC Request: cfx_getBlockRewardInfo epoch_number={:?}", num);
-        Ok(vec![])
+    fn get_block_reward_info(
+        &self, epoch: EpochNumber,
+    ) -> RpcResult<Vec<RpcRewardInfo>> {
+        info!(
+            "RPC Request: cfx_getBlockRewardInfo epoch_number={:?}",
+            epoch
+        );
+
+        let blocks = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
+
+        let mut ret = Vec::new();
+        for b in blocks {
+            if let Some(reward_result) = self
+                .consensus
+                .get_data_manager()
+                .block_reward_result_by_hash(&b)
+            {
+                ret.push(RpcRewardInfo::new(b, reward_result));
+            }
+        }
+        Ok(ret)
     }
 
     fn call(

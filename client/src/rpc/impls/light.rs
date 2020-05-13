@@ -11,12 +11,11 @@ use crate::rpc::{
         BlockHashOrEpochNumber, Bytes, CallRequest,
         CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-        Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
-        SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
         StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
-        RewardInfo as RpcRewardInfo,
     },
 };
 use cfx_types::{H160, H256, U256};

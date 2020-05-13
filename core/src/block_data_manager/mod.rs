@@ -711,19 +711,29 @@ impl BlockDataManager {
     }
 
     pub fn insert_block_reward_result(
-        &self, hash: H256, block_reward: BlockRewardResult,
-        persistent: bool,
-    )
-    {
+        &self, hash: H256, block_reward: BlockRewardResult, persistent: bool,
+    ) {
         self.insert(
             hash,
             block_reward,
             &self.block_rewards,
             |hash, value| {
-                self.db_manager.insert_block_reward_result_to_db(hash, value)
+                self.db_manager
+                    .insert_block_reward_result_to_db(hash, value)
             },
             Some(CacheId::BlockRewards(hash)),
             persistent,
+        )
+    }
+
+    pub fn block_reward_result_by_hash(
+        &self, hash: &H256,
+    ) -> Option<BlockRewardResult> {
+        self.get(
+            hash,
+            &self.block_rewards,
+            |key| self.db_manager.block_reward_result_from_db(key),
+            Some(CacheId::BlockRewards(*hash)),
         )
     }
 

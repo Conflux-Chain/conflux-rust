@@ -1,8 +1,7 @@
 use crate::{
     block_data_manager::{
-        BlockExecutionResultWithEpoch, BlockRewardResult,
-        CheckpointHashes, EpochExecutionCommitment, EpochExecutionContext,
-        LocalBlockInfo,
+        BlockExecutionResultWithEpoch, BlockRewardResult, CheckpointHashes,
+        EpochExecutionCommitment, EpochExecutionContext, LocalBlockInfo,
     },
     db::{COL_BLOCKS, COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX},
     storage::{
@@ -244,10 +243,7 @@ impl DBManager {
     pub fn block_reward_result_from_db(
         &self, hash: &H256,
     ) -> Option<BlockRewardResult> {
-        self.load_decodable_val(
-            DBTable::Blocks,
-            &block_reward_result_key(hash),
-        )
+        self.load_decodable_val(DBTable::Blocks, &block_reward_result_key(hash))
     }
 
     pub fn remove_block_execution_result_from_db(&self, hash: &H256) {
