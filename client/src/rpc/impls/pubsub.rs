@@ -322,7 +322,8 @@ impl ChainNotificationHandler {
 
         for iter in 0..NUM_POLLS {
             match self.data_man.block_execution_result_by_hash_with_epoch(
-                &block, &pivot, true, /* update_cache */
+                &block, &pivot, false, /* update_pivot_assumption */
+                true,  /* update_cache */
             ) {
                 Some(res) => return Some(res.block_receipts.clone()),
                 None => {

@@ -185,7 +185,8 @@ impl LedgerInfo {
                 self.consensus
                     .get_data_manager()
                     .block_execution_result_by_hash_with_epoch(
-                        &h, &pivot, false, /* update_cache */
+                        &h, &pivot, false, /* update_pivot_assumption */
+                        false, /* update_cache */
                     )
                     .map(|res| (*res.block_receipts).clone())
                     .ok_or(ErrorKind::InternalError.into())
@@ -209,7 +210,8 @@ impl LedgerInfo {
                 self.consensus
                     .get_data_manager()
                     .block_execution_result_by_hash_with_epoch(
-                        &h, &pivot, false, /* update_cache */
+                        &h, &pivot, false, /* update_pivot_assumption */
+                        false, /* update_cache */
                     )
                     .map(|res| res.bloom)
                     .ok_or(ErrorKind::InternalError.into())
