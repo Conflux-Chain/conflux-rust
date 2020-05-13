@@ -5,16 +5,20 @@
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TrieProof {
     /// The first node must be the root node. Child node must come later than
-    /// parent node.
+    /// one of its parent node.
     nodes: Vec<TrieProofNode>,
     merkle_to_node_index: HashMap<MerkleHash, usize>,
-    /// Root node doesn't have parent, so we set an invalid parent_index:
-    /// number_nodes.
-    parent_node_index: Vec<usize>,
-    // Root node doesn't have parent, so we leave child_index[0]
-    // default-initialized to 0.
-    pub child_index: Vec<u8>,
+    /// A node can be child of multiple nodes, because same MerkleHash can
+    /// appear at different places of the MPT.
+    nodes_parent_infos: Vec<Vec<ParentInfo>>,
     number_leaf_nodes: u32,
+}
+
+/// The node is the child_index child of the node at parent_node_index.
+#[derive(Clone, Debug, PartialEq)]
+struct ParentInfo {
+    parent_node_index: usize,
+    child_index: u8,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -58,29 +62,27 @@ impl TrieProof {
             .map(|(index, node)| (node.get_merkle().clone(), index))
             .collect::<HashMap<H256, usize>>();
         let number_nodes = nodes.len();
-        let mut parent_node_index = Vec::with_capacity(number_nodes);
-        let mut child_index = Vec::with_capacity(number_nodes);
+        let mut nodes_parent_infos = Vec::with_capacity(number_nodes);
         let mut is_non_leaf = vec![false; number_nodes];
 
         // Connectivity check.
         let mut connected_child_parent_map =
-            HashMap::<MerkleHash, (usize, u8), RandomState>::default();
+            HashMap::<MerkleHash, Vec<ParentInfo>, RandomState>::default();
         match nodes.get(0) {
             None => {}
             Some(node) => {
                 connected_child_parent_map
-                    .insert(node.get_merkle().clone(), (number_nodes, 0));
+                    .entry(node.get_merkle().clone())
+                    .or_insert(vec![]);
             }
         }
-        for (parent_index, node) in nodes.iter().enumerate() {
+        for (node_index, node) in nodes.iter().enumerate() {
             match connected_child_parent_map.get(node.get_merkle()) {
                 // Not connected.
                 None => bail!(ErrorKind::InvalidTrieProof),
-                Some((parent_index, child_index_of_parent)) => {
-                    parent_node_index.push(*parent_index);
-                    child_index.push(*child_index_of_parent);
-                    if *parent_index < number_nodes {
-                        is_non_leaf[*parent_index] = true;
+                Some(parent_infos) => {
+                    for parent_info in parent_infos {
+                        is_non_leaf[parent_info.parent_node_index] = true;
                     }
                 }
             }
@@ -88,7 +90,24 @@ impl TrieProof {
                 node.get_children_table_ref().iter()
             {
                 connected_child_parent_map
-                    .insert(child_merkle.clone(), (parent_index, child_index));
+                    .entry(child_merkle.clone())
+                    .or_insert(vec![])
+                    .push(ParentInfo {
+                        parent_node_index: node_index,
+                        child_index,
+                    });
+            }
+        }
+        // We get parent_info after the construction of
+        // connected_child_parent_map because node of same Merkle Hash
+        // may appear many times, and a node can be child of more than
+        // one nodes in the proof. Some of the parent nodes may come
+        // later than the child node.
+        for node in &nodes {
+            if let Some(parent_infos) =
+                connected_child_parent_map.get(node.get_merkle())
+            {
+                nodes_parent_infos.push(parent_infos.clone());
             }
         }
 
@@ -102,8 +121,7 @@ impl TrieProof {
         Ok(TrieProof {
             nodes,
             merkle_to_node_index,
-            parent_node_index,
-            child_index,
+            nodes_parent_infos,
             number_leaf_nodes,
         })
     }
@@ -213,32 +231,86 @@ impl TrieProof {
 
     pub fn get_proof_nodes(&self) -> &Vec<TrieProofNode> { &self.nodes }
 
-    pub fn compute_snapshot_mpt_key_for_all_nodes(
-        &self,
-    ) -> Vec<CompressedPathRaw> {
+    /// Returns the (snapshot_mpt_key, child_index, trie_node) along the proof
+    /// path of key.
+    pub fn compute_snapshot_mpt_path_for_proof(
+        &self, key: &[u8],
+    ) -> Vec<(CompressedPathRaw, u8, &VanillaTrieNode<MerkleHash>)> {
         let mut full_paths = Vec::with_capacity(self.nodes.len());
-        let mut keys = Vec::with_capacity(self.nodes.len());
+        let mut keys_child_indices_and_nodes =
+            Vec::with_capacity(self.nodes.len());
         // At the time of coding, The root node is guaranteed to have empty
         // compressed_path. But to be on the safe side, we use the root
         // node's compressed path as its full path.
+        let merkle_root;
+        // root node isn't a child, so we use CHILDREN_COUNT to distinguish
+        let mut child_index = CHILDREN_COUNT as u8;
         if let Some(node) = self.nodes.get(0) {
             full_paths.push(node.compressed_path_ref().into());
-            keys.push(CompressedPathRaw::default());
-        }
-        for i in 1..self.nodes.len() {
-            full_paths.push(CompressedPathRaw::join_connected_paths(
-                &full_paths[self.parent_node_index[i]],
-                self.child_index[i],
-                &self.nodes[i].compressed_path_ref(),
+            keys_child_indices_and_nodes.push((
+                CompressedPathRaw::default(),
+                child_index,
+                &**node,
             ));
-
-            keys.push(CompressedPathRaw::extend_path(
-                &full_paths[self.parent_node_index[i]],
-                self.child_index[i],
-            ));
+            merkle_root = *node.get_merkle();
+        } else {
+            return vec![];
         }
 
-        keys
+        let mut key_remaining = key;
+        let mut hash = &merkle_root;
+
+        loop {
+            let node = match self.merkle_to_node_index.get(hash) {
+                Some(node_index) =>
+                // The node_index is guaranteed to exist so it's actually safe.
+                unsafe { self.nodes.get_unchecked(*node_index) }
+                None => {
+                    // Missing node. The proof can be invalid or incomplete for
+                    // the key.
+                    return vec![];
+                }
+            };
+
+            if child_index < CHILDREN_COUNT as u8 {
+                let parent_node_full_path = full_paths.last().unwrap();
+                let full_path = CompressedPathRaw::join_connected_paths(
+                    parent_node_full_path,
+                    child_index,
+                    &node.compressed_path_ref(),
+                );
+                keys_child_indices_and_nodes.push((
+                    CompressedPathRaw::extend_path(
+                        parent_node_full_path,
+                        child_index,
+                    ),
+                    child_index,
+                    &**node,
+                ));
+                full_paths.push(full_path);
+            }
+
+            match node.walk::<Read>(key_remaining) {
+                WalkStop::Arrived => {
+                    return keys_child_indices_and_nodes;
+                }
+                WalkStop::PathDiverted { .. } => {
+                    return vec![];
+                }
+                WalkStop::ChildNotFound { .. } => {
+                    return vec![];
+                }
+                WalkStop::Descent {
+                    key_remaining: new_key_remaining,
+                    child_node,
+                    child_index: new_child_index,
+                } => {
+                    child_index = new_child_index;
+                    hash = child_node;
+                    key_remaining = new_key_remaining;
+                }
+            }
+        }
     }
 }
 
@@ -287,6 +359,7 @@ use super::{
     CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
     VanillaChildrenTable, VanillaTrieNode,
 };
+use crate::storage::impls::merkle_patricia_trie::CHILDREN_COUNT;
 use cfx_types::H256;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;

@@ -41,15 +41,26 @@ impl MptSliceVerifier {
         let mut boundary_nodes = HashMap::default();
 
         if let Some(left_proof) = maybe_left_proof {
-            Self::add_boundary_nodes(&mut boundary_nodes, left_proof);
+            Self::add_boundary_nodes(
+                &mut boundary_nodes,
+                left_proof,
+                left_key_bound,
+            );
         }
         if let Some(right_proof) = maybe_right_proof {
-            Self::add_boundary_nodes(&mut boundary_nodes, right_proof);
+            Self::add_boundary_nodes(
+                &mut boundary_nodes,
+                right_proof,
+                // The right key bound must exists when the proof exists.
+                maybe_right_key_bound_excl.unwrap(),
+            );
         }
 
         let boundary_nodes_to_load = Self::calculate_boundary_nodes_to_load(
             maybe_left_proof,
+            left_key_bound,
             maybe_right_proof,
+            maybe_right_key_bound_excl,
             &boundary_nodes,
         );
 
@@ -113,8 +124,9 @@ impl MptSliceVerifier {
     }
 
     fn calculate_boundary_nodes_to_load(
-        maybe_left_proof: Option<&TrieProof>,
+        maybe_left_proof: Option<&TrieProof>, left_key_bound: &[u8],
         maybe_right_proof: Option<&TrieProof>,
+        maybe_right_key_bound_excl: Option<&[u8]>,
         boundary_nodes: &HashMap<
             CompressedPathRaw,
             VanillaTrieNode<MerkleHash>,
@@ -129,51 +141,49 @@ impl MptSliceVerifier {
             HashMap::<CompressedPathRaw, bool, RandomState>::default();
 
         if let Some(left_proof) = maybe_left_proof {
-            let snapshot_mpt_keys =
-                left_proof.compute_snapshot_mpt_key_for_all_nodes();
+            let snapshot_mpt_path =
+                left_proof.compute_snapshot_mpt_path_for_proof(left_key_bound);
 
+            let left_bound_snapshot_mpt_key =
+                snapshot_mpt_path.last().unwrap().0.clone();
             index_open_left_bounds
-                .insert(snapshot_mpt_keys.last().unwrap().clone(), 0);
+                .insert(left_bound_snapshot_mpt_key.clone(), 0);
             index_open_right_bounds_excl.insert(
-                snapshot_mpt_keys.last().unwrap().clone(),
+                left_bound_snapshot_mpt_key.clone(),
                 CHILDREN_COUNT as u8,
             );
-            remove_value
-                .insert(snapshot_mpt_keys.last().unwrap().clone(), true);
+            remove_value.insert(left_bound_snapshot_mpt_key, true);
 
-            for i in 0..snapshot_mpt_keys.len() - 1 {
-                index_open_left_bounds.insert(
-                    snapshot_mpt_keys[i].clone(),
-                    left_proof.child_index[i + 1] + 1,
-                );
+            for i in 0..snapshot_mpt_path.len() - 1 {
+                let mpt_key = snapshot_mpt_path[i].0.clone();
+                let child_index = snapshot_mpt_path[i + 1].1;
+                index_open_left_bounds.insert(mpt_key.clone(), child_index + 1);
                 index_open_right_bounds_excl
-                    .insert(snapshot_mpt_keys[i].clone(), CHILDREN_COUNT as u8);
-                remove_value.insert(snapshot_mpt_keys[i].clone(), false);
+                    .insert(mpt_key.clone(), CHILDREN_COUNT as u8);
+                remove_value.insert(mpt_key, false);
             }
         }
 
         if let Some(right_proof) = maybe_right_proof {
-            let snapshot_mpt_keys =
-                right_proof.compute_snapshot_mpt_key_for_all_nodes();
-
-            for i in 0..snapshot_mpt_keys.len() - 1 {
-                index_open_left_bounds
-                    .entry(snapshot_mpt_keys[i].clone())
-                    .or_insert(0);
-                index_open_right_bounds_excl.insert(
-                    snapshot_mpt_keys[i].clone(),
-                    right_proof.child_index[i + 1],
+            let snapshot_mpt_path = right_proof
+                .compute_snapshot_mpt_path_for_proof(
+                    // The key_bound must exists when proof exists.
+                    maybe_right_key_bound_excl.unwrap(),
                 );
-                remove_value
-                    .entry(snapshot_mpt_keys[i].clone())
-                    .or_insert(true);
+
+            for i in 0..snapshot_mpt_path.len() - 1 {
+                let mpt_key = snapshot_mpt_path[i].0.clone();
+                let child_index = snapshot_mpt_path[i + 1].1;
+                index_open_left_bounds.entry(mpt_key.clone()).or_insert(0);
+                index_open_right_bounds_excl
+                    .insert(mpt_key.clone(), child_index);
+                remove_value.entry(mpt_key).or_insert(true);
             }
-            index_open_right_bounds_excl
-                .insert(snapshot_mpt_keys.last().unwrap().clone(), 0);
-            index_open_left_bounds
-                .insert(snapshot_mpt_keys.last().unwrap().clone(), 0);
-            remove_value
-                .insert(snapshot_mpt_keys.last().unwrap().clone(), false);
+
+            let last_mpt_key = snapshot_mpt_path.last().unwrap().0.clone();
+            index_open_right_bounds_excl.insert(last_mpt_key.clone(), 0);
+            index_open_left_bounds.insert(last_mpt_key.clone(), 0);
+            remove_value.insert(last_mpt_key, false);
         }
 
         let mut boundary_nodes_to_load = HashMap::default();
@@ -224,22 +234,12 @@ impl MptSliceVerifier {
             CompressedPathRaw,
             VanillaTrieNode<MerkleHash>,
         >,
-        proof: &TrieProof,
+        proof: &TrieProof, key: &[u8],
     )
     {
-        let snapshot_mpt_keys = proof.compute_snapshot_mpt_key_for_all_nodes();
-        let trie_proof_nodes = proof.get_proof_nodes();
-        for i in 0..snapshot_mpt_keys.len() {
-            let trie_node = &*trie_proof_nodes[i];
-            boundary_nodes
-                .insert(snapshot_mpt_keys[i].clone(), trie_node.clone());
-        }
-        for (snapshot_mpt_key, trie_proof_node) in snapshot_mpt_keys
-            .into_iter()
-            .zip(proof.get_proof_nodes().iter())
-        {
-            boundary_nodes
-                .insert(snapshot_mpt_key, (&**trie_proof_node).clone());
+        let keys_and_nodes = proof.compute_snapshot_mpt_path_for_proof(key);
+        for (snapshot_mpt_key, _child_index, trie_node) in keys_and_nodes {
+            boundary_nodes.insert(snapshot_mpt_key, trie_node.clone());
         }
     }
 }
