@@ -84,3 +84,7 @@ debug-assertions = true
 
 [profile.bench]
 debug-assertions = true
+overflow-checks = true
+
+[profile.release]
+overflow-checks = true
