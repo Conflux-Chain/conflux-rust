@@ -801,7 +801,9 @@ impl ConsensusGraph {
         if let Some(block_log_bloom) = self
             .data_man
             .block_execution_result_by_hash_with_epoch(
-                block_hash, epoch_hash, false, /* update_cache */
+                block_hash, epoch_hash,
+                false, /* update_pivot_assumption */
+                false, /* update_cache */
             )
             .map(|r| r.bloom)
         {
