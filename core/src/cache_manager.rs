@@ -33,6 +33,7 @@ pub enum CacheId {
     Block(H256),
     BlockHeader(H256),
     BlockReceipts(H256),
+    BlockRewards(H256),
     TransactionAddress(H256),
     CompactBlock(H256),
 }
@@ -130,6 +131,8 @@ pub struct CacheSize {
     pub blocks: usize,
     /// Block Receipts cache size.
     pub block_receipts: usize,
+    /// Block Rewards cache size.
+    pub block_rewards: usize,
     /// Transaction indices cache size.
     pub transaction_indices: usize,
     /// Compact blocks cache size.
@@ -141,6 +144,7 @@ impl CacheSize {
     pub fn total(&self) -> usize {
         self.blocks
             + self.block_receipts
+            + self.block_rewards
             + self.transaction_indices
             + self.compact_blocks
     }

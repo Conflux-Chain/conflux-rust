@@ -1,5 +1,5 @@
 use crate::storage::StateRootWithAuxInfo;
-use cfx_types::{Bloom, H256};
+use cfx_types::{Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::BlockReceipts;
@@ -58,6 +58,23 @@ impl Decodable for BlockExecutionResult {
     }
 }
 
+#[derive(RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf)]
+pub struct BlockRewardResult {
+    pub total_reward: U256,
+    pub base_reward: U256,
+    pub tx_fee: U256,
+}
+
+impl Default for BlockRewardResult {
+    fn default() -> Self {
+        BlockRewardResult {
+            total_reward: U256::from(0),
+            base_reward: U256::from(0),
+            tx_fee: U256::from(0),
+        }
+    }
+}
+
 /// The structure to maintain the `BlockExecutedResult` of blocks under
 /// different views.
 ///
@@ -72,7 +89,7 @@ pub struct BlockExecutionResultWithEpoch(
 );
 #[derive(Default, Debug)]
 pub struct BlockReceiptsInfo {
-    info_with_epoch: Vec<BlockExecutionResultWithEpoch>,
+    execution_info_with_epoch: Vec<BlockExecutionResultWithEpoch>,
     // The current pivot epoch that this block is executed.
     // This should be consistent with the epoch hash in database.
     pivot_epoch: EpochIndex,
@@ -85,7 +102,7 @@ impl BlockReceiptsInfo {
         &self, epoch: &EpochIndex,
     ) -> Option<(BlockExecutionResult, bool)> {
         for BlockExecutionResultWithEpoch(e_id, receipts) in
-            &self.info_with_epoch
+            &self.execution_info_with_epoch
         {
             if *e_id == *epoch {
                 return Some((receipts.clone(), epoch == &self.pivot_epoch));
@@ -104,16 +121,16 @@ impl BlockReceiptsInfo {
     ) {
         // If it's inserted before, we do not need to push a duplicated entry.
         if self.get_receipts_at_epoch(epoch).is_none() {
-            self.info_with_epoch
+            self.execution_info_with_epoch
                 .push(BlockExecutionResultWithEpoch(*epoch, receipts));
         }
         self.pivot_epoch = *epoch;
     }
 
-    /// Only keep the tx fee in the given `epoch`
+    /// Only keep the receipts in the given `epoch`
     /// Called after we process rewards, and other fees will not be used w.h.p.
     pub fn retain_epoch(&mut self, epoch: &EpochIndex) {
-        self.info_with_epoch
+        self.execution_info_with_epoch
             .retain(|BlockExecutionResultWithEpoch(e_id, _)| *e_id == *epoch);
         self.pivot_epoch = *epoch;
     }
@@ -121,7 +138,7 @@ impl BlockReceiptsInfo {
 
 impl MallocSizeOf for BlockReceiptsInfo {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.info_with_epoch.size_of(ops)
+        self.execution_info_with_epoch.size_of(ops)
     }
 }
 

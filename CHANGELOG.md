@@ -41,6 +41,9 @@ the pool will not be able to tell whether they mined a block or not.
 - Improve the stratum protocol to make it more consistent with the convention.
 Now the stratum protocol can correctly work with an external miner.
 
+- A new RPC ctx_getBlockRewardInfo to query block reward information inside a 
+given epoch.
+
 # 0.5.0
 
 ## Improvements
