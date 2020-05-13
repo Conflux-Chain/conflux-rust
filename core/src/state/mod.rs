@@ -156,11 +156,17 @@ impl State {
         secondary_reward
     }
 
-    /// Maintain `total_issued_tokens`, both secondary reward and primary reward
-    /// are included.
-    pub fn add_block_rewards(&mut self, rewards: U256) {
+    /// Maintain `total_issued_tokens`.
+    pub fn add_total_issued(&mut self, v: U256) {
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
-        self.staking_state.total_issued_tokens += rewards;
+        self.staking_state.total_issued_tokens += v;
+    }
+
+    /// Maintain `total_issued_tokens`. This is only used in the extremely
+    /// unlikely case that there are a lot of partial invalid blocks.
+    pub fn subtract_total_issued(&mut self, v: U256) {
+        assert!(self.staking_state_checkpoints.get_mut().is_empty());
+        self.staking_state.total_issued_tokens -= v;
     }
 
     /// Get a VM factory that can execute on this state.
