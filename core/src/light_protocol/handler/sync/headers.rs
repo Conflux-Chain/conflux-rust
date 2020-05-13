@@ -230,7 +230,7 @@ impl Headers {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} hashes={:?}", peer, hashes);
+        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
             return Ok(None);
@@ -246,7 +246,7 @@ impl Headers {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("header sync statistics: {:?}", self.get_statistics());
+        debug!("header sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_HEADERS_IN_FLIGHT,

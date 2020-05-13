@@ -152,7 +152,7 @@ impl Witnesses {
     ) -> Result<(), Error>
     {
         for item in witnesses {
-            info!("Validating witness info {:?}", item);
+            debug!("Validating witness info {:?}", item);
 
             match self.sync_manager.check_if_requested(
                 peer,
@@ -193,7 +193,7 @@ impl Witnesses {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, witnesses: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} witnesses={:?}", peer, witnesses);
+        debug!("send_request peer={:?} witnesses={:?}", peer, witnesses);
 
         if witnesses.is_empty() {
             return Ok(None);
@@ -212,7 +212,7 @@ impl Witnesses {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("witness sync statistics: {:?}", self.get_statistics());
+        debug!("witness sync statistics: {:?}", self.get_statistics());
 
         if let Err(e) = self.verify_pivot_chain() {
             warn!("Failed to verify pivot chain: {:?}", e);

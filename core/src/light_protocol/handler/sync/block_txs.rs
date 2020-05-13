@@ -107,7 +107,7 @@ impl BlockTxs {
     ) -> Result<(), Error>
     {
         for BlockTxsWithHash { hash, block_txs } in block_txs {
-            info!("Validating block_txs {:?} with hash {}", block_txs, hash);
+            debug!("Validating block_txs {:?} with hash {}", block_txs, hash);
 
             match self.sync_manager.check_if_requested(peer, id, &hash)? {
                 None => continue,
@@ -156,7 +156,7 @@ impl BlockTxs {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} hashes={:?}", peer, hashes);
+        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
             return Ok(None);
@@ -172,7 +172,7 @@ impl BlockTxs {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("block tx sync statistics: {:?}", self.get_statistics());
+        debug!("block tx sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_BLOCK_TXS_IN_FLIGHT,

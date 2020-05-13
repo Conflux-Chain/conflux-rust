@@ -344,7 +344,7 @@ impl Provider {
     fn on_get_state_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateRoots,
     ) -> Result<(), Error> {
-        info!("on_get_state_roots req={:?}", req);
+        debug!("on_get_state_roots req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -368,7 +368,7 @@ impl Provider {
     fn on_get_state_entries(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStateEntries,
     ) -> Result<(), Error> {
-        info!("on_get_state_entries req={:?}", req);
+        debug!("on_get_state_entries req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -398,7 +398,7 @@ impl Provider {
         req: GetBlockHashesByEpoch,
     ) -> Result<(), Error>
     {
-        info!("on_get_block_hashes_by_epoch req={:?}", req);
+        debug!("on_get_block_hashes_by_epoch req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -422,7 +422,7 @@ impl Provider {
     fn on_get_block_headers(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlockHeaders,
     ) -> Result<(), Error> {
-        info!("on_get_block_headers req={:?}", req);
+        debug!("on_get_block_headers req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -450,7 +450,7 @@ impl Provider {
     fn on_send_raw_tx(
         &self, _io: &dyn NetworkContext, peer: &NodeId, req: SendRawTx,
     ) -> Result<(), Error> {
-        info!("on_send_raw_tx req={:?}", req);
+        debug!("on_send_raw_tx req={:?}", req);
         self.throttle(peer, &req)?;
         let tx: TransactionWithSignature = rlp::decode(&req.raw)?;
 
@@ -458,7 +458,7 @@ impl Provider {
 
         match (passed.len(), failed.len()) {
             (0, 0) => {
-                info!("Tx already inserted, ignoring");
+                debug!("Tx already inserted, ignoring");
                 Ok(())
             }
             (0, 1) => {
@@ -467,7 +467,7 @@ impl Provider {
                 Ok(())
             }
             (1, 0) => {
-                info!("Tx inserted successfully");
+                debug!("Tx inserted successfully");
                 // TODO(thegaram): consider relaying to peers
                 Ok(())
             }
@@ -485,7 +485,7 @@ impl Provider {
     fn on_get_receipts(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetReceipts,
     ) -> Result<(), Error> {
-        info!("on_get_receipts req={:?}", req);
+        debug!("on_get_receipts req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -512,7 +512,7 @@ impl Provider {
     fn on_get_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetTxs,
     ) -> Result<(), Error> {
-        info!("on_get_txs req={:?}", req);
+        debug!("on_get_txs req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -533,7 +533,7 @@ impl Provider {
     fn on_get_witness_info(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetWitnessInfo,
     ) -> Result<(), Error> {
-        info!("on_get_witness_info req={:?}", req);
+        debug!("on_get_witness_info req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -553,7 +553,7 @@ impl Provider {
     fn on_get_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlooms,
     ) -> Result<(), Error> {
-        info!("on_get_blooms req={:?}", req);
+        debug!("on_get_blooms req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -575,7 +575,7 @@ impl Provider {
     fn on_get_block_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetBlockTxs,
     ) -> Result<(), Error> {
-        info!("on_get_block_txs req={:?}", req);
+        debug!("on_get_block_txs req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 
@@ -610,7 +610,7 @@ impl Provider {
     fn on_get_tx_infos(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetTxInfos,
     ) -> Result<(), Error> {
-        info!("on_get_tx_infos req={:?}", req);
+        debug!("on_get_tx_infos req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
 

@@ -243,7 +243,7 @@ impl QueryService {
     pub async fn get_account(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Account>, String> {
-        info!("get_account epoch={:?} address={:?}", epoch, address);
+        debug!("get_account epoch={:?} address={:?}", epoch, address);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
@@ -260,7 +260,7 @@ impl QueryService {
     pub async fn get_code(
         &self, epoch: EpochNumber, address: H160,
     ) -> Result<Option<Vec<u8>>, String> {
-        info!("get_code epoch={:?} address={:?}", epoch, address);
+        debug!("get_code epoch={:?} address={:?}", epoch, address);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
@@ -294,7 +294,7 @@ impl QueryService {
     pub async fn get_storage(
         &self, epoch: EpochNumber, address: H160, position: H256,
     ) -> Result<Option<H256>, String> {
-        info!(
+        debug!(
             "get_storage epoch={:?} address={:?} position={:?}",
             epoch, address, position
         );
@@ -314,7 +314,7 @@ impl QueryService {
     }
 
     pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
-        info!("get_tx_info hash={:?}", hash);
+        debug!("get_tx_info hash={:?}", hash);
 
         // Note: if a transaction does not exist, we fail with timeout, as
         //       peers cannot provide non-existence proofs for transactions.
@@ -374,7 +374,7 @@ impl QueryService {
     pub async fn get_tx(
         &self, hash: H256,
     ) -> Result<SignedTransaction, String> {
-        info!("get_tx hash={:?}", hash);
+        debug!("get_tx hash={:?}", hash);
 
         with_timeout(
             *MAX_POLL_TIME,

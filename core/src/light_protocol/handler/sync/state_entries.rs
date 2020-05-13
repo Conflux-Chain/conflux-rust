@@ -120,7 +120,7 @@ impl StateEntries {
     ) -> Result<(), Error>
     {
         for StateEntryWithKey { key, entry, proof } in entries {
-            info!("Validating state entry {:?} with key {:?}", entry, key);
+            debug!("Validating state entry {:?} with key {:?}", entry, key);
 
             match self.sync_manager.check_if_requested(peer, id, &key)? {
                 None => continue,
@@ -165,7 +165,7 @@ impl StateEntries {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, keys: Vec<StateKey>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} keys={:?}", peer, keys);
+        debug!("send_request peer={:?} keys={:?}", peer, keys);
 
         if keys.is_empty() {
             return Ok(None);
@@ -181,7 +181,7 @@ impl StateEntries {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("state entry sync statistics: {:?}", self.get_statistics());
+        debug!("state entry sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_STATE_ENTRIES_IN_FLIGHT,
@@ -210,7 +210,7 @@ impl StateEntries {
 
         // validate proof
         if !proof.is_valid_kv(key, value.as_ref().map(|v| &**v), root) {
-            info!("Invalid proof");
+            warn!("Invalid state proof for {:?} under key {:?}", value, key);
             return Err(ErrorKind::InvalidStateProof.into());
         }
 

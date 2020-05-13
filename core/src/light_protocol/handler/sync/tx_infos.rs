@@ -118,7 +118,7 @@ impl TxInfos {
     ) -> Result<(), Error>
     {
         for info in infos {
-            info!("Validating tx_info {:?}", info);
+            debug!("Validating tx_info {:?}", info);
 
             match self.sync_manager.check_if_requested(
                 peer,
@@ -206,7 +206,7 @@ impl TxInfos {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, hashes: Vec<H256>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} hashes={:?}", peer, hashes);
+        debug!("send_request peer={:?} hashes={:?}", peer, hashes);
 
         if hashes.is_empty() {
             return Ok(None);
@@ -221,7 +221,7 @@ impl TxInfos {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("tx info sync statistics: {:?}", self.get_statistics());
+        debug!("tx info sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_TX_INFOS_IN_FLIGHT,

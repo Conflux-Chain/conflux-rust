@@ -163,7 +163,7 @@ impl Epochs {
     fn request_epochs(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("request_epochs peer={:?} epochs={:?}", peer, epochs);
+        debug!("request_epochs peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
             return Ok(None);
@@ -179,7 +179,7 @@ impl Epochs {
     }
 
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("epoch sync statistics: {:?}", self.get_statistics());
+        debug!("epoch sync statistics: {:?}", self.get_statistics());
 
         if self.headers.num_waiting() >= NUM_WAITING_HEADERS_THRESHOLD {
             return;

@@ -131,7 +131,7 @@ impl RpcImpl {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
-            "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
+            "RPC Request: cfx_getSponsorInfo address={:?} epoch={:?}",
             address, epoch
         );
 
@@ -251,7 +251,7 @@ impl RpcImpl {
     }
 
     fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>> {
-        info!("RPC Request: cfx_getLogs({:?})", filter);
+        info!("RPC Request: cfx_getLogs filter={:?}", filter);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
@@ -299,7 +299,7 @@ impl RpcImpl {
     fn send_transaction(
         &self, mut tx: SendTxRequest, password: Option<String>,
     ) -> BoxFuture<RpcH256> {
-        info!("RPC Request: send_transaction, tx = {:?}", tx);
+        info!("RPC Request: send_transaction tx={:?}", tx);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
@@ -363,7 +363,7 @@ impl RpcImpl {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
-            "RPC Request: cfx_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
+            "RPC Request: cfx_getStorageAt address={:?} position={:?} epoch={:?})",
             address, position, epoch_num
         );
 
@@ -385,7 +385,7 @@ impl RpcImpl {
     fn transaction_by_hash(
         &self, hash: RpcH256,
     ) -> BoxFuture<Option<RpcTransaction>> {
-        info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
+        info!("RPC Request: cfx_getTransactionByHash hash={:?}", hash);
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
 
@@ -408,7 +408,7 @@ impl RpcImpl {
         &self, tx_hash: RpcH256,
     ) -> BoxFuture<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
-        info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
+        info!("RPC Request: cfx_getTransactionReceipt hash={:?}", hash);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
