@@ -44,6 +44,9 @@ Now the stratum protocol can correctly work with an external miner.
 - A new RPC ctx_getBlockRewardInfo to query block reward information inside a 
 given epoch.
 
+- Enable overflow-checks for release build, to make sure that underflow is
+impossible.
+
 # 0.5.0
 
 ## Improvements

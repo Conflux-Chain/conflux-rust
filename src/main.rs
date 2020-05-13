@@ -14,6 +14,7 @@ use client::{
     light::LightClient,
 };
 use command::account::{AccountCmd, ImportAccounts, ListAccounts, NewAccount};
+use ethereum_types::U256;
 use log::{info, LevelFilter};
 use log4rs::{
     append::{console::ConsoleAppender, file::FileAppender},
@@ -192,4 +193,24 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
     }
 
     Ok(None)
+}
+
+// TODO: find a better place
+#[cfg(test)]
+mod test {
+    use cfx_types::U256;
+
+    #[test]
+    #[should_panic]
+    fn underflow_can_not_happen_U256() {
+        let mut balance = U256::one();
+        balance -= 2;
+    }
+
+    #[test]
+    #[should_panic]
+    fn underflow_can_not_happen_u64() {
+        let mut balance = 1u64;
+        balance -= 2;
+    }
 }
