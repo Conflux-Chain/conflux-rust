@@ -11,6 +11,10 @@ readonly operation may crash.
 basic account in its absense is undesired, especially when the address is a
 contract. When a user account is to be created, the address space is checked.
 
+- Fix issue in processing snapshot chunk boundary which caused crash. The bug
+was caused by a wrong assumption of the uniqueness of the trie proof key.
+
+
 ## Improvements
 
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
