@@ -10,7 +10,7 @@ pub struct StateTrees {
     pub snapshot_db: Arc<SnapshotDb>,
     pub snapshot_epoch_id: EpochId,
     pub snapshot_merkle_root: MerkleHash,
-    /// None means that the intermediate_trie is empty, or in a specia
+    /// None means that the intermediate_trie is empty, or in a special
     /// situation that we use the snapshot at intermediate epoch directly,
     /// so we don't need to look up intermediate trie.
     pub maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
