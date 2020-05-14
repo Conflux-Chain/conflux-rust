@@ -412,9 +412,11 @@ impl NodeDatabase {
             if let Some(node) = self.untrusted_nodes.get(id) {
                 if let Some(lc) = node.last_connected {
                     if lc.success_for_duration(due) {
-                        if let Some(removed_node) =
+                        if let Some(mut removed_node) =
                             self.untrusted_nodes.remove_with_id(id)
                         {
+                            removed_node.last_contact =
+                                removed_node.last_connected;
                             self.promote_with_untrusted(
                                 id,
                                 removed_node.endpoint.address.ip(),
