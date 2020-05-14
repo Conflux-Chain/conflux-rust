@@ -116,7 +116,7 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
             inner: RwLock::new(AsyncTaskQueueInner {
                 tasks: VecDeque::new(),
                 size: 0,
-                // Set to max value at start to avoid sending too much request
+                // Set to max value at start to avoid sending too many requests
                 // at the start.
                 moving_average: MAX_BLOCK_SIZE_IN_BYTES as f64,
             }),
