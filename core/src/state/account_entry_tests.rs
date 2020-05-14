@@ -430,7 +430,8 @@ fn test_deposit_and_withdraw() {
 fn check_ordered_feature(vote_stake_list: &VoteStakeList) {
     for i in 1..vote_stake_list.len() {
         assert!(
-            vote_stake_list[i - 1].unlock_time < vote_stake_list[i].unlock_time
+            vote_stake_list[i - 1].unlock_block_number
+                < vote_stake_list[i].unlock_block_number
         );
         assert!(vote_stake_list[i - 1].amount > vote_stake_list[i].amount);
     }
@@ -468,14 +469,22 @@ fn init_test_account() -> OverlayAccount {
         0.into(),        /* accumulated_interest_rate */
         0,               /* deposit_time */
     );
-    overlay_account
-        .vote_lock(100000.into() /* amount */, 10 /* unlock_time */);
-    overlay_account
-        .vote_lock(10000.into() /* amount */, 30 /* unlock_time */);
-    overlay_account
-        .vote_lock(1000.into() /* amount */, 100 /* unlock_time */);
-    overlay_account
-        .vote_lock(100.into() /* amount */, 500 /* unlock_time */);
+    overlay_account.vote_lock(
+        100000.into(), /* amount */
+        10,            /* unlock_block_number */
+    );
+    overlay_account.vote_lock(
+        10000.into(), /* amount */
+        30,           /* unlock_block_number */
+    );
+    overlay_account.vote_lock(
+        1000.into(), /* amount */
+        100,         /* unlock_block_number */
+    );
+    overlay_account.vote_lock(
+        100.into(), /* amount */
+        500,        /* unlock_block_number */
+    );
     check_ordered_feature(overlay_account.vote_stake_list().unwrap());
     overlay_account
 }
@@ -553,7 +562,7 @@ fn test_vote_lock() {
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
         11
     );
     overlay_account
@@ -566,7 +575,7 @@ fn test_vote_lock() {
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
         13
     );
     overlay_account
@@ -579,7 +588,7 @@ fn test_vote_lock() {
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
         40
     );
     overlay_account
@@ -592,7 +601,7 @@ fn test_vote_lock() {
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[3].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[3].unlock_block_number,
         600
     );
     overlay_account
@@ -605,11 +614,11 @@ fn test_vote_lock() {
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
         40
     );
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[1].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[1].unlock_block_number,
         502
     );
     overlay_account
@@ -622,11 +631,11 @@ fn test_vote_lock() {
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 2);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
         550
     );
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[1].unlock_time,
+        overlay_account.vote_stake_list().unwrap()[1].unlock_block_number,
         600
     );
 }

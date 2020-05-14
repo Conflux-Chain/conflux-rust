@@ -29,11 +29,12 @@ pub struct DepositInfo {
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
 pub struct VoteStakeInfo {
-    /// This is the number of tokens should be locked before `unlock_time`.
+    /// This is the number of tokens should be locked before
+    /// `unlock_block_number`.
     pub amount: U256,
     /// This is the timestamp when the vote right will be invalid, measured in
     /// the number of past blocks.
-    pub unlock_time: u64,
+    pub unlock_block_number: u64,
 }
 
 #[derive(

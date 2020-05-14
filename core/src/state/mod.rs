@@ -806,7 +806,7 @@ impl State {
     }
 
     pub fn vote_lock(
-        &mut self, address: &Address, amount: &U256, unlock_time: u64,
+        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
     ) -> DbResult<()> {
         if !amount.is_zero() {
             let mut account = self.require_exists(address, false)?;
@@ -815,9 +815,21 @@ impl State {
                 true,  /* cache_vote_list */
                 &self.db,
             )?;
-            account.remove_expired_vote_stake_info(self.block_number);
-            account.vote_lock(*amount, unlock_time);
+            account.vote_lock(*amount, unlock_block_number);
         }
+        Ok(())
+    }
+
+    pub fn remove_expired_vote_stake_info(
+        &mut self, address: &Address,
+    ) -> DbResult<()> {
+        let mut account = self.require_exists(address, false)?;
+        account.cache_staking_info(
+            false, /* cache_deposit_list */
+            true,  /* cache_vote_list */
+            &self.db,
+        )?;
+        account.remove_expired_vote_stake_info(self.block_number);
         Ok(())
     }
 

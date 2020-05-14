@@ -785,7 +785,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid unlock_time")
+        vm::Error::InternalContract("invalid unlock_block_number")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),

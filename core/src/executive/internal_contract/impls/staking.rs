@@ -56,6 +56,7 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
+        state.remove_expired_vote_stake_info(&params.sender)?;
         if state.withdrawable_staking_balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract(
                 "not enough withdrawable staking balance to withdraw",
@@ -67,7 +68,8 @@ impl Staking {
     }
 
     /// Implementation of `lock(uint256,uint256)`.
-    /// The input should consist of 32 bytes `amount` + 32 bytes `unlock_time`.
+    /// The input should consist of 32 bytes `amount` + 32 bytes
+    /// `unlock_block_number`.
     fn vote_lock(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -76,15 +78,16 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
-        let unlock_time = U256::from(&input[32..64]).low_u64();
-        if unlock_time <= state.block_number() {
-            Err(vm::Error::InternalContract("invalid unlock_time"))
+        let unlock_block_number = U256::from(&input[32..64]).low_u64();
+        if unlock_block_number <= state.block_number() {
+            Err(vm::Error::InternalContract("invalid unlock_block_number"))
         } else if state.staking_balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract(
                 "not enough staking balance to lock",
             ))
         } else {
-            state.vote_lock(&params.sender, &amount, unlock_time)?;
+            state.remove_expired_vote_stake_info(&params.sender)?;
+            state.vote_lock(&params.sender, &amount, unlock_block_number)?;
             Ok(())
         }
     }

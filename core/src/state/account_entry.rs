@@ -70,9 +70,9 @@ pub struct OverlayAccount {
     // `deposit_time`.
     // If it is not `None`, which means it has been loaded from db.
     deposit_list: Option<DepositList>,
-    // This is the list of vote info. The `unlock_time` sorted in increasing
-    // order and the `amount` is sorted in decreasing order. All the
-    // `unlock_time` and `amount` is unique in the list.
+    // This is the list of vote info. The `unlock_block_number` sorted in
+    // increasing order and the `amount` is sorted in decreasing order. All
+    // the `unlock_block_number` and `amount` is unique in the list.
     // If it is not `None`, which means it has been loaded from db.
     vote_stake_list: Option<VoteStakeList>,
 
@@ -347,13 +347,14 @@ impl OverlayAccount {
         assert!(self.vote_stake_list.is_some());
         let vote_stake_list = self.vote_stake_list.as_mut().unwrap();
         if !vote_stake_list.is_empty()
-            && vote_stake_list[0].unlock_time <= block_number
+            && vote_stake_list[0].unlock_block_number <= block_number
         {
-            // Find first index whose `unlock_time` is greater than timestamp
-            // and all entries before the index could be removed.
+            // Find first index whose `unlock_block_number` is greater than
+            // timestamp and all entries before the index could be
+            // removed.
             let idx = vote_stake_list
                 .binary_search_by(|vote_info| {
-                    vote_info.unlock_time.cmp(&(block_number + 1))
+                    vote_info.unlock_block_number.cmp(&(block_number + 1))
                 })
                 .unwrap_or_else(|x| x);
             *vote_stake_list = VoteStakeList(vote_stake_list.split_off(idx));
@@ -364,11 +365,12 @@ impl OverlayAccount {
         assert!(self.vote_stake_list.is_some());
         let vote_stake_list = self.vote_stake_list.as_ref().unwrap();
         if !vote_stake_list.is_empty() {
-            // Find first index whose `unlock_time` is greater than timestamp
-            // and all entries before the index could be removed.
+            // Find first index whose `unlock_block_number` is greater than
+            // timestamp and all entries before the index could be
+            // ignored.
             let idx = vote_stake_list
                 .binary_search_by(|vote_info| {
-                    vote_info.unlock_time.cmp(&(block_number + 1))
+                    vote_info.unlock_block_number.cmp(&(block_number + 1))
                 })
                 .unwrap_or_else(|x| x);
             if idx == vote_stake_list.len() {
@@ -504,7 +506,7 @@ impl OverlayAccount {
         let mut updated = false;
         let mut updated_index = 0;
         match vote_stake_list.binary_search_by(|vote_info| {
-            vote_info.unlock_time.cmp(&unlock_block_number)
+            vote_info.unlock_block_number.cmp(&unlock_block_number)
         }) {
             Ok(index) => {
                 if amount > vote_stake_list[index].amount {
@@ -521,7 +523,7 @@ impl OverlayAccount {
                         index,
                         VoteStakeInfo {
                             amount,
-                            unlock_time: unlock_block_number,
+                            unlock_block_number,
                         },
                     );
                     updated = true;
