@@ -1148,7 +1148,7 @@ impl ConsensusExecutionHandler {
 
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
-                        warn!(
+                        debug!(
                             "tx execution error: transaction={:?}, err={:?}",
                             transaction, error
                         );
