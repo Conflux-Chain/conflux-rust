@@ -91,7 +91,7 @@ class NodeReputationTests(ConfluxTestFramework):
         node = client0.get_node(self.nodes[2].key)
         assert node[0] == "untrusted"
         assert node[1]["lastConnected"].get("failure")
-        assert node[1]["lastContact"].get("failure")
+        assert node[1]["lastContact"].get("demoted")
         assert node[1]["streamToken"] == n[1]["streamToken"]
 
         # Node 0 will not create outgoing connection to Node 2
