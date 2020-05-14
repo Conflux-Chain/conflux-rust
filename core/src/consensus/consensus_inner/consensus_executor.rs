@@ -6,6 +6,7 @@ use super::super::debug::*;
 use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
+        BlockRewardResult,
     },
     consensus::{
         consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
@@ -31,7 +32,7 @@ use crate::{
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{Address, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -1201,7 +1202,7 @@ impl ConsensusExecutionHandler {
                 receipts,
                 secondary_reward,
             });
-            self.data_man.insert_block_results(
+            self.data_man.insert_block_execution_result(
                 block.hash(),
                 pivot_block.hash(),
                 block_receipts.clone(),
@@ -1252,9 +1253,6 @@ impl ConsensusExecutionHandler {
 
         let epoch_size = epoch_blocks.len();
         let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
-        // This maintains the primary tokens rewarded to each miner. And it will
-        // be used to compute ratio for secondary reward.
-        let mut base_reward_count: HashMap<Address, U256> = HashMap::new();
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
@@ -1331,9 +1329,6 @@ impl ConsensusExecutionHandler {
                 let reward = U256::try_from(reward).unwrap();
                 epoch_block_total_rewards.push(reward);
                 if !reward.is_zero() {
-                    *base_reward_count
-                        .entry(*block.block_header.author())
-                        .or_insert(0.into()) += reward;
                     total_base_reward += reward;
                 }
             }
@@ -1409,8 +1404,12 @@ impl ConsensusExecutionHandler {
         }
 
         let mut block_tx_fees = HashMap::new();
+        // Note that some transaction fees may get lost due to solely packed by
+        // a partially invalid block.
+        let mut burnt_fee = U256::from(0);
         for TxExecutionInfo(fee, block_set) in tx_fee.values() {
             if block_set.is_empty() {
+                burnt_fee += *fee;
                 // tx_fee for the transactions executed in a partial invalid
                 // blocks and not packed in other blocks will be lost
                 continue;
@@ -1427,16 +1426,19 @@ impl ConsensusExecutionHandler {
                     remainder -= 1.into();
                 }
             }
+            debug_assert!(remainder.is_zero());
         }
 
         let mut merged_rewards = BTreeMap::new();
+        // Here is the exact secondary reward allocated in total
+        let mut allocated_secondary_reward = U256::from(0);
 
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let reward = &mut epoch_block_total_rewards[enum_idx];
+            let base_reward = epoch_block_total_rewards[enum_idx];
+
             let block_hash = block.hash();
             // Add tx fee to reward.
-            if let Some(fee) = block_tx_fees.get(&block_hash) {
-                *reward += *fee;
+            let tx_fee = if let Some(fee) = block_tx_fees.get(&block_hash) {
                 if !debug_record.is_none() {
                     let debug_out = debug_record.as_mut().unwrap();
                     debug_out.tx_fees.push(BlockHashAuthorValue(
@@ -1445,21 +1447,43 @@ impl ConsensusExecutionHandler {
                         *fee,
                     ));
                 }
-            }
+                *fee
+            } else {
+                U256::from(0)
+            };
+
+            // Distribute the secondary reward according to primary reward.
+            let total_reward = if base_reward > U256::from(0) {
+                let block_secondary_reward =
+                    base_reward * secondary_reward / total_base_reward;
+                allocated_secondary_reward += block_secondary_reward;
+                base_reward + tx_fee + block_secondary_reward
+            } else {
+                base_reward + tx_fee
+            };
 
             *merged_rewards
                 .entry(*block.block_header.author())
-                .or_insert(U256::from(0)) += *reward;
+                .or_insert(U256::from(0)) += total_reward;
 
             if debug_record.is_some() {
                 let debug_out = debug_record.as_mut().unwrap();
                 debug_out.block_final_rewards.push(BlockHashAuthorValue(
                     block_hash,
                     block.block_header.author().clone(),
-                    *reward,
+                    total_reward,
                 ));
             }
             if on_local_pivot {
+                self.data_man.insert_block_reward_result(
+                    block_hash,
+                    BlockRewardResult {
+                        total_reward,
+                        tx_fee,
+                        base_reward,
+                    },
+                    true,
+                );
                 self.data_man
                     .receipts_retain_epoch(&block_hash, &reward_epoch_hash);
             }
@@ -1467,11 +1491,7 @@ impl ConsensusExecutionHandler {
 
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
-        for (address, mut reward) in merged_rewards {
-            // Distribute the secondary reward according to primary reward.
-            if let Some(base_reward) = base_reward_count.get(&address) {
-                reward += base_reward * secondary_reward / total_base_reward;
-            }
+        for (address, reward) in merged_rewards {
             state
                 .add_balance(&address, &reward, CleanupMode::ForceCreate)
                 .unwrap();
@@ -1491,7 +1511,14 @@ impl ConsensusExecutionHandler {
                 });
             }
         }
-        state.add_block_rewards(total_base_reward + secondary_reward);
+        let new_mint = total_base_reward + allocated_secondary_reward;
+        if new_mint >= burnt_fee {
+            // The very likely case
+            state.add_total_issued(new_mint - burnt_fee);
+        } else {
+            // The very unlikely case
+            state.subtract_total_issued(burnt_fee - new_mint);
+        }
     }
 
     fn recompute_states(

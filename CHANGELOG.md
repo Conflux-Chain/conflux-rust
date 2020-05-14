@@ -45,6 +45,10 @@ Now the stratum protocol can correctly work with an external miner.
 for miners. If you want to serve transaction-related RPCs, you should set `record_tx_index=true`
 in the configuration file manually.
 
+- A new RPC ctx_getBlockRewardInfo to query block reward information inside a 
+given epoch.
+
+
 # 0.5.0
 
 ## Improvements

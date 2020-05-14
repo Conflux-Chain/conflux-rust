@@ -1444,7 +1444,7 @@ impl<Mpt> Drop for ReadWritePathNode<Mpt> {
         if !self.get_has_io_error() {
             if self.db_committed == false {
                 self.set_has_io_error();
-                assert_eq!(
+                debug_assert_eq!(
                     true,
                     self.db_committed,
                     "Node {:?}, {:?} uncommitted in MptCursorRw.",

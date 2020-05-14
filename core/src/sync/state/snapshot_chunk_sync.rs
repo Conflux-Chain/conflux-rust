@@ -594,7 +594,7 @@ impl SnapshotChunkSync {
             deferred_block_hash = *block.parent_hash();
         }
         for (block_hash, epoch_hash, receipts) in &inner.epoch_receipts {
-            sync_handler.graph.data_man.insert_block_results(
+            sync_handler.graph.data_man.insert_block_execution_result(
                 *block_hash,
                 *epoch_hash,
                 receipts.clone(),

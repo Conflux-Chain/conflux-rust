@@ -516,7 +516,7 @@ fn test_deposit_withdraw_lock() {
             CleanupMode::NoEmpty,
         )
         .unwrap();
-    state.add_block_rewards(U256::from(1_000_000_000_000u64));
+    state.add_total_issued(U256::from(1_000_000_000_000u64));
     assert_eq!(
         state.balance(&sender).unwrap(),
         U256::from(1_000_000_000_000u64)
