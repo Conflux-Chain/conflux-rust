@@ -7,6 +7,11 @@
 
 - Improve the performance of the consensus layer for unstable TreeGraph scenarios. 
 
+- Disable transaction index recording by default. This will reduce the disk usage 
+for miners. If you want to serve transaction-related RPCs, you should set `record_tx_index=true`
+in the configuration file manually.
+
+
 
 # 0.5.0
 
