@@ -203,14 +203,7 @@ impl NodeContact {
 
     pub fn demoted() -> NodeContact { NodeContact::Demoted(SystemTime::now()) }
 
-    pub fn is_demoted(&self) -> bool {
-        let mut res = false;
-        match *self {
-            NodeContact::Demoted(_) => res = true,
-            _ => {}
-        }
-        res
-    }
+    pub fn is_demoted(&self) -> bool { matches!(self, NodeContact::Demoted(_)) }
 
     pub fn time(&self) -> SystemTime {
         match *self {
