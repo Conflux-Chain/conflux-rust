@@ -352,9 +352,7 @@ impl Chunk {
             // maximal number of snapshots and cannot give a
             // response temporarily, we should differentiate this
             // from dishonest behaviors.
-            return Err(
-                ErrorKind::InvalidSnapshotChunk("empty chunk".into()).into()
-            );
+            return Err(ErrorKind::EmptySnapshotChunk.into());
         }
         if self.keys.len() != self.values.len() {
             return Err(ErrorKind::InvalidSnapshotChunk(
