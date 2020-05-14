@@ -175,13 +175,16 @@ fn test_snapshot_random_read_performance() {
     const DEFAULT_BALANCE: u64 = 1_000_000_000;
     let mut state_0 = state_manager.get_state_for_genesis_write();
     for key in &keys {
-        let address = &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
+        let mut address = Address::from_slice(
+            &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+        );
+        address.set_user_account_type_bits();
         let account = primitives::Account::new_empty_with_balance(
-            &Address::from_slice(address),
+            &address,
             &DEFAULT_BALANCE.into(),
             &0.into(),
         );
-        let account_key = StorageKey::AccountKey(address);
+        let account_key = StorageKey::new_account_key(&address);
         state_0
             .set(account_key, rlp::encode(&account).into())
             .expect("Failed to set key");
@@ -299,9 +302,11 @@ fn simulate_transactions(
             join_handles.push(thread::spawn(move || {
                 let mut i = 0;
                 for key in key_range {
-                    let address =
-                        &[*key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
-                    let account_key = StorageKey::AccountKey(address);
+                    let mut address = Address::from_slice(
+                        &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+                    );
+                    address.set_user_account_type_bits();
+                    let account_key = StorageKey::new_account_key(&address);
 
                     value_range[i] = Some(
                         state_r
@@ -320,8 +325,11 @@ fn simulate_transactions(
     } else {
         let mut i = 0;
         for key in keys {
-            let address = &[*key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
-            let account_key = StorageKey::AccountKey(address);
+            let mut address = Address::from_slice(
+                &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+            );
+            address.set_user_account_type_bits();
+            let account_key = StorageKey::new_account_key(&address);
 
             values[i] = Some(
                 state
@@ -354,8 +362,11 @@ fn simulate_transactions(
     let now = Instant::now();
     for i in 0..len {
         let key = keys[i];
-        let address = &[key; 4].concat()[0..StorageKey::ACCOUNT_BYTES];
-        let account_key = StorageKey::AccountKey(address);
+        let mut address = Address::from_slice(
+            &[key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+        );
+        address.set_user_account_type_bits();
+        let account_key = StorageKey::new_account_key(&address);
 
         state
             .set(account_key, values[i].take().unwrap())
@@ -768,7 +779,7 @@ use crate::storage::{
     tests::{FakeStateManager, TEST_NUMBER_OF_KEYS},
     StateRootWithAuxInfo,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{StateRoot, StorageKey};
 use rand::{
     distributions::{Distribution, Uniform},

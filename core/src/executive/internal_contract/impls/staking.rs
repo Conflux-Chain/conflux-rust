@@ -4,8 +4,7 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    bytes::Bytes,
-    parameters::staking::*,
+    parameters::consensus::ONE_CFX_IN_DRIP,
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
@@ -17,9 +16,18 @@ lazy_static! {
         Address::from_str("843c409373ffd5c0bec1dddb7bec830856757b65").unwrap();
 }
 
+/// The first 4 bytes of keccak('deposit(uint256)') is `0xb6b55f25`.
+static DEPOSIT_SIG: &'static [u8] = &[0xb6, 0xb5, 0x5f, 0x25];
+/// The first 4 bytes of keccak('withdraw(uint256)') is `0x2e1a7d4d`.
+static WITHDRAW_SIG: &'static [u8] = &[0x2e, 0x1a, 0x7d, 0x4d];
+/// The first 4 bytes of keccak('vote_lock(uint256,uint256)') is `0x5547dedb`.
+static VOTE_LOCK_SIG: &'static [u8] = &[0x55, 0x47, 0xde, 0xdb];
+
 pub struct Staking;
 
 impl Staking {
+    /// Implementation of `deposit(uint256)`.
+    /// The input should consist of 32 bytes `amount`.
     fn deposit(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -28,8 +36,7 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
-        // FIXME: we should find a reasonable lowerbound.
-        if amount < U256::one() {
+        if amount < U256::from(ONE_CFX_IN_DRIP) {
             Err(vm::Error::InternalContract("invalid deposit amount"))
         } else if state.balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract("not enough balance to deposit"))
@@ -39,6 +46,8 @@ impl Staking {
         }
     }
 
+    /// Implementation of `withdraw(uint256)`.
+    /// The input should consist of 32 bytes `amount`.
     fn withdraw(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -47,6 +56,7 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
+        state.remove_expired_vote_stake_info(&params.sender)?;
         if state.withdrawable_staking_balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract(
                 "not enough withdrawable staking balance to withdraw",
@@ -57,7 +67,10 @@ impl Staking {
         }
     }
 
-    fn lock(
+    /// Implementation of `lock(uint256,uint256)`.
+    /// The input should consist of 32 bytes `amount` + 32 bytes
+    /// `unlock_block_number`.
+    fn vote_lock(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
         if input.len() != 64 {
@@ -65,18 +78,16 @@ impl Staking {
         }
 
         let amount = U256::from(&input[0..32]);
-        let duration_in_day = U256::from(&input[32..64]).low_u64();
-        if duration_in_day == 0
-            || duration_in_day
-                > (std::u64::MAX - state.block_number()) / BLOCKS_PER_DAY
-        {
-            Err(vm::Error::InternalContract("invalid lock duration"))
+        let unlock_block_number = U256::from(&input[32..64]).low_u64();
+        if unlock_block_number <= state.block_number() {
+            Err(vm::Error::InternalContract("invalid unlock_block_number"))
         } else if state.staking_balance(&params.sender)? < amount {
             Err(vm::Error::InternalContract(
                 "not enough staking balance to lock",
             ))
         } else {
-            state.lock(&params.sender, &amount, duration_in_day)?;
+            state.remove_expired_vote_stake_info(&params.sender)?;
+            state.vote_lock(&params.sender, &amount, unlock_block_number)?;
             Ok(())
         }
     }
@@ -89,16 +100,39 @@ impl InternalContractTrait for Staking {
     /// The gas cost of running this internal contract for the given input data.
     ///
     /// + deposit: SSTORE (deposit_balance, deposit_time)
-    ///   Gas: 10000
+    ///   Gas: 10000 * (current length of `deposit_list`) + 10000
     /// + withdraw: SLOAD (withdrawable_balance, deposit_time) SSTORE
     ///             (deposit_balance, update new deposit_list)
-    ///   Gas: 10000
+    ///   Gas: 10000 * (current length of `deposit_list`)
     /// + lock: SSTORE (updating new locking entry and remove unnecessary ones),
     ///         SLOAD (binary search and compare)
-    ///   Gas: 10000
+    ///   Gas: 10000 * (current length of `vote_stake_list`)
     /// + otherwise
     ///   Gas: 10000
-    fn cost(&self, _input: Option<&Bytes>) -> U256 { U256::from(10000) }
+    fn cost(&self, params: &ActionParams, state: &mut State) -> U256 {
+        if let Some(ref data) = params.data {
+            if data.len() < 4 {
+                return U256::from(10000);
+            }
+            if data[0..4] == *DEPOSIT_SIG {
+                let length =
+                    state.deposit_list_length(&params.sender).unwrap_or(0);
+                U256::from(10000) * U256::from(length + 1)
+            } else if data[0..4] == *WITHDRAW_SIG {
+                let length =
+                    state.deposit_list_length(&params.sender).unwrap_or(0);
+                U256::from(10000) * U256::from(length)
+            } else if data[0..4] == *VOTE_LOCK_SIG {
+                let length =
+                    state.vote_stake_list_length(&params.sender).unwrap_or(0);
+                U256::from(10000) * U256::from(length + 1)
+            } else {
+                U256::from(10000)
+            }
+        } else {
+            U256::from(10000)
+        }
+    }
 
     /// execute this internal contract on the given parameters.
     fn execute(
@@ -132,23 +166,12 @@ impl InternalContractTrait for Staking {
             ));
         }
 
-        if data[0..4] == [0xb6, 0xb5, 0x5f, 0x25] {
-            // The first 4 bytes of
-            // keccak('deposit(uint256)') is
-            // `0xb6b55f25`.
-            // 4 bytes `Method ID` + 32 bytes `amount`
+        if data[0..4] == *DEPOSIT_SIG {
             self.deposit(&data[4..], params, state)
-        } else if data[0..4] == [0x2e, 0x1a, 0x7d, 0x4d] {
-            // The first 4 bytes of
-            // keccak('withdraw(uint256)') is `0x2e1a7d4d`.
-            // 4 bytes `Method ID` + 32 bytes `amount`.
+        } else if data[0..4] == *WITHDRAW_SIG {
             self.withdraw(&data[4..], params, state)
-        } else if data[0..4] == [0x13, 0x38, 0x73, 0x6f] {
-            // The first 4 bytes of
-            // keccak('lock(uint256,uint256)') is `0x1338736f`.
-            // 4 bytes `Method ID` + 32 bytes `amount` + 32 bytes
-            // `duration_in_day`.
-            self.lock(&data[4..], params, state)
+        } else if data[0..4] == *VOTE_LOCK_SIG {
+            self.vote_lock(&data[4..], params, state)
         } else {
             Err(vm::Error::InternalContract("unsupported function"))
         }

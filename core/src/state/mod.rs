@@ -39,6 +39,8 @@ enum RequireCache {
     None,
     CodeSize,
     Code,
+    DepositList,
+    VoteStakeList,
 }
 
 /// Mode of dealing with null accounts.
@@ -661,10 +663,22 @@ impl State {
     pub fn withdrawable_staking_balance(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_cached(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| {
-                *account.withdrawable_staking_balance()
+        self.ensure_cached(address, RequireCache::VoteStakeList, |acc| {
+            acc.map_or(U256::zero(), |acc| {
+                acc.withdrawable_staking_balance(self.block_number)
             })
+        })
+    }
+
+    pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
+        self.ensure_cached(address, RequireCache::DepositList, |acc| {
+            acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
+        })
+    }
+
+    pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
+        self.ensure_cached(address, RequireCache::VoteStakeList, |acc| {
+            acc.map_or(0, |acc| acc.vote_stake_list().map_or(0, |l| l.len()))
         })
     }
 
@@ -755,11 +769,19 @@ impl State {
         &mut self, address: &Address, amount: &U256,
     ) -> DbResult<()> {
         if !amount.is_zero() {
-            self.require_exists(address, false)?.deposit(
-                *amount,
-                self.staking_state.accumulate_interest_rate,
-                self.block_number,
-            );
+            {
+                let mut account = self.require_exists(address, false)?;
+                account.cache_staking_info(
+                    true,  /* cache_deposit_list */
+                    false, /* cache_vote_list */
+                    &self.db,
+                )?;
+                account.deposit(
+                    *amount,
+                    self.staking_state.accumulate_interest_rate,
+                    self.block_number,
+                );
+            }
             self.staking_state.total_staking_tokens += *amount;
         }
         Ok(())
@@ -769,9 +791,19 @@ impl State {
         &mut self, address: &Address, amount: &U256,
     ) -> DbResult<()> {
         if !amount.is_zero() {
-            let interest = self
-                .require_exists(address, false)?
-                .withdraw(*amount, self.staking_state.accumulate_interest_rate);
+            let interest;
+            {
+                let mut account = self.require_exists(address, false)?;
+                account.cache_staking_info(
+                    true,  /* cache_deposit_list */
+                    false, /* cache_vote_list */
+                    &self.db,
+                )?;
+                interest = account.withdraw(
+                    *amount,
+                    self.staking_state.accumulate_interest_rate,
+                );
+            }
             // the interest will be put in balance.
             self.staking_state.total_issued_tokens += interest;
             self.staking_state.total_staking_tokens -= *amount;
@@ -779,15 +811,31 @@ impl State {
         Ok(())
     }
 
-    pub fn lock(
-        &mut self, address: &Address, amount: &U256, duration_in_day: u64,
+    pub fn vote_lock(
+        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
     ) -> DbResult<()> {
         if !amount.is_zero() {
-            self.require_exists(address, false)?.lock(
-                *amount,
-                self.block_number + duration_in_day * BLOCKS_PER_DAY,
-            );
+            let mut account = self.require_exists(address, false)?;
+            account.cache_staking_info(
+                false, /* cache_deposit_list */
+                true,  /* cache_vote_list */
+                &self.db,
+            )?;
+            account.vote_lock(*amount, unlock_block_number);
         }
+        Ok(())
+    }
+
+    pub fn remove_expired_vote_stake_info(
+        &mut self, address: &Address,
+    ) -> DbResult<()> {
+        let mut account = self.require_exists(address, false)?;
+        account.cache_staking_info(
+            false, /* cache_deposit_list */
+            true,  /* cache_vote_list */
+            &self.db,
+        )?;
+        account.remove_expired_vote_stake_info(self.block_number);
         Ok(())
     }
 
@@ -825,12 +873,13 @@ impl State {
     }
 
     fn needs_update(require: RequireCache, account: &OverlayAccount) -> bool {
-        if let RequireCache::None = require {
-            return false;
-        }
-
         trace!("update_account_cache account={:?}", account);
-        !account.is_cached()
+        match require {
+            RequireCache::None => false,
+            RequireCache::Code | RequireCache::CodeSize => !account.is_cached(),
+            RequireCache::DepositList => account.deposit_list().is_none(),
+            RequireCache::VoteStakeList => account.vote_stake_list().is_none(),
+        }
     }
 
     /// Load required account data from the databases. Returns whether the
@@ -843,6 +892,20 @@ impl State {
             RequireCache::Code | RequireCache::CodeSize => {
                 account.cache_code(db).is_some()
             }
+            RequireCache::DepositList => account
+                .cache_staking_info(
+                    true,  /* cache_deposit_list */
+                    false, /* cache_vote_list */
+                    db,
+                )
+                .is_ok(),
+            RequireCache::VoteStakeList => account
+                .cache_staking_info(
+                    false, /* cache_deposit_list */
+                    true,  /* cache_vote_list */
+                    db,
+                )
+                .is_ok(),
         }
     }
 
@@ -1255,7 +1318,7 @@ impl State {
         let maybe_acc = self
             .db
             .get_account(address)?
-            .map(|acc| OverlayAccount::new(address, acc, self.block_number));
+            .map(|acc| OverlayAccount::new(address, acc));
         let cache = &mut *self.cache.write();
         Self::insert_cache_if_fresh_account(cache, address, maybe_acc);
 
@@ -1310,9 +1373,10 @@ impl State {
     where F: FnOnce(&Address) -> DbResult<OverlayAccount> {
         let mut cache;
         if !self.cache.read().contains_key(address) {
-            let account = self.db.get_account(address)?.map(|acc| {
-                OverlayAccount::new(address, acc, self.block_number)
-            });
+            let account = self
+                .db
+                .get_account(address)?
+                .map(|acc| OverlayAccount::new(address, acc));
             cache = self.cache.write();
             Self::insert_cache_if_fresh_account(&mut *cache, address, account);
         } else {

@@ -4,7 +4,6 @@
 
 use super::super::InternalContractTrait;
 use crate::{
-    bytes::Bytes,
     state::{State, Substate},
     vm::{self, ActionParams, CallType, Spec},
 };
@@ -16,9 +15,24 @@ lazy_static! {
         Address::from_str("8ad036480160591706c831f0da19d1a424e39469").unwrap();
 }
 
+/// The first 4 bytes of keccak('set_sponsor_for_gas(address,uint256)') is
+/// `0xe9ac3d4a`.
+static SET_SPONSOR_FOR_GAS_SIG: &'static [u8] = &[0xe9, 0xac, 0x3d, 0x4a];
+/// The first 4 bytes of keccak('set_sponsor_for_collateral(address)') is
+/// `0x0862bf68`.
+static SET_SPONSOR_FOR_COLLATERAL_SIG: &'static [u8] =
+    &[0x08, 0x62, 0xbf, 0x68];
+/// The first 4 bytes of keccak('add_privilege(address[])') is `0xfe15156c`.
+static ADD_PRIVILEGE_SIG: &'static [u8] = &[0xfe, 0x15, 0x15, 0x6c];
+/// The first 4 bytes of keccak('remove_privilege(address[])') is `0x44c0bd21`.
+static REMOVE_PRIVILEGE_SIG: &'static [u8] = &[0x44, 0xc0, 0xbd, 0x21];
+
 pub struct SponsorWhitelistControl;
 
 impl SponsorWhitelistControl {
+    /// Implementation of `set_sponsor_for_gas(address,uint256)`.
+    /// The input should consist of 32 bytes `contract_address` + 32 bytes
+    /// `upper_bound`.
     fn set_sponsor_for_gas(
         &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
@@ -125,6 +139,8 @@ impl SponsorWhitelistControl {
         Ok(())
     }
 
+    /// Implementation of `set_sponsor_for_collateral(address)`.
+    /// The input should consist of 32 bytes `contract_address`.
     fn set_sponsor_for_collateral(
         &self, input: &[u8], params: &ActionParams, spec: &Spec,
         state: &mut State, substate: &mut Substate,
@@ -208,6 +224,8 @@ impl SponsorWhitelistControl {
         Ok(())
     }
 
+    /// Implementation of `add_privilege(address[])`.
+    /// The input should consist of 32 bytes location + 32 bytes `length` + ...
     fn add_privilege(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -245,6 +263,8 @@ impl SponsorWhitelistControl {
         Ok(())
     }
 
+    /// Implementation of `remove_privilege(address[])`.
+    /// The input should consist of 32 bytes location + 32 bytes `length` + ...
     fn remove_privilege(
         &self, input: &[u8], params: &ActionParams, state: &mut State,
     ) -> vm::Result<()> {
@@ -300,17 +320,17 @@ impl InternalContractTrait for SponsorWhitelistControl {
     ///   Gas: 5000 * [member list length]
     /// + otherwise
     ///   Gas: 5000
-    fn cost(&self, input: Option<&Bytes>) -> U256 {
-        if let Some(ref data) = input {
+    fn cost(&self, params: &ActionParams, _state: &mut State) -> U256 {
+        if let Some(ref data) = params.data {
             if data.len() < 4 {
                 return U256::from(5000);
             }
-            if data[0..4] == [0xe9, 0xac, 0x3d, 0x4a]
-                || data[0..4] == [0x08, 0x62, 0xbf, 0x68]
+            if data[0..4] == *SET_SPONSOR_FOR_GAS_SIG
+                || data[0..4] == *SET_SPONSOR_FOR_COLLATERAL_SIG
             {
                 U256::from(10000)
-            } else if data[0..4] == [0xfe, 0x15, 0x15, 0x6c]
-                || data[0..4] == [0x44, 0xc0, 0xbd, 0x21]
+            } else if data[0..4] == *ADD_PRIVILEGE_SIG
+                || data[0..4] == *REMOVE_PRIVILEGE_SIG
             {
                 if data.len() < 4 + 32 + 32 {
                     U256::from(5000)
@@ -352,18 +372,9 @@ impl InternalContractTrait for SponsorWhitelistControl {
             ));
         }
 
-        if data[0..4] == [0xe9, 0xac, 0x3d, 0x4a] {
-            // The first 4 bytes of
-            // keccak('set_sponsor_for_gas(address,uint256)')
-            // is `0xe9ac3d4a`.
-            // 4 bytes `Method ID` + 32 bytes `contract_address` + 32 bytes
-            // `upper_bound`.
+        if data[0..4] == *SET_SPONSOR_FOR_GAS_SIG {
             self.set_sponsor_for_gas(&data[4..], params, spec, state, substate)
-        } else if data[0..4] == [0x08, 0x62, 0xbf, 0x68] {
-            // The first 4 bytes of
-            // keccak('set_sponsor_for_collateral(address)')
-            // is `0x0862bf68`.
-            // 4 bytes `Method ID` + 32 bytes `contract_address`.
+        } else if data[0..4] == *SET_SPONSOR_FOR_COLLATERAL_SIG {
             self.set_sponsor_for_collateral(
                 &data[4..],
                 params,
@@ -371,15 +382,9 @@ impl InternalContractTrait for SponsorWhitelistControl {
                 state,
                 substate,
             )
-        } else if data[0..4] == [0xfe, 0x15, 0x15, 0x6c] {
-            // The first 4 bytes of keccak('add_privilege(address[])') is
-            // `0xfe15156c`.
-            // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
+        } else if data[0..4] == *ADD_PRIVILEGE_SIG {
             self.add_privilege(&data[4..], params, state)
-        } else if data[0..4] == [0x44, 0xc0, 0xbd, 0x21] {
-            // The first 4 bytes of keccak('remove_privilege(address[])')
-            // is `0x44c0bd21`.
-            // 4 bytes `Method ID` + 32 bytes location + 32 bytes `length` + ...
+        } else if data[0..4] == *REMOVE_PRIVILEGE_SIG {
             self.remove_privilege(&data[4..], params, state)
         } else {
             Err(vm::Error::InternalContract("unsupported function"))

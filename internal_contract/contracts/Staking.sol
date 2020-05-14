@@ -7,6 +7,6 @@ contract Staking {
     function withdraw(uint amount) external {
     }
 
-    function lock(uint amount, uint duration) external {
+    function vote_lock(uint amount, uint unlock_block_number) external {
     }
 }

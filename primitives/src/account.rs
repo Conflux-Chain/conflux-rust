@@ -3,8 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
-use cfx_types::{Address, H256, U256};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{
+    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
+};
+
+use std::ops::{Deref, DerefMut};
 
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
@@ -23,12 +28,59 @@ pub struct DepositInfo {
 #[derive(
     Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
 )]
-pub struct StakingVoteInfo {
-    /// This is the number of tokens should be locked before `unlock_time`.
+pub struct VoteStakeInfo {
+    /// This is the number of tokens should be locked before
+    /// `unlock_block_number`.
     pub amount: U256,
     /// This is the timestamp when the vote right will be invalid, measured in
     /// the number of past blocks.
-    pub unlock_time: u64,
+    pub unlock_block_number: u64,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    RlpDecodableWrapper,
+    RlpEncodableWrapper,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+)]
+pub struct DepositList(pub Vec<DepositInfo>);
+
+impl Deref for DepositList {
+    type Target = Vec<DepositInfo>;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for DepositList {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    RlpDecodableWrapper,
+    RlpEncodableWrapper,
+    Ord,
+    PartialOrd,
+    Eq,
+    PartialEq,
+)]
+pub struct VoteStakeList(pub Vec<VoteStakeInfo>);
+
+impl Deref for VoteStakeList {
+    type Target = Vec<VoteStakeInfo>;
+
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for VoteStakeList {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
 #[derive(
@@ -63,9 +115,7 @@ pub struct SponsorInfo {
     pub sponsor_balance_for_collateral: U256,
 }
 
-#[derive(
-    Clone, Debug, RlpDecodable, RlpEncodable, Ord, PartialOrd, Eq, PartialEq,
-)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Account {
     pub address: Address,
     pub balance: U256,
@@ -78,13 +128,6 @@ pub struct Account {
     pub collateral_for_storage: U256,
     /// This is the accumulated interest return.
     pub accumulated_interest_return: U256,
-    /// This is the list of deposit info, sorted in increasing order of
-    /// `deposit_time`.
-    pub deposit_list: Vec<DepositInfo>,
-    /// This is the list of vote info. The `unlock_time` sorted in increasing
-    /// order and the `amount` is sorted in decreasing order. All the
-    /// `unlock_time` and `amount` is unique in the list.
-    pub staking_vote_list: Vec<StakingVoteInfo>,
     /// This is the address of the administrator of the contract.
     pub admin: Address,
     /// This is the sponsor information of the contract.
@@ -103,10 +146,79 @@ impl Account {
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
-            deposit_list: Vec::new(),
-            staking_vote_list: Vec::new(),
             admin: Address::zero(),
             sponsor_info: Default::default(),
+        }
+    }
+}
+
+impl Decodable for Account {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if !(rlp.item_count()? == 6 || rlp.item_count()? == 9) {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+        let address: Address = rlp.val_at(0)?;
+        if address.is_user_account_address() {
+            if rlp.item_count()? != 6 {
+                return Err(DecoderError::RlpIncorrectListLen);
+            }
+            Ok(Self {
+                address,
+                balance: rlp.val_at(1)?,
+                nonce: rlp.val_at(2)?,
+                code_hash: KECCAK_EMPTY,
+                staking_balance: rlp.val_at(3)?,
+                collateral_for_storage: rlp.val_at(4)?,
+                accumulated_interest_return: rlp.val_at(5)?,
+                admin: Address::zero(),
+                sponsor_info: Default::default(),
+            })
+        } else if address.is_contract_address() {
+            if rlp.item_count()? != 9 {
+                return Err(DecoderError::RlpIncorrectListLen);
+            }
+            Ok(Self {
+                address,
+                balance: rlp.val_at(1)?,
+                nonce: rlp.val_at(2)?,
+                code_hash: rlp.val_at(3)?,
+                staking_balance: rlp.val_at(4)?,
+                collateral_for_storage: rlp.val_at(5)?,
+                accumulated_interest_return: rlp.val_at(6)?,
+                admin: rlp.val_at(7)?,
+                sponsor_info: rlp.val_at(8)?,
+            })
+        } else {
+            panic!("other types of address are not supported yet.");
+        }
+    }
+}
+
+impl Encodable for Account {
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        if self.address.is_user_account_address() {
+            stream
+                .begin_list(6)
+                .append(&self.address)
+                .append(&self.balance)
+                .append(&self.nonce)
+                .append(&self.staking_balance)
+                .append(&self.collateral_for_storage)
+                .append(&self.accumulated_interest_return);
+        } else if self.address.is_contract_address() {
+            stream
+                .begin_list(9)
+                .append(&self.address)
+                .append(&self.balance)
+                .append(&self.nonce)
+                .append(&self.code_hash)
+                .append(&self.staking_balance)
+                .append(&self.collateral_for_storage)
+                .append(&self.accumulated_interest_return)
+                .append(&self.admin)
+                .append(&self.sponsor_info);
+        } else {
+            panic!("other types of address are not supported yet.");
         }
     }
 }

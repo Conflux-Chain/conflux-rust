@@ -41,6 +41,8 @@ the pool will not be able to tell whether they mined a block or not.
 - Improve the stratum protocol to make it more consistent with the convention.
 Now the stratum protocol can correctly work with an external miner.
 
+- Separate `deposit_list` and `vote_stake_list` from `Account` and adjust the gas cost for `withdraw`, `deposit`, `vote_lock` internal contract call. Now, the gas cost for there three functions is related with the length of `deposit_list` or `vote_stake_list`.
+
 - Disable transaction index recording by default. This will reduce the disk usage 
 for miners. If you want to serve transaction-related RPCs, you should set `record_tx_index=true`
 in the configuration file manually.

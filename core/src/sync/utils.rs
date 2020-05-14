@@ -23,7 +23,7 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, Notifications, TransactionPool,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
@@ -36,6 +36,8 @@ pub fn create_simple_block_impl(
 ) -> (H256, Block)
 {
     let mut b = BlockHeaderBuilder::new();
+    let mut author = Address::zero();
+    author.set_user_account_type_bits();
     let mut header = b
         .with_parent_hash(parent_hash)
         .with_height(height)
@@ -44,6 +46,7 @@ pub fn create_simple_block_impl(
         .with_nonce(nonce)
         .with_difficulty(diff)
         .with_adaptive(adaptive)
+        .with_author(author)
         .build();
     header.compute_hash();
     header.pow_quality = if block_weight > 1 {
@@ -112,14 +115,14 @@ pub fn initialize_data_manager(
 
     let mut genesis_accounts = HashMap::new();
     genesis_accounts.insert(
-        Address::from_str("0000000000000000000000000000000000000008").unwrap(),
+        Address::from_str("1000000000000000000000000000000000000008").unwrap(),
         U256::from(0),
     );
 
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
         genesis_accounts,
-        Address::from_str("0000000000000000000000000000000000000008").unwrap(),
+        Address::from_str("1000000000000000000000000000000000000008").unwrap(),
         U256::from(10),
     ));
 
