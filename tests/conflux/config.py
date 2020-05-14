@@ -25,6 +25,7 @@ default_conflux_conf = dict(
     storage_delta_mpts_cache_start_size = 2_000_000,
     storage_delta_mpts_slab_idle_size = 2_000_000,
     tx_pool_size = 500_000,
+    record_tx_index = "true",
 )
 
 production_conf = default_conflux_conf
@@ -43,4 +44,5 @@ small_local_test_conf = dict(
     storage_delta_mpts_cache_start_size = 200_000,
     storage_delta_mpts_slab_idle_size = 2_000_000,
     subnet_quota = 0,
+    record_tx_index = "true",
 )
