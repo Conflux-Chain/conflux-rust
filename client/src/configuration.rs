@@ -222,7 +222,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
-        (record_tx_index, (bool), true)
+        (record_tx_index, (bool), false)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
 
         // TreeGraph Section.
