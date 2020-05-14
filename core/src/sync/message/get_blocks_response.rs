@@ -40,7 +40,7 @@ impl Handleable for GetBlocksResponse {
 
         // TODO Check block size in advance to avoid attacks causing OOM.
         if ctx.manager.is_block_queue_full() {
-            warn!("recover_public_queue is full, discard GetBlocksResponse");
+            debug!("recover_public_queue is full, discard GetBlocksResponse");
             return Ok(());
         }
 

@@ -756,7 +756,7 @@ impl NetworkProtocolHandler for Provider {
         peer_protocol_version: ProtocolVersion,
     )
     {
-        info!(
+        debug!(
             "on_peer_connected: peer={:?} version={}",
             peer, peer_protocol_version
         );
@@ -775,7 +775,7 @@ impl NetworkProtocolHandler for Provider {
     }
 
     fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
-        info!("on_peer_disconnected: peer={}", peer);
+        debug!("on_peer_disconnected: peer={}", peer);
         self.peers.remove(peer);
     }
 
