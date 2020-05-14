@@ -81,7 +81,7 @@ fn test_mining_10_epochs() {
             .into_string()
             .unwrap(),
     );
-    conf.raw_conf.port = Some(13001);
+    conf.raw_conf.tcp_port = 13001;
     conf.raw_conf.jsonrpc_http_port = Some(18001);
     conf.raw_conf.mining_author =
         Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into());

@@ -21,9 +21,9 @@ pub trait DeltaDbTrait:
 pub trait DeltaDbManagerTrait {
     type DeltaDb: DeltaDbTrait;
 
-    fn get_delta_db_dir(&self) -> String;
+    fn get_delta_db_dir(&self) -> &Path;
     fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String;
-    fn get_delta_db_path(&self, delta_db_name: &str) -> String;
+    fn get_delta_db_path(&self, delta_db_name: &str) -> PathBuf;
 
     // Scan delta db dir, remove extra files and return the list of missing
     // snapshots for which the delta db is missing.
@@ -107,4 +107,8 @@ use crate::storage::{
     storage_db::{key_value_db::*, SnapshotInfo},
 };
 use primitives::EpochId;
-use std::{collections::HashMap, fs};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};

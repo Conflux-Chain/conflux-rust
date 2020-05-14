@@ -363,7 +363,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_tx_propagation: usize,
     pub max_peers_tx_propagation: usize,
     pub future_block_buffer_capacity: usize,
-    pub max_download_state_peers: usize,
+    pub max_downloading_chunks: usize,
     pub test_mode: bool,
     pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
@@ -527,7 +527,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
         warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={:?}",
+            "Error while handling message, peer={}, msgid={:?}, error={}",
             peer, msg_id, e
         );
 

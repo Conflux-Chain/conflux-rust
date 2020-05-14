@@ -33,8 +33,14 @@ impl Handleable for SnapshotChunkResponse {
             &ctx.manager.request_manager,
         )?;
 
+        debug!(
+            "handle_snapshot_chunk_response key={:?} chunk_len={}",
+            request.chunk_key,
+            self.chunk.keys.len()
+        );
+
         if let Err(e) = self.chunk.validate(&request.chunk_key) {
-            debug!("failed to validate the snapshot chunk, error = {:?}", e);
+            debug!("failed to validate the snapshot chunk, error = {}", e);
             // TODO: is the "other" peer guaranteed to have the chunk?
             // How did we pass the peer list?
             ctx.manager

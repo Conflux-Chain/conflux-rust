@@ -150,7 +150,7 @@ error_chain! {
 
 pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     warn!(
-        "Error while handling message, peer={}, msg_id={:?}, error={:?}",
+        "Error while handling message, peer={}, msg_id={:?}, error={}",
         peer, msg_id, e
     );
 

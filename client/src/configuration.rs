@@ -10,7 +10,10 @@ use cfx_types::H256;
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
-    cache_config::DEFAULT_LEDGER_CACHE_SIZE,
+    cache_config::{
+        DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT,
+        DEFAULT_LEDGER_CACHE_SIZE,
+    },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
         ConsensusConfig, ConsensusInnerConfig,
@@ -18,8 +21,8 @@ use cfxcore::{
     consensus_internal_parameters::*,
     consensus_parameters::*,
     storage::{
-        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
-        StorageConfiguration,
+        self, defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
+        ConsensusParam, StorageConfiguration,
     },
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -136,7 +139,8 @@ build_config! {
         // when user would like to keep the existing blockchain data
         // but disconnect from the public network.
         (network_id, (Option<u64>), None)
-        (port, (Option<u16>), Some(32323))
+        (tcp_port, (u16), 32323)
+        (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
 
@@ -154,7 +158,7 @@ build_config! {
         (heartbeat_timeout_ms, (u64), 180_000)
         (inflight_pending_tx_index_maintain_timeout_ms, (u64), 30_000)
         (max_allowed_timeout_in_observing_period, (u64), 10)
-        (max_download_state_peers, (usize), 8)
+        (max_downloading_chunks, (usize), 8)
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
@@ -203,6 +207,7 @@ build_config! {
         // FIXME: use a fixed sub-dir of conflux_data_dir instead.
         (block_db_dir, (String), "./blockchain_db".to_string())
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
+        (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
         (rocksdb_compaction_profile, (Option<String>), None)
         (storage_delta_mpts_cache_recent_lfu_factor, (f64), storage::defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR)
@@ -284,12 +289,10 @@ impl Configuration {
     }
 
     pub fn net_config(&self) -> Result<NetworkConfiguration, String> {
-        let mut network_config = match self.raw_conf.port {
-            Some(port) => {
-                NetworkConfiguration::new_with_port(self.network_id(), port)
-            }
-            None => NetworkConfiguration::new(self.network_id()),
-        };
+        let mut network_config = NetworkConfiguration::new_with_port(
+            self.network_id(),
+            self.raw_conf.tcp_port,
+        );
 
         network_config.is_consortium = self.raw_conf.is_consortium;
         network_config.discovery_enabled = self.raw_conf.enable_discovery;
@@ -305,8 +308,18 @@ impl Configuration {
                     .expect("net_key is not a valid secret string")
             });
         if let Some(addr) = self.raw_conf.public_address.clone() {
+            let addr_ip = if let Some(idx) = addr.find(":") {
+                warn!("Public address configuration should not contain port! (val = {}). Content after ':' is ignored.", &addr);
+                (&addr[0..idx]).to_string()
+            } else {
+                addr
+            };
+            let addr_with_port = match self.raw_conf.public_tcp_port {
+                Some(port) => addr_ip + ":" + &port.to_string(),
+                None => addr_ip + ":" + &self.raw_conf.tcp_port.to_string(),
+            };
             network_config.public_address =
-                match addr.to_socket_addrs().map(|mut i| i.next()) {
+                match addr_with_port.to_socket_addrs().map(|mut i| i.next()) {
                     Ok(sock_addr) => sock_addr,
                     Err(_e) => {
                         warn!("public_address in config is invalid");
@@ -343,6 +356,8 @@ impl Configuration {
     pub fn cache_config(&self) -> CacheConfig {
         let mut cache_config = CacheConfig::default();
         cache_config.ledger = self.raw_conf.ledger_cache_size;
+        cache_config.invalid_block_hashes_cache_size_in_count =
+            self.raw_conf.invalid_block_hash_cache_size_in_count;
         cache_config
     }
 
@@ -452,6 +467,7 @@ impl Configuration {
     }
 
     pub fn storage_config(&self) -> StorageConfiguration {
+        let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
             consensus_param: ConsensusParam {
                 snapshot_epoch_count: if self.is_test_mode() {
@@ -476,14 +492,14 @@ impl Configuration {
                 .raw_conf
                 .storage_delta_mpts_slab_idle_size,
             max_open_snapshots: self.raw_conf.storage_max_open_snapshots,
-            path_delta_mpts_dir: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::DELTA_MPTS_DIR,
-            path_snapshot_dir: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::SNAPSHOT_DIR,
-            path_snapshot_info_db: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::SNAPSHOT_INFO_DB_PATH,
-            path_storage_dir: self.raw_conf.conflux_data_dir.clone()
-                + StorageConfiguration::STORAGE_DIR,
+            path_delta_mpts_dir: conflux_data_path
+                .join(&*storage_dir::DELTA_MPTS_DIR),
+            path_snapshot_dir: conflux_data_path
+                .join(&*storage_dir::SNAPSHOT_DIR),
+            path_snapshot_info_db: conflux_data_path
+                .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
+            path_storage_dir: conflux_data_path
+                .join(&*storage_dir::STORAGE_DIR),
         }
     }
 
@@ -535,7 +551,7 @@ impl Configuration {
             future_block_buffer_capacity: self
                 .raw_conf
                 .future_block_buffer_capacity,
-            max_download_state_peers: self.raw_conf.max_download_state_peers,
+            max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
@@ -571,7 +587,7 @@ impl Configuration {
 
     pub fn state_sync_config(&self) -> StateSyncConfiguration {
         StateSyncConfiguration {
-            max_download_peers: self.raw_conf.max_download_state_peers,
+            max_downloading_chunks: self.raw_conf.max_downloading_chunks,
             candidate_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_candidate_request_timeout_ms,
             ),

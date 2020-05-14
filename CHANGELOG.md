@@ -43,6 +43,9 @@ Now the stratum protocol can correctly work with an external miner.
 
 - Separate `deposit_list` and `vote_stake_list` from `Account` and adjust the gas cost for `withdraw`, `deposit`, `vote_lock` internal contract call. Now, the gas cost for there three functions is related with the length of `deposit_list` or `vote_stake_list`.
 
+- A new RPC ctx_getBlockRewardInfo to query block reward information inside a 
+given epoch.
+
 # 0.5.0
 
 ## Improvements

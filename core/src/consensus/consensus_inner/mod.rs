@@ -2161,6 +2161,7 @@ impl ConsensusGraphInner {
                     self.data_man.block_execution_result_by_hash_with_epoch(
                         hash,
                         &epoch,
+                        false, /* update_pivot_assumption */
                         update_cache,
                     )?;
                 Some(BlockExecutionResultWithEpoch(epoch, execution_result))

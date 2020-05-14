@@ -4,7 +4,7 @@
 
 pub struct DeltaDbManagerSqlite {
     num_shards: u16,
-    delta_db_path: String,
+    delta_db_path: PathBuf,
     creation_mutex: Mutex<()>,
 }
 
@@ -15,9 +15,8 @@ impl DeltaDbManagerSqlite {
     const DELTA_DB_TABLE_NAME: &'static str = "delta_mpt";
 
     #[allow(unused)]
-    pub fn new(num_shards: u16, delta_db_path: String) -> Result<Self> {
-        let delta_db_dir = Path::new(delta_db_path.as_str());
-        if !delta_db_dir.exists() {
+    pub fn new(num_shards: u16, delta_db_path: PathBuf) -> Result<Self> {
+        if !delta_db_path.exists() {
             fs::create_dir_all(delta_db_path.clone())?;
         }
 
@@ -44,15 +43,15 @@ impl DeltaDbManagerSqlite {
 impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
     type DeltaDb = KvdbSqliteSharded<Box<[u8]>>;
 
-    fn get_delta_db_dir(&self) -> String { self.delta_db_path.clone() }
+    fn get_delta_db_dir(&self) -> &Path { self.delta_db_path.as_path() }
 
     fn get_delta_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::DELTA_DB_SQLITE_DIR_PREFIX.to_string()
             + &snapshot_epoch_id.to_hex()
     }
 
-    fn get_delta_db_path(&self, delta_db_name: &str) -> String {
-        self.delta_db_path.clone() + delta_db_name
+    fn get_delta_db_path(&self, delta_db_name: &str) -> PathBuf {
+        self.delta_db_path.join(delta_db_name)
     }
 
     fn new_empty_delta_db(&self, delta_db_name: &str) -> Result<Self::DeltaDb> {
@@ -102,4 +101,8 @@ use crate::storage::impls::storage_db::{
 use parity_bytes::ToPretty;
 use parking_lot::Mutex;
 use primitives::EpochId;
-use std::{fs, path::Path, sync::Arc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};

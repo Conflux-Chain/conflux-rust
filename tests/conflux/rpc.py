@@ -154,6 +154,9 @@ class RpcClient:
     def gas_price(self) -> int:
         return int(self.node.cfx_gasPrice(), 0)
 
+    def get_block_reward_info(self, epoch: str):
+        return self.node.cfx_getBlockRewardInfo(epoch)
+
     def epoch_number(self, epoch: str = None) -> int:
         if epoch is None:
             return int(self.node.cfx_epochNumber(), 0)

@@ -419,7 +419,7 @@ class P2PInterface(P2PConnection):
         ip = [127, 0, 0, 1]
         if self.remote:
             ip = get_ip_address()
-        endpoint = NodeEndpoint(address=bytes(ip), port=32325, udp_port=32325)
+        endpoint = NodeEndpoint(address=bytes(ip), tcp_port=32325, udp_port=32325)
         hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint)
 
         self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
