@@ -122,6 +122,7 @@ log_conf="log.yaml"
 # the node will not start rpc services. By default, the `jsonrpc_local_http_port` is set,
 # so as to support the Conflux CLI subcommands. What's provided here is the recommended
 # value if you want to start rpc services for other front-end applications.
+# Note that to serve transaction-related RPCs, `record_tx_index` should also be set to `true`.
 #
 # jsonrpc_ws_port=12535
 # jsonrpc_tcp_port=12536
@@ -329,7 +330,7 @@ jsonrpc_local_http_port=12539
 # Whether to record transaction indices.
 # This only needs to be enabled if you want to answer transaction-related RPCs.
 #
-# record_tx_index = true
+# record_tx_index = false
 
 # Time to keep transactions in in-memory transaction cache.
 #
