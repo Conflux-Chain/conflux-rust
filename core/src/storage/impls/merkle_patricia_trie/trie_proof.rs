@@ -8,9 +8,6 @@ pub struct TrieProof {
     /// one of its parent node.
     nodes: Vec<TrieProofNode>,
     merkle_to_node_index: HashMap<MerkleHash, usize>,
-    /// A node can be child of multiple nodes, because same MerkleHash can
-    /// appear at different places of the MPT.
-    nodes_parent_infos: Vec<Vec<ParentInfo>>,
     number_leaf_nodes: u32,
 }
 
@@ -62,29 +59,19 @@ impl TrieProof {
             .map(|(index, node)| (node.get_merkle().clone(), index))
             .collect::<HashMap<H256, usize>>();
         let number_nodes = nodes.len();
-        let mut nodes_parent_infos = Vec::with_capacity(number_nodes);
-        let mut is_non_leaf = vec![false; number_nodes];
 
         // Connectivity check.
         let mut connected_child_parent_map =
             HashMap::<MerkleHash, Vec<ParentInfo>, RandomState>::default();
-        match nodes.get(0) {
-            None => {}
-            Some(node) => {
-                connected_child_parent_map
-                    .entry(node.get_merkle().clone())
-                    .or_insert(vec![]);
-            }
+        if let Some(node) = nodes.get(0) {
+            connected_child_parent_map
+                .entry(node.get_merkle().clone())
+                .or_insert(vec![]);
         }
         for (node_index, node) in nodes.iter().enumerate() {
-            match connected_child_parent_map.get(node.get_merkle()) {
+            if !connected_child_parent_map.contains_key(node.get_merkle()) {
                 // Not connected.
-                None => bail!(ErrorKind::InvalidTrieProof),
-                Some(parent_infos) => {
-                    for parent_info in parent_infos {
-                        is_non_leaf[parent_info.parent_node_index] = true;
-                    }
-                }
+                bail!(ErrorKind::InvalidTrieProof);
             }
             for (child_index, child_merkle) in
                 node.get_children_table_ref().iter()
@@ -98,16 +85,15 @@ impl TrieProof {
                     });
             }
         }
-        // We get parent_info after the construction of
-        // connected_child_parent_map because node of same Merkle Hash
-        // may appear many times, and a node can be child of more than
-        // one nodes in the proof. Some of the parent nodes may come
-        // later than the child node.
+
+        let mut is_non_leaf = vec![false; number_nodes];
         for node in &nodes {
             if let Some(parent_infos) =
                 connected_child_parent_map.get(node.get_merkle())
             {
-                nodes_parent_infos.push(parent_infos.clone());
+                for parent_info in parent_infos {
+                    is_non_leaf[parent_info.parent_node_index] = true;
+                }
             }
         }
 
@@ -121,7 +107,6 @@ impl TrieProof {
         Ok(TrieProof {
             nodes,
             merkle_to_node_index,
-            nodes_parent_infos,
             number_leaf_nodes,
         })
     }
