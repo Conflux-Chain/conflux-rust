@@ -10,7 +10,7 @@ use crate::{
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
-    parameters::sync::*,
+    parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*},
     rand::Rng,
     sync::{
         message::{
@@ -114,7 +114,9 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
             inner: RwLock::new(AsyncTaskQueueInner {
                 tasks: VecDeque::new(),
                 size: 0,
-                moving_average: 1000.0, // Set to 1KB as initial size.
+                // Set to max value at start to avoid sending too many requests
+                // at the start.
+                moving_average: MAX_BLOCK_SIZE_IN_BYTES as f64,
             }),
             work_type: work_type as HandlerWorkType,
             max_capacity,
@@ -488,7 +490,7 @@ impl SynchronizationProtocolHandler {
                 if !self.syn.handshaking_peers.read().contains_key(peer)
                     || msg_id != msgid::STATUS
                 {
-                    warn!("Message from unknown peer {:?}", msg_id);
+                    debug!("Message from unknown peer {:?}", msg_id);
                     return Ok(());
                 }
             } else {
@@ -561,6 +563,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::InvalidSnapshotChunk(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
+            ErrorKind::EmptySnapshotChunk => disconnect = false,
             ErrorKind::AlreadyThrottled(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }

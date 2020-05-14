@@ -521,7 +521,7 @@ impl SnapshotChunkSync {
         // 1. received a out-of-date snapshot chunk, e.g. new era started.
         // 2. Duplicated chunks received, and it has been processed.
         if inner.downloading_chunks.remove(&chunk_key).is_none() {
-            info!("Snapshot chunk received, but not in downloading queue");
+            info!("Snapshot chunk received, but not in downloading queue, progess is {:?}", *inner);
             // FIXME Handle out-of-date chunks
             inner
                 .sync_candidate_manager
@@ -551,7 +551,7 @@ impl SnapshotChunkSync {
             )?;
             inner.status = Status::Completed;
         }
-        debug!("sync state progress: {:?}", *inner);
+        info!("sync state progress: {:?}", *inner);
         Ok(())
     }
 
