@@ -203,6 +203,8 @@ impl NodeContact {
 
     pub fn demoted() -> NodeContact { NodeContact::Demoted(SystemTime::now()) }
 
+    pub fn is_demoted(&self) -> bool { matches!(self, NodeContact::Demoted(_)) }
+
     pub fn time(&self) -> SystemTime {
         match *self {
             NodeContact::Success(t)
@@ -549,6 +551,10 @@ impl NodeTable {
         }
     }
 
+    fn is_reputation_level_demoted(&self, index: &NodeReputationIndex) -> bool {
+        index.0 == NodeReputation::Demoted
+    }
+
     fn remove_from_reputation_level(
         &mut self, index: &NodeReputationIndex,
     ) -> Option<Node> {
@@ -742,6 +748,12 @@ impl NodeTable {
             if by_connection {
                 node.last_connected = last_contact.clone();
             }
+        } else if self.is_reputation_level_demoted(&_index) {
+            // Only update node.last_connected
+            if by_connection {
+                let node = &mut self.node_reputation_table[_index.0][_index.1];
+                node.last_connected = last_contact.clone();
+            }
         } else if let Some(mut node) =
             self.remove_from_reputation_level(&_index)
         {
@@ -771,6 +783,15 @@ impl NodeTable {
             let node = &mut self.node_reputation_table[_index.0][_index.1];
             node.last_contact = Some(NodeContact::success());
             if by_connection {
+                node.last_connected = Some(NodeContact::success());
+                if token != None {
+                    node.stream_token = token;
+                }
+            }
+        } else if self.is_reputation_level_demoted(&_index) {
+            // Only update node.last_connected
+            if by_connection {
+                let node = &mut self.node_reputation_table[_index.0][_index.1];
                 node.last_connected = Some(NodeContact::success());
                 if token != None {
                     node.stream_token = token;
