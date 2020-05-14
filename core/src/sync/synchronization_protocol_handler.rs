@@ -494,7 +494,7 @@ impl SynchronizationProtocolHandler {
                     || (msg_id != msgid::STATUS_DEPRECATED
                         && msg_id != msgid::STATUS_V2)
                 {
-                    warn!("Message from unknown peer {:?}", msg_id);
+                    debug!("Message from unknown peer {:?}", msg_id);
                     return Ok(());
                 }
             } else {
@@ -567,6 +567,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::InvalidSnapshotChunk(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
+            ErrorKind::EmptySnapshotChunk => disconnect = false,
             ErrorKind::AlreadyThrottled(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
@@ -1716,7 +1717,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         peer_protocol_version: ProtocolVersion,
     )
     {
-        info!(
+        debug!(
             "Peer connected: peer={:?}, version={}",
             peer, peer_protocol_version
         );
@@ -1736,7 +1737,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
-        info!("Peer disconnected: peer={}", peer);
+        debug!("Peer disconnected: peer={}", peer);
         self.syn.peers.write().remove(peer);
         self.syn.handshaking_peers.write().remove(peer);
         self.request_manager.on_peer_disconnected(io, peer);

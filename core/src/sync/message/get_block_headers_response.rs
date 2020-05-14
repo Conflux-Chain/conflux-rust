@@ -151,7 +151,7 @@ impl GetBlockHeadersResponse {
             if ctx.manager.graph.verification_config.verify_timestamp {
                 let header_timestamp = header.timestamp();
                 if header_timestamp > now_timestamp {
-                    warn!("Block {} timestamp {} is ahead of the current time {}. Potential time drift!", hash, header_timestamp, now_timestamp);
+                    debug!("Block {} timestamp {} is ahead of the current time {}. Potential time drift!", hash, header_timestamp, now_timestamp);
                 }
                 if header_timestamp > now_timestamp + ACCEPTABLE_TIME_DRIFT {
                     warn!("The drift is more than the acceptable range ({}s). The processing of block {} will be delayed.", ACCEPTABLE_TIME_DRIFT, hash);

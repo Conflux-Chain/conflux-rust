@@ -7,7 +7,7 @@ use crate::{
     sync::{
         message::{msgid, Context, Handleable},
         state::{storage::Chunk, SnapshotChunkRequest},
-        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V2,
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
 };
 use network::service::ProtocolVersion;
@@ -46,7 +46,7 @@ impl Handleable for SnapshotChunkResponse {
             ctx.manager
                 .request_manager
                 .resend_request_to_another_peer(ctx.io, &message);
-            bail!(ErrorKind::InvalidSnapshotChunk(e.description().into()));
+            return Err(e);
         }
 
         ctx.manager.state_sync.handle_snapshot_chunk_response(

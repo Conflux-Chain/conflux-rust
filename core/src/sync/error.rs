@@ -86,6 +86,11 @@ error_chain! {
             display("invalid snapshot chunk: {}", reason),
         }
 
+        EmptySnapshotChunk {
+            description("empty snapshot chunk")
+            display("Receive an empty snapshot chunk response, retry later")
+        }
+
         AlreadyThrottled(msg_name: &'static str) {
             description("packet already throttled"),
             display("packet already throttled: {:?}", msg_name),
