@@ -13,6 +13,8 @@ use std::{
 
 /// State changes which should be applied in finalize,
 /// after transaction is fully executed.
+/// A Substate object is maintained for each contract
+/// function instance in the callstack.
 #[derive(Debug, Default)]
 pub struct Substate {
     /// Any accounts that have suicided.
@@ -29,7 +31,11 @@ pub struct Substate {
     pub sstore_clears_refund: i128,
     /// Created contracts.
     pub contracts_created: Vec<Address>,
-    /// Contracts called in call stack
+    /// Contracts called in call stack.
+    /// Used to detect reentrancy.
+    /// Passed from caller to callee when calling happens
+    /// and passed back to caller when callee returns,
+    /// through mem::swap.
     pub contracts_in_callstack: HashSet<Address>,
     /// Reentrancy happens in current call
     pub reentrancy_encountered: bool,
