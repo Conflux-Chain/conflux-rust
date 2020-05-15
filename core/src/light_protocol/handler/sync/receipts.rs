@@ -110,7 +110,7 @@ impl Receipts {
             epoch_receipts,
         } in receipts
         {
-            info!(
+            debug!(
                 "Validating receipts {:?} with epoch {}",
                 epoch_receipts, epoch
             );
@@ -157,7 +157,7 @@ impl Receipts {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} epochs={:?}", peer, epochs);
+        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
             return Ok(None);
@@ -173,7 +173,7 @@ impl Receipts {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("receipt sync statistics: {:?}", self.get_statistics());
+        debug!("receipt sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_RECEIPTS_IN_FLIGHT,

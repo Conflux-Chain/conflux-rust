@@ -113,7 +113,7 @@ impl StateRoots {
     ) -> Result<(), Error>
     {
         for StateRootWithEpoch { epoch, state_root } in state_roots {
-            info!(
+            debug!(
                 "Validating state root {:?} with epoch {}",
                 state_root, epoch
             );
@@ -160,7 +160,7 @@ impl StateRoots {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} epochs={:?}", peer, epochs);
+        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
             return Ok(None);
@@ -176,7 +176,7 @@ impl StateRoots {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("state root sync statistics: {:?}", self.get_statistics());
+        debug!("state root sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_STATE_ROOTS_IN_FLIGHT,

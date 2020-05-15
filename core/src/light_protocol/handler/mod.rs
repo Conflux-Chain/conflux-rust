@@ -53,6 +53,7 @@ const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 struct Statistics {
     catch_up_mode: bool,
     latest_epoch: u64,
+    latest_verified: u64,
 }
 
 /// Handler is responsible for maintaining peer meta-information and
@@ -318,6 +319,7 @@ impl Handler {
         Statistics {
             catch_up_mode: self.catch_up_mode(),
             latest_epoch: self.consensus.best_epoch_number(),
+            latest_verified: self.witnesses.latest_verified(),
         }
     }
 
@@ -428,7 +430,7 @@ impl Handler {
         resp: GetBlockHashesResponse,
     ) -> Result<(), Error>
     {
-        info!("on_block_hashes resp={:?}", resp);
+        debug!("on_block_hashes resp={:?}", resp);
 
         self.epochs.receive(&resp.request_id);
 
@@ -444,7 +446,7 @@ impl Handler {
         resp: GetBlockHeadersResponse,
     ) -> Result<(), Error>
     {
-        info!("on_block_headers resp={:?}", resp);
+        debug!("on_block_headers resp={:?}", resp);
 
         self.headers.receive(
             peer,
@@ -461,7 +463,7 @@ impl Handler {
         resp: GetBlockTxsResponse,
     ) -> Result<(), Error>
     {
-        info!("on_block_txs resp={:?}", resp);
+        debug!("on_block_txs resp={:?}", resp);
 
         self.block_txs.receive(
             peer,
@@ -476,7 +478,7 @@ impl Handler {
     fn on_blooms(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetBloomsResponse,
     ) -> Result<(), Error> {
-        info!("on_blooms resp={:?}", resp);
+        debug!("on_blooms resp={:?}", resp);
 
         self.blooms
             .receive(peer, resp.request_id, resp.blooms.into_iter())?;
@@ -488,7 +490,7 @@ impl Handler {
     fn on_new_block_hashes(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg: NewBlockHashes,
     ) -> Result<(), Error> {
-        info!("on_new_block_hashes msg={:?}", msg);
+        debug!("on_new_block_hashes msg={:?}", msg);
 
         if self.catch_up_mode() {
             if let Some(state) = self.peers.get(peer) {
@@ -514,7 +516,7 @@ impl Handler {
         resp: GetReceiptsResponse,
     ) -> Result<(), Error>
     {
-        info!("on_receipts resp={:?}", resp);
+        debug!("on_receipts resp={:?}", resp);
 
         self.receipts.receive(
             peer,
@@ -531,7 +533,7 @@ impl Handler {
         resp: GetStateEntriesResponse,
     ) -> Result<(), Error>
     {
-        info!("on_state_entries resp={:?}", resp);
+        debug!("on_state_entries resp={:?}", resp);
 
         self.state_entries.receive(
             peer,
@@ -548,7 +550,7 @@ impl Handler {
         resp: GetStateRootsResponse,
     ) -> Result<(), Error>
     {
-        info!("on_state_roots resp={:?}", resp);
+        debug!("on_state_roots resp={:?}", resp);
 
         self.state_roots.receive(
             peer,
@@ -563,7 +565,7 @@ impl Handler {
     fn on_txs(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxsResponse,
     ) -> Result<(), Error> {
-        info!("on_txs resp={:?}", resp);
+        debug!("on_txs resp={:?}", resp);
 
         self.txs
             .receive(peer, resp.request_id, resp.txs.into_iter())?;
@@ -575,7 +577,7 @@ impl Handler {
     fn on_tx_infos(
         &self, io: &dyn NetworkContext, peer: &NodeId, resp: GetTxInfosResponse,
     ) -> Result<(), Error> {
-        info!("on_tx_infos resp={:?}", resp);
+        debug!("on_tx_infos resp={:?}", resp);
 
         self.tx_infos
             .receive(peer, resp.request_id, resp.infos.into_iter())?;
@@ -589,7 +591,7 @@ impl Handler {
         resp: GetWitnessInfoResponse,
     ) -> Result<(), Error>
     {
-        info!("on_witness_info resp={:?}", resp);
+        debug!("on_witness_info resp={:?}", resp);
 
         self.witnesses.receive(
             peer,
@@ -626,7 +628,7 @@ impl Handler {
     }
 
     fn clean_up_requests(&self) {
-        info!("clean_up_requests");
+        trace!("clean_up_requests");
         self.block_txs.clean_up();
         self.blooms.clean_up();
         self.epochs.clean_up();
@@ -642,7 +644,7 @@ impl Handler {
     fn on_throttled(
         &self, _io: &dyn NetworkContext, peer: &NodeId, resp: Throttled,
     ) -> Result<(), Error> {
-        info!("on_throttled resp={:?}", resp);
+        debug!("on_throttled resp={:?}", resp);
 
         let peer = self.get_existing_peer_state(peer)?;
         peer.write().throttled_msgs.set_throttled(

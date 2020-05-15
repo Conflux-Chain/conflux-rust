@@ -106,7 +106,7 @@ impl Blooms {
     ) -> Result<(), Error>
     {
         for BloomWithEpoch { epoch, bloom } in blooms {
-            info!("Validating bloom {:?} with epoch {}", bloom, epoch);
+            debug!("Validating bloom {:?} with epoch {}", bloom, epoch);
 
             match self.sync_manager.check_if_requested(peer, id, &epoch)? {
                 None => continue,
@@ -150,7 +150,7 @@ impl Blooms {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId, epochs: Vec<u64>,
     ) -> Result<Option<RequestId>, Error> {
-        info!("send_request peer={:?} epochs={:?}", peer, epochs);
+        debug!("send_request peer={:?} epochs={:?}", peer, epochs);
 
         if epochs.is_empty() {
             return Ok(None);
@@ -165,7 +165,7 @@ impl Blooms {
 
     #[inline]
     pub fn sync(&self, io: &dyn NetworkContext) {
-        info!("bloom sync statistics: {:?}", self.get_statistics());
+        debug!("bloom sync statistics: {:?}", self.get_statistics());
 
         self.sync_manager.sync(
             MAX_BLOOMS_IN_FLIGHT,

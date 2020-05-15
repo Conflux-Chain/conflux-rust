@@ -175,7 +175,7 @@ where
     {
         // check if there are any peers available
         if self.peers.is_empty() {
-            warn!("No peers available; aborting sync");
+            debug!("No peers available; aborting sync");
             return;
         }
 
