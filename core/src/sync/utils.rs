@@ -23,7 +23,7 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, Notifications, TransactionPool,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder, ChainIdParams};
@@ -31,11 +31,13 @@ use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use threadpool::ThreadPool;
 
 pub fn create_simple_block_impl(
-    parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: u64,
+    parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
     diff: U256, block_weight: u32, adaptive: bool,
 ) -> (H256, Block)
 {
     let mut b = BlockHeaderBuilder::new();
+    let mut author = Address::zero();
+    author.set_user_account_type_bits();
     let mut header = b
         .with_parent_hash(parent_hash)
         .with_height(height)
@@ -44,6 +46,7 @@ pub fn create_simple_block_impl(
         .with_nonce(nonce)
         .with_difficulty(diff)
         .with_adaptive(adaptive)
+        .with_author(author)
         .build();
     header.compute_hash();
     header.pow_quality = if block_weight > 1 {
@@ -70,7 +73,7 @@ pub fn create_simple_block(
     // Note that because we do not fill the timestamp, it should keep at the
     // minimum difficulty of 10.
     let exp_diff = U256::from(10);
-    let nonce = sync.block_count() as u64 + 1;
+    let nonce = U256::from(sync.block_count() as u64 + 1);
     create_simple_block_impl(
         parent_hash,
         ref_hashes,
@@ -112,14 +115,14 @@ pub fn initialize_data_manager(
 
     let mut genesis_accounts = HashMap::new();
     genesis_accounts.insert(
-        Address::from_str("0000000000000000000000000000000000000008").unwrap(),
+        Address::from_str("1000000000000000000000000000000000000008").unwrap(),
         U256::from(0),
     );
 
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
         genesis_accounts,
-        Address::from_str("0000000000000000000000000000000000000008").unwrap(),
+        Address::from_str("1000000000000000000000000000000000000008").unwrap(),
         U256::from(10),
     ));
 

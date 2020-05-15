@@ -21,8 +21,11 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
     consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+    evm::Spec,
     executive::ExecutionOutcome,
-    parameters::{consensus::*, consensus_internal::*},
+    parameters::{
+        consensus::*, consensus_internal::*, staking::COLLATERAL_PER_BYTE,
+    },
     pow::ProofOfWorkConfig,
     rpc_errors::Result as RpcResult,
     state::State,
@@ -34,7 +37,7 @@ use crate::{
     vm_factory::VmFactory,
     Notifications,
 };
-use cfx_types::{Bloom, H160, H256, U256};
+use cfx_types::{Bloom, H160, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -713,11 +716,13 @@ impl ConsensusGraph {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state_db = self.get_state_db_by_epoch_number(epoch_number)?;
-        // FIXME: check if we should fill the correct `block_number`.
+        // `block_number` is not used in the follow up call. It is fine to pass
+        // 0.
         let state = State::new(
             state_db,
             Default::default(), /* vm */
-            0,                  /* block_number */
+            &Spec::new_spec(),
+            0, /* block_number */
         );
         state
             .nonce(&address)
@@ -796,7 +801,9 @@ impl ConsensusGraph {
         if let Some(block_log_bloom) = self
             .data_man
             .block_execution_result_by_hash_with_epoch(
-                block_hash, epoch_hash, false, /* update_cache */
+                block_hash, epoch_hash,
+                false, /* update_pivot_assumption */
+                false, /* update_cache */
             )
             .map(|r| r.bloom)
         {
@@ -885,6 +892,60 @@ impl ConsensusGraph {
         self.validate_stated_epoch(&epoch)?;
         let epoch_id = self.get_hash_from_epoch_number(epoch)?;
         self.executor.call_virtual(tx, &epoch_id)
+    }
+
+    pub fn check_balance_against_transaction(
+        &self, account_addr: H160, contract_addr: H160, gas_limit: U256,
+        gas_price: U256, storage_limit: U256, epoch: EpochNumber,
+    ) -> RpcResult<(bool, bool, bool)>
+    {
+        self.validate_stated_epoch(&epoch)?;
+        let state_db = self.get_state_db_by_epoch_number(epoch)?;
+        // `block_number` is not used in the follow up calls. It is fine to pass
+        // zero here.
+        let state = State::new(
+            state_db,
+            Default::default(), /* vm */
+            &Spec::new_spec(),
+            0, /* block_number */
+        );
+        let gas_cost = gas_limit.full_mul(gas_price);
+        let mut gas_sponsored = false;
+        let mut storage_sponsored = false;
+        if state.check_commission_privilege(&contract_addr, &account_addr)? {
+            // No need to check for gas sponsor account existence.
+            gas_sponsored = gas_cost
+                <= U512::from(state.sponsor_gas_bound(&contract_addr)?);
+            storage_sponsored =
+                state.sponsor_for_collateral(&contract_addr)?.is_some();
+        }
+        let gas_sponsor_balance = if gas_sponsored {
+            U512::from(state.sponsor_balance_for_gas(&contract_addr)?)
+        } else {
+            0.into()
+        };
+        let will_pay_tx_fee = !gas_sponsored || gas_sponsor_balance < gas_cost;
+
+        let storage_limit_in_drip =
+            if storage_limit >= U256::from(std::u64::MAX) {
+                U256::from(std::u64::MAX) * *COLLATERAL_PER_BYTE
+            } else {
+                storage_limit * *COLLATERAL_PER_BYTE
+            };
+        let storage_sponsor_balance = if storage_sponsored {
+            state.sponsor_balance_for_collateral(&contract_addr)?
+        } else {
+            0.into()
+        };
+
+        let will_pay_collateral = !storage_sponsored
+            || storage_limit_in_drip > storage_sponsor_balance;
+
+        let balance = state.balance(&account_addr)?;
+        let minimum_balance = if will_pay_tx_fee { gas_cost } else { 0.into() };
+        let is_balance_enough = U512::from(balance) >= minimum_balance;
+
+        Ok((will_pay_tx_fee, will_pay_collateral, is_balance_enough))
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to
@@ -1154,7 +1215,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
                             State::new(
                                 StateDb::new(db),
                                 Default::default(), /* vm */
-                                past_num_blocks,    /* block_numer */
+                                &Spec::new_spec(),
+                                past_num_blocks, /* block_numer */
                             )
                         })
                         .expect("Best state has been executed");

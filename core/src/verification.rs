@@ -6,7 +6,7 @@ use crate::{
     error::{BlockError, Error},
     executive::Executive,
     parameters::block::*,
-    pow::{self, ProofOfWorkProblem},
+    pow::{self, nonce_to_lower_bound, ProofOfWorkProblem},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm,
 };
@@ -53,15 +53,20 @@ impl VerificationConfig {
     }
 
     #[inline]
-    pub fn compute_header_pow_quality(header: &mut BlockHeader) -> H256 {
-        let pow_hash = pow::compute(header.nonce(), &header.problem_hash());
-        header.pow_quality = pow::pow_hash_to_quality(&pow_hash);
+    /// Note that this function returns *pow_hash* of the block, not its quality
+    pub fn compute_pow_hash_and_fill_header_pow_quality(
+        header: &mut BlockHeader,
+    ) -> H256 {
+        let nonce = header.nonce();
+        let pow_hash = pow::compute(&nonce, &header.problem_hash());
+        header.pow_quality = pow::pow_hash_to_quality(&pow_hash, &nonce);
         pow_hash
     }
 
     #[inline]
     pub fn verify_pow(&self, header: &mut BlockHeader) -> Result<(), Error> {
-        let pow_hash = Self::compute_header_pow_quality(header);
+        let pow_hash =
+            Self::compute_pow_hash_and_fill_header_pow_quality(header);
         if header.difficulty().is_zero() {
             return Err(BlockError::InvalidDifficulty(OutOfBounds {
                 min: Some(0.into()),
@@ -72,13 +77,21 @@ impl VerificationConfig {
         }
         let boundary = pow::difficulty_to_boundary(header.difficulty());
         if !ProofOfWorkProblem::validate_hash_against_boundary(
-            &pow_hash, &boundary,
+            &pow_hash,
+            &header.nonce(),
+            &boundary,
         ) {
-            warn!("block {} has invalid proof of work. boundary: {}, pow_hash: {}", header.hash(), boundary.clone(), pow_hash.clone());
+            let lower_bound = nonce_to_lower_bound(&header.nonce());
+            // Because the lower_bound first bit is always zero, as long as the
+            // difficulty is not 1, this should not overflow.
+            // We just use overflowing_add() here to be safe.
+            let (upper_bound, _) = lower_bound.overflowing_add(boundary);
+            warn!("block {} has invalid proof of work. boundary: [{}, {}), pow_hash: {}",
+                  header.hash(), lower_bound.clone(), upper_bound.clone(), pow_hash.clone());
             return Err(From::from(BlockError::InvalidProofOfWork(
                 OutOfBounds {
-                    min: None,
-                    max: Some(BigEndianHash::from_uint(&boundary)),
+                    min: Some(BigEndianHash::from_uint(&lower_bound)),
+                    max: Some(BigEndianHash::from_uint(&upper_bound)),
                     found: pow_hash,
                 },
             )));

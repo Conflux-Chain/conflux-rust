@@ -92,9 +92,9 @@ class WithdrawDepositTest(ConfluxTestFramework):
         assert_equal(client.get_staking_balance(addr), 10 ** 18 - capital)
         assert_equal(client.get_balance(addr), balance + capital + interest - charged_of_huge_gas(gas))
 
-        # lock 4 * 10 ** 17 for 1 day
+        # lock 4 * 10 ** 17 until block number 100000
         balance = client.get_balance(addr)
-        tx_data = decode_hex(staking_contract.functions.lock(4 * 10 ** 17, 1).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.vote_lock(4 * 10 ** 17, 100000).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])

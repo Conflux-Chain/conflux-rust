@@ -108,7 +108,10 @@ impl RpcImpl {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
         info!("RPC Request: cfx_gasPrice()");
-        Ok(consensus_graph.gas_price().unwrap_or(0.into()).into())
+        Ok(consensus_graph
+            .gas_price()
+            .unwrap_or(cfxcore::consensus_parameters::ONE_GDRIP_IN_DRIP.into())
+            .into())
     }
 
     pub fn epoch_number(

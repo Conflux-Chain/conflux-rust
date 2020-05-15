@@ -193,6 +193,7 @@ pub enum PeerType {
 pub enum NodeContact {
     Success(SystemTime),
     Failure(SystemTime),
+    Demoted(SystemTime),
 }
 
 impl NodeContact {
@@ -200,9 +201,15 @@ impl NodeContact {
 
     pub fn failure() -> NodeContact { NodeContact::Failure(SystemTime::now()) }
 
+    pub fn demoted() -> NodeContact { NodeContact::Demoted(SystemTime::now()) }
+
+    pub fn is_demoted(&self) -> bool { matches!(self, NodeContact::Demoted(_)) }
+
     pub fn time(&self) -> SystemTime {
         match *self {
-            NodeContact::Success(t) | NodeContact::Failure(t) => t,
+            NodeContact::Success(t)
+            | NodeContact::Failure(t)
+            | NodeContact::Demoted(t) => t,
         }
     }
 
@@ -341,6 +348,7 @@ enum NodeReputation {
     Success = 0,
     Unknown = 1,
     Failure = 2,
+    Demoted = 3,
 }
 
 const NODE_REPUTATION_LEVEL_COUNT: usize = 3;
@@ -386,6 +394,7 @@ impl NodeTable {
             match contact {
                 NodeContact::Success(_) => NodeReputation::Success,
                 NodeContact::Failure(_) => NodeReputation::Failure,
+                NodeContact::Demoted(_) => NodeReputation::Demoted,
                 //_ => panic!("Unknown contact information!"),
             }
         } else {
@@ -540,6 +549,10 @@ impl NodeTable {
                 self.add_to_reputation_level(target_node_rep, node);
             }
         }
+    }
+
+    fn is_reputation_level_demoted(&self, index: &NodeReputationIndex) -> bool {
+        index.0 == NodeReputation::Demoted
     }
 
     fn remove_from_reputation_level(
@@ -715,8 +728,12 @@ impl NodeTable {
         self.remove_from_reputation_level(&_index)
     }
 
-    /// Set last contact as failure for a node
-    pub fn note_failure(&mut self, id: &NodeId, by_connection: bool) {
+    /// Set last contact as failure or demoted for a node
+    pub fn note_unsuccess_contact(
+        &mut self, id: &NodeId, by_connection: bool,
+        last_contact: Option<NodeContact>,
+    )
+    {
         let mut _index;
         if let Some(index) = self.node_index.get(id) {
             _index = *index;
@@ -724,19 +741,25 @@ impl NodeTable {
             return;
         }
 
-        let target_node_rep = NodeReputation::Failure;
+        let target_node_rep = Self::node_reputation(&last_contact);
         if target_node_rep == _index.0 {
             let node = &mut self.node_reputation_table[_index.0][_index.1];
-            node.last_contact = Some(NodeContact::failure());
+            node.last_contact = last_contact.clone();
             if by_connection {
-                node.last_connected = Some(NodeContact::failure());
+                node.last_connected = last_contact.clone();
+            }
+        } else if self.is_reputation_level_demoted(&_index) {
+            // Only update node.last_connected
+            if by_connection {
+                let node = &mut self.node_reputation_table[_index.0][_index.1];
+                node.last_connected = last_contact.clone();
             }
         } else if let Some(mut node) =
             self.remove_from_reputation_level(&_index)
         {
-            node.last_contact = Some(NodeContact::failure());
+            node.last_contact = last_contact.clone();
             if by_connection {
-                node.last_connected = Some(NodeContact::failure());
+                node.last_connected = last_contact.clone();
             }
             self.add_to_reputation_level(target_node_rep, node);
         } else {
@@ -760,6 +783,15 @@ impl NodeTable {
             let node = &mut self.node_reputation_table[_index.0][_index.1];
             node.last_contact = Some(NodeContact::success());
             if by_connection {
+                node.last_connected = Some(NodeContact::success());
+                if token != None {
+                    node.stream_token = token;
+                }
+            }
+        } else if self.is_reputation_level_demoted(&_index) {
+            // Only update node.last_connected
+            if by_connection {
+                let node = &mut self.node_reputation_table[_index.0][_index.1];
                 node.last_connected = Some(NodeContact::success());
                 if token != None {
                     node.stream_token = token;
@@ -859,6 +891,8 @@ mod json {
         Success(u64),
         #[serde(rename = "failure")]
         Failure(u64),
+        #[serde(rename = "demoted")]
+        Demoted(u64),
     }
 
     impl NodeContact {
@@ -868,6 +902,9 @@ mod json {
                     time::UNIX_EPOCH + Duration::from_secs(s),
                 ),
                 NodeContact::Failure(s) => super::NodeContact::Failure(
+                    time::UNIX_EPOCH + Duration::from_secs(s),
+                ),
+                NodeContact::Demoted(s) => super::NodeContact::Demoted(
                     time::UNIX_EPOCH + Duration::from_secs(s),
                 ),
             }
@@ -906,6 +943,10 @@ mod json {
                     .duration_since(time::UNIX_EPOCH)
                     .ok()
                     .map(|d| NodeContact::Failure(d.as_secs())),
+                super::NodeContact::Demoted(t) => t
+                    .duration_since(time::UNIX_EPOCH)
+                    .ok()
+                    .map(|d| NodeContact::Demoted(d.as_secs())),
             });
 
             Node {

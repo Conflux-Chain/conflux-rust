@@ -7,6 +7,7 @@
 #![allow(deprecated)]
 
 extern crate cfx_bytes as bytes;
+extern crate cfx_utils;
 extern crate cfxkey as keylib;
 extern crate core;
 extern crate io;
@@ -57,7 +58,6 @@ pub mod executive;
 pub mod genesis;
 pub mod light_protocol;
 pub mod machine;
-pub mod miner;
 pub mod parameters;
 pub mod pow;
 pub mod rpc_errors;

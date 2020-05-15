@@ -1,0 +1,14 @@
+version: 2.1
+workflows:
+  trigger-devdoc:
+    jobs:
+      - trigger-devdoc:
+          filters:
+            branches:
+              only:
+                - master
+jobs:
+  trigger-devdoc:
+    machine: true
+    steps:
+      - run: curl -X POST "https://circleci.com/api/v1.1/project/github/Conflux-Chain/conflux-developer-site/build?circle-token=${CIRCLE_API_USER_TOKEN}"

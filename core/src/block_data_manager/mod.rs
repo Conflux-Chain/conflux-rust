@@ -157,11 +157,47 @@ impl StateAvailabilityBoundary {
     }
 }
 
+#[derive(DeriveMallocSizeOf)]
+pub struct InvalidBlockSet {
+    capacity: usize,
+    invalid_block_hashes: HashSet<H256>,
+}
+
+impl InvalidBlockSet {
+    pub fn new(capacity: usize) -> Self {
+        InvalidBlockSet {
+            capacity,
+            invalid_block_hashes: HashSet::new(),
+        }
+    }
+
+    pub fn insert(&mut self, value: H256) {
+        if !self.invalid_block_hashes.contains(&value) {
+            if self.invalid_block_hashes.len() < self.capacity {
+                self.invalid_block_hashes.insert(value);
+                return;
+            }
+
+            let mut iter = self.invalid_block_hashes.iter();
+            let the_evicted = iter.next().map(|e| e.clone());
+            if let Some(evicted) = the_evicted {
+                self.invalid_block_hashes.remove(&evicted);
+            }
+            self.invalid_block_hashes.insert(value);
+        }
+    }
+
+    pub fn contains(&self, value: &H256) -> bool {
+        self.invalid_block_hashes.contains(value)
+    }
+}
+
 pub struct BlockDataManager {
     block_headers: RwLock<HashMap<H256, Arc<BlockHeader>>>,
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
+    block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
     /// Caching for receipts_root and logs_bloom for epochs after
     /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
@@ -179,7 +215,7 @@ pub struct BlockDataManager {
         RwLock<HashMap<H256, EpochExecutionCommitment>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
 
-    invalid_block_set: RwLock<HashSet<H256>>,
+    invalid_block_set: RwLock<InvalidBlockSet>,
     cur_consensus_era_genesis_hash: RwLock<H256>,
     cur_consensus_era_stable_hash: RwLock<H256>,
     instance_id: Mutex<u64>,
@@ -224,6 +260,7 @@ impl MallocSizeOf for BlockDataManager {
         let blocks_size = self.blocks.read().size_of(ops);
         let compact_blocks_size = self.compact_blocks.read().size_of(ops);
         let block_receipts_size = self.block_receipts.read().size_of(ops);
+        let block_reward_size = self.block_rewards.read().size_of(ops);
         let transaction_indices_size =
             self.transaction_indices.read().size_of(ops);
         let epoch_execution_commitments_size =
@@ -243,6 +280,7 @@ impl MallocSizeOf for BlockDataManager {
             + blocks_size
             + compact_blocks_size
             + block_receipts_size
+            + block_reward_size
             + transaction_indices_size
             + epoch_execution_commitments_size
             + epoch_execution_contexts_size
@@ -289,10 +327,13 @@ impl BlockDataManager {
             blocks: RwLock::new(HashMap::new()),
             compact_blocks: Default::default(),
             block_receipts: Default::default(),
+            block_rewards: Default::default(),
             transaction_indices: Default::default(),
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
-            invalid_block_set: Default::default(),
+            invalid_block_set: RwLock::new(InvalidBlockSet::new(
+                cache_conf.invalid_block_hashes_cache_size_in_count,
+            )),
             true_genesis: true_genesis.clone(),
             storage_manager,
             cache_man,
@@ -576,26 +617,44 @@ impl BlockDataManager {
     }
 
     /// Return None if receipts for corresponding epoch is not computed before
-    /// or has been overwritten by another new pivot chain in db
+    /// or has been overwritten by another new pivot chain in db.
+    /// If `update_pivot_assumption` is true and we have execution results of
+    /// `assumed_epoch` in memory, we will also ensure `assumed_epoch`
+    /// is persisted as the pivot hash in db.
     ///
-    /// This function will require lock of block_receipts
+    /// This function will require lock of block_receipts.
     pub fn block_execution_result_by_hash_with_epoch(
-        &self, hash: &H256, assumed_epoch: &H256, update_cache: bool,
-    ) -> Option<BlockExecutionResult> {
-        let maybe_receipts =
-            self.block_receipts
-                .read()
-                .get(hash)
-                .and_then(|receipt_info| {
-                    receipt_info.get_receipts_at_epoch(assumed_epoch)
-                });
-        if maybe_receipts.is_some() {
+        &self, hash: &H256, assumed_epoch: &H256,
+        update_pivot_assumption: bool, update_cache: bool,
+    ) -> Option<BlockExecutionResult>
+    {
+        if let Some((receipts, is_on_pivot)) = self
+            .block_receipts
+            .write()
+            .get_mut(hash)
+            .and_then(|receipt_info| {
+                let r = receipt_info.get_receipts_at_epoch(assumed_epoch);
+                if update_pivot_assumption {
+                    receipt_info.set_pivot_hash(*assumed_epoch);
+                }
+                r
+            })
+        {
             if update_cache {
                 self.cache_man
                     .lock()
                     .note_used(CacheId::BlockReceipts(*hash));
             }
-            return maybe_receipts;
+            if update_pivot_assumption && !is_on_pivot {
+                self.db_manager.insert_block_execution_result_to_db(
+                    hash,
+                    &BlockExecutionResultWithEpoch(
+                        *assumed_epoch,
+                        receipts.clone(),
+                    ),
+                )
+            }
+            return Some(receipts);
         }
         let BlockExecutionResultWithEpoch(epoch, receipts) =
             self.db_manager.block_execution_result_from_db(hash)?;
@@ -632,7 +691,7 @@ impl BlockDataManager {
             .map(|header| header.height())
     }
 
-    pub fn insert_block_results(
+    pub fn insert_block_execution_result(
         &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
         persistent: bool,
     )
@@ -669,10 +728,39 @@ impl BlockDataManager {
             .note_used(CacheId::BlockReceipts(hash));
     }
 
-    pub fn remove_block_results(&self, hash: &H256, remove_db: bool) {
+    pub fn insert_block_reward_result(
+        &self, hash: H256, block_reward: BlockRewardResult, persistent: bool,
+    ) {
+        self.insert(
+            hash,
+            block_reward,
+            &self.block_rewards,
+            |hash, value| {
+                self.db_manager
+                    .insert_block_reward_result_to_db(hash, value)
+            },
+            Some(CacheId::BlockRewards(hash)),
+            persistent,
+        )
+    }
+
+    pub fn block_reward_result_by_hash(
+        &self, hash: &H256,
+    ) -> Option<BlockRewardResult> {
+        self.get(
+            hash,
+            &self.block_rewards,
+            |key| self.db_manager.block_reward_result_from_db(key),
+            Some(CacheId::BlockRewards(*hash)),
+        )
+    }
+
+    pub fn remove_block_result(&self, hash: &H256, remove_db: bool) {
         self.block_receipts.write().remove(hash);
+        self.block_rewards.write().remove(hash);
         if remove_db {
             self.db_manager.remove_block_execution_result_from_db(hash);
+            self.db_manager.remove_block_reward_result_from_db(hash);
         }
     }
 
@@ -970,7 +1058,8 @@ impl BlockDataManager {
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
-                    h, epoch_hash, true, /* update_cache */
+                    h, epoch_hash, true, /* update_pivot_assumption */
+                    true, /* update_cache */
                 ) {
                     epoch_receipts.push(r.block_receipts);
                 } else {
@@ -1053,12 +1142,14 @@ impl BlockDataManager {
         let blocks = self.blocks.read().size_of(malloc_ops);
         let compact_blocks = self.compact_blocks.read().size_of(malloc_ops);
         let block_receipts = self.block_receipts.read().size_of(malloc_ops);
+        let block_rewards = self.block_rewards.read().size_of(malloc_ops);
         let transaction_indices =
             self.transaction_indices.read().size_of(malloc_ops);
         CacheSize {
             block_headers,
             blocks,
             block_receipts,
+            block_rewards,
             transaction_indices,
             compact_blocks,
         }
@@ -1071,15 +1162,17 @@ impl BlockDataManager {
         let mut blocks = self.blocks.write();
         let mut compact_blocks = self.compact_blocks.write();
         let mut executed_results = self.block_receipts.write();
+        let mut reward_results = self.block_rewards.write();
         let mut tx_indices = self.transaction_indices.write();
         let mut exeuction_contexts = self.epoch_execution_contexts.write();
         let mut cache_man = self.cache_man.lock();
         debug!(
-            "Before gc cache_size={} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {}",
             current_size,
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
+            reward_results.len(),
             tx_indices.len(),
         );
 
@@ -1091,6 +1184,9 @@ impl BlockDataManager {
                     }
                     CacheId::BlockReceipts(ref h) => {
                         executed_results.remove(h);
+                    }
+                    CacheId::BlockRewards(ref h) => {
+                        reward_results.remove(h);
                     }
                     CacheId::TransactionAddress(ref h) => {
                         tx_indices.remove(h);
@@ -1107,6 +1203,7 @@ impl BlockDataManager {
             block_headers.size_of(malloc_ops)
                 + blocks.size_of(malloc_ops)
                 + executed_results.size_of(malloc_ops)
+                + reward_results.size_of(malloc_ops)
                 + tx_indices.size_of(malloc_ops)
                 + compact_blocks.size_of(malloc_ops)
         });
@@ -1114,6 +1211,7 @@ impl BlockDataManager {
         block_headers.shrink_to_fit();
         blocks.shrink_to_fit();
         executed_results.shrink_to_fit();
+        reward_results.shrink_to_fit();
         tx_indices.shrink_to_fit();
         compact_blocks.shrink_to_fit();
         exeuction_contexts.shrink_to_fit();

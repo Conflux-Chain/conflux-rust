@@ -102,8 +102,9 @@ fn check_results(
 )
 {
     let mut pending_cnt = 0;
+    let consensus_read = consensus.inner.read();
     for i in start..end {
-        let pending = consensus.inner.read().is_pending(&hashes[i]);
+        let pending = consensus_read.is_pending(&hashes[i]);
         if pending == None {
             //println!("Block {} is skipped!", i);
             continue;
@@ -112,17 +113,20 @@ fn check_results(
             pending_cnt += 1;
             continue;
         }
-        let partial_invalid = consensus
-            .inner
-            .read()
-            .is_partial_invalid(&hashes[i])
-            .unwrap();
+        let partial_invalid_opt = consensus_read.is_partial_invalid(&hashes[i]);
+        // This one is outside the era and eliminated. We will skip and count it
+        // as pending as well.
+        if partial_invalid_opt.is_none() {
+            pending_cnt += 1;
+            continue;
+        }
+        let partial_invalid = partial_invalid_opt.unwrap();
         let valid = *valid_indices.get(&i).unwrap();
         let invalid = (valid == 0);
         if valid != -1 {
             assert!(partial_invalid == invalid, "Block {} {} partial invalid status: Consensus graph {} != actual {}", i, hashes[i], partial_invalid, invalid);
         }
-        let timer0 = consensus.inner.read().is_timer_block(&hashes[i]).unwrap();
+        let timer0 = consensus_read.is_timer_block(&hashes[i]).unwrap();
         let timer_v = *timer_indices.get(&i).unwrap();
         if !invalid && timer_v != -1 {
             let timer1 = (timer_v == 1);
@@ -135,7 +139,7 @@ fn check_results(
                 timer1
             );
         }
-        let adaptive0 = consensus.inner.read().is_adaptive(&hashes[i]).unwrap();
+        let adaptive0 = consensus_read.is_adaptive(&hashes[i]).unwrap();
         let adaptive_v = *adaptive_indices.get(&i).unwrap();
         if !invalid && adaptive_v != -1 {
             let adaptive1 = (adaptive_v == 1);
@@ -331,11 +335,7 @@ fn main() {
 
     let n = hashes.len();
     let last_hash = hashes[n - 1];
-    let mut last_checked_count = 0;
-    while consensus.get_processed_block_count() != n - 1
-        && consensus.get_processed_block_count() != last_checked_count
-    {
-        last_checked_count = consensus.get_processed_block_count();
+    while sync.is_consensus_worker_busy() {
         if last_check_time.elapsed().unwrap().as_secs() >= 5 {
             let last_time_elapsed =
                 last_check_time.elapsed().unwrap().as_millis() as f64 / 1_000.0;

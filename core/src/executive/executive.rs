@@ -303,8 +303,6 @@ impl<'a> CallCreateExecutive<'a> {
         substate: &mut Substate,
     ) -> vm::Result<()>
     {
-        let nonce_offset = if spec.no_empty { 1 } else { 0 }.into();
-        let balance = state.balance(&params.address)?;
         if let ActionValue::Transfer(val) = params.value {
             state.sub_balance(
                 &params.sender,
@@ -314,15 +312,15 @@ impl<'a> CallCreateExecutive<'a> {
             state.new_contract_with_admin(
                 &params.address,
                 &params.original_sender,
-                val + balance,
-                nonce_offset,
+                val,
+                state.contract_start_nonce(),
             )?;
         } else {
             state.new_contract_with_admin(
                 &params.address,
                 &params.original_sender,
-                balance,
-                nonce_offset,
+                U256::zero(),
+                state.contract_start_nonce(),
             )?;
         }
 
@@ -335,7 +333,7 @@ impl<'a> CallCreateExecutive<'a> {
         sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
     ) -> CollateralCheckResult
     {
-        match *result {
+        match result {
             Err(vm::Error::OutOfGas)
             | Err(vm::Error::BadJumpDestination { .. })
             | Err(vm::Error::BadInstruction { .. })
@@ -355,8 +353,8 @@ impl<'a> CallCreateExecutive<'a> {
                 state.revert_to_checkpoint();
                 CollateralCheckResult::Valid
             }
-            Err(vm::Error::StateDbError(_)) => {
-                panic!("db error occurred during execution");
+            Err(vm::Error::StateDbError(e)) => {
+                panic!("db error occurred during execution, {}", e);
             }
             Ok(_) => {
                 let check_result = if is_bottom_ex {
@@ -529,7 +527,7 @@ impl<'a> CallCreateExecutive<'a> {
                     let result = if let Some(contract) =
                         internal_contract_map.contract(&params.code_address)
                     {
-                        gas_cost = contract.cost(params.data.as_ref());
+                        gas_cost = contract.cost(&params, state);
                         if gas_cost > params.gas {
                             Err(vm::Error::OutOfGas)
                         } else {
@@ -705,6 +703,7 @@ impl<'a> CallCreateExecutive<'a> {
                 params,
                 mut unconfirmed_substate,
             ) => {
+                debug!("CallCreateExecutiveKind::ExecCreate");
                 assert!(self.is_create);
 
                 {

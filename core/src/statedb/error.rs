@@ -18,7 +18,7 @@ error_chain! {
     errors {
         IncompleteDatabase(address: Address) {
             description("incomplete database")
-            display("incomplete database: address={}", address)
+            display("incomplete database: address={:?}", address)
         }
     }
 }

@@ -95,7 +95,7 @@ impl StorageManager {
         storage_conf: StorageConfiguration,
     ) -> Result<Arc<Self>>
     {
-        let storage_dir = Path::new(storage_conf.path_storage_dir.as_str());
+        let storage_dir = storage_conf.path_storage_dir.as_path();
         println!(
             "new StorageManager within storage_dir {}",
             storage_dir.display()
@@ -105,7 +105,7 @@ impl StorageManager {
         }
 
         let (_, snapshot_info_db) = KvdbSqlite::open_or_create(
-            storage_conf.path_snapshot_info_db.clone(),
+            &storage_conf.path_snapshot_info_db,
             SNAPSHOT_KVDB_STATEMENTS.clone(),
         )?;
 
@@ -1227,7 +1227,7 @@ lazy_static! {
         KvdbSqliteStatements::make_statements(
             &["value"],
             &["BLOB"],
-            StorageConfiguration::SNAPSHOT_INFO_DB_NAME,
+            &storage_dir::SNAPSHOT_INFO_DB_NAME,
             false
         )
         .unwrap()
@@ -1272,6 +1272,7 @@ use crate::{
         storage_db::{
             key_value_db::KeyValueDbIterableTrait, SnapshotMptTraitRead,
         },
+        storage_dir,
         utils::guarded_value::GuardedValue,
         KeyValueDbTrait, KvdbSqlite, StorageConfiguration,
     },
@@ -1285,7 +1286,6 @@ use std::{
     cell::Cell,
     collections::{HashMap, HashSet},
     fs,
-    path::Path,
     sync::{
         mpsc::{channel, Sender},
         Arc, Weak,

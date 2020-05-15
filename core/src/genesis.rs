@@ -5,10 +5,11 @@
 use crate::{
     executive::InternalContractMap,
     parameters::consensus::GENESIS_GAS_LIMIT,
-    statedb::StateDb,
+    state::OverlayAccount,
+    statedb::{Result as DbResult, StateDb},
     storage::{StorageManager, StorageManagerTrait},
 };
-use cfx_types::{Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use keylib::KeyPair;
 use primitives::{
     Account, Block, BlockHeaderBuilder, StorageKey, StorageLayout,
@@ -68,6 +69,35 @@ pub fn load_secrets_file(
     Ok(accounts)
 }
 
+pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
+    || -> DbResult<()> {
+        {
+            for address in InternalContractMap::new().keys() {
+                let account = OverlayAccount::new_contract_with_admin(
+                    address,
+                    /* balance = */ U256::zero(),
+                    /* nonce = */ U256::one(),
+                    /* reset_storage = */ false,
+                    // Admin for internal contract is zero.
+                    &Address::default(),
+                )
+                .as_account();
+                state.set(
+                    StorageKey::AccountKey(address.as_bytes()),
+                    &account,
+                )?;
+                // initialize storage layout for internal contracts to make sure
+                // that _all_ Conflux contracts have a storage
+                // root in our state trie
+                state
+                    .set_storage_layout(address, &StorageLayout::Regular(0))?;
+            }
+            Ok(())
+        }
+    }()
+    .expect(&concat!(file!(), ":", line!(), ":", column!()));
+}
+
 /// ` test_net_version` is used to update the genesis author so that after
 /// resetting, the chain of the older version will be discarded
 pub fn genesis_block(
@@ -76,6 +106,8 @@ pub fn genesis_block(
 ) -> Block
 {
     let mut state = StateDb::new(storage_manager.get_state_for_genesis_write());
+    let mut genesis_block_author = test_net_version;
+    genesis_block_author.set_user_account_type_bits();
 
     for (addr, balance) in genesis_accounts {
         let account = Account::new_empty_with_balance(
@@ -87,14 +119,7 @@ pub fn genesis_block(
             .set(StorageKey::new_account_key(&addr), &account)
             .unwrap();
     }
-
-    // initialize storage layout for internal contracts to make sure that
-    // _all_ Conflux contracts have a storage root in our state trie
-    for address in InternalContractMap::new().keys() {
-        state
-            .set_storage_layout(address, &StorageLayout::Regular(0))
-            .expect("set internal contract storage layout should succeed");
-    }
+    initialize_internal_contract_accounts(&mut state);
 
     let state_root = state.compute_state_root().unwrap();
     let mut genesis = Block::new(
@@ -103,7 +128,7 @@ pub fn genesis_block(
                 state_root.state_root.compute_state_root_hash(),
             )
             .with_gas_limit(GENESIS_GAS_LIMIT.into())
-            .with_author(test_net_version)
+            .with_author(genesis_block_author)
             .with_difficulty(initial_difficulty)
             .build(),
         Vec::new(),

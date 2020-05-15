@@ -88,14 +88,19 @@ log_conf="log.yaml"
 # -------------- Network Configuration -------------
 
 # `public_address` is the address of this node used for other nodes to connect to.
-# If not set, the process will try to find out the public IP with best effort, and use `port` as public port.
+# If not set, the process will try to find out the public IP with best effort, and use `tcp_port` as public port.
 # However, it's HIGHLY RECOMMENDED to set the value manually, especially for machines with IP translated by NAT.
 #
-# public_address="1.1.1.1:32323"
+# public_address="1.1.1.1"
 
-# `port` is the TCP port that the process listens for P2P messages.
+# `tcp_port` is the TCP port that the process listens for P2P messages. The default is 32323.
 #
-# port=32323
+# tcp_port=32323
+
+# `public_tcp_port` is the public TCP port that other nodes should connect to. It might be different from 
+# the tcp_port in case the machine is behind a NAT. The default is as same as `tcp_port`.
+#
+# public_tcp_port=32323
 
 # `udp_port` is the UDP port used for node discovery.
 # If not set, it will be the same as `port`.
@@ -117,6 +122,7 @@ log_conf="log.yaml"
 # the node will not start rpc services. By default, the `jsonrpc_local_http_port` is set,
 # so as to support the Conflux CLI subcommands. What's provided here is the recommended
 # value if you want to start rpc services for other front-end applications.
+# Note that to serve transaction-related RPCs, `record_tx_index` should also be set to `true`.
 #
 # jsonrpc_ws_port=12535
 # jsonrpc_tcp_port=12536
@@ -324,13 +330,13 @@ jsonrpc_local_http_port=12539
 # Whether to record transaction indices.
 # This only needs to be enabled if you want to answer transaction-related RPCs.
 #
-# record_tx_index = true
+# record_tx_index = false
 
 # Time to keep transactions in in-memory transaction cache.
 #
 # tx_cache_index_maintain_timeout_ms = 300_000
 
-# Maximum number of transactions allowed in the ransaction pool.
+# Maximum number of transactions allowed in the transaction pool.
 #
 # tx_pool_size = 500_000
 

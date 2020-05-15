@@ -25,6 +25,12 @@ pub mod consensus {
     pub const TRANSACTION_DEFAULT_EPOCH_BOUND: u64 = 100000;
 
     pub const GENESIS_GAS_LIMIT: u64 = 30_000_000;
+
+    pub const ONE_CFX_IN_DRIP: u64 = 1_000_000_000_000_000_000;
+
+    pub const ONE_UCFX_IN_DRIP: u64 = 1_000_000_000_000;
+
+    pub const ONE_GDRIP_IN_DRIP: u64 = 1_000_000_000;
 }
 
 pub mod consensus_internal {
@@ -46,8 +52,6 @@ pub mod consensus_internal {
     pub const MINING_REWARD_DECAY_RATIO_PER_QUARTER: f64 = 0.958;
     // How many quarters that the mining reward keep decaying.
     pub const MINING_REWARD_DECAY_PERIOD_IN_QUARTER: usize = 40;
-    /// The unit of one Conflux token: 10 ** 18
-    pub const CONFLUX_TOKEN: u64 = 1_000_000_000_000_000_000;
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
 
@@ -75,6 +79,10 @@ pub mod consensus_internal {
     /// meter is going to consider safe to assume no adaptive blocks in the
     /// near future.
     pub const CONFIRMATION_METER_MAXIMUM_ADAPTIVE_RISK: f64 = 0.0000001;
+    /// This controls how often the confirmation meter updates. The default is
+    /// to update the meter every 20 blocks. Note that confirmation meter
+    /// update is CPU intensive if the tree graph is in a unstable state.
+    pub const CONFIRMATION_METER_UPDATE_FREQUENCY: usize = 20;
 }
 
 pub mod sync {
@@ -89,7 +97,6 @@ pub mod sync {
     /// terminals from peers when the node is in catch-up mode.
     pub const REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD: u64 = 8;
 
-    pub const SYNCHRONIZATION_PROTOCOL_VERSION: u8 = 0x01;
     /// The max number of headers that are to be sent for header
     /// block request.
     pub const MAX_HEADERS_TO_SEND: u64 = 512;
@@ -124,7 +131,7 @@ pub mod sync {
             Duration::from_millis(50);
     }
     //const REQUEST_WAITING_TIME_BACKOFF: u32 = 2;
-    pub const DEFAULT_CHUNK_SIZE: u64 = 1 * 1024 * 1024;
+    pub const DEFAULT_CHUNK_SIZE: u64 = 256 * 1024;
 
     /// The batch size of old-era blocks garbage-collected from database for
     /// each BLOCK_CACHE_GC_TIMER timer trigger.
@@ -177,14 +184,8 @@ pub mod block {
 }
 
 pub mod staking {
-    use super::{
-        consensus_internal::CONFLUX_TOKEN,
-        pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD,
-    };
+    use super::pow::TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
     use cfx_types::U256;
-
-    /// This is the exchange unit between storage and CFX.
-    pub const NUM_BYTES_PER_CONFLUX_TOKEN: u64 = 1024;
 
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 =
@@ -199,8 +200,8 @@ pub mod staking {
     pub const BYTES_PER_STORAGE_KEY: u64 = 64;
 
     lazy_static! {
-        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes.
-        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(CONFLUX_TOKEN / NUM_BYTES_PER_CONFLUX_TOKEN);
+        /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes, which is `10 ^ 18 / 1024` drip for 1 Byte.
+        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(976_562_500_000_000u64);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
         pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(BYTES_PER_STORAGE_KEY);

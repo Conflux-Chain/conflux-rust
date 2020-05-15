@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -13,10 +17,6 @@
 
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
-
-// Copyright 2019 Conflux Foundation. All rights reserved.
-// Conflux is free software and distributed under GNU General Public License.
-// See http://www.gnu.org/licenses/
 
 //! Stratum protocol implementation for Conflux clients
 
@@ -49,6 +49,7 @@ use jsonrpc_tcp_server::{
 };
 use std::sync::Arc;
 
+use crate::traits::Error::InvalidSolution;
 use cfx_types::H256;
 use hash::keccak;
 use parking_lot::RwLock;
@@ -156,7 +157,7 @@ impl StratumImpl {
                     return to_value(&false);
                 }
             }
-            trace!(target: "stratum", "New worker #{} registered", worker_id);
+            debug!(target: "stratum", "New worker #{} registered", worker_id);
             self.workers.write().insert(meta.addr().clone(), worker_id);
             to_value(true)
         }).map(|v| v.expect("Only true/false is returned and it's always serializable; qed"))
@@ -164,29 +165,38 @@ impl StratumImpl {
 
     /// rpc method `mining.submit`
     fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
-        Ok(match params {
+        Ok(Value::Array(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
-                match self.dispatcher.submit(vals.iter().skip(2)
-                    .filter_map(|val| match *val {
-                        Value::String(ref s) => Some(s.to_owned()),
-                        _ => None
-                    })
-                    .collect::<Vec<String>>()) {
-                        Ok(()) => {
-                            to_value(true)
-                        },
-                        Err(submit_err) => {
-                            warn!("Error while submitting share: {:?}", submit_err);
-                            to_value(false)
-                        }
+                match self.dispatcher.submit(
+                    vals.iter()
+                        .filter_map(|val| match *val {
+                            Value::String(ref s) => Some(s.to_owned()),
+                            _ => None,
+                        })
+                        .collect::<Vec<String>>(),
+                ) {
+                    Ok(()) => vec![to_value(true).expect("serializable")],
+                    Err(InvalidSolution(msg)) => {
+                        // When we have invalid solution, we propagate the
+                        // reason to the client
+                        warn!("Error because of invalid solution: {:?}", msg);
+                        vec![
+                            to_value(false).expect("serializable"),
+                            to_value(msg).expect("serializable"),
+                        ]
                     }
-            },
+                    Err(submit_err) => {
+                        warn!("Error while submitting share: {:?}", submit_err);
+                        vec![to_value(false).expect("serializable")]
+                    }
+                }
+            }
             _ => {
                 trace!(target: "stratum", "Invalid submit work format {:?}", params);
-                to_value(false)
+                vec![to_value(false).expect("serializable")]
             }
-        }.expect("Only true/false is returned and it's always serializable; qed"))
+        }))
     }
 
     fn push_work_all(
@@ -206,12 +216,12 @@ impl StratumImpl {
 
             let mut hup_peers = HashSet::with_capacity(0); // most of the cases won't be needed, hence avoid allocation
             let workers_msg = format!("{{ \"id\": {}, \"method\": \"mining.notify\", \"params\": {} }}", next_request_id, payload);
-            trace!(target: "stratum", "pushing work for {} workers (payload: '{}')", workers.len(), &workers_msg);
-            for (ref addr, _) in workers.iter() {
-                trace!(target: "stratum", "pushing work to {}", addr);
+            trace!(target: "stratum", "Pushing work for {} workers (payload: '{}')", workers.len(), &workers_msg);
+            for (ref addr, worker_id) in workers.iter() {
+                trace!(target: "stratum", "Pushing work to {} at addr {}", &worker_id, &addr);
                 match tcp_dispatcher.push_message(addr, workers_msg.clone()) {
                     Err(PushMessageError::NoSuchPeer) => {
-                        trace!(target: "stratum", "Worker no longer connected: {}", &addr);
+                        debug!(target: "stratum", "Worker no longer connected: {} addr {}", &worker_id, &addr);
                         hup_peers.insert(**addr);
                     }
                     Err(e) => {

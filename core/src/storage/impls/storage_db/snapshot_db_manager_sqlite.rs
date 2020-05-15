@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub struct SnapshotDbManagerSqlite {
-    snapshot_path: String,
+    snapshot_path: PathBuf,
     // FIXME: add an command line option to assert that this method made
     // successfully cow_copy and print error messages if it fails.
     force_cow: bool,
@@ -20,15 +20,16 @@ pub struct SnapshotDbManagerSqlite {
 // when the mapped snapshot is Some(), the snapshot can be shared by other
 // readers.
 pub type AlreadyOpenSnapshots<T> =
-    Arc<RwLock<HashMap<String, Option<Weak<T>>>>>;
+    Arc<RwLock<HashMap<PathBuf, Option<Weak<T>>>>>;
 
 impl SnapshotDbManagerSqlite {
     const SNAPSHOT_DB_SQLITE_DIR_PREFIX: &'static str = "sqlite_";
 
-    pub fn new(snapshot_path: String, max_open_snapshots: u16) -> Result<Self> {
-        let snapshot_dir = Path::new(snapshot_path.as_str());
-        if !snapshot_dir.exists() {
-            fs::create_dir_all(snapshot_dir)?;
+    pub fn new(
+        snapshot_path: PathBuf, max_open_snapshots: u16,
+    ) -> Result<Self> {
+        if !snapshot_path.exists() {
+            fs::create_dir_all(snapshot_path.clone())?;
         }
 
         Ok(Self {
@@ -43,10 +44,10 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn open_snapshot_readonly(
-        &self, snapshot_path: &str, try_open: bool,
+        &self, snapshot_path: PathBuf, try_open: bool,
     ) -> Result<Option<Arc<SnapshotDbSqlite>>> {
         if let Some(already_open) =
-            self.already_open_snapshots.read().get(snapshot_path)
+            self.already_open_snapshots.read().get(&snapshot_path)
         {
             match already_open {
                 None => {
@@ -63,7 +64,7 @@ impl SnapshotDbManagerSqlite {
                 }
             }
         }
-        let file_exists = Path::new(&snapshot_path).exists();
+        let file_exists = snapshot_path.exists();
         if file_exists {
             let semaphore_permit = if try_open {
                 self.open_snapshot_semaphore
@@ -78,7 +79,7 @@ impl SnapshotDbManagerSqlite {
             // To serialize simultaneous opens.
             let _open_lock = self.open_create_delete_lock.lock();
             if let Some(already_open) =
-                self.already_open_snapshots.read().get(snapshot_path)
+                self.already_open_snapshots.read().get(&snapshot_path)
             {
                 match already_open {
                     None => {
@@ -97,7 +98,7 @@ impl SnapshotDbManagerSqlite {
             }
 
             let snapshot_db = Arc::new(SnapshotDbSqlite::open(
-                snapshot_path,
+                snapshot_path.as_path(),
                 /* readonly = */ true,
                 &self.already_open_snapshots,
                 &self.open_snapshot_semaphore,
@@ -116,12 +117,12 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn open_snapshot_write(
-        &self, snapshot_path: &str, create: bool,
+        &self, snapshot_path: PathBuf, create: bool,
     ) -> Result<SnapshotDbSqlite> {
         if self
             .already_open_snapshots
             .read()
-            .get(snapshot_path)
+            .get(&snapshot_path)
             .is_some()
         {
             bail!(ErrorKind::SnapshotAlreadyExists)
@@ -137,7 +138,7 @@ impl SnapshotDbManagerSqlite {
         if self
             .already_open_snapshots
             .read()
-            .get(snapshot_path)
+            .get(&snapshot_path)
             .is_some()
         {
             bail!(ErrorKind::SnapshotAlreadyExists)
@@ -145,15 +146,15 @@ impl SnapshotDbManagerSqlite {
 
         let snapshot_db = if create {
             SnapshotDbSqlite::create(
-                snapshot_path,
+                snapshot_path.as_path(),
                 &self.already_open_snapshots,
                 &self.open_snapshot_semaphore,
             )
         } else {
-            let file_exists = Path::new(&snapshot_path).exists();
+            let file_exists = snapshot_path.exists();
             if file_exists {
                 SnapshotDbSqlite::open(
-                    snapshot_path,
+                    snapshot_path.as_path(),
                     /* readonly = */ false,
                     &self.already_open_snapshots,
                     &self.open_snapshot_semaphore,
@@ -166,13 +167,13 @@ impl SnapshotDbManagerSqlite {
         semaphore_permit.forget();
         self.already_open_snapshots
             .write()
-            .insert(snapshot_path.to_string(), None);
+            .insert(snapshot_path.clone(), None);
         Ok(snapshot_db)
     }
 
     pub fn on_close(
         already_open_snapshots: &AlreadyOpenSnapshots<SnapshotDbSqlite>,
-        open_semaphore: &Arc<Semaphore>, path: &str, remove_on_close: bool,
+        open_semaphore: &Arc<Semaphore>, path: &Path, remove_on_close: bool,
     )
     {
         // Destroy at close.
@@ -191,36 +192,38 @@ impl SnapshotDbManagerSqlite {
         open_semaphore.add_permits(1);
     }
 
-    fn fs_remove_snapshot(path: &str) -> Result<()> {
-        debug!("Remove snapshot at {}", path);
+    fn fs_remove_snapshot(path: &Path) -> Result<()> {
+        debug!("Remove snapshot at {}", path.display());
         Ok(fs::remove_dir_all(path)?)
     }
 
     fn get_merge_temp_snapshot_db_path(
         &self, old_snapshot_epoch_id: &EpochId, delta_merkle_root: &MerkleHash,
-    ) -> String {
-        self.snapshot_path.clone()
-            + Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX
-            + "merge_temp_"
-            + &old_snapshot_epoch_id.to_hex()
-            + &delta_merkle_root.to_hex()
+    ) -> PathBuf {
+        self.snapshot_path.join(
+            Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
+                + "merge_temp_"
+                + &old_snapshot_epoch_id.to_hex()
+                + &delta_merkle_root.to_hex(),
+        )
     }
 
     fn get_full_sync_temp_snapshot_db_path(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
-    ) -> String {
-        self.snapshot_path.clone()
-            + Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX
-            + "full_sync_temp_"
-            + &snapshot_epoch_id.to_hex()
-            + &merkle_root.to_hex()
+    ) -> PathBuf {
+        self.snapshot_path.join(
+            Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
+                + "full_sync_temp_"
+                + &snapshot_epoch_id.to_hex()
+                + &merkle_root.to_hex(),
+        )
     }
 
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
     /// Ok(false) when we are running on a system where cow copy isn't
     /// available.
     fn try_make_snapshot_cow_copy_impl(
-        &self, old_snapshot_path: &str, new_snapshot_path: &str,
+        &self, old_snapshot_path: &Path, new_snapshot_path: &Path,
     ) -> Result<bool> {
         let mut command;
         if cfg!(target_os = "linux") {
@@ -268,7 +271,7 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn try_copy_snapshot(
-        &self, old_snapshot_path: &str, new_snapshot_path: &str,
+        &self, old_snapshot_path: &Path, new_snapshot_path: &Path,
     ) -> Result<()> {
         if self
             .try_make_snapshot_cow_copy(old_snapshot_path, new_snapshot_path)?
@@ -293,7 +296,7 @@ impl SnapshotDbManagerSqlite {
     /// force_cow setting enabled; Ok(true) when cow copy succeeded;
     /// Ok(false) when cow copy isn't supported with force_cow setting disabled.
     fn try_make_snapshot_cow_copy(
-        &self, old_snapshot_path: &str, new_snapshot_path: &str,
+        &self, old_snapshot_path: &Path, new_snapshot_path: &Path,
     ) -> Result<bool> {
         let result = self.try_make_snapshot_cow_copy_impl(
             old_snapshot_path,
@@ -326,7 +329,7 @@ impl SnapshotDbManagerSqlite {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
         let maybe_old_snapshot_db = Self::open_snapshot_readonly(
             self,
-            &snapshot_path,
+            snapshot_path,
             /* try_open = */ false,
         )?;
         let old_snapshot_db = maybe_old_snapshot_db
@@ -334,7 +337,9 @@ impl SnapshotDbManagerSqlite {
         temp_snapshot_db.copy_and_merge(&old_snapshot_db)
     }
 
-    fn rename_snapshot_db(old_path: &str, new_path: &str) -> Result<()> {
+    fn rename_snapshot_db<P: AsRef<Path>>(
+        old_path: P, new_path: P,
+    ) -> Result<()> {
         Ok(fs::rename(old_path, new_path)?)
     }
 }
@@ -342,16 +347,16 @@ impl SnapshotDbManagerSqlite {
 impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     type SnapshotDb = SnapshotDbSqlite;
 
-    fn get_snapshot_dir(&self) -> String { self.snapshot_path.clone() }
+    fn get_snapshot_dir(&self) -> &Path { self.snapshot_path.as_path() }
 
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
             + &snapshot_epoch_id.to_hex()
     }
 
-    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> String {
-        self.snapshot_path.clone()
-            + &self.get_snapshot_db_name(snapshot_epoch_id)
+    fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf {
+        self.snapshot_path
+            .join(&self.get_snapshot_db_name(snapshot_epoch_id))
     }
 
     fn new_snapshot_by_merging(
@@ -393,7 +398,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 {
                     // direct merge the first snapshot
                     snapshot_db = Self::SnapshotDb::create(
-                        &temp_db_path,
+                        temp_db_path.as_path(),
                         &self.already_open_snapshots,
                         &self.open_snapshot_semaphore,
                     )?;
@@ -402,14 +407,15 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 } else {
                     if self
                         .try_copy_snapshot(
-                            &self.get_snapshot_db_path(old_snapshot_epoch_id),
-                            &temp_db_path,
+                            self.get_snapshot_db_path(old_snapshot_epoch_id)
+                                .as_path(),
+                            temp_db_path.as_path(),
                         )
                         .is_ok()
                     {
                         // Open the copied database.
                         snapshot_db = self.open_snapshot_write(
-                            &temp_db_path,
+                            temp_db_path.clone(),
                             /* create = */ false,
                         )?;
 
@@ -421,7 +427,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         snapshot_db.direct_merge()?
                     } else {
                         snapshot_db = self.open_snapshot_write(
-                            &temp_db_path,
+                            temp_db_path.clone(),
                             /* create = */ true,
                         )?;
                         snapshot_db.dump_delta_mpt(&delta_mpt)?;
@@ -451,7 +457,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             return Ok(Some(Arc::new(Self::SnapshotDb::get_null_snapshot())));
         } else {
             let path = self.get_snapshot_db_path(snapshot_epoch_id);
-            self.open_snapshot_readonly(&path, try_open)
+            self.open_snapshot_readonly(path, try_open)
         }
     }
 
@@ -494,7 +500,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             snapshot_epoch_id,
             merkle_root,
         );
-        self.open_snapshot_write(&temp_db_path, /* create = */ true)
+        self.open_snapshot_write(
+            temp_db_path.to_path_buf(),
+            /* create = */ true,
+        )
     }
 
     fn finalize_full_sync_snapshot(
@@ -525,7 +534,7 @@ use std::{
     collections::HashMap,
     fs,
     hint::unreachable_unchecked,
-    path::Path,
+    path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Weak},
 };

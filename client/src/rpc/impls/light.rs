@@ -8,10 +8,11 @@ use crate::rpc::{
     traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
     types::{
         Account as RpcAccount, BlameInfo, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CallRequest, ConsensusGraphStates,
+        BlockHashOrEpochNumber, Bytes, CallRequest,
+        CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
         EpochNumber, EstimateGasAndCollateralResponse, Filter as RpcFilter,
-        Log as RpcLog, Receipt as RpcReceipt, SendTxRequest,
-        SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
+        Log as RpcLog, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+        SendTxRequest, SponsorInfo as RpcSponsorInfo, Status as RpcStatus,
         StorageRoot as RpcStorageRoot, SyncGraphStates,
         Transaction as RpcTransaction, H160 as RpcH160, H256 as RpcH256,
         H520 as RpcH520, U128 as RpcU128, U256 as RpcU256, U64 as RpcU64,
@@ -493,6 +494,8 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
         fn interest_rate(&self, num: Option<EpochNumber>) -> RpcResult<RpcU256>;
+        fn check_balance_against_transaction(&self, account_addr: RpcH160, contract_addr: RpcH160, gas_limit: RpcU256, gas_price: RpcU256, storage_limit: RpcU256, epoch: Option<EpochNumber>) -> RpcResult<CheckBalanceAgainstTransactionResponse>;
+        fn get_block_reward_info(&self, num: EpochNumber) -> RpcResult<Vec<RpcRewardInfo>>;
     }
 }
 
@@ -533,7 +536,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> RpcResult<H256>;
         fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> RpcResult<H256>;
         fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> RpcResult<H256>;
-        fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: u64, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
+        fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256, timestamp: u64, adaptive: bool) -> RpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> RpcResult<H256>;
         fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>>;
         fn send_usable_genesis_accounts(&self, account_start_index: usize) -> RpcResult<Bytes>;

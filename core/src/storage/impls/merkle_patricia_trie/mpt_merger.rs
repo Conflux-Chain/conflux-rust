@@ -40,8 +40,7 @@ impl<'a> MptMerger<'a> {
         }
     }
 
-    // This is test only.
-    #[allow(unused)]
+    #[cfg(test)]
     pub fn merge(
         &mut self, inserter: &DumpedDeltaMptIterator,
     ) -> Result<MerkleHash> {
@@ -182,8 +181,11 @@ impl GetRwMpt for MergeMptsInRequest<'_> {
 use super::{
     super::{super::storage_db::snapshot_mpt::*, errors::*},
     mpt_cursor::*,
-    KVInserter,
 };
-use crate::storage::tests::DumpedDeltaMptIterator;
 use fallible_iterator::FallibleIterator;
 use primitives::MerkleHash;
+
+#[cfg(test)]
+use super::KVInserter;
+#[cfg(test)]
+use crate::storage::tests::DumpedDeltaMptIterator;

@@ -7,7 +7,7 @@ pub struct SnapshotDbSqlite {
     maybe_db_connections: Option<Box<[SqliteConnection]>>,
     already_open_snapshots: AlreadyOpenSnapshots<Self>,
     open_semaphore: Arc<Semaphore>,
-    path: String,
+    path: PathBuf,
     remove_on_close: AtomicBool,
 }
 
@@ -69,7 +69,7 @@ lazy_static! {
 
 impl Drop for SnapshotDbSqlite {
     fn drop(&mut self) {
-        if !self.path.is_empty() {
+        if !self.path.as_os_str().is_empty() {
             self.maybe_db_connections.take();
             SnapshotDbManagerSqlite::on_close(
                 &self.already_open_snapshots,
@@ -242,7 +242,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     }
 
     fn open(
-        snapshot_path: &str, readonly: bool,
+        snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
     ) -> Result<SnapshotDbSqlite>
@@ -258,13 +258,13 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             maybe_db_connections: kvdb_sqlite_sharded.into_connections(),
             already_open_snapshots: already_open_snapshots.clone(),
             open_semaphore: open_semaphore.clone(),
-            path: snapshot_path.to_string(),
+            path: snapshot_path.to_path_buf(),
             remove_on_close: Default::default(),
         })
     }
 
     fn create(
-        snapshot_path: &str,
+        snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_snapshots_semaphore: &Arc<Semaphore>,
     ) -> Result<SnapshotDbSqlite>
@@ -290,14 +290,14 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         })();
         match create_result {
             Err(e) => {
-                fs::remove_dir_all(snapshot_path)?;
+                fs::remove_dir_all(&snapshot_path)?;
                 bail!(e);
             }
             Ok(connections) => Ok(SnapshotDbSqlite {
                 maybe_db_connections: Some(connections),
                 already_open_snapshots: already_open_snapshots.clone(),
                 open_semaphore: open_snapshots_semaphore.clone(),
-                path: snapshot_path.to_string(),
+                path: snapshot_path.to_path_buf(),
                 remove_on_close: Default::default(),
             }),
         }
@@ -615,6 +615,7 @@ use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, StorageKey};
 use std::{
     fs,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,

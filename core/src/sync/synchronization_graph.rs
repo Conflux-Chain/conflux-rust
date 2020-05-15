@@ -1218,7 +1218,7 @@ impl SynchronizationGraph {
                 self.data_man
                     .remove_block_body(&hash, true /* remove_db */);
                 self.data_man
-                    .remove_block_results(&hash, true /* remove_db */);
+                    .remove_block_result(&hash, true /* remove_db */);
             }
             // All nodes will not maintain old era states, so related data can
             // be removed safely. The in-memory data is already
@@ -1576,7 +1576,7 @@ impl SynchronizationGraph {
                 if need_to_verify && !self.is_consortium() {
                     // Compute pow_quality, because the input header may be used
                     // as a part of block later
-                    VerificationConfig::compute_header_pow_quality(header);
+                    VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
                 }
                 return (
                     BlockHeaderInsertionResult::AlreadyProcessed,
@@ -1589,7 +1589,7 @@ impl SynchronizationGraph {
             if need_to_verify {
                 // Compute pow_quality, because the input header may be used as
                 // a part of block later
-                VerificationConfig::compute_header_pow_quality(header);
+                VerificationConfig::compute_pow_hash_and_fill_header_pow_quality(header);
             }
             return (BlockHeaderInsertionResult::AlreadyProcessed, Vec::new());
         }

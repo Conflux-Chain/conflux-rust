@@ -10,18 +10,20 @@ use crate::{
     block_data_manager::BlockStatus,
     light_protocol::Provider as LightProvider,
     message::{decode_msg, Message, MsgId},
-    parameters::sync::*,
+    parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*},
     rand::Rng,
     sync::{
         message::{
             handle_rlp_message, msgid, Context, DynamicCapability,
-            GetBlockHeadersResponse, NewBlockHashes, Status,
-            TransactionDigests,
+            GetBlockHeadersResponse, NewBlockHashes, StatusDeprecatedV1,
+            StatusV2, TransactionDigests,
         },
         state::SnapshotChunkSync,
         synchronization_phases::{SyncPhaseType, SynchronizationPhaseManager},
         synchronization_state::PeerFilter,
         StateSyncConfiguration,
+        SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+        SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1,
     },
 };
 use cfx_types::H256;
@@ -30,9 +32,9 @@ use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use network::{
-    node_table::NodeId, throttling::THROTTLING_SERVICE, Error as NetworkError,
-    HandlerWorkType, NetworkContext, NetworkProtocolHandler,
-    UpdateNodeOperation,
+    node_table::NodeId, service::ProtocolVersion,
+    throttling::THROTTLING_SERVICE, Error as NetworkError, HandlerWorkType,
+    NetworkContext, NetworkProtocolHandler, UpdateNodeOperation,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
@@ -114,7 +116,9 @@ impl<T: TaskSize> AsyncTaskQueue<T> {
             inner: RwLock::new(AsyncTaskQueueInner {
                 tasks: VecDeque::new(),
                 size: 0,
-                moving_average: 1000.0, // Set to 1KB as initial size.
+                // Set to max value at start to avoid sending too many requests
+                // at the start.
+                moving_average: MAX_BLOCK_SIZE_IN_BYTES as f64,
             }),
             work_type: work_type as HandlerWorkType,
             max_capacity,
@@ -308,6 +312,8 @@ impl FutureBlockContainer {
 }
 
 pub struct SynchronizationProtocolHandler {
+    pub protocol_version: ProtocolVersion,
+
     pub protocol_config: ProtocolConfiguration,
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
@@ -359,7 +365,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_tx_propagation: usize,
     pub max_peers_tx_propagation: usize,
     pub future_block_buffer_capacity: usize,
-    pub max_download_state_peers: usize,
+    pub max_downloading_chunks: usize,
     pub test_mode: bool,
     pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
@@ -400,6 +406,7 @@ impl SynchronizationProtocolHandler {
         let state_sync = Arc::new(SnapshotChunkSync::new(state_sync_config));
 
         Self {
+            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
             protocol_config,
             graph: sync_graph.clone(),
             syn: sync_state.clone(),
@@ -486,9 +493,10 @@ impl SynchronizationProtocolHandler {
                 // `syn.peers`, and this peer should be in
                 // `syn.handshaking_peers`
                 if !self.syn.handshaking_peers.read().contains_key(peer)
-                    || msg_id != msgid::STATUS
+                    || (msg_id != msgid::STATUS_DEPRECATED
+                        && msg_id != msgid::STATUS_V2)
                 {
-                    warn!("Message from unknown peer {:?}", msg_id);
+                    debug!("Message from unknown peer {:?}", msg_id);
                     return Ok(());
                 }
             } else {
@@ -521,7 +529,7 @@ impl SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
         warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={:?}",
+            "Error while handling message, peer={}, msgid={:?}, error={}",
             peer, msg_id, e
         );
 
@@ -537,7 +545,7 @@ impl SynchronizationProtocolHandler {
                 op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::InvalidStatus(_) => {
-                op = Some(UpdateNodeOperation::Failure)
+                op = Some(UpdateNodeOperation::Demotion)
             }
             ErrorKind::InvalidMessageFormat => {
                 // TODO: Shall we blacklist a node when the message format is
@@ -561,6 +569,7 @@ impl SynchronizationProtocolHandler {
             ErrorKind::InvalidSnapshotChunk(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
+            ErrorKind::EmptySnapshotChunk => disconnect = false,
             ErrorKind::AlreadyThrottled(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
@@ -575,6 +584,22 @@ impl SynchronizationProtocolHandler {
             ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             ErrorKind::Io(_) => disconnect = false,
             ErrorKind::Network(kind) => match kind {
+                network::ErrorKind::SendUnsupportedMessage { .. } => {
+                    unreachable!(
+                        "This is a bug in protocol version maintenance. {:?}",
+                        kind
+                    );
+                }
+
+                network::ErrorKind::MessageDeprecated { .. } => {
+                    op = Some(UpdateNodeOperation::Failure);
+                    error!(
+                        "Peer sent us a deprecated message {:?}. Either it's a bug \
+                        in protocol version maintenance or the peer is malicious.",
+                        kind
+                    );
+                }
+
                 network::ErrorKind::AddressParse => disconnect = false,
                 network::ErrorKind::AddressResolve(_) => disconnect = false,
                 network::ErrorKind::Auth => disconnect = false,
@@ -984,14 +1009,14 @@ impl SynchronizationProtocolHandler {
         self.on_message(io, &io.self_node_id(), task.message.as_slice());
     }
 
-    pub fn on_mined_block(&self, mut block: Block) -> Vec<H256> {
+    pub fn on_mined_block(&self, mut block: Block) {
         let hash = block.block_header.hash();
         info!("Mined block {:?} header={:?}", hash, block.block_header);
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
         assert!(!self.graph.contains_block_header(&hash));
-        let (insert_result, to_relay) = self.graph.insert_block_header(
+        let (insert_result, _to_relay) = self.graph.insert_block_header(
             &mut block.block_header,
             false,
             false,
@@ -1007,7 +1032,6 @@ impl SynchronizationProtocolHandler {
             true,  /* persistent */
             false, /* recover_from_db */
         );
-        to_relay
     }
 
     fn broadcast_message(
@@ -1032,20 +1056,45 @@ impl SynchronizationProtocolHandler {
             peer_ids.truncate(num_allowed);
         }
 
+        // We only broadcast message which version matches the peer.
+        // When there two version of the same message to broadcast,
+        // and their valid versions are disjoint, each peer will receive
+        // at most one of the message.
+        let msg_version_introduced = msg.version_introduced();
+        let mut msg_version_valid_till = msg.version_valid_till();
+        if msg_version_valid_till == self.protocol_version {
+            msg_version_valid_till = ProtocolVersion(std::u8::MAX);
+        }
         for id in peer_ids {
-            msg.send(io, &id)?;
+            let peer_version = self.syn.get_peer_version(&id)?;
+            if peer_version >= msg_version_introduced
+                && peer_version <= msg_version_valid_till
+            {
+                msg.send(io, &id)?;
+            }
         }
 
         Ok(())
     }
 
-    fn produce_status_message(&self) -> Status {
+    fn produce_status_message_deprecated(&self) -> StatusDeprecatedV1 {
+        let best_info = self.graph.consensus.best_info();
+        let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
+
+        StatusDeprecatedV1 {
+            protocol_version: SYNC_PROTO_V1.0,
+            genesis_hash: self.graph.data_man.true_genesis.hash(),
+            best_epoch: best_info.best_epoch_number,
+            terminal_block_hashes: terminal_hashes,
+        }
+    }
+
+    fn produce_status_message_v2(&self) -> StatusV2 {
         let best_info = self.graph.consensus.best_info();
         let chain_id = self.graph.consensus.get_config().chain_id.clone();
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
-        Status {
-            protocol_version: SYNCHRONIZATION_PROTOCOL_VERSION,
+        StatusV2 {
             chain_id,
             genesis_hash: self.graph.data_man.true_genesis.hash(),
             best_epoch: best_info.best_epoch_number,
@@ -1055,18 +1104,36 @@ impl SynchronizationProtocolHandler {
 
     fn send_status(
         &self, io: &dyn NetworkContext, peer: &NodeId,
-    ) -> Result<(), NetworkError> {
-        let status_message = self.produce_status_message();
-        debug!("Sending status message to {}: {:?}", peer, status_message);
-        status_message.send(io, peer)
+        peer_protocol_version: ProtocolVersion,
+    ) -> Result<(), NetworkError>
+    {
+        if peer_protocol_version == SYNC_PROTO_V1 {
+            let status_message = self.produce_status_message_deprecated();
+            debug!("Sending status message to {}: {:?}", peer, status_message);
+            status_message.send(io, peer)
+        } else {
+            let status_message = self.produce_status_message_v2();
+            debug!("Sending status message to {}: {:?}", peer, status_message);
+            status_message.send(io, peer)
+        }
     }
 
     fn broadcast_status(&self, io: &dyn NetworkContext) {
-        let status_message = self.produce_status_message();
-        debug!("Broadcasting status message: {:?}", status_message);
+        let status_message_v1 = self.produce_status_message_deprecated();
+        let status_message_v2 = self.produce_status_message_v2();
+        debug!(
+            "Broadcasting status message v1 + v2: {:?}",
+            status_message_v2
+        );
 
         if self
-            .broadcast_message(io, &Default::default(), &status_message)
+            .broadcast_message(io, &Default::default(), &status_message_v1)
+            .is_err()
+        {
+            warn!("Error broadcsting status message");
+        }
+        if self
+            .broadcast_message(io, &Default::default(), &status_message_v2)
             .is_err()
         {
             warn!("Error broadcsting status message");
@@ -1548,6 +1615,17 @@ impl SynchronizationProtocolHandler {
 }
 
 impl NetworkProtocolHandler for SynchronizationProtocolHandler {
+    fn minimum_supported_version(&self) -> ProtocolVersion {
+        let my_version = self.protocol_version.0;
+        if my_version > SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT {
+            ProtocolVersion(
+                my_version - SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
+            )
+        } else {
+            SYNC_PROTO_V1
+        }
+    }
+
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(TX_TIMER, self.protocol_config.send_tx_period)
             .expect("Error registering transactions timer");
@@ -1636,9 +1714,16 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         }
     }
 
-    fn on_peer_connected(&self, io: &dyn NetworkContext, peer: &NodeId) {
-        info!("Peer connected: peer={:?}", peer);
-        if let Err(e) = self.send_status(io, peer) {
+    fn on_peer_connected(
+        &self, io: &dyn NetworkContext, peer: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+    )
+    {
+        debug!(
+            "Peer connected: peer={:?}, version={}",
+            peer, peer_protocol_version
+        );
+        if let Err(e) = self.send_status(io, peer, peer_protocol_version) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(
                 peer,
@@ -1649,12 +1734,12 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.syn
                 .handshaking_peers
                 .write()
-                .insert(*peer, Instant::now());
+                .insert(*peer, (peer_protocol_version, Instant::now()));
         }
     }
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, peer: &NodeId) {
-        info!("Peer disconnected: peer={}", peer);
+        debug!("Peer disconnected: peer={}", peer);
         self.syn.peers.write().remove(peer);
         self.syn.handshaking_peers.write().remove(peer);
         self.request_manager.on_peer_disconnected(io, peer);

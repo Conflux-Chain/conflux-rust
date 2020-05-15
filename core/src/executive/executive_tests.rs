@@ -17,7 +17,9 @@ use crate::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
     },
 };
-use cfx_types::{Address, BigEndianHash, H256, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256, U512,
+};
 use keylib::{Generator, Random};
 use primitives::{transaction::Action, Transaction};
 use rustc_hex::FromHex;
@@ -56,7 +58,7 @@ fn test_contract_address() {
 fn test_sender_balance() {
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
     let sender =
-        Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -148,7 +150,7 @@ fn test_create_contract_out_of_depth() {
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let sender =
-        Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -221,7 +223,7 @@ fn test_call_to_create() {
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
     let sender =
-        Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -230,7 +232,6 @@ fn test_call_to_create() {
     )
     .0;
     // TODO: add tests for 'callcreate'
-    //let next_address = contract_address(&address, &U256::zero());
     let mut params = ActionParams::default();
     params.address = address;
     params.code_address = address;
@@ -244,6 +245,9 @@ fn test_call_to_create() {
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
+    state
+        .new_contract(&address, U256::zero(), U256::one())
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .add_balance(
             &sender,
@@ -298,9 +302,9 @@ fn test_revert() {
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
 
     let contract_address =
-        Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+        Address::from_str("8d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender =
-        Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
 
     let code = "6c726576657274656420646174616000557f726576657274206d657373616765000000000000000000000000000000000000600052600e6000fd".from_hex().unwrap();
     let returns = "726576657274206d657373616765".from_hex().unwrap();
@@ -317,6 +321,9 @@ fn test_revert() {
             CleanupMode::NoEmpty,
         )
         .unwrap();
+    state
+        .new_contract(&contract_address, U256::zero(), U256::one())
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)))
         .unwrap();
@@ -373,7 +380,7 @@ fn test_keccak() {
     let code = "6064640fffffffff20600055".from_hex().unwrap();
 
     let sender =
-        Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let address = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         &sender,
@@ -492,7 +499,8 @@ fn test_not_enough_cash() {
 #[test]
 fn test_deposit_withdraw_lock() {
     let factory = Factory::new(VMType::Interpreter, 1024 * 32);
-    let sender = Address::zero();
+    let mut sender = Address::zero();
+    sender.set_user_account_type_bits();
     let storage_manager = new_state_manager_for_unit_test();
     let mut state =
         get_state_for_genesis_write_with_factory(&storage_manager, factory);
@@ -504,20 +512,20 @@ fn test_deposit_withdraw_lock() {
     state
         .add_balance(
             &sender,
-            &U256::from(1_000_000_000_000u64),
+            &U256::from(2_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
         )
         .unwrap();
-    state.add_block_rewards(U256::from(1_000_000_000_000u64));
+    state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::zero());
     assert_eq!(*state.total_staking_tokens(), U256::zero());
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(state.block_number(), 0);
 
@@ -527,8 +535,8 @@ fn test_deposit_withdraw_lock() {
     params.sender = sender;
     params.original_sender = sender;
     params.storage_owner = params.code_address;
-    params.gas = U256::from(100000);
-    params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e800".from_hex().unwrap());
+    params.gas = U256::from(1000000);
+    params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
 
     // wrong call type
     let result = Executive::new(
@@ -546,18 +554,35 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::zero());
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::zero());
     assert_eq!(state.block_number(), 0);
 
-    // everything is fine
+    // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
+    params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
+    let result = Executive::new(
+        &mut state,
+        &env,
+        &machine,
+        &spec,
+        &internal_contract_map,
+    )
+    .call(params.clone(), &mut substate);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        vm::Error::InternalContract("invalid deposit amount")
+    );
+
+    // deposit 10^18, it should work fine
+    params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -569,19 +594,19 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(900_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_staking_tokens(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(state.block_number(), 0);
 
@@ -602,19 +627,19 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(900_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_staking_tokens(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(state.block_number(), 0);
 
@@ -635,19 +660,19 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(900_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_staking_tokens(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(state.block_number(), 0);
 
@@ -668,19 +693,19 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(900_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
         *state.total_staking_tokens(),
-        U256::from(100_000_000_000u64)
+        U256::from(1_000_000_000_000_000_000u64)
     );
     assert_eq!(state.block_number(), 0);
 
@@ -697,20 +722,23 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
+        U256::from(1_000_000_050_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
+    assert_eq!(
+        *state.total_staking_tokens(),
+        U256::from(999_999_950_000_000_000u64)
+    );
     assert_eq!(state.block_number(), 0);
     // withdraw more than staking balance
-    params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7401".from_hex().unwrap());
+    params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -728,21 +756,24 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
+        U256::from(1_000_000_050_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
+    assert_eq!(
+        *state.total_staking_tokens(),
+        U256::from(999_999_950_000_000_000u64)
+    );
     assert_eq!(state.block_number(), 0);
 
-    // lock 1 for 0 days
-    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
+    // lock until block_number = 0
+    params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -754,59 +785,30 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid lock duration")
+        vm::Error::InternalContract("invalid unlock_block_number")
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
+        U256::from(1_000_000_050_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
+    assert_eq!(
+        *state.total_staking_tokens(),
+        U256::from(999_999_950_000_000_000u64)
+    );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
-    // lock 1 for 106751991167301 days should failed
-    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833945".from_hex().unwrap());
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate);
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err(),
-        vm::Error::InternalContract("invalid lock duration")
-    );
-    assert_eq!(
-        state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
-    );
-    assert_eq!(
-        state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
-    );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
-    assert_eq!(
-        *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
-    );
-    assert_eq!(
-        state.withdrawable_staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
-    );
-    // lock 1 for 106751991167301 days, should succeed
-    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
+    // lock 1 until 106751991167301 blocks, should succeed
+    params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -818,23 +820,26 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
+        U256::from(1_000_000_050_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
+    assert_eq!(
+        *state.total_staking_tokens(),
+        U256::from(999_999_950_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
-        U256::from(49_999_999_999u64)
+        U256::from(999_999_949_999_999_999u64)
     );
-    // lock 2 for 1 days
-    params.data = Some("1338736f00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001".from_hex().unwrap());
+    // lock 2 until block_number=2
+    params.data = Some("5547dedb00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -846,23 +851,26 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
+        U256::from(1_000_000_050_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
+    assert_eq!(
+        *state.total_staking_tokens(),
+        U256::from(999_999_950_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
-        U256::from(49_999_999_998u64)
+        U256::from(999_999_949_999_999_998u64)
     );
     // withdraw more than withdrawable staking balance
-    params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
+    params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bff".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -880,24 +888,27 @@ fn test_deposit_withdraw_lock() {
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(950_000_000_000u64)
+        U256::from(1_000_000_050_000_000_000u64)
     );
     assert_eq!(
         state.staking_balance(&sender).unwrap(),
-        U256::from(50_000_000_000u64)
+        U256::from(999_999_950_000_000_000u64)
     );
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
-    assert_eq!(*state.total_staking_tokens(), U256::from(50_000_000_000u64));
+    assert_eq!(
+        *state.total_staking_tokens(),
+        U256::from(999_999_950_000_000_000u64)
+    );
     assert_eq!(
         state.withdrawable_staking_balance(&sender).unwrap(),
-        U256::from(49_999_999_998u64)
+        U256::from(999_999_949_999_999_998u64)
     );
 
     // withdraw exact withdrawable staking balance
-    params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b73fe".from_hex().unwrap());
+    params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bfe".from_hex().unwrap());
     let result = Executive::new(
         &mut state,
         &env,
@@ -909,12 +920,12 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
-        U256::from(999_999_999_998u64)
+        U256::from(1_999_999_999_999_999_998u64)
     );
     assert_eq!(state.staking_balance(&sender).unwrap(), U256::from(2));
     assert_eq!(
         *state.total_issued_tokens(),
-        U256::from(1_000_000_000_000u64)
+        U256::from(2_000_000_000_000_000_000u64)
     );
     assert_eq!(*state.total_staking_tokens(), U256::from(2));
     assert_eq!(
@@ -961,6 +972,14 @@ fn test_commission_privilege() {
     )
     .0;
 
+    state
+        .new_contract_with_admin(
+            &address,
+            &sender.address(),
+            U256::zero(),
+            U256::one(),
+        )
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
     state
         .add_balance(
@@ -1320,6 +1339,14 @@ fn test_storage_commission_privilege() {
     )
     .0;
 
+    state
+        .new_contract_with_admin(
+            &address,
+            &sender.address(),
+            U256::zero(),
+            U256::one(),
+        )
+        .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
 
     state

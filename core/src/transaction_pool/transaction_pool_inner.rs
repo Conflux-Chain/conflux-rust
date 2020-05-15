@@ -917,7 +917,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!("Tx with same nonce already inserted, try to replace it with a higher gas price"))
+            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price))
         );
 
         assert_eq!(

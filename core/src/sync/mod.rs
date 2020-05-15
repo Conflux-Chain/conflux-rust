@@ -39,6 +39,26 @@ pub use self::{
     },
     synchronization_state::{SynchronizationPeerState, SynchronizationState},
 };
+use network::service::ProtocolVersion;
+
+/// The current version of the synchronization protocol.
+///
+/// Bump the version for incompatible changes. Before the version is too
+/// high, transit to a new protocol name for the next generation of the
+/// protocol.
+///
+/// To update messages within the protocol, we would like to be
+/// backward-compatible as much as possible. DO NOT UPDATE directly on the
+/// message. Instead, create a new message, mark the old one for
+/// deprecation.
+///
+/// Do NOT make this const pub.
+const SYNCHRONIZATION_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion(2);
+/// Support at most this number of old versions.
+const SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT: u8 = 2;
+/// The version to pass to Message for their lifetime declaration.
+pub const SYNC_PROTO_V1: ProtocolVersion = ProtocolVersion(1);
+pub const SYNC_PROTO_V2: ProtocolVersion = ProtocolVersion(2);
 
 pub mod random {
     use rand;
@@ -297,7 +317,8 @@ pub mod msg_sender {
 
     pub fn metric_message(msg_id: MsgId, size: usize) {
         match msg_id {
-            msgid::STATUS => ON_STATUS_METER.mark(size),
+            msgid::STATUS_DEPRECATED => ON_STATUS_METER.mark(size),
+            msgid::STATUS_V2 => ON_STATUS_METER.mark(size),
             msgid::GET_BLOCK_HEADERS_RESPONSE => {
                 GET_BLOCK_HEADER_RESPONSE_METER.mark(size);
                 GET_BLOCK_HEADER_RESPONSE_COUNTER.mark(1);

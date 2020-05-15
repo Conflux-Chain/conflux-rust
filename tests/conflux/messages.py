@@ -32,7 +32,7 @@ PACKET_HELLO = 0x80
 PACKET_DISCONNECT = 0x01
 PACKET_PROTOCOL = 0x10
 
-STATUS = 0x00
+STATUS_V2 = 0x22
 NEW_BLOCK_HASHES = 0x01
 TRANSACTIONS = 0x02
 
@@ -98,7 +98,7 @@ class NodeEndpoint(rlp.Serializable):
     fields = [
         ("address", binary),
         ("udp_port", big_endian_int),
-        ("port", big_endian_int)
+        ("tcp_port", big_endian_int)
     ]
 
 
@@ -126,7 +126,6 @@ class ChainIdParams(rlp.Serializable):
 
 class Status(rlp.Serializable):
     fields = [
-        ("protocol_version", big_endian_int),
         ("chain_id", ChainIdParams),
         ("genesis_hash", hash32),
         ("best_epoch", big_endian_int),
@@ -273,7 +272,15 @@ class BlockHeader(rlp.Serializable):
         return sha3(rlp.encode(self.without_nonce()))
 
     def pow_decimal(self):
-        tmp = sha3(rlp.encode([self.problem_hash(), self.nonce]))
+        init_buf = bytearray(64);
+        problem_hash = self.problem_hash()
+        for i in range(0, 32):
+            init_buf[i] = problem_hash[i]
+        n = self.nonce
+        for i in range(32, 64):
+            init_buf[i] = n % 256
+            n = int(n / 256)
+        tmp = sha3(bytes(init_buf))
         buf = []
         for i in range(0, 32):
             buf.append(tmp[i] ^ self.problem_hash()[i])
@@ -457,7 +464,7 @@ class Account(rlp.Serializable):
 
 
 msg_id_dict = {
-    Status: STATUS,
+    Status: STATUS_V2,
     NewBlockHashes: NEW_BLOCK_HASHES,
     Transactions: TRANSACTIONS,
     GetBlockHashes: GET_BLOCK_HASHES,

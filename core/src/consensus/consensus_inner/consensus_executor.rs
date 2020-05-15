@@ -6,6 +6,7 @@ use super::super::debug::*;
 use crate::{
     block_data_manager::{
         block_data_types::EpochExecutionCommitment, BlockDataManager,
+        BlockRewardResult,
     },
     consensus::{
         consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
@@ -15,15 +16,23 @@ use crate::{
     machine::Machine,
     parameters::{consensus::*, consensus_internal::*},
     rpc_errors::{invalid_params_check, Result as RpcResult},
-    state::{CleanupMode, State},
+    state::{
+        prefetcher::{
+            prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
+        },
+        CleanupMode, State,
+    },
     statedb::{Result as DbResult, StateDb},
-    storage::{StateIndex, StateRootWithAuxInfo, StorageManagerTrait},
+    storage::{
+        defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
+        StateRootWithAuxInfo, StorageManagerTrait,
+    },
     verification::VerificationConfig,
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
 };
-use cfx_types::{Address, BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{BigEndianHash, H256, KECCAK_EMPTY_BLOOM, U256, U512};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -36,11 +45,11 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Block, BlockHeaderBuilder, SignedTransaction, TransactionIndex,
-    MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
+    TransactionIndex, MERKLE_NULL_NODE,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     convert::From,
     fmt::{Debug, Formatter},
     sync::{
@@ -427,35 +436,13 @@ impl ConsensusExecutor {
                             ConsensusNewBlockHandler::compute_anticone_hashset_bruteforce(inner, *index)
                         };
 
-                        let block_consensus_node_anticone_same_era: HashSet<usize> =
-                            block_consensus_node_anticone
-                                .iter()
-                                .filter(|idx| {
-                                    inner.is_same_era(
-                                        **idx,
-                                        pivot_arena_index,
-                                    )
-                                })
-                                .map(|idx| *idx)
-                                .collect();
-                        let anticone_cutoff_epoch_anticone_set_same_era: HashSet<usize> = anticone_cutoff_epoch_anticone_set
-                            .iter()
-                            .filter(|idx| {
-                                inner.is_same_era(**idx, pivot_arena_index)
-                            })
-                            .map(|idx| *idx)
-                            .collect();
-                        let anticone_set = block_consensus_node_anticone_same_era
-                            .difference(&anticone_cutoff_epoch_anticone_set_same_era)
-                            .cloned()
-                            .collect::<HashSet<_>>();
-                        for a_index in anticone_set {
-                            // TODO: Maybe consider to use base difficulty
-                            // Check with the spec!
-                            anticone_difficulty +=
-                                U512::from(U256::from(inner.block_weight(
-                                    a_index
-                                )));
+                        for idx in block_consensus_node_anticone {
+                            if inner.is_same_era(idx, pivot_arena_index) && !anticone_cutoff_epoch_anticone_set.contains(&idx) {
+                                anticone_difficulty +=
+                                    U512::from(U256::from(inner.block_weight(
+                                        idx
+                                    )));
+                            }
                         }
 
                         // TODO: check the clear definition of anticone penalty,
@@ -780,6 +767,7 @@ pub struct ConsensusExecutionHandler {
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
+    execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
 }
 
 impl ConsensusExecutionHandler {
@@ -796,6 +784,21 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
+            execution_state_prefetcher: if DEFAULT_EXECUTION_PREFETCH_THREADS
+                > 0
+            {
+                Some(
+                    ExecutionStatePrefetcher::new(
+                        DEFAULT_EXECUTION_PREFETCH_THREADS,
+                    )
+                    .expect(
+                        // Do not accept error at starting up.
+                        &concat!(file!(), ":", line!(), ":", column!()),
+                    ),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -934,6 +937,7 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
 
+        let spec = Spec::new_spec();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
@@ -956,10 +960,13 @@ impl ConsensusExecutionHandler {
                     .expect("State exists"),
             ),
             self.vm.clone(),
+            &spec,
             start_block_number - 1, /* block_number */
         );
         let epoch_receipts = self
             .process_epoch_transactions(
+                &spec,
+                *epoch_hash,
                 &mut state,
                 &epoch_blocks,
                 start_block_number,
@@ -1022,12 +1029,48 @@ impl ConsensusExecutionHandler {
     }
 
     fn process_epoch_transactions(
-        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
-        start_block_number: u64, on_local_pivot: bool,
+        &self, spec: &Spec, epoch_id: EpochId, state: &mut State,
+        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
+        on_local_pivot: bool,
     ) -> DbResult<Vec<Arc<BlockReceipts>>>
     {
+        // Prefetch accounts for transactions.
+        // The return value _prefetch_join_handles is used to join all threads
+        // before the exit of this function.
+        let prefetch_join_handles = match self
+            .execution_state_prefetcher
+            .as_ref()
+        {
+            Some(prefetcher) => {
+                let mut accounts = vec![];
+                for block in epoch_blocks.iter() {
+                    for transaction in block.transactions.iter() {
+                        accounts.push(&transaction.sender);
+                        match transaction.action {
+                            Action::Call(ref address) => accounts.push(address),
+                            _ => {}
+                        }
+                    }
+                }
+
+                prefetch_accounts(prefetcher, epoch_id, state, accounts)
+            }
+            None => PrefetchTaskHandle {
+                task_epoch_id: epoch_id,
+                state,
+                prefetcher: None,
+                accounts: vec![],
+            },
+        };
+        // TODO:
+        //   Make the state shared ref for vm execution, then remove this drop.
+        //   When the state can be made shared, prefetch can happen at the same
+        //   time of the execution, the vm execution do not have to wait
+        //   for prefetching to finish.
+        prefetch_join_handles.wait_for_task();
+        drop(prefetch_join_handles);
+
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
-        let spec = Spec::new_spec();
         let internal_contract_map = InternalContractMap::new();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
@@ -1105,7 +1148,7 @@ impl ConsensusExecutionHandler {
 
                         env.accumulated_gas_used += executed.gas_used;
                         gas_fee = executed.fee;
-                        warn!(
+                        debug!(
                             "tx execution error: transaction={:?}, err={:?}",
                             transaction, error
                         );
@@ -1159,7 +1202,7 @@ impl ConsensusExecutionHandler {
                 receipts,
                 secondary_reward,
             });
-            self.data_man.insert_block_results(
+            self.data_man.insert_block_execution_result(
                 block.hash(),
                 pivot_block.hash(),
                 block_receipts.clone(),
@@ -1188,7 +1231,7 @@ impl ConsensusExecutionHandler {
             ULTIMATE_BASE_MINING_REWARD_IN_UCFX
         };
 
-        U512::from(reward_in_ucfx) * U512::from(CONFLUX_TOKEN / 1_000_000)
+        U512::from(reward_in_ucfx) * U512::from(ONE_UCFX_IN_DRIP)
     }
 
     /// `epoch_block_states` includes if a block is partial invalid and its
@@ -1210,9 +1253,6 @@ impl ConsensusExecutionHandler {
 
         let epoch_size = epoch_blocks.len();
         let mut epoch_block_total_rewards = Vec::with_capacity(epoch_size);
-        // This maintains the primary tokens rewarded to each miner. And it will
-        // be used to compute ratio for secondary reward.
-        let mut base_reward_count: HashMap<Address, U256> = HashMap::new();
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
@@ -1289,9 +1329,6 @@ impl ConsensusExecutionHandler {
                 let reward = U256::try_from(reward).unwrap();
                 epoch_block_total_rewards.push(reward);
                 if !reward.is_zero() {
-                    *base_reward_count
-                        .entry(*block.block_header.author())
-                        .or_insert(0.into()) += reward;
                     total_base_reward += reward;
                 }
             }
@@ -1314,7 +1351,8 @@ impl ConsensusExecutionHandler {
                 .block_execution_result_by_hash_with_epoch(
                     &block_hash,
                     &reward_epoch_hash,
-                    true, /* update_cache */
+                    false, /* update_pivot_assumption */
+                    true,  /* update_cache */
                 ) {
                 Some(block_exec_result) => block_exec_result.block_receipts,
                 None => {
@@ -1366,8 +1404,12 @@ impl ConsensusExecutionHandler {
         }
 
         let mut block_tx_fees = HashMap::new();
+        // Note that some transaction fees may get lost due to solely packed by
+        // a partially invalid block.
+        let mut burnt_fee = U256::from(0);
         for TxExecutionInfo(fee, block_set) in tx_fee.values() {
             if block_set.is_empty() {
+                burnt_fee += *fee;
                 // tx_fee for the transactions executed in a partial invalid
                 // blocks and not packed in other blocks will be lost
                 continue;
@@ -1384,16 +1426,19 @@ impl ConsensusExecutionHandler {
                     remainder -= 1.into();
                 }
             }
+            debug_assert!(remainder.is_zero());
         }
 
         let mut merged_rewards = BTreeMap::new();
+        // Here is the exact secondary reward allocated in total
+        let mut allocated_secondary_reward = U256::from(0);
 
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {
-            let reward = &mut epoch_block_total_rewards[enum_idx];
+            let base_reward = epoch_block_total_rewards[enum_idx];
+
             let block_hash = block.hash();
             // Add tx fee to reward.
-            if let Some(fee) = block_tx_fees.get(&block_hash) {
-                *reward += *fee;
+            let tx_fee = if let Some(fee) = block_tx_fees.get(&block_hash) {
                 if !debug_record.is_none() {
                     let debug_out = debug_record.as_mut().unwrap();
                     debug_out.tx_fees.push(BlockHashAuthorValue(
@@ -1402,21 +1447,43 @@ impl ConsensusExecutionHandler {
                         *fee,
                     ));
                 }
-            }
+                *fee
+            } else {
+                U256::from(0)
+            };
+
+            // Distribute the secondary reward according to primary reward.
+            let total_reward = if base_reward > U256::from(0) {
+                let block_secondary_reward =
+                    base_reward * secondary_reward / total_base_reward;
+                allocated_secondary_reward += block_secondary_reward;
+                base_reward + tx_fee + block_secondary_reward
+            } else {
+                base_reward + tx_fee
+            };
 
             *merged_rewards
                 .entry(*block.block_header.author())
-                .or_insert(U256::from(0)) += *reward;
+                .or_insert(U256::from(0)) += total_reward;
 
             if debug_record.is_some() {
                 let debug_out = debug_record.as_mut().unwrap();
                 debug_out.block_final_rewards.push(BlockHashAuthorValue(
                     block_hash,
                     block.block_header.author().clone(),
-                    *reward,
+                    total_reward,
                 ));
             }
             if on_local_pivot {
+                self.data_man.insert_block_reward_result(
+                    block_hash,
+                    BlockRewardResult {
+                        total_reward,
+                        tx_fee,
+                        base_reward,
+                    },
+                    true,
+                );
                 self.data_man
                     .receipts_retain_epoch(&block_hash, &reward_epoch_hash);
             }
@@ -1424,11 +1491,7 @@ impl ConsensusExecutionHandler {
 
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
-        for (address, mut reward) in merged_rewards {
-            // Distribute the secondary reward according to primary reward.
-            if let Some(base_reward) = base_reward_count.get(&address) {
-                reward += base_reward * secondary_reward / total_base_reward;
-            }
+        for (address, reward) in merged_rewards {
             state
                 .add_balance(&address, &reward, CleanupMode::ForceCreate)
                 .unwrap();
@@ -1448,7 +1511,14 @@ impl ConsensusExecutionHandler {
                 });
             }
         }
-        state.add_block_rewards(total_base_reward + secondary_reward);
+        let new_mint = total_base_reward + allocated_secondary_reward;
+        if new_mint >= burnt_fee {
+            // The very likely case
+            state.add_total_issued(new_mint - burnt_fee);
+        } else {
+            // The very unlikely case
+            state.subtract_total_issued(burnt_fee - new_mint);
+        }
     }
 
     fn recompute_states(
@@ -1462,6 +1532,7 @@ impl ConsensusExecutionHandler {
             epoch_blocks.len(),
         );
         let pivot_block = epoch_blocks.last().expect("Not empty");
+        let spec = Spec::new_spec();
         let mut state = State::new(
             StateDb::new(
                 self.data_man
@@ -1484,9 +1555,12 @@ impl ConsensusExecutionHandler {
                     .unwrap(),
             ),
             self.vm.clone(),
+            &spec,
             start_block_number - 1, /* block_number */
         );
         self.process_epoch_transactions(
+            &spec,
+            *pivot_hash,
             &mut state,
             &epoch_blocks,
             start_block_number,
@@ -1540,6 +1614,7 @@ impl ConsensusExecutionHandler {
                     .expect("State Exists"),
             ),
             self.vm.clone(),
+            &spec,
             // FIXME: 0 as block number?
             0, /* block_number */
         );
