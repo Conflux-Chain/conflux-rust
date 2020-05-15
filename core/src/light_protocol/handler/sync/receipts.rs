@@ -20,7 +20,7 @@ use crate::{
         CACHE_TIMEOUT, MAX_RECEIPTS_IN_FLIGHT, RECEIPT_REQUEST_BATCH_SIZE,
         RECEIPT_REQUEST_TIMEOUT,
     },
-    primitives::{BlockHeaderBuilder, BlockReceipts},
+    primitives::BlockReceipts,
     UniqueId,
 };
 
@@ -28,6 +28,7 @@ use super::{
     common::{FutureItem, KeyOrdered, PendingItem, SyncManager},
     witnesses::Witnesses,
 };
+use crate::verification::compute_receipts_root;
 use network::node_table::NodeId;
 
 #[derive(Debug)]
@@ -194,7 +195,7 @@ impl Receipts {
             .map(|rs| Arc::new(rs))
             .collect();
 
-        let received = BlockHeaderBuilder::compute_block_receipts_root(&rs);
+        let received = compute_receipts_root(&rs);
 
         // retrieve local receipts root
         let local = match self.witnesses.root_hashes_of(epoch) {

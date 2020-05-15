@@ -4,22 +4,26 @@
 
 use crate::storage::storage_db::SnapshotMptTraitReadAndIterate;
 
+#[cfg(test)]
 mod slicer;
+#[cfg(test)]
 mod verifier;
 
 #[derive(Default)]
-struct FakeSnapshotMptDb {
+pub struct FakeSnapshotMptDb {
     db: BTreeMap<Vec<u8>, SnapshotMptNode>,
     in_place_mode: bool,
     already_written: HashSet<Vec<u8>>,
 }
 
 impl FakeSnapshotMptDb {
+    #[cfg(test)]
     fn reset(&mut self, in_place_mode: bool) {
         self.in_place_mode = in_place_mode;
         self.already_written.clear();
     }
 
+    #[cfg(test)]
     fn assert_eq(&self, expected: &Self) {
         assert_eq!(self.db.len(), expected.db.len());
 
@@ -132,6 +136,7 @@ impl FallibleIterator for FakeSnapshotMptDbIter<'_> {
     }
 }
 
+#[cfg(test)]
 fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedDeltaMptIterator) {
     let snapshot_mpt_nodes;
     let delta_mpt_root = {
@@ -182,6 +187,7 @@ fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedDeltaMptIterator) {
     assert_eq!(empty_snapshot_mpt.db.len(), snapshot_mpt_nodes);
 }
 
+#[cfg(test)]
 #[test]
 fn test_mpt_node_path_to_from_db_key() {
     // First, construct some special compressed path in a node.
@@ -245,6 +251,7 @@ fn test_mpt_node_path_to_from_db_key() {
     }
 }
 
+#[cfg(test)]
 #[test]
 fn test_merkle_root() {
     // Merkle root of empty db.
@@ -265,6 +272,7 @@ fn test_merkle_root() {
     }
 }
 
+#[cfg(test)]
 #[test]
 fn test_delete_all() {
     let mut rng = get_rng_for_test();
@@ -311,6 +319,7 @@ fn test_delete_all() {
     assert_eq!(0, snapshot_mpt.db.len());
 }
 
+#[cfg(test)]
 #[test]
 fn test_inserts_deletes_and_subtree_size() {
     let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
@@ -456,6 +465,7 @@ fn test_inserts_deletes_and_subtree_size() {
     in_place_mod_mpt.assert_eq(&new_snapshot_mpt);
 }
 
+#[cfg(test)]
 #[test]
 fn test_two_way_merge() {
     let keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS);
@@ -550,30 +560,37 @@ fn test_delta_subtree_size() {
 use crate::storage::{
     impls::{
         errors::*,
-        merkle_patricia_trie::{
-            CompressedPathRaw, CompressedPathTrait, MptMerger, TrieNodeTrait,
-        },
+        merkle_patricia_trie::{CompressedPathRaw, CompressedPathTrait},
         storage_db::snapshot_mpt::{
             mpt_node_path_from_db_key, mpt_node_path_to_db_key,
         },
     },
-    state::StateTrait,
-    state_manager::StateManagerTrait,
     storage_db::{
         SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
         SnapshotMptTraitRw,
     },
+};
+use fallible_iterator::FallibleIterator;
+use primitives::MerkleHash;
+use std::{
+    collections::{btree_map, BTreeMap, HashSet},
+    ops::Bound::Excluded,
+};
+
+#[cfg(test)]
+use crate::storage::{
+    impls::merkle_patricia_trie::{MptMerger, TrieNodeTrait},
+    state::StateTrait,
+    state_manager::StateManagerTrait,
     tests::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         DumpedDeltaMptIterator, TEST_NUMBER_OF_KEYS,
     },
     StateIndex,
 };
-use fallible_iterator::FallibleIterator;
-use primitives::{EpochId, MerkleHash, StorageKey, MERKLE_NULL_NODE};
+#[cfg(test)]
+use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE};
+#[cfg(test)]
 use rand::Rng;
-use std::{
-    collections::{btree_map, BTreeMap, HashSet},
-    ops::Bound::Excluded,
-    sync::atomic::Ordering,
-};
+#[cfg(test)]
+use std::sync::atomic::Ordering;

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::storage::storage_db::SnapshotMptTraitReadAndIterate;
-
 #[test]
 fn test_slice_verifier_zero_or_one_chunk() {
     // Slice empty mpt.
@@ -586,7 +584,7 @@ use crate::storage::{
         KeyValueDbTraitSingleWriter, KeyValueDbTypes, OpenSnapshotMptTrait,
         SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotInfo,
         SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
-        SnapshotMptTraitRw,
+        SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,

@@ -27,7 +27,7 @@ use crate::{
         defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
         StateRootWithAuxInfo, StorageManagerTrait,
     },
-    verification::VerificationConfig,
+    verification::{compute_receipts_root, VerificationConfig},
     vm::{Env, Spec},
     vm_factory::VmFactory,
     SharedTransactionPool,
@@ -1011,7 +1011,7 @@ impl ConsensusExecutionHandler {
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
-            BlockHeaderBuilder::compute_block_receipts_root(&epoch_receipts),
+            compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
         let epoch_execution_commitment = self

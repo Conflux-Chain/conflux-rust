@@ -129,16 +129,6 @@ impl Block {
         }
     }
 
-    pub fn compute_transaction_root(
-        transactions: &Vec<Arc<SignedTransaction>>,
-    ) -> H256 {
-        let mut rlp_stream = RlpStream::new_list(transactions.len());
-        for tx in transactions {
-            rlp_stream.append(tx.as_ref());
-        }
-        keccak(rlp_stream.out())
-    }
-
     pub fn encode_body_with_tx_public(&self) -> Vec<u8> {
         let mut stream = RlpStream::new();
         stream.begin_list(self.transactions.len());

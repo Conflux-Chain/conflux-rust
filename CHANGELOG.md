@@ -54,6 +54,14 @@ in the configuration file manually.
 - A new RPC ctx_getBlockRewardInfo to query block reward information inside a 
 given epoch.
 
+- Compute transaction root and receipts root by a simple MPT where the key is
+the index in big endian bytes representation of fixed length with leading zero
+and the value is the bytes representation of the corresponding data, e.g.
+transaction hash for transaction root, Receipt rlp for block receipts root.
+The receipts root is the Merkle root of the simple MPT of block receipts roots.
+
+- Use raw bytes in blame vec hash calculation instead of rlp because each 
+element of the vec is fixed length H256.
 
 # 0.5.0
 
