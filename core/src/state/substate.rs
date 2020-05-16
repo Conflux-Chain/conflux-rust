@@ -6,37 +6,62 @@ use super::CleanupMode;
 use crate::evm::{CleanDustMode, Spec};
 use cfx_types::Address;
 use primitives::LogEntry;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    mem,
+};
 
 /// State changes which should be applied in finalize,
 /// after transaction is fully executed.
+/// A Substate object is maintained for each contract
+/// function instance in the callstack.
 #[derive(Debug, Default)]
 pub struct Substate {
     /// Any accounts that have suicided.
     pub suicides: HashSet<Address>,
-
     /// Any accounts that are touched.
     pub touched: HashSet<Address>,
-
     /// Any accounts that occupy some storage.
     pub storage_collateralized: HashMap<Address, u64>,
-
     /// Any accounts that release some storage.
     pub storage_released: HashMap<Address, u64>,
-
     /// Any logs.
     pub logs: Vec<LogEntry>,
-
     /// Refund counter of SSTORE.
     pub sstore_clears_refund: i128,
-
     /// Created contracts.
     pub contracts_created: Vec<Address>,
+    /// Contracts called in call stack.
+    /// Used to detect reentrancy.
+    /// Passed from caller to callee when calling happens
+    /// and passed back to caller when callee returns,
+    /// through mem::swap.
+    pub contracts_in_callstack: HashSet<Address>,
+    /// Reentrancy happens in current call
+    pub reentrancy_encountered: bool,
+    /// Contract address in current call
+    pub contract_address: Address,
 }
 
 impl Substate {
     /// Creates new substate.
-    pub fn new() -> Self { Substate::default() }
+    pub fn new() -> Self {
+        let mut substate = Substate::default();
+        substate.reentrancy_encountered = false;
+        substate
+    }
+
+    pub fn with_contracts_in_callstack(
+        contracts: HashSet<Address>, contract_address: Address,
+        reentrancy_encountered: bool,
+    ) -> Self
+    {
+        let mut substate = Substate::default();
+        substate.contracts_in_callstack = contracts;
+        substate.reentrancy_encountered = reentrancy_encountered;
+        substate.contract_address = contract_address;
+        substate
+    }
 
     /// Merge secondary substate `s` into self, accruing each element
     /// correspondingly.
@@ -52,6 +77,17 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
+    }
+
+    pub fn pop_callstack_contract(&mut self, s: &mut Substate) {
+        let mut contract_in_callstack = HashSet::<Address>::new();
+        mem::swap(&mut contract_in_callstack, &mut s.contracts_in_callstack);
+        if !s.reentrancy_encountered
+            && self.contract_address != s.contract_address
+        {
+            contract_in_callstack.remove(&s.contract_address);
+        }
+        self.contracts_in_callstack = contract_in_callstack;
     }
 
     /// Get the cleanup mode object from this.

@@ -29,6 +29,7 @@ use primitives::{
 use std::{
     collections::HashSet,
     convert::{TryFrom, TryInto},
+    mem,
     sync::Arc,
 };
 
@@ -146,6 +147,8 @@ impl<'a> CallCreateExecutive<'a> {
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, parent_static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
+        contracts_in_callstack: Option<HashSet<Address>>,
+        is_recursive_call: bool,
     ) -> Self
     {
         trace!(
@@ -184,7 +187,19 @@ impl<'a> CallCreateExecutive<'a> {
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
-                CallCreateExecutiveKind::ExecCall(params, Substate::new())
+                let mut contracts_in_callstack =
+                    contracts_in_callstack.unwrap();
+                let code_address = params.code_address.clone();
+                let is_contract_in_callstack =
+                    !contracts_in_callstack.insert(code_address.clone());
+                CallCreateExecutiveKind::ExecCall(
+                    params,
+                    Substate::with_contracts_in_callstack(
+                        contracts_in_callstack,
+                        code_address,
+                        is_contract_in_callstack && !is_recursive_call,
+                    ),
+                )
             } else {
                 trace!("Transfer");
                 CallCreateExecutiveKind::Transfer(params)
@@ -211,6 +226,7 @@ impl<'a> CallCreateExecutive<'a> {
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         stack_depth: usize, static_flag: bool,
         internal_contract_map: &'a InternalContractMap,
+        mut contracts_in_callstack: HashSet<Address>,
     ) -> Self
     {
         trace!(
@@ -222,7 +238,17 @@ impl<'a> CallCreateExecutive<'a> {
 
         let gas = params.gas;
 
-        let kind = CallCreateExecutiveKind::ExecCreate(params, Substate::new());
+        let code_address = params.code_address.clone();
+        assert!(!contracts_in_callstack.contains(&code_address));
+        contracts_in_callstack.insert(code_address.clone());
+        let kind = CallCreateExecutiveKind::ExecCreate(
+            params,
+            Substate::with_contracts_in_callstack(
+                contracts_in_callstack,
+                code_address,
+                false, /* reentrancy_encountered */
+            ),
+        );
 
         Self {
             env,
@@ -333,6 +359,7 @@ impl<'a> CallCreateExecutive<'a> {
         sender: &Address, storage_limit: &U256, is_bottom_ex: bool,
     ) -> CollateralCheckResult
     {
+        substate.pop_callstack_contract(&mut unconfirmed_substate);
         match result {
             Err(vm::Error::OutOfGas)
             | Err(vm::Error::BadJumpDestination { .. })
@@ -351,6 +378,11 @@ impl<'a> CallCreateExecutive<'a> {
                 apply_state: false, ..
             }) => {
                 state.revert_to_checkpoint();
+                CollateralCheckResult::Valid
+            }
+            Err(vm::Error::Reentrancy) => {
+                assert!(unconfirmed_substate.reentrancy_encountered);
+                state.discard_checkpoint();
                 CollateralCheckResult::Valid
             }
             Err(vm::Error::StateDbError(e)) => {
@@ -630,28 +662,34 @@ impl<'a> CallCreateExecutive<'a> {
                 }
 
                 let origin = OriginInfo::from(&params);
-                let exec = self.factory.create(params, self.spec, self.depth);
                 let sender = *origin.original_sender();
                 let storage_limit = *origin.storage_limit();
 
-                let out = {
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        OutputPolicy::Return,
-                        self.internal_contract_map,
-                    );
-                    match exec.exec(&mut context) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
+                let out = if unconfirmed_substate.reentrancy_encountered {
+                    Ok(Err(vm::Error::Reentrancy))
+                } else {
+                    let exec =
+                        self.factory.create(params, self.spec, self.depth);
+                    let out = {
+                        let mut context = Self::as_context(
+                            state,
+                            self.env,
+                            self.machine,
+                            self.spec,
+                            self.depth,
+                            self.stack_depth,
+                            self.static_flag,
+                            &origin,
+                            &mut unconfirmed_substate,
+                            OutputPolicy::Return,
+                            self.internal_contract_map,
+                        );
+                        match exec.exec(&mut context) {
+                            Ok(val) => Ok(val.finalize(context)),
+                            Err(err) => Err(err),
+                        }
+                    };
+                    out
                 };
 
                 let res = match out {
@@ -731,28 +769,34 @@ impl<'a> CallCreateExecutive<'a> {
                 }
 
                 let origin = OriginInfo::from(&params);
-                let exec = self.factory.create(params, self.spec, self.depth);
                 let sender = *origin.original_sender();
                 let storage_limit = *origin.storage_limit();
 
-                let out = {
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        OutputPolicy::InitContract,
-                        self.internal_contract_map,
-                    );
-                    match exec.exec(&mut context) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
+                let out = if unconfirmed_substate.reentrancy_encountered {
+                    Ok(Err(vm::Error::Reentrancy))
+                } else {
+                    let exec =
+                        self.factory.create(params, self.spec, self.depth);
+                    let out = {
+                        let mut context = Self::as_context(
+                            state,
+                            self.env,
+                            self.machine,
+                            self.spec,
+                            self.depth,
+                            self.stack_depth,
+                            self.static_flag,
+                            &origin,
+                            &mut unconfirmed_substate,
+                            OutputPolicy::InitContract,
+                            self.internal_contract_map,
+                        );
+                        match exec.exec(&mut context) {
+                            Ok(val) => Ok(val.finalize(context)),
+                            Err(err) => Err(err),
+                        }
+                    };
+                    out
                 };
 
                 let res = match out {
@@ -1067,7 +1111,22 @@ impl<'a> CallCreateExecutive<'a> {
                         None => return val,
                     }
                 },
-                Some((_, _, Err(TrapError::Call(subparams, resume)))) => {
+                Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
+                    let is_not_internal_contract_and_has_code = subparams.code.is_some() && resume.internal_contract_map.contract(&subparams.code_address).is_none();
+                    let substate = resume.unconfirmed_substate().unwrap();
+                    let mut is_recursive_call = false;
+                    let contracts_in_callstack = if is_not_internal_contract_and_has_code {
+                        is_recursive_call = substate.contract_address == subparams.code_address;
+                        let mut contracts_in_callstack = HashSet::<Address>::new();
+                        mem::swap(
+                            &mut contracts_in_callstack,
+                            &mut substate.contracts_in_callstack,
+                        );
+                        Some(contracts_in_callstack)
+                    } else {
+                        None
+                    };
+
                     let sub_exec = CallCreateExecutive::new_call_raw(
                         subparams,
                         resume.env,
@@ -1078,13 +1137,21 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.stack_depth,
                         resume.static_flag,
                         resume.internal_contract_map,
+                        contracts_in_callstack,
+                        is_recursive_call,
                     );
 
                     callstack.push((None, resume));
                     callstack.push((None, sub_exec));
                     last_res = None;
                 },
-                Some((_, _, Err(TrapError::Create(subparams, address, resume)))) => {
+                Some((_, _, Err(TrapError::Create(subparams, address, mut resume)))) => {
+                    let substate = resume.unconfirmed_substate().unwrap();
+                    let mut contracts_in_callstack = HashSet::<Address>::new();
+                    mem::swap(
+                        &mut contracts_in_callstack,
+                        &mut substate.contracts_in_callstack,
+                    );
                     let sub_exec = CallCreateExecutive::new_create_raw(
                         subparams,
                         resume.env,
@@ -1095,6 +1162,7 @@ impl<'a> CallCreateExecutive<'a> {
                         resume.stack_depth,
                         resume.static_flag,
                         resume.internal_contract_map,
+                        contracts_in_callstack,
                     );
 
                     callstack.push((Some(address), resume));
@@ -1185,6 +1253,11 @@ impl<'a> Executive<'a> {
         let _gas = params.gas;
 
         let vm_factory = self.state.vm_factory();
+        let mut contracts_in_callstack = HashSet::<Address>::new();
+        mem::swap(
+            &mut contracts_in_callstack,
+            &mut substate.contracts_in_callstack,
+        );
         let result = CallCreateExecutive::new_create_raw(
             params,
             self.env,
@@ -1195,6 +1268,7 @@ impl<'a> Executive<'a> {
             stack_depth,
             self.static_flag,
             self.internal_contract_map,
+            contracts_in_callstack,
         )
         .consume(self.state, substate);
 
@@ -1213,6 +1287,24 @@ impl<'a> Executive<'a> {
     ) -> vm::Result<FinalizationResult>
     {
         let vm_factory = self.state.vm_factory();
+        let is_not_internal_contract_and_has_code = params.code.is_some()
+            && self
+                .internal_contract_map
+                .contract(&params.code_address)
+                .is_none();
+        let mut is_recursive_call = false;
+        let contracts_in_callstack = if is_not_internal_contract_and_has_code {
+            is_recursive_call =
+                substate.contract_address == params.code_address;
+            let mut contracts_in_callstack = HashSet::<Address>::new();
+            mem::swap(
+                &mut contracts_in_callstack,
+                &mut substate.contracts_in_callstack,
+            );
+            Some(contracts_in_callstack)
+        } else {
+            None
+        };
         let result = CallCreateExecutive::new_call_raw(
             params,
             self.env,
@@ -1223,6 +1315,8 @@ impl<'a> Executive<'a> {
             stack_depth,
             self.static_flag,
             self.internal_contract_map,
+            contracts_in_callstack,
+            is_recursive_call,
         )
         .consume(self.state, substate);
 

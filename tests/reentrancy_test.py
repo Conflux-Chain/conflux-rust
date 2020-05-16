@@ -147,14 +147,18 @@ class ReentrancyTest(ConfluxTestFramework):
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
         assert_equal(balance, value)
         addr = eth_utils.encode_hex(user2_addr)
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_equal(balance, value)
+        user2_balance_before_contract_construction = parse_as_int(self.nodes[0].cfx_getBalance(addr))
+        assert_equal(user2_balance_before_contract_construction, value)
 
         transaction = self.call_contract_function(self.buggy_contract, "constructor", [], self.genesis_priv_key, storage_limit=20000)
         contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
 
         transaction = self.call_contract_function(self.exploit_contract, "constructor", [], user2, storage_limit=200000)
         exploit_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
+        addr = eth_utils.encode_hex(user2_addr)
+        user2_balance_after_contract_construction = parse_as_int(self.nodes[0].cfx_getBalance(addr))
+        assert_greater_than_or_equal(user2_balance_before_contract_construction, user2_balance_after_contract_construction)
+        user2_balance_refund_upper_bound = user2_balance_before_contract_construction - user2_balance_after_contract_construction
 
         transaction = self.call_contract_function(self.buggy_contract, "addBalance", [], user1, 100000000000000000000000000000000,
                                                   contract_addr, True, True, storage_limit=128)
@@ -165,7 +169,7 @@ class ReentrancyTest(ConfluxTestFramework):
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
         assert_greater_than_or_equal(balance, 899999999999999999999999950000000)
         addr = eth_utils.encode_hex(user2_addr)
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
+        user2_balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
         assert_greater_than_or_equal(balance, 899999999999999999999999900000000)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
         assert_equal(balance, 200000000000000000000000000000000)
@@ -178,11 +182,11 @@ class ReentrancyTest(ConfluxTestFramework):
         addr = eth_utils.encode_hex(user1_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
         assert_greater_than_or_equal(balance, 899999999999999999999999950000000)
+        balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
+        assert_equal(balance, 100000000000000000000000000000000)
         addr = eth_utils.encode_hex(user2_addr)
         balance = parse_as_int(self.nodes[0].cfx_getBalance(addr))
-        assert_greater_than_or_equal(balance, 1099999999999999999999999800000000)
-        balance = parse_as_int(self.nodes[0].cfx_getBalance(contract_addr))
-        assert_equal(balance, 0)
+        assert_greater_than_or_equal(user2_balance + user2_balance_refund_upper_bound + 100000000000000000000000000000000, balance)
 
         block_gen_thread.stop()
         block_gen_thread.join()

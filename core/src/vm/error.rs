@@ -96,6 +96,8 @@ pub enum Error {
     OutOfBounds,
     /// Execution has been reverted with REVERT.
     Reverted,
+    /// Reentrancy encountered
+    Reentrancy,
 }
 
 impl From<DbError> for Error {
@@ -144,6 +146,7 @@ impl fmt::Display for Error {
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted"),
+            Reentrancy => write!(f, "Reentrancy"),
         }
     }
 }
