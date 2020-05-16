@@ -161,15 +161,24 @@ impl TokenBucket {
         }
 
         // tokens not enough and throttled
-        let cpu_recharge_secs = ((cpu_cost - self.cpu_tokens.cur_tokens) as f64
-            / self.cpu_tokens.recharge_rate as f64)
-            .ceil() as u64;
-        let message_recharge_secs =
+        let cpu_recharge_secs = if cpu_cost > self.cpu_tokens.cur_tokens {
+            ((cpu_cost - self.cpu_tokens.cur_tokens) as f64
+                / self.cpu_tokens.recharge_rate as f64)
+                .ceil() as u64
+        } else {
+            0
+        };
+        let message_recharge_secs = if message_size_cost
+            > self.message_size_tokens.cur_tokens
+        {
             ((message_size_cost - self.message_size_tokens.cur_tokens) as f64
                 / self.message_size_tokens.recharge_rate as f64)
-                .ceil() as u64;
+                .ceil() as u64
+        } else {
+            0
+        };
         let recharge_secs = max(cpu_recharge_secs, message_recharge_secs);
-        Err(self.last_update + Duration::from_secs(recharge_secs) - now)
+        Err(Duration::from_secs(recharge_secs))
     }
 
     pub fn throttle_default(&mut self) -> ThrottleResult {
