@@ -178,7 +178,10 @@ impl TokenBucket {
             0
         };
         let recharge_secs = max(cpu_recharge_secs, message_recharge_secs);
-        Err(Duration::from_secs(recharge_secs))
+        // `refresh` ensures the difference in `self.last_update` and `now` is
+        // less than 1 second, and `recharge_secs` is at least 1 second,
+        // so this will not underflow.
+        Err(self.last_update + Duration::from_secs(recharge_secs) - now)
     }
 
     pub fn throttle_default(&mut self) -> ThrottleResult {
