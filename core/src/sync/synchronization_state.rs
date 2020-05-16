@@ -180,6 +180,7 @@ impl SynchronizationState {
             if peers.is_empty() {
                 // We do not have peers, so just assume that this is not a fresh
                 // start and do not enter NormalPhase.
+                debug!("median_epoch_from_normal_peers: no connected peers");
                 fresh_start = false;
             }
             for (_, state_lock) in &*peers {
@@ -193,12 +194,21 @@ impl SynchronizationState {
                     // Note `best_epoch` is initialized according to Status,
                     // so if it's 0, the peer is just newly started
                     fresh_start = false;
+                    debug!("median_epoch_from_normal_peers: not fresh start");
                 }
             }
         };
 
         if peer_best_epoches.is_empty() {
-            return if fresh_start { Some(0) } else { None };
+            return if fresh_start {
+                debug!("median_epoch_from_normal_peers: fresh start");
+                Some(0)
+            } else {
+                debug!(
+                    "median_epoch_from_normal_peers: no peer in normal phase"
+                );
+                None
+            };
         }
 
         peer_best_epoches.sort();
