@@ -767,36 +767,48 @@ impl BlockDataManager {
     pub fn transaction_index_by_hash(
         &self, hash: &H256, update_cache: bool,
     ) -> Option<TransactionIndex> {
-        self.get(
-            hash,
-            &self.transaction_indices,
-            |key| self.db_manager.transaction_index_from_db(key),
-            if update_cache {
-                Some(CacheId::TransactionAddress(*hash))
-            } else {
-                None
-            },
-        )
+        if self.config.persist_tx_index {
+            self.get(
+                hash,
+                &self.transaction_indices,
+                |key| self.db_manager.transaction_index_from_db(key),
+                if update_cache {
+                    Some(CacheId::TransactionAddress(*hash))
+                } else {
+                    None
+                },
+            )
+        } else {
+            self.transaction_indices
+                .write()
+                .get(hash)
+                .and_then(|v| Some(v.clone()))
+        }
     }
 
     pub fn insert_transaction_index(
         &self, hash: &H256, tx_index: &TransactionIndex,
     ) {
-        if !self.config.record_tx_index {
-            return;
+        if self.config.persist_tx_index {
+            // transaction_indices will not be updated if it's not inserted
+            // before
+            self.transaction_indices
+                .write()
+                .entry(*hash)
+                .and_modify(|v| {
+                    *v = tx_index.clone();
+                    self.cache_man
+                        .lock()
+                        .note_used(CacheId::TransactionAddress(*hash));
+                });
+            self.db_manager
+                .insert_transaction_index_to_db(hash, tx_index);
+        } else {
+            // If not persisted, we will just hold it temporarily in memory
+            self.transaction_indices
+                .write()
+                .insert(hash.clone(), tx_index.clone());
         }
-        // transaction_indices will not be updated if it's not inserted before
-        self.transaction_indices
-            .write()
-            .entry(*hash)
-            .and_modify(|v| {
-                *v = tx_index.clone();
-                self.cache_man
-                    .lock()
-                    .note_used(CacheId::TransactionAddress(*hash));
-            });
-        self.db_manager
-            .insert_transaction_index_to_db(hash, tx_index);
     }
 
     fn insert<K, V, InsertF>(
@@ -1053,7 +1065,7 @@ impl BlockDataManager {
             return false;
         }
 
-        if self.config.record_tx_index && on_local_pivot {
+        if on_local_pivot {
             // Check if all blocks receipts are from this epoch
             let mut epoch_receipts = Vec::new();
             for h in epoch_block_hashes {
@@ -1329,7 +1341,7 @@ pub enum DbType {
 }
 
 pub struct DataManagerConfiguration {
-    record_tx_index: bool,
+    persist_tx_index: bool,
     tx_cache_index_maintain_timeout: Duration,
     db_type: DbType,
 }
@@ -1340,12 +1352,12 @@ impl MallocSizeOf for DataManagerConfiguration {
 
 impl DataManagerConfiguration {
     pub fn new(
-        record_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
+        persist_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
         db_type: DbType,
     ) -> Self
     {
         Self {
-            record_tx_index,
+            persist_tx_index,
             tx_cache_index_maintain_timeout,
             db_type,
         }

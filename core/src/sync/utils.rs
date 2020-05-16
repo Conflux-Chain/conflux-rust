@@ -133,7 +133,7 @@ pub fn initialize_data_manager(
         storage_manager,
         worker_thread_pool,
         DataManagerConfiguration::new(
-            false,                          /* do not record transaction
+            false,                          /* do not persist transaction
                                              * address */
             Duration::from_millis(300_000), /* max cached tx count */
             dbtype,

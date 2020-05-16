@@ -5,7 +5,7 @@ appenders:
     kind: console
     encoder:
         pattern: "{d} {h({l}):5.5} {T:<20.20} {t:12.12} - {m:10.20000}{n}"
-    filters: 
+    filters:
       -
         kind: "threshold"
         level: "info"
@@ -23,7 +23,7 @@ appenders:
         kind: size
         limit: 2000 mb
       roller:
-        kind: fixed_window 
+        kind: fixed_window
         pattern: "log/archive/conflux.{}.gz"
         count: 50
 
@@ -38,9 +38,9 @@ loggers:
     network:
         level: info
     cfxcore:
-        level: info
+        level: debug
     rpc:
-        level: info
+        level: debug
     discovery:
         level: info
     sync:
@@ -48,4 +48,4 @@ loggers:
     blockgen:
         level: info
     client:
-        level: info
+        level: debug

@@ -221,7 +221,7 @@ impl ArchiveClient {
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));
-        if conf.raw_conf.start_mining {
+        if conf.raw_conf.start_mining && !conf.is_dev_mode() {
             if maybe_author.is_none() {
                 panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
             }
