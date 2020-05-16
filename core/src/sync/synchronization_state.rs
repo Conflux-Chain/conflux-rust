@@ -184,15 +184,21 @@ impl SynchronizationState {
             }
             for (_, state_lock) in &*peers {
                 let state = state_lock.read();
-                if state
+                match state
                     .capabilities
-                    .contains(DynamicCapability::NormalPhase(true))
+                    .contains_exact(DynamicCapability::NormalPhase(true))
                 {
-                    peer_best_epoches.push(state.best_epoch);
-                } else if state.best_epoch != 0 {
-                    // Note `best_epoch` is initialized according to Status,
-                    // so if it's 0, the peer is just newly started
-                    fresh_start = false;
+                    Some(true) => peer_best_epoches.push(state.best_epoch),
+                    Some(false) => {
+                        if state.best_epoch != 0 {
+                            // Note `best_epoch` is initialized according to
+                            // Status, so if it's 0,
+                            // the peer is just newly started
+                            fresh_start = false;
+                        }
+                    }
+                    // Do not know about the peer state yet.
+                    None => {}
                 }
             }
         };

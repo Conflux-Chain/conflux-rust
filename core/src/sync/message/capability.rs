@@ -88,6 +88,13 @@ impl DynamicCapabilitySet {
             None => return false,
         }
     }
+
+    /// Return `None` is the capability slot has not been set.
+    pub fn contains_exact(&self, cap: DynamicCapability) -> Option<bool> {
+        self.caps[cap.code() as usize]
+            .as_ref()
+            .map(|cur_cap| cur_cap == &cap)
+    }
 }
 
 #[derive(Debug, RlpDecodableWrapper, RlpEncodableWrapper)]
