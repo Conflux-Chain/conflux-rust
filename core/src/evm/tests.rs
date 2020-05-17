@@ -141,6 +141,38 @@ fn test_origin(factory: super::Factory) {
     );
 }
 
+evm_test! {test_selfbalance: test_selfbalance_int}
+fn test_selfbalance(factory: super::Factory) {
+    let own_addr =
+        Address::from_str("1337000000000000000000000000000000000000").unwrap();
+    // 47       SELFBALANCE
+    // 60 ff    PUSH ff
+    // 55       SSTORE
+    let code = "47 60 ff 55".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.address = own_addr.clone();
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    ctx.balances = {
+        let mut x = HashMap::new();
+        x.insert(own_addr, U256::from(1_025)); // 0x401
+        x
+    };
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+    assert_eq!(gas_left, U256::from(94_992));
+    assert_store(
+        &ctx,
+        0xff,
+        "0000000000000000000000000000000000000000000000000000000000000401",
+    );
+}
+
 evm_test! {test_sender: test_sender_int}
 fn test_sender(factory: super::Factory) {
     let address =
@@ -166,6 +198,31 @@ fn test_sender(factory: super::Factory) {
         &ctx,
         0,
         "000000000000000000000000cd1722f2947def4cf144679da39c4c32bdc35681",
+    );
+}
+
+evm_test! {test_chain_id: test_chain_id_int}
+fn test_chain_id(factory: super::Factory) {
+    // 46       CHAINID
+    // 60 00    PUSH 0
+    // 55       SSTORE
+    let code = "46 60 00 55".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new().with_chain_id(9);
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(94_995));
+    assert_store(
+        &ctx,
+        0,
+        "0000000000000000000000000000000000000000000000000000000000000009",
     );
 }
 
