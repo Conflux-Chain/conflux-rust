@@ -123,7 +123,7 @@ log_conf="log.yaml"
 # so as to support the Conflux CLI subcommands. What's provided here is the recommended
 # value if you want to start rpc services for other front-end applications.
 # Note that to serve transaction-related RPCs, `persist_tx_index` should also be set to `true` or
-# the node will only be able to handle very recent trnasactions.
+# the node will only be able to handle very recent transactions.
 #
 # jsonrpc_ws_port=12535
 # jsonrpc_tcp_port=12536
