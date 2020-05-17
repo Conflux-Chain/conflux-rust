@@ -1579,6 +1579,10 @@ impl ConsensusExecutionHandler {
         }
         let best_block_header = best_block_header.unwrap();
         let block_height = best_block_header.height() + 1;
+        let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
+            Some(v) => v.start_block_number + 1,
+            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
+        };
 
         invalid_params_check(
             "tx",
@@ -1615,13 +1619,12 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            // FIXME: 0 as block number?
-            0, /* block_number */
+            start_block_number,
         );
         drop(state_availability_boundary);
 
         let env = Env {
-            number: 0, // TODO: replace 0 with correct cardinal number
+            number: start_block_number,
             author: Default::default(),
             timestamp: time_stamp,
             difficulty: Default::default(),

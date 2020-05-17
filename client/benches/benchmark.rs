@@ -49,7 +49,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     let machine = new_machine_with_builtin();
     let internal_contract_map = InternalContractMap::new();
     let env = Env {
-        number: 0, // TODO: replace 0 with correct cardinal number
+        number: 0,
         author: Default::default(),
         timestamp: Default::default(),
         difficulty: Default::default(),
