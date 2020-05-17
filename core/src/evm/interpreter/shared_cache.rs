@@ -133,6 +133,7 @@ impl Default for SharedCache {
 
 #[test]
 fn test_find_jump_destinations() {
+    use rustc_hex::FromHex;
     // given
 
     // 0000 7F   PUSH32
@@ -143,7 +144,7 @@ fn test_find_jump_destinations() {
     // 0043 01   ADD
     // 0044 60   PUSH1 0x00
     // 0046 55   SSTORE
-    let code = hex!("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b01600055");
+    let code = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b01600055".from_hex().unwrap();
 
     // when
     let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
@@ -159,6 +160,7 @@ fn test_find_jump_destinations() {
 
 #[test]
 fn test_find_jump_destinations_not_in_data_segments() {
+    use rustc_hex::FromHex;
     // given
 
     // 0000 60 06   PUSH1 06
@@ -168,7 +170,7 @@ fn test_find_jump_destinations_not_in_data_segments() {
     // 0006 5B      JUMPDEST
     // 0007 60 04   PUSH1 04
     // 0009 56      JUMP
-    let code = hex!("600656605B565B6004");
+    let code = "600656605B565B6004".from_hex().unwrap();
 
     // when
     let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
@@ -180,10 +182,11 @@ fn test_find_jump_destinations_not_in_data_segments() {
 
 #[test]
 fn test_find_sub_entrypoints() {
+    use rustc_hex::FromHex;
     // given
 
     // see https://eips.ethereum.org/EIPS/eip-2315 for disassembly
-    let code = hex!("6800000000000000000cb300b26011b3b7b2b7");
+    let code = "6800000000000000000cb300b26011b3b7b2b7".from_hex().unwrap();
 
     // when
     let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
@@ -199,6 +202,7 @@ fn test_find_sub_entrypoints() {
 
 #[test]
 fn test_find_jump_and_sub_allowing_unknown_opcodes() {
+    use rustc_hex::FromHex;
     // precondition
     assert!(Instruction::from_u8(0xcc) == None);
 
@@ -207,7 +211,7 @@ fn test_find_jump_and_sub_allowing_unknown_opcodes() {
     // 0000 5B   JUMPDEST
     // 0001 CC   ???
     // 0002 B2   BEGINSUB
-    let code = hex!("5BCCB2");
+    let code = "5BCCB2".from_hex().unwrap();
 
     // when
     let cache_item = SharedCache::find_jump_and_sub_destinations(&code);

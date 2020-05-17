@@ -714,7 +714,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                     });
                 }
                 let sub_destination = self.stack.pop_back();
-                return Ok(InstructionResult::JumpToSubroutine(sub_destination));
+                return Ok(InstructionResult::JumpToSubroutine(
+                    sub_destination,
+                ));
             }
             instructions::RETURNSUB => {
                 if let Some(pos) = self.return_stack.pop() {
