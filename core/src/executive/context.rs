@@ -404,6 +404,8 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn env(&self) -> &Env { &self.env }
 
+    fn chain_id(&self) -> u64 { self.machine.params().chain_id }
+
     fn depth(&self) -> usize { self.depth }
 
     fn add_sstore_refund(&mut self, value: usize) {

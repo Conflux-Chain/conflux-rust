@@ -72,6 +72,8 @@ pub struct MockContext {
     pub balances: HashMap<Address, U256>,
     pub tracing: bool,
     pub is_static: bool,
+
+    chain_id: u64,
 }
 
 // similar to the normal `finalize` function, but ignoring NeedsReturn.
@@ -102,6 +104,11 @@ impl MockContext {
     #[allow(dead_code)]
     pub fn with_wasm(mut self) -> Self {
         self.spec.wasm = Some(Default::default());
+        self
+    }
+
+    pub fn with_chain_id(mut self, chain_id: u64) -> Self {
+        self.chain_id = chain_id;
         self
     }
 }
@@ -210,6 +217,8 @@ impl Context for MockContext {
     fn spec(&self) -> &Spec { &self.spec }
 
     fn env(&self) -> &Env { &self.env }
+
+    fn chain_id(&self) -> u64 { self.chain_id }
 
     fn depth(&self) -> usize { self.depth }
 

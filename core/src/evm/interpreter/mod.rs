@@ -620,6 +620,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 || instruction == instructions::JUMPSUB
                 || instruction == instructions::RETURNSUB)
                 && !spec.have_subs)
+            || (instruction == instructions::CHAINID && !spec.have_chain_id)
+            || (instruction == instructions::SELFBALANCE
+                && !spec.have_self_balance)
         {
             return Err(vm::Error::BadInstruction {
                 instruction: instruction as u8,
@@ -1201,6 +1204,10 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::GASLIMIT => {
                 self.stack.push(context.env().gas_limit.clone());
+            }
+            instructions::CHAINID => self.stack.push(context.chain_id().into()),
+            instructions::SELFBALANCE => {
+                self.stack.push(context.balance(&self.params.address)?);
             }
 
             // Stack instructions

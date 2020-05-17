@@ -141,6 +141,9 @@ pub trait Context {
     /// Returns environment.
     fn env(&self) -> &Env;
 
+    /// Returns the chain ID of the blockchain
+    fn chain_id(&self) -> u64;
+
     /// Returns current depth of execution.
     ///
     /// If contract A calls contract B, and contract B calls C,
