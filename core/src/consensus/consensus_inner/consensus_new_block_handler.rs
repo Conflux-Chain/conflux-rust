@@ -1435,9 +1435,7 @@ impl ConsensusNewBlockHandler {
                     != inner.cur_era_stable_block_hash))
             && !self.conf.bench_mode
         {
-            if has_body {
-                self.persist_terminals(inner);
-            }
+            self.persist_terminals(inner);
             if pivot_changed {
                 // If we switch to a chain without stable block,
                 // we should avoid execute unavailable states.
@@ -1765,9 +1763,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        if has_body {
-            self.persist_terminals(inner);
-        }
+        self.persist_terminals(inner);
         debug!(
             "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
             me, inner.arena[me].hash
