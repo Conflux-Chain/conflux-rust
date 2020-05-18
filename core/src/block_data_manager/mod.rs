@@ -779,10 +779,7 @@ impl BlockDataManager {
                 },
             )
         } else {
-            self.transaction_indices
-                .write()
-                .get(hash)
-                .and_then(|v| Some(v.clone()))
+            self.transaction_indices.read().get(hash).map(|v| v.clone())
         }
     }
 
