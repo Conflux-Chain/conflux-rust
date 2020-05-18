@@ -851,7 +851,7 @@ impl SynchronizationProtocolHandler {
             return true;
         }
 
-        if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+        if let Some(info) = self.graph.data_man.local_block_info_by_hash(hash) {
             if info.get_status() == BlockStatus::Invalid {
                 // this block was invalid before
                 return true;
@@ -1512,7 +1512,7 @@ impl SynchronizationProtocolHandler {
             return false;
         }
 
-        if let Some(info) = self.graph.data_man.local_block_info_from_db(hash) {
+        if let Some(info) = self.graph.data_man.local_block_info_by_hash(hash) {
             if info.get_status() == BlockStatus::Invalid {
                 // this block is invalid before
                 return true;

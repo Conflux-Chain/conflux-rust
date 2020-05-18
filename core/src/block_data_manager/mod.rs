@@ -199,6 +199,7 @@ pub struct BlockDataManager {
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
     block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
+    local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
     /// Caching for receipts_root and logs_bloom for epochs after
     /// cur_era_genesis. It is not deferred, i.e., indexed by the hash of
     /// the pivot block that produces the result when executed.
@@ -329,6 +330,7 @@ impl BlockDataManager {
             block_receipts: Default::default(),
             block_rewards: Default::default(),
             transaction_indices: Default::default(),
+            local_block_info: Default::default(),
             epoch_execution_commitments: Default::default(),
             epoch_execution_contexts: Default::default(),
             invalid_block_set: RwLock::new(InvalidBlockSet::new(
@@ -799,6 +801,30 @@ impl BlockDataManager {
             .insert_transaction_index_to_db(hash, tx_index);
     }
 
+    pub fn insert_local_block_info(&self, hash: &H256, info: LocalBlockInfo) {
+        self.insert(
+            *hash,
+            info,
+            &self.local_block_info,
+            |key, value| {
+                self.db_manager.insert_local_block_info_to_db(key, value)
+            },
+            Some(CacheId::LocalBlockInfo(*hash)),
+            true,
+        )
+    }
+
+    pub fn local_block_info_by_hash(
+        &self, hash: &H256,
+    ) -> Option<LocalBlockInfo> {
+        self.get(
+            hash,
+            &self.local_block_info,
+            |key| self.db_manager.local_block_info_from_db(key),
+            Some(CacheId::LocalBlockInfo(*hash)),
+        )
+    }
+
     fn insert<K, V, InsertF>(
         &self, key: K, value: V, in_mem: &RwLock<HashMap<K, V>>,
         insert_f: InsertF, maybe_cache_id: Option<CacheId>, persistent: bool,
@@ -836,18 +862,6 @@ impl BlockDataManager {
             }
             value
         })
-    }
-
-    pub fn insert_local_block_info_to_db(
-        &self, hash: &H256, info: LocalBlockInfo,
-    ) {
-        self.db_manager.insert_local_block_info_to_db(hash, &info)
-    }
-
-    pub fn local_block_info_from_db(
-        &self, hash: &H256,
-    ) -> Option<LocalBlockInfo> {
-        self.db_manager.local_block_info_from_db(hash)
     }
 
     pub fn insert_terminals_to_db(&self, terminals: Vec<H256>) {
@@ -1145,6 +1159,9 @@ impl BlockDataManager {
         let block_rewards = self.block_rewards.read().size_of(malloc_ops);
         let transaction_indices =
             self.transaction_indices.read().size_of(malloc_ops);
+        let local_block_infos =
+            self.local_block_info.read().size_of(malloc_ops);
+
         CacheSize {
             block_headers,
             blocks,
@@ -1152,11 +1169,11 @@ impl BlockDataManager {
             block_rewards,
             transaction_indices,
             compact_blocks,
+            local_block_infos,
         }
     }
 
     fn block_cache_gc(&self) {
-        let malloc_ops = &mut new_malloc_size_ops();
         let current_size = self.cache_size().total();
         let mut block_headers = self.block_headers.write();
         let mut blocks = self.blocks.write();
@@ -1164,48 +1181,54 @@ impl BlockDataManager {
         let mut executed_results = self.block_receipts.write();
         let mut reward_results = self.block_rewards.write();
         let mut tx_indices = self.transaction_indices.write();
-        let mut exeuction_contexts = self.epoch_execution_contexts.write();
+        let mut local_block_info = self.local_block_info.write();
         let mut cache_man = self.cache_man.lock();
         debug!(
-            "Before gc cache_size={} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {} {}",
             current_size,
             blocks.len(),
             compact_blocks.len(),
             executed_results.len(),
             reward_results.len(),
             tx_indices.len(),
+            local_block_info.len(),
         );
 
         cache_man.collect_garbage(current_size, |ids| {
             for id in &ids {
-                match *id {
-                    CacheId::Block(ref h) => {
+                match id {
+                    CacheId::Block(h) => {
                         blocks.remove(h);
                     }
-                    CacheId::BlockReceipts(ref h) => {
-                        executed_results.remove(h);
+                    CacheId::BlockHeader(h) => {
+                        block_headers.remove(h);
                     }
-                    CacheId::BlockRewards(ref h) => {
-                        reward_results.remove(h);
-                    }
-                    CacheId::TransactionAddress(ref h) => {
-                        tx_indices.remove(h);
-                    }
-                    CacheId::CompactBlock(ref h) => {
+                    CacheId::CompactBlock(h) => {
                         compact_blocks.remove(h);
                     }
-                    CacheId::BlockHeader(ref h) => {
-                        block_headers.remove(h);
+                    CacheId::BlockReceipts(h) => {
+                        executed_results.remove(h);
+                    }
+                    CacheId::BlockRewards(h) => {
+                        reward_results.remove(h);
+                    }
+                    CacheId::TransactionAddress(h) => {
+                        tx_indices.remove(h);
+                    }
+                    CacheId::LocalBlockInfo(h) => {
+                        local_block_info.remove(h);
                     }
                 }
             }
 
+            let malloc_ops = &mut new_malloc_size_ops();
             block_headers.size_of(malloc_ops)
                 + blocks.size_of(malloc_ops)
                 + executed_results.size_of(malloc_ops)
                 + reward_results.size_of(malloc_ops)
                 + tx_indices.size_of(malloc_ops)
                 + compact_blocks.size_of(malloc_ops)
+                + local_block_info.size_of(malloc_ops)
         });
 
         block_headers.shrink_to_fit();
@@ -1214,7 +1237,7 @@ impl BlockDataManager {
         reward_results.shrink_to_fit();
         tx_indices.shrink_to_fit();
         compact_blocks.shrink_to_fit();
-        exeuction_contexts.shrink_to_fit();
+        local_block_info.shrink_to_fit();
     }
 
     pub fn cache_gc(&self) { self.block_cache_gc(); }

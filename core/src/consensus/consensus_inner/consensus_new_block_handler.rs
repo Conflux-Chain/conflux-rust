@@ -1120,7 +1120,7 @@ impl ConsensusNewBlockHandler {
         } else {
             let block_status_in_db = self
                 .data_man
-                .local_block_info_from_db(&inner.arena[me].hash)
+                .local_block_info_by_hash(&inner.arena[me].hash)
                 .map(|info| info.get_status())
                 .unwrap_or(BlockStatus::Pending);
             fully_valid = block_status_in_db != BlockStatus::PartialInvalid;
@@ -1787,7 +1787,7 @@ impl ConsensusNewBlockHandler {
             );
             let block_status_in_db = self
                 .data_man
-                .local_block_info_from_db(hash)
+                .local_block_info_by_hash(hash)
                 .map(|info| info.get_status())
                 .unwrap_or(BlockStatus::Pending);
             let (sn, me) = inner.insert_out_era_block(
@@ -1799,8 +1799,7 @@ impl ConsensusNewBlockHandler {
                 sn,
                 self.data_man.get_instance_id(),
             );
-            self.data_man
-                .insert_local_block_info_to_db(hash, block_info);
+            self.data_man.insert_local_block_info(hash, block_info);
             // If me is NULL, it means that this block does not have any stub,
             // so we can safely ignore it in the consensus besides
             // update its sequence number in the data manager.
@@ -1921,7 +1920,7 @@ impl ConsensusNewBlockHandler {
             self.data_man.get_instance_id(),
         );
         self.data_man
-            .insert_local_block_info_to_db(&inner.arena[me].hash, block_info);
+            .insert_local_block_info(&inner.arena[me].hash, block_info);
         let era_block = inner.arena[me].era_block();
         let era_block_hash = if era_block != NULL {
             inner.arena[era_block].hash
