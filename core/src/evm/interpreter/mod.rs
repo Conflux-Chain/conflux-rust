@@ -707,7 +707,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // ignore
             }
             instructions::BEGINSUB => {
-                // ignore
+                // BEGINSUB should not be executed. If so, returns OutOfGas
+                // (EIP-2315).
+                return Err(vm::Error::OutOfGas);
             }
             instructions::JUMPSUB => {
                 if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
