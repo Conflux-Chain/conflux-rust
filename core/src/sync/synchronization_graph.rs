@@ -256,6 +256,17 @@ impl SynchronizationGraphInner {
             let hash = self.arena[index].block_header.hash();
             assert!(self.arena[index].parent == NULL);
 
+            if self.data_man.local_block_info_by_hash(&hash).is_none() {
+                // This block has not been processed in consensus. Clearing it
+                // now may make its referrers not block-graph-ready.
+                // See https://github.com/Conflux-Chain/conflux-rust/issues/1426.
+                //
+                // The blocks pushed to `old_era_blocks_frontier` are all
+                // BlockGraphReady, so it's ensured that they will be inserted
+                // into consensus and their local block infos will be persisted.
+                continue;
+            }
+
             let referees: Vec<usize> =
                 self.arena[index].referees.iter().map(|x| *x).collect();
             for referee in referees {
@@ -362,7 +373,7 @@ impl SynchronizationGraphInner {
         let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
         let genesis_seq_num = self
             .data_man
-            .local_block_info_from_db(&genesis_hash)
+            .local_block_info_by_hash(&genesis_hash)
             .expect("local_block_info for genesis must exist")
             .get_seq_num();
 
@@ -380,7 +391,7 @@ impl SynchronizationGraphInner {
         let mut is_graph_ready =
             |parent_or_referee_hash: &H256, index: &usize| {
                 if let Some(info) =
-                    data_man.local_block_info_from_db(parent_or_referee_hash)
+                    data_man.local_block_info_by_hash(parent_or_referee_hash)
                 {
                     if info.get_status() == BlockStatus::Invalid {
                         invalid_blocks.push(*index);
@@ -633,7 +644,7 @@ impl SynchronizationGraphInner {
     ) -> bool {
         if let Some(info) = self
             .data_man
-            .local_block_info_from_db(parent_or_referee_hash)
+            .local_block_info_by_hash(parent_or_referee_hash)
         {
             if info.get_status() == BlockStatus::Invalid {
                 false
@@ -664,7 +675,7 @@ impl SynchronizationGraphInner {
         let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
         let genesis_seq_num = self
             .data_man
-            .local_block_info_from_db(&genesis_hash)
+            .local_block_info_by_hash(&genesis_hash)
             .expect("local_block_info for genesis must exist")
             .get_seq_num();
         let parent = self.arena[index].parent;
@@ -1246,7 +1257,7 @@ impl SynchronizationGraph {
         // based on the sequence number of genesis block in db.
         let genesis_hash = self.data_man.get_cur_consensus_era_genesis_hash();
         let genesis_local_info =
-            self.data_man.local_block_info_from_db(&genesis_hash);
+            self.data_man.local_block_info_by_hash(&genesis_hash);
         if genesis_local_info.is_none() {
             // Local info of genesis block must exist.
             panic!(
@@ -1301,7 +1312,7 @@ impl SynchronizationGraph {
             // If block_local_info is missing, consider it is in current
             // genesis era.
             if let Some(block_local_info) =
-                self.data_man.local_block_info_from_db(&hash)
+                self.data_man.local_block_info_by_hash(&hash)
             {
                 if block_local_info.get_seq_num() < genesis_seq_num {
                     debug!(
