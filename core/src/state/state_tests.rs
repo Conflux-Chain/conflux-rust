@@ -14,9 +14,7 @@ use crate::{
     vm::Spec,
     vm_factory::VmFactory,
 };
-use cfx_types::{
-    address_util::AddressUtil, Address, BigEndianHash, H256, U256,
-};
+use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256};
 use primitives::{EpochId, StorageLayout};
 
 fn get_state(storage_manager: &StorageManager, epoch_id: EpochId) -> State {
@@ -42,6 +40,12 @@ fn get_state_for_genesis_write(storage_manager: &StorageManager) -> State {
         &Spec::new_spec(),
         0, /* block_number */
     )
+}
+
+fn u256_to_vec(val: &U256) -> Vec<u8> {
+    let mut key = vec![0; 32];
+    val.to_big_endian(key.as_mut());
+    key
 }
 
 #[test]
@@ -135,7 +139,7 @@ fn checkpoint_revert_to_get_storage_at() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut address = Address::zero();
     address.set_contract_type_bits();
-    let key = BigEndianHash::from_uint(&U256::from(0));
+    let key = u256_to_vec(&U256::from(0));
     let c0 = state.checkpoint();
     let c1 = state.checkpoint();
     state
@@ -144,7 +148,7 @@ fn checkpoint_revert_to_get_storage_at() {
     state
         .set_storage(
             &address,
-            key,
+            key.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             address,
         )
@@ -182,8 +186,8 @@ fn checkpoint_from_empty_get_storage_at() {
     let mut a = Address::zero();
     a.set_user_account_type_bits();
     let sponsor = Address::random();
-    let k = BigEndianHash::from_uint(&U256::from(0));
-    let k2 = BigEndianHash::from_uint(&U256::from(1));
+    let k = u256_to_vec(&U256::from(0));
+    let k2 = u256_to_vec(&U256::from(1));
 
     assert_eq!(
         state.storage_at(&a, &k).unwrap(),
@@ -214,19 +218,24 @@ fn checkpoint_from_empty_get_storage_at() {
     );
     let c1 = state.checkpoint();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(1)), a)
         .unwrap();
     let c2 = state.checkpoint();
     let c3 = state.checkpoint();
     state
-        .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)), a)
+        .set_storage(
+            &a,
+            k2.clone(),
+            BigEndianHash::from_uint(&U256::from(3)),
+            a,
+        )
         .unwrap();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(3)), a)
         .unwrap();
     let c4 = state.checkpoint();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(4)), a)
         .unwrap();
     let c5 = state.checkpoint();
 
@@ -381,8 +390,8 @@ fn checkpoint_get_storage_at() {
     let mut a = Address::zero();
     a.set_user_account_type_bits();
     let sponsor = Address::random();
-    let k = BigEndianHash::from_uint(&U256::from(0));
-    let k2 = BigEndianHash::from_uint(&U256::from(1));
+    let k = u256_to_vec(&U256::from(0));
+    let k2 = u256_to_vec(&U256::from(1));
 
     state.checkpoint();
     state
@@ -404,7 +413,12 @@ fn checkpoint_get_storage_at() {
         .expect("should be able to set storage layout");
 
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(0xffff)), a)
+        .set_storage(
+            &a,
+            k.clone(),
+            BigEndianHash::from_uint(&U256::from(0xffff)),
+            a,
+        )
         .unwrap();
     assert_eq!(
         state
@@ -469,19 +483,24 @@ fn checkpoint_get_storage_at() {
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0),);
     let c1 = state.checkpoint();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(1)), a)
         .unwrap();
     let c2 = state.checkpoint();
     let c3 = state.checkpoint();
     state
-        .set_storage(&a, k2, BigEndianHash::from_uint(&U256::from(3)), a)
+        .set_storage(
+            &a,
+            k2.clone(),
+            BigEndianHash::from_uint(&U256::from(3)),
+            a,
+        )
         .unwrap();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(3)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(3)), a)
         .unwrap();
     let c4 = state.checkpoint();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(4)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(4)), a)
         .unwrap();
     let c5 = state.checkpoint();
 
@@ -677,11 +696,11 @@ fn kill_account_with_checkpoints() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_contract_type_bits();
-    let k = BigEndianHash::from_uint(&U256::from(0));
+    let k = u256_to_vec(&U256::from(0));
     state.checkpoint();
     state.new_contract(&a, U256::zero(), U256::one()).unwrap();
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(1)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(1)), a)
         .unwrap();
     state.checkpoint();
     state.kill_account(&a);
@@ -735,7 +754,7 @@ fn create_contract_fail_previous_storage() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::from_low_u64_be(1000);
     a.set_user_account_type_bits();
-    let k = BigEndianHash::from_uint(&U256::from(0));
+    let k = u256_to_vec(&U256::from(0));
 
     state.checkpoint();
     state
@@ -752,7 +771,12 @@ fn create_contract_fail_previous_storage() {
         .expect("should be able to set storage layout");
 
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(0xffff)), a)
+        .set_storage(
+            &a,
+            k.clone(),
+            BigEndianHash::from_uint(&U256::from(0xffff)),
+            a,
+        )
         .unwrap();
     assert_eq!(
         state
@@ -790,7 +814,7 @@ fn create_contract_fail_previous_storage() {
     state.new_contract(&a, U256::zero(), U256::zero()).unwrap();
     state.checkpoint(); // c2
     state
-        .set_storage(&a, k, BigEndianHash::from_uint(&U256::from(2)), a)
+        .set_storage(&a, k.clone(), BigEndianHash::from_uint(&U256::from(2)), a)
         .unwrap();
     state.revert_to_checkpoint(); // revert to c2
     assert_eq!(*state.total_storage_tokens(), *COLLATERAL_PER_STORAGE_KEY);
@@ -826,9 +850,9 @@ fn test_automatic_collateral_normal_account() {
     normal_account.set_user_account_type_bits();
     let mut contract_account = Address::from_low_u64_be(1);
     contract_account.set_contract_type_bits();
-    let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
-    let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
-    let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
+    let k1 = u256_to_vec(&U256::from(0));
+    let k2 = u256_to_vec(&U256::from(1));
+    let k3 = u256_to_vec(&U256::from(3));
 
     state
         .add_balance(
@@ -868,7 +892,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k1,
+            k1.clone(),
             BigEndianHash::from_uint(&U256::from(0)),
             normal_account,
         )
@@ -908,7 +932,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k1,
+            k1.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             normal_account,
         )
@@ -943,7 +967,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k2,
+            k2.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             normal_account,
         )
@@ -951,7 +975,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k3,
+            k3.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             normal_account,
         )
@@ -986,7 +1010,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k2,
+            k2.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             normal_account,
         )
@@ -1021,7 +1045,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k2,
+            k2.clone(),
             BigEndianHash::from_uint(&U256::from(0)),
             normal_account,
         )
@@ -1055,7 +1079,7 @@ fn test_automatic_collateral_normal_account() {
     state
         .set_storage(
             &contract_account,
-            k1,
+            k1.clone(),
             BigEndianHash::from_uint(&U256::from(0)),
             normal_account,
         )
@@ -1093,9 +1117,9 @@ fn test_automatic_collateral_contract_account() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let contract_account = Address::from_low_u64_be(1);
     let sponsor = Address::random();
-    let k1: H256 = BigEndianHash::from_uint(&U256::from(0));
-    let k2: H256 = BigEndianHash::from_uint(&U256::from(1));
-    let k3: H256 = BigEndianHash::from_uint(&U256::from(3));
+    let k1 = u256_to_vec(&U256::from(0));
+    let k2 = u256_to_vec(&U256::from(1));
+    let k3 = u256_to_vec(&U256::from(3));
 
     state
         .new_contract(&contract_account, U256::zero(), U256::zero())
@@ -1132,7 +1156,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k1,
+            k1.clone(),
             BigEndianHash::from_uint(&U256::from(0)),
             contract_account,
         )
@@ -1166,7 +1190,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k1,
+            k1.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             contract_account,
         )
@@ -1200,7 +1224,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k2,
+            k2.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             contract_account,
         )
@@ -1208,7 +1232,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k3,
+            k3.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             contract_account,
         )
@@ -1247,7 +1271,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k2,
+            k2.clone(),
             BigEndianHash::from_uint(&U256::from(1)),
             contract_account,
         )
@@ -1285,7 +1309,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k2,
+            k2.clone(),
             BigEndianHash::from_uint(&U256::from(0)),
             contract_account,
         )
@@ -1320,7 +1344,7 @@ fn test_automatic_collateral_contract_account() {
     state
         .set_storage(
             &contract_account,
-            k1,
+            k1.clone(),
             BigEndianHash::from_uint(&U256::from(0)),
             contract_account,
         )
