@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -551,7 +555,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                         Err(e) => return InterpreterResult::Done(Err(e)),
                     };
                 self.return_stack.push(self.reader.position);
-                self.reader.position = pos;
+                // JUMPSUB will land on the next position after BEGINSUB
+                self.reader.position = pos + 1;
             }
             InstructionResult::ReturnFromSubroutine(pos) => {
                 self.reader.position = pos;

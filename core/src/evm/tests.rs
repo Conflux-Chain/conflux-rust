@@ -1142,8 +1142,11 @@ fn test_subs_shallow_return_stack(factory: super::Factory) {
 
 evm_test! {test_subs_substack_limit: test_subs_substack_limit_int}
 fn test_subs_substack_limit(factory: super::Factory) {
-    //    PUSH <recursion_limit>
+    //    PUSH2 <recursion_limit>
+    //    PUSH1
+    //    JUMP :b
     // :s BEGINSUB
+    // :b JUMPDEST
     //    DUP1
     //    JUMPI :c
     //    STOP
@@ -1153,7 +1156,9 @@ fn test_subs_substack_limit(factory: super::Factory) {
     //    SUB
     //    JUMPSUB :s
 
-    let mut code = "610400b280600957005b600190036003b3".from_hex().unwrap();
+    let mut code = "610400600756b25b80600d57005b600190036006b3"
+        .from_hex()
+        .unwrap();
     code[1..3].copy_from_slice(&(MAX_SUB_STACK_SIZE as u16).to_be_bytes()[..]);
 
     let mut params = ActionParams::default();
@@ -1166,12 +1171,14 @@ fn test_subs_substack_limit(factory: super::Factory) {
         test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
     };
 
-    assert_eq!(gas_left, U256::from(963_115));
+    assert_eq!(gas_left, U256::from(961_057));
 }
 
 evm_test! {test_subs_substack_out: test_subs_substack_out_int}
 fn test_subs_substack_out(factory: super::Factory) {
-    let mut code = "610400b280600957005b600190036003b3".from_hex().unwrap();
+    let mut code = "610400600756b25b80600d57005b600190036006b3"
+        .from_hex()
+        .unwrap();
     code[1..3]
         .copy_from_slice(&((MAX_SUB_STACK_SIZE + 1) as u16).to_be_bytes()[..]);
 
