@@ -55,7 +55,7 @@ fn txexe_benchmark(c: &mut Criterion) {
         difficulty: Default::default(),
         accumulated_gas_used: U256::zero(),
         gas_limit: tx.gas.clone(),
-        last_hashes: Arc::new(vec![]),
+        last_hash: H256::zero(),
         epoch_height: 0,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };

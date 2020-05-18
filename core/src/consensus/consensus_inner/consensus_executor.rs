@@ -1075,6 +1075,8 @@ impl ConsensusExecutionHandler {
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
+        let mut last_block_hash =
+            pivot_block.block_header.parent_hash().clone();
         for block in epoch_blocks.iter() {
             let mut receipts = Vec::new();
             debug!(
@@ -1088,7 +1090,7 @@ impl ConsensusExecutionHandler {
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
                 accumulated_gas_used: U256::zero(),
-                last_hashes: Arc::new(vec![]),
+                last_hash: last_block_hash,
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
                 transaction_epoch_bound: self
@@ -1099,6 +1101,7 @@ impl ConsensusExecutionHandler {
             assert_eq!(state.block_number(), env.number);
 
             block_number += 1;
+            last_block_hash = block.hash();
             for (idx, transaction) in block.transactions.iter().enumerate() {
                 let tx_outcome_status;
                 let mut transaction_logs = Vec::new();
@@ -1619,8 +1622,9 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            start_block_number,
+            start_block_number - 1,
         );
+        state.increase_block_number();
         drop(state_availability_boundary);
 
         let env = Env {
@@ -1629,7 +1633,7 @@ impl ConsensusExecutionHandler {
             timestamp: time_stamp,
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
-            last_hashes: Arc::new(vec![]),
+            last_hash: epoch_id.clone(),
             gas_limit: tx.gas.clone(),
             epoch_height: block_height,
             transaction_epoch_bound: self
