@@ -65,7 +65,7 @@ mod tests {
         assert_eq!(default_env.timestamp, 0);
         assert_eq!(default_env.difficulty, 0.into());
         assert_eq!(default_env.gas_limit, 0.into());
-        assert_eq!(default_env.last_hash, 0.into());
+        assert_eq!(default_env.last_hash, H256::zero());
         assert_eq!(default_env.accumulated_gas_used, 0.into());
     }
 }

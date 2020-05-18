@@ -462,7 +462,7 @@ mod tests {
         },
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-    use std::{str::FromStr, sync::Arc};
+    use std::str::FromStr;
 
     fn get_test_origin() -> OriginInfo {
         let mut sender = Address::zero();
