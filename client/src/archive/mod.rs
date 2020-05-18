@@ -221,7 +221,17 @@ impl ArchiveClient {
             pow_config.clone(),
             maybe_author.clone().unwrap_or_default(),
         ));
-        if conf.raw_conf.start_mining {
+        if conf.is_dev_mode() {
+            let bg = blockgen.clone();
+            let interval_ms = conf.raw_conf.dev_block_interval_ms;
+            info!("Start auto block generation");
+            thread::Builder::new()
+                .name("auto_mining".into())
+                .spawn(move || {
+                    bg.auto_block_generation(interval_ms);
+                })
+                .expect("Mining thread spawn error");
+        } else if conf.raw_conf.start_mining {
             if maybe_author.is_none() {
                 panic!("mining-author is not set correctly, so you'll not get mining rewards!!!");
             }
@@ -233,18 +243,6 @@ impl ArchiveClient {
                     BlockGenerator::start_mining(bg, 0);
                 })
                 .expect("Mining thread spawn error");
-        } else {
-            if conf.is_dev_mode() {
-                let bg = blockgen.clone();
-                let interval_ms = conf.raw_conf.dev_block_interval_ms;
-                info!("Start auto block generation");
-                thread::Builder::new()
-                    .name("auto_mining".into())
-                    .spawn(move || {
-                        bg.auto_block_generation(interval_ms);
-                    })
-                    .expect("Mining thread spawn error");
-            }
         }
 
         let rpc_impl = Arc::new(RpcImpl::new(

@@ -51,7 +51,7 @@ pub fn simple_mpt_merkle_root(
         None => MERKLE_NULL_NODE,
         Some(root_node) => {
             if root_node.get_children_count() == 1 {
-                warn!(
+                trace!(
                     "debug receipts calculation: root node {:?}",
                     simple_mpt.load_node(
                         &CompressedPathRaw::new_and_apply_mask(
@@ -68,7 +68,7 @@ pub fn simple_mpt_merkle_root(
                     .unwrap()
                     .merkle
             } else {
-                warn!("debug receipts calculation: root node {:?}", root_node);
+                trace!("debug receipts calculation: root node {:?}", root_node);
                 *root_node.get_merkle()
             }
         }

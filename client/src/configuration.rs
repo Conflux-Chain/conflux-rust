@@ -222,7 +222,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
-        (record_tx_index, (bool), false)
+        (persist_tx_index, (bool), false)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
 
         // TreeGraph Section.
@@ -602,7 +602,7 @@ impl Configuration {
 
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
         DataManagerConfiguration::new(
-            self.raw_conf.record_tx_index,
+            self.raw_conf.persist_tx_index,
             Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),
