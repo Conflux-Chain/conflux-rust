@@ -32,9 +32,10 @@ const COLLECTION_QUEUE_SIZE: usize = 8;
 pub enum CacheId {
     Block(H256),
     BlockHeader(H256),
+    CompactBlock(H256),
     BlockReceipts(H256),
     TransactionAddress(H256),
-    CompactBlock(H256),
+    LocalBlockInfo(H256),
 }
 
 pub struct CacheManager<T> {
@@ -128,12 +129,14 @@ pub struct CacheSize {
     pub block_headers: usize,
     /// Blocks cache size.
     pub blocks: usize,
+    /// Compact blocks cache size.
+    pub compact_blocks: usize,
     /// Block Receipts cache size.
     pub block_receipts: usize,
     /// Transaction indices cache size.
     pub transaction_indices: usize,
-    /// Compact blocks cache size.
-    pub compact_blocks: usize,
+    /// Local block info cache size.
+    pub local_block_infos: usize,
 }
 
 impl CacheSize {
