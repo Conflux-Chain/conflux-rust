@@ -754,7 +754,7 @@ impl SynchronizationProtocolHandler {
                         true, /* ignore_db */
                     );
                 }
-                *latest_requested += 1;
+                *latest_requested = from;
                 continue;
             } else if median_peer_epoch == 0 {
                 // We have recovered all epochs from db, and there is no peer to

@@ -79,10 +79,12 @@ impl Worker {
                     // check if there is a new problem
                     let new_problem = problem_receiver.try_recv();
                     if new_problem.is_ok() {
+                        trace!("new problem: {:?}", problem);
                         problem = Some(new_problem.unwrap());
                     }
                     // check if there is a problem to be solved
                     if problem.is_some() {
+                        trace!("problem is {:?}", problem);
                         let boundary = problem.as_ref().unwrap().boundary;
                         let block_hash = problem.as_ref().unwrap().block_hash;
 
@@ -100,6 +102,7 @@ impl Worker {
                                         warn!("{}", e);
                                     }
                                 }
+                                trace!("problem solved");
                                 // TODO Update problem fast. This will cause
                                 // miner to stop mining
                                 // until the previous blocks is processed by
@@ -735,12 +738,14 @@ impl BlockGenerator {
                         .problem_hash(),
                     *current_difficulty,
                 );
+                trace!("send problem: {:?}", problem);
                 BlockGenerator::send_problem(bg.clone(), problem);
                 current_problem = Some(problem);
             } else {
                 // check if the problem solved
                 let mut new_solution = receiver.try_recv();
                 loop {
+                    trace!("new solution: {:?}", new_solution);
                     // check if the block received valid
                     if new_solution.is_ok()
                         && !validate(
