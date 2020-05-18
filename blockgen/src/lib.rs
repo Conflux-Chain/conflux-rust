@@ -83,10 +83,12 @@ impl Worker {
                     // check if there is a new problem
                     let new_problem = problem_receiver.try_recv();
                     if new_problem.is_ok() {
+                        trace!("new problem: {:?}", problem);
                         problem = Some(new_problem.unwrap());
                     }
                     // check if there is a problem to be solved
                     if problem.is_some() {
+                        trace!("problem is {:?}", problem);
                         let boundary = problem.as_ref().unwrap().boundary;
                         let block_hash = problem.as_ref().unwrap().block_hash;
                         let mut nonce: u64 = rand::random();
@@ -104,6 +106,7 @@ impl Worker {
                                     }
                                 }
 
+                                trace!("problem solved");
                                 problem = None;
                                 break;
                             }
@@ -756,6 +759,7 @@ impl BlockGenerator {
                     *current_difficulty,
                 );
                 last_assemble = SystemTime::now();
+                trace!("send problem: {:?}", problem);
                 BlockGenerator::send_problem(bg.clone(), problem);
                 last_notify = SystemTime::now();
                 current_problem = Some(problem);
@@ -763,6 +767,7 @@ impl BlockGenerator {
                 // check if the problem solved
                 let mut new_solution = receiver.try_recv();
                 loop {
+                    trace!("new solution: {:?}", new_solution);
                     // check if the block received valid
                     if new_solution.is_ok()
                         && !validate(

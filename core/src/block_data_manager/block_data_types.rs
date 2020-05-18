@@ -161,7 +161,7 @@ impl Decodable for BlockExecutionResultWithEpoch {
 
 /// The local information about a block. It is NOT consistent across different
 /// nodes.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, DeriveMallocSizeOf)]
 pub struct LocalBlockInfo {
     status: BlockStatus,
     enter_consensus_seq_num: u64,
@@ -209,7 +209,7 @@ impl Decodable for LocalBlockInfo {
 /// The validity status of a block. If a block's status among all honest nodes
 /// is guaranteed to have no conflict, which means if some honest nodes think a
 /// block is not `Pending`, their decision will be the same status.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, DeriveMallocSizeOf)]
 pub enum BlockStatus {
     Valid = 0,
     Invalid = 1,

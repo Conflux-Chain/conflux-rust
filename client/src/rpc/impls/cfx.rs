@@ -902,7 +902,7 @@ impl RpcImpl {
             .expect("downcast should succeed");
         let status = consensus_graph
             .data_man
-            .local_block_info_from_db(&block_hash)
+            .local_block_info_by_hash(&block_hash)
             // FIXME: invalid_params?
             .ok_or(invalid_params("block_hash", "No block status"))?
             .get_status();
