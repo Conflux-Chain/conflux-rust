@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_bytes::Bytes;
-use cfx_types::U256;
+use cfx_types::{H256, U256};
 use cfxcore::{
     executive::{Executive, InternalContractMap},
     machine::new_machine_with_builtin,
