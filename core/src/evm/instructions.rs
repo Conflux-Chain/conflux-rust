@@ -153,6 +153,10 @@ enum_with_from_u8! {
         DIFFICULTY = 0x44,
         #[doc = "get the block's gas limit"]
         GASLIMIT = 0x45,
+        #[doc = "get chain ID"]
+        CHAINID = 0x46,
+        #[doc = "get balance of own account"]
+        SELFBALANCE = 0x47,
 
         #[doc = "remove item from stack"]
         POP = 0x50,
@@ -320,6 +324,13 @@ enum_with_from_u8! {
         LOG3 = 0xa3,
         #[doc = "Makes a log entry, 4 topics."]
         LOG4 = 0xa4,
+
+        #[doc = "Marks the entry point to a subroutine."]
+        BEGINSUB = 0xb2,
+        #[doc = "Jumps to a defined BEGINSUB subroutine."]
+        JUMPSUB = 0xb3,
+        #[doc = "Returns from a subroutine."]
+        RETURNSUB = 0xb7,
 
         #[doc = "create a new account with associated code"]
         CREATE = 0xf0,
@@ -508,6 +519,8 @@ lazy_static! {
         arr[NUMBER as usize] = Some(InstructionInfo::new("NUMBER", 0, 1, GasPriceTier::Base));
         arr[DIFFICULTY as usize] = Some(InstructionInfo::new("DIFFICULTY", 0, 1, GasPriceTier::Base));
         arr[GASLIMIT as usize] = Some(InstructionInfo::new("GASLIMIT", 0, 1, GasPriceTier::Base));
+        arr[CHAINID as usize] = Some(InstructionInfo::new("CHAINID", 0, 1, GasPriceTier::Base));
+        arr[SELFBALANCE as usize] = Some(InstructionInfo::new("SELFBALANCE", 0, 1, GasPriceTier::Low));
         arr[POP as usize] = Some(InstructionInfo::new("POP", 1, 0, GasPriceTier::Base));
         arr[MLOAD as usize] = Some(InstructionInfo::new("MLOAD", 1, 1, GasPriceTier::VeryLow));
         arr[MSTORE as usize] = Some(InstructionInfo::new("MSTORE", 2, 0, GasPriceTier::VeryLow));
@@ -589,6 +602,9 @@ lazy_static! {
         arr[LOG2 as usize] = Some(InstructionInfo::new("LOG2", 4, 0, GasPriceTier::Special));
         arr[LOG3 as usize] = Some(InstructionInfo::new("LOG3", 5, 0, GasPriceTier::Special));
         arr[LOG4 as usize] = Some(InstructionInfo::new("LOG4", 6, 0, GasPriceTier::Special));
+        arr[BEGINSUB as usize] = Some(InstructionInfo::new("BEGINSUB", 0, 0, GasPriceTier::Base));
+        arr[JUMPSUB as usize] = Some(InstructionInfo::new("JUMPSUB", 1, 0, GasPriceTier::Mid));
+        arr[RETURNSUB as usize] = Some(InstructionInfo::new("RETURNSUB", 0, 0, GasPriceTier::Base));
         arr[CREATE as usize] = Some(InstructionInfo::new("CREATE", 3, 1, GasPriceTier::Special));
         arr[CALL as usize] = Some(InstructionInfo::new("CALL", 7, 1, GasPriceTier::Special));
         arr[CALLCODE as usize] = Some(InstructionInfo::new("CALLCODE", 7, 1, GasPriceTier::Special));

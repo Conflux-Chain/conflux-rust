@@ -63,6 +63,8 @@ The receipts root is the Merkle root of the simple MPT of block receipts roots.
 - Use raw bytes in blame vec hash calculation instead of rlp because each 
 element of the vec is fixed length H256.
 
+- Add support for CHAINID, SELFBALANCE, BEGINSUB, JUMPSUB, RETURNSUB opcodes.
+
 # 0.5.0
 
 ## Improvements

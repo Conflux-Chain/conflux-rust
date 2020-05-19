@@ -125,6 +125,12 @@ pub struct Spec {
     pub have_static_call: bool,
     /// RETURNDATA and RETURNDATASIZE opcodes enabled.
     pub have_return_data: bool,
+    /// BEGINSUB, JUMPSUB, and RETURNSUB opcodes enabled.
+    pub have_subs: bool,
+    /// CHAINID enabled.
+    pub have_chain_id: bool,
+    /// SELFBALANCE enabled.
+    pub have_self_balance: bool,
     /// SHL, SHR, SAR opcodes enabled.
     pub have_bitwise_shifting: bool,
     /// Kill basic accounts below this balance if touched.
@@ -216,6 +222,9 @@ impl Spec {
             have_return_data: false,
             have_bitwise_shifting: false,
             have_extcodehash: false,
+            have_subs: false,
+            have_chain_id: false,
+            have_self_balance: false,
             stack_limit: 1024,
             max_depth: 1024,
             tier_step_gas: [0, 2, 3, 5, 8, 10, 20, 0],
@@ -271,6 +280,9 @@ impl Spec {
         spec.have_return_data = true;
         spec.have_bitwise_shifting = true;
         spec.have_extcodehash = true;
+        spec.have_subs = true;
+        spec.have_chain_id = true;
+        spec.have_self_balance = true;
         spec
     }
 

@@ -369,6 +369,8 @@ impl<'a> CallCreateExecutive<'a> {
             | Err(vm::Error::InternalContract { .. })
             | Err(vm::Error::Wasm { .. })
             | Err(vm::Error::OutOfStack { .. })
+            | Err(vm::Error::SubStackUnderflow { .. })
+            | Err(vm::Error::OutOfSubStack { .. })
             | Err(vm::Error::ExceedStorageLimit)
             | Err(vm::Error::NotEnoughBalanceForStorage { .. })
             | Err(vm::Error::MutableCallInStaticContext)

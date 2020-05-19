@@ -19,10 +19,13 @@
 // See http://www.gnu.org/licenses/
 
 use super::{factory::Factory, vmtype::VMType};
-use crate::vm::{
-    self,
-    tests::{test_finalize, MockCall, MockCallType, MockContext},
-    ActionParams, ActionValue, Context,
+use crate::{
+    evm::interpreter::MAX_SUB_STACK_SIZE,
+    vm::{
+        self,
+        tests::{test_finalize, MockCall, MockCallType, MockContext},
+        ActionParams, ActionValue, Context,
+    },
 };
 use cfx_types::{Address, H256, U256};
 use rustc_hex::FromHex;
@@ -138,6 +141,38 @@ fn test_origin(factory: super::Factory) {
     );
 }
 
+evm_test! {test_selfbalance: test_selfbalance_int}
+fn test_selfbalance(factory: super::Factory) {
+    let own_addr =
+        Address::from_str("1337000000000000000000000000000000000000").unwrap();
+    // 47       SELFBALANCE
+    // 60 ff    PUSH ff
+    // 55       SSTORE
+    let code = "47 60 ff 55".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.address = own_addr.clone();
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    ctx.balances = {
+        let mut x = HashMap::new();
+        x.insert(own_addr, U256::from(1_025)); // 0x401
+        x
+    };
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+    assert_eq!(gas_left, U256::from(94_992));
+    assert_store(
+        &ctx,
+        0xff,
+        "0000000000000000000000000000000000000000000000000000000000000401",
+    );
+}
+
 evm_test! {test_sender: test_sender_int}
 fn test_sender(factory: super::Factory) {
     let address =
@@ -163,6 +198,31 @@ fn test_sender(factory: super::Factory) {
         &ctx,
         0,
         "000000000000000000000000cd1722f2947def4cf144679da39c4c32bdc35681",
+    );
+}
+
+evm_test! {test_chain_id: test_chain_id_int}
+fn test_chain_id(factory: super::Factory) {
+    // 46       CHAINID
+    // 60 00    PUSH 0
+    // 55       SSTORE
+    let code = "46 60 00 55".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(100_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new().with_chain_id(9);
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(94_995));
+    assert_store(
+        &ctx,
+        0,
+        "0000000000000000000000000000000000000000000000000000000000000009",
     );
 }
 
@@ -1000,6 +1060,160 @@ fn test_jumps(factory: super::Factory) {
         "0000000000000000000000000000000000000000000000000000000000000078",
     ); // 5!
        //assert_eq!(gas_left, U256::from(54_117));
+}
+
+evm_test! {test_subs_simple: test_subs_simple_int}
+fn test_subs_simple(factory: super::Factory) {
+    // as defined in https://eips.ethereum.org/EIPS/eip-2315
+    let code = "6004b300b2b7".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(13);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(0));
+}
+
+evm_test! {test_subs_two_levels: test_subs_two_levels_int}
+fn test_subs_two_levels(factory: super::Factory) {
+    // as defined in https://eips.ethereum.org/EIPS/eip-2315
+    let code = "6800000000000000000cb300b26011b3b7b2b7".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(26);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(0));
+}
+
+evm_test! {test_subs_invalid_jump: test_subs_invalid_jump_int}
+fn test_subs_invalid_jump(factory: super::Factory) {
+    // as defined in https://eips.ethereum.org/EIPS/eip-2315
+    let code = "6801000000000000000cb300b26011b3b7b2b7".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(24);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let current = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap())
+    };
+
+    let expected =
+        Result::Err(vm::Error::BadJumpDestination { destination: 0xc });
+    assert_eq!(current, expected);
+}
+
+evm_test! {test_subs_shallow_return_stack: test_subs_shallow_return_stack_int}
+fn test_subs_shallow_return_stack(factory: super::Factory) {
+    // as defined in https://eips.ethereum.org/EIPS/eip-2315
+    let code = "b75858".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(24);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let current = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap())
+    };
+
+    let expected = Result::Err(vm::Error::SubStackUnderflow {
+        wanted: 1,
+        on_stack: 0,
+    });
+    assert_eq!(current, expected);
+}
+
+evm_test! {test_subs_substack_limit: test_subs_substack_limit_int}
+fn test_subs_substack_limit(factory: super::Factory) {
+    //    PUSH2 <recursion_limit>
+    //    PUSH1
+    //    JUMP :b
+    // :s BEGINSUB
+    // :b JUMPDEST
+    //    DUP1
+    //    JUMPI :c
+    //    STOP
+    // :c JUMPDEST
+    //    PUSH1 1
+    //    SWAP
+    //    SUB
+    //    JUMPSUB :s
+
+    let mut code = "610400600756b25b80600d57005b600190036006b3"
+        .from_hex()
+        .unwrap();
+    code[1..3].copy_from_slice(&(MAX_SUB_STACK_SIZE as u16).to_be_bytes()[..]);
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(1_000_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(961_057));
+}
+
+evm_test! {test_subs_substack_out: test_subs_substack_out_int}
+fn test_subs_substack_out(factory: super::Factory) {
+    let mut code = "610400600756b25b80600d57005b600190036006b3"
+        .from_hex()
+        .unwrap();
+    code[1..3]
+        .copy_from_slice(&((MAX_SUB_STACK_SIZE + 1) as u16).to_be_bytes()[..]);
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(1_000_000);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let current = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap())
+    };
+
+    let expected = Result::Err(vm::Error::OutOfSubStack {
+        wanted: 1,
+        limit: MAX_SUB_STACK_SIZE,
+    });
+    assert_eq!(current, expected);
+}
+
+evm_test! {test_subs_sub_at_end: test_subs_sub_at_end_int}
+fn test_subs_sub_at_end(factory: super::Factory) {
+    let code = "600556b2b75b6003b3".from_hex().unwrap();
+
+    let mut params = ActionParams::default();
+    params.gas = U256::from(25);
+    params.code = Some(Arc::new(code));
+    let mut ctx = MockContext::new();
+
+    let gas_left = {
+        let vm = factory.create(params, ctx.spec(), ctx.depth());
+        test_finalize(vm.exec(&mut ctx).ok().unwrap()).unwrap()
+    };
+
+    assert_eq!(gas_left, U256::from(0));
 }
 
 evm_test! {test_calls: test_calls_int}

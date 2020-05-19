@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -65,6 +69,10 @@ const TWO_POW_96: U256 = U256([0, 0x100000000, 0, 0]); //0x1 00000000 00000000 0
 const TWO_POW_224: U256 = U256([0, 0, 0, 0x100000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000
 const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000 000000
 
+/// Maximal subroutine stack size as specified in
+/// https://eips.ethereum.org/EIPS/eip-2315.
+pub const MAX_SUB_STACK_SIZE: usize = 1024;
+
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader {
     position: ProgramCounter,
@@ -90,6 +98,8 @@ enum InstructionResult<Gas> {
     Ok,
     UnusedGas(Gas),
     JumpToPosition(U256),
+    JumpToSubroutine(U256),
+    ReturnFromSubroutine(usize),
     StopExecutionNeedsReturn {
         /// Gas left.
         gas: Gas,
@@ -103,8 +113,6 @@ enum InstructionResult<Gas> {
     StopExecution,
     Trap(TrapKind),
 }
-
-enum Never {}
 
 /// ActionParams without code, so that it can be feed into CodeReader.
 #[derive(Debug)]
@@ -185,8 +193,10 @@ pub struct Interpreter<Cost: CostType> {
     do_trace: bool,
     done: bool,
     valid_jump_destinations: Option<Arc<BitSet>>,
+    valid_subroutine_destinations: Option<Arc<BitSet>>,
     gasometer: Option<Gasometer<Cost>>,
     stack: VecStack<U256>,
+    return_stack: Vec<usize>,
     resume_output_range: Option<(U256, U256)>,
     resume_result: Option<InstructionResult<Cost>>,
     last_stack_ret_len: usize,
@@ -305,10 +315,12 @@ impl<Cost: CostType> Interpreter<Cost> {
         let params = InterpreterParams::from(params);
         let informant = informant::EvmInformant::new(depth);
         let valid_jump_destinations = None;
+        let valid_subroutine_destinations = None;
         let gasometer = Cost::from_u256(params.gas)
             .ok()
             .map(|gas| Gasometer::<Cost>::new(gas));
         let stack = VecStack::with_capacity(spec.stack_limit, U256::zero());
+        let return_stack = Vec::with_capacity(MAX_SUB_STACK_SIZE);
 
         Interpreter {
             cache,
@@ -316,8 +328,10 @@ impl<Cost: CostType> Interpreter<Cost> {
             reader,
             informant,
             valid_jump_destinations,
+            valid_subroutine_destinations,
             gasometer,
             stack,
+            return_stack,
             done: false,
             do_trace: true,
             mem: Vec::new(),
@@ -348,8 +362,6 @@ impl<Cost: CostType> Interpreter<Cost> {
             )))
         } else {
             self.step_inner(context)
-                .err()
-                .expect("step_inner never returns Ok(()); qed")
         };
 
         if let &InterpreterResult::Done(_) = &result {
@@ -363,7 +375,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     #[inline(always)]
     fn step_inner(
         &mut self, context: &mut dyn vm::Context,
-    ) -> Result<Never, InterpreterResult> {
+    ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -387,20 +399,24 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let instruction = match instruction {
                     Some(i) => i,
                     None => {
-                        return Err(InterpreterResult::Done(Err(
+                        return InterpreterResult::Done(Err(
                             vm::Error::BadInstruction {
                                 instruction: opcode,
                             },
-                        )));
+                        ));
                     }
                 };
 
                 let info = instruction.info();
                 self.last_stack_ret_len = info.ret;
-                self.verify_instruction(context, instruction, info)?;
+                if let Err(e) =
+                    self.verify_instruction(context, instruction, info)
+                {
+                    return InterpreterResult::Done(Err(e));
+                }
 
                 // Calculate gas cost
-                let requirements = self
+                let requirements = match self
                     .gasometer
                     .as_mut()
                     .expect(GASOMETER_PROOF)
@@ -410,7 +426,10 @@ impl<Cost: CostType> Interpreter<Cost> {
                         info,
                         &self.stack,
                         self.mem.size(),
-                    )?;
+                    ) {
+                    Ok(t) => t,
+                    Err(e) => return InterpreterResult::Done(Err(e)),
+                };
                 if self.do_trace {
                     context.trace_prepare_execute(
                         self.reader.position - 1,
@@ -421,10 +440,14 @@ impl<Cost: CostType> Interpreter<Cost> {
                     );
                 }
 
-                self.gasometer
+                if let Err(e) = self
+                    .gasometer
                     .as_mut()
                     .expect(GASOMETER_PROOF)
-                    .verify_gas(&requirements.gas_cost)?;
+                    .verify_gas(&requirements.gas_cost)
+                {
+                    return InterpreterResult::Done(Err(e));
+                }
                 self.mem.expand(requirements.memory_required_size);
                 self.gasometer
                     .as_mut()
@@ -451,12 +474,17 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // Execute instruction
                 let current_gas =
                     self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
-                let result = self.exec_instruction(
+                let result = match self.exec_instruction(
                     current_gas,
                     context,
                     instruction,
                     requirements.provide_gas,
-                )?;
+                ) {
+                    Err(x) => {
+                        return InterpreterResult::Done(Err(x));
+                    }
+                    Ok(x) => x,
+                };
 
                 evm_debug!({ self.informant.after_instruction(instruction) });
 
@@ -465,7 +493,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         };
 
         if let InstructionResult::Trap(trap) = result {
-            return Err(InterpreterResult::Trap(trap));
+            return InterpreterResult::Trap(trap);
         }
 
         if let InstructionResult::UnusedGas(ref gas) = result {
@@ -490,17 +518,47 @@ impl<Cost: CostType> Interpreter<Cost> {
         match result {
             InstructionResult::JumpToPosition(position) => {
                 if self.valid_jump_destinations.is_none() {
-                    self.valid_jump_destinations =
-                        Some(self.cache.jump_destinations(
-                            &self.params.code_hash,
-                            &self.reader.code,
-                        ));
+                    self.valid_jump_destinations = Some(
+                        self.cache
+                            .jump_and_sub_destinations(
+                                &self.params.code_hash,
+                                &self.reader.code,
+                            )
+                            .0,
+                    );
                 }
                 let jump_destinations =
                     self.valid_jump_destinations.as_ref().expect(
                         "jump_destinations are initialized on first jump; qed",
                     );
-                let pos = self.verify_jump(position, jump_destinations)?;
+                let pos = match self.verify_jump(position, jump_destinations) {
+                    Ok(x) => x,
+                    Err(e) => return InterpreterResult::Done(Err(e)),
+                };
+                self.reader.position = pos;
+            }
+            InstructionResult::JumpToSubroutine(position) => {
+                if self.valid_subroutine_destinations.is_none() {
+                    self.valid_subroutine_destinations = Some(
+                        self.cache
+                            .jump_and_sub_destinations(
+                                &self.params.code_hash,
+                                &self.reader.code,
+                            )
+                            .1,
+                    );
+                }
+                let subroutine_destinations = self.valid_subroutine_destinations.as_ref().expect("subroutine_destinations are initialized on first jump; qed");
+                let pos =
+                    match self.verify_jump(position, subroutine_destinations) {
+                        Ok(x) => x,
+                        Err(e) => return InterpreterResult::Done(Err(e)),
+                    };
+                self.return_stack.push(self.reader.position);
+                // JUMPSUB will land on the next position after BEGINSUB
+                self.reader.position = pos + 1;
+            }
+            InstructionResult::ReturnFromSubroutine(pos) => {
                 self.reader.position = pos;
             }
             InstructionResult::StopExecutionNeedsReturn {
@@ -510,37 +568,35 @@ impl<Cost: CostType> Interpreter<Cost> {
                 apply,
             } => {
                 let mem = mem::replace(&mut self.mem, Vec::new());
-                return Err(InterpreterResult::Done(Ok(
-                    GasLeft::NeedsReturn {
-                        gas_left: gas.as_u256(),
-                        data: mem.into_return_data(init_off, init_size),
-                        apply_state: apply,
-                    },
-                )));
+                return InterpreterResult::Done(Ok(GasLeft::NeedsReturn {
+                    gas_left: gas.as_u256(),
+                    data: mem.into_return_data(init_off, init_size),
+                    apply_state: apply,
+                }));
             }
             InstructionResult::StopExecution => {
-                return Err(InterpreterResult::Done(Ok(GasLeft::Known(
+                return InterpreterResult::Done(Ok(GasLeft::Known(
                     self.gasometer
                         .as_mut()
                         .expect(GASOMETER_PROOF)
                         .current_gas
                         .as_u256(),
-                ))));
+                )));
             }
             _ => {}
         }
 
         if self.reader.position >= self.reader.len() {
-            return Err(InterpreterResult::Done(Ok(GasLeft::Known(
+            return InterpreterResult::Done(Ok(GasLeft::Known(
                 self.gasometer
                     .as_mut()
                     .expect(GASOMETER_PROOF)
                     .current_gas
                     .as_u256(),
-            ))));
+            )));
         }
 
-        Err(InterpreterResult::Continue)
+        InterpreterResult::Continue
     }
 
     fn verify_instruction(
@@ -565,6 +621,13 @@ impl<Cost: CostType> Interpreter<Cost> {
                 && !spec.have_bitwise_shifting)
             || (instruction == instructions::EXTCODEHASH
                 && !spec.have_extcodehash)
+            || ((instruction == instructions::BEGINSUB
+                || instruction == instructions::JUMPSUB
+                || instruction == instructions::RETURNSUB)
+                && !spec.have_subs)
+            || (instruction == instructions::CHAINID && !spec.have_chain_id)
+            || (instruction == instructions::SELFBALANCE
+                && !spec.have_self_balance)
         {
             return Err(vm::Error::BadInstruction {
                 instruction: instruction as u8,
@@ -647,6 +710,33 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::JUMPDEST => {
                 // ignore
+            }
+            instructions::BEGINSUB => {
+                // BEGINSUB should not be executed. If so, returns OutOfGas
+                // (EIP-2315).
+                return Err(vm::Error::OutOfGas);
+            }
+            instructions::JUMPSUB => {
+                if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
+                    return Err(vm::Error::OutOfSubStack {
+                        wanted: 1,
+                        limit: MAX_SUB_STACK_SIZE,
+                    });
+                }
+                let sub_destination = self.stack.pop_back();
+                return Ok(InstructionResult::JumpToSubroutine(
+                    sub_destination,
+                ));
+            }
+            instructions::RETURNSUB => {
+                if let Some(pos) = self.return_stack.pop() {
+                    return Ok(InstructionResult::ReturnFromSubroutine(pos));
+                } else {
+                    return Err(vm::Error::SubStackUnderflow {
+                        wanted: 1,
+                        on_stack: 0,
+                    });
+                }
             }
             instructions::CREATE | instructions::CREATE2 => {
                 let endowment = self.stack.pop_back();
@@ -1121,6 +1211,10 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::GASLIMIT => {
                 self.stack.push(context.env().gas_limit.clone());
+            }
+            instructions::CHAINID => self.stack.push(context.chain_id().into()),
+            instructions::SELFBALANCE => {
+                self.stack.push(context.balance(&self.params.address)?);
             }
 
             // Stack instructions

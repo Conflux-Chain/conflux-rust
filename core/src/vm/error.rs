@@ -75,6 +75,21 @@ pub enum Error {
         /// What was the stack limit
         limit: usize,
     },
+    /// `SubStackUnderflow` when there is not enough stack elements to execute
+    /// a subroutine return
+    SubStackUnderflow {
+        /// How many stack elements was requested by instruction
+        wanted: usize,
+        /// How many elements were on stack
+        on_stack: usize,
+    },
+    /// When execution would exceed defined subroutine Stack Limit
+    OutOfSubStack {
+        /// How many stack elements instruction wanted to pop
+        wanted: usize,
+        /// What was the stack limit
+        limit: usize,
+    },
     /// When balance is not enough for `collateral_for_storage`.
     /// The state should be reverted to the state from before the
     /// transaction execution.
@@ -131,6 +146,12 @@ impl fmt::Display for Error {
                 wanted,
                 limit,
             } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
+            SubStackUnderflow { wanted, on_stack } => {
+                write!(f, "Subroutine stack underflow {}/{}", wanted, on_stack)
+            }
+            OutOfSubStack { wanted, limit } => {
+                write!(f, "Out of subroutine stack {}/{}", wanted, limit)
+            }
             NotEnoughBalanceForStorage { required, got } => {
                 write!(f, "Not enough balance for storage {}/{}", required, got)
             }
