@@ -12,6 +12,8 @@ repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
 enable_flamegraph=${5:-false}
 slave_role=${key_pair}_exp_slave
 
+nodes_per_host = 10
+
 run_latency_exp () {
     branch=$1
     exp_config=$2
@@ -28,7 +30,7 @@ run_latency_exp () {
     ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;rm -rf ~/.ssh/known_hosts;./launch-on-demand.sh $slave_count $key_pair $slave_role $slave_image;"
 
     #3) compile, and distributed binary to slaves: You can make change on the MASTER node and run the changed code against SLAVES nodes.
-    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;cargo build --release ;\
+    ssh ubuntu@${master_ip} "cd ./conflux-rust/tests/scripts;export RUSTFLAGS=\"-g\" && cargo build --release ;\
     parallel-scp -O \"StrictHostKeyChecking no\" -h ips -l ubuntu -p 1000 ../../target/release/conflux ~ |grep FAILURE|wc -l;"
 
     #4) Run experiments
@@ -42,10 +44,11 @@ run_latency_exp () {
     --storage-memory-gb 16 \
     --bandwidth 20 \
     --tps $tps \
-    --enable-tx-propagation \
     --send-tx-period-ms 200 \
     $flamegraph_option \
+    --nodes-per-host $nodes_per_host \
     --max-block-size-in-bytes $max_block_size_in_bytes "
+    # --enable-tx-propagation \
 
     #5) Terminate slave instances
     rm -rf tmp_data

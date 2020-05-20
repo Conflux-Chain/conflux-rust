@@ -126,7 +126,7 @@ class TestNode:
         if extra_args is not None:
             self.args += extra_args
         if "--public-address" not in self.args:
-            self.args += ["--public-address", "{}:{}".format(self.ip, self.port)]
+            self.args += ["--public-address", "{}".format(self.ip)]
 
         # Delete any existing cookie file -- if such a file exists (eg due to
         # unclean shutdown), it will get overwritten anyway by bitcoind, and
@@ -142,7 +142,7 @@ class TestNode:
             cli_conf = "scp {3} -r {0} {1}@{2}:`dirname {0}`;".format(
                 self.datadir, self.user, self.ip, ssh_args
             )
-            cli_kill = "ssh {}@{} killall conflux;".format(self.user, self.ip)
+            cli_kill = "ssh {}@{} killall -9 conflux;".format(self.user, self.ip)
             cli_exe = 'ssh {} {}@{} "{} > ~/stdout"'.format(
                 ssh_args,
                 self.user,

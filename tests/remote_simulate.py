@@ -115,6 +115,7 @@ class RemoteSimulate(ConfluxTestFramework):
             self.conf_parameters["generate_tx_period_us"] = str(1000000 * len(self.ips) // self.options.tps)
         else:
             self.conf_parameters["send_tx_period_ms"] = "31536000000" # one year to disable txs propagation
+            del self.conf_parameters["genesis_secrets"]
         # FIXME: Double check if disabling this improves performance.
         self.conf_parameters["enable_optimistic_execution"] = "false"
 
@@ -144,7 +145,7 @@ class RemoteSimulate(ConfluxTestFramework):
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
 
     def setup_network(self):
-        self.setup_remote_conflux()
+        # self.setup_remote_conflux()
 
         # add remote nodes and start all
         for ip in self.ips:
@@ -204,7 +205,7 @@ class RemoteSimulate(ConfluxTestFramework):
                 thread = SimpleGenerateThread(self.nodes, p, self.options.max_block_size_in_bytes, self.log, rpc_times)
             else:
                 # Generate a fixed-size block with fake tx
-                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.log, rpc_times)
+                thread = GenerateThread(self.nodes, p, self.options.txs_per_block, self.options.generate_tx_data_len, self.options.max_block_size_in_bytes, self.log, rpc_times)
             thread.start()
             threads[p] = thread
 
@@ -239,7 +240,8 @@ class RemoteSimulate(ConfluxTestFramework):
         self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         self.wait_until_nodes_synced()
 
-        self.log.info("Best block: {}".format(RpcClient(self.nodes[0]).best_block_hash()))
+        node0 = RpcClient(self.nodes[0])
+        self.log.info("Best block: {}, height: {}".format(node0.best_block_hash(), node0.epoch_number()))
 
     def wait_until_nodes_synced(self):
         """
@@ -311,7 +313,7 @@ class GenerateThread(threading.Thread):
         self.nodes = nodes
         self.i = i
         self.tx_n = tx_n
-        self.tx_data_len = tx_data_len
+        self.tx_data_len = tx_data_len - 200
         self.max_block_size = max_block_size
         self.log = log
         self.rpc_times = rpc_times

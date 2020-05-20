@@ -21,7 +21,7 @@ master_ip=`cat ips`
 master_id=`cat instances`
 setup_script="setup_image.sh"
 scp -o "StrictHostKeyChecking no" $SCRIPT_DIR/$setup_script ubuntu@$master_ip:~
-ssh ubuntu@$master_ip ./$setup_script $branch $repo
+ssh -tt ubuntu@$master_ip ./$setup_script $branch $repo
 
 # create slave image
 echo "create slave image ..."
