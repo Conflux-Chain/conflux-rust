@@ -510,13 +510,9 @@ impl SnapshotChunkSync {
         // There are two possible reasons that a response is not in
         // `downloading_chunks`:
         // 1. received a out-of-date snapshot chunk, e.g. new era started.
-        // 2. Duplicated chunks received, and it has been processed.
+        // 2. Chunks are received after timeout.
         if inner.downloading_chunks.remove(&chunk_key).is_none() {
             info!("Snapshot chunk received, but not in downloading queue, progess is {:?}", *inner);
-            // FIXME Handle out-of-date chunks
-            inner
-                .sync_candidate_manager
-                .note_state_sync_failure(&ctx.node_id);
             self.request_chunks(ctx, &mut inner);
             return Ok(());
         }
@@ -528,7 +524,9 @@ impl SnapshotChunkSync {
         self.request_chunks(ctx, &mut inner);
 
         // begin to restore if all chunks downloaded
-        if inner.downloading_chunks.is_empty() {
+        if inner.downloading_chunks.is_empty()
+            && inner.pending_chunks.is_empty()
+        {
             debug!("Snapshot chunks are all downloaded",);
 
             let snapshot_info = inner.snapshot_info.clone();
