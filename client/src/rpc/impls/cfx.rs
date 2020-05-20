@@ -762,7 +762,7 @@ impl RpcImpl {
         match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
                 bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
+                    "Transaction can not be executed".into(),
                     format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
                 ))
             }
