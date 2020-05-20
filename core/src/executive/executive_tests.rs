@@ -325,7 +325,7 @@ fn test_revert() {
         .new_contract(&contract_address, U256::zero(), U256::one())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)))
+        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
 
     let mut params = ActionParams::default();

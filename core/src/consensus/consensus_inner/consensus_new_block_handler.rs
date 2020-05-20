@@ -11,24 +11,19 @@ use crate::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
             ConsensusGraphInner, NULL,
         },
-        debug::ComputeEpochDebugRecord,
         ConsensusConfig,
     },
     parameters::{consensus::*, consensus_internal::*},
-    rlp::Encodable,
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
-    storage::StateRootWithAuxInfo,
     Notifications, SharedTransactionPool,
 };
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
-use parity_bytes::ToPretty;
 use primitives::{BlockHeader, SignedTransaction};
 use std::{
     cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
-    io::Write,
     slice::Iter,
     sync::Arc,
 };
@@ -623,134 +618,6 @@ impl ConsensusNewBlockHandler {
         valid
     }
 
-    #[allow(dead_code)]
-    fn log_debug_epoch_computation(
-        &self, epoch_arena_index: usize, inner: &mut ConsensusGraphInner,
-    ) -> ComputeEpochDebugRecord {
-        let epoch_block_hash = inner.arena[epoch_arena_index].hash;
-
-        let epoch_block_hashes =
-            inner.get_epoch_block_hashes(epoch_arena_index);
-
-        // Parent state root.
-        let parent_arena_index = inner.arena[epoch_arena_index].parent;
-        let parent_block_hash = inner.arena[parent_arena_index].hash;
-        let parent_state_root = inner
-            .data_man
-            .get_epoch_execution_commitment(&parent_block_hash)
-            .unwrap()
-            .state_root_with_aux_info
-            .clone();
-
-        let reward_index = inner.get_pivot_reward_index(epoch_arena_index);
-
-        let reward_execution_info = self
-            .executor
-            .get_reward_execution_info_from_index(inner, reward_index);
-        let task = EpochExecutionTask::new(
-            epoch_block_hash,
-            epoch_block_hashes.clone(),
-            inner.get_epoch_start_block_number(epoch_arena_index),
-            reward_execution_info,
-            false, /* on_local_pivot */
-            true,  /* debug_record */
-            false, /* force_recompute */
-        );
-        let debug_record_data = task.debug_record.clone();
-        {
-            let mut debug_record_data_locked = debug_record_data.lock();
-            let debug_record = debug_record_data_locked.as_mut().unwrap();
-
-            debug_record.parent_block_hash = parent_block_hash;
-            debug_record.parent_state_root = parent_state_root;
-            debug_record.reward_epoch_hash =
-                if let Some((reward_epoch_block, _)) = reward_index.clone() {
-                    Some(inner.arena[reward_epoch_block].hash)
-                } else {
-                    None
-                };
-            debug_record.anticone_penalty_cutoff_epoch_hash =
-                if let Some((_, anticone_penalty_cutoff_epoch_block)) =
-                    reward_index.clone()
-                {
-                    Some(inner.arena[anticone_penalty_cutoff_epoch_block].hash)
-                } else {
-                    None
-                };
-
-            let blocks = epoch_block_hashes
-                .iter()
-                .map(|hash| {
-                    self.data_man
-                        .block_by_hash(hash, false /* update_cache */)
-                        .unwrap()
-                })
-                .collect::<Vec<_>>();
-
-            debug_record.block_hashes = epoch_block_hashes;
-            debug_record.block_txs = blocks
-                .iter()
-                .map(|block| block.transactions.len())
-                .collect::<Vec<_>>();
-            debug_record.transactions = blocks
-                .iter()
-                .flat_map(|block| block.transactions.clone())
-                .collect::<Vec<_>>();
-
-            debug_record.block_authors = blocks
-                .iter()
-                .map(|block| *block.block_header.author())
-                .collect::<Vec<_>>();
-        }
-        self.executor.enqueue_epoch(task);
-        self.executor.wait_for_result(epoch_block_hash).unwrap();
-
-        Arc::try_unwrap(debug_record_data)
-            .unwrap()
-            .into_inner()
-            .unwrap()
-    }
-
-    #[allow(dead_code)]
-    fn log_invalid_state_root(
-        &self, expected_state_root: &StateRootWithAuxInfo,
-        got_state_root: &StateRootWithAuxInfo, deferred: usize,
-        inner: &mut ConsensusGraphInner,
-    ) -> std::io::Result<()>
-    {
-        let debug_record = self.log_debug_epoch_computation(deferred, inner);
-        let debug_record_rlp = debug_record.rlp_bytes();
-
-        let deferred_block_hash = inner.arena[deferred].hash;
-
-        warn!(
-            "Invalid state root: should be {:?}, got {:?}, deferred block: {:?}, \
-            reward epoch bock: {:?}, anticone cutoff block: {:?}, \
-            number of blocks in epoch: {:?}, number of transactions in epoch: {:?}, rewards: {:?}",
-            expected_state_root,
-            got_state_root,
-            deferred_block_hash,
-            debug_record.reward_epoch_hash,
-            debug_record.anticone_penalty_cutoff_epoch_hash,
-            debug_record.block_hashes.len(),
-            debug_record.transactions.len(),
-            debug_record.merged_rewards_by_author,
-        );
-
-        let dump_dir = &self.conf.debug_dump_dir_invalid_state_root;
-        let invalid_state_root_path =
-            dump_dir.clone() + &deferred_block_hash.to_hex();
-        std::fs::create_dir_all(dump_dir)?;
-
-        if std::path::Path::new(&invalid_state_root_path).exists() {
-            return Ok(());
-        }
-        let mut file = std::fs::File::create(&invalid_state_root_path)?;
-        file.write_all(&debug_record_rlp)?;
-
-        Ok(())
-    }
-
     fn check_block_full_validity(
         &self, new: usize, inner: &mut ConsensusGraphInner, adaptive: bool,
         anticone_barrier: &BitSet, weight_tuple: Option<&Vec<i128>>,
@@ -896,7 +763,7 @@ impl ConsensusNewBlockHandler {
                     .wait_for_result(inner.arena[stable_pivot_block].hash)
                     .expect("Execution state of the pivot chain is corrupted!");
                 inner
-                    .compute_state_valid_and_blame_info(stable_pivot_block)
+                    .compute_state_valid_and_blame_info(stable_pivot_block, &self.executor)
                     .expect("Stable node should be able to compute state_valid and blame_info");
             }
             // Stable block must have a blame vector that does not stretch
@@ -1557,7 +1424,10 @@ impl ConsensusNewBlockHandler {
                             "Execution state of the pivot chain is corrupted!",
                         );
                     inner
-                        .compute_state_valid_and_blame_info(stable_arena_index)
+                        .compute_state_valid_and_blame_info(
+                            stable_arena_index,
+                            &self.executor,
+                        )
                         .expect(
                             "New stable node should have available state_valid",
                         );
@@ -1798,12 +1668,10 @@ impl ConsensusNewBlockHandler {
                     .executor
                     .get_reward_execution_info(inner, epoch_arena_index);
                 self.executor.enqueue_epoch(EpochExecutionTask::new(
-                    inner.arena[epoch_arena_index].hash,
-                    inner.get_epoch_block_hashes(epoch_arena_index),
-                    inner.get_epoch_start_block_number(epoch_arena_index),
+                    epoch_arena_index,
+                    inner,
                     reward_execution_info,
                     true,  /* on_local_pivot */
-                    false, /* debug_record */
                     false, /* force_recompute */
                 ));
 
@@ -2103,16 +1971,19 @@ impl ConsensusNewBlockHandler {
                 }
             }
             if compute_epoch {
-                self.executor.compute_epoch(EpochExecutionTask::new(
-                    pivot_hash,
-                    inner.get_epoch_block_hashes(pivot_arena_index),
-                    inner.get_epoch_start_block_number(pivot_arena_index),
-                    self.executor
-                        .get_reward_execution_info(inner, pivot_arena_index),
-                    true,  /* on_local_pivot */
-                    false, /* debug_record */
-                    true,  /* force_recompute */
-                ));
+                let reward_execution_info = self
+                    .executor
+                    .get_reward_execution_info(inner, pivot_arena_index);
+                self.executor.compute_epoch(
+                    EpochExecutionTask::new(
+                        pivot_arena_index,
+                        inner,
+                        reward_execution_info,
+                        true, /* on_local_pivot */
+                        true, /* force_recompute */
+                    ),
+                    None,
+                );
             }
         }
     }

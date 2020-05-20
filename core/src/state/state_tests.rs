@@ -434,7 +434,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_PER_STORAGE_KEY
     );
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1u64)))
+        .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
         .unwrap();
     state.clear();
 
@@ -743,7 +743,7 @@ fn create_contract_fail() {
     assert_eq!(state.exists(&a).unwrap(), false);
 
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)))
+        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
 }
 
@@ -792,7 +792,7 @@ fn create_contract_fail_previous_storage() {
     );
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)))
+        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
     state.clear();
 
@@ -837,7 +837,7 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a).unwrap(), U256::from(0));
 
     state
-        .commit(BigEndianHash::from_uint(&U256::from(2)))
+        .commit(BigEndianHash::from_uint(&U256::from(2)), None)
         .unwrap();
 }
 

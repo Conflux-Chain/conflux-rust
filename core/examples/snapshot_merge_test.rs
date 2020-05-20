@@ -407,7 +407,7 @@ where
         let (addr, account) =
             account_map.next().expect("Caller has checked the size");
         state
-            .set(StorageKey::new_account_key(&addr), account)
+            .set(StorageKey::new_account_key(&addr), account, None)
             .unwrap();
     }
     let epoch = H256::random();

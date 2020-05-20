@@ -233,7 +233,7 @@ impl BlockGenerator {
             .with_blame(blame_info.blame)
             .with_deferred_state_root(blame_info.state_vec_root)
             .with_deferred_receipts_root(blame_info.receipts_vec_root)
-            .with_deferred_logs_bloom_hash(blame_info.logs_boom_vec_root)
+            .with_deferred_logs_bloom_hash(blame_info.logs_bloom_vec_root)
             .with_difficulty(expected_difficulty)
             .with_adaptive(adaptive)
             .with_referee_hashes(referees)
@@ -376,7 +376,7 @@ impl BlockGenerator {
             state_blame_info.receipts_vec_root = x;
         }
         if let Some(x) = logs_bloom_hash_override {
-            state_blame_info.logs_boom_vec_root = x;
+            state_blame_info.logs_bloom_vec_root = x;
         }
 
         let best_block_hash = best_info.best_block_hash.clone();

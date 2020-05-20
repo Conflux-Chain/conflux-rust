@@ -5,7 +5,7 @@
 mod anticone_cache;
 pub mod consensus_inner;
 mod consensus_trait;
-mod debug;
+pub mod debug;
 mod pastset_cache;
 
 use super::consensus::consensus_inner::{
@@ -71,9 +71,6 @@ lazy_static! {
 pub struct ConsensusConfig {
     /// Chain id configs.
     pub chain_id: ChainIdParams,
-    /// If we hit invalid state root, we will dump the information into a
-    /// directory specified here. This is useful for testing.
-    pub debug_dump_dir_invalid_state_root: String,
     /// When bench_mode is true, the PoW solution verification will be skipped.
     /// The transaction execution will also be skipped and only return the
     /// pair of (KECCAK_NULL_RLP, KECCAK_EMPTY_LIST_RLP) This is for testing

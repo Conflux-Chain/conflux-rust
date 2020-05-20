@@ -80,7 +80,9 @@ build_config! {
         //
         (mode, (Option<String>), None)
         // Development related section.
-        (debug_dump_dir_invalid_state_root, (String), "./storage/debug_dump_invalid_state_root/".to_string())
+        (debug_invalid_state_root, (bool), false)
+        (debug_invalid_state_root_epoch, (Option<String>), None)
+        (debug_dump_dir_invalid_state_root, (String), "./storage_db/debug_dump_invalid_state_root/".to_string())
         // Controls block generation speed.
         // Only effective in `dev` mode and `start_mining` is false
         (dev_block_interval_ms, (u64), 250)
@@ -394,10 +396,6 @@ impl Configuration {
                     .chain_id
                     .unwrap_or_else(|| rand::thread_rng().gen()),
             },
-            debug_dump_dir_invalid_state_root: self
-                .raw_conf
-                .debug_dump_dir_invalid_state_root
-                .clone(),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: self.raw_conf.adaptive_weight_beta,
                 heavy_block_difficulty_ratio: self
@@ -410,6 +408,27 @@ impl Configuration {
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
+
+                debug_dump_dir_invalid_state_root: if self
+                    .raw_conf
+                    .debug_invalid_state_root
+                {
+                    Some(
+                        self.raw_conf.debug_dump_dir_invalid_state_root.clone(),
+                    )
+                } else {
+                    None
+                },
+
+                debug_invalid_state_root_epoch: match &self
+                    .raw_conf
+                    .debug_invalid_state_root_epoch
+                {
+                    Some(epoch_hex) => {
+                        Some(H256::from_str(&epoch_hex).expect("debug_invalid_state_root_epoch byte length is incorrect."))
+                    }
+                    None => None,
+                },
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
