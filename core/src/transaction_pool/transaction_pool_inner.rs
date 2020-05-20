@@ -779,7 +779,9 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             ));
-        } else if transaction.nonce < state_nonce {
+        } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
+            && transaction.nonce < state_nonce
+        {
             trace!(
                 "Transaction {:?} is discarded due to a too stale nonce, self.nonce={}, state_nonce={}",
                 transaction.hash(), transaction.nonce, state_nonce,

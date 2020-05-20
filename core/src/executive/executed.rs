@@ -100,6 +100,7 @@ pub enum ExecutionError {
 
 #[derive(Debug)]
 pub enum ExecutionOutcome {
+    NotExecutedOldNonce(U256, U256),
     NotExecutedToReconsiderPacking(ToRepackError),
     ExecutionErrorBumpNonce(ExecutionError, Executed),
     Finished(Executed),
