@@ -181,8 +181,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
             chain_id: ChainIdParams { chain_id: 0 },
-            debug_dump_dir_invalid_state_root: "./invalid_state_root/"
-                .to_string(),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
@@ -191,6 +189,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
                 era_epoch_count,
                 enable_optimistic_execution: false,
                 enable_state_expose: false,
+                debug_dump_dir_invalid_state_root: None,
+                debug_invalid_state_root_epoch: None,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */

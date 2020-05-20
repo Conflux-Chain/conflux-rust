@@ -984,6 +984,7 @@ impl BlockDataManager {
         logs_bloom_hash: H256,
     )
     {
+        // FIXME: here or there.
         let commitment = EpochExecutionCommitment {
             state_root_with_aux_info,
             receipts_root,

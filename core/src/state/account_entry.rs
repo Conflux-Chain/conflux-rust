@@ -4,6 +4,7 @@
 
 use crate::{
     bytes::{Bytes, ToPretty},
+    consensus::debug::ComputeEpochDebugRecord,
     hash::{keccak, KECCAK_EMPTY},
     statedb::{Result as DbResult, StateDb},
 };
@@ -841,7 +842,11 @@ impl OverlayAccount {
         storage_delta
     }
 
-    pub fn commit(&mut self, db: &mut StateDb) -> DbResult<()> {
+    pub fn commit(
+        &mut self, db: &mut StateDb,
+        debug_record: &mut Option<ComputeEpochDebugRecord>,
+    ) -> DbResult<()>
+    {
         // reinsert storage_layout to delta trie if storage is updated
         // FIXME: load storage layout on first storage access instead
         if !self.storage_changes.is_empty()
@@ -854,7 +859,7 @@ impl OverlayAccount {
                 // storage_layout_change cannot be None for new accounts
                 .expect("storage layout should exist");
 
-            db.set_storage_layout(&self.address, &layout)?;
+            db.set_storage_layout(&self.address, &layout, debug_record)?;
         }
 
         assert!(self.ownership_changes.is_empty());
@@ -867,13 +872,14 @@ impl OverlayAccount {
             let owner = ownership_cache.get(&k).expect("all key must exist");
 
             match v.is_zero() {
-                true => db.delete(address_key)?,
+                true => db.delete(address_key, debug_record)?,
                 false => db.set::<StorageValue>(
                     address_key,
                     &StorageValue {
                         value: BigEndianHash::from_uint(&v.into_uint()),
                         owner: owner.expect("owner exists"),
                     },
+                    debug_record,
                 )?,
             }
         }
@@ -892,6 +898,7 @@ impl OverlayAccount {
                             code: (*code).clone(),
                             owner: self.code_owner,
                         },
+                        debug_record,
                     )?;
                 }
             }
@@ -903,9 +910,13 @@ impl OverlayAccount {
                 let storage_key =
                     StorageKey::new_deposit_list_key(&self.address);
                 if deposit_list.is_empty() {
-                    db.delete(storage_key)?;
+                    db.delete(storage_key, debug_record)?;
                 } else {
-                    db.set::<DepositList>(storage_key, deposit_list)?;
+                    db.set::<DepositList>(
+                        storage_key,
+                        deposit_list,
+                        debug_record,
+                    )?;
                 }
             }
         }
@@ -915,15 +926,19 @@ impl OverlayAccount {
             Some(vote_stake_list) => {
                 let storage_key = StorageKey::new_vote_list_key(&self.address);
                 if vote_stake_list.is_empty() {
-                    db.delete(storage_key)?;
+                    db.delete(storage_key, debug_record)?;
                 } else {
-                    db.set::<VoteStakeList>(storage_key, vote_stake_list)?;
+                    db.set::<VoteStakeList>(
+                        storage_key,
+                        vote_stake_list,
+                        debug_record,
+                    )?;
                 }
             }
         }
 
         if let Some(ref layout) = self.storage_layout_change {
-            db.set_storage_layout(&self.address, layout)?;
+            db.set_storage_layout(&self.address, layout, debug_record)?;
         }
 
         Ok(())

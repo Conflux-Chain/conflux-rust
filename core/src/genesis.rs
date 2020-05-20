@@ -87,12 +87,16 @@ pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
                 state.set(
                     StorageKey::AccountKey(address.as_bytes()),
                     &account,
+                    &mut None,
                 )?;
                 // initialize storage layout for internal contracts to make sure
                 // that _all_ Conflux contracts have a storage
                 // root in our state trie
-                state
-                    .set_storage_layout(address, &StorageLayout::Regular(0))?;
+                state.set_storage_layout(
+                    address,
+                    &StorageLayout::Regular(0),
+                    &mut None,
+                )?;
             }
             Ok(())
         }
@@ -118,7 +122,7 @@ pub fn genesis_block(
             &0.into(), /* nonce */
         );
         state
-            .set(StorageKey::new_account_key(&addr), &account)
+            .set(StorageKey::new_account_key(&addr), &account, &mut None)
             .unwrap();
     }
     initialize_internal_contract_accounts(&mut state);
