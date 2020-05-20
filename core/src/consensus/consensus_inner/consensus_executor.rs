@@ -1130,6 +1130,7 @@ impl ConsensusExecutionHandler {
                             expected,
                             got
                         );
+                        gas_fee = U256::zero();
                     }
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
