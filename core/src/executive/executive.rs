@@ -1357,7 +1357,9 @@ impl<'a> Executive<'a> {
         let nonce = self.state.nonce(&sender)?;
 
         // Validate transaction nonce
-        if tx.nonce != nonce {
+        if tx.nonce < nonce {
+            return Ok(ExecutionOutcome::NotExecutedOldNonce(nonce, tx.nonce));
+        } else if tx.nonce > nonce {
             return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::InvalidNonce {
                     expected: nonce,

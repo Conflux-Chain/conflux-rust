@@ -760,6 +760,12 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         match self.exec_transaction(request, epoch)? {
+            ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+                bail!(call_execution_error(
+                    "Transaction can not be executed".into(),
+                    format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
+                ))
+            }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -787,6 +793,12 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
         let executed = match self.exec_transaction(request, epoch)? {
+            ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+                bail!(call_execution_error(
+                    "Can not estimate: transaction can not be executed".into(),
+                    format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
+                ))
+            }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
