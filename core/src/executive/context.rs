@@ -105,13 +105,13 @@ impl<'a> Context<'a> {
 }
 
 impl<'a> ContextTrait for Context<'a> {
-    fn storage_at(&self, key: &H256) -> vm::Result<H256> {
+    fn storage_at(&self, key: &Vec<u8>) -> vm::Result<H256> {
         self.state
             .storage_at(&self.origin.address, key)
             .map_err(Into::into)
     }
 
-    fn set_storage(&mut self, key: H256, value: H256) -> vm::Result<()> {
+    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> vm::Result<()> {
         if self.static_flag {
             Err(vm::Error::MutableCallInStaticContext)
         } else {

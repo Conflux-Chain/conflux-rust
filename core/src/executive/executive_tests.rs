@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use cfx_types::{
-    address_util::AddressUtil, Address, BigEndianHash, H256, U256, U512,
+    address_util::AddressUtil, Address, BigEndianHash, U256, U512,
 };
 use keylib::{Generator, Random};
 use primitives::{transaction::Action, Transaction};
@@ -106,7 +106,7 @@ fn test_sender_balance() {
 
     assert_eq!(gas_left, U256::from(94_595));
     assert_eq!(
-        state.storage_at(&address, &H256::zero()).unwrap(),
+        state.storage_at(&address, &vec![0; 32]).unwrap(),
         BigEndianHash::from_uint(
             &(*COLLATERAL_PER_STORAGE_KEY + U256::from(0xf9))
         )
@@ -363,12 +363,7 @@ fn test_revert() {
     assert_eq!(result, U256::from(15_001));
     assert_eq!(output[..], returns[..]);
     assert_eq!(
-        state
-            .storage_at(
-                &contract_address,
-                &BigEndianHash::from_uint(&U256::zero())
-            )
-            .unwrap(),
+        state.storage_at(&contract_address, &vec![0; 32]).unwrap(),
         BigEndianHash::from_uint(&U256::zero())
     );
 }

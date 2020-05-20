@@ -13,14 +13,13 @@ use primitives::{
     Account, CodeInfo, DepositInfo, DepositList, SponsorInfo, StorageKey,
     StorageLayout, StorageValue, VoteStakeInfo, VoteStakeList,
 };
-use rlp::RlpStream;
 use std::{collections::HashMap, sync::Arc};
 
 lazy_static! {
-    static ref SPONSOR_ADDRESS_STORAGE_KEY: H256 =
-        keccak("sponsor_address");
-    static ref SPONSOR_BALANCE_STORAGE_KEY: H256 =
-        keccak("sponsor_balance");
+    static ref SPONSOR_ADDRESS_STORAGE_KEY: Vec<u8> =
+        keccak("sponsor_address").as_bytes().to_vec();
+    static ref SPONSOR_BALANCE_STORAGE_KEY: Vec<u8> =
+        keccak("sponsor_balance").as_bytes().to_vec();
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: H256 =
         H256::from_low_u64_le(1);
     /// If we set this key, it means every account has commission privilege.
@@ -46,12 +45,12 @@ pub struct OverlayAccount {
     sponsor_info: SponsorInfo,
 
     // This is a cache for storage change.
-    storage_cache: RwLock<HashMap<H256, H256>>,
-    storage_changes: HashMap<H256, H256>,
+    storage_cache: RwLock<HashMap<Vec<u8>, H256>>,
+    storage_changes: HashMap<Vec<u8>, H256>,
 
     // This is a cache for storage ownership change.
-    ownership_cache: RwLock<HashMap<H256, Option<Address>>>,
-    ownership_changes: HashMap<H256, Address>,
+    ownership_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
+    ownership_changes: HashMap<Vec<u8>, Address>,
 
     unpaid_storage_entries: u64,
     unrefunded_storage_entries: u64,
@@ -84,7 +83,7 @@ pub struct OverlayAccount {
     code_cache: Arc<Bytes>,
     code_owner: Address,
 
-    reset_storage: bool,
+    is_newly_created_contract: bool,
     // Whether it is a contract address.
     is_contract: bool,
 }
@@ -113,7 +112,7 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(vec![]),
             code_owner: Address::zero(),
-            reset_storage: false,
+            is_newly_created_contract: false,
             is_contract: account.code_hash != KECCAK_EMPTY,
         };
 
@@ -143,15 +142,13 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(vec![]),
             code_owner: Address::zero(),
-            reset_storage: false,
+            is_newly_created_contract: false,
             is_contract: false,
         }
     }
 
     #[cfg(test)]
-    pub fn new_contract(
-        address: &Address, balance: U256, nonce: U256, reset_storage: bool,
-    ) -> Self {
+    pub fn new_contract(address: &Address, balance: U256, nonce: U256) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -174,16 +171,14 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(vec![]),
             code_owner: Address::zero(),
-            reset_storage,
+            is_newly_created_contract: true,
             is_contract: true,
         }
     }
 
     pub fn new_contract_with_admin(
-        address: &Address, balance: U256, nonce: U256, reset_storage: bool,
-        admin: &Address,
-    ) -> Self
-    {
+        address: &Address, balance: U256, nonce: U256, admin: &Address,
+    ) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -206,7 +201,7 @@ impl OverlayAccount {
             code_size: None,
             code_cache: Arc::new(Default::default()),
             code_owner: Address::zero(),
-            reset_storage,
+            is_newly_created_contract: true,
             is_contract: true,
         }
     }
@@ -279,22 +274,17 @@ impl OverlayAccount {
     pub fn check_commission_privilege(
         &self, db: &StateDb, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        let special_key = {
-            let mut rlp_stream = RlpStream::new_list(2);
-            rlp_stream.append_list(contract_address.as_ref());
-            rlp_stream.append_list(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_ref());
-            keccak(rlp_stream.out())
-        };
+        let mut special_key = Vec::with_capacity(Address::len_bytes() * 2);
+        special_key.extend_from_slice(contract_address.as_bytes());
+        special_key
+            .extend_from_slice(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_bytes());
         let special_value = self.storage_at(db, &special_key)?;
         if !special_value.is_zero() {
             Ok(true)
         } else {
-            let key = {
-                let mut rlp_stream = RlpStream::new_list(2);
-                rlp_stream.append_list(contract_address.as_ref());
-                rlp_stream.append_list(user.as_ref());
-                keccak(rlp_stream.out())
-            };
+            let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+            key.extend_from_slice(contract_address.as_bytes());
+            key.extend_from_slice(user.as_bytes());
             self.storage_at(db, &key).map(|x| !x.is_zero())
         }
     }
@@ -306,10 +296,9 @@ impl OverlayAccount {
         user: Address,
     )
     {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(user.as_ref());
-        let key = keccak(rlp_stream.out());
+        let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+        key.extend_from_slice(contract_address.as_bytes());
+        key.extend_from_slice(user.as_bytes());
         self.set_storage(
             key,
             COMMISSION_PRIVILEGE_STORAGE_VALUE.clone(),
@@ -325,10 +314,9 @@ impl OverlayAccount {
         user: Address,
     )
     {
-        let mut rlp_stream = RlpStream::new_list(2);
-        rlp_stream.append_list(contract_address.as_ref());
-        rlp_stream.append_list(user.as_ref());
-        let key = keccak(rlp_stream.out());
+        let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+        key.extend_from_slice(contract_address.as_bytes());
+        key.extend_from_slice(user.as_bytes());
         self.set_storage(key, H256::zero(), contract_owner);
     }
 
@@ -392,17 +380,19 @@ impl OverlayAccount {
     }
 
     #[cfg(test)]
-    pub fn storage_changes(&self) -> &HashMap<H256, H256> {
+    pub fn storage_changes(&self) -> &HashMap<Vec<u8>, H256> {
         &self.storage_changes
     }
 
     #[cfg(test)]
-    pub fn ownership_changes(&self) -> &HashMap<H256, Address> {
+    pub fn ownership_changes(&self) -> &HashMap<Vec<u8>, Address> {
         &self.ownership_changes
     }
 
     #[cfg(test)]
-    pub fn reset_storage(&self) -> bool { self.reset_storage }
+    pub fn is_newly_created_contract(&self) -> bool {
+        self.is_newly_created_contract
+    }
 
     pub fn nonce(&self) -> &U256 { &self.nonce }
 
@@ -642,7 +632,7 @@ impl OverlayAccount {
             code_size: self.code_size,
             code_cache: self.code_cache.clone(),
             code_owner: self.code_owner,
-            reset_storage: self.reset_storage,
+            is_newly_created_contract: self.is_newly_created_contract,
             is_contract: self.is_contract,
         }
     }
@@ -660,8 +650,8 @@ impl OverlayAccount {
         account
     }
 
-    pub fn set_storage(&mut self, key: H256, value: H256, owner: Address) {
-        self.storage_changes.insert(key, value);
+    pub fn set_storage(&mut self, key: Vec<u8>, value: H256, owner: Address) {
+        self.storage_changes.insert(key.clone(), value);
         self.ownership_changes.insert(key, owner);
     }
 
@@ -669,7 +659,7 @@ impl OverlayAccount {
         self.storage_layout_change = Some(layout);
     }
 
-    pub fn cached_storage_at(&self, key: &H256) -> Option<H256> {
+    pub fn cached_storage_at(&self, key: &Vec<u8>) -> Option<H256> {
         if let Some(value) = self.storage_changes.get(key) {
             return Some(value.clone());
         }
@@ -679,11 +669,11 @@ impl OverlayAccount {
         None
     }
 
-    pub fn storage_at(&self, db: &StateDb, key: &H256) -> DbResult<H256> {
+    pub fn storage_at(&self, db: &StateDb, key: &Vec<u8>) -> DbResult<H256> {
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
         }
-        if self.reset_storage {
+        if self.is_newly_created_contract {
             Ok(H256::zero())
         } else {
             Self::get_and_cache_storage(
@@ -699,7 +689,7 @@ impl OverlayAccount {
 
     #[cfg(test)]
     pub fn original_storage_at(
-        &self, db: &StateDb, key: &H256,
+        &self, db: &StateDb, key: &Vec<u8>,
     ) -> DbResult<H256> {
         if let Some(value) = self.storage_cache.read().get(key) {
             return Ok(value.clone());
@@ -715,9 +705,9 @@ impl OverlayAccount {
     }
 
     fn get_and_cache_storage(
-        storage_cache: &mut HashMap<H256, H256>,
-        ownership_cache: &mut HashMap<H256, Option<Address>>, db: &StateDb,
-        address: &Address, key: &H256, cache_ownership: bool,
+        storage_cache: &mut HashMap<Vec<u8>, H256>,
+        ownership_cache: &mut HashMap<Vec<u8>, Option<Address>>, db: &StateDb,
+        address: &Address, key: &Vec<u8>, cache_ownership: bool,
     ) -> DbResult<H256>
     {
         assert!(!ownership_cache.contains_key(key));
@@ -728,15 +718,15 @@ impl OverlayAccount {
             ))
             .expect("get_and_cache_storage failed")
         {
-            storage_cache.insert(*key, value.value);
+            storage_cache.insert(key.clone(), value.value);
             if cache_ownership {
-                ownership_cache.insert(*key, Some(value.owner));
+                ownership_cache.insert(key.clone(), Some(value.owner));
             }
             Ok(value.value)
         } else {
             storage_cache.insert(key.clone(), H256::zero());
             if cache_ownership {
-                ownership_cache.insert(*key, None);
+                ownership_cache.insert(key.clone(), None);
             }
             Ok(H256::zero())
         }
@@ -771,7 +761,7 @@ impl OverlayAccount {
         self.accumulated_interest_return = other.accumulated_interest_return;
         self.deposit_list = other.deposit_list;
         self.vote_stake_list = other.vote_stake_list;
-        self.reset_storage = other.reset_storage;
+        self.is_newly_created_contract = other.is_newly_created_contract;
         self.is_contract = other.is_contract;
     }
 
@@ -779,12 +769,12 @@ impl OverlayAccount {
     /// means the value of the key is zero before this execution. Otherwise, the
     /// value of the key is nonzero.
     fn original_ownership_at(
-        &self, db: &StateDb, key: &H256,
+        &self, db: &StateDb, key: &Vec<u8>,
     ) -> Option<Address> {
         if let Some(value) = self.ownership_cache.read().get(key) {
             return value.clone();
         }
-        if self.reset_storage {
+        if self.is_newly_created_contract {
             return None;
         }
         let ownership_cache = &mut *self.ownership_cache.write();
@@ -852,16 +842,6 @@ impl OverlayAccount {
     }
 
     pub fn commit(&mut self, db: &mut StateDb) -> DbResult<()> {
-        if self.reset_storage {
-            // FIXME: We should consider ownership reset during storage reset.
-            // FIXME: In current implementation, storage reset will only happen
-            // FIXME: on contract creation. And in this case, the storage in
-            // FIXME: disk should be empty. So we should not worry too much now.
-            db.delete_all(StorageKey::new_storage_root_key(&self.address))?;
-            db.delete_all(StorageKey::new_code_root_key(&self.address))?;
-            self.reset_storage = false;
-        }
-
         // reinsert storage_layout to delta trie if storage is updated
         // FIXME: load storage layout on first storage access instead
         if !self.storage_changes.is_empty()
