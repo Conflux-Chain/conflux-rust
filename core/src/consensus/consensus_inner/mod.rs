@@ -10,7 +10,12 @@ use crate::{
     block_data_manager::{
         BlockDataManager, BlockExecutionResultWithEpoch, EpochExecutionContext,
     },
-    consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
+    consensus::{
+        anticone_cache::AnticoneCache,
+        consensus_inner::consensus_executor::ConsensusExecutor,
+        debug::debug_recompute::log_invalid_state_root,
+        pastset_cache::PastSetCache,
+    },
     parameters::{consensus::*, consensus_internal::*},
     pow::{target_difficulty, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
@@ -35,7 +40,7 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct ConsensusInnerConfig {
     /// Beta is the threshold in GHAST algorithm
     pub adaptive_weight_beta: u64,
@@ -56,6 +61,11 @@ pub struct ConsensusInnerConfig {
     pub enable_optimistic_execution: bool,
     /// Control whether we enable the state exposer for the testing purpose.
     pub enable_state_expose: bool,
+
+    /// If we hit invalid state root, we will dump the information into a
+    /// directory specified here. This is useful for testing.
+    pub debug_dump_dir_invalid_state_root: Option<String>,
+    pub debug_invalid_state_root_epoch: Option<H256>,
 }
 
 #[derive(Copy, Clone, DeriveMallocSizeOf)]
@@ -63,7 +73,7 @@ pub struct StateBlameInfo {
     pub blame: u32,
     pub state_vec_root: H256,
     pub receipts_vec_root: H256,
-    pub logs_boom_vec_root: H256,
+    pub logs_bloom_vec_root: H256,
 }
 
 /// ConsensusGraphNodeData contains all extra information of a block that will
@@ -397,6 +407,11 @@ impl Default for ConsensusGraphPivotData {
 /// each node has an internal index. This enables fast internal implementation
 /// to use integer index instead of H256 block hashes.
 pub struct ConsensusGraphInner {
+    /// data_man is the handle to access raw block data
+    pub data_man: Arc<BlockDataManager>,
+    pub inner_conf: ConsensusInnerConfig,
+    pub pow_config: ProofOfWorkConfig,
+    //executor: Arc<ConsensusExecutor>,
     /// This slab hold consensus graph node data and the array index is the
     /// internal index.
     pub arena: Slab<ConsensusGraphNode>,
@@ -446,12 +461,8 @@ pub struct ConsensusGraphInner {
     /// This cache is to store all passed block body parameters of non-active
     /// blocks
     block_body_caches: HashMap<usize, Option<Vec<Arc<SignedTransaction>>>>,
-    pub pow_config: ProofOfWorkConfig,
     /// It maintains the expected difficulty of the next local mined block.
     pub current_difficulty: U256,
-    /// data_man is the handle to access raw block data
-    data_man: Arc<BlockDataManager>,
-    pub inner_conf: ConsensusInnerConfig,
     /// The cache to store Anticone information of each node. This could be
     /// very large so we periodically remove old ones in the cache.
     anticone_cache: AnticoneCache,
@@ -783,7 +794,9 @@ impl ConsensusGraphInner {
     }
 
     #[inline]
-    fn get_epoch_block_hashes(&self, epoch_arena_index: usize) -> Vec<H256> {
+    pub fn get_epoch_block_hashes(
+        &self, epoch_arena_index: usize,
+    ) -> Vec<H256> {
         self.get_ordered_executable_epoch_blocks(epoch_arena_index)
             .iter()
             .map(|idx| self.arena[*idx].hash)
@@ -1793,7 +1806,7 @@ impl ConsensusGraphInner {
     /// Let D is the gap between the parent of the genesis of next era and [Bi].
     /// The gap between [Ba] and [Bi] is
     ///     min(ANTICONE_PENALTY_UPPER_EPOCH_COUNT, D).
-    fn get_pivot_reward_index(
+    pub fn get_pivot_reward_index(
         &self, epoch_arena_index: usize,
     ) -> Option<(usize, usize)> {
         // We are going to exclude the original genesis block here!
@@ -2398,7 +2411,7 @@ impl ConsensusGraphInner {
                                 .last()
                                 .unwrap()
                                 .clone(),
-                            logs_boom_vec_root: bloom_blame_vec
+                            logs_bloom_vec_root: bloom_blame_vec
                                 .last()
                                 .unwrap()
                                 .clone(),
@@ -2426,7 +2439,7 @@ impl ConsensusGraphInner {
                 blame_cnt = blame_info.blame + 1;
                 state_blame_vec.push(blame_info.state_vec_root);
                 receipt_blame_vec.push(blame_info.receipts_vec_root);
-                bloom_blame_vec.push(blame_info.logs_boom_vec_root);
+                bloom_blame_vec.push(blame_info.logs_bloom_vec_root);
                 break;
             }
             blame_info_to_fill.push(cur);
@@ -2459,7 +2472,7 @@ impl ConsensusGraphInner {
                 state_blame_vec.last().unwrap().clone();
             let mut accumulated_receipts_root =
                 receipt_blame_vec.last().unwrap().clone();
-            let mut accumulated_logs_boom_root =
+            let mut accumulated_logs_bloom_root =
                 bloom_blame_vec.last().unwrap().clone();
             for i in (0..blame_info_to_fill.len()).rev() {
                 accumulated_state_root =
@@ -2472,17 +2485,17 @@ impl ConsensusGraphInner {
                         receipt_blame_vec[i + 1],
                         accumulated_receipts_root,
                     );
-                accumulated_logs_boom_root =
+                accumulated_logs_bloom_root =
                     BlockHeaderBuilder::compute_blame_state_root_incremental(
                         bloom_blame_vec[i + 1],
-                        accumulated_logs_boom_root,
+                        accumulated_logs_bloom_root,
                     );
                 self.arena[blame_info_to_fill[i]].data.blame_info =
                     Some(StateBlameInfo {
                         blame: blame_cnt,
                         state_vec_root: accumulated_state_root,
                         receipts_vec_root: accumulated_receipts_root,
-                        logs_boom_vec_root: accumulated_logs_boom_root,
+                        logs_bloom_vec_root: accumulated_logs_bloom_root,
                     });
                 blame_cnt += 1;
             }
@@ -2496,23 +2509,23 @@ impl ConsensusGraphInner {
                     receipt_blame_vec[0],
                     accumulated_receipts_root,
                 );
-            let logs_boom_vec_root =
+            let logs_bloom_vec_root =
                 BlockHeaderBuilder::compute_blame_state_root_incremental(
                     bloom_blame_vec[0],
-                    accumulated_logs_boom_root,
+                    accumulated_logs_bloom_root,
                 );
             Ok(StateBlameInfo {
                 blame,
                 state_vec_root,
                 receipts_vec_root,
-                logs_boom_vec_root,
+                logs_bloom_vec_root,
             })
         } else {
             Ok(StateBlameInfo {
                 blame: 0,
                 state_vec_root: state_blame_vec.pop().unwrap(),
                 receipts_vec_root: receipt_blame_vec.pop().unwrap(),
-                logs_boom_vec_root: bloom_blame_vec.pop().unwrap(),
+                logs_bloom_vec_root: bloom_blame_vec.pop().unwrap(),
             })
         }
     }
@@ -2523,12 +2536,11 @@ impl ConsensusGraphInner {
     ///   2. The execution_commitment for deferred state block of `me` exist.
     ///   3. `me` is in stable era.
     fn compute_state_valid_and_blame_info_for_block(
-        &mut self, me: usize,
+        &mut self, me: usize, executor: &ConsensusExecutor,
     ) -> Result<(), String> {
-        debug!(
-            "compute_state_valid: me={} height={}",
-            me, self.arena[me].height
-        );
+        let block_height = self.arena[me].height;
+        let block_hash = self.arena[me].hash;
+        debug!("compute_state_valid: me={} height={}", me, block_height);
         let deferred_state_arena_index =
             self.get_deferred_state_arena_index(me)?;
         let exec_commitment = self
@@ -2538,10 +2550,8 @@ impl ConsensusGraphInner {
             )
             .expect("Commitment exist");
         let parent = self.arena[me].parent;
-        let original_deferred_state_root = exec_commitment
-            .state_root_with_aux_info
-            .aux_info
-            .state_root_hash;
+        let original_deferred_state_root =
+            exec_commitment.state_root_with_aux_info.clone();
         let original_deferred_receipt_root =
             exec_commitment.receipts_root.clone();
         let original_deferred_logs_bloom_hash =
@@ -2550,7 +2560,10 @@ impl ConsensusGraphInner {
         let state_blame_info = self
             .compute_blame_and_state_with_execution_result(
                 parent,
-                original_deferred_state_root.clone(),
+                original_deferred_state_root
+                    .aux_info
+                    .state_root_hash
+                    .clone(),
                 original_deferred_receipt_root.clone(),
                 original_deferred_logs_bloom_hash.clone(),
             )?;
@@ -2564,16 +2577,110 @@ impl ConsensusGraphInner {
             && *block_header.deferred_receipts_root()
                 == state_blame_info.receipts_vec_root
             && *block_header.deferred_logs_bloom_hash()
-                == state_blame_info.logs_boom_vec_root;
+                == state_blame_info.logs_bloom_vec_root;
 
+        let mut debug_recompute = false;
         if state_valid {
-            debug!("compute_state_valid_for_block(): Block {} state/blame is valid.", self.arena[me].hash);
+            debug!(
+                "compute_state_valid_for_block(): Block {} state/blame is valid.",
+                block_hash,
+            );
         } else {
-            debug!("compute_state_valid_for_block(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.",
-                   self.arena[me].hash, block_header.blame(), state_blame_info.blame, block_header.deferred_state_root(),
-                   state_blame_info.state_vec_root, block_header.deferred_receipts_root(),
-                   state_blame_info.receipts_vec_root, block_header.deferred_logs_bloom_hash(),
-                   state_blame_info.logs_boom_vec_root);
+            warn!(
+                "compute_state_valid_for_block(): Block {:?} state/blame is invalid! \
+                header blame {:?}, our blame {:?}, header state_root {:?}, \
+                our state root {:?}, header receipt_root {:?}, our receipt root {:?}, \
+                header logs_bloom_hash {:?}, our logs_bloom_hash {:?}.",
+                block_hash, block_header.blame(), state_blame_info.blame,
+                block_header.deferred_state_root(), state_blame_info.state_vec_root,
+                block_header.deferred_receipts_root(), state_blame_info.receipts_vec_root,
+                block_header.deferred_logs_bloom_hash(), state_blame_info.logs_bloom_vec_root,
+            );
+
+            if self.inner_conf.debug_dump_dir_invalid_state_root.is_some() {
+                debug_recompute = true;
+            }
+        }
+        if let Some(debug_epoch) =
+            &self.inner_conf.debug_invalid_state_root_epoch
+        {
+            if block_hash.eq(debug_epoch) {
+                debug_recompute = true;
+            }
+        }
+        if debug_recompute {
+            if let Ok(epoch_arena_index) =
+                self.get_deferred_state_arena_index(me)
+            {
+                let state_availability_lower_bound = self
+                    .data_man
+                    .state_availability_boundary
+                    .read()
+                    .lower_bound;
+                // Can not run debug_recompute when the parent state is not
+                // available.
+                if state_availability_lower_bound < block_height {
+                    // Maybe this block isn't valid, when our node is correct.
+                    log_invalid_state_root(
+                        epoch_arena_index,
+                        self,
+                        executor,
+                        block_hash,
+                        block_height,
+                        &original_deferred_state_root,
+                    )
+                    .ok();
+
+                    // Maybe this block is valid, but we are not. So we find the
+                    // first state we think is correct however this block things
+                    // wrong.
+                    let header_blame = block_header.blame() as u64;
+                    let mut block_arena_index = self.arena[me].parent;
+                    let mut earliest_mismatch_arena_index = me;
+                    for i in 1..header_blame {
+                        if block_height - i <= state_availability_lower_bound {
+                            break;
+                        }
+                        if self.arena[block_arena_index].data.state_valid
+                            != Some(false)
+                        {
+                            earliest_mismatch_arena_index = block_arena_index;
+                        }
+                        block_arena_index =
+                            self.arena[block_arena_index].parent;
+                    }
+                    if earliest_mismatch_arena_index != me {
+                        if let Ok(state_epoch_arena_index) = self
+                            .get_deferred_state_arena_index(
+                                earliest_mismatch_arena_index,
+                            )
+                        {
+                            let block_hash =
+                                self.arena[earliest_mismatch_arena_index].hash;
+                            let block_height = self.arena
+                                [earliest_mismatch_arena_index]
+                                .height;
+                            let state_root = self
+                                .data_man
+                                .get_epoch_execution_commitment(
+                                    &self.arena[state_epoch_arena_index].hash,
+                                )
+                                .expect("Commitment exist")
+                                .state_root_with_aux_info
+                                .clone();
+                            log_invalid_state_root(
+                                state_epoch_arena_index,
+                                self,
+                                executor,
+                                block_hash,
+                                block_height,
+                                &state_root,
+                            )
+                            .ok();
+                        }
+                    }
+                }
+            }
         }
 
         self.arena[me].data.state_valid = Some(state_valid);
@@ -2587,8 +2694,10 @@ impl ConsensusGraphInner {
                 .lock()
                 .block_execution_state_vec
                 .push(ConsensusGraphBlockExecutionState {
-                    block_hash: self.arena[me].hash,
-                    deferred_state_root: original_deferred_state_root,
+                    block_hash,
+                    deferred_state_root: original_deferred_state_root
+                        .aux_info
+                        .state_root_hash,
                     deferred_receipt_root: original_deferred_receipt_root,
                     deferred_logs_bloom_hash: original_deferred_logs_bloom_hash,
                     state_valid: self.arena[me]
@@ -3265,7 +3374,7 @@ impl ConsensusGraphInner {
 
     /// Compute missing `state_valid` for `me` and all the precedents.
     fn compute_state_valid_and_blame_info(
-        &mut self, me: usize,
+        &mut self, me: usize, executor: &ConsensusExecutor,
     ) -> Result<(), String> {
         // Collect all precedents whose state_valid is empty, and evaluate them
         // in order
@@ -3288,7 +3397,7 @@ impl ConsensusGraphInner {
         blocks_to_compute.reverse();
 
         for index in blocks_to_compute {
-            self.compute_state_valid_and_blame_info_for_block(index)?;
+            self.compute_state_valid_and_blame_info_for_block(index, executor)?;
         }
         Ok(())
     }
