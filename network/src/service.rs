@@ -1192,7 +1192,7 @@ impl NetworkServiceInner {
                 }
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
-                info!(
+                debug!(
                     "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
                 );
@@ -1267,7 +1267,7 @@ impl NetworkServiceInner {
             deregister = remote || sess.done();
             token = sess.token();
             assert_eq!(sess.id().unwrap().clone(), node_id.clone());
-            info!(
+            debug!(
                 "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                 deregister, reason, *sess, op
             );
