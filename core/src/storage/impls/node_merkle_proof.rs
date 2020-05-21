@@ -37,6 +37,16 @@ impl NodeMerkleProof {
         self
     }
 
+    pub fn is_valid_triplet(
+        &self, key: &Vec<u8>, triplet: NodeMerkleTriplet, state_root: StateRoot,
+    ) -> bool {
+        self.is_valid(
+            key,
+            StorageRoot::from_node_merkle_triplet(triplet),
+            state_root,
+        )
+    }
+
     pub fn is_valid(
         &self, key: &Vec<u8>, storage_root: Option<StorageRoot>,
         state_root: StateRoot,
@@ -163,6 +173,7 @@ impl NodeMerkleProof {
 
 use super::merkle_patricia_trie::TrieProof;
 use primitives::{
-    DeltaMptKeyPadding, StateRoot, StorageKey, StorageRoot, MERKLE_NULL_NODE,
+    DeltaMptKeyPadding, NodeMerkleTriplet, StateRoot, StorageKey, StorageRoot,
+    MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};

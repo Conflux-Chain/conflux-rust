@@ -714,12 +714,13 @@ fn test_proofs() {
 
     keys.shuffle(&mut rng);
 
-    for key in &keys {
+    for original_key in &keys {
+        // ----------- state proof -----------
         let (value, proof) = state
-            .get_with_proof(StorageKey::AccountKey(key))
+            .get_with_proof(StorageKey::AccountKey(original_key))
             .expect("Failed to get key.");
 
-        let key = &key.to_vec();
+        let key = &original_key.to_vec();
         let value = value.as_ref().map(|b| &**b);
 
         // valid proof
@@ -747,6 +748,49 @@ fn test_proofs() {
 
         // test rlp
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
+
+        // ----------- node merkle proof -----------
+        let (triplet, proof) = state
+            .get_node_merkle_all_versions(
+                StorageKey::AccountKey(original_key),
+                true, /* with_proof */
+            )
+            .expect("Failed to get key.");
+
+        // valid proof
+        assert!(proof.is_valid_triplet(key, triplet.clone(), root.clone()));
+
+        // invalid state root
+        let mut invalid_root = root.delta_root.clone();
+        invalid_root.as_bytes_mut()[0] = 0x00;
+
+        assert!(!proof.is_valid_triplet(
+            key,
+            triplet.clone(),
+            StateRoot {
+                snapshot_root: invalid_root,
+                intermediate_delta_root: invalid_root,
+                delta_root: invalid_root
+            },
+        ));
+
+        // invalid merkle triplet
+        let mut invalid_triplet = triplet.clone();
+        invalid_triplet
+            .delta
+            .as_mut()
+            .map(|delta| delta.as_bytes_mut()[0] = 0x00);
+        invalid_triplet
+            .delta
+            .as_mut()
+            .map(|delta| delta.as_bytes_mut()[1] = 0x00);
+        assert!(!proof.is_valid_triplet(key, invalid_triplet, root.clone()));
+
+        // invalid non-existence proof
+        assert!(!proof.is_valid(key, None, root.clone()));
+
+        // test rlp
+        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
     }
 
     let nonexistent_keys: Vec<Vec<u8>> = generate_keys(TEST_NUMBER_OF_KEYS)
@@ -760,14 +804,24 @@ fn test_proofs() {
             continue;
         }
 
+        // state proof should be valid non-existence proof
         let (value, proof) = state
             .get_with_proof(StorageKey::AccountKey(key))
             .expect("Failed to get key.");
 
         assert_eq!(value, None);
 
-        // valid non-existence proof
         assert!(proof.is_valid_kv(&key.to_vec(), None, root.clone()));
+
+        // node merkle proof should be valid non-existence proof
+        let (_, proof) = state
+            .get_node_merkle_all_versions(
+                StorageKey::AccountKey(key),
+                true, /* with_proof */
+            )
+            .expect("Failed to get key.");
+
+        assert!(proof.is_valid(&key.to_vec(), None, root.clone()));
     }
 }
 
