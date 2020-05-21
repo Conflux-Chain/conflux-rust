@@ -21,19 +21,19 @@ use crate::{
             BlockTxs as GetBlockTxsResponse, BlockTxsWithHash, BloomWithEpoch,
             Blooms as GetBloomsResponse, GetBlockHashesByEpoch,
             GetBlockHeaders, GetBlockTxs, GetBlooms, GetReceipts,
-            GetStateEntries, GetStateRoots, GetTxInfos, GetTxs, GetWitnessInfo,
-            NewBlockHashes, NodeType, Receipts as GetReceiptsResponse,
-            ReceiptsWithEpoch, SendRawTx,
+            GetStateEntries, GetStateRoots, GetStorageRoots, GetTxInfos,
+            GetTxs, GetWitnessInfo, NewBlockHashes, NodeType,
+            Receipts as GetReceiptsResponse, ReceiptsWithEpoch, SendRawTx,
             StateEntries as GetStateEntriesResponse, StateEntryWithKey,
             StateRootWithEpoch, StateRoots as GetStateRootsResponse,
             StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
-            StatusPongV2, TxInfo, TxInfos as GetTxInfosResponse,
-            Txs as GetTxsResponse, WitnessInfo as GetWitnessInfoResponse,
-            WitnessInfoWithHeight,
+            StatusPongV2, StorageRootWithKey,
+            StorageRoots as GetStorageRootsResponse, TxInfo,
+            TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
+            WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID,
-        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
-        LIGHT_PROTO_V1,
+        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTO_V1, LIGHT_PROTO_V3,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{
@@ -86,7 +86,7 @@ impl Provider {
         let peers = Peers::new();
 
         Provider {
-            protocol_version: LIGHT_PROTOCOL_VERSION,
+            protocol_version: LIGHT_PROTO_V3,
             consensus,
             graph,
             ledger,
@@ -171,6 +171,7 @@ impl Provider {
             msgid::GET_BLOOMS => self.on_get_blooms(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
+            msgid::GET_STORAGE_ROOTS => self.on_get_storage_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             _ => Err(ErrorKind::UnknownMessage.into()),
         }
     }
@@ -623,6 +624,32 @@ impl Provider {
 
         let msg: Box<dyn Message> =
             Box::new(GetTxInfosResponse { request_id, infos });
+
+        msg.send(io, peer)?;
+        Ok(())
+    }
+
+    fn on_get_storage_roots(
+        &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStorageRoots,
+    ) -> Result<(), Error> {
+        debug!("on_get_storage_roots req={:?}", req);
+        self.throttle(peer, &req)?;
+        let request_id = req.request_id;
+
+        let roots = req
+            .keys
+            .into_iter()
+            .map(|key| {
+                self.ledger
+                    .storage_root_of(key.epoch, &key.address)
+                    .map(|(root, proof)| (key, root, proof))
+            })
+            .filter_map(Result::ok)
+            .map(|(key, root, proof)| StorageRootWithKey { key, root, proof })
+            .collect();
+
+        let msg: Box<dyn Message> =
+            Box::new(GetStorageRootsResponse { request_id, roots });
 
         msg.send(io, peer)?;
         Ok(())

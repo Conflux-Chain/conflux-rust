@@ -6,9 +6,9 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{
         common::{FullPeerFilter, LedgerInfo},
-        handler::sync::tx_infos::TxInfoValidated,
+        handler::sync::TxInfoValidated,
         message::msgid,
-        Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
+        Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTO_V3,
     },
     network::{NetworkContext, NetworkService},
     parameters::{
@@ -27,7 +27,7 @@ use primitives::{
     filter::{Filter, FilterError},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, BlockReceipts, CodeInfo, EpochNumber, Receipt, SignedTransaction,
-    StateRoot, StorageKey, StorageValue, TransactionIndex,
+    StateRoot, StorageKey, StorageRoot, StorageValue, TransactionIndex,
 };
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
 
@@ -91,7 +91,7 @@ impl QueryService {
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {
-            protocol_version: LIGHT_PROTOCOL_VERSION,
+            protocol_version: LIGHT_PROTO_V3,
             consensus,
             handler,
             ledger,
@@ -166,6 +166,28 @@ impl QueryService {
         }
     }
 
+    async fn retrieve_storage_root(
+        &self, epoch: u64, address: H160,
+    ) -> Result<Option<StorageRoot>, String> {
+        trace!(
+            "retrieve_storage_root epoch = {}, address = {}",
+            epoch,
+            address
+        );
+
+        // trigger state root request but don't wait for result
+        // FIXME(thegaram): is there a better way?
+        let _ =
+            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
+
+        with_timeout(
+            *MAX_POLL_TIME,
+            format!("Timeout while retrieving storage root for address {:?} in epoch {:?}", address, epoch),
+            self.with_io(|io| self.handler.storage_roots.request_now(io, epoch, address)),
+        )
+        .await
+    }
+
     async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
         trace!("retrieve_bloom epoch = {}", epoch);
 
@@ -221,23 +243,15 @@ impl QueryService {
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
-        StorageKey::AccountKey(&address.0).to_key_bytes()
+        StorageKey::new_account_key(&address).to_key_bytes()
     }
 
     fn code_key(address: &H160, code_hash: &H256) -> Vec<u8> {
-        StorageKey::CodeKey {
-            address_bytes: &address.0,
-            code_hash_bytes: &code_hash.0,
-        }
-        .to_key_bytes()
+        StorageKey::new_code_key(&address, &code_hash).to_key_bytes()
     }
 
     fn storage_key(address: &H160, position: &H256) -> Vec<u8> {
-        StorageKey::StorageKey {
-            address_bytes: &address.0,
-            storage_key: &position.0,
-        }
-        .to_key_bytes()
+        StorageKey::new_storage_key(&address, &position.0).to_key_bytes()
     }
 
     pub async fn get_account(
@@ -310,6 +324,22 @@ impl QueryService {
             Err(e) => Err(format!("Unable to retrieve storage entry: {}", e)),
             Ok(None) => Ok(None),
             Ok(Some(entry)) => Ok(Some(entry.value)),
+        }
+    }
+
+    pub async fn get_storage_root(
+        &self, epoch: EpochNumber, address: H160,
+    ) -> Result<Option<StorageRoot>, String> {
+        debug!("get_storage_root epoch={:?} address={:?}", epoch, address,);
+
+        let epoch = match self.get_height_from_epoch_number(epoch) {
+            Ok(epoch) => epoch,
+            Err(e) => return Err(format!("{}", e)),
+        };
+
+        match self.retrieve_storage_root(epoch, address).await {
+            Err(e) => Err(format!("Unable to retrieve storage root: {}", e)),
+            Ok(root) => Ok(root),
         }
     }
 

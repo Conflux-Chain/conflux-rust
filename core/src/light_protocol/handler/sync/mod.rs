@@ -10,7 +10,8 @@ mod headers;
 mod receipts;
 mod state_entries;
 mod state_roots;
-pub mod tx_infos;
+mod storage_roots;
+mod tx_infos;
 mod txs;
 mod witnesses;
 
@@ -21,6 +22,7 @@ pub use headers::{HashSource, Headers};
 pub use receipts::Receipts;
 pub use state_entries::StateEntries;
 pub use state_roots::StateRoots;
-pub use tx_infos::TxInfos;
+pub use storage_roots::StorageRoots;
+pub use tx_infos::{TxInfoValidated, TxInfos};
 pub use txs::Txs;
 pub use witnesses::Witnesses;

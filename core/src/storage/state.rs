@@ -46,12 +46,14 @@ pub trait StateTrait {
     /// Node merkle is computed on the value and children hashes, ignoring the
     /// compressed path.
     fn get_node_merkle_all_versions(
-        &self, access_key: StorageKey,
-    ) -> Result<(Option<MerkleHash>, Option<MerkleHash>, Option<MerkleHash>)>;
+        &self, access_key: StorageKey, with_proof: bool,
+    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
 }
 
 use super::{
-    impls::{errors::*, state_proof::StateProof},
+    impls::{
+        errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
+    },
     StateRootWithAuxInfo,
 };
-use primitives::{EpochId, MerkleHash, StorageKey};
+use primitives::{EpochId, NodeMerkleTriplet, StorageKey};

@@ -2,15 +2,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Bloom, H256};
+use cfx_types::{Bloom, H160, H256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use super::NodeType;
-use crate::{message::RequestId, storage::StateProof};
+use crate::{
+    message::RequestId,
+    storage::{StateProof, StorageRootProof},
+};
 
 use primitives::{
     BlockHeader as PrimitiveBlockHeader, BlockReceipts, ChainIdParams,
     SignedTransaction, StateRoot as PrimitiveStateRoot,
+    StorageRoot as PrimitiveStorageRoot,
 };
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -230,4 +234,31 @@ pub struct TxInfo {
 pub struct TxInfos {
     pub request_id: RequestId,
     pub infos: Vec<TxInfo>,
+}
+
+#[derive(
+    Clone, Debug, Default, PartialEq, Eq, Hash, RlpEncodable, RlpDecodable,
+)]
+pub struct StorageRootKey {
+    pub epoch: u64,
+    pub address: H160,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct GetStorageRoots {
+    pub request_id: RequestId,
+    pub keys: Vec<StorageRootKey>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StorageRootWithKey {
+    pub key: StorageRootKey,
+    pub root: Option<PrimitiveStorageRoot>,
+    pub proof: StorageRootProof,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StorageRoots {
+    pub request_id: RequestId,
+    pub roots: Vec<StorageRootWithKey>,
 }

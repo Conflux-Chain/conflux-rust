@@ -348,9 +348,28 @@ impl RpcImpl {
     #[allow(unused_variables)]
     fn storage_root(
         &self, address: RpcH160, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcStorageRoot>> {
-        // TODO(thegaram)
-        Err(error_codes::unimplemented(None))
+    ) -> BoxFuture<Option<RpcStorageRoot>> {
+        let address: H160 = address.into();
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+
+        info!(
+            "RPC Request: cfx_getStorageRoot address={:?} epoch={:?})",
+            address, epoch_num
+        );
+
+        // clone `self.light` to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            let root = light
+                .get_storage_root(epoch_num.into(), address)
+                .await
+                .map_err(RpcError::invalid_params)?;
+
+            Ok(root.map(RpcStorageRoot::from_primitive))
+        };
+
+        Box::new(fut.boxed().compat())
     }
 
     fn storage_at(
@@ -485,7 +504,7 @@ impl Cfx for CfxHandler {
             fn sponsor_info(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcSponsorInfo>;
             fn staking_balance(&self, address: RpcH160, num: Option<EpochNumber>) -> BoxFuture<RpcU256>;
             fn storage_at(&self, addr: RpcH160, pos: RpcH256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<RpcH256>>;
-            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> RpcResult<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
         }

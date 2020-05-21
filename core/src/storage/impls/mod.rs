@@ -6,6 +6,7 @@
 pub(super) mod merkle_patricia_trie;
 pub(super) mod delta_mpt;
 pub(super) mod errors;
+pub(super) mod node_merkle_proof;
 pub(super) mod snapshot_sync;
 pub(super) mod state;
 pub(super) mod state_manager;

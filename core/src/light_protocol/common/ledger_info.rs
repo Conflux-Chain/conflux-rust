@@ -2,10 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Bloom, H256};
+use cfx_types::{Address, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, EpochNumber,
-    StateRoot, StorageKey,
+    StateRoot, StorageKey, StorageRoot,
 };
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        StateProof,
+        StateProof, StorageRootProof,
     },
 };
 
@@ -165,6 +165,20 @@ impl LedgerInfo {
             .or(Err(ErrorKind::InternalError))?;
 
         let value = value.map(|x| x.to_vec());
+        Ok((value, proof))
+    }
+
+    /// Get the storage root of contract `address` at `epoch`.
+    #[inline]
+    pub fn storage_root_of(
+        &self, epoch: u64, address: &Address,
+    ) -> Result<(Option<StorageRoot>, StorageRootProof), Error> {
+        let state = self.state_of(epoch)?;
+
+        let (value, proof) = StateDb::new(state)
+            .get_storage_root_with_proof(address)
+            .or(Err(ErrorKind::InternalError))?;
+
         Ok((value, proof))
     }
 

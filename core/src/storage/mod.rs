@@ -98,6 +98,7 @@ pub use self::{
         delta_mpt::*,
         errors::{Error, ErrorKind, Result},
         merkle_patricia_trie::{simple_mpt::*, KVInserter, TrieProof},
+        node_merkle_proof::{NodeMerkleProof, StorageRootProof},
         snapshot_sync::{FullSyncVerifier, MptSlicer},
         state_proof::StateProof,
         storage_db::{

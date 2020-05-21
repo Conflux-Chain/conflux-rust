@@ -390,7 +390,7 @@ impl RpcImpl {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
-            "RPC Request: storage_hash address={:?} epoch_num={:?}",
+            "RPC Request: cfx_getStorageRoot address={:?} epoch={:?}",
             address, epoch_num
         );
 
@@ -1009,7 +1009,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<RpcH256>>;
             fn transaction_by_hash(&self, hash: RpcH256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: RpcH256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> JsonRpcResult<Option<RpcStorageRoot>>;
+            fn storage_root(&self, address: RpcH160, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<RpcStorageRoot>>;
         }
     }
 }
