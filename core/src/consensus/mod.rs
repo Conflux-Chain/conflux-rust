@@ -1208,7 +1208,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                             State::new(
                                 StateDb::new(db),
                                 Default::default(), /* vm */
-                                past_num_blocks,    /* block_numer */
+                                past_num_blocks + 1, /* block_numer */
                             )
                         })
                         .expect("Best state has been executed");

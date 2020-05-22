@@ -7,7 +7,8 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::sync::Arc;
 
-/// The number of blocks in the past of an epoch.
+/// The start block number of an epoch. It equals to the past executed number of
+/// blocks in the previous epoch + 1. For the true genesis, it equals 0.
 /// Used in evm execution.
 #[derive(Clone, RlpEncodable, RlpDecodable, DeriveMallocSizeOf)]
 pub struct EpochExecutionContext {
