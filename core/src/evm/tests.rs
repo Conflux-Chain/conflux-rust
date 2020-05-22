@@ -360,7 +360,7 @@ fn test_blockhash(factory: super::Factory) {
     };
 
     assert_eq!(gas_left, U256::from(94_974));
-    assert_eq!(ctx.store.get(&H256::zero()).unwrap(), &blockhash);
+    assert_eq!(ctx.store.get(&vec![0; 32]).unwrap(), &blockhash);
 }
 
 evm_test! {test_calldataload: test_calldataload_int}
@@ -1302,8 +1302,7 @@ fn assert_set_contains<T: Debug + Eq + PartialEq + Hash>(
 }
 
 fn assert_store(ctx: &MockContext, pos: u64, val: &str) {
-    assert_eq!(
-        ctx.store.get(&H256::from_low_u64_be(pos)).unwrap(),
-        &H256::from_str(val).unwrap()
-    );
+    let mut key = vec![0; 32];
+    U256::from(pos).to_big_endian(key.as_mut());
+    assert_eq!(ctx.store.get(&key).unwrap(), &H256::from_str(val).unwrap());
 }

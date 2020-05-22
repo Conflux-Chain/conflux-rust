@@ -747,12 +747,17 @@ impl SynchronizationProtocolHandler {
     pub fn request_epochs(&self, io: &dyn NetworkContext) {
         // make sure only one thread can request new epochs at a time
         let mut latest_requested = self.latest_epoch_requested.lock();
-        let best_peer_epoch = self.syn.best_peer_epoch().unwrap_or(0);
+
+        // We use median here instead of max, so w.h.p. we won't request all
+        // epoch sets from malicious peer.
+        // See https://github.com/Conflux-Chain/conflux-rust/issues/1466.
+        let median_peer_epoch =
+            self.syn.median_epoch_from_normal_peers().unwrap_or(0);
         let my_best_epoch = self.graph.consensus.best_epoch_number();
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && (*latest_requested < best_peer_epoch || best_peer_epoch == 0)
+            && (*latest_requested < median_peer_epoch || median_peer_epoch == 0)
         {
             let from = cmp::max(my_best_epoch, *latest_requested) + 1;
             // Check epochs from db
@@ -773,7 +778,7 @@ impl SynchronizationProtocolHandler {
                 }
                 *latest_requested = from;
                 continue;
-            } else if best_peer_epoch == 0 {
+            } else if median_peer_epoch == 0 {
                 // We have recovered all epochs from db, and there is no peer to
                 // request new epochs, so we should enter `Latest` phase
                 return;
@@ -811,7 +816,7 @@ impl SynchronizationProtocolHandler {
                 "requesting epochs [{}..{}]/{:?} from peer {:?}",
                 from,
                 until - 1,
-                best_peer_epoch,
+                median_peer_epoch,
                 peer
             );
 

@@ -80,7 +80,6 @@ pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
                     address,
                     /* balance = */ U256::zero(),
                     /* nonce = */ U256::one(),
-                    /* reset_storage = */ false,
                     // Admin for internal contract is zero.
                     &Address::default(),
                 )

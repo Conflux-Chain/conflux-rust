@@ -65,17 +65,22 @@ pub struct SyncGraphConfig {
 #[derive(Debug)]
 pub struct SyncGraphStatistics {
     pub inserted_block_count: usize,
+    pub inserted_header_count: usize,
 }
 
 impl SyncGraphStatistics {
     pub fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
             // Already counted genesis block
+            inserted_header_count: 1,
             inserted_block_count: 1,
         }
     }
 
-    pub fn clear(&mut self) { self.inserted_block_count = 1; }
+    pub fn clear(&mut self) {
+        self.inserted_header_count = 1;
+        self.inserted_block_count = 1;
+    }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -1904,7 +1909,9 @@ impl SynchronizationGraph {
             block.size(),
         );
 
-        if inner.arena[me].graph_status == BLOCK_INVALID {
+        // Note: If `me` is invalid, it has been removed from `arena` now,
+        // so we cannot access its `graph_status`.
+        if invalid_set.contains(&me) {
             BlockInsertionResult::Invalid
         } else if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
             BlockInsertionResult::ShouldRelay

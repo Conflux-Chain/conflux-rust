@@ -377,7 +377,7 @@ impl State {
             contract,
             AccountEntry::new_dirty(Some(
                 OverlayAccount::new_contract_with_admin(
-                    contract, balance, nonce, true, admin,
+                    contract, balance, nonce, admin,
                 ),
             )),
         );
@@ -393,7 +393,7 @@ impl State {
             self.checkpoints.get_mut(),
             contract,
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
-                contract, balance, nonce, true,
+                contract, balance, nonce,
             ))),
         );
         Ok(())
@@ -1157,7 +1157,9 @@ impl State {
         Ok(())
     }
 
-    pub fn storage_at(&self, address: &Address, key: &H256) -> DbResult<H256> {
+    pub fn storage_at(
+        &self, address: &Address, key: &Vec<u8>,
+    ) -> DbResult<H256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(H256::zero(), |account| {
                 account.storage_at(&self.db, key).unwrap_or(H256::zero())
@@ -1167,7 +1169,7 @@ impl State {
 
     #[cfg(test)]
     pub fn original_storage_at(
-        &self, address: &Address, key: &H256,
+        &self, address: &Address, key: &Vec<u8>,
     ) -> DbResult<H256> {
         self.ensure_cached(address, RequireCache::None, |acc| {
             acc.map_or(H256::zero(), |account| {
@@ -1182,7 +1184,7 @@ impl State {
     /// TODO: Remove this function since it is not used outside.
     #[cfg(test)]
     pub fn checkpoint_storage_at(
-        &self, start_checkpoint_index: usize, address: &Address, key: &H256,
+        &self, start_checkpoint_index: usize, address: &Address, key: &Vec<u8>,
     ) -> DbResult<Option<H256>> {
         #[derive(Debug)]
         enum ReturnKind {
@@ -1207,7 +1209,7 @@ impl State {
                     })) => {
                         if let Some(value) = account.cached_storage_at(key) {
                             return Ok(Some(value));
-                        } else if account.reset_storage() {
+                        } else if account.is_newly_created_contract() {
                             return Ok(Some(H256::zero()));
                         } else {
                             kind = Some(ReturnKind::OriginalAt);
@@ -1240,7 +1242,7 @@ impl State {
     }
 
     pub fn set_storage(
-        &mut self, address: &Address, key: H256, value: H256, owner: Address,
+        &mut self, address: &Address, key: Vec<u8>, value: H256, owner: Address,
     ) -> DbResult<()> {
         if self.storage_at(address, &key)? != value {
             self.require_exists(address, false)?

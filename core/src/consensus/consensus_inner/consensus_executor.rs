@@ -461,7 +461,7 @@ impl ConsensusExecutor {
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
                 }
                 RewardExecutionInfo {
-                    past_block_count: inner.arena[pivot_arena_index].past_num_blocks + 1,
+                    past_block_count: inner.arena[pivot_arena_index].past_num_blocks,
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
@@ -1123,6 +1123,18 @@ impl ConsensusExecutionHandler {
                 let mut gas_sponsor_paid = false;
                 let mut storage_sponsor_paid = false;
                 match r {
+                    ExecutionOutcome::NotExecutedOldNonce(expected, got) => {
+                        tx_outcome_status =
+                            TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        trace!(
+                            "tx not executed due to old nonce: \
+                             transaction={:?}, expected={:?}, got={:?}",
+                            transaction,
+                            expected,
+                            got
+                        );
+                        gas_fee = U256::zero();
+                    }
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;

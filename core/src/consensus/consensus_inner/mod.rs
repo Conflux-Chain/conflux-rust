@@ -493,7 +493,7 @@ pub struct ConsensusGraphNode {
     difficulty: U256,
     is_heavy: bool,
     is_timer: bool,
-    /// The total number of executed blocks in its past (including self)
+    /// The total number of *executed* blocks in its past (not including self)
     past_num_blocks: u64,
     adaptive: bool,
 
@@ -610,12 +610,19 @@ impl ConsensusGraphInner {
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .data
             .epoch_number = cur_era_genesis_height;
+        let genesis_epoch_size = inner
+            .data_man
+            .executed_epoch_set_hashes_from_db(cur_era_genesis_height)
+            .expect("Genesis epoch set should be in data manager.")
+            .len();
         inner.arena[inner.cur_era_genesis_block_arena_index].past_num_blocks =
             inner
                 .data_man
                 .get_epoch_execution_context(cur_era_genesis_block_hash)
                 .expect("ExecutionContext for cur_era_genesis exists")
-                .start_block_number;
+                .start_block_number
+                + genesis_epoch_size as u64
+                - 1;
         inner.arena[inner.cur_era_genesis_block_arena_index]
             .data
             .last_pivot_in_past = cur_era_genesis_height;

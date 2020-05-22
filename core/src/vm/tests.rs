@@ -59,7 +59,7 @@ pub struct MockCall {
 /// Can't do recursive calls.
 #[derive(Default)]
 pub struct MockContext {
-    pub store: HashMap<H256, H256>,
+    pub store: HashMap<Vec<u8>, H256>,
     pub suicides: HashSet<Address>,
     pub calls: HashSet<MockCall>,
     pub sstore_clears: i128,
@@ -114,11 +114,11 @@ impl MockContext {
 }
 
 impl Context for MockContext {
-    fn storage_at(&self, key: &H256) -> Result<H256> {
+    fn storage_at(&self, key: &Vec<u8>) -> Result<H256> {
         Ok(self.store.get(key).unwrap_or(&H256::zero()).clone())
     }
 
-    fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
+    fn set_storage(&mut self, key: Vec<u8>, value: H256) -> Result<()> {
         self.store.insert(key, value);
         Ok(())
     }

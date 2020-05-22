@@ -37,7 +37,7 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.collateral_for_storage(), 0.into());
     assert_eq!(*overlay_account.accumulated_interest_return(), 0.into());
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
-    assert_eq!(overlay_account.reset_storage(), false);
+    assert_eq!(overlay_account.is_newly_created_contract(), false);
     assert_eq!(*overlay_account.admin(), Address::zero());
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
 
@@ -73,7 +73,7 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.collateral_for_storage(), 455.into());
     assert_eq!(*overlay_account.accumulated_interest_return(), 2.into());
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
-    assert_eq!(overlay_account.reset_storage(), false);
+    assert_eq!(overlay_account.is_newly_created_contract(), false);
     assert_eq!(*overlay_account.admin(), admin);
     assert_eq!(*overlay_account.sponsor_info(), sponsor_info);
 
@@ -89,7 +89,7 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.collateral_for_storage(), 0.into());
     assert_eq!(*overlay_account.accumulated_interest_return(), 0.into());
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
-    assert_eq!(overlay_account.reset_storage(), false);
+    assert_eq!(overlay_account.is_newly_created_contract(), false);
     assert_eq!(overlay_account.is_contract(), false);
     assert_eq!(overlay_account.is_basic(), true);
     assert_eq!(*overlay_account.admin(), Address::zero());
@@ -97,7 +97,7 @@ fn test_overlay_account_create() {
 
     // test new contract
     let mut overlay_account =
-        OverlayAccount::new_contract(&address, 5678.into(), 1234.into(), true);
+        OverlayAccount::new_contract(&address, 5678.into(), 1234.into());
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
     assert_eq!(*overlay_account.address(), address);
@@ -107,7 +107,7 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.collateral_for_storage(), 0.into());
     assert_eq!(*overlay_account.accumulated_interest_return(), 0.into());
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
-    assert_eq!(overlay_account.reset_storage(), true);
+    assert_eq!(overlay_account.is_newly_created_contract(), true);
     assert_eq!(overlay_account.is_contract(), true);
     assert_eq!(*overlay_account.admin(), Address::zero());
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
@@ -119,7 +119,6 @@ fn test_overlay_account_create() {
         &address,
         5678.into(),
         1234.into(),
-        true,
         &admin,
     );
     assert!(overlay_account.deposit_list().is_none());
@@ -131,7 +130,7 @@ fn test_overlay_account_create() {
     assert_eq!(*overlay_account.collateral_for_storage(), 0.into());
     assert_eq!(*overlay_account.accumulated_interest_return(), 0.into());
     assert_eq!(overlay_account.code_hash(), KECCAK_EMPTY);
-    assert_eq!(overlay_account.reset_storage(), true);
+    assert_eq!(overlay_account.is_newly_created_contract(), true);
     assert_eq!(overlay_account.is_contract(), true);
     assert_eq!(*overlay_account.admin(), admin);
     assert_eq!(*overlay_account.sponsor_info(), Default::default());
@@ -688,7 +687,7 @@ fn test_clone_overwrite() {
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account2.as_account());
 
-    overlay_account1.set_storage(H256::zero(), H256::zero(), address);
+    overlay_account1.set_storage(vec![0; 32], H256::zero(), address);
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(overlay_account1.storage_changes().len(), 1);
     assert_eq!(overlay_account1.ownership_changes().len(), 1);
@@ -701,12 +700,8 @@ fn test_clone_overwrite() {
     assert_eq!(overlay_account.storage_changes().len(), 1);
     assert_eq!(overlay_account.ownership_changes().len(), 1);
 
-    overlay_account2.set_storage(H256::zero(), H256::zero(), address);
-    overlay_account2.set_storage(
-        H256::from_low_u64_le(1),
-        H256::zero(),
-        address,
-    );
+    overlay_account2.set_storage(vec![0; 32], H256::zero(), address);
+    overlay_account2.set_storage(vec![1; 32], H256::zero(), address);
     overlay_account1.overwrite_with(overlay_account2);
     assert_ne!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account1.as_account());
