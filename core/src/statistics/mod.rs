@@ -31,28 +31,27 @@ impl Statistics {
     }
 
     pub fn inc_sync_graph_inserted_block_count(&self) {
-        let mut inner = self.inner.write();
-        inner.sync_graph.inserted_block_count += 1;
+        self.inner.write().sync_graph.inserted_block_count += 1;
+    }
+
+    pub fn inc_sync_graph_inserted_header_count(&self) {
+        self.inner.write().sync_graph.inserted_header_count += 1;
     }
 
     pub fn inc_consensus_graph_processed_block_count(&self) {
-        let mut inner = self.inner.write();
-        inner.consensus_graph.processed_block_count += 1;
+        self.inner.write().consensus_graph.processed_block_count += 1;
     }
 
     pub fn inc_consensus_graph_activated_block_count(&self) {
-        let mut inner = self.inner.write();
-        inner.consensus_graph.activated_block_count += 1;
+        self.inner.write().consensus_graph.activated_block_count += 1;
     }
 
     pub fn set_consensus_graph_inserted_block_count(&self, count: usize) {
-        let mut inner = self.inner.write();
-        inner.consensus_graph.inserted_block_count = count;
+        self.inner.write().consensus_graph.inserted_block_count = count;
     }
 
     pub fn get_consensus_graph_processed_block_count(&self) -> usize {
-        let inner = self.inner.read();
-        inner.consensus_graph.processed_block_count
+        self.inner.read().consensus_graph.processed_block_count
     }
 
     pub fn clear_sync_and_consensus_graph_statistics(&self) {

@@ -79,7 +79,7 @@ impl Handleable for GetCompactBlocks {
                     blocks.push(block.as_ref().clone());
                 }
             } else {
-                warn!(
+                debug!(
                     "Peer {} requested non-existent compact block {}",
                     ctx.node_id, hash
                 );
