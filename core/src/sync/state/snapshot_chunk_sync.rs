@@ -249,11 +249,13 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "(status = {:?}, download = {}/{}/{})",
+            "(status = {:?}, download = {}/{}/{}, pending_peers: {}, active_peers: {})",
             self.status,
             self.pending_chunks.len(),
             self.downloading_chunks.len(),
             self.num_downloaded,
+            self.sync_candidate_manager.pending_peers().len(),
+            self.sync_candidate_manager.active_peers().len(),
         )
     }
 }
