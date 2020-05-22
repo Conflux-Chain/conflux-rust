@@ -493,7 +493,7 @@ pub struct ConsensusGraphNode {
     difficulty: U256,
     is_heavy: bool,
     is_timer: bool,
-    /// The total number of executed blocks in its past (including self)
+    /// The total number of *executed* blocks in its past (not including self)
     past_num_blocks: u64,
     adaptive: bool,
 
