@@ -461,7 +461,7 @@ impl ConsensusExecutor {
                     epoch_block_anticone_difficulties.push(anticone_difficulty);
                 }
                 RewardExecutionInfo {
-                    past_block_count: inner.arena[pivot_arena_index].past_num_blocks + 1,
+                    past_block_count: inner.arena[pivot_arena_index].past_num_blocks,
                     epoch_blocks,
                     epoch_block_no_reward,
                     epoch_block_anticone_difficulties,
