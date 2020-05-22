@@ -1581,9 +1581,17 @@ impl ConsensusExecutionHandler {
             bail!("invalid epoch id");
         }
         let best_block_header = best_block_header.unwrap();
+        let epoch_size = if let Some(v) = self
+            .data_man
+            .executed_epoch_set_hashes_from_db(best_block_header.height())
+        {
+            v.len()
+        } else {
+            bail!("cannot find the epoch block set from the database");
+        };
         let block_height = best_block_header.height() + 1;
         let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
-            Some(v) => v.start_block_number + 1,
+            Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
         };
 
