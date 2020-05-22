@@ -1634,9 +1634,8 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            start_block_number - 1,
+            start_block_number,
         );
-        state.increase_block_number();
         drop(state_availability_boundary);
 
         let env = Env {
