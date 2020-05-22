@@ -1904,7 +1904,9 @@ impl SynchronizationGraph {
             block.size(),
         );
 
-        if inner.arena[me].graph_status == BLOCK_INVALID {
+        // Note: If `me` is invalid, it has been removed from `arena` now,
+        // so we cannot access its `graph_status`.
+        if invalid_set.contains(&me) {
             BlockInsertionResult::Invalid
         } else if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
             BlockInsertionResult::ShouldRelay
