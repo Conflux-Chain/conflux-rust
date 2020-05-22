@@ -13,6 +13,9 @@ from test_framework.test_framework import OptionHelper
 def cleanup_remote_logs(ips_file:str):
     pssh(ips_file, "rm -f *.tgz *.out; rm -rf /tmp/conflux_test_*")
 
+def setup_bandwidth_limit(ips_file:str, bandwidth: float, nodes_per_host: int):
+    pssh(ips_file, f"./throttle_bitcoin_bandwidth.sh {bandwidth} {nodes_per_host}")
+
 class RemoteSimulateConfig:
     def __init__(self, block_gen_interval_ms, txs_per_block, tx_size, num_blocks):
         self.block_gen_interval_ms = block_gen_interval_ms
@@ -88,6 +91,7 @@ class LatencyExperiment:
             print("kill remote conflux and cleanup logs ...")
             kill_remote_conflux(self.options.ips_file)
             cleanup_remote_logs(self.options.ips_file)
+            setup_bandwidth_limit(self.options.ips_file, self.options.bandwidth, self.options.nodes_per_host)
 
             print("Run remote simulator ...")
             self.run_remote_simulate(config)

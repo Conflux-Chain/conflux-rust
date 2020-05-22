@@ -69,7 +69,7 @@ class RemoteSimulate(ConfluxTestFramework):
         egress_max_throttle = 1024,
         egress_queue_capacity = 2048,
         genesis_secrets = "/home/ubuntu/genesis_secrets.txt",
-        record_tx_index = False,
+        persist_tx_index = "false",
         send_tx_period_ms = 1300,
         txgen_account_count = 1000,
         tx_pool_size = conflux.config.default_conflux_conf["tx_pool_size"],
@@ -108,7 +108,7 @@ class RemoteSimulate(ConfluxTestFramework):
             self.options.tx_pool_size // target_memory * self.options.storage_memory_gb
 
         # Do not keep track of tx index to save CPU/Disk costs because they are not used in the experiments
-        self.conf_parameters["record_tx_index"] = "false"
+        self.conf_parameters["persist_tx_index"] = "false"
 
         if self.enable_tx_propagation:
             self.conf_parameters["generate_tx"] = "true"

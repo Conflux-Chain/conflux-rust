@@ -147,7 +147,7 @@ class TestNode:
                 ssh_args,
                 self.user,
                 self.ip,
-                "cd {} && export RUST_BACKTRACE=full && ".format(self.datadir)
+                "cd {} && export RUST_BACKTRACE=full && cgexec -g net_cls:limit{} ".format(self.datadir, self.index)
                 + " ".join(self.args),
                 )
             print(cli_mkdir + cli_kill + cli_conf + cli_exe)
