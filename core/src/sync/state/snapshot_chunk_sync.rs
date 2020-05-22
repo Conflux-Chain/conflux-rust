@@ -924,13 +924,6 @@ impl SnapshotChunkSync {
         if inner.sync_candidate_manager.current_era_genesis
             == current_era_genesis
         {
-            if inner.sync_candidate_manager.is_inactive() {
-                // We are requesting candidates and all `pending_peers` timeout,
-                // or we are syncing states all
-                // `active_peers` for all candidates timeout.
-                warn!("current sync candidate becomes inactive: {:?}", inner);
-                inner.status = Status::Inactive;
-            }
             match inner.status {
                 Status::Completed => return,
                 Status::RequestingCandidates => {
@@ -941,14 +934,20 @@ impl SnapshotChunkSync {
                 }
                 Status::DownloadingManifest(_)
                 | Status::DownloadingChunks(_) => {
-                    if inner.sync_candidate_manager.pending_peers().is_empty() {
+                    if inner.sync_candidate_manager.active_peers().is_empty() {
                         inner.status = Status::StartCandidateSync;
                         inner.sync_candidate_manager.set_active_candidate();
                     }
                 }
                 _ => {}
             }
-
+            if inner.sync_candidate_manager.is_inactive() {
+                // We are requesting candidates and all `pending_peers` timeout,
+                // or we are syncing states all
+                // `active_peers` for all candidates timeout.
+                warn!("current sync candidate becomes inactive: {:?}", inner);
+                inner.status = Status::Inactive;
+            }
             // We need to start/restart syncing states for a candidate.
             if inner.status == Status::StartCandidateSync {
                 if let Some(sync_candidate) =
