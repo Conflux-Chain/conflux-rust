@@ -1623,6 +1623,13 @@ impl SynchronizationGraph {
                     || self
                         .verification_config
                         .verify_header_params(header)
+                        .or_else(|e| {
+                            warn!(
+                                "Invalid header: err={} header={:?}",
+                                e, header
+                            );
+                            Err(e)
+                        })
                         .is_err())
         } else {
             if !bench_mode && !self.is_consortium() {
