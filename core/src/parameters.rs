@@ -79,6 +79,9 @@ pub mod consensus_internal {
     /// to update the meter every 20 blocks. Note that confirmation meter
     /// update is CPU intensive if the tree graph is in a unstable state.
     pub const CONFIRMATION_METER_UPDATE_FREQUENCY: usize = 20;
+
+    /// v0.5.x only.
+    pub const BLAME_BOUND: u32 = 1000;
 }
 
 pub mod sync {
