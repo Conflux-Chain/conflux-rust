@@ -2387,6 +2387,10 @@ impl ConsensusGraphInner {
                     return Ok(None);
                 }
             }
+            // v0.5.x special check
+            if blame >= BLAME_BOUND {
+                break;
+            }
 
             debug!("compute_blame_and_state_with_execution_result: cur={} height={}", cur, self.arena[cur].height);
             let deferred_arena_index =
