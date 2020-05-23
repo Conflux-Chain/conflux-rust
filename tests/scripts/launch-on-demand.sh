@@ -16,7 +16,7 @@ elif [[ -f slave_image ]]; then
     public=""
 else
     # create master instances
-    image="ami-008edf1c6beddf2d6" # experiment image
+    image="ami-04a756d577df9c205" # experiment image
     type="m5.2xlarge"
     public="--public"
 fi

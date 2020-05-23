@@ -12,7 +12,7 @@ repo="${4:-https://github.com/Conflux-Chain/conflux-rust}"
 enable_flamegraph=${5:-false}
 slave_role=${key_pair}_exp_slave
 
-nodes_per_host=10
+nodes_per_host=1
 
 run_latency_exp () {
     branch=$1
