@@ -285,6 +285,9 @@ impl ConsensusNewBlockHandler {
         // Clear best_terminals_lca_caches
         inner.best_terminals_lca_height_cache.clear();
 
+        // Clear has_timer_block_in_anticone cache
+        inner.has_timer_block_in_anticone_cache.clear();
+
         // Chop off all link-cut-trees in the inner data structure
         inner.split_root(new_era_block_arena_index);
 
@@ -916,6 +919,17 @@ impl ConsensusNewBlockHandler {
                 return inner.cur_era_genesis_block_arena_index;
             }
 
+            // Because the timer chain is unlikely to reorganize at this point.
+            // We will just skip this height if we found timer block
+            // in its anticone before.
+            if inner
+                .has_timer_block_in_anticone_cache
+                .contains(&new_genesis_block_arena_index)
+            {
+                new_genesis_height += inner.inner_conf.era_epoch_count;
+                continue 'out;
+            }
+
             // Now we need to make sure that no timer chain block is in the
             // anticone of the new genesis. This is required for our
             // checkpoint algorithm.
@@ -946,6 +960,9 @@ impl ConsensusNewBlockHandler {
                 as usize;
             for i in start_timer_chain_index..inner.timer_chain.len() {
                 if !visited.contains(inner.timer_chain[i] as u32) {
+                    inner
+                        .has_timer_block_in_anticone_cache
+                        .insert(new_genesis_block_arena_index);
                     // This era genesis candidate has a timer chain block in its
                     // anticone, so we move to check the next one.
                     new_genesis_height += inner.inner_conf.era_epoch_count;
