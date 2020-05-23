@@ -459,6 +459,9 @@ pub struct ConsensusGraphInner {
     /// This is to record the pivot chain reorganization height since the last
     /// invocation of best_terminals()
     best_terminals_reorg_height: u64,
+    /// This is a cache to record history of checking whether a block has timer
+    /// block in its anticone.
+    has_timer_block_in_anticone_cache: HashSet<usize>,
 }
 
 impl MallocSizeOf for ConsensusGraphInner {
@@ -571,6 +574,7 @@ impl ConsensusGraphInner {
             old_era_block_set: Mutex::new(VecDeque::new()),
             best_terminals_lca_height_cache: Default::default(),
             best_terminals_reorg_height: NULLU64,
+            has_timer_block_in_anticone_cache: Default::default(),
         };
 
         // NOTE: Only genesis block will be first inserted into consensus graph
