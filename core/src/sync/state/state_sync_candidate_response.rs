@@ -9,7 +9,7 @@ use crate::{
 use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
-#[derive(RlpEncodable, RlpDecodable)]
+#[derive(RlpEncodable, RlpDecodable, Debug)]
 pub struct StateSyncCandidateResponse {
     pub request_id: RequestId,
     pub supported_candidates: Vec<SnapshotSyncCandidate>,
@@ -24,6 +24,7 @@ impl Handleable for StateSyncCandidateResponse {
             ctx.io,
             &ctx.manager.request_manager,
         )?;
+        debug!("Receive StateSyncCandidateResponse={:?}", self);
         ctx.manager.state_sync.handle_snapshot_candidate_response(
             &ctx.node_id,
             &self.supported_candidates,

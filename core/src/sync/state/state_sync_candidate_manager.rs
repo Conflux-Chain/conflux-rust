@@ -86,11 +86,11 @@ impl StateSyncCandidateManager {
         &mut self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
-    ) -> Option<SnapshotSyncCandidate>
+    )
     {
         if !self.pending_peers.remove(peer) {
             debug!("Receive response from unexpected peer {:?}, possibly from old requests", peer);
-            return None;
+            return;
         }
         let mut requested_candidates_set: HashSet<&SnapshotSyncCandidate> =
             requested_candidates.iter().collect();
@@ -125,17 +125,6 @@ impl StateSyncCandidateManager {
                 }
             }
         }
-
-        // TODO We can choose an active candidate before receiving all the
-        // response
-        if self.pending_peers.is_empty() {
-            self.set_active_candidate();
-            // Here we return None only if all requested peers cannot serve the
-            // candidates TODO ask about new state candidates or new
-            // peers when active_candidate is None
-            return self.get_active_candidate();
-        }
-        None
     }
 
     pub fn on_peer_disconnected(&mut self, peer: &NodeId) {
@@ -153,6 +142,8 @@ impl StateSyncCandidateManager {
 
     pub fn active_peers(&self) -> &HashSet<NodeId> { &self.active_peers }
 
+    pub fn pending_peers(&self) -> &HashSet<NodeId> { &self.pending_peers }
+
     pub fn get_active_candidate(&self) -> Option<SnapshotSyncCandidate> {
         self.active_candidate.map(|i| self.candidates[i].clone())
     }
@@ -160,10 +151,6 @@ impl StateSyncCandidateManager {
     /// `peer` cannot support the active candidate now
     pub fn note_state_sync_failure(&mut self, peer: &NodeId) {
         self.pending_peers.remove(peer);
-        if self.pending_peers.is_empty() {
-            // Rely on periodic phase checks to start state sync
-            self.set_active_candidate();
-        }
         self.active_peers.remove(peer);
         if let Some(active_candidate) = self.active_candidate.clone() {
             if let Some(peers) = self
@@ -208,7 +195,6 @@ impl StateSyncCandidateManager {
             && self.start_time.elapsed() > *candidate_timeout
         {
             self.pending_peers.clear();
-            self.set_active_candidate();
         }
     }
 
