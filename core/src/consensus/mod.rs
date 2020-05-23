@@ -904,7 +904,7 @@ impl ConsensusGraph {
         let state = State::new(
             state_db,
             Default::default(), /* vm */
-            0, /* block_number */
+            0,                  /* block_number */
         );
         let gas_cost = gas_limit.full_mul(gas_price);
         let mut gas_sponsored = false;
@@ -1207,7 +1207,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                         .map(|db| {
                             State::new(
                                 StateDb::new(db),
-                                Default::default(), /* vm */
+                                Default::default(),  /* vm */
                                 past_num_blocks + 1, /* block_numer */
                             )
                         })
