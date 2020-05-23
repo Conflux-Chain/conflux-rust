@@ -2350,7 +2350,9 @@ impl ConsensusGraphInner {
     /// [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
     fn compute_blame_and_state_with_execution_result(
         &self, parent: usize, exec_result: &EpochExecutionCommitment,
-    ) -> Result<(u32, H256, H256, H256), String> {
+        maybe_header_blame: Option<u32>,
+    ) -> Result<Option<(u32, H256, H256, H256)>, String>
+    {
         let mut cur = parent;
         let mut blame: u32 = 0;
         let mut state_blame_vec = Vec::new();
@@ -2373,6 +2375,11 @@ impl ConsensusGraphInner {
                 // The state_valid for this block and blocks before have been
                 // computed
                 break;
+            }
+            if let Some(header_blame) = maybe_header_blame {
+                if blame > header_blame {
+                    return Ok(None);
+                }
             }
 
             debug!("compute_blame_and_state_with_execution_result: cur={} height={}", cur, self.arena[cur].height);
@@ -2404,7 +2411,7 @@ impl ConsensusGraphInner {
             cur = self.arena[cur].parent;
         }
         if blame > 0 {
-            Ok((
+            Ok(Some((
                 blame,
                 BlockHeaderBuilder::compute_blame_state_root_vec_root(
                     state_blame_vec,
@@ -2415,14 +2422,14 @@ impl ConsensusGraphInner {
                 BlockHeaderBuilder::compute_blame_state_root_vec_root(
                     bloom_blame_vec,
                 ),
-            ))
+            )))
         } else {
-            Ok((
+            Ok(Some((
                 0,
                 state_blame_vec.pop().unwrap(),
                 receipt_blame_vec.pop().unwrap(),
                 bloom_blame_vec.pop().unwrap(),
-            ))
+            )))
         }
     }
 
@@ -2455,31 +2462,38 @@ impl ConsensusGraphInner {
             exec_commitment.receipts_root.clone();
         let original_deferred_logs_bloom_hash =
             exec_commitment.logs_bloom_hash.clone();
-
-        let (
-            blame,
-            deferred_state_root,
-            deferred_receipt_root,
-            deferred_logs_bloom_hash,
-        ) = self.compute_blame_and_state_with_execution_result(
-            parent,
-            &exec_commitment,
-        )?;
         let block_header = self
             .data_man
             .block_header_by_hash(&self.arena[me].hash)
             .unwrap();
-        let state_valid = block_header.blame() == blame
-            && *block_header.deferred_state_root() == deferred_state_root
-            && *block_header.deferred_receipts_root() == deferred_receipt_root
-            && *block_header.deferred_logs_bloom_hash()
-                == deferred_logs_bloom_hash;
 
-        if state_valid {
-            debug!("compute_state_valid_for_block(): Block {} state/blame is valid.", self.arena[me].hash);
+        let state_valid = if let Some((
+            blame,
+            deferred_state_root,
+            deferred_receipt_root,
+            deferred_logs_bloom_hash,
+        )) = self
+            .compute_blame_and_state_with_execution_result(
+                parent,
+                &exec_commitment,
+                Some(block_header.blame()),
+            )? {
+            let state_valid = block_header.blame() == blame
+                && *block_header.deferred_state_root() == deferred_state_root
+                && *block_header.deferred_receipts_root()
+                    == deferred_receipt_root
+                && *block_header.deferred_logs_bloom_hash()
+                    == deferred_logs_bloom_hash;
+            if state_valid {
+                debug!("compute_state_valid_for_block(): Block {} state/blame is valid.", self.arena[me].hash);
+            } else {
+                debug!("compute_state_valid_for_block(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
+            }
+            state_valid
         } else {
-            debug!("compute_state_valid_for_block(): Block {} state/blame is invalid! header blame {}, our blame {}, header state_root {}, our state root {}, header receipt_root {}, our receipt root {}, header logs_bloom_hash {}, our logs_bloom_hash {}.", self.arena[me].hash, block_header.blame(), blame, block_header.deferred_state_root(), deferred_state_root, block_header.deferred_receipts_root(), deferred_receipt_root, block_header.deferred_logs_bloom_hash(), deferred_logs_bloom_hash);
-        }
+            debug!("compute_state_valid_for_block(): Block {} state/blame is invalid! header blame {}",self.arena[me].hash, block_header.blame());
+            false
+        };
 
         self.arena[me].data.state_valid = Some(state_valid);
 

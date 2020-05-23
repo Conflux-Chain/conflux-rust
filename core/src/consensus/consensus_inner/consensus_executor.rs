@@ -552,10 +552,13 @@ impl ConsensusExecutor {
         {
             let inner = &mut *inner_lock.write();
             if inner.arena[parent_arena_index].hash == *parent_block_hash {
-                Ok(inner.compute_blame_and_state_with_execution_result(
-                    parent_arena_index,
-                    &last_result,
-                )?)
+                Ok(inner
+                    .compute_blame_and_state_with_execution_result(
+                        parent_arena_index,
+                        &last_result,
+                        None,
+                    )?
+                    .unwrap())
             } else {
                 Err("Too old parent/subtree to prepare for generation"
                     .to_owned())
