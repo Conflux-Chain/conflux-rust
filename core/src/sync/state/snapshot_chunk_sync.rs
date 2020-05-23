@@ -219,7 +219,7 @@ impl Inner {
 
     /// request manifest from random peer
     fn request_manifest(
-        &self, io: &dyn NetworkContext,
+        &mut self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
     )
     {
@@ -232,14 +232,16 @@ impl Inner {
         let available_peers = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
             .choose_from(self.sync_candidate_manager.active_peers())
             .select_all(&sync_handler.syn);
-        let peer = available_peers.choose(&mut thread_rng()).map(|p| *p);
-
-        sync_handler.request_manager.request_with_delay(
-            io,
-            Box::new(request),
-            peer,
-            None,
-        );
+        let maybe_peer = available_peers.choose(&mut thread_rng()).map(|p| *p);
+        if let Some(peer) = maybe_peer {
+            self.manifest_request_status = Some((Instant::now(), peer));
+            sync_handler.request_manager.request_with_delay(
+                io,
+                Box::new(request),
+                Some(peer),
+                None,
+            );
+        }
     }
 }
 
@@ -247,11 +249,13 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "(status = {:?}, download = {}/{}/{})",
+            "(status = {:?}, download = {}/{}/{}, pending_peers: {}, active_peers: {})",
             self.status,
             self.pending_chunks.len(),
             self.downloading_chunks.len(),
             self.num_downloaded,
+            self.sync_candidate_manager.pending_peers().len(),
+            self.sync_candidate_manager.active_peers().len(),
         )
     }
 }
@@ -426,6 +430,7 @@ impl SnapshotChunkSync {
 
         // update status
         inner.status = Status::DownloadingChunks(Instant::now());
+        inner.manifest_request_status = None;
         inner.receipt_blame_vec = response.receipt_blame_vec;
         inner.bloom_blame_vec = response.bloom_blame_vec;
 
@@ -877,15 +882,11 @@ impl SnapshotChunkSync {
         requested_candidates: &Vec<SnapshotSyncCandidate>,
     )
     {
-        if self
-            .inner
-            .write()
-            .sync_candidate_manager
-            .on_peer_response(peer, supported_candidates, requested_candidates)
-            .is_some()
-        {
-            self.inner.write().status = Status::StartCandidateSync;
-        }
+        self.inner.write().sync_candidate_manager.on_peer_response(
+            peer,
+            supported_candidates,
+            requested_candidates,
+        )
     }
 
     pub fn on_peer_disconnected(&self, peer: &NodeId) {
@@ -911,10 +912,6 @@ impl SnapshotChunkSync {
                 manager: sync_handler,
             },
         );
-        if inner.sync_candidate_manager.is_inactive() {
-            warn!("current sync candidate becomes inactive: {:?}", inner);
-            inner.status = Status::Inactive;
-        }
 
         // If we moves into the next era, we should force state_sync to change
         // the candidates to states with in the new stable era. If the
@@ -925,15 +922,31 @@ impl SnapshotChunkSync {
         if inner.sync_candidate_manager.current_era_genesis
             == current_era_genesis
         {
-            // state sync started, so we only need to check if it's completed
-            if inner.status == Status::Completed {
-                return;
-            } else if inner.sync_candidate_manager.active_peers().is_empty() {
-                // Previous candidate sync failed. Start the next one.
-                inner.status = Status::StartCandidateSync;
-                inner.sync_candidate_manager.set_active_candidate();
+            match inner.status {
+                Status::Completed => return,
+                Status::RequestingCandidates => {
+                    if inner.sync_candidate_manager.pending_peers().is_empty() {
+                        inner.status = Status::StartCandidateSync;
+                        inner.sync_candidate_manager.set_active_candidate();
+                    }
+                }
+                Status::DownloadingManifest(_)
+                | Status::DownloadingChunks(_) => {
+                    if inner.sync_candidate_manager.active_peers().is_empty() {
+                        inner.status = Status::StartCandidateSync;
+                        inner.sync_candidate_manager.set_active_candidate();
+                    }
+                }
+                _ => {}
             }
-
+            if inner.sync_candidate_manager.is_inactive() {
+                // We are requesting candidates and all `pending_peers` timeout,
+                // or we are syncing states all
+                // `active_peers` for all candidates timeout.
+                warn!("current sync candidate becomes inactive: {:?}", inner);
+                inner.status = Status::Inactive;
+            }
+            // We need to start/restart syncing states for a candidate.
             if inner.status == Status::StartCandidateSync {
                 if let Some(sync_candidate) =
                     inner.sync_candidate_manager.get_active_candidate()
@@ -987,12 +1000,14 @@ impl SnapshotChunkSync {
             .sync_candidate_manager
             .check_timeout(&self.config.candidate_request_timeout);
         if let Some((manifest_start_time, peer)) =
-            &inner.manifest_request_status
+            &inner.manifest_request_status.clone()
         {
             if manifest_start_time.elapsed()
                 > self.config.manifest_request_timeout
             {
-                inner.sync_candidate_manager.note_state_sync_failure(peer)
+                inner.sync_candidate_manager.note_state_sync_failure(peer);
+                inner.manifest_request_status = None;
+                inner.request_manifest(ctx.io, ctx.manager);
             }
         }
         let mut timeout_chunks = Vec::new();
