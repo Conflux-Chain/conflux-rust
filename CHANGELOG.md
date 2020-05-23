@@ -65,6 +65,8 @@ element of the vec is fixed length H256.
 
 - Add support for CHAINID, SELFBALANCE, BEGINSUB, JUMPSUB, RETURNSUB opcodes.
 
+- Disable reentrancy of contract calling through other contracts. 
+
 # 0.5.0
 
 ## Improvements
