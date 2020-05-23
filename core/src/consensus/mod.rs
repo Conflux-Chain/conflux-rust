@@ -1207,7 +1207,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                         .map(|db| {
                             State::new(
                                 StateDb::new(db),
-                                Default::default(), /* vm */
+                                Default::default(),  /* vm */
                                 past_num_blocks + 1, /* block_numer */
                             )
                         })
