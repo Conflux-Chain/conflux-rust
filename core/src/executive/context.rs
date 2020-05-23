@@ -332,7 +332,7 @@ impl<'a> ContextTrait for Context<'a> {
                     } else {
                         self.state.balance(&self.origin.storage_owner)?
                     };
-                println!(
+                debug!(
                     "ret() balance={:?} collateral_for_code={:?}",
                     balance, collateral_for_code
                 );
