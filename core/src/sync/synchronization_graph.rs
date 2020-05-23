@@ -1324,8 +1324,6 @@ impl SynchronizationGraph {
                 }
             }
 
-            // FIXME: for full node in `CatchUpRecoverBlockHeaderFromDB` phase,
-            // we may only have header in db
             if let Some(block_header_arc) =
                 self.data_man.block_header_by_hash(&hash)
             {

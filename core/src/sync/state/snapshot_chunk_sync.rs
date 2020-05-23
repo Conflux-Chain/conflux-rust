@@ -912,9 +912,7 @@ impl SnapshotChunkSync {
                 manager: sync_handler,
             },
         );
-        // We are requesting candidates and all `pending_peers` timeout,
-        // or we are syncing states for a candidate and all `active_peers`
-        // timeout.
+
         // If we moves into the next era, we should force state_sync to change
         // the candidates to states with in the new stable era. If the
         // era stays the same and a new snapshot becomes available, we

@@ -150,7 +150,7 @@ impl StateSyncCandidateManager {
 
     /// `peer` cannot support the active candidate now
     pub fn note_state_sync_failure(&mut self, peer: &NodeId) {
-        if self.pending_peers.remove(peer) {}
+        self.pending_peers.remove(peer);
         self.active_peers.remove(peer);
         if let Some(active_candidate) = self.active_candidate.clone() {
             if let Some(peers) = self
