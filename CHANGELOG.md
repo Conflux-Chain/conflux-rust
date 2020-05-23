@@ -65,6 +65,11 @@ element of the vec is fixed length H256.
 
 - Add support for CHAINID, SELFBALANCE, BEGINSUB, JUMPSUB, RETURNSUB opcodes.
 
+- NUMBER opcode in call_virtual() now returns the correct block number.
+
+- BLOCKHASH opcode now returns the last block hash (i.e., ``blockhash(block.number - 1)``) 
+or zero if not querying the last block hash.
+
 - Disable reentrancy of contract calling through other contracts. 
 
 # 0.5.0

@@ -144,9 +144,14 @@ impl<'a> ContextTrait for Context<'a> {
         self.state.balance(address).map_err(Into::into)
     }
 
-    fn blockhash(&mut self, _number: &U256) -> H256 {
-        // TODO: I have no idea why we need this function
-        H256::default()
+    fn blockhash(&mut self, number: &U256) -> H256 {
+        // In Conflux, we only maintain the block hash of the previous block.
+        // For other block numbers, it always returns zero.
+        if U256::from(self.env().number) == number + 1 {
+            self.env().last_hash.clone()
+        } else {
+            H256::default()
+        }
     }
 
     fn create(
@@ -457,7 +462,7 @@ mod tests {
         },
     };
     use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-    use std::{str::FromStr, sync::Arc};
+    use std::str::FromStr;
 
     fn get_test_origin() -> OriginInfo {
         let mut sender = Address::zero();
@@ -478,7 +483,7 @@ mod tests {
             author: Address::from_low_u64_be(0),
             timestamp: 0,
             difficulty: 0.into(),
-            last_hashes: Arc::new(vec![]),
+            last_hash: H256::zero(),
             accumulated_gas_used: 0.into(),
             gas_limit: 0.into(),
             epoch_height: 0,

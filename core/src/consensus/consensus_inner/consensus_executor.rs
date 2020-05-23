@@ -585,9 +585,9 @@ impl ConsensusExecutor {
     }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch_id: &H256,
+        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
     ) -> RpcResult<ExecutionOutcome> {
-        self.handler.call_virtual(tx, epoch_id)
+        self.handler.call_virtual(tx, epoch_id, epoch_size)
     }
 
     pub fn stop(&self) {
@@ -1075,6 +1075,8 @@ impl ConsensusExecutionHandler {
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
+        let mut last_block_hash =
+            pivot_block.block_header.parent_hash().clone();
         for block in epoch_blocks.iter() {
             let mut receipts = Vec::new();
             debug!(
@@ -1088,7 +1090,7 @@ impl ConsensusExecutionHandler {
                 timestamp: block.block_header.timestamp(),
                 difficulty: block.block_header.difficulty().clone(),
                 accumulated_gas_used: U256::zero(),
-                last_hashes: Arc::new(vec![]),
+                last_hash: last_block_hash,
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
                 transaction_epoch_bound: self
@@ -1099,6 +1101,7 @@ impl ConsensusExecutionHandler {
             assert_eq!(state.block_number(), env.number);
 
             block_number += 1;
+            last_block_hash = block.hash();
             for (idx, transaction) in block.transactions.iter().enumerate() {
                 let tx_outcome_status;
                 let mut transaction_logs = Vec::new();
@@ -1581,7 +1584,7 @@ impl ConsensusExecutionHandler {
     }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch_id: &H256,
+        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
     ) -> RpcResult<ExecutionOutcome> {
         let spec = Spec::new_spec();
         let internal_contract_map = InternalContractMap::new();
@@ -1591,6 +1594,10 @@ impl ConsensusExecutionHandler {
         }
         let best_block_header = best_block_header.unwrap();
         let block_height = best_block_header.height() + 1;
+        let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
+            Some(v) => v.start_block_number + epoch_size as u64,
+            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
+        };
 
         invalid_params_check(
             "tx",
@@ -1627,18 +1634,17 @@ impl ConsensusExecutionHandler {
             ),
             self.vm.clone(),
             &spec,
-            // FIXME: 0 as block number?
-            0, /* block_number */
+            start_block_number,
         );
         drop(state_availability_boundary);
 
         let env = Env {
-            number: 0, // TODO: replace 0 with correct cardinal number
+            number: start_block_number,
             author: Default::default(),
             timestamp: time_stamp,
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
-            last_hashes: Arc::new(vec![]),
+            last_hash: epoch_id.clone(),
             gas_limit: tx.gas.clone(),
             epoch_height: block_height,
             transaction_epoch_bound: self

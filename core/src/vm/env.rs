@@ -1,3 +1,7 @@
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -22,11 +26,6 @@
 
 use cfx_types::{Address, H256, U256};
 use primitives::BlockNumber;
-use std::sync::Arc;
-
-/// Simple vector of hashes, should be at most 256 items large, can be smaller
-/// if being used for a block whose number is less than 257.
-pub type LastHashes = Vec<H256>;
 
 /// Information concerning the execution environment for a
 /// message-call/contract-creation.
@@ -42,8 +41,8 @@ pub struct Env {
     pub difficulty: U256,
     /// The block gas limit.
     pub gas_limit: U256,
-    /// The last 256 block hashes.
-    pub last_hashes: Arc<LastHashes>,
+    /// The last block hash.
+    pub last_hash: H256,
     /// The total gas used in the block following execution of the transaction.
     pub accumulated_gas_used: U256,
     /// The epoch height.
@@ -66,7 +65,7 @@ mod tests {
         assert_eq!(default_env.timestamp, 0);
         assert_eq!(default_env.difficulty, 0.into());
         assert_eq!(default_env.gas_limit, 0.into());
-        assert!(default_env.last_hashes.is_empty());
+        assert_eq!(default_env.last_hash, H256::zero());
         assert_eq!(default_env.accumulated_gas_used, 0.into());
     }
 }
