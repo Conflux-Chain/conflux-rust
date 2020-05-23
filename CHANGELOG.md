@@ -70,6 +70,8 @@ element of the vec is fixed length H256.
 - BLOCKHASH opcode now returns the last block hash (i.e., ``blockhash(block.number - 1)``) 
 or zero if not querying the last block hash.
 
+- Disable reentrancy of contract calling through other contracts. 
+
 # 0.5.0
 
 ## Improvements

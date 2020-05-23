@@ -1387,11 +1387,17 @@ impl SynchronizationProtocolHandler {
             .ok();
     }
 
-    /// If we are in `SyncHeaders` phase, we should insert graph-ready block
-    /// headers to sync graph directly
+    /// If we are in `SyncHeaders` or `CatchUpCheckpoint` phase, we should
+    /// insert graph-ready block headers to sync graph directly.
+    /// For `CatchUpCheckpoint`, this is needed to move the target checkpoint,
+    /// and avoid being blocked on a stale checkpoint that no peers can serve.
     pub fn insert_header_to_consensus(&self) -> bool {
         let current_phase = self.phase_manager.get_current_phase();
-        current_phase.phase_type() == SyncPhaseType::CatchUpSyncBlockHeader
+        matches!(
+            current_phase.phase_type(),
+            SyncPhaseType::CatchUpSyncBlockHeader
+                | SyncPhaseType::CatchUpCheckpoint
+        )
     }
 
     pub fn propagate_new_transactions(&self, io: &dyn NetworkContext) {
