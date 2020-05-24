@@ -442,10 +442,23 @@ impl BlockHeaderBuilder {
     }
 
     pub fn compute_blame_state_root_vec_root(roots: Vec<H256>) -> H256 {
-        let mut buffer = Vec::with_capacity(H256::len_bytes() * roots.len());
-        for root in roots {
-            buffer.extend_from_slice(root.as_bytes());
+        let mut accumulated_root = roots.last().unwrap().clone();
+        for i in (0..(roots.len() - 1)).rev() {
+            accumulated_root =
+                BlockHeaderBuilder::compute_blame_state_root_incremental(
+                    roots[i],
+                    accumulated_root,
+                );
         }
+        accumulated_root
+    }
+
+    pub fn compute_blame_state_root_incremental(
+        first_root: H256, remaining_root: H256,
+    ) -> H256 {
+        let mut buffer = Vec::with_capacity(H256::len_bytes() * 2);
+        buffer.extend_from_slice(first_root.as_bytes());
+        buffer.extend_from_slice(remaining_root.as_bytes());
         keccak(&buffer)
     }
 }

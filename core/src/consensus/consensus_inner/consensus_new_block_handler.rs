@@ -97,7 +97,7 @@ impl ConsensusNewBlockHandler {
                 .wait_for_result(inner.arena[new_era_block_arena_index].hash)
                 .expect("Execution state of the pivot chain is corrupted!");
             inner
-                .compute_state_valid(stable_era_genesis)
+                .compute_state_valid_and_blame_info(stable_era_genesis)
                 .expect("Old cur_era_stable_height has available state_valid");
         }
 
@@ -1527,7 +1527,7 @@ impl ConsensusNewBlockHandler {
                 // state_valid.
                 if has_body && !self.conf.bench_mode {
                     inner
-                        .compute_state_valid(stable_arena_index)
+                        .compute_state_valid_and_blame_info(stable_arena_index)
                         .expect("last stable has available state_valid state");
                 }
                 let genesis_hash =

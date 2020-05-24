@@ -9,7 +9,8 @@ use crate::miner::{
 };
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
-    block_parameters::*, parameters::consensus::GENESIS_GAS_LIMIT, pow::*,
+    block_parameters::*, consensus::consensus_inner::StateBlameInfo,
+    parameters::consensus::GENESIS_GAS_LIMIT, pow::*,
     verification::compute_transaction_root, ConsensusGraph,
     ConsensusGraphTrait, SharedSynchronizationGraph,
     SharedSynchronizationService, SharedTransactionPool, Stopable,
@@ -170,9 +171,8 @@ impl BlockGenerator {
 
     // TODO: should not hold and pass write lock to consensus.
     fn assemble_new_block_impl(
-        &self, parent_hash: H256, mut referees: Vec<H256>, blame: u32,
-        deferred_state_root: H256, deferred_receipts_root: H256,
-        deferred_logs_bloom_hash: H256, block_gas_limit: U256,
+        &self, parent_hash: H256, mut referees: Vec<H256>,
+        blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>,
     ) -> Block
@@ -230,10 +230,10 @@ impl BlockGenerator {
             .with_height(parent_height + 1)
             .with_timestamp(my_timestamp)
             .with_author(self.mining_author)
-            .with_blame(blame)
-            .with_deferred_state_root(deferred_state_root)
-            .with_deferred_receipts_root(deferred_receipts_root)
-            .with_deferred_logs_bloom_hash(deferred_logs_bloom_hash)
+            .with_blame(blame_info.blame)
+            .with_deferred_state_root(blame_info.state_vec_root)
+            .with_deferred_receipts_root(blame_info.receipts_vec_root)
+            .with_deferred_logs_bloom_hash(blame_info.logs_boom_vec_root)
             .with_difficulty(expected_difficulty)
             .with_adaptive(adaptive)
             .with_referee_hashes(referees)
@@ -257,11 +257,10 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let (blame, state_root, receipts_root, logs_bloom_hash) =
-            consensus_graph
-                .force_compute_blame_and_deferred_state_for_generation(
-                    &parent_hash,
-                )?;
+        let state_blame_info = consensus_graph
+            .force_compute_blame_and_deferred_state_for_generation(
+                &parent_hash,
+            )?;
 
         let block_gas_limit = block_gas_limit.into();
         let block_size_limit =
@@ -277,10 +276,7 @@ impl BlockGenerator {
         Ok(self.assemble_new_block_impl(
             parent_hash,
             referee,
-            blame,
-            state_root,
-            receipts_root,
-            logs_bloom_hash,
+            state_blame_info,
             block_gas_limit,
             transactions,
             difficulty,
@@ -318,12 +314,7 @@ impl BlockGenerator {
         }
         PACKED_ACCOUNT_SIZE.update(sender_accounts.len());
 
-        let (
-            blame,
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
-        ) = consensus_graph
+        let state_blame_info = consensus_graph
             .get_blame_and_deferred_state_for_generation(
                 &best_info.best_block_hash,
             )
@@ -336,10 +327,7 @@ impl BlockGenerator {
         self.assemble_new_block_impl(
             best_block_hash,
             referee,
-            blame,
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
+            state_blame_info,
             block_gas_limit,
             transactions,
             0,
@@ -372,28 +360,23 @@ impl BlockGenerator {
                 additional_transactions,
             );
 
-        let (
-            mut blame,
-            mut deferred_state_root,
-            mut deferred_receipts_root,
-            mut deferred_logs_bloom_hash,
-        ) = consensus_graph
+        let mut state_blame_info = consensus_graph
             .get_blame_and_deferred_state_for_generation(
                 &best_info.best_block_hash,
             )
             .unwrap();
 
         if let Some(x) = blame_override {
-            blame = x;
+            state_blame_info.blame = x;
         }
         if let Some(x) = state_root_override {
-            deferred_state_root = x;
+            state_blame_info.state_vec_root = x;
         }
         if let Some(x) = receipt_root_override {
-            deferred_receipts_root = x;
+            state_blame_info.receipts_vec_root = x;
         }
         if let Some(x) = logs_bloom_hash_override {
-            deferred_logs_bloom_hash = x;
+            state_blame_info.logs_boom_vec_root = x;
         }
 
         let best_block_hash = best_info.best_block_hash.clone();
@@ -403,10 +386,7 @@ impl BlockGenerator {
         self.assemble_new_block_impl(
             best_block_hash,
             referee,
-            blame,
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
+            state_blame_info,
             block_gas_limit,
             transactions,
             0,
@@ -515,12 +495,7 @@ impl BlockGenerator {
         let (best_info, block_gas_limit, _) = self
             .txpool
             .get_best_info_with_packed_transactions(0, 0, Vec::new());
-        let (
-            blame,
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
-        ) = consensus_graph
+        let state_blame_info = consensus_graph
             .get_blame_and_deferred_state_for_generation(
                 &best_info.best_block_hash,
             )
@@ -533,10 +508,7 @@ impl BlockGenerator {
         let block = self.assemble_new_block_impl(
             best_block_hash,
             referee,
-            blame,
-            deferred_state_root,
-            deferred_receipts_root,
-            deferred_logs_bloom_hash,
+            state_blame_info,
             block_gas_limit,
             transactions,
             0,
@@ -557,19 +529,15 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let (blame, state_root, receipts_root, logs_bloom_hash) =
-            consensus_graph
-                .force_compute_blame_and_deferred_state_for_generation(
-                    &parent_hash,
-                )?;
+        let state_blame_info = consensus_graph
+            .force_compute_blame_and_deferred_state_for_generation(
+                &parent_hash,
+            )?;
 
         let block = self.assemble_new_block_impl(
             parent_hash,
             referee,
-            blame,
-            state_root,
-            receipts_root,
-            logs_bloom_hash,
+            state_blame_info,
             GENESIS_GAS_LIMIT.into(),
             transactions,
             0,
@@ -591,19 +559,15 @@ impl BlockGenerator {
             .as_any()
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed");
-        let (blame, state_root, receipts_root, logs_bloom_hash) =
-            consensus_graph
-                .force_compute_blame_and_deferred_state_for_generation(
-                    &parent_hash,
-                )?;
+        let state_blame_info = consensus_graph
+            .force_compute_blame_and_deferred_state_for_generation(
+                &parent_hash,
+            )?;
 
         let mut block = self.assemble_new_block_impl(
             parent_hash,
             referee,
-            blame,
-            state_root,
-            receipts_root,
-            logs_bloom_hash,
+            state_blame_info,
             GENESIS_GAS_LIMIT.into(),
             transactions,
             0,

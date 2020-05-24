@@ -20,7 +20,9 @@ pub use crate::consensus::{
 use crate::{
     block_data_manager::{BlockDataManager, BlockExecutionResultWithEpoch},
     bytes::Bytes,
-    consensus::consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+    consensus::consensus_inner::{
+        consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+    },
     evm::Spec,
     executive::ExecutionOutcome,
     parameters::{
@@ -601,12 +603,11 @@ impl ConsensusGraph {
         })
     }
 
-    // FIXME: structure the return value?
     /// Force the engine to recompute the deferred state root for a particular
     /// block given a delay.
     pub fn force_compute_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, H256, H256, H256), String> {
+    ) -> Result<StateBlameInfo, String> {
         {
             let inner = &mut *self.inner.write();
             let hash = inner
@@ -623,10 +624,9 @@ impl ConsensusGraph {
         )
     }
 
-    // FIXME: structure the return value?
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
-    ) -> Result<(u32, H256, H256, H256), String> {
+    ) -> Result<StateBlameInfo, String> {
         self.executor.get_blame_and_deferred_state_for_generation(
             parent_block_hash,
             &self.inner,
