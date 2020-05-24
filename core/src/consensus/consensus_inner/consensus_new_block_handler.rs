@@ -872,35 +872,46 @@ impl ConsensusNewBlockHandler {
     }
 
     fn should_form_checkpoint_at(
-        &self, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner, will_execute: bool,
     ) -> usize {
         let stable_pivot_block =
             inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
         let mut new_genesis_height =
             inner.cur_era_genesis_height + inner.inner_conf.era_epoch_count;
 
-        // During the recovery phase, the state_valid for stable may temporarily
-        // not available at the start.
-        if inner.arena[stable_pivot_block].data.state_valid.is_none() {
-            self.executor
-                .wait_for_result(inner.arena[stable_pivot_block].hash)
-                .expect("Execution state of the pivot chain is corrupted!");
-            inner
-                .compute_state_valid_and_blame_info(stable_pivot_block)
-                .expect("Stable node should be able to compute state_valid and blame_info");
-        }
-        // Stable block must have a blame vector that does not stretch beyond
-        // the new genesis
-        if !inner.arena[stable_pivot_block].data.state_valid.unwrap() {
-            if inner.arena[stable_pivot_block]
-                .data
-                .blame_info
-                .unwrap()
-                .blame as u64
-                + new_genesis_height
-                >= inner.cur_era_stable_height
-            {
-                return inner.cur_era_genesis_block_arena_index;
+        // FIXME: Here is a chicken and egg problem. In our full node sync
+        // FIXME: logic, we first run consensus on headers to determine
+        // FIXME: the checkpoint location. And then run the full blocks.
+        // FIXME: However, when we do not have the body, we cannot faithfully
+        // FIXME: check this condition. The consequence is that if
+        // FIXME: attacker managed to generate a lot blame blocks. New full
+        // FIXME: nodes will not correctly determine the safe checkpoint
+        // FIXME: location to start the sync. Causing potential panic
+        // FIXME: when computing `state_valid` and `blame_info`.
+        if will_execute {
+            // During the recovery phase, the state_valid for stable may
+            // temporarily not available at the start.
+            if inner.arena[stable_pivot_block].data.state_valid.is_none() {
+                self.executor
+                    .wait_for_result(inner.arena[stable_pivot_block].hash)
+                    .expect("Execution state of the pivot chain is corrupted!");
+                inner
+                    .compute_state_valid_and_blame_info(stable_pivot_block)
+                    .expect("Stable node should be able to compute state_valid and blame_info");
+            }
+            // Stable block must have a blame vector that does not stretch
+            // beyond the new genesis
+            if !inner.arena[stable_pivot_block].data.state_valid.unwrap() {
+                if inner.arena[stable_pivot_block]
+                    .data
+                    .blame_info
+                    .unwrap()
+                    .blame as u64
+                    + new_genesis_height
+                    >= inner.cur_era_stable_height
+                {
+                    return inner.cur_era_genesis_block_arena_index;
+                }
             }
         }
 
@@ -1576,8 +1587,10 @@ impl ConsensusNewBlockHandler {
             .hash
                 == inner.cur_era_stable_block_hash
         {
-            let new_checkpoint_era_genesis =
-                self.should_form_checkpoint_at(inner);
+            let new_checkpoint_era_genesis = self.should_form_checkpoint_at(
+                inner,
+                has_body && !self.conf.bench_mode,
+            );
             if new_checkpoint_era_genesis
                 != inner.cur_era_genesis_block_arena_index
             {
