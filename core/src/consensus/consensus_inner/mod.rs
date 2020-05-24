@@ -2374,6 +2374,7 @@ impl ConsensusGraphInner {
         let mut receipt_blame_vec = Vec::new();
         let mut bloom_blame_vec = Vec::new();
         let mut blame_info_to_fill = Vec::new();
+        let mut last_is_valid = false;
         state_blame_vec.push(state_root_hash);
         receipt_blame_vec.push(receipts_root_hash);
         bloom_blame_vec.push(logs_bloom_hash);
@@ -2385,6 +2386,7 @@ impl ConsensusGraphInner {
             {
                 // The state_valid for this block and blocks before have been
                 // computed
+                last_is_valid = true;
                 break;
             }
 
@@ -2432,7 +2434,21 @@ impl ConsensusGraphInner {
                 receipt_blame_vec.last().unwrap().clone();
             let mut accumulated_logs_boom_root =
                 bloom_blame_vec.last().unwrap().clone();
-            for i in (0..blame_info_to_fill.len()).rev() {
+            let end;
+            if last_is_valid {
+                self.arena[*blame_info_to_fill.last().unwrap()]
+                    .data
+                    .blame_info = Some(StateBlameInfo {
+                    blame: 0,
+                    state_vec_root: accumulated_state_root.clone(),
+                    receipts_vec_root: accumulated_receipts_root.clone(),
+                    logs_boom_vec_root: accumulated_logs_boom_root.clone(),
+                });
+                end = blame_info_to_fill.len() - 1;
+            } else {
+                end = blame_info_to_fill.len();
+            }
+            for i in (0..end).rev() {
                 accumulated_state_root =
                     BlockHeaderBuilder::compute_blame_state_root_incremental(
                         state_blame_vec[i + 1],
@@ -2457,23 +2473,26 @@ impl ConsensusGraphInner {
                         logs_boom_vec_root: accumulated_logs_boom_root,
                     });
             }
+            let state_vec_root =
+                BlockHeaderBuilder::compute_blame_state_root_incremental(
+                    state_blame_vec[0],
+                    accumulated_state_root,
+                );
+            let receipts_vec_root =
+                BlockHeaderBuilder::compute_blame_state_root_incremental(
+                    receipt_blame_vec[0],
+                    accumulated_receipts_root,
+                );
+            let logs_boom_vec_root =
+                BlockHeaderBuilder::compute_blame_state_root_incremental(
+                    bloom_blame_vec[0],
+                    accumulated_logs_boom_root,
+                );
             Ok(StateBlameInfo {
                 blame,
-                state_vec_root:
-                    BlockHeaderBuilder::compute_blame_state_root_incremental(
-                        state_blame_vec[0],
-                        accumulated_state_root,
-                    ),
-                receipts_vec_root:
-                    BlockHeaderBuilder::compute_blame_state_root_incremental(
-                        receipt_blame_vec[0],
-                        accumulated_receipts_root,
-                    ),
-                logs_boom_vec_root:
-                    BlockHeaderBuilder::compute_blame_state_root_incremental(
-                        bloom_blame_vec[0],
-                        accumulated_logs_boom_root,
-                    ),
+                state_vec_root,
+                receipts_vec_root,
+                logs_boom_vec_root,
             })
         } else {
             Ok(StateBlameInfo {
