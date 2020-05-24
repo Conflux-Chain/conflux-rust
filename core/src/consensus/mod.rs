@@ -690,8 +690,8 @@ impl ConsensusGraph {
                 // `wait_for_result`
                 let state_root = execution_commitment
                     .state_root_with_aux_info
-                    .state_root
-                    .compute_state_root_hash();
+                    .aux_info
+                    .state_root_hash;
                 Some((results_with_epoch, address, state_root))
             }
             Err(msg) => {

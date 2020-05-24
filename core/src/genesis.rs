@@ -130,9 +130,7 @@ pub fn genesis_block(
     })]);
     let mut genesis = Block::new(
         BlockHeaderBuilder::new()
-            .with_deferred_state_root(
-                state_root.state_root.compute_state_root_hash(),
-            )
+            .with_deferred_state_root(state_root.aux_info.state_root_hash)
             .with_deferred_receipts_root(receipt_root)
             .with_gas_limit(GENESIS_GAS_LIMIT.into())
             .with_author(genesis_block_author)

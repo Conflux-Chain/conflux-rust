@@ -2363,8 +2363,8 @@ impl ConsensusGraphInner {
         state_blame_vec.push(
             exec_result
                 .state_root_with_aux_info
-                .state_root
-                .compute_state_root_hash(),
+                .aux_info
+                .state_root_hash,
         );
         receipt_blame_vec.push(exec_result.receipts_root.clone());
         bloom_blame_vec.push(exec_result.logs_bloom_hash.clone());
@@ -2398,8 +2398,8 @@ impl ConsensusGraphInner {
             state_blame_vec.push(
                 deferred_block_commitment
                     .state_root_with_aux_info
-                    .state_root
-                    .compute_state_root_hash(),
+                    .aux_info
+                    .state_root_hash,
             );
             receipt_blame_vec
                 .push(deferred_block_commitment.receipts_root.clone());
@@ -2453,8 +2453,8 @@ impl ConsensusGraphInner {
         let parent = self.arena[me].parent;
         let original_deferred_state_root = exec_commitment
             .state_root_with_aux_info
-            .state_root
-            .compute_state_root_hash();
+            .aux_info
+            .state_root_hash;
         let original_deferred_receipt_root =
             exec_commitment.receipts_root.clone();
         let original_deferred_logs_bloom_hash =
