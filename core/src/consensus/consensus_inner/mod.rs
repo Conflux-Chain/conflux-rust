@@ -2564,7 +2564,7 @@ impl ConsensusGraphInner {
         }
 
         self.arena[me].data.state_valid = Some(state_valid);
-        if state_valid {
+        if !state_valid {
             self.arena[me].data.blame_info = Some(state_blame_info);
         }
 
