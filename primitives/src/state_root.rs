@@ -38,11 +38,12 @@ impl Default for StateRoot {
 
 impl StateRoot {
     pub fn compute_state_root_hash(&self) -> H256 {
-        let mut rlp_stream = RlpStream::new_list(3);
-        rlp_stream.append_list(self.snapshot_root.as_bytes());
-        rlp_stream.append_list(self.intermediate_delta_root.as_bytes());
-        rlp_stream.append_list(self.delta_root.as_bytes());
-        keccak(rlp_stream.out())
+        let mut buffer: [u8; 96] = [0; 96];
+        &mut buffer[0..32].copy_from_slice(self.snapshot_root.as_bytes());
+        &mut buffer[32..64]
+            .copy_from_slice(self.intermediate_delta_root.as_bytes());
+        &mut buffer[64..96].copy_from_slice(self.delta_root.as_bytes());
+        keccak(&buffer[..])
     }
 
     pub fn genesis(genesis_root: &MerkleHash) -> StateRoot {
