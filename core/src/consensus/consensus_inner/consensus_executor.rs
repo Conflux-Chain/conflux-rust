@@ -559,7 +559,12 @@ impl ConsensusExecutor {
             if inner.arena[parent_arena_index].hash == *parent_block_hash {
                 Ok(inner.compute_blame_and_state_with_execution_result(
                     parent_arena_index,
-                    &last_result,
+                    last_result
+                        .state_root_with_aux_info
+                        .aux_info
+                        .state_root_hash,
+                    last_result.receipts_root,
+                    last_result.logs_bloom_hash,
                 )?)
             } else {
                 Err("Too old parent/subtree to prepare for generation"

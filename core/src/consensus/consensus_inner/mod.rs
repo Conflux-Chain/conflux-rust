@@ -8,8 +8,7 @@ pub mod consensus_new_block_handler;
 
 use crate::{
     block_data_manager::{
-        block_data_types::EpochExecutionCommitment, BlockDataManager,
-        BlockExecutionResultWithEpoch, EpochExecutionContext,
+        BlockDataManager, BlockExecutionResultWithEpoch, EpochExecutionContext,
     },
     consensus::{anticone_cache::AnticoneCache, pastset_cache::PastSetCache},
     parameters::{consensus::*, consensus_internal::*},
@@ -2365,21 +2364,19 @@ impl ConsensusGraphInner {
     /// ([Dm], [Dp], [Di], [Dj]), therefore, the deferred blame root of
     /// [Bm] is keccak([Dm], [Dp], [Di], [Dj]).
     fn compute_blame_and_state_with_execution_result(
-        &self, parent: usize, exec_result: &EpochExecutionCommitment,
-    ) -> Result<StateBlameInfo, String> {
+        &mut self, parent: usize, state_root_hash: H256,
+        receipts_root_hash: H256, logs_bloom_hash: H256,
+    ) -> Result<StateBlameInfo, String>
+    {
         let mut cur = parent;
-        let mut blame: u32 = 0;
+        let mut blame_cnt: u32 = 0;
         let mut state_blame_vec = Vec::new();
         let mut receipt_blame_vec = Vec::new();
         let mut bloom_blame_vec = Vec::new();
-        state_blame_vec.push(
-            exec_result
-                .state_root_with_aux_info
-                .aux_info
-                .state_root_hash,
-        );
-        receipt_blame_vec.push(exec_result.receipts_root.clone());
-        bloom_blame_vec.push(exec_result.logs_bloom_hash.clone());
+        let mut blame_info_to_fill = Vec::new();
+        state_blame_vec.push(state_root_hash);
+        receipt_blame_vec.push(receipts_root_hash);
+        bloom_blame_vec.push(logs_bloom_hash);
         loop {
             if self.arena[cur]
                 .data
@@ -2400,7 +2397,15 @@ impl ConsensusGraphInner {
                     &self.arena[deferred_arena_index].hash,
                 )
                 .ok_or("State block commitment missing")?;
-            blame += 1;
+            // We can retrieve the already filled info and maybe stop here
+            if let Some(blame_info) = self.arena[cur].data.blame_info {
+                blame_cnt = blame_info.blame;
+                state_blame_vec.push(blame_info.state_vec_root);
+                receipt_blame_vec.push(blame_info.receipts_vec_root);
+                bloom_blame_vec.push(blame_info.logs_boom_vec_root);
+                break;
+            }
+            blame_info_to_fill.push(cur);
             if self.arena[cur].height == self.cur_era_genesis_height {
                 return Err(
                     "Failed to compute blame and state due to out of era"
@@ -2419,20 +2424,55 @@ impl ConsensusGraphInner {
                 .push(deferred_block_commitment.logs_bloom_hash.clone());
             cur = self.arena[cur].parent;
         }
+        let blame = blame_cnt + blame_info_to_fill.len() as u32;
         if blame > 0 {
+            let mut accumulated_state_root =
+                state_blame_vec.last().unwrap().clone();
+            let mut accumulated_receipts_root =
+                receipt_blame_vec.last().unwrap().clone();
+            let mut accumulated_logs_boom_root =
+                bloom_blame_vec.last().unwrap().clone();
+            for i in (0..blame_info_to_fill.len()).rev() {
+                accumulated_state_root =
+                    BlockHeaderBuilder::compute_blame_state_root_incremental(
+                        state_blame_vec[i + 1],
+                        accumulated_state_root,
+                    );
+                accumulated_receipts_root =
+                    BlockHeaderBuilder::compute_blame_state_root_incremental(
+                        receipt_blame_vec[i + 1],
+                        accumulated_receipts_root,
+                    );
+                accumulated_logs_boom_root =
+                    BlockHeaderBuilder::compute_blame_state_root_incremental(
+                        bloom_blame_vec[i + 1],
+                        accumulated_logs_boom_root,
+                    );
+                blame_cnt += 1;
+                self.arena[blame_info_to_fill[i]].data.blame_info =
+                    Some(StateBlameInfo {
+                        blame: blame_cnt,
+                        state_vec_root: accumulated_state_root,
+                        receipts_vec_root: accumulated_receipts_root,
+                        logs_boom_vec_root: accumulated_logs_boom_root,
+                    });
+            }
             Ok(StateBlameInfo {
                 blame,
                 state_vec_root:
-                    BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                        state_blame_vec,
+                    BlockHeaderBuilder::compute_blame_state_root_incremental(
+                        state_blame_vec[0],
+                        accumulated_state_root,
                     ),
                 receipts_vec_root:
-                    BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                        receipt_blame_vec,
+                    BlockHeaderBuilder::compute_blame_state_root_incremental(
+                        receipt_blame_vec[0],
+                        accumulated_receipts_root,
                     ),
                 logs_boom_vec_root:
-                    BlockHeaderBuilder::compute_blame_state_root_vec_root(
-                        bloom_blame_vec,
+                    BlockHeaderBuilder::compute_blame_state_root_incremental(
+                        bloom_blame_vec[0],
+                        accumulated_logs_boom_root,
                     ),
             })
         } else {
@@ -2478,7 +2518,9 @@ impl ConsensusGraphInner {
         let state_blame_info = self
             .compute_blame_and_state_with_execution_result(
                 parent,
-                &exec_commitment,
+                original_deferred_state_root.clone(),
+                original_deferred_receipt_root.clone(),
+                original_deferred_logs_bloom_hash.clone(),
             )?;
         let block_header = self
             .data_man
