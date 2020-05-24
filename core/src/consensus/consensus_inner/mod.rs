@@ -2426,7 +2426,11 @@ impl ConsensusGraphInner {
                 .push(deferred_block_commitment.logs_bloom_hash.clone());
             cur = self.arena[cur].parent;
         }
-        let blame = blame_cnt + blame_info_to_fill.len() as u32;
+        let blame = if last_is_valid {
+            blame_info_to_fill.len() as u32
+        } else {
+            blame_cnt + blame_info_to_fill.len() as u32 + 1
+        };
         if blame > 0 {
             let mut accumulated_state_root =
                 state_blame_vec.last().unwrap().clone();
