@@ -2409,8 +2409,13 @@ impl ConsensusGraphInner {
             }
             blame_info_to_fill.push(cur);
             if self.arena[cur].height == self.cur_era_genesis_height {
+                // Note that this should never happen for pivot chain blocks,
+                // because we guarantee that the blame vector at
+                // the stable genesis will not stretch beyond the checkpoint
+                // genesis. So the blame vector should stop at
+                // some point unless the stable genesis is reverted.
                 return Err(
-                    "Failed to compute blame and state due to out of era"
+                    "Failed to compute blame and state due to out of era. The blockchain data is probably corrupted."
                         .to_owned(),
                 );
             }
