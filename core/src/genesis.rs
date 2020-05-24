@@ -123,7 +123,9 @@ pub fn genesis_block(
             .unwrap();
         total_balance += balance;
     }
-    state.set_total_issued_tokens(&total_balance).expect("Cannot set issued tokens in the database!");
+    state
+        .set_total_issued_tokens(&total_balance)
+        .expect("Cannot set issued tokens in the database!");
     initialize_internal_contract_accounts(&mut state);
 
     let state_root = state.compute_state_root().unwrap();
