@@ -101,12 +101,14 @@ fn main() -> Result<(), Error> {
     )?;
     storage_manager.register_new_snapshot(snapshot_info1.clone())?;
     println!("After merging: {:?}", snapshot_info1);
+    let state_root = StateRoot {
+        snapshot_root: MERKLE_NULL_NODE,
+        intermediate_delta_root: snapshot1_delta_root,
+        delta_root: MERKLE_NULL_NODE,
+    };
+    let state_root_hash = state_root.compute_state_root_hash();
     let state_root_2 = StateRootWithAuxInfo {
-        state_root: StateRoot {
-            snapshot_root: MERKLE_NULL_NODE,
-            intermediate_delta_root: snapshot1_delta_root,
-            delta_root: MERKLE_NULL_NODE,
-        },
+        state_root,
         aux_info: StateRootAuxInfo {
             snapshot_epoch_id: NULL_EPOCH,
             intermediate_epoch_id: snapshot1_epoch,
@@ -120,6 +122,7 @@ fn main() -> Result<(), Error> {
                 &MERKLE_NULL_NODE,
                 &snapshot1_delta_root,
             ),
+            state_root_hash,
         },
     };
     let (snapshot2_epoch, snapshot2_delta_root) = prepare_state(

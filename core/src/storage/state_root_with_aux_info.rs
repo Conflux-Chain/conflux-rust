@@ -23,15 +23,21 @@ pub struct StateRootAuxInfo {
     // FIXME: blame? what's the expectation of saving as many
     // FIXME: EpochExecutionCommitments from blame?
     pub delta_mpt_key_padding: DeltaMptKeyPadding,
+
+    // The merged hash of the original three fields
+    pub state_root_hash: MerkleHash,
 }
 
 impl StateRootAuxInfo {
-    pub fn genesis_state_root_aux_info() -> Self {
+    pub fn genesis_state_root_aux_info(
+        genesis_state_root: &MerkleHash,
+    ) -> Self {
         Self {
             snapshot_epoch_id: NULL_EPOCH,
             intermediate_epoch_id: NULL_EPOCH,
             maybe_intermediate_mpt_key_padding: None,
             delta_mpt_key_padding: GENESIS_DELTA_MPT_KEY_PADDING.clone(),
+            state_root_hash: genesis_state_root.clone(),
         }
     }
 }
@@ -47,9 +53,13 @@ pub struct StateRootWithAuxInfo {
 
 impl StateRootWithAuxInfo {
     pub fn genesis(genesis_root: &MerkleHash) -> Self {
+        let state_root = StateRoot::genesis(genesis_root);
+        let genesis_state_root = state_root.compute_state_root_hash();
         Self {
-            state_root: StateRoot::genesis(genesis_root),
-            aux_info: StateRootAuxInfo::genesis_state_root_aux_info(),
+            state_root,
+            aux_info: StateRootAuxInfo::genesis_state_root_aux_info(
+                &genesis_state_root,
+            ),
         }
     }
 }
@@ -83,11 +93,12 @@ impl From<(&StateRoot, &StateRootAuxInfo)> for StateRootWithAuxInfo {
 
 impl Encodable for StateRootAuxInfo {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(4)
+        s.begin_list(5)
             .append(&self.snapshot_epoch_id)
             .append(&self.intermediate_epoch_id)
             .append(&self.maybe_intermediate_mpt_key_padding)
-            .append(&&self.delta_mpt_key_padding[..]);
+            .append(&&self.delta_mpt_key_padding[..])
+            .append(&self.state_root_hash);
     }
 }
 
@@ -98,6 +109,7 @@ impl Decodable for StateRootAuxInfo {
             intermediate_epoch_id: rlp.val_at(1)?,
             maybe_intermediate_mpt_key_padding: rlp.val_at(2)?,
             delta_mpt_key_padding: rlp.val_at(3)?,
+            state_root_hash: rlp.val_at(4)?,
         })
     }
 }

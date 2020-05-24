@@ -742,6 +742,7 @@ impl SnapshotChunkSync {
                 .height()
         };
         let mut snapshot_state_root = state_root_vec[offset].clone();
+        let state_root_hash = state_root_vec[offset].compute_state_root_hash();
         // This delta_root is the intermediate_delta_root of the new snapshot,
         // and this field will be used to fill new state_root in
         // get_state_trees_for_next_epoch
@@ -768,6 +769,7 @@ impl SnapshotChunkSync {
                     // We don't necessarily need to know because
                     // the execution of the next epoch shifts delta MPT.
                     maybe_intermediate_mpt_key_padding: None,
+                    state_root_hash,
                 },
             },
             SnapshotInfo {
