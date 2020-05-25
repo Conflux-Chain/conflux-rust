@@ -28,13 +28,26 @@ use std::{error, fmt};
 /// Errors concerning log filtering.
 pub enum FilterError {
     /// Filter has wrong epoch numbers set.
-    InvalidEpochNumber { from_epoch: u64, to_epoch: u64 },
+    InvalidEpochNumber {
+        from_epoch: u64,
+        to_epoch: u64,
+    },
+
+    OutOfBoundEpochNumber {
+        to_epoch: u64,
+        max_epoch: u64,
+    },
 
     /// Roots for verifying the requested epochs are unavailable.
-    UnableToVerify { epoch: u64, latest_verifiable: u64 },
+    UnableToVerify {
+        epoch: u64,
+        latest_verifiable: u64,
+    },
 
     /// The block requested does not exist
-    UnknownBlock { hash: H256 },
+    UnknownBlock {
+        hash: H256,
+    },
 
     /// Filter error with custom error message (e.g. timeout)
     Custom(String),
@@ -50,6 +63,13 @@ impl fmt::Display for FilterError {
             } => format! {
                 "Filter has wrong epoch numbers set (from: {}, to: {})",
                 from_epoch, to_epoch
+            },
+            OutOfBoundEpochNumber {
+                to_epoch,
+                max_epoch,
+            } => format! {
+                "Filter to_epoch is larger than the current best_epoch (to: {}, max: {})",
+                to_epoch, max_epoch,
             },
             UnableToVerify {
                 epoch,
