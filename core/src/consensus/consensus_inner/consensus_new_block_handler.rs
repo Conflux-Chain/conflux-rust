@@ -908,6 +908,7 @@ impl ConsensusNewBlockHandler {
                     .unwrap()
                     .blame as u64
                     + new_genesis_height
+                    + DEFERRED_STATE_EPOCH_COUNT
                     >= inner.cur_era_stable_height
                 {
                     return inner.cur_era_genesis_block_arena_index;
