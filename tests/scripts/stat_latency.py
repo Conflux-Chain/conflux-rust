@@ -143,7 +143,9 @@ class LogAnalyzer:
         tx_sum = sum(block_txs_list)
         print("{} txs generated".format(tx_sum))
         print("Throughput is {}".format(tx_sum / (max_time - min_time)))
-        # print("Slowest packed transaction hash: {}".format(self.agg.get_largest_min_tx_packed_latency_hash()))
+        slowest_tx_latency = self.agg.get_largest_min_tx_packed_latency_hash()
+        if slowest_tx_latency is not None:
+            print("Slowest packed transaction hash: {}".format(slowest_tx_latency))
         table.pretty_print()
         if self.csv_output is not None:
             table.output_csv(self.csv_output)

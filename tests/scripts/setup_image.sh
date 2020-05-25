@@ -54,3 +54,13 @@ cd tests/scripts
 wget https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt
 cp ../../target/release/conflux throttle_bitcoin_bandwidth.sh remote_start_conflux.sh remote_collect_log.sh stat_latency_map_reduce.py genesis_secrets.txt ~
 
+# Remove process number limit.
+echo "LABEL=cloudimg-rootfs   /        ext4   defaults,noatime,nodiratime,barrier=0       0 0" > fstab
+sudo cp fstab /etc/fstab
+echo "ulimit -n 65535" >> ~/.profile
+echo "ulimit -u 60000" >> ~/.profile
+echo "*            -          nproc     65535 " | sudo tee -a /etc/security/limits.conf
+echo "*            -          nfile     65535 " | sudo tee -a /etc/security/limits.conf
+echo "DefaultTasksMax=65535" | sudo tee -a /etc/systemd/system.conf
+sudo mkdir -p /etc/systemd/logind.conf.d
+echo "[Login] \nUserTasksMax=infinity" |sudo tee -a /etc/systemd/logind.conf.d/override.conf

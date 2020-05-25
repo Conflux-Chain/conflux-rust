@@ -16,7 +16,7 @@ import time
 from scripts.stat_latency_map_reduce import Statistics
 import os
 
-CONFIRMATION_THRESHOLD = 0.1**-6 * 2**256
+CONFIRMATION_THRESHOLD = 0.1**6 * 2**256
 
 def execute(cmd, retry, cmd_description):
     while True:
@@ -147,11 +147,11 @@ class RemoteSimulate(ConfluxTestFramework):
         pssh(self.options.ips_file, cmd, 3, "setup and run conflux on remote nodes")
 
     def setup_network(self):
-        # self.setup_remote_conflux()
+        self.setup_remote_conflux()
 
         # add remote nodes and start all
         for ip in self.ips:
-            self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip)
+            self.add_remote_nodes(self.options.nodes_per_host, user="ubuntu", ip=ip, no_pssh=False)
         for i in range(len(self.nodes)):
             self.log.info("Node[{}]: ip={}, p2p_port={}, rpc_port={}".format(
                 i, self.nodes[i].ip, self.nodes[i].port, self.nodes[i].rpcport))
@@ -260,8 +260,19 @@ class RemoteSimulate(ConfluxTestFramework):
         self.log.info("Goodput: {}".format(self.nodes[0].getgoodput()))
         self.wait_until_nodes_synced()
 
+        ghost_confirmation_time = []
         node0 = RpcClient(self.nodes[0])
         self.log.info("Best block: {}, height: {}".format(node0.best_block_hash(), node0.epoch_number()))
+        for i in range(1, node0.epoch_number()+1):
+            pivot_block = node0.block_by_epoch(node0.EPOCH_NUM(i))["hash"]
+            if pivot_block in self.confirm_info.block_confirmation_time:
+                ghost_confirmation_time.append(self.confirm_info.block_confirmation_time[pivot_block])
+        if len(ghost_confirmation_time) != 0:
+            self.log.info("GHOST average confirmation time: {} confirmed number: {}".format(
+                sum(ghost_confirmation_time)/len(ghost_confirmation_time),
+                len(ghost_confirmation_time)
+            ))
+
 
     def wait_until_nodes_synced(self):
         """

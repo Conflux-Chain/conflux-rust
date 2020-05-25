@@ -141,13 +141,14 @@ class LatencyExperiment:
             "--txs-per-block", str(config.txs_per_block),
             "--generate-tx-data-len", str(config.tx_size),
             "--tx-pool-size", str(1_000_000),
-            "--conflux-binary", "~/conflux"
+            "--conflux-binary", "~/conflux",
+            "--nocleanup"
         ] + OptionHelper.parsed_options_to_args(
             dict(filter(lambda kv: kv[0] not in self.exp_latency_options, vars(self.options).items()))
         )
 
-        log_file = open(self.simulate_log_file, "w")
-        print("[CMD]: {} > {}".format(cmd, self.simulate_log_file))
+        log_file = open(self.simulate_log_file, "a")
+        print("[CMD]: {} >> {}".format(cmd, self.simulate_log_file))
         ret = subprocess.run(cmd, stdout = log_file, stderr=log_file).returncode
         assert ret == 0, "Failed to run remote simulator, return code = {}. Please check [{}] for more details".format(ret, self.simulate_log_file)
 
@@ -173,6 +174,7 @@ class LatencyExperiment:
             print("begin to statistic confirmation latency ...")
             ret = os.system("python3 stat_confirmation.py logs 4 >> {}".format(self.stat_log_file))
             assert ret == 0, "Failed to statistic block confirmation latency, return code = {}".format(ret)
+
 
 if __name__ == "__main__":
     LatencyExperiment().run()
