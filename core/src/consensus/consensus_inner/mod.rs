@@ -2374,7 +2374,6 @@ impl ConsensusGraphInner {
         let mut receipt_blame_vec = Vec::new();
         let mut bloom_blame_vec = Vec::new();
         let mut blame_info_to_fill = Vec::new();
-        let mut last_is_valid = false;
         state_blame_vec.push(state_root_hash);
         receipt_blame_vec.push(receipts_root_hash);
         bloom_blame_vec.push(logs_bloom_hash);
@@ -2385,12 +2384,35 @@ impl ConsensusGraphInner {
                 .expect("computed by the caller")
             {
                 // The state_valid for this block and blocks before have been
-                // computed
-                last_is_valid = true;
+                // computed. In this case, we need to fill the last one with
+                // blame 0.
+                if let Some(last_blame_info) = blame_info_to_fill.pop() {
+                    self.arena[last_blame_info].data.blame_info =
+                        Some(StateBlameInfo {
+                            blame: 0,
+                            state_vec_root: state_blame_vec
+                                .last()
+                                .unwrap()
+                                .clone(),
+                            receipts_vec_root: receipt_blame_vec
+                                .last()
+                                .unwrap()
+                                .clone(),
+                            logs_boom_vec_root: bloom_blame_vec
+                                .last()
+                                .unwrap()
+                                .clone(),
+                        });
+                    blame_cnt = 1;
+                }
                 break;
             }
 
             debug!("compute_blame_and_state_with_execution_result: cur={} height={}", cur, self.arena[cur].height);
+            // Note that this function should never return errors for pivot
+            // chain blocks, because our assumption is that stable
+            // blocks will always already have `state_valid` and
+            // `blame_info` computed.
             let deferred_arena_index =
                 self.get_deferred_state_arena_index(cur)?;
             let deferred_block_commitment = self
@@ -2401,7 +2423,7 @@ impl ConsensusGraphInner {
                 .ok_or("State block commitment missing")?;
             // We can retrieve the already filled info and maybe stop here
             if let Some(blame_info) = self.arena[cur].data.blame_info {
-                blame_cnt = blame_info.blame;
+                blame_cnt = blame_info.blame + 1;
                 state_blame_vec.push(blame_info.state_vec_root);
                 receipt_blame_vec.push(blame_info.receipts_vec_root);
                 bloom_blame_vec.push(blame_info.logs_boom_vec_root);
@@ -2431,11 +2453,7 @@ impl ConsensusGraphInner {
                 .push(deferred_block_commitment.logs_bloom_hash.clone());
             cur = self.arena[cur].parent;
         }
-        let blame = if last_is_valid {
-            blame_info_to_fill.len() as u32
-        } else {
-            blame_cnt + blame_info_to_fill.len() as u32 + 1
-        };
+        let blame = blame_cnt + blame_info_to_fill.len() as u32;
         if blame > 0 {
             let mut accumulated_state_root =
                 state_blame_vec.last().unwrap().clone();
@@ -2443,21 +2461,7 @@ impl ConsensusGraphInner {
                 receipt_blame_vec.last().unwrap().clone();
             let mut accumulated_logs_boom_root =
                 bloom_blame_vec.last().unwrap().clone();
-            let end;
-            if last_is_valid {
-                self.arena[*blame_info_to_fill.last().unwrap()]
-                    .data
-                    .blame_info = Some(StateBlameInfo {
-                    blame: 0,
-                    state_vec_root: accumulated_state_root.clone(),
-                    receipts_vec_root: accumulated_receipts_root.clone(),
-                    logs_boom_vec_root: accumulated_logs_boom_root.clone(),
-                });
-                end = blame_info_to_fill.len() - 1;
-            } else {
-                end = blame_info_to_fill.len();
-            }
-            for i in (0..end).rev() {
+            for i in (0..blame_info_to_fill.len()).rev() {
                 accumulated_state_root =
                     BlockHeaderBuilder::compute_blame_state_root_incremental(
                         state_blame_vec[i + 1],
@@ -2473,7 +2477,6 @@ impl ConsensusGraphInner {
                         bloom_blame_vec[i + 1],
                         accumulated_logs_boom_root,
                     );
-                blame_cnt += 1;
                 self.arena[blame_info_to_fill[i]].data.blame_info =
                     Some(StateBlameInfo {
                         blame: blame_cnt,
@@ -2481,6 +2484,7 @@ impl ConsensusGraphInner {
                         receipts_vec_root: accumulated_receipts_root,
                         logs_boom_vec_root: accumulated_logs_boom_root,
                     });
+                blame_cnt += 1;
             }
             let state_vec_root =
                 BlockHeaderBuilder::compute_blame_state_root_incremental(
@@ -3322,25 +3326,31 @@ impl ConsensusGraphInner {
     fn get_deferred_state_arena_index(
         &self, me: usize,
     ) -> Result<usize, String> {
-        let mut idx = me;
-        for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
-            if idx == self.cur_era_genesis_block_arena_index {
-                // If it is the original genesis, we just break
-                if self.arena[idx].height == 0 {
-                    break;
-                } else {
-                    return Err(
-                        "Parent is too old for computing the deferred state"
-                            .to_owned(),
-                    );
-                }
-            }
-            idx = self.arena[idx].parent;
-            if idx == NULL {
-                return Err("Parent is NULL, possibly out of era?".to_owned());
-            }
+        let height = self.arena[me].height;
+        // We are in the very early of the blockchain, here we can just
+        // return cur_era_genesis_block_arena_index and it will be the true
+        // genesis.
+        if height <= DEFERRED_STATE_EPOCH_COUNT {
+            return Ok(self.cur_era_genesis_block_arena_index);
         }
-        Ok(idx)
+        // This is the case we cannot handle, the block is no longer maintained.
+        if self.cur_era_genesis_height + DEFERRED_STATE_EPOCH_COUNT > height {
+            return Err(
+                "Parent is too old for computing the deferred state".to_owned()
+            );
+        }
+        let target_height = height - DEFERRED_STATE_EPOCH_COUNT;
+        let pivot_idx = self.height_to_pivot_index(height);
+        // If it is on the pivot chain already, we can avoid O(log n) lca query
+        if pivot_idx < self.pivot_chain.len()
+            && self.pivot_chain[pivot_idx] == me
+        {
+            return Ok(
+                self.pivot_chain[self.height_to_pivot_index(target_height)]
+            );
+        } else {
+            return Ok(self.ancestor_at(me, target_height));
+        }
     }
 
     /// Find the first state valid block on the pivot chain after
