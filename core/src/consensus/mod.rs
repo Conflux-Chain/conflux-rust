@@ -749,6 +749,13 @@ impl ConsensusGraph {
                 });
             }
 
+            if to_epoch > inner.best_epoch_number() {
+                return Err(FilterError::OutOfBoundEpochNumber {
+                    to_epoch,
+                    max_epoch: inner.best_epoch_number(),
+                });
+            }
+
             let blooms = filter.bloom_possibilities();
             let mut blocks = vec![];
             for epoch_number in from_epoch..(to_epoch + 1) {
