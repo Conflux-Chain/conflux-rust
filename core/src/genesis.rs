@@ -111,6 +111,7 @@ pub fn genesis_block(
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
+    let mut total_balance = U256::from(0);
     for (addr, balance) in genesis_accounts {
         let account = Account::new_empty_with_balance(
             &addr,
@@ -120,7 +121,11 @@ pub fn genesis_block(
         state
             .set(StorageKey::new_account_key(&addr), &account)
             .unwrap();
+        total_balance += balance;
     }
+    state
+        .set_total_issued_tokens(&total_balance)
+        .expect("Cannot set issued tokens in the database!");
     initialize_internal_contract_accounts(&mut state);
 
     let state_root = state.compute_state_root().unwrap();

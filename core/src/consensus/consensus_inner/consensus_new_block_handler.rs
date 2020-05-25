@@ -72,34 +72,8 @@ impl ConsensusNewBlockHandler {
     /// true, it cannot become a checkpoint block
     fn make_checkpoint_at(
         inner: &mut ConsensusGraphInner, new_era_block_arena_index: usize,
-        will_execute: bool, executor: &ConsensusExecutor,
-    )
-    {
+    ) {
         let new_era_height = inner.arena[new_era_block_arena_index].height;
-
-        let stable_era_genesis =
-            inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
-
-        // Ensure all blocks on the pivot chain before
-        // stable_era_genesis have state_valid computed
-        if will_execute
-            && new_era_height
-                >= inner
-                    .data_man
-                    .state_availability_boundary
-                    .read()
-                    .lower_bound
-        {
-            // If new_era_genesis should have available state,
-            // make sure state execution is finished before setting lower_bound
-            // to the new_checkpoint_era_genesis.
-            executor
-                .wait_for_result(inner.arena[new_era_block_arena_index].hash)
-                .expect("Execution state of the pivot chain is corrupted!");
-            inner
-                .compute_state_valid(stable_era_genesis)
-                .expect("Old cur_era_stable_height has available state_valid");
-        }
 
         // We first compute the set of blocks inside the new era and we
         // recompute the past_weight inside the stable height.
@@ -898,12 +872,50 @@ impl ConsensusNewBlockHandler {
     }
 
     fn should_form_checkpoint_at(
-        &self, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner, will_execute: bool,
     ) -> usize {
         let stable_pivot_block =
             inner.get_pivot_block_arena_index(inner.cur_era_stable_height);
         let mut new_genesis_height =
             inner.cur_era_genesis_height + inner.inner_conf.era_epoch_count;
+
+        // FIXME: Here is a chicken and egg problem. In our full node sync
+        // FIXME: logic, we first run consensus on headers to determine
+        // FIXME: the checkpoint location. And then run the full blocks.
+        // FIXME: However, when we do not have the body, we cannot faithfully
+        // FIXME: check this condition. The consequence is that if
+        // FIXME: attacker managed to generate a lot blame blocks. New full
+        // FIXME: nodes will not correctly determine the safe checkpoint
+        // FIXME: location to start the sync. Causing potential panic
+        // FIXME: when computing `state_valid` and `blame_info`.
+        if will_execute {
+            // During the recovery phase, the state_valid for stable may
+            // temporarily not available at the start.
+            if inner.arena[stable_pivot_block].data.state_valid.is_none() {
+                self.executor
+                    .wait_for_result(inner.arena[stable_pivot_block].hash)
+                    .expect("Execution state of the pivot chain is corrupted!");
+                inner
+                    .compute_state_valid_and_blame_info(stable_pivot_block)
+                    .expect("Stable node should be able to compute state_valid and blame_info");
+            }
+            // Stable block must have a blame vector that does not stretch
+            // beyond the new genesis
+            if !inner.arena[stable_pivot_block].data.state_valid.unwrap() {
+                if inner.arena[stable_pivot_block]
+                    .data
+                    .blame_info
+                    .unwrap()
+                    .blame as u64
+                    + new_genesis_height
+                    + DEFERRED_STATE_EPOCH_COUNT
+                    >= inner.cur_era_stable_height
+                {
+                    return inner.cur_era_genesis_block_arena_index;
+                }
+            }
+        }
+
         // We cannot move beyond the stable block/height
         'out: while new_genesis_height < inner.cur_era_stable_height {
             let new_genesis_block_arena_index =
@@ -1523,13 +1535,34 @@ impl ConsensusNewBlockHandler {
                 inner.cur_era_stable_height = new_stable_height;
                 let stable_arena_index =
                     inner.get_pivot_block_arena_index(new_stable_height);
-                // Always ensure that era stable genesis has an available
-                // state_valid.
+
+                // Ensure all blocks on the pivot chain before
+                // the new stable block to have state_valid computed
                 if has_body && !self.conf.bench_mode {
+                    assert!(
+                        new_stable_height
+                            >= inner
+                                .data_man
+                                .state_availability_boundary
+                                .read()
+                                .lower_bound
+                    );
+                    // If new_era_genesis should have available state,
+                    // make sure state execution is finished before setting
+                    // lower_bound
+                    // to the new_checkpoint_era_genesis.
+                    self.executor
+                        .wait_for_result(inner.arena[stable_arena_index].hash)
+                        .expect(
+                            "Execution state of the pivot chain is corrupted!",
+                        );
                     inner
-                        .compute_state_valid(stable_arena_index)
-                        .expect("last stable has available state_valid state");
+                        .compute_state_valid_and_blame_info(stable_arena_index)
+                        .expect(
+                            "New stable node should have available state_valid",
+                        );
                 }
+
                 let genesis_hash =
                     &inner.arena[inner.cur_era_genesis_block_arena_index].hash;
                 let stable_hash = &inner.arena[stable_arena_index].hash;
@@ -1555,8 +1588,10 @@ impl ConsensusNewBlockHandler {
             .hash
                 == inner.cur_era_stable_block_hash
         {
-            let new_checkpoint_era_genesis =
-                self.should_form_checkpoint_at(inner);
+            let new_checkpoint_era_genesis = self.should_form_checkpoint_at(
+                inner,
+                has_body && !self.conf.bench_mode,
+            );
             if new_checkpoint_era_genesis
                 != inner.cur_era_genesis_block_arena_index
             {
@@ -1569,8 +1604,6 @@ impl ConsensusNewBlockHandler {
                 ConsensusNewBlockHandler::make_checkpoint_at(
                     inner,
                     new_checkpoint_era_genesis,
-                    has_body && !self.conf.bench_mode,
-                    &self.executor,
                 );
                 let stable_era_genesis_arena_index =
                     inner.ancestor_at(me, inner.cur_era_stable_height);

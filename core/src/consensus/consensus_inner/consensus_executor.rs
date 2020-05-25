@@ -9,7 +9,10 @@ use crate::{
         BlockRewardResult,
     },
     consensus::{
-        consensus_inner::consensus_new_block_handler::ConsensusNewBlockHandler,
+        consensus_inner::{
+            consensus_new_block_handler::ConsensusNewBlockHandler,
+            StateBlameInfo,
+        },
         ConsensusGraphInner,
     },
     executive::{ExecutionOutcome, Executive, InternalContractMap},
@@ -378,7 +381,7 @@ impl ConsensusExecutor {
                          height = {}, era_genesis_height = {} era_stable_height = {}",
                         pivot_arena_index, height, inner.cur_era_genesis_height, inner.cur_era_stable_height
                     );
-                    self.wait_and_compute_state_valid_locked(
+                    self.wait_and_compute_state_valid_and_blame_info_locked(
                         pivot_arena_index,
                         inner,
                     )
@@ -479,9 +482,9 @@ impl ConsensusExecutor {
         )
     }
 
-    /// Wait for the deferred state to be executed and compute `state_valid` for
-    /// `me`.
-    fn wait_and_compute_state_valid(
+    /// Wait for the deferred state to be executed and compute `state_valid` and
+    /// `blame_info` for `me`.
+    fn wait_and_compute_state_valid_and_blame_info(
         &self, me: usize, inner_lock: &RwLock<ConsensusGraphInner>,
     ) -> Result<(), String> {
         // We go up from deferred state block of `me`
@@ -498,11 +501,11 @@ impl ConsensusExecutor {
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        inner_lock.write().compute_state_valid(me)?;
+        inner_lock.write().compute_state_valid_and_blame_info(me)?;
         Ok(())
     }
 
-    fn wait_and_compute_state_valid_locked(
+    fn wait_and_compute_state_valid_and_blame_info_locked(
         &self, me: usize, inner: &mut ConsensusGraphInner,
     ) -> Result<(), String> {
         // We go up from deferred state block of `me`
@@ -519,15 +522,14 @@ impl ConsensusExecutor {
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
-        inner.compute_state_valid(me)?;
+        inner.compute_state_valid_and_blame_info(me)?;
         Ok(())
     }
 
-    // FIXME: structure the return value?
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
         inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<(u32, H256, H256, H256), String>
+    ) -> Result<StateBlameInfo, String>
     {
         let (parent_arena_index, last_state_block) = {
             let inner = inner_lock.read();
@@ -548,13 +550,21 @@ impl ConsensusExecutor {
             )
         };
         let last_result = self.wait_for_result(last_state_block)?;
-        self.wait_and_compute_state_valid(parent_arena_index, inner_lock)?;
+        self.wait_and_compute_state_valid_and_blame_info(
+            parent_arena_index,
+            inner_lock,
+        )?;
         {
             let inner = &mut *inner_lock.write();
             if inner.arena[parent_arena_index].hash == *parent_block_hash {
                 Ok(inner.compute_blame_and_state_with_execution_result(
                     parent_arena_index,
-                    &last_result,
+                    last_result
+                        .state_root_with_aux_info
+                        .aux_info
+                        .state_root_hash,
+                    last_result.receipts_root,
+                    last_result.logs_bloom_hash,
                 )?)
             } else {
                 Err("Too old parent/subtree to prepare for generation"
