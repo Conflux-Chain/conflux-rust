@@ -1224,7 +1224,7 @@ impl SynchronizationProtocolHandler {
 
         let mut short_ids_part: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];
         let mut tx_hashes_part: Vec<H256> = vec![];
-        let (short_ids_transactions, tx_hashes_transactions) = {
+        let (short_ids_transactions, tx_hashes_transactions, all_transactions) = {
             let mut transactions = self.get_to_propagate_trans();
             if transactions.is_empty() {
                 return;
@@ -1259,10 +1259,10 @@ impl SynchronizationProtocolHandler {
                 for tx in tx_hashes_transactions.iter() {
                     transactions.remove(&tx.hash);
                 }
-                self.set_to_propagate_trans(transactions);
+                self.set_to_propagate_trans(transactions.clone());
             }
 
-            (short_ids_transactions, tx_hashes_transactions)
+            (short_ids_transactions, tx_hashes_transactions, transactions)
         };
         debug!(
             "Send short ids:{}, Send tx hashes:{}",
@@ -1309,6 +1309,7 @@ impl SynchronizationProtocolHandler {
             .request_manager
             .append_sent_transactions(sent_transactions);
 
+        let mut resend_flag = false;
         for i in 0..lucky_peers.len() {
             let peer_id = lucky_peers[i];
             let (key1, key2) = nonces.pop().unwrap();
@@ -1332,8 +1333,12 @@ impl SynchronizationProtocolHandler {
                         "failed to propagate transaction ids to peer, id: {}, err: {}",
                         peer_id, e
                     );
+                    resend_flag = true;
                 }
             }
+        }
+        if resend_flag {
+            self.set_to_propagate_trans(all_transactions);
         }
     }
 
