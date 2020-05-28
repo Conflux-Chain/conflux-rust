@@ -22,7 +22,7 @@ use crate::{
             WitnessInfo as GetWitnessInfoResponse,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
-        LIGHT_PROTO_V1, LIGHT_PROTO_V3,
+        LIGHT_PROTOCOL_VERSION, LIGHT_PROTO_V1,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{NetworkContext, NetworkProtocolHandler},
@@ -187,7 +187,7 @@ impl Handler {
         );
 
         Handler {
-            protocol_version: LIGHT_PROTO_V3,
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             block_txs,
             blooms,
             consensus,

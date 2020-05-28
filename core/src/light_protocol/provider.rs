@@ -33,7 +33,8 @@ use crate::{
             WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
         },
         Error, ErrorKind, LIGHT_PROTOCOL_ID,
-        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTO_V1, LIGHT_PROTO_V3,
+        LIGHT_PROTOCOL_OLD_VERSIONS_TO_SUPPORT, LIGHT_PROTOCOL_VERSION,
+        LIGHT_PROTO_V1,
     },
     message::{decode_msg, decode_rlp_and_check_deprecation, Message, MsgId},
     network::{
@@ -86,7 +87,7 @@ impl Provider {
         let peers = Peers::new();
 
         Provider {
-            protocol_version: LIGHT_PROTO_V3,
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             consensus,
             graph,
             ledger,
@@ -640,12 +641,11 @@ impl Provider {
             .keys
             .into_iter()
             .map(|key| {
-                self.ledger
-                    .storage_root_of(key.epoch, &key.address)
-                    .map(|(root, proof)| (key, root, proof))
+                self.ledger.storage_root_of(key.epoch, &key.address).map(
+                    |(root, proof)| StorageRootWithKey { key, root, proof },
+                )
             })
             .filter_map(Result::ok)
-            .map(|(key, root, proof)| StorageRootWithKey { key, root, proof })
             .collect();
 
         let msg: Box<dyn Message> =
