@@ -8,7 +8,7 @@ use crate::{
     sync::message::Throttled,
 };
 use network::node_table::NodeId;
-use primitives::ChainIdParams;
+use primitives::{filter::FilterError, ChainIdParams};
 use rlp::DecoderError;
 
 error_chain! {
@@ -18,12 +18,13 @@ error_chain! {
 
     foreign_links {
         Decoder(DecoderError);
+        Filter(FilterError);
     }
 
     errors {
-        GenesisMismatch {
-            description("Genesis mismatch"),
-            display("Genesis mismatch"),
+        AlreadyThrottled(msg_name: &'static str) {
+            description("packet already throttled"),
+            display("packet already throttled: {:?}", msg_name),
         }
 
         ChainIdMismatch{ours: ChainIdParams, theirs: ChainIdParams} {
@@ -31,9 +32,9 @@ error_chain! {
             display("ChainId mismatch, ours {:?}, theirs {:?}.", ours, theirs),
         }
 
-        NoResponse {
-            description("NoResponse"),
-            display("NoResponse"),
+        GenesisMismatch {
+            description("Genesis mismatch"),
+            display("Genesis mismatch"),
         }
 
         InternalError {
@@ -91,14 +92,19 @@ error_chain! {
             display("Invalid tx signature"),
         }
 
-        PivotHashMismatch {
-            description("Pivot hash mismatch"),
-            display("Pivot hash mismatch"),
-        }
-
         SendStatusFailed {
             description("Send status failed"),
             display("Send status failed"),
+        }
+
+        Timeout(details: String) {
+            description("Operation timeout"),
+            display("Operation timeout: {:?}", details),
+        }
+
+        Throttled(msg_name: &'static str, response: Throttled) {
+            description("packet throttled"),
+            display("packet {:?} throttled: {:?}", msg_name, response),
         }
 
         UnableToProduceProof {
@@ -135,21 +141,6 @@ error_chain! {
             description("Unknown peer"),
             display("Unknown peer"),
         }
-
-        ValidationFailed {
-            description("Validation failed"),
-            display("Validation failed"),
-        }
-
-        AlreadyThrottled(msg_name: &'static str) {
-            description("packet already throttled"),
-            display("packet already throttled: {:?}", msg_name),
-        }
-
-        Throttled(msg_name: &'static str, response: Throttled) {
-            description("packet throttled"),
-            display("packet {:?} throttled: {:?}", msg_name, response),
-        }
     }
 }
 
@@ -166,20 +157,18 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     // NOTE: do not use wildcard; this way, the compiler
     // will help covering all the cases.
     match e.0 {
-        ErrorKind::NoResponse
+        ErrorKind::Filter(_)
         | ErrorKind::InternalError
 
         // NOTE: we should be tolerant of non-critical errors,
         // e.g. do not disconnect on requesting non-existing epoch
         | ErrorKind::Msg(_)
 
-        // NOTE: this can happen in normal scenarios
-        // where the pivot chain has not converged
-        | ErrorKind::PivotHashMismatch
-
         // NOTE: in order to let other protocols run,
         // we should not disconnect on protocol failure
         | ErrorKind::SendStatusFailed
+
+        | ErrorKind::Timeout(_)
 
         // NOTE: if we do not have a confirmed (non-blamed) block
         // with the info needed to produce a state root proof, we
@@ -189,6 +178,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         // NOTE: to help with backward-compatibility, we
         // should not disconnect on `UnknownMessage`
         | ErrorKind::UnknownMessage => disconnect = false,
+
 
         ErrorKind::GenesisMismatch
         | ErrorKind::ChainIdMismatch{..}
@@ -210,7 +200,6 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidTxInfo
         | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature
-        | ErrorKind::ValidationFailed
         | ErrorKind::AlreadyThrottled(_)
         | ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
 

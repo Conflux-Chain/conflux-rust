@@ -8,7 +8,8 @@ use crate::{
         common::{FullPeerFilter, LedgerInfo},
         handler::sync::TxInfoValidated,
         message::msgid,
-        Handler as LightHandler, LIGHT_PROTOCOL_ID, LIGHT_PROTO_V3,
+        Error, ErrorKind, Handler as LightHandler, LIGHT_PROTOCOL_ID,
+        LIGHT_PROTOCOL_VERSION,
     },
     network::{NetworkContext, NetworkService},
     parameters::{
@@ -46,7 +47,7 @@ type TxInfo = (
 // As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
 async fn with_timeout<T>(
     d: Duration, msg: String, fut: impl Future<Output = T> + Send + Sync,
-) -> Result<T, String> {
+) -> Result<T, Error> {
     // convert `fut` into futures@0.1
     let fut = fut.unit_error().boxed().compat();
 
@@ -58,7 +59,9 @@ async fn with_timeout<T>(
     let with_timeout = with_timeout.compat();
 
     // set error message
-    with_timeout.await.map_err(|_| msg)
+    with_timeout
+        .await
+        .map_err(|_| ErrorKind::Timeout(msg).into())
 }
 
 pub struct QueryService {
@@ -91,7 +94,7 @@ impl QueryService {
         let ledger = LedgerInfo::new(consensus.clone());
 
         QueryService {
-            protocol_version: LIGHT_PROTO_V3,
+            protocol_version: LIGHT_PROTOCOL_VERSION,
             consensus,
             handler,
             ledger,
@@ -120,7 +123,7 @@ impl QueryService {
     #[allow(dead_code)]
     async fn retrieve_state_root(
         &self, epoch: u64,
-    ) -> Result<StateRoot, String> {
+    ) -> Result<StateRoot, Error> {
         trace!("retrieve_state_root epoch = {}", epoch);
 
         with_timeout(
@@ -133,7 +136,7 @@ impl QueryService {
 
     async fn retrieve_state_entry_raw(
         &self, epoch: u64, key: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, String> {
+    ) -> Result<Option<Vec<u8>>, Error> {
         trace!(
             "retrieve_state_entry_raw epoch = {}, key = {:?}",
             epoch,
@@ -155,7 +158,7 @@ impl QueryService {
 
     async fn retrieve_state_entry<T: rlp::Decodable>(
         &self, epoch: u64, key: Vec<u8>,
-    ) -> Result<Option<T>, String> {
+    ) -> Result<Option<T>, Error> {
         match self.retrieve_state_entry_raw(epoch, key).await? {
             None => Ok(None),
             Some(raw) => {
@@ -168,7 +171,7 @@ impl QueryService {
 
     async fn retrieve_storage_root(
         &self, epoch: u64, address: H160,
-    ) -> Result<Option<StorageRoot>, String> {
+    ) -> Result<Option<StorageRoot>, Error> {
         trace!(
             "retrieve_storage_root epoch = {}, address = {}",
             epoch,
@@ -188,7 +191,7 @@ impl QueryService {
         .await
     }
 
-    async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), String> {
+    async fn retrieve_bloom(&self, epoch: u64) -> Result<(u64, Bloom), Error> {
         trace!("retrieve_bloom epoch = {}", epoch);
 
         with_timeout(
@@ -202,7 +205,7 @@ impl QueryService {
 
     async fn retrieve_receipts(
         &self, epoch: u64,
-    ) -> Result<(u64, Vec<BlockReceipts>), String> {
+    ) -> Result<(u64, Vec<BlockReceipts>), Error> {
         trace!("retrieve_receipts epoch = {}", epoch);
 
         with_timeout(
@@ -216,7 +219,7 @@ impl QueryService {
 
     async fn retrieve_block_txs(
         &self, log: LocalizedLogEntry,
-    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), String> {
+    ) -> Result<(LocalizedLogEntry, Vec<SignedTransaction>), Error> {
         trace!("retrieve_block_txs log = {:?}", log);
         let hash = log.block_hash;
 
@@ -231,7 +234,7 @@ impl QueryService {
 
     async fn retrieve_tx_info(
         &self, hash: H256,
-    ) -> Result<TxInfoValidated, String> {
+    ) -> Result<TxInfoValidated, Error> {
         trace!("retrieve_tx_info hash = {:?}", hash);
 
         with_timeout(
@@ -256,50 +259,46 @@ impl QueryService {
 
     pub async fn get_account(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Account>, String> {
+    ) -> Result<Option<Account>, Error> {
         debug!("get_account epoch={:?} address={:?}", epoch, address);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
-            Err(e) => return Err(format!("{}", e)),
+            Err(e) => return Err(e.into()),
         };
 
         let key = Self::account_key(&address);
 
-        self.retrieve_state_entry(epoch, key)
-            .await
-            .map_err(|e| format!("Unable to retrieve account: {}", e))
+        self.retrieve_state_entry(epoch, key).await
     }
 
     pub async fn get_code(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<Vec<u8>>, String> {
+    ) -> Result<Option<Vec<u8>>, Error> {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
-            Err(e) => return Err(format!("{}", e)),
+            Err(e) => return Err(e.into()),
         };
 
         let key = Self::account_key(&address);
 
-        let code_hash = match self
-            .retrieve_state_entry::<Account>(epoch, key)
-            .await
-        {
-            Err(e) => return Err(format!("Unable to retrieve account: {}", e)),
-            Ok(None) => return Ok(None),
-            Ok(Some(account)) => account.code_hash,
-        };
+        let code_hash =
+            match self.retrieve_state_entry::<Account>(epoch, key).await {
+                Err(e) => return Err(e),
+                Ok(None) => return Ok(None),
+                Ok(Some(account)) => account.code_hash,
+            };
 
         let key = Self::code_key(&address, &code_hash);
 
         match self.retrieve_state_entry::<CodeInfo>(epoch, key).await {
-            Err(e) => Err(format!("Unable to retrieve code: {}", e)),
+            Err(e) => Err(e),
             Ok(None) => {
                 // FIXME(thegaram): can this happen?
                 error!("Account {:?} found but code {:?} does not exist (epoch={:?})",  address, code_hash, epoch);
-                Err(format!("Unable to retrieve code: internal error"))
+                Err(ErrorKind::InternalError.into())
             }
             Ok(Some(info)) => Ok(Some(info.code)),
         }
@@ -307,7 +306,7 @@ impl QueryService {
 
     pub async fn get_storage(
         &self, epoch: EpochNumber, address: H160, position: H256,
-    ) -> Result<Option<H256>, String> {
+    ) -> Result<Option<H256>, Error> {
         debug!(
             "get_storage epoch={:?} address={:?} position={:?}",
             epoch, address, position
@@ -315,13 +314,13 @@ impl QueryService {
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
-            Err(e) => return Err(format!("{}", e)),
+            Err(e) => return Err(e.into()),
         };
 
         let key = Self::storage_key(&address, &position);
 
         match self.retrieve_state_entry::<StorageValue>(epoch, key).await {
-            Err(e) => Err(format!("Unable to retrieve storage entry: {}", e)),
+            Err(e) => Err(e),
             Ok(None) => Ok(None),
             Ok(Some(entry)) => Ok(Some(entry.value)),
         }
@@ -329,21 +328,18 @@ impl QueryService {
 
     pub async fn get_storage_root(
         &self, epoch: EpochNumber, address: H160,
-    ) -> Result<Option<StorageRoot>, String> {
+    ) -> Result<Option<StorageRoot>, Error> {
         debug!("get_storage_root epoch={:?} address={:?}", epoch, address,);
 
         let epoch = match self.get_height_from_epoch_number(epoch) {
             Ok(epoch) => epoch,
-            Err(e) => return Err(format!("{}", e)),
+            Err(e) => return Err(e.into()),
         };
 
-        match self.retrieve_storage_root(epoch, address).await {
-            Err(e) => Err(format!("Unable to retrieve storage root: {}", e)),
-            Ok(root) => Ok(root),
-        }
+        self.retrieve_storage_root(epoch, address).await
     }
 
-    pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, String> {
+    pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, Error> {
         debug!("get_tx_info hash={:?}", hash);
 
         // Note: if a transaction does not exist, we fail with timeout, as
@@ -401,9 +397,7 @@ impl QueryService {
         }
     }
 
-    pub async fn get_tx(
-        &self, hash: H256,
-    ) -> Result<SignedTransaction, String> {
+    pub async fn get_tx(&self, hash: H256) -> Result<SignedTransaction, Error> {
         debug!("get_tx hash={:?}", hash);
 
         with_timeout(
@@ -611,7 +605,7 @@ impl QueryService {
 
     pub async fn get_logs(
         &self, filter: Filter,
-    ) -> Result<Vec<LocalizedLogEntry>, String> {
+    ) -> Result<Vec<LocalizedLogEntry>, Error> {
         debug!("get_logs filter = {:?}", filter);
 
         // find epochs and blocks to match against
