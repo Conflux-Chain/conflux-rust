@@ -70,13 +70,15 @@ class StorageRootTest(ConfluxTestFramework):
         root_light = self.rpc[LIGHTNODE].get_storage_root("0x0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6", epoch=hex(1))
         assert_equal(root_full, root_light)
 
-        # check storage root
-        sync_blocks(self.nodes)
+        # make sure the storage roots are verifiable on the light node
         latest_epoch = self.rpc[FULLNODE0].epoch_number()
+        self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
+        sync_blocks(self.nodes)
 
+        # check storage roots
         for epoch in range(latest_epoch):
-            root_full = self.rpc[FULLNODE0].get_storage_root(contractAddr, epoch=hex(1))
-            root_light = self.rpc[LIGHTNODE].get_storage_root(contractAddr, epoch=hex(1))
+            root_full = self.rpc[FULLNODE0].get_storage_root(contractAddr, epoch=hex(epoch))
+            root_light = self.rpc[LIGHTNODE].get_storage_root(contractAddr, epoch=hex(epoch))
             assert_equal(root_full, root_light)
             self.log.info(f"Pass (epoch {epoch})")
 
