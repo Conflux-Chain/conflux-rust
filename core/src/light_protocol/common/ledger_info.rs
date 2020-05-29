@@ -16,7 +16,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        StateProof, StorageRootProof,
+        NodeMerkleProof, StateProof,
     },
 };
 
@@ -121,6 +121,12 @@ impl LedgerInfo {
             .ok_or(ErrorKind::InternalError.into())
     }
 
+    /// Get the number of epochs per snapshot period.
+    #[inline]
+    pub fn snapshot_epoch_count(&self) -> u32 {
+        self.consensus.get_data_manager().get_snapshot_epoch_count()
+    }
+
     /// Get the state trie corresponding to the execution of `epoch`.
     #[inline]
     pub fn state_of(&self, epoch: u64) -> Result<State, Error> {
@@ -172,7 +178,7 @@ impl LedgerInfo {
     #[inline]
     pub fn storage_root_of(
         &self, epoch: u64, address: &Address,
-    ) -> Result<(Option<StorageRoot>, StorageRootProof), Error> {
+    ) -> Result<(Option<StorageRoot>, NodeMerkleProof), Error> {
         let state = self.state_of(epoch)?;
 
         let (value, proof) = StateDb::new(state)

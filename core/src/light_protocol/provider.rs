@@ -27,7 +27,7 @@ use crate::{
             StateEntries as GetStateEntriesResponse, StateEntryWithKey,
             StateRootWithEpoch, StateRoots as GetStateRootsResponse,
             StatusPingDeprecatedV1, StatusPingV2, StatusPongDeprecatedV1,
-            StatusPongV2, StorageRootWithKey,
+            StatusPongV2, StorageRootKey, StorageRootProof, StorageRootWithKey,
             StorageRoots as GetStorageRootsResponse, TxInfo,
             TxInfos as GetTxInfosResponse, Txs as GetTxsResponse,
             WitnessInfo as GetWitnessInfoResponse, WitnessInfoWithHeight,
@@ -630,6 +630,36 @@ impl Provider {
         Ok(())
     }
 
+    fn storage_root(
+        &self, key: StorageRootKey,
+    ) -> Result<StorageRootWithKey, Error> {
+        let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
+
+        // state root in current snapshot period
+        let state_root = self.ledger.state_root_of(key.epoch)?;
+
+        // state root in previous snapshot period
+        let prev_state_root = match key.epoch {
+            e if e <= snapshot_epoch_count => None,
+            _ => Some(
+                self.ledger
+                    .state_root_of(key.epoch - snapshot_epoch_count)?,
+            ),
+        };
+
+        // storage root and merkle proof
+        let (root, merkle_proof) =
+            self.ledger.storage_root_of(key.epoch, &key.address)?;
+
+        let proof = StorageRootProof {
+            state_root,
+            prev_state_root,
+            merkle_proof,
+        };
+
+        Ok(StorageRootWithKey { key, root, proof })
+    }
+
     fn on_get_storage_roots(
         &self, io: &dyn NetworkContext, peer: &NodeId, req: GetStorageRoots,
     ) -> Result<(), Error> {
@@ -640,11 +670,7 @@ impl Provider {
         let roots = req
             .keys
             .into_iter()
-            .map(|key| {
-                self.ledger.storage_root_of(key.epoch, &key.address).map(
-                    |(root, proof)| StorageRootWithKey { key, root, proof },
-                )
-            })
+            .map(|key| self.storage_root(key))
             .filter_map(Result::ok)
             .collect();
 

@@ -8,7 +8,7 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use super::NodeType;
 use crate::{
     message::RequestId,
-    storage::{StateProof, StorageRootProof},
+    storage::{NodeMerkleProof, StateProof},
 };
 
 use primitives::{
@@ -248,6 +248,13 @@ pub struct StorageRootKey {
 pub struct GetStorageRoots {
     pub request_id: RequestId,
     pub keys: Vec<StorageRootKey>,
+}
+
+#[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
+pub struct StorageRootProof {
+    pub state_root: PrimitiveStateRoot,
+    pub prev_state_root: Option<PrimitiveStateRoot>,
+    pub merkle_proof: NodeMerkleProof,
 }
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]

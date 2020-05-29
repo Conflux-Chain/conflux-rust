@@ -178,11 +178,6 @@ impl QueryService {
             address
         );
 
-        // trigger state root request but don't wait for result
-        // FIXME(thegaram): is there a better way?
-        let _ =
-            self.with_io(|io| self.handler.state_roots.request_now(io, epoch));
-
         with_timeout(
             *MAX_POLL_TIME,
             format!("Timeout while retrieving storage root for address {:?} in epoch {:?}", address, epoch),

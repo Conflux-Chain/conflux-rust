@@ -7,6 +7,7 @@ use crate::{
     network::{self, NetworkContext, UpdateNodeOperation},
     sync::message::Throttled,
 };
+use error_chain::ChainedError;
 use network::node_table::NodeId;
 use primitives::{filter::FilterError, ChainIdParams};
 use rlp::DecoderError;
@@ -72,9 +73,9 @@ error_chain! {
             display("Invalid state root"),
         }
 
-        InvalidStorageRootProof {
+        InvalidStorageRootProof(reason: &'static str) {
             description("Invalid storage root proof"),
-            display("Invalid storage root proof"),
+            display("Invalid storage root proof: {}", reason),
         }
 
         InvalidTxInfo {
@@ -147,7 +148,9 @@ error_chain! {
 pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
     warn!(
         "Error while handling message, peer={}, msg_id={:?}, error={}",
-        peer, msg_id, e
+        peer,
+        msg_id,
+        e.display_chain().to_string(),
     );
 
     let mut disconnect = true;
@@ -196,7 +199,7 @@ pub fn handle(io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error) {
         | ErrorKind::InvalidReceipts
         | ErrorKind::InvalidStateProof
         | ErrorKind::InvalidStateRoot
-        | ErrorKind::InvalidStorageRootProof
+        | ErrorKind::InvalidStorageRootProof(_)
         | ErrorKind::InvalidTxInfo
         | ErrorKind::InvalidTxRoot
         | ErrorKind::InvalidTxSignature

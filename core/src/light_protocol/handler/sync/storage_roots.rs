@@ -11,8 +11,11 @@ use std::{future::Future, sync::Arc};
 use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
-        message::{msgid, GetStorageRoots, StorageRootKey, StorageRootWithKey},
-        Error, ErrorKind,
+        error::*,
+        message::{
+            msgid, GetStorageRoots, StorageRootKey, StorageRootProof,
+            StorageRootWithKey,
+        },
     },
     message::{Message, RequestId},
     network::NetworkContext,
@@ -20,7 +23,6 @@ use crate::{
         CACHE_TIMEOUT, MAX_STORAGE_ROOTS_IN_FLIGHT,
         STORAGE_ROOT_REQUEST_BATCH_SIZE, STORAGE_ROOT_REQUEST_TIMEOUT,
     },
-    storage::StorageRootProof,
     UniqueId,
 };
 
@@ -59,6 +61,9 @@ pub struct StorageRoots {
     // series of unique request ids
     request_id_allocator: Arc<UniqueId>,
 
+    // number of epochs per snapshot period
+    snapshot_epoch_count: u64,
+
     // state_root sync manager
     state_roots: Arc<StateRoots>,
 
@@ -72,8 +77,8 @@ pub struct StorageRoots {
 
 impl StorageRoots {
     pub fn new(
-        peers: Arc<Peers<FullPeerState>>, state_roots: Arc<StateRoots>,
-        request_id_allocator: Arc<UniqueId>,
+        peers: Arc<Peers<FullPeerState>>, snapshot_epoch_count: u64,
+        state_roots: Arc<StateRoots>, request_id_allocator: Arc<UniqueId>,
     ) -> Self
     {
         let sync_manager =
@@ -84,6 +89,7 @@ impl StorageRoots {
 
         StorageRoots {
             request_id_allocator,
+            snapshot_epoch_count,
             sync_manager,
             verified,
             state_roots,
@@ -120,7 +126,7 @@ impl StorageRoots {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         entries: impl Iterator<Item = StorageRootWithKey>,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         for StorageRootWithKey { key, root, proof } in entries {
             debug!("Validating storage root {:?} with key {:?}", root, key);
@@ -138,7 +144,7 @@ impl StorageRoots {
     pub fn validate_and_store(
         &self, key: StorageRootKey, root: Option<StorageRoot>,
         proof: StorageRootProof,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
         // validate storage root
         self.validate_storage_root(key.epoch, &key.address, &root, proof)?;
@@ -170,7 +176,7 @@ impl StorageRoots {
     fn send_request(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         keys: Vec<StorageRootKey>,
-    ) -> Result<Option<RequestId>, Error>
+    ) -> Result<Option<RequestId>>
     {
         debug!("send_request peer={:?} keys={:?}", peer, keys);
 
@@ -201,29 +207,76 @@ impl StorageRoots {
     fn validate_storage_root(
         &self, epoch: u64, address: &H160, storage_root: &Option<StorageRoot>,
         proof: StorageRootProof,
-    ) -> Result<(), Error>
+    ) -> Result<()>
     {
-        // retrieve local state root
-        let root = match self.state_roots.state_root_of(epoch) {
-            Some(root) => root.clone(),
-            None => {
-                warn!(
-                    "Unable to verify storage root: state root not found, epoch={}, address={:?}, storage_root={:?}, proof={:?}",
-                    epoch, address, storage_root, proof
-                );
-                return Err(ErrorKind::InternalError.into());
-            }
-        };
+        // validate state root
+        let state_root = proof.state_root;
+        self.state_roots
+            .validate_state_root(epoch, &state_root)
+            .chain_err(|| {
+                ErrorKind::InvalidStorageRootProof(
+                    "Validation of current state root failed",
+                )
+            })?;
 
-        let key = StorageKey::new_storage_root_key(&address).to_key_bytes();
+        // validate previous state root
+        let maybe_prev_root = proof.prev_state_root;
+
+        match maybe_prev_root {
+            Some(ref root) => {
+                if epoch <= self.snapshot_epoch_count {
+                    return Err(ErrorKind::InvalidStorageRootProof(
+                        "Validation of previous state root failed",
+                    )
+                    .into());
+                }
+
+                self.state_roots
+                    .validate_state_root(
+                        epoch - self.snapshot_epoch_count,
+                        &root,
+                    )
+                    .chain_err(|| {
+                        ErrorKind::InvalidStorageRootProof(
+                            "Validation of previous state root failed",
+                        )
+                    })?;
+            }
+            None => {
+                if epoch > self.snapshot_epoch_count {
+                    return Err(ErrorKind::InvalidStorageRootProof(
+                        "Validation of previous state root failed",
+                    )
+                    .into());
+                }
+            }
+        }
+
+        // construct padding
+        let maybe_intermediate_padding = maybe_prev_root.map(|root| {
+            StorageKey::delta_mpt_padding(
+                &root.snapshot_root,
+                &root.intermediate_delta_root,
+            )
+        });
 
         // validate proof
-        if !proof.is_valid(&key, storage_root.clone(), root) {
+        let key = StorageKey::new_storage_root_key(&address).to_key_bytes();
+
+        if !proof.merkle_proof.is_valid(
+            &key,
+            storage_root,
+            state_root,
+            maybe_intermediate_padding,
+        ) {
             warn!(
                 "Invalid storage root proof for {:?} under key {:?}",
                 storage_root, key
             );
-            return Err(ErrorKind::InvalidStorageRootProof.into());
+            return Err(ErrorKind::InvalidStorageRootProof(
+                "Validation of merkle proof failed",
+            )
+            .into());
         }
 
         Ok(())

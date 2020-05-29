@@ -6,9 +6,8 @@ use crate::{
     executive::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     parameters::staking::*,
     storage::{
-        Error as StorageError, ErrorKind as StorageErrorKind, StateProof,
-        StateRootWithAuxInfo, StorageRootProof, StorageState,
-        StorageStateTrait,
+        Error as StorageError, ErrorKind as StorageErrorKind, NodeMerkleProof,
+        StateProof, StateRootWithAuxInfo, StorageState, StorageStateTrait,
     },
 };
 use cfx_types::{Address, H256, U256};
@@ -104,7 +103,7 @@ impl StateDb {
 
     pub fn get_storage_root_with_proof(
         &self, address: &Address,
-    ) -> Result<(Option<StorageRoot>, StorageRootProof)> {
+    ) -> Result<(Option<StorageRoot>, NodeMerkleProof)> {
         let key = StorageKey::new_storage_root_key(address);
 
         let (triplet, proof) = self

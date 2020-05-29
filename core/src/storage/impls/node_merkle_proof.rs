@@ -4,13 +4,10 @@
 
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct NodeMerkleProof {
-    pub maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     pub delta_proof: Option<TrieProof>,
     pub intermediate_proof: Option<TrieProof>,
     pub snapshot_proof: Option<TrieProof>,
 }
-
-pub type StorageRootProof = NodeMerkleProof;
 
 impl NodeMerkleProof {
     pub fn with_delta(
@@ -22,11 +19,8 @@ impl NodeMerkleProof {
 
     pub fn with_intermediate(
         &mut self, maybe_intermediate_proof: Option<TrieProof>,
-        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
-    ) -> &mut Self
-    {
+    ) -> &mut Self {
         self.intermediate_proof = maybe_intermediate_proof;
-        self.maybe_intermediate_padding = maybe_intermediate_padding;
         self
     }
 
@@ -37,19 +31,25 @@ impl NodeMerkleProof {
         self
     }
 
+    #[cfg(test)]
     pub fn is_valid_triplet(
-        &self, key: &Vec<u8>, triplet: NodeMerkleTriplet, state_root: StateRoot,
-    ) -> bool {
+        &self, key: &Vec<u8>, triplet: NodeMerkleTriplet,
+        state_root: StateRoot,
+        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
+    ) -> bool
+    {
         self.is_valid(
             key,
-            StorageRoot::from_node_merkle_triplet(triplet),
+            &StorageRoot::from_node_merkle_triplet(triplet),
             state_root,
+            maybe_intermediate_padding,
         )
     }
 
     pub fn is_valid(
-        &self, key: &Vec<u8>, storage_root: Option<StorageRoot>,
+        &self, key: &Vec<u8>, storage_root: &Option<StorageRoot>,
         state_root: StateRoot,
+        maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     ) -> bool
     {
         let delta_root = &state_root.delta_root;
@@ -62,8 +62,7 @@ impl NodeMerkleProof {
         let storage_key = StorageKey::from_key_bytes(&key);
         let delta_mpt_key =
             storage_key.to_delta_mpt_key_bytes(&delta_mpt_padding);
-        let maybe_intermediate_mpt_key = self
-            .maybe_intermediate_padding
+        let maybe_intermediate_mpt_key = maybe_intermediate_padding
             .as_ref()
             .map(|p| storage_key.to_delta_mpt_key_bytes(p));
 
@@ -173,7 +172,9 @@ impl NodeMerkleProof {
 
 use super::merkle_patricia_trie::TrieProof;
 use primitives::{
-    DeltaMptKeyPadding, NodeMerkleTriplet, StateRoot, StorageKey, StorageRoot,
-    MERKLE_NULL_NODE,
+    DeltaMptKeyPadding, StateRoot, StorageKey, StorageRoot, MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
+
+#[cfg(test)]
+use primitives::NodeMerkleTriplet;

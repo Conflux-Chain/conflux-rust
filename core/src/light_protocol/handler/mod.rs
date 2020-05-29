@@ -162,8 +162,12 @@ impl Handler {
             request_id_allocator.clone(),
         );
 
+        let snapshot_epoch_count =
+            consensus.get_data_manager().get_snapshot_epoch_count() as u64;
+
         let storage_roots = StorageRoots::new(
             peers.clone(),
+            snapshot_epoch_count,
             state_roots.clone(),
             request_id_allocator.clone(),
         );
