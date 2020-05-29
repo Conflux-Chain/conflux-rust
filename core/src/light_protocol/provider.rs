@@ -353,7 +353,11 @@ impl Provider {
         let state_roots = req
             .epochs
             .into_iter()
-            .map(|e| self.ledger.state_root_of(e).map(|root| (e, root)))
+            .map(|e| {
+                self.ledger
+                    .state_root_of(e)
+                    .map(|root| (e, root.state_root))
+            })
             .filter_map(Result::ok)
             .map(|(epoch, state_root)| StateRootWithEpoch { epoch, state_root })
             .collect();
@@ -636,14 +640,15 @@ impl Provider {
         let snapshot_epoch_count = self.ledger.snapshot_epoch_count() as u64;
 
         // state root in current snapshot period
-        let state_root = self.ledger.state_root_of(key.epoch)?;
+        let state_root = self.ledger.state_root_of(key.epoch)?.state_root;
 
         // state root in previous snapshot period
         let prev_state_root = match key.epoch {
             e if e <= snapshot_epoch_count => None,
             _ => Some(
                 self.ledger
-                    .state_root_of(key.epoch - snapshot_epoch_count)?,
+                    .state_root_of(key.epoch - snapshot_epoch_count)?
+                    .state_root,
             ),
         };
 

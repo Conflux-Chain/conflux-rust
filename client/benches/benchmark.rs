@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_bytes::Bytes;
-use cfx_types::U256;
+use cfx_types::{H256, U256};
 use cfxcore::{
     executive::{Executive, InternalContractMap},
     machine::new_machine_with_builtin,
@@ -49,13 +49,13 @@ fn txexe_benchmark(c: &mut Criterion) {
     let machine = new_machine_with_builtin();
     let internal_contract_map = InternalContractMap::new();
     let env = Env {
-        number: 0, // TODO: replace 0 with correct cardinal number
+        number: 0,
         author: Default::default(),
         timestamp: Default::default(),
         difficulty: Default::default(),
         accumulated_gas_used: U256::zero(),
         gas_limit: tx.gas.clone(),
-        last_hashes: Arc::new(vec![]),
+        last_hash: H256::zero(),
         epoch_height: 0,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };

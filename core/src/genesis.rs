@@ -87,12 +87,16 @@ pub fn initialize_internal_contract_accounts(state: &mut StateDb) {
                 state.set(
                     StorageKey::AccountKey(address.as_bytes()),
                     &account,
+                    None,
                 )?;
                 // initialize storage layout for internal contracts to make sure
                 // that _all_ Conflux contracts have a storage
                 // root in our state trie
-                state
-                    .set_storage_layout(address, &StorageLayout::Regular(0))?;
+                state.set_storage_layout(
+                    address,
+                    &StorageLayout::Regular(0),
+                    None,
+                )?;
             }
             Ok(())
         }
@@ -111,6 +115,7 @@ pub fn genesis_block(
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
+    let mut total_balance = U256::from(0);
     for (addr, balance) in genesis_accounts {
         let account = Account::new_empty_with_balance(
             &addr,
@@ -118,9 +123,13 @@ pub fn genesis_block(
             &0.into(), /* nonce */
         );
         state
-            .set(StorageKey::new_account_key(&addr), &account)
+            .set(StorageKey::new_account_key(&addr), &account, None)
             .unwrap();
+        total_balance += balance;
     }
+    state
+        .set_total_issued_tokens(&total_balance, None)
+        .expect("Cannot set issued tokens in the database!");
     initialize_internal_contract_accounts(&mut state);
 
     let state_root = state.compute_state_root().unwrap();
@@ -130,9 +139,7 @@ pub fn genesis_block(
     })]);
     let mut genesis = Block::new(
         BlockHeaderBuilder::new()
-            .with_deferred_state_root(
-                state_root.state_root.compute_state_root_hash(),
-            )
+            .with_deferred_state_root(state_root.aux_info.state_root_hash)
             .with_deferred_receipts_root(receipt_root)
             .with_gas_limit(GENESIS_GAS_LIMIT.into())
             .with_author(genesis_block_author)

@@ -7,6 +7,7 @@ pub mod prefetcher;
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
     bytes::Bytes,
+    consensus::debug::ComputeEpochDebugRecord,
     executive::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     hash::KECCAK_EMPTY,
     parameters::staking::*,
@@ -80,6 +81,7 @@ struct StakingState {
 pub struct State {
     db: StateDb,
 
+    dirty_accounts_to_commit: Vec<(Address, AccountEntry)>,
     cache: RwLock<HashMap<Address, AccountEntry>>,
     staking_state_checkpoints: RwLock<Vec<StakingState>>,
     checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
@@ -134,6 +136,7 @@ impl State {
             },
             block_number,
             vm,
+            dirty_accounts_to_commit: Default::default(),
         }
     }
 
@@ -909,21 +912,29 @@ impl State {
         }
     }
 
-    fn commit_staking_state(&mut self) -> DbResult<()> {
+    fn commit_staking_state(
+        &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<()> {
         self.db.set_annual_interest_rate(
             &(self.staking_state.interest_rate_per_block
                 * U256::from(BLOCKS_PER_YEAR)),
+            debug_record.as_deref_mut(),
         )?;
         self.db.set_accumulate_interest_rate(
             &self.staking_state.accumulate_interest_rate,
+            debug_record.as_deref_mut(),
         )?;
-        self.db
-            .set_total_issued_tokens(&self.staking_state.total_issued_tokens)?;
+        self.db.set_total_issued_tokens(
+            &self.staking_state.total_issued_tokens,
+            debug_record.as_deref_mut(),
+        )?;
         self.db.set_total_staking_tokens(
             &self.staking_state.total_staking_tokens,
+            debug_record.as_deref_mut(),
         )?;
         self.db.set_total_storage_tokens(
             &self.staking_state.total_storage_tokens,
+            debug_record,
         )?;
         Ok(())
     }
@@ -932,14 +943,22 @@ impl State {
     /// killed.
     fn recycle_storage(
         &mut self, killed_addresses: Vec<Address>,
-    ) -> DbResult<()> {
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<()>
+    {
         for address in killed_addresses {
-            self.db.delete(StorageKey::new_account_key(&address))?;
-            let storages_opt = self
-                .db
-                .delete_all(StorageKey::new_storage_root_key(&address))?;
-            self.db
-                .delete_all(StorageKey::new_code_root_key(&address))?;
+            self.db.delete(
+                StorageKey::new_account_key(&address),
+                debug_record.as_deref_mut(),
+            )?;
+            let storages_opt = self.db.delete_all(
+                StorageKey::new_storage_root_key(&address),
+                debug_record.as_deref_mut(),
+            )?;
+            self.db.delete_all(
+                StorageKey::new_code_root_key(&address),
+                debug_record.as_deref_mut(),
+            )?;
             if let Some(storage_key_value) = storages_opt {
                 for (key, value) in storage_key_value {
                     if let StorageKey::StorageKey { .. } =
@@ -961,88 +980,74 @@ impl State {
         Ok(())
     }
 
+    fn precommit_make_dirty_accounts_list(&mut self) {
+        if self.dirty_accounts_to_commit.is_empty() {
+            let mut sorted_dirty_accounts = self
+                .cache
+                .get_mut()
+                .drain()
+                .filter_map(|(address, entry)| {
+                    if entry.is_dirty() {
+                        Some((address, entry))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+            self.dirty_accounts_to_commit = sorted_dirty_accounts;
+        }
+    }
+
     pub fn commit(
         &mut self, epoch_id: EpochId,
-    ) -> DbResult<StateRootWithAuxInfo> {
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateRootWithAuxInfo>
+    {
         debug!("Commit epoch[{}]", epoch_id);
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.staking_state_checkpoints.get_mut().is_empty());
 
+        self.precommit_make_dirty_accounts_list();
+        self.commit_staking_state(debug_record.as_deref_mut())?;
+
         let mut killed_addresses = Vec::new();
-        {
-            let accounts = self.cache.get_mut();
-            for (address, entry) in accounts.iter() {
-                if entry.is_dirty() && entry.account.is_none() {
-                    killed_addresses.push(*address);
+        for (address, entry) in self.dirty_accounts_to_commit.iter_mut() {
+            entry.state = AccountState::Committed;
+            match &mut entry.account {
+                None => killed_addresses.push(*address),
+                Some(account) => {
+                    account
+                        .commit(&mut self.db, debug_record.as_deref_mut())?;
+                    self.db.set::<Account>(
+                        StorageKey::new_account_key(address),
+                        &account.as_account(),
+                        debug_record.as_deref_mut(),
+                    )?;
                 }
             }
         }
-        self.recycle_storage(killed_addresses)?;
-        self.commit_staking_state()?;
-
-        let accounts = self.cache.get_mut();
-        for (address, ref mut entry) in accounts
-            .iter_mut()
-            .filter(|&(_, ref entry)| entry.is_dirty())
-        {
-            entry.state = AccountState::Committed;
-            if let Some(ref mut account) = entry.account {
-                account.commit(&mut self.db)?;
-                self.db.set::<Account>(
-                    StorageKey::new_account_key(address),
-                    &account.as_account(),
-                )?;
-            }
-        }
+        self.recycle_storage(killed_addresses, debug_record)?;
         Ok(self.db.commit(epoch_id)?)
     }
 
     pub fn commit_and_notify(
         &mut self, epoch_id: EpochId, txpool: &SharedTransactionPool,
-    ) -> DbResult<StateRootWithAuxInfo> {
-        assert!(self.checkpoints.get_mut().is_empty());
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateRootWithAuxInfo>
+    {
+        let result = self.commit(epoch_id, debug_record)?;
+
+        debug!("Notify epoch[{}]", epoch_id);
 
         let mut accounts_for_txpool = vec![];
-
-        let mut killed_addresses = Vec::new();
-        {
-            let accounts = self.cache.get_mut();
-            for (address, entry) in accounts.iter() {
-                if entry.is_dirty() && entry.account.is_none() {
-                    killed_addresses.push(*address);
-                }
-            }
-        }
-        self.recycle_storage(killed_addresses)?;
-        self.commit_staking_state()?;
-
-        let accounts = self.cache.get_mut();
-        debug!("Notify epoch[{}]", epoch_id);
-        let mut sorted_dirty_addresses = accounts
-            .iter()
-            .filter_map(|(address, entry)| {
-                if entry.is_dirty() {
-                    Some(address.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        sorted_dirty_addresses.sort();
-        for address in &sorted_dirty_addresses {
-            let entry = accounts.get_mut(address).unwrap();
-            entry.state = AccountState::Committed;
-            if let Some(ref mut account) = entry.account {
+        for (_address, entry) in &self.dirty_accounts_to_commit {
+            if let Some(account) = &entry.account {
                 accounts_for_txpool.push(account.as_account());
-                account.commit(&mut self.db)?;
-                self.db.set::<Account>(
-                    StorageKey::new_account_key(address),
-                    &account.as_account(),
-                )?;
             }
         }
-        let result = self.db.commit(epoch_id)?;
         {
+            // TODO: use channel to deliver the message.
             let txpool_clone = txpool.clone();
             std::thread::Builder::new()
                 .name("txpool_update_state".into())
@@ -1051,6 +1056,7 @@ impl State {
                 })
                 .expect("can not notify tx pool to start state");
         }
+
         Ok(result)
     }
 

@@ -5,7 +5,7 @@
 use cfx_types::{Address, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, EpochNumber,
-    StateRoot, StorageKey, StorageRoot,
+    StorageKey, StorageRoot,
 };
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     storage::{
         state::{State, StateTrait},
         state_manager::StateManagerTrait,
-        NodeMerkleProof, StateProof,
+        NodeMerkleProof, StateProof, StateRootWithAuxInfo,
     },
 };
 
@@ -86,7 +86,7 @@ impl LedgerInfo {
     ) -> Result<H256, Error> {
         let epoch = height.saturating_sub(DEFERRED_STATE_EPOCH_COUNT);
         let root = self.state_root_of(epoch)?;
-        Ok(root.compute_state_root_hash())
+        Ok(root.aux_info.state_root_hash)
     }
 
     /// Get the correct deferred receipts root of the block at `height` on the
@@ -152,9 +152,11 @@ impl LedgerInfo {
 
     /// Get the state trie roots corresponding to the execution of `epoch`.
     #[inline]
-    pub fn state_root_of(&self, epoch: u64) -> Result<StateRoot, Error> {
+    pub fn state_root_of(
+        &self, epoch: u64,
+    ) -> Result<StateRootWithAuxInfo, Error> {
         match self.state_of(epoch)?.get_state_root() {
-            Ok(root) => Ok(root.state_root),
+            Ok(root) => Ok(root),
             _ => Err(ErrorKind::InternalError.into()),
         }
     }

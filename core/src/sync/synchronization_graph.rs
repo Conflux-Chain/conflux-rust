@@ -65,17 +65,22 @@ pub struct SyncGraphConfig {
 #[derive(Debug)]
 pub struct SyncGraphStatistics {
     pub inserted_block_count: usize,
+    pub inserted_header_count: usize,
 }
 
 impl SyncGraphStatistics {
     pub fn new() -> SyncGraphStatistics {
         SyncGraphStatistics {
             // Already counted genesis block
+            inserted_header_count: 1,
             inserted_block_count: 1,
         }
     }
 
-    pub fn clear(&mut self) { self.inserted_block_count = 1; }
+    pub fn clear(&mut self) {
+        self.inserted_header_count = 1;
+        self.inserted_block_count = 1;
+    }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -1324,13 +1329,14 @@ impl SynchronizationGraph {
                 }
             }
 
-            // FIXME: for full node in `CatchUpRecoverBlockHeaderFromDB` phase,
-            // we may only have header in db
-            if let Some(mut block) = self.data_man.block_from_db(&hash) {
+            if let Some(block_header_arc) =
+                self.data_man.block_header_by_hash(&hash)
+            {
+                let mut block_header = block_header_arc.as_ref().clone();
                 // Only construct synchronization graph if is not header_only.
                 // Construct both sync and consensus graph if is header_only.
                 let (insert_result, _) = self.insert_block_header(
-                    &mut block.block_header,
+                    &mut block_header,
                     true,        /* need_to_verify */
                     false,       /* bench_mode */
                     header_only, /* insert_to_consensus */
@@ -1338,17 +1344,24 @@ impl SynchronizationGraph {
                 );
                 assert!(!insert_result.is_invalid());
 
-                let parent = block.block_header.parent_hash().clone();
-                let referees = block.block_header.referee_hashes().clone();
+                let parent = block_header.parent_hash().clone();
+                let referees = block_header.referee_hashes().clone();
 
                 // Construct consensus graph if is not header_only.
                 if !header_only {
-                    let result = self.insert_block(
-                        block, true,  /* need_to_verify */
-                        false, /* persistent */
-                        true,  /* recover_from_db */
-                    );
-                    assert!(result.is_valid());
+                    if let Some(block) =
+                        self.data_man.block_by_hash(&hash, false)
+                    {
+                        let result = self.insert_block(
+                            block.as_ref().clone(),
+                            true,  /* need_to_verify */
+                            false, /* persistent */
+                            true,  /* recover_from_db */
+                        );
+                        assert!(result.is_valid());
+                    } else {
+                        missed_hashes.insert(hash);
+                    }
                 }
 
                 if !visited_blocks.contains(&parent) {
@@ -1613,6 +1626,13 @@ impl SynchronizationGraph {
                     || self
                         .verification_config
                         .verify_header_params(header)
+                        .or_else(|e| {
+                            warn!(
+                                "Invalid header: err={} header={:?}",
+                                e, header
+                            );
+                            Err(e)
+                        })
                         .is_err())
         } else {
             if !bench_mode && !self.is_consortium() {
@@ -1904,7 +1924,9 @@ impl SynchronizationGraph {
             block.size(),
         );
 
-        if inner.arena[me].graph_status == BLOCK_INVALID {
+        // Note: If `me` is invalid, it has been removed from `arena` now,
+        // so we cannot access its `graph_status`.
+        if invalid_set.contains(&me) {
             BlockInsertionResult::Invalid
         } else if inner.arena[me].graph_status >= BLOCK_HEADER_GRAPH_READY {
             BlockInsertionResult::ShouldRelay

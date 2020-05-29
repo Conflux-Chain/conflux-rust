@@ -92,10 +92,10 @@ pub mod sync {
     /// A node is in catch-up mode if its local best epoch number is
     /// CATCH_UP_EPOCH_LAG_THRESHOLD behind the median of the epoch
     /// numbers of peers.
-    pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 3;
+    pub const CATCH_UP_EPOCH_LAG_THRESHOLD: u64 = 20;
     /// This threshold controlling whether a node should request missing
     /// terminals from peers when the node is in catch-up mode.
-    pub const REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD: u64 = 8;
+    pub const REQUEST_TERMINAL_EPOCH_LAG_THRESHOLD: u64 = 40;
 
     /// The max number of headers that are to be sent for header
     /// block request.
