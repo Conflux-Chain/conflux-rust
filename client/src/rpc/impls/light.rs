@@ -56,7 +56,7 @@ impl RpcImpl {
             let account = light
                 .get_account(epoch, address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(RpcAccount::new(account.unwrap_or(
@@ -89,7 +89,7 @@ impl RpcImpl {
             let account = light
                 .get_account(epoch, address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(account
@@ -118,7 +118,7 @@ impl RpcImpl {
             let account = light
                 .get_account(epoch, address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(account.map(|account| account.admin.into()))
@@ -145,7 +145,7 @@ impl RpcImpl {
             let account = light
                 .get_account(epoch, address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(RpcSponsorInfo::new(
@@ -174,7 +174,7 @@ impl RpcImpl {
             let account = light
                 .get_account(epoch, address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(account
@@ -203,7 +203,7 @@ impl RpcImpl {
             let account = light
                 .get_account(epoch, address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(account
@@ -242,7 +242,7 @@ impl RpcImpl {
                 .await
                 .map(|code| code.unwrap_or_default())
                 .map(Bytes::new)
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)
         };
 
@@ -267,7 +267,7 @@ impl RpcImpl {
             let logs = light
                 .get_logs(filter.into())
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(logs.into_iter().map(RpcLog::from).collect())
@@ -372,7 +372,7 @@ impl RpcImpl {
             let root = light
                 .get_storage_root(epoch_num.into(), address)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(root.map(RpcStorageRoot::from_primitive))
@@ -402,7 +402,7 @@ impl RpcImpl {
             let maybe_entry = light
                 .get_storage(epoch_num.into(), address, position)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(maybe_entry.map(Into::into))
@@ -425,7 +425,7 @@ impl RpcImpl {
             let tx = light
                 .get_tx(hash.into())
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             Ok(Some(RpcTransaction::from_signed(&tx, None)))
@@ -455,7 +455,7 @@ impl RpcImpl {
             ) = light
                 .get_tx_info(hash)
                 .await
-                .map_err(|e| e.description().to_owned()) // TODO(thegaram): return meaningful error
+                .map_err(|e| e.to_string()) // TODO(thegaram): return meaningful error
                 .map_err(RpcError::invalid_params)?;
 
             let receipt = RpcReceipt::new(
