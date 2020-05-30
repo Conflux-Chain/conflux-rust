@@ -79,6 +79,7 @@ impl TransactionDataManager {
     /// thrown.
     pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
         let (uncached_trans, mut recovered_trans) = {
+            // TODO: check if it's shared by transaction pool.
             let tx_time_window = self.tx_time_window.read();
             let mut uncached_trans = Vec::new();
             let mut recovered_trans = Vec::new();

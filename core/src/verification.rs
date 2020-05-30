@@ -233,7 +233,7 @@ impl VerificationConfig {
     /// should discard this block and all its descendants.
     #[inline]
     pub fn verify_block_basic(
-        &self, block: &Block, chain_id: u64,
+        &self, block: &Block, chain_id: u8,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
@@ -270,6 +270,7 @@ impl VerificationConfig {
         Ok(())
     }
 
+    /* not for eth replay
     pub fn check_transaction_epoch_bound(
         tx: &TransactionWithSignature, block_height: u64,
         transaction_epoch_bound: u64,
@@ -304,20 +305,23 @@ impl VerificationConfig {
             });
         }
     }
+    */
 
     pub fn verify_transaction_in_block(
-        &self, tx: &TransactionWithSignature, chain_id: u64, block_height: u64,
+        &self, tx: &TransactionWithSignature, chain_id: u8, _block_height: u64,
     ) -> Result<(), TransactionError> {
-        self.verify_transaction_common(tx, chain_id)?;
+        self.verify_transaction_common(tx, chain_id)
+        /* commented out for eth replay
         Self::verify_transaction_epoch_height(
             tx,
             block_height,
             self.transaction_epoch_bound,
         )
+        */
     }
 
     pub fn verify_transaction_common(
-        &self, tx: &TransactionWithSignature, chain_id: u64,
+        &self, tx: &TransactionWithSignature, chain_id: u8,
     ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
 
@@ -328,10 +332,10 @@ impl VerificationConfig {
             ));
         }
 
-        if tx.chain_id != chain_id {
+        if tx.chain_id().unwrap_or(0) != chain_id {
             bail!(TransactionError::ChainIdMismatch {
                 expected: chain_id,
-                got: tx.chain_id,
+                got: tx.chain_id().unwrap_or(0),
             });
         }
 

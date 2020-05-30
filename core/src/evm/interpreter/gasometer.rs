@@ -28,6 +28,7 @@ use super::{
     stack::Stack,
 };
 use crate::vm::{self, Spec};
+use std::sync::atomic::Ordering;
 
 macro_rules! overflowing {
     ($x:expr) => {{
@@ -145,8 +146,9 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
 
                 let is_value_transfer = !context.origin_balance()?.is_zero();
                 let address = u256_to_address(stack.peek(0));
-                if (!spec.no_empty && !context.exists(&address)?)
-                    || (spec.no_empty
+                if (!spec.no_empty.load(Ordering::Relaxed)
+                    && !context.exists(&address)?)
+                    || (spec.no_empty.load(Ordering::Relaxed)
                         && is_value_transfer
                         && !context.exists_and_not_null(&address)?)
                 {
@@ -217,8 +219,9 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                 let is_value_transfer = !stack.peek(2).is_zero();
 
                 if instruction == instructions::CALL
-                    && ((!spec.no_empty && !context.exists(&address)?)
-                        || (spec.no_empty
+                    && ((!spec.no_empty.load(Ordering::Relaxed)
+                        && !context.exists(&address)?)
+                        || (spec.no_empty.load(Ordering::Relaxed)
                             && is_value_transfer
                             && !context.exists_and_not_null(&address)?))
                 {

@@ -16,7 +16,7 @@ use crate::{
     transaction_pool::SharedTransactionPool,
     vm_factory::VmFactory,
 };
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{Address, H256, U256};
 use primitives::{Account, EpochId, StorageKey, StorageLayout, StorageValue};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
@@ -32,8 +32,9 @@ mod account_entry;
 mod substate;
 
 pub use self::{account_entry::OverlayAccount, substate::Substate};
-use crate::evm::Spec;
+use crate::{evm::Spec, vm::NO_EMPTY};
 use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
+use std::sync::atomic::Ordering;
 
 #[derive(Copy, Clone)]
 enum RequireCache {
@@ -96,7 +97,7 @@ pub struct State {
 
 impl State {
     pub fn new(
-        db: StateDb, vm: VmFactory, spec: &Spec, block_number: u64,
+        db: StateDb, vm: VmFactory, _spec: &Spec, block_number: u64,
     ) -> Self {
         let annual_interest_rate =
             db.get_annual_interest_rate().expect("no db error");
@@ -114,7 +115,7 @@ impl State {
             .into();
         */
         let account_start_nonce = U256::zero();
-        let contract_start_nonce = if spec.no_empty {
+        let contract_start_nonce = if NO_EMPTY.load(Ordering::Relaxed) {
             U256::one()
         } else {
             U256::zero()
@@ -139,6 +140,9 @@ impl State {
             dirty_accounts_to_commit: Default::default(),
         }
     }
+
+    // ETH replay code
+    pub fn set_no_empty(&mut self) { self.contract_start_nonce = U256::one(); }
 
     pub fn contract_start_nonce(&self) -> U256 { self.contract_start_nonce }
 
@@ -716,6 +720,7 @@ impl State {
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
         let exists = self.exists(address)?;
+        /* no such check for eth replay
         if !exists && !address.is_user_account_address() {
             // Sending to non-existent non user account address is
             // not allowed.
@@ -730,6 +735,7 @@ impl State {
             );
             return Ok(());
         }
+        */
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
@@ -1360,18 +1366,19 @@ impl State {
         &self, address: &Address,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
-            if address.is_user_account_address() {
-                Ok(OverlayAccount::new_basic(
-                    address,
-                    U256::zero(),
-                    self.account_start_nonce.into(),
-                ))
-            } else {
-                unreachable!(
-                    "address does not already exist and is not an user account. {:?}",
-                    address
-                )
-            }
+            // no such check for eth replay
+            //if address.is_user_account_address() {
+            Ok(OverlayAccount::new_basic(
+                address,
+                U256::zero(),
+                self.account_start_nonce.into(),
+            ))
+            //} else {
+            //    unreachable!(
+            //        "address does not already exist and is not an user
+            // account. {:?}",        address
+            //    )
+            //}
         })
     }
 

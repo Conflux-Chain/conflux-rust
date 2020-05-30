@@ -5,7 +5,7 @@
 mod evm;
 #[macro_use]
 pub mod factory;
-mod instructions;
+pub mod instructions;
 mod interpreter;
 mod vmtype;
 

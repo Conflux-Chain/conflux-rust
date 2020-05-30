@@ -231,6 +231,15 @@ fn test_call_to_create() {
         &[],
     )
     .0;
+
+    let value_to_transfer = U256::from(100);
+    let collateral_for_sth = *COLLATERAL_PER_STORAGE_KEY;
+    // Eth replay.
+    let collateral_for_code = U256::zero(); // U256::from(15_625_000_000_000_000u64);
+                                            // FIXME: check consistency of two kinds of collateral.
+    let balance_to_credit =
+        value_to_transfer + collateral_for_sth + collateral_for_code;
+
     // TODO: add tests for 'callcreate'
     let mut params = ActionParams::default();
     params.address = address;
@@ -240,7 +249,7 @@ fn test_call_to_create() {
     params.storage_owner = sender;
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
-    params.value = ActionValue::Transfer(U256::from(100));
+    params.value = ActionValue::Transfer(value_to_transfer);
     params.call_type = CallType::Call;
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -249,20 +258,9 @@ fn test_call_to_create() {
         .new_contract(&address, U256::zero(), U256::one())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
-        .add_balance(
-            &sender,
-            &(U256::from(100)
-                + *COLLATERAL_PER_STORAGE_KEY
-                + U256::from(15_625_000_000_000_000u64)),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender, &balance_to_credit, CleanupMode::NoEmpty)
         .unwrap();
-    assert_eq!(
-        state.balance(&sender).unwrap(),
-        U256::from(100)
-            + *COLLATERAL_PER_STORAGE_KEY
-            + U256::from(15_625_000_000_000_000u64)
-    );
+    assert_eq!(state.balance(&sender).unwrap(), balance_to_credit);
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
         U256::from(0)
@@ -287,11 +285,11 @@ fn test_call_to_create() {
     assert_eq!(state.balance(&sender).unwrap(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&sender).unwrap(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
+        collateral_for_sth + collateral_for_code
     );
     assert_eq!(
         *state.total_storage_tokens(),
-        *COLLATERAL_PER_STORAGE_KEY + U256::from(15_625_000_000_000_000u64)
+        collateral_for_sth + collateral_for_code
     );
 
     assert_eq!(gas_left, U256::from(59_752));
@@ -440,8 +438,8 @@ fn test_not_enough_cash() {
         gas: U256::from(100_000),
         gas_price: U256::one(),
         storage_limit: U256::zero(),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         nonce: U256::zero(),
     }
     .sign(keypair.secret());
@@ -991,8 +989,8 @@ fn test_commission_privilege() {
         value: U256::from(1000000),
         action: Action::Call(address),
         storage_limit: U256::from(0),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(sender.secret());
@@ -1079,8 +1077,8 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::from(0),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller3.secret());
@@ -1120,8 +1118,8 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::from(0),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller1.secret());
@@ -1161,8 +1159,8 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::from(0),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1216,8 +1214,8 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::from(0),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1264,8 +1262,8 @@ fn test_commission_privilege() {
         value: U256::zero(),
         action: Action::Call(address),
         storage_limit: U256::from(0),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller3.secret());
@@ -1360,8 +1358,8 @@ fn test_storage_commission_privilege() {
         value: *COLLATERAL_PER_STORAGE_KEY,
         action: Action::Call(address),
         storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(sender.secret());
@@ -1498,8 +1496,8 @@ fn test_storage_commission_privilege() {
         value: U256::from(0),
         action: Action::Call(address),
         storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller3.secret());
@@ -1573,8 +1571,8 @@ fn test_storage_commission_privilege() {
         value: U256::from(0),
         action: Action::Call(address),
         storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller1.secret());
@@ -1666,8 +1664,8 @@ fn test_storage_commission_privilege() {
         value: U256::from(0),
         action: Action::Call(address),
         storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller2.secret());
@@ -1792,8 +1790,8 @@ fn test_storage_commission_privilege() {
         value: U256::from(0),
         action: Action::Call(address),
         storage_limit: U256::from(BYTES_PER_STORAGE_KEY),
-        epoch_height: 0,
-        chain_id: 0,
+        //epoch_height: 0,
+        //chain_id: 0,
         data: vec![],
     }
     .sign(caller1.secret());

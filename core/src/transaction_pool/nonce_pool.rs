@@ -29,8 +29,9 @@ impl TxWithReadyInfo {
             return true;
         }
         self.gas_price > x.gas_price
-            || self.gas_price == x.gas_price
-                && self.epoch_height > x.epoch_height
+        /* || self.gas_price == x.gas_price
+        && self.epoch_height > x.epoch_height */
+        // commented out for eth replay.
     }
 }
 
@@ -417,8 +418,8 @@ mod nonce_pool_test {
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
                 storage_limit: U256::zero(),
-                epoch_height: 0,
-                chain_id: 0,
+                //epoch_height: 0,
+                //chain_id: 0,
                 data: Vec::new(),
             }
             .sign(sender.secret()),

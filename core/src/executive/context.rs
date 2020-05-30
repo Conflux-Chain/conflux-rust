@@ -421,27 +421,6 @@ impl<'a> ContextTrait for Context<'a> {
         self.substate.sstore_clears_refund -= value as i128;
     }
 
-    fn trace_next_instruction(
-        &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
-    ) -> bool {
-        // TODO
-        false
-    }
-
-    fn trace_prepare_execute(
-        &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
-        _mem_written: Option<(usize, usize)>,
-        _store_written: Option<(U256, U256)>,
-    )
-    {
-        // TODO
-    }
-
-    fn trace_executed(
-        &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
-    ) {
-        // TODO
-    }
 }
 
 #[cfg(test)]

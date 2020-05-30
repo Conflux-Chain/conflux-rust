@@ -158,6 +158,7 @@ pub mod pow {
 pub mod block {
     use crate::parameters::consensus::GENESIS_GAS_LIMIT;
 
+    // FIXME: high tps need more bytes and txs per block.
     // The maximum block size limit in bytes
     // Consider that the simple payment transaction consumes only 100 bytes per
     // second. This would allow us to have 2000 simple payment transactions
@@ -201,7 +202,8 @@ pub mod staking {
 
     lazy_static! {
         /// This is the renting fee for one byte in storage. 1 CFX for 1024 Bytes, which is `10 ^ 18 / 1024` drip for 1 Byte.
-        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(976_562_500_000_000u64);
+        // Do not charge COLLATERAL for eth replay.
+        pub static ref COLLATERAL_PER_BYTE: U256 = U256::from(0);
         /// This is the renting fee for one key/value pair in storage.
         /// 1 CFX for 1 KB, the storage for one key/value pair is 64 B = 1/16 CFX.
         pub static ref COLLATERAL_PER_STORAGE_KEY: U256 = *COLLATERAL_PER_BYTE * U256::from(BYTES_PER_STORAGE_KEY);

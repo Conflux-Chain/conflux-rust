@@ -903,14 +903,20 @@ impl ConsensusGraph {
     ) -> RpcResult<ExecutionOutcome> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
+        let height = self.get_height_from_epoch_number(epoch)?;
         let (epoch_id, epoch_size) = if let Ok(v) =
-            self.get_block_hashes_by_epoch(epoch)
+            self.get_block_hashes_by_epoch(EpochNumber::Number(height))
         {
             (v.last().expect("pivot block always exist").clone(), v.len())
         } else {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
-        self.executor.call_virtual(tx, &epoch_id, epoch_size)
+        self.executor.call_virtual(
+            tx,
+            &epoch_id,
+            self.config.chain_id.get_chain_id(height) as u8,
+            epoch_size,
+        )
     }
 
     pub fn check_balance_against_transaction(

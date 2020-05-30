@@ -32,8 +32,9 @@ pub struct Transaction {
     pub contract_created: Option<RpcH160>,
     pub data: Bytes,
     pub storage_limit: RpcU256,
-    pub epoch_height: RpcU256,
-    pub chain_id: RpcU256,
+    // No such fields for eth replay.
+    // pub epoch_height: RpcU256,
+    // pub chain_id: RpcU256,
     pub status: Option<RpcU256>,
     /// The standardised V field of the signature.
     pub v: RpcU256,
@@ -72,8 +73,8 @@ impl Transaction {
             gas: t.gas.into(),
             data: t.data.clone().into(),
             storage_limit: t.storage_limit.into(),
-            epoch_height: t.epoch_height.into(),
-            chain_id: t.chain_id.into(),
+            //epoch_height: t.epoch_height.into(),
+            //chain_id: t.chain_id.into(),
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),
@@ -93,8 +94,8 @@ impl Transaction {
                     },
                     value: self.value.into(),
                     storage_limit: self.storage_limit.into(),
-                    epoch_height: self.epoch_height.as_usize() as u64,
-                    chain_id: self.chain_id.as_usize() as u64,
+                    //epoch_height: self.epoch_height.as_usize() as u64,
+                    //chain_id: self.chain_id.as_usize() as u64,
                     data: self.data.into(),
                 },
                 v: self.v.as_usize() as u8,
@@ -126,7 +127,7 @@ pub struct SendTxRequest {
 
 impl SendTxRequest {
     pub fn sign_with(
-        self, best_epoch_height: u64, chain_id: u64, password: Option<String>,
+        self, _best_epoch_height: u64, _chain_id: u64, password: Option<String>,
     ) -> Result<TransactionWithSignature, String> {
         let tx = PrimitiveTransaction {
             nonce: self.nonce.unwrap_or_default().into(),
@@ -141,20 +142,23 @@ impl SendTxRequest {
                 .storage_limit
                 .unwrap_or(U256::MAX.into())
                 .into(),
+            /*
             epoch_height: self
                 .epoch_height
                 .unwrap_or(best_epoch_height.into())
                 .as_usize() as u64,
             chain_id: self.chain_id.unwrap_or(chain_id.into()).as_usize()
                 as u64,
+                */
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 
+        let chain_id = self.chain_id.map(|x| x.as_usize() as u8);
         let password = password.map(Password::from);
         let sig = account_provider(None, None)?
-            .sign(self.from.into(), password, tx.hash())
+            .sign(self.from.into(), password, tx.hash(chain_id))
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 
-        Ok(tx.with_signature(sig))
+        Ok(tx.with_eth_signature(sig, chain_id))
     }
 }

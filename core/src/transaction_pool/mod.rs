@@ -321,7 +321,7 @@ impl TransactionPool {
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
-        let (chain_id, best_height) = {
+        let (chain_id, _best_height) = {
             (
                 current_best_info.best_chain_id(),
                 current_best_info.best_epoch_number,
@@ -331,13 +331,15 @@ impl TransactionPool {
         if basic_check {
             if let Err(e) = self
                 .verification_config
-                .verify_transaction_common(transaction, chain_id)
+                .verify_transaction_common(transaction, chain_id as u8)
             {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
                 return Err(format!("{:?}", e));
             }
         }
 
+        // Do not check epoch height for Eth replay
+        /*
         // If it is zero, it might be possible that it is not initialized
         // TODO: figure out when we should active txpool.
         // TODO: Ideally txpool should only be initialized after Normal phase.
@@ -364,6 +366,7 @@ impl TransactionPool {
                     self.verification_config.transaction_epoch_bound));
             }
         }
+        */
 
         // check transaction gas limit
         if transaction.gas > self.config.max_tx_gas.into() {
