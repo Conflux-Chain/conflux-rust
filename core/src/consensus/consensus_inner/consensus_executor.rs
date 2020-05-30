@@ -595,9 +595,12 @@ impl ConsensusExecutor {
     }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-    ) -> RpcResult<ExecutionOutcome> {
-        self.handler.call_virtual(tx, epoch_id, epoch_size)
+        &self, tx: &SignedTransaction, epoch_id: &H256, chain_id: u8,
+        epoch_size: usize,
+    ) -> RpcResult<ExecutionOutcome>
+    {
+        self.handler
+            .call_virtual(tx, epoch_id, chain_id, epoch_size)
     }
 
     pub fn stop(&self) {
@@ -1594,8 +1597,10 @@ impl ConsensusExecutionHandler {
     }
 
     pub fn call_virtual(
-        &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-    ) -> RpcResult<ExecutionOutcome> {
+        &self, tx: &SignedTransaction, epoch_id: &H256, chain_id: u8,
+        epoch_size: usize,
+    ) -> RpcResult<ExecutionOutcome>
+    {
         let spec = Spec::new_spec();
         let internal_contract_map = InternalContractMap::new();
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
@@ -1613,7 +1618,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_in_block(
                 tx,
-                tx.chain_id,
+                chain_id,
                 block_height,
             ),
         )?;

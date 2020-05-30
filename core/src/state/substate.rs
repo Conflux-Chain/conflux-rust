@@ -9,6 +9,7 @@ use primitives::LogEntry;
 use std::{
     collections::{HashMap, HashSet},
     mem,
+    sync::atomic::Ordering,
 };
 
 /// State changes which should be applied in finalize,
@@ -94,7 +95,7 @@ impl Substate {
     pub fn to_cleanup_mode(&mut self, spec: &Spec) -> CleanupMode {
         match (
             spec.kill_dust != CleanDustMode::Off,
-            spec.no_empty,
+            spec.no_empty.load(Ordering::Relaxed),
             spec.kill_empty,
         ) {
             (false, false, _) => CleanupMode::ForceCreate,

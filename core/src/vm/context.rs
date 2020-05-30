@@ -61,6 +61,8 @@ pub enum MessageCallResult {
 /// Specifies how an address is calculated for a new contract.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CreateContractAddress {
+    // For eth replay
+    FromSenderAndNonce,
     /// Address is calculated from sender, nonce, and code hash. Conflux
     /// `create` scheme.
     FromSenderNonceAndCodeHash,

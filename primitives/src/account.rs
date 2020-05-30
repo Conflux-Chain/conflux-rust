@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{Address, H256, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{
     RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper,
@@ -158,10 +158,13 @@ impl Decodable for Account {
             return Err(DecoderError::RlpIncorrectListLen);
         }
         let address: Address = rlp.val_at(0)?;
-        if address.is_user_account_address() {
-            if rlp.item_count()? != 6 {
-                return Err(DecoderError::RlpIncorrectListLen);
-            }
+        // eth replay
+        let rlp_item_count = rlp.item_count()?;
+        if rlp_item_count == 6 {
+            // if address.is_user_account_address() {
+            //if rlp.item_count()? != 6 {
+            //    return Err(DecoderError::RlpIncorrectListLen);
+            //}
             Ok(Self {
                 address,
                 balance: rlp.val_at(1)?,
@@ -173,10 +176,11 @@ impl Decodable for Account {
                 admin: Address::zero(),
                 sponsor_info: Default::default(),
             })
-        } else if address.is_contract_address() {
-            if rlp.item_count()? != 9 {
-                return Err(DecoderError::RlpIncorrectListLen);
-            }
+        } else if rlp_item_count == 9 {
+            //} else if address.is_contract_address() {
+            //if rlp.item_count()? != 9 {
+            //    return Err(DecoderError::RlpIncorrectListLen);
+            //}
             Ok(Self {
                 address,
                 balance: rlp.val_at(1)?,
@@ -196,19 +200,24 @@ impl Decodable for Account {
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address.is_user_account_address() {
+        // eth replay, rely on code_hash to distinguish between account types.
+        //if self.address.is_user_account_address() {
+        if self.code_hash.eq(&KECCAK_EMPTY) {
             stream
                 .begin_list(6)
-                .append(&self.address)
+                // FIXME: for Conflux, do not store address
+                //.append(&self.address)
                 .append(&self.balance)
                 .append(&self.nonce)
                 .append(&self.staking_balance)
                 .append(&self.collateral_for_storage)
                 .append(&self.accumulated_interest_return);
-        } else if self.address.is_contract_address() {
+        } else {
+            //} else if self.address.is_contract_address() {
             stream
                 .begin_list(9)
-                .append(&self.address)
+                // FIXME: for Conflux, do not store address
+                //.append(&self.address)
                 .append(&self.balance)
                 .append(&self.nonce)
                 .append(&self.code_hash)
@@ -217,8 +226,8 @@ impl Encodable for Account {
                 .append(&self.accumulated_interest_return)
                 .append(&self.admin)
                 .append(&self.sponsor_info);
-        } else {
-            panic!("other types of address are not supported yet.");
+            //} else {
+            //    panic!("other types of address are not supported yet.");
         }
     }
 }

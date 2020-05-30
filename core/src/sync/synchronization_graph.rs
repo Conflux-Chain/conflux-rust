@@ -1863,9 +1863,10 @@ impl SynchronizationGraph {
         inner.arena[me].block_ready = true;
 
         if need_to_verify {
-            let r = self
-                .verification_config
-                .verify_block_basic(&block, self.consensus.best_chain_id());
+            let r = self.verification_config.verify_block_basic(
+                &block,
+                self.consensus.best_chain_id() as u8,
+            );
             match r {
                 Err(Error(
                     ErrorKind::Block(BlockError::InvalidTransactionsRoot(e)),

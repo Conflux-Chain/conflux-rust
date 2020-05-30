@@ -5,13 +5,13 @@ use super::{
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::statedb::Result as StateDbResult;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{Address, H256, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, SponsorInfo, TransactionWithSignature,
+    Account, SignedTransaction, SponsorInfo, TransactionWithSignature,
 };
 use rlp::*;
 use std::{
@@ -24,7 +24,9 @@ lazy_static! {
     pub static ref MAX_WEIGHT: U256 = u128::max_value().into();
 }
 
-const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
+// Shouldn't limit the nonce_offset when replaying ETH txs because
+// we don't resend a transaction in the experiment.
+const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 100000;
 // By default, the capacity of tx pool is 500K, so the maximum TPS is
 // 500K / 100 = 5K
 const TIME_WINDOW: u64 = 100;
@@ -595,8 +597,8 @@ impl TransactionPoolInner {
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256,
-        block_size_limit: usize, epoch_height_lower_bound: u64,
-        epoch_height_upper_bound: u64,
+        block_size_limit: usize, _epoch_height_lower_bound: u64,
+        _epoch_height_upper_bound: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
@@ -624,6 +626,8 @@ impl TransactionPoolInner {
                 }
             }
 
+            // no epoch_height for eth replay.
+            /*
             // If in rare case we popped up something that is currently outside
             // the bound, we will skip the transaction.
             if tx.epoch_height < epoch_height_lower_bound {
@@ -632,6 +636,7 @@ impl TransactionPoolInner {
                 recycle_txs.push(tx.clone());
                 continue 'out;
             }
+            */
 
             total_tx_gas_limit += *tx.gas_limit();
             total_tx_size += tx_size;
@@ -726,8 +731,9 @@ impl TransactionPoolInner {
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
-        let mut sponsored_gas = U256::from(0);
+        let sponsored_gas = U256::from(0);
 
+        /* not for eth replay
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = transaction.action {
             // FIXME: This is a quick fix for performance issue.
@@ -741,6 +747,7 @@ impl TransactionPoolInner {
                     ) {
                         let estimated_gas =
                             transaction.gas * transaction.gas_price;
+                        // FIXME: for conflux, the first line is wrong.
                         if estimated_gas <= sponsor_info.sponsor_gas_bound
                             && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
@@ -751,6 +758,7 @@ impl TransactionPoolInner {
                 }
             }
         }
+        */
 
         let (state_nonce, state_balance) = self
             .get_nonce_and_balance_from_storage(
@@ -834,8 +842,8 @@ mod test_transaction_pool_inner {
                 action: Action::Call(Address::random()),
                 value: U256::from(value),
                 storage_limit: U256::zero(),
-                epoch_height: 0,
-                chain_id: 0,
+                //epoch_height: 0,
+                //chain_id: 0,
                 data: Vec::new(),
             }
             .sign(sender.secret()),

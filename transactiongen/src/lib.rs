@@ -218,8 +218,8 @@ impl TransactionGenerator {
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: U256::zero(),
-                chain_id: txgen.consensus.get_config().chain_id.chain_id,
-                epoch_height: txgen.consensus.best_epoch_number(),
+                //chain_id: txgen.consensus.get_config().chain_id.chain_id,
+                //epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
             };
 
@@ -308,7 +308,8 @@ impl DirectTransactionGenerator {
         let address_by_index = vec![start_address.clone()];
 
         let erc20_address = contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
+            // Use eth address scheme for eth replay.
+            CreateContractAddress::FromSenderAndNonce,
             &contract_creator,
             &0.into(),
             &[],
@@ -329,7 +330,7 @@ impl DirectTransactionGenerator {
 
     pub fn generate_transactions(
         &mut self, block_size_limit: &mut usize, mut num_txs_simple: usize,
-        mut num_txs_erc20: usize, chain_id: &ChainIdParams,
+        mut num_txs_erc20: usize, _chain_id: &ChainIdParams,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut result = vec![];
@@ -409,8 +410,8 @@ impl DirectTransactionGenerator {
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
-                epoch_height: 0,
-                chain_id: chain_id.chain_id,
+                //epoch_height: 0,
+                //chain_id: chain_id.chain_id,
                 data: vec![0u8; 128],
             };
             let signed_transaction = tx.sign(sender_kp.secret());
@@ -500,8 +501,8 @@ impl DirectTransactionGenerator {
                 // FIXME: We will have to setup TRANSACTION_EPOCH_BOUND to a
                 // large value to avoid FIXME: this sloppy zero
                 // becomes an issue in the experiments.
-                epoch_height: 0,
-                chain_id: chain_id.chain_id,
+                //epoch_height: 0,
+                //chain_id: chain_id.chain_id,
                 data: tx_data,
             };
             let signed_transaction = tx.sign(sender_kp.secret());

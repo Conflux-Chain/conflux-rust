@@ -20,8 +20,14 @@
 
 //! Cost spec and other parameterisations for the EVM.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+lazy_static! {
+    pub static ref NO_EMPTY: AtomicBool = AtomicBool::default();
+}
+
 /// Definition of the cost spec and other parameterisations for the VM.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Spec {
     /// Does it support exceptional failed code deposit
     pub exceptional_failed_code_deposit: bool,
@@ -116,7 +122,7 @@ pub struct Spec {
     pub sub_gas_cap_divisor: Option<usize>,
     /// Don't ever make empty accounts; contracts start with nonce=1. Also,
     /// don't charge 25k when sending/suicide zero-value.
-    pub no_empty: bool,
+    pub no_empty: AtomicBool,
     /// Kill empty accounts if touched.
     pub kill_empty: bool,
     /// Blockhash instruction gas cost.
@@ -140,6 +146,68 @@ pub struct Spec {
     pub keep_unsigned_nonce: bool,
     /// Wasm extra specs, if wasm activated
     pub wasm: Option<WasmCosts>,
+}
+
+impl Clone for Spec {
+    fn clone(&self) -> Self {
+        Self {
+            exceptional_failed_code_deposit: self
+                .exceptional_failed_code_deposit,
+            have_delegate_call: self.have_delegate_call,
+            have_create2: self.have_create2,
+            have_revert: self.have_revert,
+            have_return_data: self.have_return_data,
+            have_bitwise_shifting: self.have_bitwise_shifting,
+            have_extcodehash: self.have_extcodehash,
+            have_subs: self.have_subs,
+            have_chain_id: self.have_chain_id,
+            have_self_balance: self.have_self_balance,
+            stack_limit: self.stack_limit,
+            max_depth: self.max_depth,
+            tier_step_gas: self.tier_step_gas,
+            exp_gas: self.exp_gas,
+            exp_byte_gas: self.exp_byte_gas,
+            sha3_gas: self.sha3_gas,
+            sha3_word_gas: self.sha3_word_gas,
+            sload_gas: self.sload_gas,
+            sstore_set_gas: self.sstore_set_gas,
+            sstore_reset_gas: self.sstore_reset_gas,
+            sstore_refund_gas: self.sstore_refund_gas,
+            jumpdest_gas: self.jumpdest_gas,
+            log_gas: self.log_gas,
+            log_data_gas: self.log_data_gas,
+            log_topic_gas: self.log_topic_gas,
+            create_gas: self.create_gas,
+            call_gas: self.call_gas,
+            call_stipend: self.call_stipend,
+            call_value_transfer_gas: self.call_value_transfer_gas,
+            call_new_account_gas: self.call_new_account_gas,
+            suicide_refund_gas: self.suicide_refund_gas,
+            memory_gas: self.memory_gas,
+            quad_coeff_div: self.quad_coeff_div,
+            create_data_gas: self.create_data_gas,
+            create_data_limit: self.create_data_limit,
+            tx_gas: self.tx_gas,
+            tx_create_gas: self.tx_create_gas,
+            tx_data_zero_gas: self.tx_data_zero_gas,
+            tx_data_non_zero_gas: self.tx_data_non_zero_gas,
+            copy_gas: self.copy_gas,
+            extcodesize_gas: self.extcodesize_gas,
+            extcodecopy_base_gas: self.extcodecopy_base_gas,
+            extcodehash_gas: self.extcodehash_gas,
+            balance_gas: self.balance_gas,
+            suicide_gas: self.suicide_gas,
+            suicide_to_new_account_cost: self.suicide_to_new_account_cost,
+            sub_gas_cap_divisor: self.sub_gas_cap_divisor,
+            no_empty: AtomicBool::new(NO_EMPTY.load(Ordering::Relaxed)),
+            kill_empty: self.kill_empty,
+            blockhash_gas: self.blockhash_gas,
+            have_static_call: self.have_static_call,
+            kill_dust: self.kill_dust.clone(),
+            keep_unsigned_nonce: self.keep_unsigned_nonce,
+            wasm: self.wasm.clone(),
+        }
+    }
 }
 
 /// Wasm cost table
@@ -211,8 +279,14 @@ pub enum CleanDustMode {
 }
 
 impl Spec {
+    // eth replay code
+    pub fn set_no_empty(&self) {
+        self.no_empty.store(true, Ordering::Relaxed);
+        NO_EMPTY.store(true, Ordering::Relaxed);
+    }
+
     pub fn new(
-        max_code_size: usize, fix_exp: bool, no_empty: bool, kill_empty: bool,
+        max_code_size: usize, fix_exp: bool, _no_empty: bool, kill_empty: bool,
     ) -> Spec {
         Spec {
             exceptional_failed_code_deposit: true,
@@ -262,7 +336,7 @@ impl Spec {
             suicide_gas: 5000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
-            no_empty,
+            no_empty: AtomicBool::new(NO_EMPTY.load(Ordering::Relaxed)),
             kill_empty,
             blockhash_gas: 20,
             have_static_call: false,

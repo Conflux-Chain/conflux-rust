@@ -21,7 +21,7 @@ pub use self::{
     env::Env,
     error::{Error, ExecTrapResult, Result, TrapError, TrapKind, TrapResult},
     return_data::{GasLeft, ReturnData},
-    spec::{CleanDustMode, Spec, WasmCosts},
+    spec::{CleanDustMode, Spec, WasmCosts, NO_EMPTY},
 };
 
 /// Virtual Machine interface

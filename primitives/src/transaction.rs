@@ -32,7 +32,7 @@ pub enum TransactionError {
     /// Transaction is already imported to the queue
     AlreadyImported,
     /// Chain id in the transaction doesn't match the chain id of the network.
-    ChainIdMismatch { expected: u64, got: u64 },
+    ChainIdMismatch { expected: u8, got: u8 },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
         block_height: u64,
@@ -227,29 +227,63 @@ pub struct Transaction {
     pub action: Action,
     /// Transferred value.
     pub value: U256,
-    /// Maximum storage increasement in this execution.
+    // Nothing to do for eth replay because collateral does not exceed storage
+    // limit of 0.
+    /// Maximum storage increment in this execution.
     pub storage_limit: U256,
+    /* no such fields for eth replay
     /// The epoch height of the transaction. A transaction
     /// can only be packed between the epochs of [epoch_height -
     /// TRANSACTION_EPOCH_BOUND, epoch_height + TRANSACTION_EPOCH_BOUND]
     pub epoch_height: u64,
     /// The chain id of the transaction
     pub chain_id: u64,
+    */
     /// Transaction data.
     pub data: Bytes,
 }
 
+// for Eth replay
+mod eth_signature {
+    pub fn add_chain_replay_protection(v: u8, chain_id: Option<u8>) -> u8 {
+        v + if let Some(n) = chain_id {
+            35 + n * 2
+        } else {
+            27
+        }
+    }
+}
+
 impl Transaction {
-    pub fn hash(&self) -> H256 {
+    // for Eth replay
+    pub fn hash(&self, chain_id: Option<u8>) -> H256 {
         let mut s = RlpStream::new();
-        s.append(self);
+        self.rlp_append_unsigned_transaction(&mut s, chain_id);
         keccak(s.as_raw())
     }
 
+    // for Eth replay
+    pub fn rlp_append_unsigned_transaction(
+        &self, s: &mut RlpStream, chain_id: Option<u8>,
+    ) {
+        s.begin_list(if chain_id.is_none() { 6 } else { 9 });
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        if let Some(n) = chain_id {
+            s.append(&n);
+            s.append(&0u8);
+            s.append(&0u8);
+        }
+    }
+
     pub fn sign(self, secret: &Secret) -> SignedTransaction {
-        let sig = ::keylib::sign(secret, &self.hash())
+        let sig = ::keylib::sign(secret, &self.hash(None))
             .expect("data is valid and context has signing capabilities; qed");
-        let tx_with_sig = self.with_signature(sig);
+        let tx_with_sig = self.with_eth_signature(sig, None);
         let public = tx_with_sig
             .recover_public()
             .expect("secret is valid so it's recoverable");
@@ -277,13 +311,16 @@ impl Transaction {
     }
 
     /// Signs the transaction with signature.
-    pub fn with_signature(self, sig: Signature) -> TransactionWithSignature {
+    pub fn with_eth_signature(
+        self, sig: Signature, chain_id: Option<u8>,
+    ) -> TransactionWithSignature {
         TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
                 unsigned: self,
                 r: sig.r().into(),
                 s: sig.s().into(),
-                v: sig.v(),
+                v: eth_signature::add_chain_replay_protection(sig.v(), chain_id)
+                    as u8,
             },
             hash: H256::zero(),
             rlp_size: None,
@@ -395,15 +432,27 @@ impl TransactionWithSignature {
     pub fn signature(&self) -> Signature {
         let r: H256 = BigEndianHash::from_uint(&self.r);
         let s: H256 = BigEndianHash::from_uint(&self.s);
-        Signature::from_rsv(&r, &s, self.v)
+        Signature::from_electrum(&Signature::from_rsv(&r, &s, self.v)[..])
     }
 
     /// Checks whether the signature has a low 's' value.
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
+        // Eth didn't check for low_s in its early version.
+        /*
         if !self.signature().is_low_s() {
             Err(keylib::Error::InvalidSignature)
         } else {
             Ok(())
+        }
+        */
+        Ok(())
+    }
+
+    pub fn chain_id(&self) -> Option<u8> {
+        match self.v {
+            v if self.is_unsigned() => Some(v),
+            v if v >= 35 => Some((v - 35) / 2),
+            _ => None,
         }
     }
 
@@ -411,7 +460,10 @@ impl TransactionWithSignature {
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
-        Ok(recover(&self.signature(), &self.unsigned.hash())?)
+        Ok(recover(
+            &self.signature(),
+            &self.unsigned.hash(self.chain_id()),
+        )?)
     }
 
     pub fn rlp_size(&self) -> usize {
@@ -524,7 +576,7 @@ impl SignedTransaction {
             Ok(verify_public(
                 &public,
                 &self.signature(),
-                &self.unsigned.hash(),
+                &self.unsigned.hash(self.chain_id()),
             )?)
         } else {
             Ok(true)

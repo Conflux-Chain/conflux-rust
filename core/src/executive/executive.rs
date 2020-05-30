@@ -15,17 +15,17 @@ use crate::{
     parameters::staking::*,
     state::{CleanupMode, CollateralCheckResult, State, Substate},
     statedb::Result as DbResult,
-    verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
         ResumeCall, ResumeCreate, ReturnData, Spec, TrapError,
     },
     vm_factory::VmFactory,
 };
-use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512};
+use cfx_types::{Address, H256, U256, U512};
 use primitives::{
     receipt::StorageChange, transaction::Action, SignedTransaction,
 };
+use rlp::RlpStream;
 use std::{
     collections::HashSet,
     convert::{TryFrom, TryInto},
@@ -40,6 +40,13 @@ pub fn contract_address(
 ) -> (Address, Option<H256>)
 {
     match address_scheme {
+        // For eth replay
+        CreateContractAddress::FromSenderAndNonce => {
+            let mut stream = RlpStream::new_list(2);
+            stream.append(sender);
+            stream.append(nonce);
+            (From::from(keccak(stream.as_raw())), None)
+        }
         CreateContractAddress::FromSenderNonceAndCodeHash => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             // In Conflux, we append CodeHash to determine the address as well.
@@ -53,8 +60,8 @@ pub fn contract_address(
             // In Conflux, we use the first four bits to indicate the type of
             // the address. For contract address, the bits will be
             // set to 0x8.
-            let mut h = Address::from(keccak(&buffer[..]));
-            h.set_contract_type_bits();
+            let h = Address::from(keccak(&buffer[..]));
+            // h.set_contract_type_bits(); // not for eth replay
             (h, Some(code_hash))
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
@@ -66,8 +73,8 @@ pub fn contract_address(
             &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bits will be set to 0x8.
-            let mut h = Address::from(keccak(&buffer[..]));
-            h.set_contract_type_bits();
+            let h = Address::from(keccak(&buffer[..]));
+            // h.set_contract_type_bits(); // not for eth replay
             (h, Some(code_hash))
         }
     }
@@ -1356,6 +1363,12 @@ impl<'a> Executive<'a> {
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
 
+        // passed height of EIP-155 && EIP-161
+        if tx.v > 28 {
+            self.spec.set_no_empty();
+            self.state.set_no_empty();
+        }
+
         // Validate transaction nonce
         if tx.nonce < nonce {
             return Ok(ExecutionOutcome::NotExecutedOldNonce(nonce, tx.nonce));
@@ -1368,7 +1381,9 @@ impl<'a> Executive<'a> {
             ));
         }
 
+        // No epoch height for Eth replay.
         // Validate transaction epoch height.
+        /*
         match VerificationConfig::verify_transaction_epoch_height(
             tx,
             self.env.epoch_height,
@@ -1387,6 +1402,7 @@ impl<'a> Executive<'a> {
             }
             Ok(()) => {}
         }
+        */
 
         let base_gas_required = Executive::gas_required_for(
             tx.action == Action::Create,
@@ -1397,7 +1413,8 @@ impl<'a> Executive<'a> {
             tx.gas >= base_gas_required.into(),
             "We have already checked the base gas requirement when we received the block."
         );
-        let init_gas = tx.gas - base_gas_required;
+        //let init_gas = tx.gas - base_gas_required;
+        let init_gas = U256::max_value();
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
@@ -1562,7 +1579,8 @@ impl<'a> Executive<'a> {
         let (result, output) = match tx.action {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
-                    CreateContractAddress::FromSenderNonceAndCodeHash,
+                    // address_scheme for eth replay
+                    CreateContractAddress::FromSenderAndNonce,
                     &sender,
                     &nonce,
                     &tx.data,
@@ -1631,6 +1649,14 @@ impl<'a> Executive<'a> {
             None
         };
 
+        // Refund for eth replay
+        let refund_value = tx.gas - base_gas_required;
+        self.state.add_balance(
+            &tx.sender(),
+            &refund_value,
+            substate.to_cleanup_mode(self.spec),
+        )?;
+
         Ok(self.finalize(
             tx,
             substate,
@@ -1643,7 +1669,7 @@ impl<'a> Executive<'a> {
 
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
-        &mut self, tx: &SignedTransaction, mut substate: Substate,
+        &mut self, tx: &SignedTransaction, substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
     ) -> DbResult<ExecutionOutcome>
@@ -1658,7 +1684,7 @@ impl<'a> Executive<'a> {
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
-        let (gas_charged, fees_value, refund_value) = if charge_all {
+        let (gas_charged, fees_value, _refund_value) = if charge_all {
             let gas_refunded = tx.gas >> 2;
             let gas_charged = tx.gas - gas_refunded;
             (
@@ -1670,6 +1696,7 @@ impl<'a> Executive<'a> {
             (gas_used, gas_used * tx.gas_price, gas_left * tx.gas_price)
         };
 
+        /* do not refund gas for eth replay.
         if let Some(r) = refund_receiver {
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
@@ -1679,6 +1706,7 @@ impl<'a> Executive<'a> {
                 substate.to_cleanup_mode(self.spec),
             )?;
         };
+        */
 
         // perform suicides
         for address in &substate.suicides {
