@@ -229,35 +229,16 @@ impl ConfirmationMeter {
 
         // Compute risk
         let m_n_diff = m as f64 - n as f64;
-        let mut risk = 0.9;
-        let threshold_1 = if 0.75 * m as f64 - 22.0 < 2250.0 {
-            0.75 * m as f64 - 22.0
+        let threshold = if 0.85 * m as f64 - 20.0 < 1700.0 {
+            0.85 * m as f64 - 20.0
         } else {
-            2250.0
+            1700.0
         };
-        if m_n_diff >= threshold_1 {
-            return risk;
-        }
-        risk = 0.0001;
-        let threshold_2 = if 0.70 * m as f64 - 22.0 < 1500.0 {
-            0.70 * m as f64 - 22.0
+        if m_n_diff >= threshold {
+            return 0.9;
         } else {
-            1500.0
-        };
-        if m_n_diff >= threshold_2 {
-            return risk;
+            return 0.000001;
         }
-        risk = 0.000001;
-        let threshold_3 = if 0.65 * m as f64 - 22.0 < 750.0 {
-            0.65 * m as f64
-        } else {
-            750.0
-        };
-        if m_n_diff >= threshold_3 {
-            return risk;
-        }
-        risk = 0.00000001;
-        risk
     }
 
     /// `ConsensusGraphInner` invokes this function to recompute confirmation
@@ -374,7 +355,7 @@ impl ConfirmationMeter {
                 / d;
 
             let i_risk =
-                10f64.powf((m_j as f64 / 3.0 - n_j as f64) / 700.0 + 5.3);
+                10f64.powf((m_j as f64 / 4.0 - n_j as f64) / 1000.0 + 4.5);
             adaptive_risk += i_risk;
         }
 
